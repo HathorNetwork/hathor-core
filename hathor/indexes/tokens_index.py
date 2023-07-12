@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Iterator, List, NamedTuple, Optional, Tuple
+from typing import Iterator, NamedTuple, Optional
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
@@ -91,7 +91,7 @@ class TokensIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def iter_all_tokens(self) -> Iterator[Tuple[bytes, TokenIndexInfo]]:
+    def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:
         """ Iterate over all tokens, yields tuples of (token_uid, token_index_info)
         """
         raise NotImplementedError
@@ -114,21 +114,21 @@ class TokensIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_newest_transactions(self, token_uid: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_newest_transactions(self, token_uid: bytes, count: int) -> tuple[list[bytes], bool]:
         """ Get transactions from the newest to the oldest
         """
         raise NotImplementedError
 
     @abstractmethod
     def get_older_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
-                               ) -> Tuple[List[bytes], bool]:
+                               ) -> tuple[list[bytes], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the oldest
         """
         raise NotImplementedError
 
     @abstractmethod
     def get_newer_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
-                               ) -> Tuple[List[bytes], bool]:
+                               ) -> tuple[list[bytes], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the newest
         """
         raise NotImplementedError

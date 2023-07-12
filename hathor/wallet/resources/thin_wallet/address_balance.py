@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 from twisted.web.http import Request
 
@@ -100,7 +100,7 @@ class AddressBalanceResource(Resource):
                 'message': 'Invalid \'address\' parameter'
             })
 
-        tokens_data: Dict[bytes, TokenData] = defaultdict(TokenData)
+        tokens_data: dict[bytes, TokenData] = defaultdict(TokenData)
         tx_hashes = addresses_index.get_from_address(requested_address)
         for tx_hash in tx_hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
@@ -121,7 +121,7 @@ class AddressBalanceResource(Resource):
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
                         tokens_data[token_uid].received += tx_output.value
 
-        return_tokens_data: Dict[str, Dict[str, Any]] = {}
+        return_tokens_data: dict[str, dict[str, Any]] = {}
         for token_uid in tokens_data.keys():
             if token_uid == settings.HATHOR_TOKEN_UID:
                 tokens_data[token_uid].name = settings.HATHOR_TOKEN_NAME

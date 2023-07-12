@@ -377,8 +377,6 @@ class HathorSettings(NamedTuple):
     # Identifier used in metadata's voided_by to mark a tx as partially validated.
     PARTIALLY_VALIDATED_ID: bytes = b'pending-validation'
 
-    ENABLE_EVENT_QUEUE_FEATURE: bool = False
-
     EVENT_API_DEFAULT_BATCH_SIZE: int = 100
 
     EVENT_API_MAX_BATCH_SIZE: int = 1000
@@ -391,6 +389,9 @@ class HathorSettings(NamedTuple):
 
     # All settings related to Feature Activation
     FEATURE_ACTIVATION: FeatureActivationSettings = FeatureActivationSettings()
+
+    # Maximum number of GET_TIPS delayed calls per connection while running sync.
+    MAX_GET_TIPS_DELAYED_CALLS: int = 5
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
@@ -413,7 +414,7 @@ def _parse_checkpoints(checkpoints: Union[dict[int, str], list[Checkpoint]]) -> 
         ]
 
     if not isinstance(checkpoints, list):
-        raise TypeError(f'expected \'Dict[int, str]\' or \'List[Checkpoint]\', got {checkpoints}')
+        raise TypeError(f'expected \'dict[int, str]\' or \'list[Checkpoint]\', got {checkpoints}')
 
     return checkpoints
 

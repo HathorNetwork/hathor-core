@@ -13,12 +13,16 @@
 # limitations under the License.
 
 import base64
+from itertools import starmap, zip_longest
+from operator import add
 from struct import pack
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import (
@@ -31,6 +35,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -38,11 +43,11 @@ if TYPE_CHECKING:
 settings = HathorSettings()
 cpu = get_cpu_profiler()
 
-# Version (H), outputs len (B)
-_FUNDS_FORMAT_STRING = '!HB'
+# Signal bits (B), version (B), outputs len (B)
+_FUNDS_FORMAT_STRING = '!BBB'
 
-# Version (H), inputs len (B) and outputs len (B)
-_SIGHASH_ALL_FORMAT_STRING = '!HBB'
+# Signal bits (B), version (B), inputs len (B) and outputs len (B)
+_SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 
 
 class Block(BaseTransaction):
@@ -51,18 +56,19 @@ class Block(BaseTransaction):
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_BLOCK,
                  weight: float = 0,
-                 outputs: Optional[List[TxOutput]] = None,
-                 parents: Optional[List[bytes]] = None,
+                 outputs: Optional[list[TxOutput]] = None,
+                 parents: Optional[list[bytes]] = None,
                  hash: Optional[bytes] = None,
                  data: bytes = b'',
                  storage: Optional['TransactionStorage'] = None) -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight,
+        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.data = data
 
-    def _get_formatted_fields_dict(self, short: bool = True) -> Dict[str, str]:
+    def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
         d = super()._get_formatted_fields_dict(short)
         if not short:
             d.update(data=self.data.hex())
@@ -99,7 +105,7 @@ class Block(BaseTransaction):
             return 0
         assert self.storage is not None
         parent_block = self.get_block_parent()
-        return parent_block.get_metadata().height + 1
+        return parent_block.get_height() + 1
 
     def calculate_min_height(self) -> int:
         """The minimum height the next block needs to have, basically the maximum min-height of this block's parents.
@@ -108,6 +114,37 @@ class Block(BaseTransaction):
         # maximum min-height of any parent tx
         return max((self.storage.get_transaction(tx).get_metadata().min_height for tx in self.get_tx_parents()),
                    default=0)
+
+    def calculate_feature_activation_bit_counts(self) -> list[int]:
+        """
+        Calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation bit
+        counts.
+
+        Each list index corresponds to a bit position, and its respective value is the rolling count of active bits
+        from the previous boundary block up to this block, including it. LSB is on the left.
+        """
+        previous_counts = self._get_previous_feature_activation_bit_counts()
+        bit_list = self._get_feature_activation_bit_list()
+
+        count_and_bit_pairs = zip_longest(previous_counts, bit_list, fillvalue=0)
+        updated_counts = starmap(add, count_and_bit_pairs)
+
+        return list(updated_counts)
+
+    def _get_previous_feature_activation_bit_counts(self) -> list[int]:
+        """
+        Returns the feature_activation_bit_counts metadata attribute from the parent block,
+        or no previous counts if this is a boundary block.
+        """
+        evaluation_interval = settings.FEATURE_ACTIVATION.evaluation_interval
+        is_boundary_block = self.calculate_height() % evaluation_interval == 0
+
+        if is_boundary_block:
+            return []
+
+        parent_block = self.get_block_parent()
+
+        return parent_block.get_feature_activation_bit_counts()
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
         """Return the hash of the next (child/left-to-right) block in the best blockchain.
@@ -165,8 +202,9 @@ class Block(BaseTransaction):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.version, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        (self.signal_bits, self.version, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
         if verbose:
+            verbose('signal_bits', self.signal_bits)
             verbose('version', self.version)
             verbose('outputs_len', outputs_len)
 
@@ -202,7 +240,7 @@ class Block(BaseTransaction):
         :return: funds data serialization of the block
         :rtype: bytes
         """
-        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.version, len(self.outputs))
+        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.signal_bits, self.version, len(self.outputs))
 
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
@@ -234,13 +272,13 @@ class Block(BaseTransaction):
         return settings.HATHOR_TOKEN_UID
 
     # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
         return json
 
-    def to_json_extended(self) -> Dict[str, Any]:
+    def to_json_extended(self) -> dict[str, Any]:
         json = super().to_json_extended()
         json['height'] = self.get_metadata().height
 
@@ -262,19 +300,21 @@ class Block(BaseTransaction):
             self.verify_weight()
         self.verify_reward()
 
-    def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
+    def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.hash is not None
         assert self.storage is not None
-        meta = self.get_metadata()
-        # XXX: it's fine to use `in` with NamedTuples
-        if Checkpoint(meta.height, self.hash) in checkpoints:
-            return
-        # otherwise at least one child must be checkpoint validated
-        for child_tx in map(self.storage.get_transaction, meta.children):
-            if child_tx.get_metadata().validation.is_checkpoint():
-                return
-        raise CheckpointError(f'Invalid new block {self.hash_hex}: expected to reach a checkpoint but none of '
-                              'its children is checkpoint-valid and its hash does not match any checkpoint')
+        height = self.get_height()  # TODO: use "soft height" when sync-checkpoint is added
+        # find checkpoint with our height:
+        checkpoint: Optional[Checkpoint] = None
+        for cp in checkpoints:
+            if cp.height == height:
+                checkpoint = cp
+                break
+        if checkpoint is not None and checkpoint.hash != self.hash:
+            raise CheckpointError(f'Invalid new block {self.hash_hex}: checkpoint hash does not match')
+        else:
+            # TODO: check whether self is a parent of any checkpoint-valid block, this is left for a future PR
+            raise NotImplementedError
 
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""
@@ -286,13 +326,14 @@ class Block(BaseTransaction):
     def verify_height(self) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
         meta = self.get_metadata()
+        assert meta.height is not None
         if meta.height < meta.min_height:
             raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
 
     def verify_reward(self) -> None:
         """Validate reward amount."""
         parent_block = self.get_block_parent()
-        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
+        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if self.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(
                 f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={self.hash_hex} '
@@ -347,3 +388,54 @@ class Block(BaseTransaction):
         self.verify_parents()
 
         self.verify_height()
+
+    def get_height(self) -> int:
+        """Returns the block's height."""
+        meta = self.get_metadata()
+        assert meta.height is not None
+        return meta.height
+
+    def get_feature_activation_bit_counts(self) -> list[int]:
+        """Returns the block's feature_activation_bit_counts metadata attribute."""
+        metadata = self.get_metadata()
+        assert metadata.feature_activation_bit_counts is not None, 'Blocks must always have this attribute set.'
+
+        return metadata.feature_activation_bit_counts
+
+    def _get_feature_activation_bit_list(self) -> list[int]:
+        """
+        Extracts feature activation bits from the signal bits, as a list where each index corresponds to the bit
+        position. LSB is on the left.
+        """
+        assert self.signal_bits <= 0xFF, 'signal_bits must be one byte at most'
+
+        bitmask = self._get_feature_activation_bitmask()
+        bits = self.signal_bits & bitmask
+
+        bit_list = get_bit_list(bits, min_size=settings.FEATURE_ACTIVATION.max_signal_bits)
+
+        return bit_list
+
+    @classmethod
+    def _get_feature_activation_bitmask(cls) -> int:
+        """Returns the bitmask that gets feature activation bits from signal bits."""
+        bitmask = (1 << settings.FEATURE_ACTIVATION.max_signal_bits) - 1
+
+        return bitmask
+
+    def get_feature_state(self, *, feature: Feature) -> Optional[FeatureState]:
+        """Returns the state of a feature from metadata."""
+        metadata = self.get_metadata()
+        feature_states = metadata.feature_states or {}
+
+        return feature_states.get(feature)
+
+    def update_feature_state(self, *, feature: Feature, state: FeatureState) -> None:
+        """Updates the state of a feature in metadata and persists it."""
+        assert self.storage is not None
+        metadata = self.get_metadata()
+        feature_states = metadata.feature_states or {}
+        feature_states[feature] = state
+        metadata.feature_states = feature_states
+
+        self.storage.save_transaction(self, only_metadata=True)

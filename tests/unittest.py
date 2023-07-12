@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 import time
-from typing import Iterator, List, Optional
+from typing import Iterator, Optional
 from unittest import main as ut_main
 
 from structlog import get_logger
@@ -119,10 +119,10 @@ class TestCase(unittest.TestCase):
     def reset_peer_id_pool(self) -> None:
         self._free_peer_id_pool = self.new_peer_id_pool()
 
-    def new_peer_id_pool(self) -> List[PeerId]:
+    def new_peer_id_pool(self) -> list[PeerId]:
         return PEER_ID_POOL.copy()
 
-    def get_random_peer_id_from_pool(self, pool: Optional[List[PeerId]] = None,
+    def get_random_peer_id_from_pool(self, pool: Optional[list[PeerId]] = None,
                                      rng: Optional[Random] = None) -> PeerId:
         if pool is None:
             pool = self._free_peer_id_pool
@@ -139,7 +139,7 @@ class TestCase(unittest.TestCase):
         self.tmpdirs.append(tmpdir)
         return tmpdir
 
-    def _create_test_wallet(self):
+    def _create_test_wallet(self, unlocked=False):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
         """
@@ -148,13 +148,36 @@ class TestCase(unittest.TestCase):
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'MYPASS')
         wallet.generate_keys(count=20)
-        wallet.lock()
+        if not unlocked:
+            wallet.lock()
         return wallet
+
+    def get_builder(self, network: str) -> TestBuilder:
+        builder = TestBuilder()
+        builder.set_rng(self.rng) \
+            .set_reactor(self.clock) \
+            .set_network(network)
+        return builder
+
+    def create_peer_from_builder(self, builder, start_manager=True):
+        artifacts = builder.build()
+        manager = artifacts.manager
+
+        if artifacts.rocksdb_storage:
+            self._pending_cleanups.append(artifacts.rocksdb_storage.close)
+
+        manager.avg_time_between_blocks = 0.0001
+
+        if start_manager:
+            manager.start()
+            self.run_to_completion()
+
+        return manager
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
                     checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
-                    pubsub=None, event_storage=None, event_ws_factory=None):
+                    pubsub=None, event_storage=None, enable_event_queue=None, use_memory_storage=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -165,10 +188,7 @@ class TestCase(unittest.TestCase):
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
 
-        builder = TestBuilder() \
-            .set_rng(self.rng) \
-            .set_reactor(self.clock) \
-            .set_network(network) \
+        builder = self.get_builder(network) \
             .set_full_verification(full_verification)
 
         if checkpoints is not None:
@@ -193,13 +213,13 @@ class TestCase(unittest.TestCase):
         if event_manager:
             builder.set_event_manager(event_manager)
 
-        if event_ws_factory:
-            builder.enable_event_manager(event_ws_factory=event_ws_factory)
+        if enable_event_queue:
+            builder.enable_event_queue()
 
         if tx_storage is not None:
             builder.set_tx_storage(tx_storage)
 
-        if self.use_memory_storage:
+        if use_memory_storage or self.use_memory_storage:
             builder.use_memory()
         else:
             directory = tempfile.mkdtemp()
@@ -227,11 +247,7 @@ class TestCase(unittest.TestCase):
         if utxo_index:
             builder.enable_utxo_index()
 
-        artifacts = builder.build()
-        manager = artifacts.manager
-
-        if artifacts.rocksdb_storage:
-            self._pending_cleanups.append(artifacts.rocksdb_storage.close)
+        manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         # XXX: just making sure that tests set this up correctly
         if enable_sync_v2:
@@ -245,11 +261,6 @@ class TestCase(unittest.TestCase):
             assert SyncVersion.V1 not in manager.connections._sync_factories
             assert SyncVersion.V1_1 not in manager.connections._sync_factories
 
-        manager.avg_time_between_blocks = 0.0001
-
-        if start_manager:
-            manager.start()
-            self.run_to_completion()
         return manager
 
     def run_to_completion(self):
@@ -295,7 +306,7 @@ class TestCase(unittest.TestCase):
             tx2 = manager2.tx_storage.get_transaction(tx1.hash)
             tx1_meta = tx1.get_metadata()
             tx2_meta = tx2.get_metadata()
-            # conflict_with's type is Optional[List[bytes]], so we convert to a set because order does not matter.
+            # conflict_with's type is Optional[list[bytes]], so we convert to a set because order does not matter.
             self.assertEqual(set(tx1_meta.conflict_with or []), set(tx2_meta.conflict_with or []))
             # Soft verification
             if tx1_meta.voided_by is None:

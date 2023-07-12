@@ -15,7 +15,7 @@
 import hashlib
 from itertools import chain
 from struct import pack
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
@@ -42,6 +42,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
+from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -49,11 +50,11 @@ if TYPE_CHECKING:
 settings = HathorSettings()
 cpu = get_cpu_profiler()
 
-# Version (H), token uids len (B) and inputs len (B), outputs len (B).
-_FUNDS_FORMAT_STRING = '!HBBB'
+# Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
+_FUNDS_FORMAT_STRING = '!BBBBB'
 
-# Version (H), inputs len (B), and outputs len (B), token uids len (B).
-_SIGHASH_ALL_FORMAT_STRING = '!HBBB'
+# Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
+_SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 
 class TokenInfo(NamedTuple):
@@ -63,7 +64,7 @@ class TokenInfo(NamedTuple):
 
 
 class RewardLockedInfo(NamedTuple):
-    block_hash: bytes
+    block_hash: VertexId
     blocks_needed: int
 
 
@@ -74,20 +75,21 @@ class Transaction(BaseTransaction):
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_TRANSACTION,
                  weight: float = 0,
-                 inputs: Optional[List[TxInput]] = None,
-                 outputs: Optional[List[TxOutput]] = None,
-                 parents: Optional[List[bytes]] = None,
-                 tokens: Optional[List[bytes]] = None,
-                 hash: Optional[bytes] = None,
+                 inputs: Optional[list[TxInput]] = None,
+                 outputs: Optional[list[TxOutput]] = None,
+                 parents: Optional[list[VertexId]] = None,
+                 tokens: Optional[list[TokenUid]] = None,
+                 hash: Optional[VertexId] = None,
                  storage: Optional['TransactionStorage'] = None) -> None:
         """
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
         """
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
-                         or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
+                         inputs=inputs or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
@@ -152,7 +154,7 @@ class Transaction(BaseTransaction):
         """ Calculates min height derived from own spent rewards"""
         min_height = 0
         for blk in self.iter_spent_rewards():
-            min_height = max(min_height, blk.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1)
+            min_height = max(min_height, blk.get_height() + settings.REWARD_SPEND_MIN_BLOCKS + 1)
         return min_height
 
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
@@ -166,8 +168,13 @@ class Transaction(BaseTransaction):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.version, tokens_len, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        (self.signal_bits, self.version, tokens_len, inputs_len, outputs_len), buf = unpack(
+            _FUNDS_FORMAT_STRING,
+            buf
+        )
+
         if verbose:
+            verbose('signal_bits', self.signal_bits)
             verbose('version', self.version)
             verbose('tokens_len', tokens_len)
             verbose('inputs_len', inputs_len)
@@ -195,7 +202,14 @@ class Transaction(BaseTransaction):
         :return: funds data serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs), len(self.outputs))
+        struct_bytes = pack(
+            _FUNDS_FORMAT_STRING,
+            self.signal_bits,
+            self.version,
+            len(self.tokens),
+            len(self.inputs),
+            len(self.outputs)
+        )
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
@@ -220,8 +234,16 @@ class Transaction(BaseTransaction):
         if self._sighash_cache:
             return self._sighash_cache
 
-        struct_bytes = bytearray(pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
-                                 len(self.outputs)))
+        struct_bytes = bytearray(
+            pack(
+                _SIGHASH_ALL_FORMAT_STRING,
+                self.signal_bits,
+                self.version,
+                len(self.tokens),
+                len(self.inputs),
+                len(self.outputs)
+            )
+        )
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
@@ -243,7 +265,7 @@ class Transaction(BaseTransaction):
 
         return self._sighash_data_cache
 
-    def get_token_uid(self, index: int) -> bytes:
+    def get_token_uid(self, index: int) -> TokenUid:
         """Returns the token uid with corresponding index from the tx token uid list.
 
         Hathor always has index 0, but we don't include it in the token uid list, so other tokens are
@@ -253,13 +275,12 @@ class Transaction(BaseTransaction):
         :type index: int
 
         :return: the token uid
-        :rtype: bytes
         """
         if index == 0:
             return settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
         return json
@@ -273,7 +294,7 @@ class Transaction(BaseTransaction):
         self.verify_weight()
         self.verify_without_storage()
 
-    def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
+    def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.storage is not None
         if self.is_genesis:
             return
@@ -392,10 +413,10 @@ class Transaction(BaseTransaction):
             if output.get_token_index() > len(self.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def get_token_info_from_inputs(self) -> Dict[bytes, TokenInfo]:
+    def get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
-        token_dict: Dict[bytes, TokenInfo] = {}
+        token_dict: dict[TokenUid, TokenInfo] = {}
 
         default_info: TokenInfo = TokenInfo(0, False, False)
 
@@ -419,7 +440,7 @@ class Transaction(BaseTransaction):
 
         return token_dict
 
-    def update_token_info_from_outputs(self, token_dict: Dict[bytes, TokenInfo]) -> None:
+    def update_token_info_from_outputs(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
         """Iterate over the outputs and add values to token info dict. Updates the dict in-place.
 
         Also, checks if no token has authorities on the outputs not present on the inputs
@@ -450,7 +471,7 @@ class Transaction(BaseTransaction):
                     sum_tokens = token_info.amount + tx_output.value
                     token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
-    def check_authorities_and_deposit(self, token_dict: Dict[bytes, TokenInfo]) -> None:
+    def check_authorities_and_deposit(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
 
@@ -517,7 +538,7 @@ class Transaction(BaseTransaction):
         """Verify inputs signatures and ownership and all inputs actually exist"""
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
-        spent_outputs: Set[Tuple[bytes, int]] = set()
+        spent_outputs: set[tuple[VertexId, int]] = set()
         for input_tx in self.inputs:
             if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
                 raise InvalidInputDataSize('size: {} and max-size: {}'.format(
@@ -572,12 +593,18 @@ class Transaction(BaseTransaction):
 
     def _spent_reward_needed_height(self, block: Block) -> int:
         """ Returns height still needed to unlock this reward: 0 means it's unlocked."""
+        import math
         assert self.storage is not None
         # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow
         tips = self.storage.get_best_block_tips()
         assert len(tips) > 0
-        best_height = min(self.storage.get_transaction(tip).get_metadata().height for tip in tips)
-        spent_height = block.get_metadata().height
+        best_height = math.inf
+        for tip in tips:
+            blk = self.storage.get_transaction(tip)
+            assert isinstance(blk, Block)
+            best_height = min(best_height, blk.get_height())
+        assert isinstance(best_height, int)
+        spent_height = block.get_height()
         spend_blocks = best_height - spent_height
         needed_height = settings.REWARD_SPEND_MIN_BLOCKS - spend_blocks
         return max(needed_height, 0)

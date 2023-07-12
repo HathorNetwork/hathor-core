@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Deque, Optional
+from typing import TYPE_CHECKING, Optional
 
 from OpenSSL.crypto import X509
 from structlog import get_logger
@@ -60,8 +60,8 @@ class FakeConnection:
         self.tr2 = HathorStringTransport(self._proto1.my_peer)
 
         self._do_buffering = True
-        self._buf1: Deque[str] = deque()
-        self._buf2: Deque[str] = deque()
+        self._buf1: deque[str] = deque()
+        self._buf2: deque[str] = deque()
 
         self._proto1.makeConnection(self.tr1)
         self._proto2.makeConnection(self.tr2)

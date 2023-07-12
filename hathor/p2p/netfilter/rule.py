@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -32,7 +32,7 @@ class NetfilterRule:
         # UUID used to find the rule, in order to delete it
         self.uuid = str(uuid4())
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             'uuid': self.uuid,
             'chain': self.chain.to_json() if self.chain else None,

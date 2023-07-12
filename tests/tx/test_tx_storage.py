@@ -10,13 +10,10 @@ from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
-from hathor.simulator.clock import MemoryReactorHeapClock
-from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
-from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.transaction_metadata import ValidationState
+from hathor.transaction.validation_state import ValidationState
 from tests.unittest import TestBuilder
 from tests.utils import (
     BURN_ADDRESS,
@@ -35,16 +32,15 @@ settings = HathorSettings()
 class BaseTransactionStorageTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self, tx_storage, reactor=None):
+    def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
 
         builder = TestBuilder()
-        builder.set_tx_storage(tx_storage)
         builder.enable_keypair_wallet(self.tmpdir, unlock=b'teste')
         builder.enable_address_index()
         builder.enable_tokens_index()
-        if reactor is not None:
-            builder.set_reactor(reactor)
+
+        self._config_builder(builder)
 
         artifacts = builder.build()
         self.reactor = artifacts.reactor
@@ -57,7 +53,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.reactor.advance(time.time())
 
         self.tx_storage._manually_initialize()
-        assert tx_storage.first_timestamp > 0
+        assert self.tx_storage.first_timestamp > 0
 
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
@@ -66,7 +62,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         block_parents = [tx.hash for tx in chain(self.genesis_blocks, self.genesis_txs)]
         output = TxOutput(200, P2PKH.create_output_script(BURN_ADDRESS))
         self.block = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents,
-                           nonce=100781, storage=tx_storage)
+                           nonce=100781, storage=self.tx_storage)
         self.block.resolve()
         self.block.verify()
         self.block.get_metadata().validation = ValidationState.FULL
@@ -83,7 +79,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.tx = Transaction(
             timestamp=MIN_TIMESTAMP + 2, weight=10, nonce=932049, inputs=[tx_input], outputs=[output],
             tokens=[bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')],
-            parents=tx_parents, storage=tx_storage)
+            parents=tx_parents, storage=self.tx_storage)
         self.tx.resolve()
         self.tx.get_metadata().validation = ValidationState.FULL
 
@@ -627,27 +623,25 @@ class BaseCacheStorageTest(BaseTransactionStorageTest):
 class TransactionMemoryStorageTest(BaseTransactionStorageTest):
     __test__ = True
 
-    def setUp(self):
-        super().setUp(TransactionMemoryStorage())
+    def _config_builder(self, builder: TestBuilder) -> None:
+        builder.use_memory()
 
 
 class CacheMemoryStorageTest(BaseCacheStorageTest):
     __test__ = True
 
-    def setUp(self):
-        store = TransactionMemoryStorage(with_index=False)
-        reactor = MemoryReactorHeapClock()
-        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+    def _config_builder(self, builder: TestBuilder) -> None:
+        builder.use_memory()
+        builder.use_tx_storage_cache(capacity=5)
 
 
 @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
     __test__ = True
 
-    def setUp(self):
+    def _config_builder(self, builder: TestBuilder) -> None:
         self.directory = tempfile.mkdtemp()
-        rocksdb_storage = RocksDBStorage(path=self.directory)
-        super().setUp(TransactionRocksDBStorage(rocksdb_storage))
+        builder.use_rocksdb(self.directory)
 
     def tearDown(self):
         shutil.rmtree(self.directory)
@@ -662,12 +656,10 @@ class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
 class CacheRocksDBStorageTest(BaseCacheStorageTest):
     __test__ = True
 
-    def setUp(self):
+    def _config_builder(self, builder: TestBuilder) -> None:
         self.directory = tempfile.mkdtemp()
-        rocksdb_storage = RocksDBStorage(path=self.directory)
-        store = TransactionRocksDBStorage(rocksdb_storage, with_index=False)
-        reactor = MemoryReactorHeapClock()
-        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+        builder.use_rocksdb(self.directory)
+        builder.use_tx_storage_cache(capacity=5)
 
     def tearDown(self):
         shutil.rmtree(self.directory)

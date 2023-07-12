@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Deque, List
+from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
@@ -49,7 +49,7 @@ class RandomTransactionGenerator:
 
         # List of addresses to send tokens. If this list is empty, tokens will be sent to an address
         # of its own wallet.
-        self.send_to: List[str] = []
+        self.send_to: list[str] = []
 
         self.clock = manager.reactor
         self.rate = rate
@@ -63,7 +63,7 @@ class RandomTransactionGenerator:
         # Most recent transactions generated here.
         # The lowest index has the most recent transaction.
         self.transactions_found: int = 0
-        self.latest_transactions: Deque[Transaction] = deque()
+        self.latest_transactions: deque[Transaction] = deque()
 
         self.double_spending_only = False
 

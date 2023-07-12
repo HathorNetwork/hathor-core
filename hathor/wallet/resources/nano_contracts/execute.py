@@ -15,7 +15,7 @@
 import base64
 import binascii
 from json import JSONDecodeError
-from typing import Any, Dict, NamedTuple
+from typing import Any, NamedTuple
 
 from hathor.api_util import Resource, get_missing_params_msg, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -109,7 +109,7 @@ class NanoContractExecuteResource(Resource):
     def render_OPTIONS(self, request):
         return render_options(request)
 
-    def decode_params(self, data: Dict[str, Any]) -> DecodedParams:
+    def decode_params(self, data: dict[str, Any]) -> DecodedParams:
         """Decode the data required for execute operation. Raise an error if any of the
         fields is not of the expected type.
         """

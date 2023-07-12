@@ -14,18 +14,18 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from hathor.p2p.downloader import Downloader
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.sync_factory import SyncManagerFactory
 from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
+from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.util import Reactor
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
 
 
-class SyncV1Factory(SyncManagerFactory):
+class SyncV11Factory(SyncManagerFactory):
     def __init__(self, connections: ConnectionsManager):
         self.connections = connections
         self._downloader: Optional[Downloader] = None

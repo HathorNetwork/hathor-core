@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 from structlog import get_logger
 
@@ -23,7 +23,7 @@ from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
-from hathor.util import Reactor
+from hathor.util import Reactor, progress
 
 logger = get_logger()
 
@@ -36,8 +36,6 @@ _GROUP_END_EVENTS = {
 }
 
 _SUBSCRIBE_EVENTS = [
-    HathorEvents.MANAGER_ON_START,
-    HathorEvents.LOAD_FINISHED,
     HathorEvents.NETWORK_NEW_TX_ACCEPTED,
     HathorEvents.REORG_STARTED,
     HathorEvents.REORG_FINISHED,
@@ -76,6 +74,7 @@ class EventManager:
         self._pubsub = pubsub
 
     def start(self, peer_id: str) -> None:
+        """Starts the EventManager."""
         assert self._is_running is False, 'Cannot start, EventManager is already running'
         assert self._event_ws_factory is not None, 'Cannot start, EventWebsocketFactory is not set'
         assert self.get_event_queue_state() is True, 'Cannot start, event queue feature is disabled'
@@ -95,53 +94,75 @@ class EventManager:
         self._event_ws_factory.start()
         self._is_running = True
 
-    def stop(self):
+    def stop(self) -> None:
+        """Stops the EventManager."""
         assert self._is_running is True, 'Cannot stop, EventManager is not running'
         assert self._event_ws_factory is not None
 
         self._event_ws_factory.stop()
         self._is_running = False
 
-    def _assert_closed_event_group(self):
+    def _assert_closed_event_group(self) -> None:
         # XXX: we must check that the last event either does not belong to an event group or that it just closed an
         #      event group, because we cannot resume an open group of events that wasn't properly closed before exit
-        assert (
-            self._event_group_is_closed()
-        ), 'an unclosed event group was detected, which indicates the node crashed, cannot resume'
+        assert self._event_group_is_closed(), (
+            'an unclosed event group was detected, which indicates the node crashed, cannot resume'
+        )
 
-    def _event_group_is_closed(self):
+    def _event_group_is_closed(self) -> bool:
+        """Returns whether the previous event group was properly closed, if there's one."""
         return (
             self._last_event is None or
             self._last_event.group_id is None or
             EventType(self._last_event.type) in _GROUP_END_EVENTS
         )
 
-    def _subscribe_events(self):
+    def _subscribe_events(self) -> None:
         """ Subscribe to defined events for the pubsub received
         """
         for event in _SUBSCRIBE_EVENTS:
             self._pubsub.subscribe(event, self._handle_hathor_event)
 
+    def load_started(self):
+        if not self._is_running:
+            return
+
+        self._handle_event(
+            event_type=EventType.LOAD_STARTED,
+            event_args=EventArguments(),
+        )
+        self._event_storage.save_node_state(NodeState.LOAD)
+
+    def load_finished(self):
+        if not self._is_running:
+            return
+
+        self._handle_event(
+            event_type=EventType.LOAD_FINISHED,
+            event_args=EventArguments(),
+        )
+        self._event_storage.save_node_state(NodeState.SYNC)
+
     def _handle_hathor_event(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
+        """Handles a PubSub 'HathorEvents' event."""
         event_type = EventType.from_hathor_event(hathor_event)
 
         self._handle_event(event_type, event_args)
 
     def _handle_event(self, event_type: EventType, event_args: EventArguments) -> None:
+        """Handles an Event Queue feature 'EventType' event."""
         assert self._is_running, 'Cannot handle event, EventManager is not started.'
-
-        event_specific_handlers = {
-            EventType.LOAD_STARTED: self._handle_load_started,
-            EventType.LOAD_FINISHED: self._handle_load_finished
-        }
-
-        if event_specific_handler := event_specific_handlers.get(event_type):
-            event_specific_handler()
-
-        self._handle_event_creation(event_type, event_args)
-
-    def _handle_event_creation(self, event_type: EventType, event_args: EventArguments) -> None:
         assert self._event_ws_factory is not None
+
+        event = self._handle_event_creation(event_type, event_args)
+
+        self._event_storage.save_event(event)
+        self._event_ws_factory.broadcast_event(event)
+
+        self._last_event = event
+
+    def _handle_event_creation(self, event_type: EventType, event_args: EventArguments) -> BaseEvent:
+        """Handles the creation of an event from PubSub's EventArguments, according to its EventType."""
         create_event_fn: Callable[[EventType, EventArguments], BaseEvent]
 
         if event_type in _GROUP_START_EVENTS:
@@ -153,12 +174,10 @@ class EventManager:
 
         event = create_event_fn(event_type, event_args)
 
-        self._event_storage.save_event(event)
-        self._event_ws_factory.broadcast_event(event)
-
-        self._last_event = event
+        return event
 
     def _create_group_start_event(self, event_type: EventType, event_args: EventArguments) -> BaseEvent:
+        """Creates a group start event."""
         assert self._event_group_is_closed(), 'A new event group cannot be started as one is already in progress.'
 
         new_group_id = 0 if self._last_existing_group_id is None else self._last_existing_group_id + 1
@@ -172,6 +191,7 @@ class EventManager:
         )
 
     def _create_group_end_event(self, event_type: EventType, event_args: EventArguments) -> BaseEvent:
+        """Creates a group end event."""
         assert self._last_event is not None, 'Cannot end event group if there are no events.'
         assert not self._event_group_is_closed(), 'Cannot end event group as none is in progress.'
 
@@ -182,6 +202,7 @@ class EventManager:
         )
 
     def _create_non_group_edge_event(self, event_type: EventType, event_args: EventArguments) -> BaseEvent:
+        """Creates an event that neither a start nor an end event."""
         group_id = None
 
         if not self._event_group_is_closed():
@@ -200,6 +221,7 @@ class EventManager:
         event_args: EventArguments,
         group_id: Optional[int],
     ) -> BaseEvent:
+        """Actually creates a BaseEvent."""
         return BaseEvent.from_event_arguments(
             event_id=0 if self._last_event is None else self._last_event.id + 1,
             peer_id=self._peer_id,
@@ -209,23 +231,24 @@ class EventManager:
             group_id=group_id,
         )
 
-    def _handle_load_started(self):
-        self._event_storage.save_node_state(NodeState.LOAD)
-
-    def _handle_load_finished(self):
-        self._event_storage.save_node_state(NodeState.SYNC)
-
     def _should_reload_events(self) -> bool:
+        """Returns whether events should be reloaded or not."""
         return self._previous_node_state in [None, NodeState.LOAD]
 
     def get_event_queue_state(self) -> bool:
-        """Get whether the event queue feature is enabled from the storage"""
+        """Get whether the event queue feature is enabled from the storage."""
         return self._event_storage.get_event_queue_state()
 
     def save_event_queue_state(self, state: bool) -> None:
+        """Saves whether the event queue feature is enabled from the storage."""
         self._event_storage.save_event_queue_state(state)
 
-    def handle_load_phase_vertices(self, topological_iterator: Iterator[BaseTransaction]) -> None:
+    def handle_load_phase_vertices(
+        self,
+        *,
+        topological_iterator: Iterator[BaseTransaction],
+        total_vertices: int
+    ) -> None:
         """
         Either generates load phase events or not, depending on previous node state.
         Does so asynchronously so events generated here are not processed before normal event handling.
@@ -235,10 +258,20 @@ class EventManager:
         if not self._should_reload_events():
             return
 
-        for vertex in topological_iterator:
-            self._reactor.callLater(
-                delay=0,
-                callable=self._handle_event,
-                event_type=EventType.NEW_VERTEX_ACCEPTED,
-                event_args=EventArguments(tx=vertex)
-            )
+        def create_event_batch() -> Iterable[BaseEvent]:
+            assert self._event_ws_factory is not None
+            self.log.info('Starting creating events from existing database...')
+
+            for vertex in progress(topological_iterator, log=self.log, total=total_vertices):
+                event = self._handle_event_creation(
+                    event_type=EventType.NEW_VERTEX_ACCEPTED,
+                    event_args=EventArguments(tx=vertex)
+                )
+
+                yield event
+                self._event_ws_factory.broadcast_event(event)
+                self._last_event = event
+
+            self.log.info('Finished creating events from existing database.')
+
+        self._event_storage.save_events(create_event_batch())

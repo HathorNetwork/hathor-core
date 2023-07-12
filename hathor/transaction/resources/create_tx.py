@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import base64
-from typing import Dict, List
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -25,7 +24,7 @@ from hathor.transaction.scripts import create_output_script
 from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
 
 
-def from_raw_output(raw_output: Dict, tokens: List[bytes]) -> TxOutput:
+def from_raw_output(raw_output: dict, tokens: list[bytes]) -> TxOutput:
     value = raw_output['value']
     token_uid = raw_output.get('token_uid')
     if token_uid is not None:

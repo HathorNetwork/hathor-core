@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.context import NetfilterContext
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 class NetfilterTarget:
     terminate: bool
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             'type': type(self).__name__,
             'target_params': {}
@@ -56,7 +56,7 @@ class NetfilterLog(NetfilterTarget):
     def __init__(self, msg: str) -> None:
         self.msg = msg
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         data = super().to_json()
         data['target_params']['msg'] = self.msg
         return data

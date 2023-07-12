@@ -14,7 +14,7 @@
 
 import socket
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generator, List, Set, Tuple
+from typing import Any, Callable, Generator
 
 from structlog import get_logger
 from twisted.internet import defer
@@ -43,7 +43,7 @@ class BootstrapPeerDiscovery(PeerDiscovery):
     """ It implements a bootstrap peer discovery, which receives a static list of peers.
     """
 
-    def __init__(self, descriptions: List[str]):
+    def __init__(self, descriptions: list[str]):
         """
         :param descriptions: Descriptions of peers to connect to.
         """
@@ -60,7 +60,7 @@ class DNSPeerDiscovery(PeerDiscovery):
     """ It implements a DNS peer discovery, which looks for peers in A, AAA, and TXT records.
     """
 
-    def __init__(self, hosts: List[str], default_port: int = 40403, test_mode: int = 0):
+    def __init__(self, hosts: list[str], default_port: int = 40403, test_mode: int = 0):
         """
         :param hosts: List of hosts to be queried
         :param default_port: Port number which will be used to connect when only IP address is available.
@@ -81,7 +81,7 @@ class DNSPeerDiscovery(PeerDiscovery):
                 connect_to(url)
 
     @inlineCallbacks
-    def dns_seed_lookup(self, host: str) -> Generator[Any, Any, List[str]]:
+    def dns_seed_lookup(self, host: str) -> Generator[Any, Any, list[str]]:
         """ Run a DNS lookup for TXT, A, and AAAA records and return a list of connection strings.
         """
         if self.test_mode:
@@ -98,7 +98,7 @@ class DNSPeerDiscovery(PeerDiscovery):
 
         d = defer.gatherResults([d1, d2])
         results = yield d
-        unique_urls: Set[str] = set()
+        unique_urls: set[str] = set()
         for urls in results:
             unique_urls.update(urls)
         return list(unique_urls)
@@ -110,14 +110,14 @@ class DNSPeerDiscovery(PeerDiscovery):
         return []
 
     def dns_seed_lookup_text(
-        self, results: Tuple[List[RRHeader], List[RRHeader], List[RRHeader]]
-    ) -> List[str]:
+        self, results: tuple[list[RRHeader], list[RRHeader], list[RRHeader]]
+    ) -> list[str]:
         """ Run a DNS lookup for TXT records to discover new peers.
 
         The `results` has three lists that contain answer records, authority records, and additional records.
         """
         answers, _, _ = results
-        ret: List[str] = []
+        ret: list[str] = []
         for record in answers:
             assert isinstance(record.payload, Record_TXT)
             for txt in record.payload.data:
@@ -127,14 +127,14 @@ class DNSPeerDiscovery(PeerDiscovery):
         return ret
 
     def dns_seed_lookup_address(
-        self, results: Tuple[List[RRHeader], List[RRHeader], List[RRHeader]]
-    ) -> List[str]:
+        self, results: tuple[list[RRHeader], list[RRHeader], list[RRHeader]]
+    ) -> list[str]:
         """ Run a DNS lookup for A records to discover new peers.
 
         The `results` has three lists that contain answer records, authority records, and additional records.
         """
         answers, _, _ = results
-        ret: List[str] = []
+        ret: list[str] = []
         for record in answers:
             assert isinstance(record.payload, Record_A)
             address = record.payload.address

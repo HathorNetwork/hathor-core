@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from math import log
-from typing import Any, Dict
+from typing import Any
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
@@ -32,7 +32,7 @@ class TransactionAccWeightResource(Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def _render_GET_data(self, requested_hash: str) -> Dict[str, Any]:
+    def _render_GET_data(self, requested_hash: str) -> dict[str, Any]:
         success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
         if not success:
             return {'success': False, 'message': message}
@@ -44,7 +44,7 @@ class TransactionAccWeightResource(Resource):
             return {'success': False, 'message': 'not allowed on blocks'}
 
         meta = tx.get_metadata()
-        data: Dict[str, Any] = {'success': True}
+        data: dict[str, Any] = {'success': True}
 
         if meta.first_block:
             block = self.manager.tx_storage.get_transaction(meta.first_block)

@@ -26,7 +26,9 @@ class FeatureState(Enum):
         FAILED: Represents that a certain feature is not and will never be activated.
     """
 
-    DEFINED = 0
-    STARTED = 1
-    ACTIVE = 2
-    FAILED = 3
+    DEFINED = 'DEFINED'
+    STARTED = 'STARTED'
+    MUST_SIGNAL = 'MUST_SIGNAL'
+    LOCKED_IN = 'LOCKED_IN'
+    ACTIVE = 'ACTIVE'
+    FAILED = 'FAILED'

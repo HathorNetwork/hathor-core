@@ -15,7 +15,7 @@
 import operator
 from abc import ABC, abstractmethod
 from functools import reduce
-from typing import TYPE_CHECKING, Iterator, List, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
@@ -30,12 +30,11 @@ from hathor.indexes.tips_index import ScopeType as TipsScopeType, TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
 from hathor.transaction import BaseTransaction
-from hathor.util import progress
+from hathor.util import tx_progress
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
-
     from hathor.pubsub import PubSubManager
+    from hathor.storage import RocksDBStorage
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -136,7 +135,7 @@ class IndexesManager(ABC):
 
         db_last_started_at = tx_storage.get_last_started_at()
 
-        indexes_to_init: List[BaseIndex] = []
+        indexes_to_init: list[BaseIndex] = []
         for index in self.iter_all_indexes():
             index_db_name = index.get_db_name()
             if index_db_name is None:
@@ -173,7 +172,7 @@ class IndexesManager(ABC):
         if indexes_to_init:
             overall_scope = reduce(operator.__or__, map(lambda i: i.get_scope(), indexes_to_init))
             tx_iter_inner = overall_scope.get_iterator(tx_storage)
-            tx_iter = progress(tx_iter_inner, log=self.log, total=tx_storage.get_vertices_count())
+            tx_iter = tx_progress(tx_iter_inner, log=self.log, total=tx_storage.get_vertices_count())
             self.log.debug('indexes init', scope=overall_scope)
         else:
             tx_iter = iter([])
@@ -331,13 +330,13 @@ class MemoryIndexesManager(IndexesManager):
 
 
 class RocksDBIndexesManager(IndexesManager):
-    def __init__(self, db: 'rocksdb.DB') -> None:
+    def __init__(self, rocksdb_storage: 'RocksDBStorage') -> None:
         from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
 
-        self._db = db
+        self._db = rocksdb_storage.get_db()
 
         self.info = RocksDBInfoIndex(self._db)
         self.height = RocksDBHeightIndex(self._db)

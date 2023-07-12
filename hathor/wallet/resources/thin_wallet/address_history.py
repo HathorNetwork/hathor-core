@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from json import JSONDecodeError
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Optional
 
 from twisted.web.http import Request
 
@@ -144,7 +144,7 @@ class AddressHistoryResource(Resource):
             # Old and deprecated resource
             return self.deprecated_resource(request)
 
-    def get_address_history(self, addresses: List[str], ref_hash: Optional[str]) -> bytes:
+    def get_address_history(self, addresses: list[str], ref_hash: Optional[str]) -> bytes:
         ref_hash_bytes = None
         if ref_hash:
             try:
@@ -166,7 +166,7 @@ class AddressHistoryResource(Resource):
         total_elements = 0
 
         history = []
-        seen: Set[bytes] = set()
+        seen: set[bytes] = set()
         # XXX In this algorithm we need to sort all transactions of an address
         # and find one specific (in case of a pagination request)
         # so if this address has many txs, this could become slow
@@ -234,7 +234,7 @@ class AddressHistoryResource(Resource):
                 first_address = address
                 break
 
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             'success': True,
             'history': history,
             'has_more': has_more,
@@ -255,7 +255,7 @@ class AddressHistoryResource(Resource):
 
         addresses = raw_args[b'addresses[]']
         history = []
-        seen: Set[bytes] = set()
+        seen: set[bytes] = set()
         for address_to_decode in addresses:
             address = address_to_decode.decode('utf-8')
             try:

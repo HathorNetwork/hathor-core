@@ -15,15 +15,14 @@
 import secrets
 import time
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Generator, Optional
 
 from mnemonic import Mnemonic
 from structlog import get_logger
 
-from hathor.builder import Builder
+from hathor.builder import BuildArtifacts, Builder
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
-from hathor.event.websocket import EventWebsocketFactory
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock
@@ -55,6 +54,7 @@ class Simulator:
         Patches:
 
         - disable pow verification
+        - disable Transaction.resolve method
         - set DAA test-mode to DISABLED (will actually run the pow function, that won't actually verify the pow)
         - override AVG_TIME_BETWEEN_BLOCKS to 64
         """
@@ -64,8 +64,16 @@ class Simulator:
             assert self.hash is not None
             logger.new().debug('Skipping BaseTransaction.verify_pow() for simulator')
 
+        def resolve(self: BaseTransaction, update_time: bool = True) -> bool:
+            self.update_hash()
+            logger.new().debug('Skipping BaseTransaction.resolve() for simulator')
+            return True
+
         cls._original_verify_pow = BaseTransaction.verify_pow
         BaseTransaction.verify_pow = verify_pow
+
+        cls._original_resolve = BaseTransaction.resolve
+        BaseTransaction.resolve = resolve
 
         _set_test_mode(TestMode.DISABLED)
 
@@ -79,6 +87,7 @@ class Simulator:
         """
         from hathor.transaction import BaseTransaction
         BaseTransaction.verify_pow = cls._original_verify_pow
+        BaseTransaction.resolve = cls._original_resolve
 
         from hathor import daa
         daa.AVG_TIME_BETWEEN_BLOCKS = cls._original_avg_time_between_blocks
@@ -111,7 +120,7 @@ class Simulator:
         self._network = 'testnet'
         self._clock = HeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
-        self._connections: List['FakeConnection'] = []
+        self._connections: list['FakeConnection'] = []
         self._started = False
 
     def start(self) -> None:
@@ -130,38 +139,43 @@ class Simulator:
         self._started = False
         self._patches_rc_decrement()
 
-    def create_peer(
-        self,
-        network: Optional[str] = None,
-        peer_id: Optional[PeerId] = None,
-        enable_sync_v1: bool = True,
-        enable_sync_v2: bool = True,
-        soft_voided_tx_ids: Optional[Set[bytes]] = None,
-        full_verification: bool = True,
-        event_ws_factory: Optional[EventWebsocketFactory] = None
-    ) -> HathorManager:
+    def get_default_builder(self) -> Builder:
+        """
+        Returns a builder with default configuration, for convenience when using create_peer() or create_artifacts()
+        """
+        return Builder() \
+            .set_network(self._network) \
+            .set_peer_id(PeerId()) \
+            .set_soft_voided_tx_ids(set()) \
+            .enable_full_verification() \
+            .enable_sync_v1() \
+            .enable_sync_v2() \
+            .use_memory()
+
+    def create_peer(self, builder: Optional[Builder] = None) -> HathorManager:
+        """
+        Returns a manager from a builder, after configuring it for simulator use.
+        You may get a builder from get_default_builder() for convenience.
+        """
+        artifacts = self.create_artifacts(builder)
+        return artifacts.manager
+
+    def create_artifacts(self, builder: Optional[Builder] = None) -> BuildArtifacts:
+        """
+        Returns build artifacts from a builder, after configuring it for simulator use.
+        You may get a builder from get_default_builder() for convenience.
+        """
         assert self._started, 'Simulator is not started.'
-        assert peer_id is not None  # XXX: temporary, for checking that tests are using the peer_id
+        builder = builder or self.get_default_builder()
 
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
-        builder = Builder() \
+        artifacts = builder \
             .set_reactor(self._clock) \
-            .set_peer_id(peer_id or PeerId()) \
-            .set_network(network or self._network) \
-            .set_wallet(wallet) \
             .set_rng(Random(self.rng.getrandbits(64))) \
-            .set_enable_sync_v1(enable_sync_v1) \
-            .set_enable_sync_v2(enable_sync_v2) \
-            .set_full_verification(full_verification) \
-            .set_soft_voided_tx_ids(soft_voided_tx_ids or set()) \
-            .use_memory()
-
-        if event_ws_factory:
-            builder.enable_event_manager(event_ws_factory=event_ws_factory)
-
-        artifacts = builder.build()
+            .set_wallet(wallet) \
+            .build()
 
         artifacts.manager.start()
         self.run_to_completion()
@@ -173,7 +187,7 @@ class Simulator:
         self.log.debug('randomized step: generate wallet', words=words)
         wallet.unlock(words=words, tx_storage=artifacts.tx_storage)
 
-        return artifacts.manager
+        return artifacts
 
     def create_tx_generator(self, peer: HathorManager, *args: Any, **kwargs: Any) -> RandomTransactionGenerator:
         return RandomTransactionGenerator(peer, self.rng, *args, **kwargs)
@@ -203,6 +217,9 @@ class Simulator:
 
     def add_connection(self, conn: 'FakeConnection') -> None:
         self._connections.append(conn)
+
+    def remove_connection(self, conn: 'FakeConnection') -> None:
+        self._connections.remove(conn)
 
     def _run(self, interval: float, step: float, status_interval: float) -> Generator[None, None, None]:
         """ Implementation of run, yields at every step to allow verifications like in run_until_complete

@@ -15,7 +15,7 @@
 import asyncio
 from contextlib import suppress
 from functools import wraps
-from typing import Any, Awaitable, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Awaitable, Callable, Optional, Union
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, ensureDeferred
@@ -34,8 +34,8 @@ class Periodic:
     def __init__(self,
                  afunc: Callable[..., Awaitable[None]],
                  interval: Union[int, float],
-                 args: Tuple = (),
-                 kwargs: Dict = {}):
+                 args: tuple = (),
+                 kwargs: dict = {}):
         """ Create Periodic instance from async function, `interval` is in seconds.
         """
         self.afunc = afunc

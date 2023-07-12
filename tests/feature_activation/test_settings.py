@@ -16,7 +16,7 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.settings import FeatureInterval, Settings, _find_overlap
+from hathor.feature_activation.settings import FeatureInterval, Settings as FeatureSettings, _find_overlap
 
 
 @pytest.mark.parametrize(
@@ -26,14 +26,14 @@ from hathor.feature_activation.settings import FeatureInterval, Settings, _find_
             NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             ),
             NOP_FEATURE_2=dict(
                 bit=1,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             )
@@ -42,14 +42,14 @@ from hathor.feature_activation.settings import FeatureInterval, Settings, _find_
             NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             ),
             NOP_FEATURE_2=dict(
                 bit=0,
-                start_height=2 * 40320,
-                timeout_height=3 * 40320,
+                start_height=3 * 40320,
+                timeout_height=5 * 40320,
                 threshold=0,
                 version='0.0.0'
             )
@@ -58,7 +58,7 @@ from hathor.feature_activation.settings import FeatureInterval, Settings, _find_
 )
 def test_valid_settings(features):
     data = dict(features=features)
-    Settings(**data)
+    FeatureSettings(**data)
 
 
 @pytest.mark.parametrize(
@@ -68,14 +68,14 @@ def test_valid_settings(features):
             NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             ),
             NOP_FEATURE_2=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             )
@@ -84,14 +84,14 @@ def test_valid_settings(features):
             NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             ),
             NOP_FEATURE_2=dict(
                 bit=0,
                 start_height=40320,
-                timeout_height=2 * 40320,
+                timeout_height=3 * 40320,
                 threshold=0,
                 version='0.0.0'
             )
@@ -107,7 +107,7 @@ def test_valid_settings(features):
             NOP_FEATURE_2=dict(
                 bit=1,
                 start_height=15 * 40320,
-                timeout_height=16 * 40320,
+                timeout_height=17 * 40320,
                 threshold=0,
                 version='0.0.0'
             )
@@ -117,7 +117,7 @@ def test_valid_settings(features):
 def test_conflicting_bits(features):
     with pytest.raises(ValidationError) as e:
         data = dict(features=features)
-        Settings(**data)
+        FeatureSettings(**data)
 
     errors = e.value.errors()
     assert errors[0]['msg'] == 'At least one pair of Features have the same bit configured for an overlapping ' \
@@ -134,7 +134,7 @@ def test_conflicting_bits(features):
 def test_default_threshold(evaluation_interval, default_threshold, error):
     with pytest.raises(ValidationError) as e:
         data = dict(evaluation_interval=evaluation_interval, default_threshold=default_threshold)
-        Settings(**data)
+        FeatureSettings(**data)
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error

@@ -16,7 +16,7 @@ import base64
 import struct
 from collections import OrderedDict
 from math import inf
-from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Generator, Iterator, Optional
 from weakref import WeakSet
 
 from structlog import get_logger
@@ -25,9 +25,9 @@ from twisted.internet.interfaces import IConsumer, IDelayedCall, IPushProducer
 from zope.interface import implementer
 
 from hathor.conf import HathorSettings
-from hathor.p2p.downloader import Downloader
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -65,8 +65,8 @@ class SendDataPush:
         self.is_running: bool = False
         self.is_producing: bool = False
 
-        self.queue: OrderedDict[bytes, Tuple[BaseTransaction, List[bytes]]] = OrderedDict()
-        self.priority_queue: OrderedDict[bytes, Tuple[BaseTransaction, List[bytes]]] = OrderedDict()
+        self.queue: OrderedDict[bytes, tuple[BaseTransaction, list[bytes]]] = OrderedDict()
+        self.priority_queue: OrderedDict[bytes, tuple[BaseTransaction, list[bytes]]] = OrderedDict()
 
         self.delayed_call: Optional[IDelayedCall] = None
 
@@ -207,6 +207,9 @@ class NodeSyncTimestamp(SyncManager):
         self.call_later_id: Optional[IDelayedCall] = None
         self.call_later_interval: int = 1  # seconds
 
+        # Keep track of call laters.
+        self._send_tips_call_later: list[IDelayedCall] = []
+
         # Timestamp of the peer's latest block (according to the peer itself)
         self.peer_timestamp: int = 0
 
@@ -220,7 +223,7 @@ class NodeSyncTimestamp(SyncManager):
         self.previous_timestamp: int = 0
 
         # Latest deferred waiting for a reply.
-        self.deferred_by_key: Dict[str, Deferred[Any]] = {}
+        self.deferred_by_key: dict[str, Deferred[Any]] = {}
 
         # Maximum difference between our latest timestamp and synced timestamp to consider
         # that the peer is synced (in seconds).
@@ -248,7 +251,7 @@ class NodeSyncTimestamp(SyncManager):
             'synced_timestamp': self.synced_timestamp,
         }
 
-    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
         """ Return a dict of messages.
         """
         return {
@@ -284,6 +287,9 @@ class NodeSyncTimestamp(SyncManager):
             self.send_data_queue.stop()
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()
+        for call_later in self._send_tips_call_later:
+            if call_later.active():
+                call_later.cancel()
         # XXX: force remove this connection from _all_ pending downloads
         self.downloader.drop_connection(self)
 
@@ -617,13 +623,29 @@ class NodeSyncTimestamp(SyncManager):
         """Try to send a TIPS message. If rate limit has been reached, it schedules to send it later."""
         if not self.global_rate_limiter.add_hit(self.GlobalRateLimiter.SEND_TIPS):
             self.log.debug('send_tips throttled')
-            self.reactor.callLater(1, self.send_tips, timestamp, include_hashes, offset)
+            if len(self._send_tips_call_later) >= settings.MAX_GET_TIPS_DELAYED_CALLS:
+                self.protocol.send_error_and_close_connection(
+                    'Too many GET_TIPS message'
+                )
+                return
+            self._send_tips_call_later.append(
+                self.reactor.callLater(
+                    1, self.send_tips, timestamp, include_hashes, offset
+                )
+            )
             return
         self._send_tips(timestamp, include_hashes, offset)
 
     def _send_tips(self, timestamp: Optional[int] = None, include_hashes: bool = False, offset: int = 0) -> None:
         """ Send a TIPS message.
         """
+        # Filter for active delayed calls once one is executing
+        self._send_tips_call_later = [
+            call_later
+            for call_later in self._send_tips_call_later
+            if call_later.active()
+        ]
+
         if timestamp is None:
             timestamp = self.manager.tx_storage.latest_timestamp
 

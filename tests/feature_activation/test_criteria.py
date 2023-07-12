@@ -22,10 +22,10 @@ from hathor.feature_activation.model.criteria import Criteria
 VALID_CRITERIA = dict(
     bit=0,
     start_height=1000,
-    timeout_height=2000,
+    timeout_height=3000,
     threshold=0,
     minimum_activation_height=0,
-    activate_on_timeout=False,
+    lock_in_on_timeout=False,
     version='0.0.0'
 )
 
@@ -43,7 +43,7 @@ class TestCriteria:
                 timeout_height=102_000,
                 threshold=1000,
                 minimum_activation_height=101_000,
-                activate_on_timeout=True,
+                lock_in_on_timeout=True,
                 version='0.52.3'
             )
         ]
@@ -91,10 +91,10 @@ class TestCriteria:
         [
             (-10, 'ensure this value is greater than or equal to 0'),
             (-1, 'ensure this value is greater than or equal to 0'),
-            (1, 'timeout_height must be greater than start_height: 1 <= 1000'),
-            (45, 'timeout_height must be greater than start_height: 45 <= 1000'),
-            (100, 'timeout_height must be greater than start_height: 100 <= 1000'),
-            (1111, 'Should be a multiple of evaluation_interval: 1111 % 1000 != 0')
+            (1, 'timeout_height must be at least two evaluation intervals after the start_height: 1 < 3000'),
+            (45, 'timeout_height must be at least two evaluation intervals after the start_height: 45 < 3000'),
+            (100, 'timeout_height must be at least two evaluation intervals after the start_height: 100 < 3000'),
+            (3111, 'Should be a multiple of evaluation_interval: 3111 % 1000 != 0')
         ]
     )
     def test_timeout_height(self, timeout_height, error):
@@ -130,7 +130,6 @@ class TestCriteria:
             (1, 'Should be a multiple of evaluation_interval: 1 % 1000 != 0'),
             (45, 'Should be a multiple of evaluation_interval: 45 % 1000 != 0'),
             (100, 'Should be a multiple of evaluation_interval: 100 % 1000 != 0'),
-            (10_000, 'minimum_activation_height must not be greater than timeout_height: 10000 > 2000')
         ]
     )
     def test_minimum_activation_height(self, minimum_activation_height, error):

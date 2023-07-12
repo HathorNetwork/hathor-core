@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Iterable, Optional, Sized, Tuple, TypeVar
+from typing import TYPE_CHECKING, Iterable, Optional, Sized, TypeVar
 
 from structlog import get_logger
 
@@ -81,7 +81,7 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
             assert len(rocksdb_key) == self._KEY_SIZE + 4 + 32
         return rocksdb_key
 
-    def _from_rocksdb_key(self, rocksdb_key: bytes) -> Tuple[KT, int, bytes]:
+    def _from_rocksdb_key(self, rocksdb_key: bytes) -> tuple[KT, int, bytes]:
         import struct
         assert len(rocksdb_key) == self._KEY_SIZE + 4 + 32
         key = self._deserialize_key(rocksdb_key[:self._KEY_SIZE])

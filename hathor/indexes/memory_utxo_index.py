@@ -14,7 +14,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import DefaultDict, Iterator, NamedTuple, Optional, Union
+from typing import Iterator, NamedTuple, Optional, Union
 
 from sortedcontainers import SortedSet
 from structlog import get_logger
@@ -60,7 +60,7 @@ class _IndexItem:
 
 
 class MemoryUtxoIndex(UtxoIndex):
-    _index: DefaultDict[_IndexKey, _IndexItem]
+    _index: defaultdict[_IndexKey, _IndexItem]
 
     def __init__(self):
         super().__init__()

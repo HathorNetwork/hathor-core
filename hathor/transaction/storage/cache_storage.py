@@ -21,6 +21,7 @@ from hathor.indexes import IndexesManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.util import Reactor
 
 
@@ -32,7 +33,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     dirty_txs: Set[bytes]
 
     def __init__(self, store: 'BaseTransactionStorage', reactor: Reactor, interval: int = 5,
-                 capacity: int = 10000, *, _clone_if_needed: bool = False):
+                 capacity: int = 10000, *, indexes: Optional[IndexesManager], _clone_if_needed: bool = False):
         """
         :param store: a subclass of BaseTransactionStorage
         :type store: :py:class:`hathor.transaction.storage.BaseTransactionStorage`
@@ -67,8 +68,16 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         # we need to use only one weakref dict, so we must first initialize super, and then
         # attribute the same weakref for both.
-        super().__init__()
+        super().__init__(indexes=indexes)
         self._tx_weakref = store._tx_weakref
+        # XXX: just to make sure this isn't being used anywhere, setters/getters should be used instead
+        del self._allow_scope
+
+    def set_allow_scope(self, allow_scope: TxAllowScope) -> None:
+        self.store._allow_scope = allow_scope
+
+    def get_allow_scope(self) -> TxAllowScope:
+        return self.store._allow_scope
 
     def set_capacity(self, capacity: int) -> None:
         """Change the max number of items in cache."""
@@ -148,9 +157,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def get_all_genesis(self) -> Set[BaseTransaction]:
         return self.store.get_all_genesis()
-
-    def _build_indexes_manager(self) -> IndexesManager:
-        return self.store._build_indexes_manager()
 
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""

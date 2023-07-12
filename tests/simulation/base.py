@@ -35,9 +35,11 @@ class SimulatorTestCase(unittest.TestCase):
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
         if simulator is None:
             simulator = self.simulator
-        return simulator.create_peer(
-            peer_id=self.get_random_peer_id_from_pool(rng=simulator.rng),
-            soft_voided_tx_ids=soft_voided_tx_ids,
-            enable_sync_v1=enable_sync_v1,
-            enable_sync_v2=enable_sync_v2,
-        )
+
+        builder = simulator.get_default_builder() \
+            .set_peer_id(self.get_random_peer_id_from_pool(rng=simulator.rng)) \
+            .set_soft_voided_tx_ids(soft_voided_tx_ids) \
+            .set_enable_sync_v1(enable_sync_v1) \
+            .set_enable_sync_v2(enable_sync_v2)
+
+        return simulator.create_peer(builder)

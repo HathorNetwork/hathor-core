@@ -17,7 +17,7 @@ Module for mining websocket API discussed at https://github.com/HathorNetwork/ha
 """
 
 from json import JSONDecodeError
-from typing import Any, Dict, List, NamedTuple, Optional, Set, Union
+from typing import Any, NamedTuple, Optional, Union
 
 from autobahn.twisted.websocket import WebSocketServerFactory, WebSocketServerProtocol
 from structlog import get_logger
@@ -32,7 +32,7 @@ logger = get_logger()
 settings = HathorSettings()
 
 JsonRpcId = Union[str, int, float]
-JsonValue = Optional[Union[Dict[str, Any], List[Any], str, int, float]]
+JsonValue = Optional[Union[dict[str, Any], list[Any], str, int, float]]
 
 
 class JsonRpcError(NamedTuple):
@@ -64,7 +64,7 @@ class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
     def onMessage(self, payload: bytes, isBinary: bool) -> None:
         self.log.info('message', payload=payload)
         try:
-            data: Union[List[Dict], Dict] = json_loadb(payload)
+            data: Union[list[dict], dict] = json_loadb(payload)
         except JSONDecodeError:
             return self.send_response(error=JSON_RPC_PARSE_ERROR)
         try:
@@ -77,11 +77,11 @@ class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
             self.log.warn('internal error', exc_info=True)
             return self.send_response(error=JSON_RPC_INTERNAL_ERROR)
 
-    def _handle_request(self, data: Dict) -> None:
+    def _handle_request(self, data: dict) -> None:
         try:
             id = data.get('id')
             method_name = data['method'].replace('.', '_')
-            params: Union[Dict[str, Any], List[Any]] = data.get('params', [])
+            params: Union[dict[str, Any], list[Any]] = data.get('params', [])
         except (KeyError, ValueError):
             return self.send_response(error=JSON_RPC_INVALID_REQUEST)
         try:
@@ -107,7 +107,7 @@ class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
                       id: Optional[JsonRpcId] = None,
                       result: Optional[JsonValue] = None,
                       error: Optional[JsonRpcError] = None) -> None:
-        response: Dict[str, JsonValue] = {
+        response: dict[str, JsonValue] = {
             'id': id,
             'error': None,
             'result': None,
@@ -122,8 +122,8 @@ class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
         if error is not None and error.fatal:
             self.sendClose()
 
-    def send_notification(self, *, method: str, params: Union[List, Dict]) -> None:
-        request: Dict[str, JsonValue] = {
+    def send_notification(self, *, method: str, params: Union[list, dict]) -> None:
+        request: dict[str, JsonValue] = {
             'id': None,
             'method': method,
         }
@@ -155,13 +155,13 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
             self.factory.connections.remove(self)
             self._open = False
 
-    def do_mining_refresh(self) -> List[Dict]:
+    def do_mining_refresh(self) -> list[dict]:
         if not self.factory.manager.can_start_mining():
             self.log.warn('node syncing')
             return []
         return self.factory.get_block_templates()
 
-    def do_mining_submit(self, hexdata: str, optimistic: bool = False) -> Union[bool, Dict]:
+    def do_mining_submit(self, hexdata: str, optimistic: bool = False) -> Union[bool, dict]:
         if not self.factory.manager.can_start_mining():
             self.log.warn('node syncing')
             return False
@@ -181,13 +181,13 @@ class MiningWebsocketFactory(WebSocketServerFactory):
     """
     protocol = MiningWebsocketProtocol
 
-    connections: Set[MiningWebsocketProtocol]
+    connections: set[MiningWebsocketProtocol]
 
     def __init__(self, manager: HathorManager):
         super().__init__()
         self.connections = set()
         self.manager = manager
-        self._last_broadcast: List[Dict] = []
+        self._last_broadcast: list[dict] = []
         manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self._on_new_tx)
 
     def buildProtocol(self, addr):
@@ -202,12 +202,12 @@ class MiningWebsocketFactory(WebSocketServerFactory):
                 self.broadcast_notification(method='mining.notify', params=block_templates)
                 self._last_broadcast = block_templates
 
-    def get_block_templates(self) -> List[Dict]:
+    def get_block_templates(self) -> list[dict]:
         """Serialized manager.get_block_templates()"""
         block_templates = self.manager.get_block_templates()
         return [t.to_dict() for t in block_templates]
 
-    def broadcast_notification(self, *, method: str, params: Union[List, Dict]) -> None:
+    def broadcast_notification(self, *, method: str, params: Union[list, dict]) -> None:
         """ Broadcast notification to all connections
         """
         for conn in self.connections:

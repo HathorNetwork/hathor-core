@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any, NamedTuple, Optional, Type, TypeVar
+from typing import Any, NamedTuple, Optional, TypeVar
 
 import pydantic
 
@@ -22,7 +22,7 @@ T = TypeVar('T', bound=NamedTuple)
 
 
 def validated_named_tuple_from_dict(
-    named_tuple_type: Type[T],
+    named_tuple_type: type[T],
     attributes_dict: dict[str, Any],
     *,
     validators: Optional[dict[str, classmethod]] = None

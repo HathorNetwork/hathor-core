@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict
+from typing import Any
 
 from twisted.web.http import Request
 
@@ -35,7 +35,7 @@ class TokenResource(Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def get_one_token_data(self, token_uid: bytes) -> Dict[str, Any]:
+    def get_one_token_data(self, token_uid: bytes) -> dict[str, Any]:
         # Get one token data specified in id
         tokens_index = self.manager.tx_storage.indexes.tokens
         try:
@@ -71,7 +71,7 @@ class TokenResource(Resource):
         }
         return data
 
-    def get_list_token_data(self) -> Dict[str, Any]:
+    def get_list_token_data(self) -> dict[str, Any]:
         # XXX We should change this in the future so we don't return all tokens in one request
         # XXX Right now, the way we have the tokens index is not easy to do it but in the future
         # XXX when the number of tokens grow we should refactor this resource

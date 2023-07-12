@@ -14,7 +14,7 @@
 
 import struct
 from json import JSONDecodeError
-from typing import TYPE_CHECKING, Any, Dict, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from structlog import get_logger
 from twisted.web.http import Request
@@ -67,7 +67,7 @@ class PushTxResource(Resource):
         addr = request.getClientAddress()
         return getattr(addr, 'host', 'unknown')
 
-    def handle_push_tx(self, params: Dict[str, Any], client_addr: str) -> Dict[str, Any]:
+    def handle_push_tx(self, params: dict[str, Any], client_addr: str) -> dict[str, Any]:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
@@ -154,8 +154,8 @@ class PushTxResource(Resource):
         if not isinstance(data, dict):
             return error_ret
 
-        # Need to do that because json_loadb returns an object, which is not compatible with Dict[str, Any]
-        data = cast(Dict[str, Any], data)
+        # Need to do that because json_loadb returns an object, which is not compatible with dict[str, Any]
+        data = cast(dict[str, Any], data)
 
         if 'hex_tx' not in data:
             return error_ret

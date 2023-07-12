@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Type
+from typing import TYPE_CHECKING, Optional
 
 from twisted.internet import protocol
 from twisted.internet.interfaces import IAddress
@@ -33,7 +33,7 @@ class HathorServerFactory(protocol.ServerFactory):
     """
 
     manager: Optional[ConnectionsManager]
-    protocol: Type[MyServerProtocol] = MyServerProtocol
+    protocol: type[MyServerProtocol] = MyServerProtocol
 
     def __init__(
             self,
@@ -66,7 +66,7 @@ class HathorClientFactory(protocol.ClientFactory):
     """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
     """
 
-    protocol: Type[MyClientProtocol] = MyClientProtocol
+    protocol: type[MyClientProtocol] = MyClientProtocol
 
     def __init__(
             self,

@@ -27,11 +27,14 @@ logger = get_logger()
 
 
 class EventWebsocketFactory(WebSocketServerFactory):
-    """ Websocket that will handle events
-    """
+    """WebSocket factory that handles the broadcasting of the Event Queue feature."""
 
     protocol = EventWebsocketProtocol
+
+    # Whether the factory is running or not.
     _is_running = False
+
+    # The last event id broadcast by this factory.
     _latest_event_id: Optional[int] = None
 
     def __init__(self, reactor: Reactor, event_storage: EventStorage):
@@ -85,6 +88,10 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self._connections.discard(connection)
 
     def send_next_event_to_connection(self, connection: EventWebsocketProtocol) -> None:
+        """
+        Sends the next expected event to a connection, if it can receive the next event, and the event exists.
+        Will recurse asynchronously trying to send new events to the connection until it cannot receive more events.
+        """
         next_event_id = connection.next_expected_event_id()
 
         if not connection.can_receive_event(next_event_id):
@@ -95,6 +102,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
             self._reactor.callLater(0, self.send_next_event_to_connection, connection)
 
     def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent) -> None:
+        """Sends an event to a connection, if it can receive this event."""
         if not connection.can_receive_event(event.id):
             return
 

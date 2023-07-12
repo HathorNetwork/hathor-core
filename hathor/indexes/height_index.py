@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import List, NamedTuple, Optional, Tuple
+from typing import NamedTuple, Optional
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
@@ -57,10 +57,9 @@ class HeightIndex(BaseIndex):
             return
         assert isinstance(tx, Block)
         assert tx.hash is not None
-        tx_meta = tx.get_metadata()
-        if tx_meta.voided_by:
+        if tx.get_metadata().voided_by:
             return
-        self.add_new(tx_meta.height, tx.hash, tx.timestamp)
+        self.add_new(tx.get_height(), tx.hash, tx.timestamp)
 
     @abstractmethod
     def add_new(self, height: int, block_hash: bytes, timestamp: int) -> None:
@@ -85,7 +84,7 @@ class HeightIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_height_tip(self) -> Tuple[int, bytes]:
+    def get_height_tip(self) -> tuple[int, bytes]:
         """ Return the best block height and hash, it returns the genesis when there is no other block
         """
         raise NotImplementedError
@@ -98,14 +97,14 @@ class HeightIndex(BaseIndex):
 
         block_height = height
         side_chain_block = block
-        add_to_index: List[_AddToIndexItem] = []
+        add_to_index: list[_AddToIndexItem] = []
         while self.get(block_height) != side_chain_block.hash:
             add_to_index.append(
                 _AddToIndexItem(block_height, not_none(side_chain_block.hash), side_chain_block.timestamp)
             )
 
             side_chain_block = side_chain_block.get_block_parent()
-            new_block_height = side_chain_block.get_metadata().height
+            new_block_height = side_chain_block.get_height()
             assert new_block_height + 1 == block_height
             block_height = new_block_height
 

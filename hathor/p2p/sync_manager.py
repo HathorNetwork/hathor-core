@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Callable, Dict
+from typing import Callable
 
 from hathor.p2p.messages import ProtocolMessages
 from hathor.transaction import BaseTransaction
@@ -36,7 +36,7 @@ class SyncManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
         """Command dict to add to the protocol handler"""
         raise NotImplementedError
 

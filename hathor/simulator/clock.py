@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import heapq
-from typing import Any, Callable, List
+from typing import Any, Callable
 
 from twisted.internet.base import DelayedCall
 from twisted.internet.interfaces import IDelayedCall, IReactorTime
@@ -56,7 +56,7 @@ class HeapClock:
         heapq.heappush(self.calls, (dc.getTime(), dc))
         return dc
 
-    def getDelayedCalls(self) -> List[IDelayedCall]:
+    def getDelayedCalls(self) -> list[IDelayedCall]:
         """
         See L{twisted.internet.interfaces.IReactorTime.getDelayedCalls}
         """

@@ -58,7 +58,6 @@ def test_valid_hathor_settings_from_yaml(filepath):
         ],
         REWARD_SPEND_MIN_BLOCKS=10,
         SLOW_ASSERTS=True,
-        ENABLE_EVENT_QUEUE_FEATURE=True,
         MAX_TX_WEIGHT_DIFF_ACTIVATION=0.0,
         BLOCKS_PER_HALVING=120,
         MIN_BLOCK_WEIGHT=2,
@@ -76,7 +75,7 @@ def test_valid_hathor_settings_from_yaml(filepath):
         ('fixtures/invalid_byte_hathor_settings_fixture.yml', "expected 'str' or 'bytes', got 64"),
         (
             'fixtures/invalid_features_hathor_settings_fixture.yml',
-            'Should be a multiple of evaluation_interval: 1001 % 1000 != 0'
+            'Should be a multiple of evaluation_interval: 2001 % 1000 != 0'
         )
     ]
 )

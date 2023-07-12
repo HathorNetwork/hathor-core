@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from json import JSONDecodeError
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 
-def handle_body_validation(request: 'Request') -> Dict[str, Any]:
+def handle_body_validation(request: 'Request') -> dict[str, Any]:
     """ Auxiliar method to be used by POST and DELETE requests
         to handle the parameters validation
     """

@@ -15,7 +15,7 @@
 import base64
 import hashlib
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Set, cast
+from typing import TYPE_CHECKING, Any, Generator, Optional, cast
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -56,14 +56,14 @@ class PeerId:
     """
 
     id: Optional[str]
-    entrypoints: List[str]
+    entrypoints: list[str]
     private_key: Optional[rsa.RSAPrivateKeyWithSerialization]
     public_key: Optional[rsa.RSAPublicKey]
     certificate: Optional[x509.Certificate]
     retry_timestamp: int    # should only try connecting to this peer after this timestamp
     retry_interval: int     # how long to wait for next connection retry. It will double for each failure
     retry_attempts: int     # how many retries were made
-    flags: Set[str]
+    flags: set[str]
 
     def __init__(self, auto_generate_keys: bool = True) -> None:
         self.id = None
@@ -158,7 +158,7 @@ class PeerId:
             return True
 
     @classmethod
-    def create_from_json(cls, data: Dict[str, Any]) -> 'PeerId':
+    def create_from_json(cls, data: dict[str, Any]) -> 'PeerId':
         """ Create a new PeerId from a JSON.
 
         It is used both to load a PeerId from disk and to create a PeerId
@@ -213,7 +213,7 @@ class PeerId:
             if public_der1 != public_der2:
                 raise InvalidPeerIdException('private/public pair does not match')
 
-    def to_json(self, include_private_key: bool = False) -> Dict[str, Any]:
+    def to_json(self, include_private_key: bool = False) -> dict[str, Any]:
         """ Return a JSON serialization of the object.
 
         By default, it will not include the private key. If you would like to add

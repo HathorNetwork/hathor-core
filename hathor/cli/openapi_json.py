@@ -14,27 +14,27 @@
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'openapi_files')
 DEFAULT_OUTPUT_PATH = os.path.join(BASE_PATH, 'openapi.json')
 
 
-def get_base() -> Dict[str, Any]:
+def get_base() -> dict[str, Any]:
     """ Returns the base configuration from OpenAPI json
     """
     with open(os.path.join(BASE_PATH, 'openapi_base.json'), 'r') as f:
         return json.load(f)
 
 
-def get_components() -> Dict[str, Any]:
+def get_components() -> dict[str, Any]:
     """ Returns the components from OpenAPI json
     """
     with open(os.path.join(BASE_PATH, 'openapi_components.json'), 'r') as f:
         return json.load(f)
 
 
-def get_openapi_dict() -> Dict[str, Any]:
+def get_openapi_dict() -> dict[str, Any]:
     """ Returns the generated OpenAPI dict
     """
     from hathor.cli.openapi_files.register import get_registered_resources

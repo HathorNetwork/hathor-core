@@ -27,6 +27,16 @@ class EventStorageBaseTest(unittest.TestCase):
 
         assert event_retrieved == event
 
+    def test_save_events_and_retrieve(self):
+        event1 = self.event_mocker.generate_mocked_event()
+        event2 = self.event_mocker.generate_mocked_event()
+        self.event_storage.save_events([event1, event2])
+        event1_retrieved = self.event_storage.get_event(event1.id)
+        event2_retrieved = self.event_storage.get_event(event2.id)
+
+        assert event1_retrieved == event1
+        assert event2_retrieved == event2
+
     def test_get_negative_key(self):
         with self.assertRaises(ValueError) as cm:
             self.event_storage.get_event(-1)

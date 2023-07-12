@@ -22,7 +22,7 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Set, Tuple, Type
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional
 
 from structlog import get_logger
 
@@ -42,8 +42,10 @@ from hathor.transaction.exceptions import (
     TxValidationError,
     WeightError,
 )
-from hathor.transaction.transaction_metadata import TransactionMetadata, ValidationState
+from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.validation_state import ValidationState
+from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
 
 if TYPE_CHECKING:
@@ -66,9 +68,8 @@ TX_HASH_SIZE = 32   # 256 bits, 32 bytes
 # H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
 # Q = unsigned long long int (64), B = unsigned char (1 byte)
 
-# Version (H), inputs len (B), and outputs len (B), token uids len (B).
-# H = unsigned short (2 bytes)
-_SIGHASH_ALL_FORMAT_STRING = '!HBBB'
+# Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
+_SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 # Weight (d), timestamp (I), and parents len (B)
 _GRAPH_FORMAT_STRING = '!dIB'
@@ -80,6 +81,9 @@ _TX_PARENTS_BLOCKS = 0
 # blocks have 3 parents, 2 txs and 1 block
 _BLOCK_PARENTS_TXS = 2
 _BLOCK_PARENTS_BLOCKS = 1
+
+# The int value of one byte
+_ONE_BYTE = 0xFF
 
 
 def sum_weights(w1: float, w2: float) -> float:
@@ -110,22 +114,19 @@ class TxVersion(IntEnum):
     MERGE_MINED_BLOCK = 3
 
     @classmethod
-    def _missing_(cls, value: Any) -> 'TxVersion':
-        # version's first byte is reserved for future use, so we'll ignore it
-        assert isinstance(value, int)
-        version = value & 0xFF
-        if version == value:
-            # Prevent infinite recursion when starting TxVerion with wrong version
-            raise ValueError('Invalid version.')
-        return cls(version)
+    def _missing_(cls, value: Any) -> None:
+        assert isinstance(value, int), f"Value '{value}' must be an integer"
+        assert value <= _ONE_BYTE, f'Value {hex(value)} must not be larger than one byte'
 
-    def get_cls(self) -> Type['BaseTransaction']:
+        raise ValueError(f'Invalid version: {value}')
+
+    def get_cls(self) -> type['BaseTransaction']:
         from hathor.transaction.block import Block
         from hathor.transaction.merge_mined_block import MergeMinedBlock
         from hathor.transaction.token_creation_tx import TokenCreationTransaction
         from hathor.transaction.transaction import Transaction
 
-        cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
+        cls_map: dict[TxVersion, type[BaseTransaction]] = {
             TxVersion.REGULAR_BLOCK: Block,
             TxVersion.REGULAR_TRANSACTION: Transaction,
             TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
@@ -154,26 +155,38 @@ class BaseTransaction(ABC):
 
     _metadata: Optional[TransactionMetadata]
 
+    # Bits extracted from the first byte of the version field. They carry extra information that may be interpreted
+    # differently by each subclass of BaseTransaction.
+    # Currently only the Block subclass uses it, carrying information about Feature Activation bits and also extra
+    # bits reserved for future use, depending on the configuration.
+    signal_bits: int
+
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_BLOCK,
                  weight: float = 0,
-                 inputs: Optional[List['TxInput']] = None,
-                 outputs: Optional[List['TxOutput']] = None,
-                 parents: Optional[List[bytes]] = None,
-                 hash: Optional[bytes] = None,
+                 inputs: Optional[list['TxInput']] = None,
+                 outputs: Optional[list['TxOutput']] = None,
+                 parents: Optional[list[VertexId]] = None,
+                 hash: Optional[VertexId] = None,
                  storage: Optional['TransactionStorage'] = None) -> None:
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
+            Signal bits: bits used to carry extra information that may be interpreted differently by each subclass
             Version: version when it was created
             Weight: different for transactions and blocks
             Outputs: all outputs that are being created
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
         """
+        assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
+        assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
+
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
+        self.signal_bits = signal_bits
         self.version = version
         self.weight = weight
         self.inputs = inputs or []
@@ -190,7 +203,7 @@ class BaseTransaction(ABC):
         """
         return _base_transaction_log
 
-    def _get_formatted_fields_dict(self, short: bool = True) -> Dict[str, str]:
+    def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
         """ Used internally on __repr__ and __str__, returns a dict of `field_name: formatted_value`.
         """
         from collections import OrderedDict
@@ -422,26 +435,26 @@ class BaseTransaction(ABC):
         struct_bytes += self.get_struct_nonce()
         return struct_bytes
 
-    def get_all_dependencies(self) -> Set[bytes]:
+    def get_all_dependencies(self) -> set[bytes]:
         """Set of all tx-hashes needed to fully validate this tx, including parent blocks/txs and inputs."""
         return set(chain(self.parents, (i.tx_id for i in self.inputs)))
 
-    def get_tx_dependencies(self) -> Set[bytes]:
+    def get_tx_dependencies(self) -> set[bytes]:
         """Set of all tx-hashes needed to fully validate this, except for block parent, i.e. only tx parents/inputs."""
         parents = self.parents[1:] if self.is_block else self.parents
         return set(chain(parents, (i.tx_id for i in self.inputs)))
 
-    def get_tx_parents(self) -> Set[bytes]:
+    def get_tx_parents(self) -> set[bytes]:
         """Set of parent tx hashes, typically used for syncing transactions."""
         return set(self.parents[1:] if self.is_block else self.parents)
 
-    def get_related_addresses(self) -> Set[str]:
+    def get_related_addresses(self) -> set[str]:
         """ Return a set of addresses collected from tx's inputs and outputs.
         """
         from hathor.transaction.scripts import parse_address_script
 
         assert self.storage is not None
-        addresses: Set[str] = set()
+        addresses: set[str] = set()
 
         def add_address_from_output(output: 'TxOutput') -> None:
             script_type_out = parse_address_script(output.script)
@@ -494,7 +507,7 @@ class BaseTransaction(ABC):
         else:
             self._mark_partially_validated()
 
-    def validate_checkpoint(self, checkpoints: List[Checkpoint]) -> bool:
+    def validate_checkpoint(self, checkpoints: list[Checkpoint]) -> bool:
         """ Run checkpoint validations  and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `CHECKPOINT` and return `True`.
@@ -559,7 +572,7 @@ class BaseTransaction(ABC):
         tx_meta.del_voided_by(settings.PARTIALLY_VALIDATED_ID)
 
     @abstractmethod
-    def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
+    def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         """Check that this tx is a known checkpoint or is parent of another checkpoint-valid tx/block.
 
         To be implemented by tx/block, used by `self.validate_checkpoint`. Should not modify the validation state."""
@@ -710,7 +723,7 @@ class BaseTransaction(ABC):
                     len(output.script), settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
-    def resolve(self, update_time: bool = True) -> bool:
+    def resolve(self, update_time: bool = False) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work
 
         The `self.weight` must be set before calling this method.
@@ -800,7 +813,7 @@ class BaseTransaction(ABC):
         self.hash = self.calculate_hash()
 
     def start_mining(self, start: int = 0, end: int = MAX_NONCE, sleep_seconds: float = 0.0, update_time: bool = True,
-                     *, should_stop: Callable[[], bool] = lambda: False) -> Optional[bytes]:
+                     *, should_stop: Callable[[], bool] = lambda: False) -> Optional[VertexId]:
         """Starts mining until it solves the problem, i.e., finds the nonce that satisfies the conditions
 
         :param start: beginning of the search interval
@@ -860,10 +873,23 @@ class BaseTransaction(ABC):
             # FIXME: there is code that set use_storage=False but relies on correct height being calculated
             #        which requires the use of a storage, this is a workaround that should be fixed, places where this
             #        happens include generating new mining blocks and some tests
-            height = self.calculate_height() if self.storage else 0
+            height = self.calculate_height() if self.storage else None
             score = self.weight if self.is_genesis else 0
-            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height, score=score,
-                                           min_height=0)
+            kwargs: dict[str, Any] = {}
+
+            if self.is_block:
+                from hathor.transaction import Block
+                assert isinstance(self, Block)
+                kwargs['feature_activation_bit_counts'] = self.calculate_feature_activation_bit_counts()
+
+            metadata = TransactionMetadata(
+                hash=self.hash,
+                accumulated_weight=self.weight,
+                height=height,
+                score=score,
+                min_height=0,
+                **kwargs
+            )
             self._metadata = metadata
         if not metadata.hash:
             metadata.hash = self.hash
@@ -887,6 +913,9 @@ class BaseTransaction(ABC):
             self._metadata.validation = ValidationState.INITIAL
             self._metadata.voided_by = {settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
+
+        self._update_height_metadata()
+
         self.storage.save_transaction(self, only_metadata=True)
 
     def update_accumulated_weight(self, *, stop_value: float = inf, save_file: bool = True) -> TransactionMetadata:
@@ -922,8 +951,8 @@ class BaseTransaction(ABC):
         # reduce the number of visits in the BFS. We need to specially handle when a transaction is not
         # directly verified by a block.
 
-        from hathor.transaction.storage.traversal import BFSWalk
-        bfs_walk = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+        from hathor.transaction.storage.traversal import BFSTimestampWalk
+        bfs_walk = BFSTimestampWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         for tx in bfs_walk.run(self, skip_root=True):
             accumulated_weight = sum_weights(accumulated_weight, tx.weight)
             if accumulated_weight > stop_value:
@@ -943,6 +972,7 @@ class BaseTransaction(ABC):
         self._update_height_metadata()
         self._update_parents_children_metadata()
         self._update_reward_lock_metadata()
+        self._update_feature_activation_bit_counts_metadata()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
@@ -968,6 +998,16 @@ class BaseTransaction(ABC):
                 metadata.children.append(self.hash)
                 self.storage.save_transaction(parent, only_metadata=True)
 
+    def _update_feature_activation_bit_counts_metadata(self) -> None:
+        """Update the block feature_activation_bit_counts metadata."""
+        if not self.is_block:
+            return
+
+        from hathor.transaction import Block
+        assert isinstance(self, Block)
+        metadata = self.get_metadata()
+        metadata.feature_activation_bit_counts = self.calculate_feature_activation_bit_counts()
+
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
 
@@ -985,10 +1025,10 @@ class BaseTransaction(ABC):
         assert self.storage is not None
         return self.storage.get_transaction(input_tx.tx_id)
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
-        """ Creates a json serializable Dict object from self
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
+        """ Creates a json serializable dict object from self
         """
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         data['hash'] = self.hash_hex or None
         data['nonce'] = self.nonce
         data['timestamp'] = self.timestamp
@@ -1001,7 +1041,7 @@ class BaseTransaction(ABC):
 
         data['inputs'] = []
         for tx_input in self.inputs:
-            data_input: Dict[str, Any] = {}
+            data_input: dict[str, Any] = {}
             data_input['tx_id'] = tx_input.tx_id.hex()
             data_input['index'] = tx_input.index
             data_input['data'] = base64.b64encode(tx_input.data).decode('utf-8')
@@ -1016,11 +1056,11 @@ class BaseTransaction(ABC):
 
         return data
 
-    def to_json_extended(self) -> Dict[str, Any]:
+    def to_json_extended(self) -> dict[str, Any]:
         assert self.hash is not None
         assert self.storage is not None
 
-        def serialize_output(tx: BaseTransaction, tx_out: TxOutput) -> Dict[str, Any]:
+        def serialize_output(tx: BaseTransaction, tx_out: TxOutput) -> dict[str, Any]:
             data = tx_out.to_json(decode_script=True)
             data['token'] = tx.get_token_uid(tx_out.get_token_index()).hex()
             data['decoded'].pop('token_data', None)
@@ -1028,7 +1068,7 @@ class BaseTransaction(ABC):
             return data
 
         meta = self.get_metadata()
-        ret: Dict[str, Any] = {
+        ret: dict[str, Any] = {
             'tx_id': self.hash_hex,
             'version': int(self.version),
             'weight': self.weight,
@@ -1062,7 +1102,7 @@ class BaseTransaction(ABC):
 
         return ret
 
-    def validate_tx_error(self) -> Tuple[bool, str]:
+    def validate_tx_error(self) -> tuple[bool, str]:
         """ Verify if tx is valid and return success and possible error message
 
             :return: Success if tx is valid and possible error message, if not
@@ -1090,7 +1130,7 @@ class BaseTransaction(ABC):
         return new_tx
 
     @abstractmethod
-    def get_token_uid(self, index: int) -> bytes:
+    def get_token_uid(self, index: int) -> TokenUid:
         raise NotImplementedError
 
     def is_ready_for_validation(self) -> bool:
@@ -1108,19 +1148,19 @@ class BaseTransaction(ABC):
 class TxInput:
     _tx: BaseTransaction  # XXX: used for caching on hathor.transaction.Transaction.get_spent_tx
 
-    def __init__(self, tx_id: bytes, index: int, data: bytes) -> None:
+    def __init__(self, tx_id: VertexId, index: int, data: bytes) -> None:
         """
             tx_id: hash of the transaction that contains the output of this input
             index: index of the output you are spending from transaction tx_id (1 byte)
             data: data to solve output script
         """
-        assert isinstance(tx_id, bytes), 'Value is %s, type %s' % (str(tx_id), type(tx_id))
+        assert isinstance(tx_id, VertexId), 'Value is %s, type %s' % (str(tx_id), type(tx_id))
         assert isinstance(index, int), 'Value is %s, type %s' % (str(index), type(index))
         assert isinstance(data, bytes), 'Value is %s, type %s' % (str(data), type(data))
 
-        self.tx_id = tx_id  # bytes
-        self.index = index  # int
-        self.data = data  # bytes
+        self.tx_id = tx_id
+        self.index = index
+        self.data = data
 
     def __repr__(self) -> str:
         return str(self)
@@ -1153,7 +1193,7 @@ class TxInput:
         return bytes(ret)
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple['TxInput', bytes]:
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxInput', bytes]:
         """ Creates a TxInput from a serialized input. Returns the input
         and remaining bytes
         """
@@ -1171,7 +1211,7 @@ class TxInput:
         return txin, buf
 
     @classmethod
-    def create_from_dict(cls, data: Dict) -> 'TxInput':
+    def create_from_dict(cls, data: dict) -> 'TxInput':
         """ Creates a TxInput from a human readable dict."""
         return cls(
             bytes.fromhex(data['tx_id']),
@@ -1179,10 +1219,10 @@ class TxInput:
             base64.b64decode(data['data']) if data.get('data') else b'',
         )
 
-    def to_human_readable(self) -> Dict[str, Any]:
+    def to_human_readable(self) -> dict[str, Any]:
         """Returns dict of Input information, ready to be serialized
 
-        :rtype: Dict
+        :rtype: dict
         """
         return {
             'tx_id': self.tx_id.hex(),  # string
@@ -1204,14 +1244,14 @@ class TxOutput:
 
     ALL_AUTHORITIES = TOKEN_MINT_MASK | TOKEN_MELT_MASK
 
-    def __init__(self, value: int, script: bytes, token_data: int = 0) -> None:
+    def __init__(self, value: int, script: TxOutputScript, token_data: int = 0) -> None:
         """
             value: amount spent (4 bytes)
             script: script in bytes
             token_data: index of the token uid in the uid list
         """
         assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
-        assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
+        assert isinstance(script, TxOutputScript), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
         if value <= 0 or value > MAX_OUTPUT_VALUE:
             raise InvalidOutputValue
@@ -1251,7 +1291,7 @@ class TxOutput:
         return ret
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple['TxOutput', bytes]:
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxOutput', bytes]:
         """ Creates a TxOutput from a serialized output. Returns the output
         and remaining bytes
         """
@@ -1292,7 +1332,7 @@ class TxOutput:
         """Whether this utxo can melt tokens"""
         return self.is_token_authority() and ((self.value & self.TOKEN_MELT_MASK) > 0)
 
-    def to_human_readable(self) -> Dict[str, Any]:
+    def to_human_readable(self) -> dict[str, Any]:
         """Checks what kind of script this is and returns it in human readable form
         """
         from hathor.transaction.scripts import NanoContractMatchValues, parse_address_script
@@ -1310,8 +1350,8 @@ class TxOutput:
 
         return {}
 
-    def to_json(self, *, decode_script: bool = False) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def to_json(self, *, decode_script: bool = False) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         data['value'] = self.value
         data['token_data'] = self.token_data
         data['script'] = base64.b64encode(self.script).decode('utf-8')
@@ -1320,7 +1360,7 @@ class TxOutput:
         return data
 
 
-def bytes_to_output_value(buf: bytes) -> Tuple[int, bytes]:
+def bytes_to_output_value(buf: bytes) -> tuple[int, bytes]:
     (value_high_byte,), _ = unpack('!b', buf)
     if value_high_byte < 0:
         output_struct = '!q'
@@ -1353,8 +1393,8 @@ def tx_or_block_from_bytes(data: bytes,
                            storage: Optional['TransactionStorage'] = None) -> BaseTransaction:
     """ Creates the correct tx subclass from a sequence of bytes
     """
-    # version field takes up the first 2 bytes
-    version = int.from_bytes(data[0:2], 'big')
+    # version field takes up the second byte only
+    version = data[1]
     try:
         tx_version = TxVersion(version)
         cls = tx_version.get_cls()

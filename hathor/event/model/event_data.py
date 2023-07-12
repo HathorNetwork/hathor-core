@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import List, Optional, Union, cast
+from typing import Optional, Union, cast
 
 from pydantic import Extra, validator
 
@@ -34,17 +34,17 @@ class TxOutput(BaseModel):
 
 class SpentOutput(BaseModel):
     index: int
-    tx_ids: List[str]
+    tx_ids: list[str]
 
 
 class TxMetadata(BaseModel, extra=Extra.ignore):
     hash: str
-    spent_outputs: List[SpentOutput]
-    conflict_with: List[str]
-    voided_by: List[str]
-    received_by: List[int]
-    children: List[str]
-    twins: List[str]
+    spent_outputs: list[SpentOutput]
+    conflict_with: list[str]
+    voided_by: list[str]
+    received_by: list[int]
+    children: list[str]
+    twins: list[str]
     accumulated_weight: float
     score: float
     first_block: Optional[str]
@@ -52,7 +52,7 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     validation: str
 
     @validator('spent_outputs', pre=True, each_item=True)
-    def _parse_spent_outputs(cls, spent_output: Union[SpentOutput, List[Union[int, List[str]]]]) -> SpentOutput:
+    def _parse_spent_outputs(cls, spent_output: Union[SpentOutput, list[Union[int, list[str]]]]) -> SpentOutput:
         """
         This validator method is called by pydantic when parsing models, and is not supposed to be called directly.
         It either returns a SpentOutput if it receives one, or tries to parse it as a list (as returned from
@@ -63,39 +63,43 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
         >>> TxMetadata._parse_spent_outputs([0, ['tx1', 'tx2']])
         SpentOutput(index=0, tx_ids=['tx1', 'tx2'])
         """
-        if isinstance(spent_output, SpentOutput):
-            return spent_output
+        if isinstance(spent_output, list):
+            index, tx_ids = spent_output
 
-        index, tx_ids = spent_output
+            return SpentOutput(
+                index=cast(int, index),
+                tx_ids=cast(list[str], tx_ids)
+            )
 
-        return SpentOutput(
-            index=cast(int, index),
-            tx_ids=cast(List[str], tx_ids)
-        )
+        return spent_output
 
 
 class BaseEventData(BaseModel):
+    """Base class for event data polymorphism."""
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'EventData':
+        """Returns an instance of this class by processing PubSub's EventArguments."""
         raise NotImplementedError()
 
 
 class EmptyData(BaseEventData):
+    """Class that represents empty data on an event."""
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'EmptyData':
         return cls()
 
 
 class TxData(BaseEventData, extra=Extra.ignore):
+    """Class that represents transaction data on an event."""
     hash: str
     nonce: Optional[int] = None
     timestamp: int
     version: int
     weight: float
-    inputs: List['TxInput']
-    outputs: List['TxOutput']
-    parents: List[str]
-    tokens: List[str]
+    inputs: list['TxInput']
+    outputs: list['TxOutput']
+    parents: list[str]
+    tokens: list[str]
     # TODO: Token name and symbol could be in a different class because they're only used by TokenCreationTransaction
     token_name: Optional[str]
     token_symbol: Optional[str]
@@ -110,6 +114,7 @@ class TxData(BaseEventData, extra=Extra.ignore):
 
 
 class ReorgData(BaseEventData):
+    """Class that represents reorg data on an event."""
     reorg_size: int
     previous_best_block: str
     new_best_block: str
@@ -125,4 +130,5 @@ class ReorgData(BaseEventData):
         )
 
 
+# Union type to encompass BaseEventData polymorphism
 EventData = Union[EmptyData, TxData, ReorgData]

@@ -25,23 +25,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from functools import partial, wraps
 from random import Random as PyRandom
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Deque,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, Sequence, TypeVar, Union, cast
 
 from structlog import get_logger
 from twisted.internet import reactor as twisted_reactor
@@ -53,6 +37,7 @@ from zope.interface.verify import verifyObject
 
 import hathor
 from hathor.conf import HathorSettings
+from hathor.types import TokenUid
 
 if TYPE_CHECKING:
     import structlog
@@ -77,7 +62,7 @@ T = TypeVar('T')
 Z = TypeVar('Z', bound=Interface)
 
 
-def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]) -> bool:
+def practically_equal(a: dict[Any, Any], b: dict[Any, Any]) -> bool:
     """ Compare two defaultdict. It is used because a simple access have
     side effects in defaultdict.
 
@@ -180,7 +165,7 @@ def ichunks(array: bytes, chunk_size: int) -> Iterator[bytes]:
     return takewhile(bool, (bytes(islice(idata, chunk_size)) for _ in repeat(None)))
 
 
-def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[Tuple[T, ...]]:
+def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[tuple[T, ...]]:
     """ Adapt iterator to yield windows of the given size.
 
     window_size must be greater than 0
@@ -199,7 +184,7 @@ def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[Tuple[T, ...]]
     from collections import deque
     it = iter(iterable)
     assert window_size > 0
-    res_item: Deque[T] = deque()
+    res_item: deque[T] = deque()
     while len(res_item) < window_size:
         res_item.append(next(it))
     yield tuple(res_item)
@@ -254,7 +239,7 @@ class MaxSizeOrderedDict(OrderedDict):
                 self.popitem(False)
 
 
-def json_loadb(raw: bytes) -> Dict:
+def json_loadb(raw: bytes) -> dict:
     """Compact loading as UTF-8 encoded bytes/string to a Python object."""
     import json
 
@@ -269,7 +254,7 @@ def json_loadb(raw: bytes) -> Dict:
 
 
 # XXX: cast-converting the function saves a function-call, which can make a difference
-json_loads = cast(Callable[[str], Dict], json_loadb)
+json_loads = cast(Callable[[str], dict], json_loadb)
 
 
 def json_dumpb(obj: object) -> bytes:
@@ -346,7 +331,7 @@ class Random(PyRandom):
         """
         return math.ceil(math.log(self.random()) / math.log(1 - p))
 
-    def ordered_sample(self, seq: Sequence[T], k: int) -> List[T]:
+    def ordered_sample(self, seq: Sequence[T], k: int) -> list[T]:
         """Like self.sample but preserve orginal order.
 
         For example, ordered_sample([1, 2, 3]) will never return [3, 2] only [2, 3] instead."""
@@ -359,7 +344,7 @@ class Random(PyRandom):
             return self.getrandbits(n * 8).to_bytes(n, 'little')
 
 
-def collect_n(it: Iterator[_T], n: int) -> Tuple[List[_T], bool]:
+def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
     """Collect up to n elements from an iterator into a list, returns the list and whether there were more elements.
 
     This method will consume up to n+1 elements from the iterator because it will try to get one more element after it
@@ -381,7 +366,7 @@ def collect_n(it: Iterator[_T], n: int) -> Tuple[List[_T], bool]:
     """
     if n < 0:
         raise ValueError(f'n must be non-negative, got {n}')
-    col: List[_T] = []
+    col: list[_T] = []
     has_more = False
     while n > 0:
         try:
@@ -429,7 +414,7 @@ def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
     return it
 
 
-def verified_cast(interface_class: Type[Z], obj: Any) -> Z:
+def verified_cast(interface_class: type[Z], obj: Any) -> Z:
     verifyObject(interface_class, obj)
     return obj
 
@@ -439,19 +424,78 @@ _DT_LOG_PROGRESS = 30  # time in seconds after which a progress will be logged (
 _DT_YIELD_WARN = 1  # time in seconds to warn when `yield tx` takes too long (which is when processing happens)
 
 
-def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
-             total: Optional[int] = None) -> Iterator['BaseTransaction']:
+def progress(
+    it: Iterator[T],
+    *,
+    log: 'structlog.stdlib.BoundLogger',
+    total: Optional[int]
+) -> Iterator[T]:
+    """ Implementation of progress helper for using with an iterator of any type.
+
+    This is basically a stripped down version of `hathor.util.progress`
+    """
+    t_start = time.time()
+    count = 0
+    count_log_prev = 0
+    if total:
+        log.info('loading... 0%', progress=0)
+    else:
+        log.info('loading...')
+    t_log_prev = t_start
+    while True:
+        try:
+            item = next(it)
+        except StopIteration:
+            break
+
+        t_log = time.time()
+        dt_log = LogDuration(t_log - t_log_prev)
+        if dt_log > _DT_LOG_PROGRESS:
+            t_log_prev = t_log
+            dcount = count - count_log_prev
+            rate = '?' if dt_log == 0 else dcount / dt_log
+            kwargs = dict(rate=rate, new=dcount, dt=dt_log, total=count)
+            if total:
+                progress_ = count / total
+                elapsed_time = t_log - t_start
+                remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
+                log.info(
+                    f'loading... {math.floor(progress_ * 100):2.0f}%',
+                    progress=progress_,
+                    remaining_time=remaining_time,
+                    **kwargs
+                )
+            else:
+                log.info('loading...', **kwargs)
+            count_log_prev = count
+        count += 1
+
+        yield item
+
+    t_final = time.time()
+    dt_total = LogDuration(t_final - t_start)
+    rate = '?' if dt_total == 0 else count / dt_total
+    if total:
+        progress_ = count / total
+        log.info(f'loaded...  {math.floor(progress_ * 100):2.0f}%', progress=progress_, count=count, rate=rate,
+                 total_dt=dt_total)
+    else:
+        log.info('loaded', count=count, rate=rate, total_dt=dt_total)
+
+
+def tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
+                total: Optional[int] = None) -> Iterator['BaseTransaction']:
     """ Log the progress of a transaction iterator while iterating.
     """
     if log is None:
         log = logger.new()
 
-    yield from _progress(iter_tx, log=log, total=total)
+    yield from _tx_progress(iter_tx, log=log, total=total)
 
 
-def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int]
-              ) -> Iterator['BaseTransaction']:
-    """ Inner implementation of progress helper, it expects the gc to be disabled.
+def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int]
+                 ) -> Iterator['BaseTransaction']:
+    """ Inner implementation of progress helper.
     """
     t_start = time.time()
     h = 0
@@ -476,8 +520,10 @@ def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.Bo
             log.warn('iterator was slow to yield', took_sec=dt_next)
 
         assert tx.hash is not None
-        tx_meta = tx.get_metadata()
-        h = max(h, tx_meta.height)
+        # XXX: this is only informative and made to work with either partially/fully validated blocks/transactions
+        meta = tx.get_metadata()
+        if meta.height:
+            h = max(h, meta.height)
         ts_tx = max(ts_tx, tx.timestamp)
 
         t_log = time.time()
@@ -488,10 +534,16 @@ def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.Bo
             tx_rate = '?' if dt_log == 0 else dcount / dt_log
             ts = datetime.datetime.fromtimestamp(ts_tx)
             kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count, latest_ts=ts, height=h)
-            if total is not None:
-                progress = count / total
-                # TODO: we could add an ETA since we know the total
-                log.info(f'loading... {math.floor(progress * 100):2.0f}%', progress=progress, **kwargs)
+            if total:
+                progress_ = count / total
+                elapsed_time = t_log - t_start
+                remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
+                log.info(
+                    f'loading... {math.floor(progress_ * 100):2.0f}%',
+                    progress=progress_,
+                    remaining_time=remaining_time,
+                    **kwargs
+                )
             else:
                 log.info('loading...', **kwargs)
             count_log_prev = count
@@ -552,11 +604,11 @@ class peekable(Iterator[T]):
 
     def __init__(self, it: Iterable[T]) -> None:
         self._it: Optional[Iterator[T]] = iter(it)
-        # XXX: using Optional[Tuple[T]] makes it so the iterator can yield None, and it would be correctly peekable,
+        # XXX: using Optional[tuple[T]] makes it so the iterator can yield None, and it would be correctly peekable,
         #      which is different from not having a next element to peek into
-        self._head: Optional[Tuple[T]] = None
+        self._head: Optional[tuple[T]] = None
 
-    def _peek(self) -> Optional[Tuple[T]]:
+    def _peek(self) -> Optional[tuple[T]]:
         if self._head is None and self._it is None:
             return None
         if self._head is None:
@@ -735,7 +787,7 @@ class manualgc(AbstractContextManager):
             gc.enable()
 
 
-def is_token_uid_valid(token_uid: bytes) -> bool:
+def is_token_uid_valid(token_uid: TokenUid) -> bool:
     """ Checks whether a byte sequence can be a valid token UID.
 
     >>> is_token_uid_valid(bytes.fromhex('00'))

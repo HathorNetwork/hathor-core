@@ -13,8 +13,7 @@
 # limitations under the License.
 
 import os
-from argparse import Namespace
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
@@ -23,9 +22,11 @@ from twisted.web.resource import Resource
 
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.prometheus import PrometheusMetricsExporter
 
 if TYPE_CHECKING:
+    from hathor.cli.run_node_args import RunNodeArgs
     from hathor.event.websocket.factory import EventWebsocketFactory
     from hathor.manager import HathorManager
 
@@ -33,30 +34,39 @@ logger = get_logger()
 
 
 class ResourcesBuilder:
-    def __init__(self, manager: 'HathorManager', event_ws_factory: Optional['EventWebsocketFactory']) -> None:
+    def __init__(
+        self,
+        manager: 'HathorManager',
+        args: 'RunNodeArgs',
+        event_ws_factory: Optional['EventWebsocketFactory'],
+        feature_service: FeatureService
+    ) -> None:
         self.log = logger.new()
         self.manager = manager
         self.event_ws_factory = event_ws_factory
         self.wallet = manager.wallet
 
+        self._args = args
         self._built_status = False
         self._built_prometheus = False
 
-    def build(self, args: Namespace) -> Optional[server.Site]:
-        if args.prometheus:
-            self.create_prometheus(args)
-        if args.status:
-            return self.create_resources(args)
+        self._feature_service = feature_service
+
+    def build(self) -> Optional[server.Site]:
+        if self._args.prometheus:
+            self.create_prometheus()
+        if self._args.status:
+            return self.create_resources()
         return None
 
-    def create_prometheus(self, args: Namespace) -> PrometheusMetricsExporter:
-        kwargs: Dict[str, Any] = {
+    def create_prometheus(self) -> PrometheusMetricsExporter:
+        kwargs: dict[str, Any] = {
             'metrics': self.manager.metrics,
-            'metrics_prefix': args.prometheus_prefix
+            'metrics_prefix': self._args.prometheus_prefix
         }
 
-        if args.data:
-            kwargs['path'] = os.path.join(args.data, 'prometheus')
+        if self._args.data:
+            kwargs['path'] = os.path.join(self._args.data, 'prometheus')
         else:
             raise BuilderError('To run prometheus exporter you must have a data path')
 
@@ -66,7 +76,7 @@ class ResourcesBuilder:
         self._built_prometheus = True
         return prometheus
 
-    def create_resources(self, args: Namespace) -> server.Site:
+    def create_resources(self) -> server.Site:
         from hathor.conf import HathorSettings
         from hathor.debug_resources import (
             DebugCrashResource,
@@ -76,6 +86,7 @@ class ResourcesBuilder:
             DebugRaiseResource,
             DebugRejectResource,
         )
+        from hathor.feature_activation.resources.feature import FeatureResource
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import (
             AddPeersResource,
@@ -158,7 +169,7 @@ class ResourcesBuilder:
             (b'decode_tx', DecodeTxResource(self.manager), root),
             (b'validate_address', ValidateAddressResource(self.manager), root),
             (b'push_tx',
-                PushTxResource(self.manager, args.max_output_script_size, args.allow_non_standard_script),
+                PushTxResource(self.manager, self._args.max_output_script_size, self._args.allow_non_standard_script),
                 root),
             (b'graphviz', graphviz, root),
             (b'transaction', TransactionResource(self.manager), root),
@@ -189,14 +200,24 @@ class ResourcesBuilder:
             (b'peers', AddPeersResource(self.manager), p2p_resource),
             (b'netfilter', NetfilterRuleResource(self.manager), p2p_resource),
             (b'readiness', HealthcheckReadinessResource(self.manager), p2p_resource),
+            # Feature Activation
+            (
+                b'feature',
+                FeatureResource(
+                    feature_settings=settings.FEATURE_ACTIVATION,
+                    feature_service=self._feature_service,
+                    tx_storage=self.manager.tx_storage
+                ),
+                root
+            )
         ]
         # XXX: only enable UTXO search API if the index is enabled
-        if args.utxo_index:
+        if self._args.utxo_index:
             resources.extend([
                 (b'utxo_search', UtxoSearchResource(self.manager), root),
             ])
 
-        if args.enable_debug_api:
+        if self._args.enable_debug_api:
             debug_resource = Resource()
             root.putChild(b'_debug', debug_resource)
             resources.extend([
@@ -205,7 +226,7 @@ class ResourcesBuilder:
                 (b'reject', DebugRejectResource(), debug_resource),
                 (b'print', DebugPrintResource(), debug_resource),
             ])
-        if args.enable_crash_api:
+        if self._args.enable_crash_api:
             crash_resource = Resource()
             root.putChild(b'_crash', crash_resource)
             resources.extend([
@@ -220,7 +241,7 @@ class ResourcesBuilder:
             from hathor.stratum.resources import MiningStatsResource
             root.putChild(b'miners', MiningStatsResource(self.manager))
 
-        with_wallet_api = bool(self.wallet and args.wallet_enable_api)
+        with_wallet_api = bool(self.wallet and self._args.wallet_enable_api)
         if with_wallet_api:
             wallet_resources = (
                 # /wallet
@@ -250,7 +271,7 @@ class ResourcesBuilder:
         ws_factory.subscribe(self.manager.pubsub)
 
         # Event websocket resource
-        if args.x_enable_event_queue:
+        if self._args.x_enable_event_queue:
             root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
             root.putChild(b'event', EventResource(self.manager._event_manager))
 
@@ -262,7 +283,7 @@ class ResourcesBuilder:
 
         from hathor.profiler.site import SiteProfiler
         status_server = SiteProfiler(real_root)
-        self.log.info('with status', listen=args.status, with_wallet_api=with_wallet_api)
+        self.log.info('with status', listen=self._args.status, with_wallet_api=with_wallet_api)
 
         # Set websocket factory in metrics
         self.manager.metrics.websocket_factory = ws_factory

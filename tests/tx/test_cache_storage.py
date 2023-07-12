@@ -1,6 +1,6 @@
 from hathor.daa import TestMode, _set_test_mode
 from hathor.transaction import Transaction, TransactionMetadata
-from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
+from hathor.transaction.storage import TransactionCacheStorage
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions
 
@@ -13,10 +13,13 @@ class BaseCacheStorageTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        store = TransactionMemoryStorage(with_index=False)
-        self.cache_storage = TransactionCacheStorage(store, self.clock, capacity=5)
-        self.cache_storage._manually_initialize()
-        self.cache_storage.pre_init()
+        builder = self.get_builder('testnet') \
+            .use_memory() \
+            .use_tx_storage_cache(capacity=5) \
+            .set_wallet(self._create_test_wallet(unlocked=True))
+        self.manager = self.create_peer_from_builder(builder)
+        self.cache_storage = self.manager.tx_storage
+        self.assertIsInstance(self.cache_storage, TransactionCacheStorage)
 
         self.genesis = self.cache_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
@@ -25,13 +28,11 @@ class BaseCacheStorageTest(unittest.TestCase):
         # Save genesis metadata
         self.cache_storage.save_transaction(self.genesis_txs[0], only_metadata=True)
 
-        self.manager = self.create_peer('testnet', tx_storage=self.cache_storage, unlock_wallet=True)
-
     def tearDown(self):
         super().tearDown()
 
     def _get_new_tx(self, nonce):
-        from hathor.transaction.transaction_metadata import ValidationState
+        from hathor.transaction.validation_state import ValidationState
         tx = Transaction(nonce=nonce, storage=self.cache_storage)
         tx.update_hash()
         meta = TransactionMetadata(hash=tx.hash)
