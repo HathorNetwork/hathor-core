@@ -71,10 +71,20 @@ function check_do_not_use_builtin_random_in_tests() {
 	return 0
 }
 
+function check_deprecated_typing() {
+	if grep -R '\<typing .*\<import .*\<\(Tuple\|List\|Dict\|Set\|FrozenSet\|AbstractSet\|DefaultDict\|OrderedDict\)\>' "${SOURCE_DIRS[@]}"; then
+		echo 'do not use typing.List/Tuple/Dict/... for type annotations use builtin list/tuple/dict/... instead'
+		echo 'for more info check the PEP 585 doc: https://peps.python.org/pep-0585/'
+		return 1
+	fi
+	return 0
+}
+
 # List of functions to be executed
 checks=(
 	check_version_match
 	check_do_not_use_builtin_random_in_tests
+	check_deprecated_typing
 )
 
 # Initialize a variable to track if any check fails

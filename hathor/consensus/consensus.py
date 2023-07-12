@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Set
-
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
@@ -57,7 +55,7 @@ class ConsensusAlgorithm:
     b0 will not be propagated to the voided_by of b1, b2, and b3.
     """
 
-    def __init__(self, soft_voided_tx_ids: Set[bytes], pubsub: PubSubManager) -> None:
+    def __init__(self, soft_voided_tx_ids: set[bytes], pubsub: PubSubManager) -> None:
         self.log = logger.new()
         self._pubsub = pubsub
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
@@ -147,7 +145,7 @@ class ConsensusAlgorithm:
         if context.reorg_common_block is not None:
             context.pubsub.publish(HathorEvents.REORG_FINISHED)
 
-    def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: Set[bytes]) -> Set[bytes]:
+    def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
         if not (self.soft_voided_tx_ids & voided_by):
             return voided_by
         ret = set()
@@ -163,7 +161,7 @@ class ConsensusAlgorithm:
             assert tx.storage is not None
             tx3 = tx.storage.get_transaction(h)
             tx3_meta = tx3.get_metadata()
-            tx3_voided_by: Set[bytes] = tx3_meta.voided_by or set()
+            tx3_voided_by: set[bytes] = tx3_meta.voided_by or set()
             if not (self.soft_voided_tx_ids & tx3_voided_by):
                 ret.add(h)
         return ret
