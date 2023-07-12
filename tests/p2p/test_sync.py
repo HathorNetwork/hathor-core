@@ -1,5 +1,3 @@
-import random
-
 from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
@@ -53,7 +51,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         txs = []
         for _ in range(num_txs):
             address = self.get_address(0)
-            value = random.choice([5, 10, 50, 100, 120])
+            value = self.rng.choice([5, 10, 50, 100, 120])
             tx = self._add_new_tx(address, value)
             txs.append(tx)
         return txs
