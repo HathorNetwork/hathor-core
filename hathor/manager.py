@@ -266,8 +266,6 @@ class HathorManager:
         self.connections.start()
         self.pow_thread_pool.start()
 
-        self._bit_signaling_service.start()
-
         # Disable get transaction lock when initializing components
         self.tx_storage.disable_lock()
         # Initialize manager's components.
@@ -828,7 +826,7 @@ class HathorManager:
             parents_any=parents_any,
             height=height,
             score=sum_weights(parent_block_metadata.score, weight),
-            signal_bits=self._bit_signaling_service.get_signal_bits()
+            signal_bits=self._bit_signaling_service.get_signal_bits(parent_block)
         )
 
     def generate_mining_block(self, timestamp: Optional[int] = None,
