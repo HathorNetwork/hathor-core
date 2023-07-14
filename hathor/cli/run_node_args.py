@@ -16,6 +16,7 @@ from typing import Optional
 
 from pydantic import Extra
 
+from hathor.feature_activation.feature import Feature
 from hathor.utils.pydantic import BaseModel
 
 
@@ -70,3 +71,5 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_enable_event_queue: bool
     peer_id_blacklist: list[str]
     config_yaml: Optional[str]
+    signal_support: set[Feature]
+    signal_not_support: set[Feature]
