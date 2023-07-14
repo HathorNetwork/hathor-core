@@ -25,3 +25,4 @@ class Feature(Enum):
 
     NOP_FEATURE_1 = 'NOP_FEATURE_1'
     NOP_FEATURE_2 = 'NOP_FEATURE_2'
+    NOP_FEATURE_3 = 'NOP_FEATURE_3'
