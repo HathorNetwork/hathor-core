@@ -53,6 +53,7 @@ class BitSignalingService:
 
         self._validate_support_intersection()
 
+    def start(self) -> None:
         best_block = self._tx_storage.get_best_block()
 
         self._warn_non_signaling_features(best_block)
@@ -129,7 +130,8 @@ class BitSignalingService:
             self._log.warn(
                 'Considering the current best block, there are signaled features outside their signaling period. '
                 'Therefore, signaling for them has no effect. Make sure you are signaling for the desired features.',
-                best_block=best_block,
+                best_block_hash=best_block.hash_hex,
+                best_block_height=best_block.get_height(),
                 non_signaling_features=feature_names
             )
 

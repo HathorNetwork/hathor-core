@@ -252,6 +252,8 @@ def test_non_signaling_features_warning(
     non_signaling_features: set[str],
 ) -> None:
     best_block = Mock(spec_set=Block)
+    best_block.get_height = Mock(return_value=123)
+    best_block.hash_hex = 'abc'
     tx_storage = Mock(spec_set=TransactionStorage)
     tx_storage.get_best_block = lambda: best_block
 
@@ -263,18 +265,21 @@ def test_non_signaling_features_warning(
     feature_service = Mock(spec_set=FeatureService)
     feature_service.get_bits_description = get_bits_description_mock
 
+    service = BitSignalingService(
+        feature_settings=FeatureSettings(),
+        feature_service=feature_service,
+        tx_storage=tx_storage,
+        support_features=support_features,
+        not_support_features=not_support_features,
+    )
+
     with capture_logs() as logs:
-        BitSignalingService(
-            feature_settings=FeatureSettings(),
-            feature_service=feature_service,
-            tx_storage=tx_storage,
-            support_features=support_features,
-            not_support_features=not_support_features,
-        )
+        service.start()
 
     expected_log = dict(
         log_level='warning',
-        best_block=best_block,
+        best_block_height=123,
+        best_block_hash='abc',
         non_signaling_features=non_signaling_features,
         event='Considering the current best block, there are signaled features outside their signaling period. '
               'Therefore, signaling for them has no effect. Make sure you are signaling for the desired features.',
