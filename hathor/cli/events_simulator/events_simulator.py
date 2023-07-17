@@ -14,6 +14,8 @@
 
 from argparse import ArgumentParser, Namespace
 
+from hathor.cli.events_simulator.scenario import Scenario
+
 DEFAULT_PORT = 8080
 
 
@@ -22,9 +24,9 @@ def create_parser() -> ArgumentParser:
     from hathor.cli.util import create_parser
 
     parser = create_parser()
-    possible_scenarios = [scenario.value for scenario in Scenario]
+    possible_scenarios = [scenario.name for scenario in Scenario]
 
-    parser.add_argument('--scenario', help=f'One of {possible_scenarios}', type=Scenario, required=True)
+    parser.add_argument('--scenario', help=f'One of {possible_scenarios}', type=str, required=True)
     parser.add_argument('--port', help='Port to run the WebSocket server', type=int, default=DEFAULT_PORT)
 
     return parser
@@ -35,9 +37,10 @@ def execute(args: Namespace) -> None:
     from hathor.event.websocket import EventWebsocketFactory
     from hathor.util import reactor
 
+    scenario = Scenario[args.scenario]
     storage = EventMemoryStorage()
 
-    for event in args.scenario.value:
+    for event in scenario.value:
         storage.save_event(event)
 
     factory = EventWebsocketFactory(reactor, storage)
