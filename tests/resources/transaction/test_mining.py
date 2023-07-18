@@ -43,6 +43,7 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
             },
             'tokens': [],
             'data': '',
+            'signal_bits': 0
         })
 
     @inlineCallbacks
@@ -75,6 +76,7 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
             },
             'tokens': [],
             'data': '',
+            'signal_bits': 0
         })
 
     @inlineCallbacks
