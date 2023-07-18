@@ -78,6 +78,15 @@ class Criteria(BaseModel, validate_all=True):
             signal_support_by_default=self.signal_support_by_default
         )
 
+    def to_validated(self, evaluation_interval: int, max_signal_bits: int) -> 'ValidatedCriteria':
+        """Create a validated version of self, including attribute validations that have external dependencies."""
+        attributes: dict[str, Any] = self.dict() | dict(
+            evaluation_interval=evaluation_interval,
+            max_signal_bits=max_signal_bits
+        )
+
+        return ValidatedCriteria(**attributes)
+
     def get_threshold(self, feature_settings: 'FeatureSettings') -> int:
         """Returns the configured threshold, or the default threshold if it is None."""
         return self.threshold if self.threshold is not None else feature_settings.default_threshold
