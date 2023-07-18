@@ -41,18 +41,6 @@ class Settings(BaseModel, validate_all=True):
     # neither their values changed, to preserve history.
     features: dict[Feature, Criteria] = {}
 
-    @validator('evaluation_interval')
-    def _process_evaluation_interval(cls, evaluation_interval: int) -> int:
-        """Sets the evaluation_interval on Criteria."""
-        Criteria.evaluation_interval = evaluation_interval
-        return evaluation_interval
-
-    @validator('max_signal_bits')
-    def _process_max_signal_bits(cls, max_signal_bits: int) -> int:
-        """Sets the max_signal_bits on Criteria."""
-        Criteria.max_signal_bits = max_signal_bits
-        return max_signal_bits
-
     @validator('default_threshold')
     def _validate_default_threshold(cls, default_threshold: int, values: dict[str, Any]) -> int:
         """Validates that the default_threshold is not greater than the evaluation_interval."""
@@ -66,6 +54,19 @@ class Settings(BaseModel, validate_all=True):
             )
 
         return default_threshold
+
+    @validator('features')
+    def _validate_features(cls, features: dict[Feature, Criteria], values: dict[str, Any]) -> dict[Feature, Criteria]:
+        """Validate Criteria by calling its to_validated() method, injecting the necessary attributes."""
+        evaluation_interval = values.get('evaluation_interval')
+        max_signal_bits = values.get('max_signal_bits')
+        assert evaluation_interval is not None, 'evaluation_interval must be set'
+        assert max_signal_bits is not None, 'max_signal_bits must be set'
+
+        return {
+            feature: criteria.to_validated(evaluation_interval, max_signal_bits)
+            for feature, criteria in features.items()
+        }
 
     @validator('features')
     def _validate_conflicting_bits(cls, features: dict[Feature, Criteria]) -> dict[Feature, Criteria]:
