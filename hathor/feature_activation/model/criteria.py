@@ -75,6 +75,7 @@ class Criteria(BaseModel, validate_all=True):
             minimum_activation_height=self.minimum_activation_height,
             lock_in_on_timeout=self.lock_in_on_timeout,
             version=self.version,
+            signal_support_by_default=self.signal_support_by_default
         )
 
     def get_threshold(self, feature_settings: 'FeatureSettings') -> int:
