@@ -24,6 +24,8 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
+from hathor.feature_activation.bit_signaling_service import BitSignalingService
+from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
@@ -64,7 +66,6 @@ class BuildArtifacts(NamedTuple):
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
     stratum_factory: Optional[StratumFactory]
-    feature_service: FeatureService
 
 
 class Builder:
@@ -80,7 +81,7 @@ class Builder:
         self.log = logger.new()
         self.artifacts: Optional[BuildArtifacts] = None
 
-        self._settings: HathorSettingsType = HathorSettings()
+        self._settings: Optional[HathorSettingsType] = None
         self._rng: Random = Random()
         self._checkpoints: Optional[list[Checkpoint]] = None
         self._capabilities: Optional[list[str]] = None
@@ -94,6 +95,11 @@ class Builder:
 
         self._event_manager: Optional[EventManager] = None
         self._enable_event_queue: Optional[bool] = None
+
+        self._support_features: set[Feature] = set()
+        self._not_support_features: set[Feature] = set()
+        self._feature_service: Optional[FeatureService] = None
+        self._bit_signaling_service: Optional[BitSignalingService] = None
 
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
@@ -134,7 +140,7 @@ class Builder:
         if self._network is None:
             raise TypeError('you must set a network')
 
-        settings = self._get_settings()
+        settings = self._get_or_create_settings()
         reactor = self._get_reactor()
         pubsub = self._get_or_create_pubsub()
 
@@ -149,6 +155,7 @@ class Builder:
         event_manager = self._get_or_create_event_manager()
         indexes = self._get_or_create_indexes_manager()
         tx_storage = self._get_or_create_tx_storage(indexes)
+        bit_signaling_service = self._get_or_create_bit_signaling_service(tx_storage)
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -181,6 +188,7 @@ class Builder:
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
             environment_info=get_environment_info(self._cmdline, peer_id.id),
+            bit_signaling_service=bit_signaling_service,
             **kwargs
         )
 
@@ -189,8 +197,6 @@ class Builder:
         stratum_factory: Optional[StratumFactory] = None
         if self._enable_stratum_server:
             stratum_factory = self._create_stratum_server(manager)
-
-        feature_service = self._create_feature_service(tx_storage)
 
         self.artifacts = BuildArtifacts(
             peer_id=peer_id,
@@ -206,7 +212,6 @@ class Builder:
             wallet=wallet,
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
-            feature_service=feature_service
         )
 
         return self.artifacts
@@ -218,6 +223,16 @@ class Builder:
     def set_event_manager(self, event_manager: EventManager) -> 'Builder':
         self.check_if_can_modify()
         self._event_manager = event_manager
+        return self
+
+    def set_feature_service(self, feature_service: FeatureService) -> 'Builder':
+        self.check_if_can_modify()
+        self._feature_service = feature_service
+        return self
+
+    def set_bit_signaling_service(self, bit_signaling_service: BitSignalingService) -> 'Builder':
+        self.check_if_can_modify()
+        self._bit_signaling_service = bit_signaling_service
         return self
 
     def set_rng(self, rng: Random) -> 'Builder':
@@ -240,7 +255,9 @@ class Builder:
         self._peer_id = peer_id
         return self
 
-    def _get_settings(self) -> HathorSettingsType:
+    def _get_or_create_settings(self) -> HathorSettingsType:
+        if self._settings is None:
+            self._settings = HathorSettings()
         return self._settings
 
     def _get_reactor(self) -> Reactor:
@@ -252,7 +269,7 @@ class Builder:
         if self._soft_voided_tx_ids is not None:
             return self._soft_voided_tx_ids
 
-        settings = self._get_settings()
+        settings = self._get_or_create_settings()
 
         return set(settings.SOFT_VOIDED_TX_IDS)
 
@@ -271,12 +288,6 @@ class Builder:
         manager.stratum_factory = stratum_factory
         manager.metrics.stratum_factory = stratum_factory
         return stratum_factory
-
-    def _create_feature_service(self, tx_storage: TransactionStorage) -> FeatureService:
-        return FeatureService(
-            feature_settings=self._settings.FEATURE_ACTIVATION,
-            tx_storage=tx_storage
-        )
 
     def _get_or_create_rocksdb_storage(self) -> RocksDBStorage:
         assert self._rocksdb_path is not None
@@ -387,6 +398,29 @@ class Builder:
             )
 
         return self._event_manager
+
+    def _get_or_create_feature_service(self, tx_storage: TransactionStorage) -> FeatureService:
+        if self._feature_service is None:
+            settings = self._get_or_create_settings()
+            self._feature_service = FeatureService(
+                feature_settings=settings.FEATURE_ACTIVATION,
+                tx_storage=tx_storage
+            )
+
+        return self._feature_service
+
+    def _get_or_create_bit_signaling_service(self, tx_storage: TransactionStorage) -> BitSignalingService:
+        if self._bit_signaling_service is None:
+            settings = self._get_or_create_settings()
+            self._bit_signaling_service = BitSignalingService(
+                feature_settings=settings.FEATURE_ACTIVATION,
+                feature_service=self._get_or_create_feature_service(tx_storage),
+                tx_storage=tx_storage,
+                support_features=self._support_features,
+                not_support_features=self._not_support_features,
+            )
+
+        return self._bit_signaling_service
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
@@ -558,4 +592,20 @@ class Builder:
     def set_soft_voided_tx_ids(self, soft_voided_tx_ids: set[bytes]) -> 'Builder':
         self.check_if_can_modify()
         self._soft_voided_tx_ids = soft_voided_tx_ids
+        return self
+
+    def set_features(
+        self,
+        *,
+        support_features: Optional[set[Feature]],
+        not_support_features: Optional[set[Feature]]
+    ) -> 'Builder':
+        self.check_if_can_modify()
+        self._support_features = support_features or set()
+        self._not_support_features = not_support_features or set()
+        return self
+
+    def set_settings(self, settings: HathorSettingsType) -> 'Builder':
+        self.check_if_can_modify()
+        self._settings = settings
         return self

@@ -1035,6 +1035,7 @@ class BaseTransaction(ABC):
         data['timestamp'] = self.timestamp
         data['version'] = int(self.version)
         data['weight'] = self.weight
+        data['signal_bits'] = self.signal_bits
 
         data['parents'] = []
         for parent in self.parents:

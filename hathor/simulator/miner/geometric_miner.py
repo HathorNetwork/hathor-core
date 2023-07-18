@@ -75,7 +75,10 @@ class GeometricMiner(AbstractMiner):
         except IndexError:
             signal_bits = 0
 
-        return self._manager.generate_mining_block(signal_bits=signal_bits)
+        block = self._manager.generate_mining_block()
+        block.signal_bits = signal_bits
+
+        return block
 
     def _schedule_next_block(self):
         if self._block:
