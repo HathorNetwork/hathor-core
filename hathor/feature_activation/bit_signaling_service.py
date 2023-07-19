@@ -88,7 +88,7 @@ class BitSignalingService:
 
     def _log_signal_bits(self, feature: Feature, enable_bit: bool, support: bool, not_support: bool) -> None:
         """Generate info log for a feature's signal."""
-        action = 'Enabling' if enable_bit else 'Disabling'
+        signal = 'enabled' if enable_bit else 'disabled'
         reason = 'using default feature signal'
 
         if support:
@@ -97,7 +97,12 @@ class BitSignalingService:
         if not_support:
             reason = 'user signaled not support'
 
-        self._log.info(f'{action} support signal for feature "{feature.value}". Reason: {reason}.')
+        self._log.info(
+            'Configuring support signal for feature.',
+            feature=feature.value,
+            signal=signal,
+            reason=reason
+        )
 
     def _get_signaling_features(self, block: Block) -> dict[Feature, Criteria]:
         """Given a specific block, return all features that are in a signaling state for that block."""
