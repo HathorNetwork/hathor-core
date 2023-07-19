@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import TYPE_CHECKING, Any, ClassVar, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import Field, NonNegativeInt, validator
 
@@ -27,10 +27,12 @@ class Criteria(BaseModel, validate_all=True):
     """
     Represents the configuration for a certain feature activation criteria.
 
-    Attributes:
-        evaluation_interval: the number of blocks in the feature activation evaluation interval. Class variable.
+    Note: the to_validated() method must be called to perform all attribute validations.
 
-        max_signal_bits: the number of bits used in the first byte of a block's version field. Class variable.
+    Attributes:
+        evaluation_interval: the number of blocks in the feature activation evaluation interval.
+
+        max_signal_bits: the number of bits used in the first byte of a block's version field.
 
         bit: which bit in the version field of the block is going to be used to signal the feature support by miners.
 
@@ -47,8 +49,8 @@ class Criteria(BaseModel, validate_all=True):
 
         version: the client version of hathor-core at which this feature was defined.
     """
-    evaluation_interval: ClassVar[Optional[int]] = None
-    max_signal_bits: ClassVar[Optional[int]] = None
+    evaluation_interval: Optional[int] = None
+    max_signal_bits: Optional[int] = None
 
     bit: NonNegativeInt
     start_height: NonNegativeInt
@@ -58,29 +60,50 @@ class Criteria(BaseModel, validate_all=True):
     lock_in_on_timeout: bool = False
     version: str = Field(..., regex=version.BUILD_VERSION_REGEX)
 
+    def to_validated(self, evaluation_interval: int, max_signal_bits: int) -> 'ValidatedCriteria':
+        """Create a validated version of self, including attribute validations that have external dependencies."""
+        return ValidatedCriteria(
+            evaluation_interval=evaluation_interval,
+            max_signal_bits=max_signal_bits,
+            bit=self.bit,
+            start_height=self.start_height,
+            timeout_height=self.timeout_height,
+            threshold=self.threshold,
+            minimum_activation_height=self.minimum_activation_height,
+            lock_in_on_timeout=self.lock_in_on_timeout,
+            version=self.version,
+        )
+
     def get_threshold(self, feature_settings: 'FeatureSettings') -> int:
         """Returns the configured threshold, or the default threshold if it is None."""
         return self.threshold if self.threshold is not None else feature_settings.default_threshold
 
-    @validator('bit')
-    def _validate_bit(cls, bit: int) -> int:
-        """Validates that the bit is lower than the max_signal_bits."""
-        assert Criteria.max_signal_bits is not None, 'Criteria.max_signal_bits must be set'
 
-        if bit >= Criteria.max_signal_bits:
-            raise ValueError(f'bit must be lower than max_signal_bits: {bit} >= {Criteria.max_signal_bits}')
+class ValidatedCriteria(Criteria):
+    """
+    Wrapper class for Criteria that holds its field validations. Can be created using Criteria.to_validated().
+    """
+    @validator('bit')
+    def _validate_bit(cls, bit: int, values: dict[str, Any]) -> int:
+        """Validates that the bit is lower than the max_signal_bits."""
+        max_signal_bits = values.get('max_signal_bits')
+        assert max_signal_bits is not None, 'max_signal_bits must be set'
+
+        if bit >= max_signal_bits:
+            raise ValueError(f'bit must be lower than max_signal_bits: {bit} >= {max_signal_bits}')
 
         return bit
 
     @validator('timeout_height')
     def _validate_timeout_height(cls, timeout_height: int, values: dict[str, Any]) -> int:
         """Validates that the timeout_height is greater than the start_height."""
-        assert Criteria.evaluation_interval is not None, 'Criteria.evaluation_interval must be set'
+        evaluation_interval = values.get('evaluation_interval')
+        assert evaluation_interval is not None, 'evaluation_interval must be set'
 
         start_height = values.get('start_height')
         assert start_height is not None, 'start_height must be set'
 
-        minimum_timeout_height = start_height + 2 * Criteria.evaluation_interval
+        minimum_timeout_height = start_height + 2 * evaluation_interval
 
         if timeout_height < minimum_timeout_height:
             raise ValueError(f'timeout_height must be at least two evaluation intervals after the start_height: '
@@ -89,25 +112,27 @@ class Criteria(BaseModel, validate_all=True):
         return timeout_height
 
     @validator('threshold')
-    def _validate_threshold(cls, threshold: Optional[int]) -> Optional[int]:
+    def _validate_threshold(cls, threshold: Optional[int], values: dict[str, Any]) -> Optional[int]:
         """Validates that the threshold is not greater than the evaluation_interval."""
-        assert Criteria.evaluation_interval is not None, 'Criteria.evaluation_interval must be set'
+        evaluation_interval = values.get('evaluation_interval')
+        assert evaluation_interval is not None, 'evaluation_interval must be set'
 
-        if threshold is not None and threshold > Criteria.evaluation_interval:
+        if threshold is not None and threshold > evaluation_interval:
             raise ValueError(
-                f'threshold must not be greater than evaluation_interval: {threshold} > {Criteria.evaluation_interval}'
+                f'threshold must not be greater than evaluation_interval: {threshold} > {evaluation_interval}'
             )
 
         return threshold
 
     @validator('start_height', 'timeout_height', 'minimum_activation_height')
-    def _validate_evaluation_interval_multiple(cls, value: int) -> int:
+    def _validate_evaluation_interval_multiple(cls, value: int, values: dict[str, Any]) -> int:
         """Validates that the value is a multiple of evaluation_interval."""
-        assert Criteria.evaluation_interval is not None, 'Criteria.evaluation_interval must be set'
+        evaluation_interval = values.get('evaluation_interval')
+        assert evaluation_interval is not None, 'evaluation_interval must be set'
 
-        if value % Criteria.evaluation_interval != 0:
+        if value % evaluation_interval != 0:
             raise ValueError(
-                f'Should be a multiple of evaluation_interval: {value} % {Criteria.evaluation_interval} != 0'
+                f'Should be a multiple of evaluation_interval: {value} % {evaluation_interval} != 0'
             )
 
         return value
