@@ -48,6 +48,8 @@ class Criteria(BaseModel, validate_all=True):
             the timeout_height is reached, effectively forcing activation.
 
         version: the client version of hathor-core at which this feature was defined.
+
+        signal_support_by_default: the default miner support signal for this feature.
     """
     evaluation_interval: Optional[int] = None
     max_signal_bits: Optional[int] = None
@@ -59,6 +61,7 @@ class Criteria(BaseModel, validate_all=True):
     minimum_activation_height: NonNegativeInt = 0
     lock_in_on_timeout: bool = False
     version: str = Field(..., regex=version.BUILD_VERSION_REGEX)
+    signal_support_by_default: bool = False
 
     def to_validated(self, evaluation_interval: int, max_signal_bits: int) -> 'ValidatedCriteria':
         """Create a validated version of self, including attribute validations that have external dependencies."""
@@ -72,6 +75,7 @@ class Criteria(BaseModel, validate_all=True):
             minimum_activation_height=self.minimum_activation_height,
             lock_in_on_timeout=self.lock_in_on_timeout,
             version=self.version,
+            signal_support_by_default=self.signal_support_by_default
         )
 
     def get_threshold(self, feature_settings: 'FeatureSettings') -> int:
