@@ -22,8 +22,9 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
+from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
-from hathor.utils.api import Response
+from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 
 @register_resource
@@ -48,6 +49,45 @@ class FeatureResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
+        if request.args:
+            return self.get_block_features(request)
+
+        return self.get_features()
+
+    def get_block_features(self, request: Request) -> bytes:
+        params = GetBlockFeaturesParams.from_request(request)
+
+        if isinstance(params, ErrorResponse):
+            return params.json_dumpb()
+
+        block_hash = bytes.fromhex(params.block)
+        block = self.tx_storage.get_transaction(block_hash)
+
+        if not isinstance(block, Block):
+            error = ErrorResponse(error=f"Hash '{params.block}' is not a Block.")
+            return error.json_dumpb()
+
+        signal_bits = []
+        feature_descriptions = self._feature_service.get_bits_description(block=block)
+
+        for feature, description in feature_descriptions.items():
+            if description.state not in FeatureState.get_signaling_states():
+                continue
+
+            block_feature = GetBlockFeatureResponse(
+                bit=description.criteria.bit,
+                signal=block.get_feature_activation_bit_value(description.criteria.bit),
+                feature=feature,
+                feature_state=description.state.name
+            )
+
+            signal_bits.append(block_feature)
+
+        response = GetBlockFeaturesResponse(signal_bits=signal_bits)
+
+        return response.json_dumpb()
+
+    def get_features(self) -> bytes:
         best_block = self.tx_storage.get_best_block()
         bit_counts = best_block.get_feature_activation_bit_counts()
         features = []
@@ -83,6 +123,21 @@ class FeatureResource(Resource):
         )
 
         return response.json_dumpb()
+
+
+class GetBlockFeaturesParams(QueryParams):
+    block: str
+
+
+class GetBlockFeatureResponse(Response, use_enum_values=True):
+    bit: int
+    signal: int
+    feature: Feature
+    feature_state: str
+
+
+class GetBlockFeaturesResponse(Response):
+    signal_bits: list[GetBlockFeatureResponse]
 
 
 class GetFeatureResponse(Response, use_enum_values=True):

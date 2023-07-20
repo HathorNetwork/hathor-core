@@ -440,3 +440,9 @@ class Block(BaseTransaction):
         metadata.feature_states = feature_states
 
         self.storage.save_transaction(self, only_metadata=True)
+
+    def get_feature_activation_bit_value(self, bit: int) -> int:
+        """Get the feature activation bit value for a specific bit position."""
+        bit_list = self._get_feature_activation_bit_list()
+
+        return bit_list[bit]
