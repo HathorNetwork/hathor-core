@@ -12,14 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 from hathor.builder import BuildArtifacts
+from hathor.conf.settings import HathorSettings
 from hathor.sysctl import ConnectionsManagerSysctl, Sysctl, WebsocketManagerSysctl
+
+settings = HathorSettings
 
 
 class SysctlBuilder:
     """Builder for the sysctl tree."""
+
     def __init__(self, artifacts: BuildArtifacts) -> None:
         self.artifacts = artifacts
+        self.sysctl_init_file: Optional[str] = None
 
     def build(self) -> Sysctl:
         """Build the sysctl tree."""

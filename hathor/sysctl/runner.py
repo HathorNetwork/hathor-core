@@ -13,12 +13,19 @@
 # limitations under the License.
 
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 from hathor.sysctl.exception import SysctlRunnerException
 
 if TYPE_CHECKING:
     from hathor.sysctl.sysctl import Sysctl
+
+# - It starts with an opening square bracket [.
+# - It ends with a closing square bracket ].
+# - The elements are separated by commas and can be followed by optional whitespace.
+# - There can be zero or more elements in the array (an empty array is allowed).
+array_pattern = r'^\s*\[\s*(?:[^\[\],]+(?:\s*,\s*[^\[\],]+)*)?\s*\]\s*$'
 
 
 class SysctlRunner:
@@ -75,6 +82,10 @@ class SysctlRunner:
         """Deserialize a value sent by the client."""
         if len(value_str) == 0:
             return ()
+
+        if re.match(array_pattern, value_str):
+            return list(json.loads(value_str))
+
         parts = [x.strip() for x in value_str.split(',')]
         if len(parts) > 1:
             return tuple(json.loads(x) for x in parts)
