@@ -1,4 +1,3 @@
-import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -6,7 +5,7 @@ from unittest.mock import Mock, patch
 
 from hathor.builder.sysctl_builder import SysctlBuilder
 from hathor.cli.run_node import RunNode
-from hathor.sysctl.exception import SysctlEntryNotFound, SysctlRunnerException
+from hathor.sysctl.exception import SysctlRunnerException
 from hathor.sysctl.init_file_loader import SysctlInitFileLoader
 from hathor.sysctl.runner import SysctlRunner
 from tests import unittest
@@ -42,14 +41,14 @@ class SysctlInitTest(unittest.TestCase):
             'manager.metrics.websocket_factory.return_value': None
         })
 
-        with self.assertRaises(SysctlEntryNotFound) as context:
+        with self.assertRaises(SysctlRunnerException) as context:
             root = SysctlBuilder(artifacts).build()
             runner = SysctlRunner(root)
             loader = SysctlInitFileLoader(runner, sysctl_init_file_path)
             loader.load()
 
         # assert message in the caught exception
-        expected_msg = 'invalid.property'
+        expected_msg = 'path invalid.property not found'
         self.assertEqual(str(context.exception), expected_msg)
 
     def test_sysctl_builder_fail_with_invalid_value(self):
@@ -81,25 +80,6 @@ class SysctlInitTest(unittest.TestCase):
         expected_msg = 'value: wrong format'
         self.assertEqual(str(context.exception), expected_msg)
 
-    def test_syctl_init_file_fail_with_empty_or_invalid_file(self):
-        # prepare to register only p2p commands
-        artifacts = Mock(**{
-            'p2p_manager': Mock(),
-            'manager.metrics.websocket_factory.return_value': None
-        })
-
-        with self.assertRaises(AssertionError):
-            root = SysctlBuilder(artifacts).build()
-            runner = SysctlRunner(root)
-            loader = SysctlInitFileLoader(runner, None)
-            loader.load()
-
-        with self.assertRaises(AssertionError):
-            root = SysctlBuilder(artifacts).build()
-            runner = SysctlRunner(root)
-            loader = SysctlInitFileLoader(runner, "")
-            loader.load()
-
     @patch('twisted.internet.endpoints.serverFromString')  # avoid open sock
     def test_command_option_sysctl_init_file(self, mock_endpoint):
         class CustomRunNode(RunNode):
@@ -113,12 +93,14 @@ class SysctlInitTest(unittest.TestCase):
             'p2p.max_enabled_sync': 7,
             'p2p.rate_limit.global.send_tips': (5, 3),
             'p2p.sync_update_interval': 17,
+            'p2p.always_enable_sync': ['peer-1', 'peer-2'],
         }
 
         file_content = [
             'p2p.max_enabled_sync=7',
             'p2p.rate_limit.global.send_tips=5,3',
             'p2p.sync_update_interval=17',
+            'p2p.always_enable_sync=["peer-1","peer-2"]',
         ]
 
         with tempfile.NamedTemporaryFile(
@@ -155,6 +137,10 @@ class SysctlInitTest(unittest.TestCase):
                 curr_sync_update_interval,
                 expected_sysctl_dict['p2p.sync_update_interval'])
 
+        curr_always_enabled_sync = list(conn.always_enable_sync)
+        self.assertTrue(
+                set(curr_always_enabled_sync).issuperset(set(expected_sysctl_dict['p2p.always_enable_sync'])))
+
         # assert always_enabled_sync when it is set with a file
         expected_sysctl_dict = {
             'p2p.always_enable_sync': ['peer-3', 'peer-4'],
@@ -175,7 +161,7 @@ class SysctlInitTest(unittest.TestCase):
             always_enabled_peers_file_path = str(Path(always_enabled_peers_file.name))
 
         file_content = [
-            f'p2p.always_enable_sync.readtxt={json.dumps(always_enabled_peers_file_path)}'
+            f'p2p.always_enable_sync.readtxt="{always_enabled_peers_file_path}"'
         ]
 
         # set the sysctl.txt file

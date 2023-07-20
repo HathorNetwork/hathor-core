@@ -373,7 +373,8 @@ class RunNode:
         self.prepare()
         self.register_signal_handlers()
         if self._args.sysctl:
-            self.init_sysctl(self._args.sysctl, self._args.sysctl_init_file)
+            self.init_sysctl(
+                self._args.sysctl, self._args.sysctl_init_file)
 
     def init_sysctl(self, description: str, sysctl_init_file: Optional[str] = None) -> None:
         """Initialize sysctl, listen for connections and apply settings from config file if required.
@@ -393,14 +394,14 @@ class RunNode:
         from hathor.sysctl.factory import SysctlFactory
         from hathor.sysctl.init_file_loader import SysctlInitFileLoader
         from hathor.sysctl.runner import SysctlRunner
+        from hathor.sysctl.init_file_loader import SysctlInitFileLoader
 
         builder = SysctlBuilder(self.artifacts)
         root = builder.build()
         runner = SysctlRunner(root)
 
-        if sysctl_init_file:
-            init_file_loader = SysctlInitFileLoader(runner, sysctl_init_file)
-            init_file_loader.load()
+        init_file_loader = SysctlInitFileLoader(runner, sysctl_init_file)
+        init_file_loader.load()
 
         factory = SysctlFactory(runner)
         endpoint = serverFromString(self.reactor, description)
