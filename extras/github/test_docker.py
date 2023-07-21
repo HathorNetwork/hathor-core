@@ -17,7 +17,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.9',
+            'MATRIX_PYTHON_VERSION': '3.10',
             'SECRETS_DOCKERHUB_IMAGE': '',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -32,7 +32,7 @@ class DockerWorkflowTest(unittest.TestCase):
         output = prep_tags(os.environ, base_version, is_release_candidate)
 
         self.assertEqual(output['slack-notification-version'], base_version)
-        self.assertEqual(output['version'], base_version + '-python3.9')
+        self.assertEqual(output['version'], base_version + '-python3.10')
         self.assertEqual(output['login-dockerhub'], 'false')
         self.assertEqual(output['login-ghcr'], 'false')
         self.assertEqual(output['tags'], 'dont-push--local-only')
@@ -47,7 +47,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.9',
+            'MATRIX_PYTHON_VERSION': '3.10',
             'SECRETS_DOCKERHUB_IMAGE': 'mock_image',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -62,12 +62,12 @@ class DockerWorkflowTest(unittest.TestCase):
         output = prep_tags(os.environ, base_version, is_release_candidate)
 
         self.assertEqual(output['slack-notification-version'], base_version)
-        self.assertEqual(output['version'], base_version + '-python3.9')
+        self.assertEqual(output['version'], base_version + '-python3.10')
         self.assertEqual(output['login-dockerhub'], 'true')
         self.assertEqual(output['login-ghcr'], 'false')
         self.assertEqual(len(output['tags'].split(',')), 2)
         self.assertIn('mock_image:nightly-55629a7d', output['tags'].split(','))
-        self.assertIn('mock_image:nightly-55629a7d-python3.9', output['tags'].split(','))
+        self.assertIn('mock_image:nightly-55629a7d-python3.10', output['tags'].split(','))
         self.assertEqual(output['push'], 'true')
         self.assertEqual(output['dockerfile'], 'Dockerfile')
 
@@ -110,7 +110,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.9',
+            'MATRIX_PYTHON_VERSION': '3.10',
             'SECRETS_DOCKERHUB_IMAGE': 'mock_image',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -140,7 +140,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.9',
+            'MATRIX_PYTHON_VERSION': '3.10',
             'SECRETS_DOCKERHUB_IMAGE': 'mock_image',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -155,12 +155,12 @@ class DockerWorkflowTest(unittest.TestCase):
         output = prep_tags(os.environ, base_version, is_release_candidate)
 
         self.assertEqual(output['slack-notification-version'], base_version)
-        self.assertEqual(output['version'], base_version + '-python3.9')
+        self.assertEqual(output['version'], base_version + '-python3.10')
         self.assertEqual(output['login-dockerhub'], 'true')
         self.assertEqual(output['login-ghcr'], 'false')
         self.assertEqual(len(output['tags'].split(',')), 4)
-        self.assertIn('mock_image:v0.53-python3.9', output['tags'].split(','))
-        self.assertIn('mock_image:v0.53.0-python3.9', output['tags'].split(','))
+        self.assertIn('mock_image:v0.53-python3.10', output['tags'].split(','))
+        self.assertIn('mock_image:v0.53.0-python3.10', output['tags'].split(','))
         self.assertIn('mock_image:v0.53.0', output['tags'].split(','))
         self.assertIn('mock_image:latest', output['tags'].split(','))
         self.assertEqual(output['push'], 'true')
