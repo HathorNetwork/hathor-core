@@ -53,7 +53,7 @@ types-pyyaml = "=6.0.12.9"
 [tool.poetry.dependencies]
 python = ">=3.9,<4"
 twisted = "~22.10.0"
-autobahn = "~22.7.1"
+autobahn = "~23.6.2"
 base58 = "~2.1.1"
 colorama = "~0.4.6"
 configargparse = "~1.5.3"
