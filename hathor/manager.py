@@ -403,8 +403,6 @@ class HathorManager:
 
         self.log.debug('load blocks and transactions')
         for tx in self.tx_storage._topological_sort_dfs():
-            tx.update_initial_metadata()
-
             assert tx.hash is not None
 
             tx_meta = tx.get_metadata()
@@ -433,7 +431,14 @@ class HathorManager:
 
             try:
                 # TODO: deal with invalid tx
+                tx.calculate_height()
+                tx._update_parents_children_metadata()
+
                 if tx.can_validate_full():
+                    tx.update_initial_metadata()
+                    tx.calculate_min_height()
+                    if tx.is_genesis:
+                        assert tx.validate_checkpoint(self.checkpoints)
                     assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
                     self.tx_storage.add_to_indexes(tx)
                     with self.tx_storage.allow_only_valid_context():
@@ -934,12 +939,11 @@ class HathorManager:
         """
         assert self.tx_storage.is_only_valid_allowed()
         assert tx.hash is not None
+
+        already_exists = False
         if self.tx_storage.transaction_exists(tx.hash):
             self.tx_storage.compare_bytes_with_local_tx(tx)
-            if not fails_silently:
-                raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
-            self.log.warn('on_new_tx(): Transaction already exists', tx=tx.hash_hex)
-            return False
+            already_exists = True
 
         if tx.timestamp - self.reactor.seconds() > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
             if not fails_silently:
@@ -956,8 +960,14 @@ class HathorManager:
             metadata = tx.get_metadata()
         except TransactionDoesNotExist:
             if not fails_silently:
-                raise InvalidNewTransaction('missing parent')
-            self.log.warn('on_new_tx(): missing parent', tx=tx.hash_hex)
+                raise InvalidNewTransaction('cannot get metadata')
+            self.log.warn('on_new_tx(): cannot get metadata', tx=tx.hash_hex)
+            return False
+
+        if already_exists and metadata.validation.is_fully_connected():
+            if not fails_silently:
+                raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
+            self.log.warn('on_new_tx(): Transaction already exists', tx=tx.hash_hex)
             return False
 
         if metadata.validation.is_invalid():
@@ -1044,7 +1054,7 @@ class HathorManager:
                     try:
                         # XXX: `reject_locked_reward` might not apply, partial validation is only used on sync-v2
                         # TODO: deal with `reject_locked_reward` on sync-v2
-                        assert tx.validate_full(reject_locked_reward=True)
+                        assert tx.validate_full(reject_locked_reward=False)
                     except (AssertionError, HathorError):
                         # TODO
                         raise
