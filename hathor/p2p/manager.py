@@ -29,7 +29,7 @@ from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
-from hathor.p2p.sync_factory import SyncManagerFactory
+from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -83,7 +83,7 @@ class ConnectionsManager:
     connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
     handshaking_peers: set[HathorProtocol]
     whitelist_only: bool
-    _sync_factories: dict[SyncVersion, SyncManagerFactory]
+    _sync_factories: dict[SyncVersion, SyncAgentFactory]
 
     rate_limiter: RateLimiter
 
@@ -258,7 +258,7 @@ class ConnectionsManager:
             # XXX: this is to make it easy to simulate old behavior if we disable the sync-version capability
             return {SyncVersion.V1}
 
-    def get_sync_factory(self, sync_version: SyncVersion) -> SyncManagerFactory:
+    def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
         """Get the sync factory for a given version, support MUST be checked beforehand or it will raise an assert."""
         assert sync_version in self._sync_factories, 'get_sync_factory must be called for a supported version'
         return self._sync_factories[sync_version]

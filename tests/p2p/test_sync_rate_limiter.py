@@ -30,7 +30,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         connected_peers2 = list(manager2.connections.connected_peers.values())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
-        sync2 = protocol1.state.sync_manager
+        sync2 = protocol1.state.sync_agent
         sync2._send_tips = MagicMock()
 
         for i in range(100):
@@ -62,7 +62,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
-        sync1 = protocol1.state.sync_manager
+        sync1 = protocol1.state.sync_agent
         sync1._send_tips = Mock(wraps=sync1._send_tips)
 
         sync1.send_tips()
@@ -109,7 +109,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
-        sync1 = protocol1.state.sync_manager
+        sync1 = protocol1.state.sync_agent
 
         sync1.send_tips()
         self.assertEqual(len(sync1._send_tips_call_later), 0)
@@ -147,7 +147,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
-        sync1 = protocol1.state.sync_manager
+        sync1 = protocol1.state.sync_agent
 
         sync1.send_tips()
         self.assertEqual(len(sync1._send_tips_call_later), 0)

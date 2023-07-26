@@ -29,15 +29,15 @@ logger = get_logger()
 class SyncMempoolManager:
     """Manage the sync-v2 mempool with one peer.
     """
-    def __init__(self, sync_manager: 'NodeBlockSync'):
+    def __init__(self, sync_agent: 'NodeBlockSync'):
         """Initialize the sync-v2 mempool manager."""
-        self.log = logger.new(peer=sync_manager.protocol.get_short_peer_id())
+        self.log = logger.new(peer=sync_agent.protocol.get_short_peer_id())
 
         # Shortcuts.
-        self.sync_manager = sync_manager
-        self.manager = self.sync_manager.manager
+        self.sync_agent = sync_agent
+        self.manager = self.sync_agent.manager
         self.tx_storage = self.manager.tx_storage
-        self.reactor = self.sync_manager.reactor
+        self.reactor = self.sync_agent.reactor
 
         # Set of tips we know but couldn't add to the DAG yet.
         self.missing_tips: set[bytes] = set()
@@ -65,7 +65,7 @@ class SyncMempoolManager:
         try:
             yield self._unsafe_run()
         finally:
-            # sync_manager.run_sync will start it again when needed
+            # sync_agent.run_sync will start it again when needed
             self._is_running = False
 
     @inlineCallbacks
@@ -73,13 +73,13 @@ class SyncMempoolManager:
         """Run a single loop of the sync-v2 mempool."""
         if not self.missing_tips:
             # No missing tips? Let's get them!
-            tx_hashes: list[bytes] = yield self.sync_manager.get_tips()
+            tx_hashes: list[bytes] = yield self.sync_agent.get_tips()
             self.missing_tips.update(h for h in tx_hashes if not self.tx_storage.transaction_exists(h))
 
         while self.missing_tips:
             self.log.debug('We have missing tips! Let\'s start!', missing_tips=[x.hex() for x in self.missing_tips])
             tx_id = next(iter(self.missing_tips))
-            tx: BaseTransaction = yield self.sync_manager.get_tx(tx_id)
+            tx: BaseTransaction = yield self.sync_agent.get_tx(tx_id)
             # Stack used by the DFS in the dependencies.
             # We use a deque for performance reasons.
             self.log.debug('start mempool DSF', tx=tx.hash_hex)
@@ -98,7 +98,7 @@ class SyncMempoolManager:
                 assert tx == stack.pop()
             else:
                 self.log.debug('Iterate in the DFS.', missing_dep=missing_dep.hex())
-                tx_dep = yield self.sync_manager.get_tx(missing_dep)
+                tx_dep = yield self.sync_agent.get_tx(missing_dep)
                 stack.append(tx_dep)
                 if len(stack) > self.MAX_STACK_LENGTH:
                     stack.popleft()

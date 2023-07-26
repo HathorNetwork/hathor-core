@@ -15,14 +15,14 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
-from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_agent import SyncAgent
 from hathor.util import Reactor
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
 
 
-class SyncManagerFactory(ABC):
+class SyncAgentFactory(ABC):
     @abstractmethod
-    def create_sync_manager(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncManager:
+    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncAgent:
         pass

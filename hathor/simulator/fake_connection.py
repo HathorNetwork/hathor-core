@@ -91,13 +91,13 @@ class FakeConnection:
             return False
         assert isinstance(state1, ReadyState)  # mypy can't infer this from the above
         assert isinstance(state2, ReadyState)  # mypy can't infer this from the above
-        state1_is_errored = state1.sync_manager.is_errored()
-        state2_is_errored = state2.sync_manager.is_errored()
+        state1_is_errored = state1.sync_agent.is_errored()
+        state2_is_errored = state2.sync_agent.is_errored()
         if state1_is_errored or state2_is_errored:
             self.log.debug('peer errored', peer1_errored=state1_is_errored, peer2_errored=state2_is_errored)
             return False
-        state1_is_synced = state1.sync_manager.is_synced()
-        state2_is_synced = state2.sync_manager.is_synced()
+        state1_is_synced = state1.sync_agent.is_synced()
+        state2_is_synced = state2.sync_agent.is_synced()
         if not state1_is_synced or not state2_is_synced:
             self.log.debug('peer not synced', peer1_synced=state1_is_synced, peer2_synced=state2_is_synced)
             return False
@@ -120,13 +120,13 @@ class FakeConnection:
             return True
         assert isinstance(state1, ReadyState)  # mypy can't infer this from the above
         assert isinstance(state2, ReadyState)  # mypy can't infer this from the above
-        state1_is_errored = state1.sync_manager.is_errored()
-        state2_is_errored = state2.sync_manager.is_errored()
+        state1_is_errored = state1.sync_agent.is_errored()
+        state2_is_errored = state2.sync_agent.is_errored()
         if state1_is_errored or state2_is_errored:
             self.log.debug('peer errored', peer1_errored=state1_is_errored, peer2_errored=state2_is_errored)
             return False
-        state1_is_synced = state1.sync_manager.is_synced()
-        state2_is_synced = state2.sync_manager.is_synced()
+        state1_is_synced = state1.sync_agent.is_synced()
+        state2_is_synced = state2.sync_agent.is_synced()
         if not state1_is_synced or not state2_is_synced:
             self.log.debug('peer not synced', peer1_synced=state1_is_synced, peer2_synced=state2_is_synced)
             return True

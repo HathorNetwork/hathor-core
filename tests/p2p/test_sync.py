@@ -101,7 +101,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         conn.run_one_step()  # PEER-ID
         conn.run_one_step()  # READY
 
-        node_sync = conn.proto1.state.sync_manager
+        node_sync = conn.proto1.state.sync_agent
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
 
@@ -119,7 +119,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             conn.run_one_step(debug=True)
             self.clock.advance(0.1)
 
-        node_sync = conn.proto1.state.sync_manager
+        node_sync = conn.proto1.state.sync_agent
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
         self.assertConsensusEqual(self.manager1, manager2)
@@ -139,7 +139,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             conn.run_one_step(debug=True)
             self.clock.advance(0.1)
 
-        node_sync = conn.proto1.state.sync_manager
+        node_sync = conn.proto1.state.sync_agent
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
         self.assertConsensusEqual(self.manager1, manager2)
@@ -167,7 +167,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # dot2 = manager2.tx_storage.graphviz(format='pdf')
         # dot2.render('dot2')
 
-        node_sync = conn.proto1.state.sync_manager
+        node_sync = conn.proto1.state.sync_agent
         self.assertEqual(self.manager1.tx_storage.latest_timestamp, manager2.tx_storage.latest_timestamp)
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
@@ -501,8 +501,8 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             self.clock.advance(1)
 
         # check they have the same consensus
-        node_sync1 = conn.proto1.state.sync_manager
-        node_sync2 = conn.proto2.state.sync_manager
+        node_sync1 = conn.proto1.state.sync_agent
+        node_sync2 = conn.proto2.state.sync_agent
         self.assertEqual(node_sync1.peer_height, height)
         self.assertEqual(node_sync1.synced_height, height)
         self.assertEqual(node_sync2.peer_height, height)
@@ -525,13 +525,13 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
     def test_tx_propagation_nat_peers(self):
         super().test_tx_propagation_nat_peers()
 
-        node_sync1 = self.conn1.proto1.state.sync_manager
+        node_sync1 = self.conn1.proto1.state.sync_agent
         self.assertEqual(self.manager1.tx_storage.latest_timestamp, self.manager2.tx_storage.latest_timestamp)
         self.assertEqual(node_sync1.peer_height, node_sync1.synced_height)
         self.assertEqual(node_sync1.peer_height, self.manager1.tx_storage.get_height_best_block())
         self.assertConsensusEqual(self.manager1, self.manager2)
 
-        node_sync2 = self.conn2.proto1.state.sync_manager
+        node_sync2 = self.conn2.proto1.state.sync_agent
         self.assertEqual(self.manager2.tx_storage.latest_timestamp, self.manager3.tx_storage.latest_timestamp)
         self.assertEqual(node_sync2.peer_height, node_sync2.synced_height)
         self.assertEqual(node_sync2.peer_height, self.manager2.tx_storage.get_height_best_block())
@@ -558,7 +558,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         # dot2 = manager2.tx_storage.graphviz(format='pdf')
         # dot2.render('dot2')
 
-        node_sync = conn.proto1.state.sync_manager
+        node_sync = conn.proto1.state.sync_agent
         self.assertEqual(self.manager1.tx_storage.latest_timestamp, manager2.tx_storage.latest_timestamp)
         self.assertEqual(node_sync.peer_height, node_sync.synced_height)
         self.assertEqual(node_sync.peer_height, self.manager1.tx_storage.get_height_best_block())
@@ -580,7 +580,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             conn.run_one_step(debug=True)
             self.clock.advance(1)
 
-        node_sync = conn.proto1.state.sync_manager
+        node_sync = conn.proto1.state.sync_agent
         self.assertEqual(node_sync.peer_height, node_sync.synced_height)
         self.assertEqual(node_sync.peer_height, self.manager1.tx_storage.get_height_best_block())
         self.assertConsensusEqual(self.manager1, manager2)
@@ -601,7 +601,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             conn.run_one_step(debug=True)
             self.clock.advance(1)
 
-        node_sync = conn.proto1.state.sync_manager
+        node_sync = conn.proto1.state.sync_agent
         self.assertEqual(node_sync.peer_height, node_sync.synced_height)
         self.assertEqual(node_sync.peer_height, self.manager1.tx_storage.get_height_best_block())
         self.assertConsensusEqual(self.manager1, manager2)
@@ -654,7 +654,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             self.clock.advance(0.1)
         conn.run_until_empty(1000)
 
-        # node_sync = conn.proto1.state.sync_manager
+        # node_sync = conn.proto1.state.sync_agent
         # self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         # self.assertTipsEqual(self.manager1, manager2)
         common_height = 25 + len_reward_unlock
@@ -662,8 +662,8 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertEqual(self.manager1.tx_storage.get_height_best_block(), common_height)
         self.assertEqual(manager2.tx_storage.get_height_best_block(), common_height)
 
-        node_sync1 = conn.proto1.state.sync_manager
-        node_sync2 = conn.proto2.state.sync_manager
+        node_sync1 = conn.proto1.state.sync_agent
+        node_sync2 = conn.proto2.state.sync_agent
         self.assertEqual(node_sync1.peer_height, common_height)
         self.assertEqual(node_sync1.synced_height, common_height)
         self.assertEqual(node_sync2.peer_height, common_height)
@@ -712,8 +712,8 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertEqual(self.manager1.tx_storage.get_best_block().get_metadata().height, TOTAL_BLOCKS)
         self.assertEqual(manager2.tx_storage.get_best_block().get_metadata().height, TOTAL_BLOCKS)
 
-        node_sync1 = conn.proto1.state.sync_manager
-        node_sync2 = conn.proto2.state.sync_manager
+        node_sync1 = conn.proto1.state.sync_agent
+        node_sync2 = conn.proto2.state.sync_agent
 
         self.assertEqual(node_sync1.peer_height, TOTAL_BLOCKS)
         self.assertEqual(node_sync1.synced_height, TOTAL_BLOCKS)
@@ -737,7 +737,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             conn.run_one_step(debug=True)
             self.clock.advance(1)
 
-        node_sync = conn.proto1.state.sync_manager
+        node_sync = conn.proto1.state.sync_agent
         self.assertEqual(node_sync.synced_height, 0)
         self.assertEqual(node_sync.peer_height, 0)
 
