@@ -23,8 +23,8 @@ class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase)
         # Even if we don't have the capability we must connect because the whitelist url conf is None
         self.assertEqual(conn._proto1.state.state_name, 'READY')
         self.assertEqual(conn._proto2.state.state_name, 'READY')
-        self.assertIsInstance(conn._proto1.state.sync_manager, NodeSyncTimestamp)
-        self.assertIsInstance(conn._proto2.state.sync_manager, NodeSyncTimestamp)
+        self.assertIsInstance(conn._proto1.state.sync_agent, NodeSyncTimestamp)
+        self.assertIsInstance(conn._proto2.state.sync_agent, NodeSyncTimestamp)
 
         manager3 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST])
         manager4 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST])
@@ -38,8 +38,8 @@ class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase)
 
         self.assertEqual(conn2._proto1.state.state_name, 'READY')
         self.assertEqual(conn2._proto2.state.state_name, 'READY')
-        self.assertIsInstance(conn2._proto1.state.sync_manager, NodeSyncTimestamp)
-        self.assertIsInstance(conn2._proto2.state.sync_manager, NodeSyncTimestamp)
+        self.assertIsInstance(conn2._proto1.state.sync_agent, NodeSyncTimestamp)
+        self.assertIsInstance(conn2._proto2.state.sync_agent, NodeSyncTimestamp)
 
 
 class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase):
@@ -59,8 +59,8 @@ class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase)
         # Even if we don't have the capability we must connect because the whitelist url conf is None
         self.assertEqual(conn._proto1.state.state_name, 'READY')
         self.assertEqual(conn._proto2.state.state_name, 'READY')
-        self.assertIsInstance(conn._proto1.state.sync_manager, NodeBlockSync)
-        self.assertIsInstance(conn._proto2.state.sync_manager, NodeBlockSync)
+        self.assertIsInstance(conn._proto1.state.sync_agent, NodeBlockSync)
+        self.assertIsInstance(conn._proto2.state.sync_agent, NodeBlockSync)
 
         manager3 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST,
                                                            settings.CAPABILITY_SYNC_VERSION])
@@ -76,8 +76,8 @@ class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase)
 
         self.assertEqual(conn2._proto1.state.state_name, 'READY')
         self.assertEqual(conn2._proto2.state.state_name, 'READY')
-        self.assertIsInstance(conn2._proto1.state.sync_manager, NodeBlockSync)
-        self.assertIsInstance(conn2._proto2.state.sync_manager, NodeBlockSync)
+        self.assertIsInstance(conn2._proto1.state.sync_agent, NodeBlockSync)
+        self.assertIsInstance(conn2._proto2.state.sync_agent, NodeBlockSync)
 
 
 # sync-bridge should behave like sync-v2

@@ -21,7 +21,7 @@ from twisted.internet.task import LoopingCall
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
-from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_agent import SyncAgent
 from hathor.transaction import BaseTransaction
 from hathor.util import json_dumps, json_loads
 
@@ -77,8 +77,8 @@ class ReadyState(BaseState):
         self.log.debug(f'loading {sync_version}')
         sync_factory = connections.get_sync_factory(sync_version)
 
-        self.sync_manager: SyncManager = sync_factory.create_sync_manager(self.protocol, reactor=self.reactor)
-        self.cmd_map.update(self.sync_manager.get_cmd_dict())
+        self.sync_agent: SyncAgent = sync_factory.create_sync_agent(self.protocol, reactor=self.reactor)
+        self.cmd_map.update(self.sync_agent.get_cmd_dict())
 
     def on_enter(self) -> None:
         if self.protocol.connections:
@@ -87,24 +87,24 @@ class ReadyState(BaseState):
         self.lc_ping.start(1, now=False)
         self.send_get_peers()
 
-        self.sync_manager.start()
+        self.sync_agent.start()
 
     def on_exit(self) -> None:
         if self.lc_ping.running:
             self.lc_ping.stop()
 
-        if self.sync_manager.is_started():
-            self.sync_manager.stop()
+        if self.sync_agent.is_started():
+            self.sync_agent.stop()
 
     def prepare_to_disconnect(self) -> None:
-        if self.sync_manager.is_started():
-            self.sync_manager.stop()
+        if self.sync_agent.is_started():
+            self.sync_agent.stop()
 
     def send_tx_to_peer(self, tx: BaseTransaction) -> None:
-        self.sync_manager.send_tx_to_peer_if_possible(tx)
+        self.sync_agent.send_tx_to_peer_if_possible(tx)
 
     def is_synced(self) -> bool:
-        return self.sync_manager.is_synced()
+        return self.sync_agent.is_synced()
 
     def send_get_peers(self) -> None:
         """ Send a GET-PEERS command, requesting a list of nodes.

@@ -19,7 +19,7 @@ from hathor.p2p.messages import ProtocolMessages
 from hathor.transaction import BaseTransaction
 
 
-class SyncManager(ABC):
+class SyncAgent(ABC):
     @abstractmethod
     def is_started(self) -> bool:
         """Whether the manager started running"""

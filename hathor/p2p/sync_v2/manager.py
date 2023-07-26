@@ -26,7 +26,7 @@ from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
 from hathor.p2p.sync_v2.streamers import DEFAULT_STREAMING_LIMIT, BlockchainStreaming, StreamEnd, TransactionsStreaming
 from hathor.transaction import BaseTransaction, Block, Transaction
@@ -53,7 +53,7 @@ class PeerState(Enum):
     SYNCING_MEMPOOL = 'syncing-mempool'
 
 
-class NodeBlockSync(SyncManager):
+class NodeBlockSync(SyncAgent):
     """ An algorithm to sync two peers based on their blockchain.
     """
     name: str = 'node-block-sync'

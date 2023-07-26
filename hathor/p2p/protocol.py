@@ -363,21 +363,21 @@ class HathorProtocol:
         if not self.is_state(self.PeerState.READY):
             return False
         assert isinstance(self.state, ReadyState)
-        return self.state.sync_manager.is_sync_enabled()
+        return self.state.sync_agent.is_sync_enabled()
 
     def enable_sync(self) -> None:
         """Enable sync for this connection."""
         assert self.is_state(self.PeerState.READY)
         assert isinstance(self.state, ReadyState)
         self.log.info('enable sync')
-        self.state.sync_manager.enable_sync()
+        self.state.sync_agent.enable_sync()
 
     def disable_sync(self) -> None:
         """Disable sync for this connection."""
         assert self.is_state(self.PeerState.READY)
         assert isinstance(self.state, ReadyState)
         self.log.info('disable sync')
-        self.state.sync_manager.disable_sync()
+        self.state.sync_agent.disable_sync()
 
 
 class HathorLineReceiver(LineReceiver, HathorProtocol):

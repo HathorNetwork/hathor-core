@@ -15,8 +15,8 @@
 from typing import TYPE_CHECKING, Optional
 
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.sync_factory import SyncManagerFactory
-from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_agent import SyncAgent
+from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.util import Reactor
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
 
 
-class SyncV10Factory(SyncManagerFactory):
+class SyncV10Factory(SyncAgentFactory):
     def __init__(self, connections: ConnectionsManager):
         self.connections = connections
         self._downloader: Optional[Downloader] = None
@@ -36,5 +36,5 @@ class SyncV10Factory(SyncManagerFactory):
             self._downloader = Downloader(self.connections.manager)
         return self._downloader
 
-    def create_sync_manager(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncManager:
+    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncAgent:
         return NodeSyncTimestamp(protocol, downloader=self.get_downloader(), reactor=reactor)
