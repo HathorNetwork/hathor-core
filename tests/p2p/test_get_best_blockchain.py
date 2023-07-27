@@ -1,8 +1,8 @@
 from hathor.conf import HathorSettings
+from hathor.indexes.height_index import HeightInfo
 from hathor.manager import DEFAULT_CAPABILITIES
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states import ReadyState
-from hathor.indexes.height_index import HeightInfo
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
 from hathor.util import json_dumps
@@ -61,8 +61,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertIn(ProtocolMessages.BEST_BLOCKCHAIN, state2.cmd_map)
 
         # assert best blockchain contains the genesis block
-        self.assertIsNotNone(state1.best_blockchain)
-        self.assertIsNotNone(state2.best_blockchain)
+        self.assertIsNotNone(state1.peer_best_blockchain)
+        self.assertIsNotNone(state2.peer_best_blockchain)
 
         # mine 20 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
@@ -75,11 +75,11 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         state1.send_get_best_blockchain()
         state2.send_get_best_blockchain()
         self.simulator.run(60)
-        self.assertEqual(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state1.best_blockchain))
-        self.assertEqual(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state2.best_blockchain))
+        self.assertEqual(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state1.peer_best_blockchain))
+        self.assertEqual(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state2.peer_best_blockchain))
 
-        self.assertIsInstance(state1.best_blockchain[0], HeightInfo)
-        self.assertIsInstance(state2.best_blockchain[0], HeightInfo)
+        self.assertIsInstance(state1.peer_best_blockchain[0], HeightInfo)
+        self.assertIsInstance(state2.peer_best_blockchain[0], HeightInfo)
 
     def test_handle_get_best_blockchain(self):
         manager1 = self.create_peer()
@@ -246,8 +246,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         miner.stop()
 
         # assert the best_blockchain remains empty even after mine
-        self.assertEqual([], state2.best_blockchain)
-        self.assertEqual([], state1.best_blockchain)
+        self.assertEqual([], state2.peer_best_blockchain)
+        self.assertEqual([], state1.peer_best_blockchain)
 
         # assert connections will close if force get_best_blockchain
         state1.send_get_best_blockchain()

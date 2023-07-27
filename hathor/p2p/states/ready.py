@@ -19,14 +19,14 @@ from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
+from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
+from hathor.p2p.states.utils import to_height_info
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.transaction import BaseTransaction
 from hathor.util import json_dumps, json_loads
-from hathor.indexes.height_index import HeightInfo
-from hathor.p2p.states.utils import to_height_info
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -64,7 +64,7 @@ class ReadyState(BaseState):
         self.ping_min_rtt: float = inf
 
         # The last blocks from the best blockchain in the peer
-        self.best_blockchain: list[HeightInfo] = []
+        self.peer_best_blockchain: list[HeightInfo] = []
 
         self.cmd_map.update({
             # p2p control messages
@@ -256,4 +256,4 @@ class ReadyState(BaseState):
                 'Invalid HeightInfo while handling best_blockchain response.'
             )
             return
-        self.best_blockchain = best_blockchain
+        self.peer_best_blockchain = best_blockchain

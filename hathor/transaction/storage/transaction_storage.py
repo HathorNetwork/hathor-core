@@ -19,13 +19,13 @@ from contextlib import AbstractContextManager
 from threading import Lock
 from typing import Any, Iterator, NamedTuple, Optional, cast
 from weakref import WeakValueDictionary
-from hathor.indexes.height_index import HeightInfo
 
 from intervaltree.interval import Interval
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager
+from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
@@ -652,6 +652,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        assert self.indexes is not None
         return self.indexes.height.get_n_height_tips(n_blocks)
 
     def get_weight_best_block(self) -> float:
