@@ -19,6 +19,7 @@ from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.genesis import BLOCK_GENESIS
+from hathor.types import VertexId
 from hathor.util import not_none
 
 SCOPE = Scope(
@@ -32,6 +33,12 @@ class IndexEntry(NamedTuple):
     """Helper named tuple that implementations can use."""
     hash: bytes
     timestamp: int
+
+
+class HeightInfo(NamedTuple):
+    """Used by a few methods to represent a (height, hash) tuple."""
+    height: int
+    id: VertexId
 
 
 BLOCK_GENESIS_ENTRY: IndexEntry = IndexEntry(not_none(BLOCK_GENESIS.hash), BLOCK_GENESIS.timestamp)
@@ -84,8 +91,16 @@ class HeightIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_height_tip(self) -> tuple[int, bytes]:
+    def get_height_tip(self) -> HeightInfo:
         """ Return the best block height and hash, it returns the genesis when there is no other block
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        """ Return the n best block height and hash list, it returns the genesis when there is no other block
+
+        The returned list starts at the highest block and goes down in reverse height order.
         """
         raise NotImplementedError
 
