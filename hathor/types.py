@@ -15,7 +15,7 @@
 # XXX There is a lot of refactor to be done before we can use `NewType`.
 #     So, let's skip using NewType until everything is refactored.
 
-VertexId = bytes            # NewType('TxId', bytes)
+VertexId = bytes        # NewType('TxId', bytes)
 Address = bytes         # NewType('Address', bytes)
 TxOutputScript = bytes  # NewType('TxOutputScript', bytes)
 Timestamp = int         # NewType('Timestamp', int)

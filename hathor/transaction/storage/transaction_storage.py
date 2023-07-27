@@ -19,6 +19,7 @@ from contextlib import AbstractContextManager
 from threading import Lock
 from typing import Any, Iterator, NamedTuple, Optional, cast
 from weakref import WeakValueDictionary
+from hathor.indexes.height_index import HeightInfo
 
 from intervaltree.interval import Interval
 from structlog import get_logger
@@ -649,6 +650,10 @@ class TransactionStorage(ABC):
             self._best_block_tips_cache = best_tip_blocks[:]
         return best_tip_blocks
 
+    @abstractmethod
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        return self.indexes.height.get_n_height_tips(n_blocks)
+
     def get_weight_best_block(self) -> float:
         heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
         highest_weight = 0.0
@@ -1086,6 +1091,8 @@ class BaseTransactionStorage(TransactionStorage):
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
 
+        self._latest_n_height_tips: list[HeightInfo] = []
+
     @property
     def latest_timestamp(self) -> int:
         assert self.indexes is not None
@@ -1113,6 +1120,16 @@ class BaseTransactionStorage(TransactionStorage):
 
     def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> list[bytes]:
         return super().get_best_block_tips(timestamp, skip_cache=skip_cache)
+
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        block = self.get_best_block()
+        if self._latest_n_height_tips:
+            best_block = self._latest_n_height_tips[0]
+            if block.hash == best_block.id and n_blocks <= len(self._latest_n_height_tips):
+                return self._latest_n_height_tips[:n_blocks]
+
+        self._latest_n_height_tips = super().get_n_height_tips(n_blocks)
+        return self._latest_n_height_tips[:n_blocks]
 
     def get_weight_best_block(self) -> float:
         return super().get_weight_best_block()

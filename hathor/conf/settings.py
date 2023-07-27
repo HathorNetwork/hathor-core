@@ -399,7 +399,7 @@ class HathorSettings(NamedTuple):
     MAX_GET_TIPS_DELAYED_CALLS: int = 5
 
     # Maximum number of blocks in the best blockchain list.
-    MAX_BEST_BLOCKCHAIN_BLOCKS: int = 100
+    MAX_BEST_BLOCKCHAIN_BLOCKS: int = 20
 
     # Default number of blocks in the best blockchain list.
     DEFAULT_BEST_BLOCKCHAIN_BLOCKS: int = 10

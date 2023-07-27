@@ -52,7 +52,7 @@ from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
-from hathor.types import Address, BlockInfo, VertexId
+from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
 from hathor.wallet import BaseWallet
 
@@ -216,9 +216,6 @@ class HathorManager:
 
         # This is included in some logs to provide more context
         self.environment_info = environment_info
-
-        # Memoize latest best blockchain
-        self._latest_best_blockchain: list[BlockInfo] = []
 
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)

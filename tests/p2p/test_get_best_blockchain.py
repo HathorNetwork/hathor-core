@@ -2,7 +2,7 @@ from hathor.conf import HathorSettings
 from hathor.manager import DEFAULT_CAPABILITIES
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states import ReadyState
-from hathor.p2p.states.ready import BlockInfo
+from hathor.indexes.height_index import HeightInfo
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
 from hathor.util import json_dumps
@@ -64,10 +64,10 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertIsNotNone(state1.best_blockchain)
         self.assertIsNotNone(state2.best_blockchain)
 
-        # mine 100 blocks
+        # mine 20 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
         miner.start()
-        trigger = StopAfterNMinedBlocks(miner, quantity=100)
+        trigger = StopAfterNMinedBlocks(miner, quantity=20)
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
         miner.stop()
 
@@ -78,8 +78,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertEqual(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state1.best_blockchain))
         self.assertEqual(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state2.best_blockchain))
 
-        self.assertIsInstance(state1.best_blockchain[0], BlockInfo)
-        self.assertIsInstance(state2.best_blockchain[0], BlockInfo)
+        self.assertIsInstance(state1.best_blockchain[0], HeightInfo)
+        self.assertIsInstance(state2.best_blockchain[0], HeightInfo)
 
     def test_handle_get_best_blockchain(self):
         manager1 = self.create_peer()
@@ -87,10 +87,10 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
         self.simulator.add_connection(conn12)
 
-        # mine 100 blocks
+        # mine 20 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
         miner.start()
-        trigger = StopAfterNMinedBlocks(miner, quantity=100)
+        trigger = StopAfterNMinedBlocks(miner, quantity=20)
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
         miner.stop()
 
@@ -111,7 +111,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.run(60)
         self.assertFalse(conn12.tr1.disconnecting)
 
-        state2.send_get_best_blockchain(n_blocks=100)
+        state2.send_get_best_blockchain(n_blocks=20)
         self.simulator.run(60)
         self.assertFalse(conn12.tr2.disconnecting)
 
@@ -121,7 +121,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertTrue(conn12.tr1.disconnecting)
 
         # assert compliance with N blocks beyond upper boundary
-        state2.send_get_best_blockchain(n_blocks=101)
+        state2.send_get_best_blockchain(n_blocks=21)
         self.simulator.run(60)
         self.assertTrue(conn12.tr2.disconnecting)
 
@@ -170,8 +170,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # assert a valid blockchain keeps connections open
         fake_blockchain = [
-            (BlockInfo('0000000000000002eccfbca9bc06c449c01f37afb3cb49c04ee62921d9bcf9dc', 1, 1.1)),
-            (BlockInfo('00000000000000006c846e182462a2cc437070288a486dfa21aa64bb373b8507', 2, 1.3)),
+            (1, '0000000000000002eccfbca9bc06c449c01f37afb3cb49c04ee62921d9bcf9dc'),
+            (2, '00000000000000006c846e182462a2cc437070288a486dfa21aa64bb373b8507'),
         ]
         state1.handle_best_blockchain(json_dumps(fake_blockchain))
         state2.handle_best_blockchain(json_dumps(fake_blockchain))
@@ -179,12 +179,12 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertFalse(conn12.tr1.disconnecting)
         self.assertFalse(conn12.tr2.disconnecting)
 
-        # assert an invalid BlockInfo closes connection
+        # assert an invalid HeightInfo closes connection
         fake_blockchain = [
             # valid
-            (BlockInfo('0000000000000002eccfbca9bc06c449c01f37afb3cb49c04ee62921d9bcf9dc', 1, 1.1)),
+            (1, '0000000000000002eccfbca9bc06c449c01f37afb3cb49c04ee62921d9bcf9dc'),
             # invalid because height is of float type
-            (BlockInfo('00000000000000006c846e182462a2cc437070288a486dfa21aa64bb373b8507', 3.1, 1.3)),
+            (3.1, '00000000000000006c846e182462a2cc437070288a486dfa21aa64bb373b8507'),
         ]
         state2.handle_best_blockchain(json_dumps(fake_blockchain))
         self.simulator.run(60)
@@ -192,9 +192,9 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         fake_blockchain = [
             # valid
-            (BlockInfo('0000000000000002eccfbca9bc06c449c01f37afb3cb49c04ee62921d9bcf9dc', 1, 1.1)),
+            (1, '0000000000000002eccfbca9bc06c449c01f37afb3cb49c04ee62921d9bcf9dc'),
             # invalid hash
-            (BlockInfo('invalid hash', 3, 1.3)),
+            (2, 'invalid hash'),
         ]
         state1.handle_best_blockchain(json_dumps(fake_blockchain))
         self.simulator.run(60)
@@ -257,33 +257,29 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.run(60)
         self.assertTrue(conn12.tr2.disconnecting)
 
-    def test_best_blockchain_from_hathor_manager(self):
+    def test_best_blockchain_from_storage(self):
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
         self.simulator.add_connection(conn12)
         blocks = 10
 
-        error_msg = 'Invalid N. N must be greater than 0.'
-        with self.assertRaises(ValueError, msg=error_msg):
-            manager1.get_best_blockchain(0)
-
         # cache miss because the cache is empty
-        self.assertEqual(len(manager1._latest_best_blockchain), 0)
-        best_blockchain = manager1.get_best_blockchain(1)  # there is only the genesis block
-        self.assertIsNotNone(manager1._latest_best_blockchain)
+        self.assertEqual(len(manager1.tx_storage._latest_n_height_tips), 0)
+        best_blockchain = manager1.tx_storage.get_n_height_tips(1)  # there is only the genesis block
+        self.assertIsNotNone(manager1.tx_storage._latest_n_height_tips)
 
         # cache hit
         block = best_blockchain[0]
-        best_blockchain = manager1.get_best_blockchain(1)  # there is only the genesis block
+        best_blockchain = manager1.tx_storage.get_n_height_tips(1)  # there is only the genesis block
         memo_block = best_blockchain[0]
         # can only produce the same object if use the memoized best_blockchain
         self.assertTrue(block is memo_block)
 
         # cache miss if best block doesn't match
-        fake_block = BlockInfo('fake hash', 1, 1.1)
-        manager1._latest_best_blockchain = [fake_block]
-        best_blockchain = manager1.get_best_blockchain(1)  # there is only the genesis block
+        fake_block = HeightInfo(1, 'fake hash')
+        manager1._latest_n_height_tips = [fake_block]
+        best_blockchain = manager1.tx_storage.get_n_height_tips(1)  # there is only the genesis block
         block = best_blockchain[0]
         # the memoized best_blockchain is skiped
         # and a new best_blockchain object is generated
@@ -297,15 +293,15 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         miner.stop()
 
         # cache miss if n_blocks > cache length
-        manager1.get_best_blockchain(blocks)  # update cache
+        manager1.tx_storage.get_n_height_tips(blocks)  # update cache
         memo_block = best_blockchain[0]
-        best_blockchain = manager1.get_best_blockchain(blocks+1)
+        best_blockchain = manager1.tx_storage.get_n_height_tips(blocks+1)
         block = best_blockchain[0]
         self.assertFalse(block is memo_block)
 
         # cache hit if n_blocks <= cache length
         memo_block = block
-        best_blockchain = manager1.get_best_blockchain(blocks-1)
+        best_blockchain = manager1.tx_storage.get_n_height_tips(blocks-1)
         block = best_blockchain[0]
         self.assertTrue(block is memo_block)
 

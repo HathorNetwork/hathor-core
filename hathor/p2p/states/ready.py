@@ -24,9 +24,9 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.transaction import BaseTransaction
-from hathor.types import BlockHeightInfo
 from hathor.util import json_dumps, json_loads
 from hathor.indexes.height_index import HeightInfo
+from hathor.p2p.states.utils import to_height_info
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -64,7 +64,7 @@ class ReadyState(BaseState):
         self.ping_min_rtt: float = inf
 
         # The last blocks from the best blockchain in the peer
-        self.best_blockchain: list[BlockHeightInfo] = []
+        self.best_blockchain: list[HeightInfo] = []
 
         self.cmd_map.update({
             # p2p control messages
@@ -233,14 +233,16 @@ class ReadyState(BaseState):
                 f'N out of bounds. Valid range: [1, {settings.MAX_BEST_BLOCKCHAIN_BLOCKS}].'
             )
             return
+        self.protocol.my_peer
 
-        best_blockchain = self.protocol.node.tx_storage.indexes.height.get_n_height_tips(n_blocks)
+        best_blockchain = self.protocol.node.tx_storage.get_n_height_tips(n_blocks)
         self.send_best_blockchain(best_blockchain)
 
-    def send_best_blockchain(self, best_blockchain: list[BlockHeightInfo]) -> None:
+    def send_best_blockchain(self, best_blockchain: list[HeightInfo]) -> None:
         """ Send a BEST-BLOCKCHAIN command with a best blockchain of N blocks.
         """
-        self.send_message(ProtocolMessages.BEST_BLOCKCHAIN, json_dumps(best_blockchain))
+        serialiable_best_blockchain = [(hi.height, hi.id.hex()) for hi in best_blockchain]
+        self.send_message(ProtocolMessages.BEST_BLOCKCHAIN, json_dumps(serialiable_best_blockchain))
 
     def handle_best_blockchain(self, payload: str) -> None:
         """ Executed when a BEST-BLOCKCHAIN command is received. It updates
@@ -248,10 +250,10 @@ class ReadyState(BaseState):
         """
         restored_blocks = json_loads(payload)
         try:
-            best_blockchain = [BlockHeightInfo.from_raw(block_info_raw) for block_info_raw in restored_blocks]
-        except ValueError:
+            best_blockchain = [to_height_info(raw) for raw in restored_blocks]
+        except Exception:
             self.protocol.send_error_and_close_connection(
-                'Invalid block_info while handling best_blockchain response.'
+                'Invalid HeightInfo while handling best_blockchain response.'
             )
             return
         self.best_blockchain = best_blockchain
