@@ -123,9 +123,6 @@ class ReadyState(BaseState):
         if self.sync_agent.is_started():
             self.sync_agent.stop()
 
-        if self.sync_agent.is_started():
-            self.sync_agent.stop()
-
     def prepare_to_disconnect(self) -> None:
         if self.sync_agent.is_started():
             self.sync_agent.stop()
@@ -211,8 +208,7 @@ class ReadyState(BaseState):
         self.ping_start_time = None
         self.log.debug('rtt updated', rtt=self.ping_rtt, min_rtt=self.ping_min_rtt)
 
-    def send_get_best_blockchain(
-            self, n_blocks: int = settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS) -> None:
+    def send_get_best_blockchain(self, n_blocks: int = settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS) -> None:
         """ Send a GET-BEST-BLOCKCHAIN command, requesting a list of the latest
         N blocks from the best blockchain.
         """
