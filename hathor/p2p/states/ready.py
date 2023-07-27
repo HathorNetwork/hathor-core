@@ -233,12 +233,7 @@ class ReadyState(BaseState):
             )
             return
 
-        try:
-            best_blockchain = self.protocol.node.get_best_blockchain(n_blocks)
-        except ValueError as e:
-            self.protocol.send_error_and_close_connection(msg=str(e))
-            return
-
+        best_blockchain = self.protocol.node.get_best_blockchain(n_blocks)
         self.send_best_blockchain(best_blockchain)
 
     def send_best_blockchain(self, best_blockchain: list[BlockInfo]) -> None:
