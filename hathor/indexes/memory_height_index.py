@@ -14,7 +14,7 @@
 
 from typing import Optional
 
-from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, IndexEntry
+from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, HeightInfo, IndexEntry
 
 
 class MemoryHeightIndex(HeightIndex):
@@ -68,6 +68,15 @@ class MemoryHeightIndex(HeightIndex):
     def get_tip(self) -> bytes:
         return self._index[-1].hash
 
-    def get_height_tip(self) -> tuple[int, bytes]:
+    def get_height_tip(self) -> HeightInfo:
         height = len(self._index) - 1
-        return height, self._index[height].hash
+        return HeightInfo(height, self._index[height].hash)
+
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        if n_blocks < 1:
+            raise ValueError('n_blocks must be a positive, non-zero, integer')
+        # highest height that is included, will be the first element
+        h_high = len(self._index) - 1
+        # lowest height that is not included, -1 if it reaches the genesis
+        h_low = max(h_high - n_blocks, -1)
+        return [HeightInfo(h, self._index[h].hash) for h in range(h_high, h_low, -1)]
