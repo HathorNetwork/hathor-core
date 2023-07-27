@@ -107,21 +107,21 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertIsInstance(state1, ReadyState)
 
         # assert compliance with N blocks inside the boundaries
-        state1.send_get_best_blockchain(n_blocks='1')
+        state1.send_get_best_blockchain(n_blocks=1)
         self.simulator.run(60)
         self.assertFalse(conn12.tr1.disconnecting)
 
-        state2.send_get_best_blockchain(n_blocks='100')
+        state2.send_get_best_blockchain(n_blocks=100)
         self.simulator.run(60)
         self.assertFalse(conn12.tr2.disconnecting)
 
         # assert compliance with N blocks under lower boundary
-        state1.send_get_best_blockchain(n_blocks='0')
+        state1.send_get_best_blockchain(n_blocks=0)
         self.simulator.run(60)
         self.assertTrue(conn12.tr1.disconnecting)
 
         # assert compliance with N blocks beyond upper boundary
-        state2.send_get_best_blockchain(n_blocks='101')
+        state2.send_get_best_blockchain(n_blocks=101)
         self.simulator.run(60)
         self.assertTrue(conn12.tr2.disconnecting)
 

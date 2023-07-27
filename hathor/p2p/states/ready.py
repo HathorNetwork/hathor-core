@@ -26,7 +26,7 @@ from hathor.p2p.sync_agent import SyncAgent
 from hathor.transaction import BaseTransaction
 from hathor.types import BlockHeightInfo
 from hathor.util import json_dumps, json_loads
-from hathor.indexes.height_index import BlockHeightInfo
+from hathor.indexes.height_index import HeightInfo
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -234,7 +234,7 @@ class ReadyState(BaseState):
             )
             return
 
-        best_blockchain = self.protocol.node.tx_storage.indexes.height.get_best_blockchain(n_blocks)
+        best_blockchain = self.protocol.node.tx_storage.indexes.height.get_n_height_tips(n_blocks)
         self.send_best_blockchain(best_blockchain)
 
     def send_best_blockchain(self, best_blockchain: list[BlockHeightInfo]) -> None:
