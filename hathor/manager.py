@@ -715,31 +715,6 @@ class HathorManager:
         can_include = [i.data for i in can_include_intervals]
         return ParentTxs(max_timestamp, can_include, must_include)
 
-    def get_best_blockchain(self, n_blocks: int) -> list['BlockInfo']:
-        """ Get a list with N blocks from the best blockchain
-        in descending order.
-        """
-        if not (n_blocks > 0):
-            raise ValueError(
-                'Invalid N. N must be greater than 0.'
-            )
-
-        block = self.tx_storage.get_best_block()
-        if self._latest_best_blockchain:
-            best_block = self._latest_best_blockchain[0]
-            if block.hash_hex == best_block.hash_hex and n_blocks <= len(self._latest_best_blockchain):
-                return self._latest_best_blockchain[:n_blocks]
-
-        best_blockchain: list[BlockInfo] = []
-        while len(best_blockchain) < n_blocks:
-            best_blockchain.append(block.to_blockinfo())
-            if block.is_genesis:
-                break
-            block = block.get_block_parent()
-
-        self._latest_best_blockchain = best_blockchain
-        return best_blockchain
-
     def allow_mining_without_peers(self) -> None:
         """Allow mining without being synced to at least one peer.
         It should be used only for debugging purposes.
