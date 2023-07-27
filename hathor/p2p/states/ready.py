@@ -24,8 +24,9 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.transaction import BaseTransaction
-from hathor.types import BlockInfo
+from hathor.types import BlockHeightInfo
 from hathor.util import json_dumps, json_loads
+from hathor.indexes.height_index import BlockHeightInfo
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -63,7 +64,7 @@ class ReadyState(BaseState):
         self.ping_min_rtt: float = inf
 
         # The last blocks from the best blockchain in the peer
-        self.best_blockchain: list[BlockInfo] = []
+        self.best_blockchain: list[BlockHeightInfo] = []
 
         self.cmd_map.update({
             # p2p control messages
@@ -233,10 +234,10 @@ class ReadyState(BaseState):
             )
             return
 
-        best_blockchain = self.protocol.node.get_best_blockchain(n_blocks)
+        best_blockchain = self.protocol.node.tx_storage.indexes.height.get_best_blockchain(n_blocks)
         self.send_best_blockchain(best_blockchain)
 
-    def send_best_blockchain(self, best_blockchain: list[BlockInfo]) -> None:
+    def send_best_blockchain(self, best_blockchain: list[BlockHeightInfo]) -> None:
         """ Send a BEST-BLOCKCHAIN command with a best blockchain of N blocks.
         """
         self.send_message(ProtocolMessages.BEST_BLOCKCHAIN, json_dumps(best_blockchain))
@@ -247,7 +248,7 @@ class ReadyState(BaseState):
         """
         restored_blocks = json_loads(payload)
         try:
-            best_blockchain = [BlockInfo.from_raw(block_info_raw) for block_info_raw in restored_blocks]
+            best_blockchain = [BlockHeightInfo.from_raw(block_info_raw) for block_info_raw in restored_blocks]
         except ValueError:
             self.protocol.send_error_and_close_connection(
                 'Invalid block_info while handling best_blockchain response.'
