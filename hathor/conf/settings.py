@@ -347,6 +347,7 @@ class HathorSettings(NamedTuple):
     # Capabilities
     CAPABILITY_WHITELIST: str = 'whitelist'
     CAPABILITY_SYNC_VERSION: str = 'sync-version'
+    CAPABILITY_GET_BEST_BLOCKCHAIN: str = 'get-best-blockchain'
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None
@@ -396,6 +397,15 @@ class HathorSettings(NamedTuple):
 
     # Maximum number of GET_TIPS delayed calls per connection while running sync.
     MAX_GET_TIPS_DELAYED_CALLS: int = 5
+
+    # Maximum number of blocks in the best blockchain list.
+    MAX_BEST_BLOCKCHAIN_BLOCKS: int = 20
+
+    # Default number of blocks in the best blockchain list.
+    DEFAULT_BEST_BLOCKCHAIN_BLOCKS: int = 10
+
+    # Time in seconds to request the best blockchain from peers.
+    BEST_BLOCKCHAIN_INTERVAL: int = 5  # seconds
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':

@@ -360,6 +360,7 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
         self.assertEqual(b'PING\r\n', self.conn.peek_tr2_value())
         self.conn.run_one_step()  # PING
         self.conn.run_one_step()  # GET-TIPS
+        self.conn.run_one_step()  # GET-BEST-BLOCKCHAIN
         self.assertEqual(b'PONG\r\n', self.conn.peek_tr1_value())
         self.assertEqual(b'PONG\r\n', self.conn.peek_tr2_value())
         while b'PONG\r\n' in self.conn.peek_tr1_value():
@@ -409,12 +410,17 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         self.assertIsConnected()
         self.assertAndStepConn(self.conn, b'^GET-TIPS')
         self.assertAndStepConn(self.conn, b'^PING')
+
+        for _ in range(19):
+            self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN')
+
         # peer1 should now send a PEERS with the new peer that just connected
-        self.assertAndStepConn(self.conn, b'^PEERS',    b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^PEERS',    b'^GET-BEST-BLOCKCHAIN')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN',    b'^TIPS')
         self.assertAndStepConn(self.conn, b'^TIPS',     b'^TIPS')
         self.assertAndStepConn(self.conn, b'^TIPS',     b'^TIPS-END')
         self.assertAndStepConn(self.conn, b'^TIPS-END', b'^PONG')
-        self.assertAndStepConn(self.conn, b'^PONG',     b'^$')
+        self.assertAndStepConn(self.conn, b'^PONG',     b'^BEST-BLOCKCHAIN')
         self.assertIsConnected()
 
     @inlineCallbacks
@@ -449,6 +455,7 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         self.assertIsConnected()
         self.assertAndStepConn(self.conn, b'^GET-TIPS')
         self.assertAndStepConn(self.conn, b'^PING')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN')
         self.assertAndStepConn(self.conn, b'^TIPS')
         self.assertAndStepConn(self.conn, b'^TIPS')
         self.assertAndStepConn(self.conn, b'^TIPS-END')
@@ -456,7 +463,9 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         self.assertIsConnected()
 
         self.clock.advance(5)
+        self.assertAndStepConn(self.conn, b'^BEST-BLOCKCHAIN')
         self.assertAndStepConn(self.conn, b'^PING')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCK')
         self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCK')
         self.assertAndStepConn(self.conn, b'^PONG')
         self.assertAndStepConn(self.conn, b'^BEST-BLOCK')
@@ -476,6 +485,7 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         self.clock.advance(5)
         self.assertAndStepConn(self.conn, b'^GET-TIPS')
         self.assertAndStepConn(self.conn, b'^PING')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN')
         self.assertAndStepConn(self.conn, b'^TIPS')
         self.assertAndStepConn(self.conn, b'^TIPS')
         self.assertAndStepConn(self.conn, b'^TIPS-END')

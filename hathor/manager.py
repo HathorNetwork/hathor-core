@@ -61,7 +61,11 @@ logger = get_logger()
 cpu = get_cpu_profiler()
 
 
-DEFAULT_CAPABILITIES = [settings.CAPABILITY_WHITELIST, settings.CAPABILITY_SYNC_VERSION]
+DEFAULT_CAPABILITIES = [
+    settings.CAPABILITY_WHITELIST,
+    settings.CAPABILITY_SYNC_VERSION,
+    settings.CAPABILITY_GET_BEST_BLOCKCHAIN
+]
 
 
 class HathorManager:

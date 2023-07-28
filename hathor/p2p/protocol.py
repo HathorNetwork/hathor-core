@@ -90,6 +90,7 @@ class HathorProtocol:
     diff_timestamp: Optional[int]
     idle_timeout: int
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
+    capabilities: set[str]  # capabilities received from the peer in HelloState
 
     def __init__(self, network: str, my_peer: PeerId, p2p_manager: 'ConnectionsManager',
                  *, use_ssl: bool, inbound: bool) -> None:
@@ -156,6 +157,8 @@ class HathorProtocol:
         self.sync_version = None
 
         self.log = logger.new()
+
+        self.capabilities = set()
 
     def change_state(self, state_enum: PeerState) -> None:
         """Called to change the state of the connection."""
