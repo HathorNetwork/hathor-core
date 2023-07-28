@@ -28,6 +28,7 @@ from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
+from hathor.p2p.sync_v2.request_response_command import MultipleRequestResponseCommand, SingleRequestResponseCommand
 from hathor.p2p.sync_v2.streamers import DEFAULT_STREAMING_LIMIT, BlockchainStreaming, StreamEnd, TransactionsStreaming
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
@@ -97,11 +98,26 @@ class NodeBlockSync(SyncAgent):
         # highest block peer has
         self.peer_height = 0
 
-        # Latest deferred waiting for a reply.
-        self._deferred_txs: dict[VertexId, Deferred[BaseTransaction]] = {}
-        self._deferred_tips: Optional[Deferred[list[bytes]]] = None
-        self._deferred_best_block: Optional[Deferred[dict[str, Any]]] = None
-        self._deferred_peer_block_hashes: Optional[Deferred[list[tuple[int, bytes]]]] = None
+        # Request-response commands configurations
+        self._get_tx_cmds = MultipleRequestResponseCommand[VertexId, BaseTransaction](
+            message_sender=self.send_message,
+            request_message=ProtocolMessages.GET_DATA,
+        )
+
+        self._get_peer_block_hashes_cmd = SingleRequestResponseCommand[list[tuple[int, bytes]]](
+            message_sender=self.send_message,
+            request_message=ProtocolMessages.GET_PEER_BLOCK_HASHES,
+        )
+
+        self._get_best_block_cmd = SingleRequestResponseCommand[dict[str, Any]](
+            message_sender=self.send_message,
+            request_message=ProtocolMessages.GET_BEST_BLOCK,
+        )
+
+        self._get_tips_cmd = SingleRequestResponseCommand[list[bytes]](
+            message_sender=self.send_message,
+            request_message=ProtocolMessages.GET_TIPS,
+        )
 
         # When syncing blocks we start streaming with all peers
         # so the moment I get some repeated blocks, I stop the download
@@ -375,19 +391,10 @@ class NodeBlockSync(SyncAgent):
     def get_tips(self) -> Deferred[list[bytes]]:
         """ Async method to request the remote peer's tips.
         """
-        if self._deferred_tips is None:
-            self._deferred_tips = Deferred()
-            self.send_get_tips()
-        else:
-            assert self._receiving_tips is not None
-        return self._deferred_tips
-
-    def send_get_tips(self) -> None:
-        """ Send a GET-TIPS message.
-        """
         self.log.debug('get tips')
-        self.send_message(ProtocolMessages.GET_TIPS)
         self._receiving_tips = []
+
+        return self._get_tips_cmd.request_data()
 
     def handle_get_tips(self, _payload: str) -> None:
         """ Handle a GET-TIPS message.
@@ -425,12 +432,12 @@ class NodeBlockSync(SyncAgent):
         """ Handle a TIPS-END message.
         """
         assert self._receiving_tips is not None
-        deferred = self._deferred_tips
-        self._deferred_tips = None
-        if deferred is None:
+        received = self._get_tips_cmd.receive_response(self._receiving_tips)
+
+        if not received:
             self.protocol.send_error_and_close_connection('TIPS-END not expected')
             return
-        deferred.callback(self._receiving_tips)
+
         self._receiving_tips = None
 
     def send_relay(self, *, enable: bool = True) -> None:
@@ -557,17 +564,8 @@ class NodeBlockSync(SyncAgent):
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[tuple[int, bytes]]]:
         """ Returns the peer's block hashes in the given heights.
         """
-        if self._deferred_peer_block_hashes is not None:
-            raise Exception('latest_deferred is not None')
-        self.send_get_peer_block_hashes(heights)
-        self._deferred_peer_block_hashes = Deferred()
-        return self._deferred_peer_block_hashes
-
-    def send_get_peer_block_hashes(self, heights: list[int]) -> None:
-        """ Send a GET-PEER-BLOCK-HASHES message.
-        """
         payload = json.dumps(heights)
-        self.send_message(ProtocolMessages.GET_PEER_BLOCK_HASHES, payload)
+        return self._get_peer_block_hashes_cmd.request_data(payload)
 
     def handle_get_peer_block_hashes(self, payload: str) -> None:
         """ Handle a GET-PEER-BLOCK-HASHES message.
@@ -597,10 +595,8 @@ class NodeBlockSync(SyncAgent):
         """
         data = json.loads(payload)
         data = [(h, bytes.fromhex(block_hash)) for (h, block_hash) in data]
-        deferred = self._deferred_peer_block_hashes
-        self._deferred_peer_block_hashes = None
-        if deferred:
-            deferred.callback(data)
+
+        self._get_peer_block_hashes_cmd.receive_response(data)
 
     def send_get_next_blocks(self, start_hash: bytes, end_hash: bytes) -> None:
         """ Send a PEER-BLOCK-HASHES message.
@@ -795,17 +791,7 @@ class NodeBlockSync(SyncAgent):
     def get_peer_best_block(self) -> Deferred[dict[str, Any]]:
         """ Async call to get the remote peer's best block.
         """
-        if self._deferred_best_block is not None:
-            raise Exception('latest_deferred is not None')
-
-        self.send_get_best_block()
-        self._deferred_best_block = Deferred()
-        return self._deferred_best_block
-
-    def send_get_best_block(self) -> None:
-        """ Send a GET-BEST-BLOCK messsage.
-        """
-        self.send_message(ProtocolMessages.GET_BEST_BLOCK)
+        return self._get_best_block_cmd.request_data()
 
     def handle_get_best_block(self, payload: str) -> None:
         """ Handle a GET-BEST-BLOCK message.
@@ -818,15 +804,13 @@ class NodeBlockSync(SyncAgent):
     def handle_best_block(self, payload: str) -> None:
         """ Handle a BEST-BLOCK message.
         """
-        data = json.loads(payload)
         assert self.protocol.connections is not None
+
+        data = json.loads(payload)
         self.log.debug('got best block', **data)
         data['block'] = bytes.fromhex(data['block'])
 
-        deferred = self._deferred_best_block
-        self._deferred_best_block = None
-        if deferred:
-            deferred.callback(data)
+        self._get_best_block_cmd.receive_response(data)
 
     def _setup_tx_streaming(self):
         """ Common setup before starting an outgoing transaction stream.
@@ -972,7 +956,7 @@ class NodeBlockSync(SyncAgent):
                 self.log.debug('tx streaming in progress', txs_received=self._tx_received)
 
     @inlineCallbacks
-    def get_tx(self, tx_id: bytes) -> Generator[Deferred, Any, BaseTransaction]:
+    def get_tx(self, tx_id: VertexId) -> Generator[Deferred, Any, BaseTransaction]:
         """ Async method to get a transaction from the db/cache or to download it.
         """
         tx = self._get_tx_cache.get(tx_id)
@@ -989,37 +973,36 @@ class NodeBlockSync(SyncAgent):
                 raise
         return tx
 
-    def get_data(self, tx_id: bytes, origin: str) -> Deferred[BaseTransaction]:
+    def get_data(self, tx_id: VertexId, origin: str) -> Deferred[BaseTransaction]:
         """ Async method to request a tx by id.
         """
         # TODO: deal with stale `get_data` calls
         if origin != 'mempool':
             raise ValueError(f'origin={origin} not supported, only origin=mempool is supported')
-        deferred = self._deferred_txs.get(tx_id, None)
-        if deferred is None:
-            deferred = self._deferred_txs[tx_id] = Deferred()
-            self.send_get_data(tx_id, origin=origin)
-            self.log.debug('get_data of new tx_id', deferred=deferred, key=tx_id.hex())
-        else:
-            # XXX: can we re-use deferred objects like this?
-            self.log.debug('get_data of same tx_id, reusing deferred', deferred=deferred, key=tx_id.hex())
-        return deferred
+
+        data = dict(txid=tx_id.hex(), origin=origin)
+        payload = json.dumps(data)
+        self.log.debug('get_data of tx_id', tx_id=tx_id.hex())
+
+        return self._get_tx_cmds.request_data(tx_id, payload)
 
     def _on_get_data(self, tx: BaseTransaction, origin: str) -> None:
         """ Called when a requested tx is received.
         """
         assert tx.hash is not None
-        deferred = self._deferred_txs.pop(tx.hash, None)
-        if deferred is None:
+        self.log.debug('get_data fulfilled', key=tx.hash.hex())
+        self._get_tx_cache[tx.hash] = tx
+
+        if len(self._get_tx_cache) > self._get_tx_cache_maxsize:
+            self._get_tx_cache.popitem(last=False)
+
+        received = self._get_tx_cmds.receive_response(tx.hash, tx)
+
+        if not received:
             # Peer sent the wrong transaction?!
             # XXX: ban peer?
             self.protocol.send_error_and_close_connection(f'DATA {origin}: with tx that was not requested')
             return
-        self.log.debug('get_data fulfilled', deferred=deferred, key=tx.hash.hex())
-        self._get_tx_cache[tx.hash] = tx
-        if len(self._get_tx_cache) > self._get_tx_cache_maxsize:
-            self._get_tx_cache.popitem(last=False)
-        deferred.callback(tx)
 
     def send_data(self, tx: BaseTransaction, *, origin: str = '') -> None:
         """ Send a DATA message.
@@ -1031,17 +1014,6 @@ class NodeBlockSync(SyncAgent):
         else:
             payload = ' '.join([origin, tx_payload])
         self.send_message(ProtocolMessages.DATA, payload)
-
-    def send_get_data(self, txid: bytes, *, origin: Optional[str] = None) -> None:
-        """ Send a GET-DATA message for a given txid.
-        """
-        data = {
-            'txid': txid.hex(),
-        }
-        if origin is not None:
-            data['origin'] = origin
-        payload = json.dumps(data)
-        self.send_message(ProtocolMessages.GET_DATA, payload)
 
     def handle_get_data(self, payload: str) -> None:
         """ Handle a GET-DATA message.
