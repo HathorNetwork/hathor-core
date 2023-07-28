@@ -6,6 +6,7 @@ from twisted.test import proto_helpers
 from hathor.sysctl import Sysctl
 from hathor.sysctl.exception import SysctlEntryNotFound, SysctlReadOnlyEntry, SysctlWriteOnlyEntry
 from hathor.sysctl.factory import SysctlFactory
+from hathor.sysctl.runner import SysctlRunner
 from hathor.sysctl.sysctl import SysctlCommand
 from tests import unittest
 
@@ -61,7 +62,8 @@ class SysctlTest(unittest.TestCase):
         self.root.put_child('core', core)
         self.root.put_child('ab.bc.cd', multi)
 
-        factory = SysctlFactory(self.root)
+        runner = SysctlRunner(self.root)
+        factory = SysctlFactory(runner)
         self.proto = factory.buildProtocol(('127.0.0.1', 0))
         self.tr = proto_helpers.StringTransport()
         self.proto.makeConnection(self.tr)
@@ -237,13 +239,14 @@ class SysctlTest(unittest.TestCase):
         self.proto.lineReceived(b'!backup')
         output = self.tr.value()
         lines = set(output.split(b'\n'))
-        self.assertEqual(lines, {
-            b'core.loglevel="info"',
+        expected = {
             b'net.max_connections=3',
             b'net.rate_limit=4, 1',
             b'net.readonly=0.25',
+            b'core.loglevel="info"',
             b'',    # output ends with a new line (\n)
-        })
+        }
+        self.assertEqual(lines, expected)
 
     def test_proto_help(self) -> None:
         self.proto.lineReceived(b'!help')
