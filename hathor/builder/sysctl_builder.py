@@ -18,6 +18,7 @@ from hathor.sysctl import ConnectionsManagerSysctl, Sysctl, WebsocketManagerSysc
 
 class SysctlBuilder:
     """Builder for the sysctl tree."""
+
     def __init__(self, artifacts: BuildArtifacts) -> None:
         self.artifacts = artifacts
 
