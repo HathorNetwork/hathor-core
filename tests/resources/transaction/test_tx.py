@@ -63,10 +63,10 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_one_known_tx(self):
+
         # Tx tesnet 0033784bc8443ba851fd88d81c6f06774ae529f25c1fa8f026884ad0a0e98011
         # We had a bug with this endpoint in this tx because the token_data from inputs
         # was being copied from the output
-
         # First add needed data on storage
         tx_hex = ('0001020306001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d007231eee3cb6160d95172'
                   'a409d634d0866eafc8775f5729fff6a61e7850aba500f4dd53f84f1f0091125250b044e49023fbbd0f74f6093cdd2226'
@@ -175,10 +175,10 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_one_known_tx_with_authority(self):
+
         # Tx tesnet 00005f234469407614bf0abedec8f722bb5e534949ad37650f6077c899741ed7
         # We had a bug with this endpoint in this tx because the token_data from inputs
         # was not considering authority mask
-
         # First add needed data on storage
         tx_hex = ('0001010202000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330000023b318c91dcfd4b967b20'
                   '5dc938f9f5e2fd5114256caacfb8f6dd13db33000006946304402200f7de9e866fbc2d600d6a46eb620fa2d72c9bf032250'
@@ -489,6 +489,34 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                     b'hash': bytes(blocks[-1].hash.hex(), 'utf-8'),
                     b'page': b'next'
                 })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+    @inlineCallbacks
+    def test_partially_validated_not_found(self):
+        # First add needed data on storage
+        tx_hex = ('0001020306001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d007231eee3cb6160d95172'
+                  'a409d634d0866eafc8775f5729fff6a61e7850aba500f4dd53f84f1f0091125250b044e49023fbbd0f74f6093cdd2226'
+                  'fdff3e09a101006946304402205dcbb7956d95b0e123954160d369e64bca7b176e1eb136e2dae5b95e46741509022072'
+                  '6f99a363e8a4d79963492f4359c7589667eb0f45af7effe0dd4e51fbb5543d210288c10b8b1186b8c5f6bc05855590a6'
+                  '522af35f269ddfdb8df39426a01ca9d2dd003d3c40fb04737e1a2a848cfd2592490a71cd0248b9e7d6a626f45dec8697'
+                  '5b00006a4730450221008741dff52d97ce5f084518e1f4cac6bd98abdc88b98e6b18d6a8666fadac05f0022068951306'
+                  '19eaf5433526e4803187c0aa08a8b1c46d9dc4ffaa89406fb2d4940c2102dd29eaadbb21a4de015d1812d5c0ec63cb8e'
+                  'e921e28580b6a9f8ff08db168c0e0096fb9b1a9e5fc34a9750bcccc746564c2b73f6defa381e130d9a4ea38cb1d80000'
+                  '6a473045022100cb6b8abfb958d4029b0e6a89c828b65357456d20b8e6a8e42ad6d9a780fcddc4022035a8a46248b9c5'
+                  '20b0205aa99ec5c390b40ae97a0b3ccc6e68e835ce5bde972a210306f7fdc08703152348484768fc7b85af900860a3d6'
+                  'fa85343524150d0370770b0000000100001976a914b9987a3866a7c26225c57a62b14e901377e2f9e288ac0000000200'
+                  '001976a914b9987a3866a7c26225c57a62b14e901377e2f9e288ac0000000301001f0460b5a2b06f76a914b9987a3866'
+                  'a7c26225c57a62b14e901377e2f9e288ac0000006001001976a914b9987a3866a7c26225c57a62b14e901377e2f9e288'
+                  'ac0000000402001976a914b9987a3866a7c26225c57a62b14e901377e2f9e288ac000002b602001976a91479ae26cf2f'
+                  '2dc703120a77192fc16eda9ed22e1b88ac40200000218def416095b08602003d3c40fb04737e1a2a848cfd2592490a71cd'
+                  '0248b9e7d6a626f45dec86975b00f4dd53f84f1f0091125250b044e49023fbbd0f74f6093cdd2226fdff3e09a1000002be')
+        tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
+        tx.set_validation(ValidationState.BASIC)
+        with self.manager.tx_storage.allow_partially_validated_context():
+            self.manager.tx_storage.save_transaction(tx)
+
+        response = yield self.web.get("transaction", {b'id': bytes(tx.hash_hex, 'utf-8')})
         data = response.json_value()
         self.assertFalse(data['success'])
 

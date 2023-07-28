@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Set, Union
+from typing import TYPE_CHECKING, Union
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from structlog import get_logger
@@ -33,7 +33,7 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
     def __init__(self, factory: 'HathorAdminWebsocketFactory') -> None:
         self.log = logger.new()
         self.factory = factory
-        self.subscribed_to: Set[str] = set()
+        self.subscribed_to: set[str] = set()
         super().__init__()
 
     def onConnect(self, request):

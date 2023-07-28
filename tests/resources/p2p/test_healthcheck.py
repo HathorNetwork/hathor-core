@@ -72,7 +72,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
         add_new_blocks(self.manager, 5)
 
         # This will make sure the peers are synced
-        while not self.conn1.is_empty():
+        for _ in range(600):
             self.conn1.run_one_step(debug=True)
             self.clock.advance(0.1)
 

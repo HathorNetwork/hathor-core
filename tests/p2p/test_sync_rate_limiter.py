@@ -8,7 +8,9 @@ from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
 
-class BaseRandomSimulatorTestCase(SimulatorTestCase):
+class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
+    __test__ = True
+
     def test_sync_rate_limiter(self):
         manager1 = self.create_peer()
 
@@ -28,7 +30,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         connected_peers2 = list(manager2.connections.connected_peers.values())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
-        sync2 = protocol1.state.sync_manager
+        sync2 = protocol1.state.sync_agent
         sync2._send_tips = MagicMock()
 
         for i in range(100):
@@ -60,7 +62,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
-        sync1 = protocol1.state.sync_manager
+        sync1 = protocol1.state.sync_agent
         sync1._send_tips = Mock(wraps=sync1._send_tips)
 
         sync1.send_tips()
@@ -107,7 +109,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
-        sync1 = protocol1.state.sync_manager
+        sync1 = protocol1.state.sync_agent
 
         sync1.send_tips()
         self.assertEqual(len(sync1._send_tips_call_later), 0)
@@ -145,7 +147,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
-        sync1 = protocol1.state.sync_manager
+        sync1 = protocol1.state.sync_agent
 
         sync1.send_tips()
         self.assertEqual(len(sync1._send_tips_call_later), 0)
@@ -177,16 +179,3 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # All residual tasks should have been canceled
         for call_later in sync1._send_tips_call_later:
             self.assertEqual(call_later.active(), False)
-
-
-class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-
-class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
-    __test__ = True

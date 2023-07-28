@@ -147,7 +147,18 @@ class Block(BaseTransaction):
         return parent_block.get_feature_activation_bit_counts()
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
-        """Return the hash of the next (child/left-to-right) block in the best blockchain.
+        """Return the hash of the next block in the best blockchain. The blockchain is
+        written from left-to-righ (->), meaning the next block has a greater height.
+        In a timeline, the parent block (left) comes first of the child (right).
+
+             +-----------+       +-----------+       +-----------+
+         --->| height: 1 |------>| height: 2 |------>| height: 3 |--->
+             |  parent   |       |  current  |       |   child   |
+             +-----------+       +-----------+       +-----------+
+                 left                                    right
+                 past                                   future
+
+                                "left-to-right"
         """
         assert self.storage is not None
         meta = self.get_metadata()
@@ -168,7 +179,18 @@ class Block(BaseTransaction):
         return candidates[0]
 
     def get_next_block_best_chain(self) -> Optional['Block']:
-        """Return the next (child/left-to-right)block in the best blockchain.
+        """Return the next block in the best blockchain. The blockchain is written
+        from left-to-righ (->), meaning the next block has a greater height.
+        In a timeline, the parent block (left) comes first of the child (right).
+
+             +-----------+       +-----------+       +-----------+
+         --->| height: 1 |------>| height: 2 |------>| height: 3 |--->
+             |  parent   |       |  current  |       |   child   |
+             +-----------+       +-----------+       +-----------+
+                 left                                    right
+                 past                                   future
+
+                                "left-to-right"
         """
         assert self.storage is not None
         h = self.get_next_block_best_chain_hash()
@@ -291,7 +313,8 @@ class Block(BaseTransaction):
         if not self.storage.transaction_exists(parent_block_hash):
             return False
         metadata = self.storage.get_metadata(parent_block_hash)
-        assert metadata is not None
+        if metadata is None:
+            return False
         return metadata.validation.is_at_least_basic()
 
     def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
@@ -314,7 +337,7 @@ class Block(BaseTransaction):
             raise CheckpointError(f'Invalid new block {self.hash_hex}: checkpoint hash does not match')
         else:
             # TODO: check whether self is a parent of any checkpoint-valid block, this is left for a future PR
-            raise NotImplementedError
+            pass
 
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""
@@ -439,3 +462,9 @@ class Block(BaseTransaction):
         metadata.feature_states = feature_states
 
         self.storage.save_transaction(self, only_metadata=True)
+
+    def get_feature_activation_bit_value(self, bit: int) -> int:
+        """Get the feature activation bit value for a specific bit position."""
+        bit_list = self._get_feature_activation_bit_list()
+
+        return bit_list[bit]

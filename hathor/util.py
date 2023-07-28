@@ -363,6 +363,11 @@ def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
 
     >>> collect_n(iter(range(10)), 8)
     ([0, 1, 2, 3, 4, 5, 6, 7], True)
+
+    # This also works for checking (albeit destructively, because it consumes from the itreator), if it is empty
+
+    >>> collect_n(iter(range(10)), 0)
+    ([], True)
     """
     if n < 0:
         raise ValueError(f'n must be non-negative, got {n}')

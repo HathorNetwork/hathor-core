@@ -23,6 +23,7 @@ from structlog import get_logger
 from hathor.cli.run_node_args import RunNodeArgs
 from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
 from hathor.exception import PreInitializationError
+from hathor.feature_activation.feature import Feature
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -112,6 +113,11 @@ class RunNode:
         parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
                             help='Peer IDs to forbid connection')
         parser.add_argument('--config-yaml', type=str, help='Configuration yaml filepath')
+        possible_features = [feature.value for feature in Feature]
+        parser.add_argument('--signal-support', default=[], action='append', choices=possible_features,
+                            help=f'Signal support for a feature. One of {possible_features}')
+        parser.add_argument('--signal-not-support', default=[], action='append', choices=possible_features,
+                            help=f'Signal not support for a feature. One of {possible_features}')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:

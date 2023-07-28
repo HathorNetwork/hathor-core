@@ -28,9 +28,7 @@ jobs:
           - '3.10'
           - '3.11'
         exclude:
-          # XXX: neither pypy-3.10 nor pypy-3.11 exist yet, maybe pypy-3.10 will be out on PyPy v7.3.10
-          - python-impl: pypy
-            python-version: '3.10'
+          # XXX: pypy-3.11 does exist yet
           - python-impl: pypy
             python-version: '3.11'
     steps:
@@ -52,8 +50,9 @@ jobs:
           python extras/github/docker.py
       - name: Check version
         if: steps.prep.outputs.check-version
-        run: |
-          make check-version VERSION='${{ steps.prep.outputs.check-version }}'
+        env:
+          VERSION: ${{ steps.prep.outputs.check-version }}
+        run: make check-custom
       - name: Set up QEMU  # arm64 is not available natively
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx

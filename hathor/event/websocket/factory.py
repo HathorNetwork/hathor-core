@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Set
+from typing import Optional
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
@@ -42,7 +42,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self.log = logger.new()
         self._reactor = reactor
         self._event_storage = event_storage
-        self._connections: Set[EventWebsocketProtocol] = set()
+        self._connections: set[EventWebsocketProtocol] = set()
 
         latest_event = self._event_storage.get_last_event()
 

@@ -1,5 +1,3 @@
-import random
-
 from hathor.crypto.util import decode_address
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx
@@ -21,7 +19,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         txs = []
         for _ in range(num_txs):
             address = self.get_address(0)
-            value = random.choice([5, 10, 15, 20])
+            value = self.rng.choice([5, 10, 15, 20])
             tx = add_new_tx(manager, address, value)
             txs.append(tx)
         return txs

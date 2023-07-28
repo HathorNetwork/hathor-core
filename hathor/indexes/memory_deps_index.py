@@ -34,6 +34,9 @@ class MemoryDepsIndex(DepsIndex):
     _txs_with_deps_ready: set[bytes]
 
     # Next to be downloaded
+    # - Key: hash of the tx to be downloaded
+    # - Value[0]: height
+    # - Value[1]: hash of the tx waiting for the download
     _needed_txs_index: dict[bytes, tuple[int, bytes]]
 
     def __init__(self):
@@ -49,10 +52,11 @@ class MemoryDepsIndex(DepsIndex):
         self._needed_txs_index = {}
 
     def add_tx(self, tx: BaseTransaction, partial: bool = True) -> None:
-        assert tx.hash is not None
-        assert tx.storage is not None
         validation = tx.get_metadata().validation
         if validation.is_fully_connected():
+            # discover if new txs are ready because of this tx
+            self._update_new_deps_ready(tx)
+            # finally remove from rev deps
             self._del_from_deps_index(tx)
         elif not partial:
             raise ValueError('partial=False will only accept fully connected transactions')
@@ -62,6 +66,19 @@ class MemoryDepsIndex(DepsIndex):
 
     def del_tx(self, tx: BaseTransaction) -> None:
         self._del_from_deps_index(tx)
+
+    def _update_new_deps_ready(self, tx: BaseTransaction) -> None:
+        """Go over the reverse dependencies of tx and check if any of them are now ready to be validated.
+
+        This is also idempotent.
+        """
+        assert tx.hash is not None
+        assert tx.storage is not None
+        for candidate_hash in self._rev_dep_index.get(tx.hash, []):
+            with tx.storage.allow_partially_validated_context():
+                candidate_tx = tx.storage.get_transaction(candidate_hash)
+            if candidate_tx.is_ready_for_validation():
+                self._txs_with_deps_ready.add(candidate_hash)
 
     def _add_deps(self, tx: BaseTransaction) -> None:
         """This method is idempotent, because self.update needs it to be indempotent."""
@@ -94,7 +111,9 @@ class MemoryDepsIndex(DepsIndex):
         else:
             cur_ready, self._txs_with_deps_ready = self._txs_with_deps_ready, set()
         while cur_ready:
-            yield from sorted(cur_ready, key=lambda tx_hash: tx_storage.get_transaction(tx_hash).timestamp)
+            with tx_storage.allow_partially_validated_context():
+                sorted_cur_ready = sorted(cur_ready, key=lambda tx_hash: tx_storage.get_transaction(tx_hash).timestamp)
+            yield from sorted_cur_ready
             if dry_run:
                 cur_ready = self._txs_with_deps_ready - cur_ready
             else:
@@ -113,7 +132,8 @@ class MemoryDepsIndex(DepsIndex):
     def known_children(self, tx: BaseTransaction) -> list[bytes]:
         assert tx.hash is not None
         assert tx.storage is not None
-        it_rev_deps = map(tx.storage.get_transaction, self._get_rev_deps(tx.hash))
+        with tx.storage.allow_partially_validated_context():
+            it_rev_deps = map(tx.storage.get_transaction, self._get_rev_deps(tx.hash))
         return [not_none(rev.hash) for rev in it_rev_deps if tx.hash in rev.parents]
 
     # needed-txs-index methods:
@@ -127,18 +147,13 @@ class MemoryDepsIndex(DepsIndex):
     def remove_from_needed_index(self, tx: bytes) -> None:
         self._needed_txs_index.pop(tx, None)
 
-    def get_next_needed_tx(self) -> bytes:
-        # This strategy maximizes the chance to download multiple txs on the same stream
-        # find the tx with highest "height"
-        # XXX: we could cache this onto `needed_txs` so we don't have to fetch txs every time
-        # TODO: improve this by using some sorted data structure to make this better than O(n)
-        height, start_hash, tx = max((h, s, t) for t, (h, s) in self._needed_txs_index.items())
-        self.log.debug('next needed tx start', needed=len(self._needed_txs_index), start=start_hash.hex(),
-                       height=height, needed_tx=tx.hex())
-        return start_hash
+    def iter_next_needed_txs(self) -> Iterator[bytes]:
+        for tx_hash, _ in self._needed_txs_index.items():
+            yield tx_hash
 
     def _add_needed(self, tx: BaseTransaction) -> None:
         """This method is idempotent, because self.update needs it to be indempotent."""
+        assert tx.hash is not None
         assert tx.storage is not None
         tx_storage = tx.storage
 
@@ -147,9 +162,14 @@ class MemoryDepsIndex(DepsIndex):
         # get_all_dependencies is needed to ensure that we get the inputs that aren't reachable through parents alone,
         # this can happen for inputs that have not been confirmed as of the block the confirms the block or transaction
         # that we're adding the dependencies of
-        for tx_hash in tx.get_all_dependencies():
+        for dep_hash in tx.get_all_dependencies():
             # It may happen that we have one of the dependencies already, so just add the ones we don't
             # have. We should add at least one dependency, otherwise this tx should be full validated
-            if not tx_storage.transaction_exists(tx_hash):
-                self.log.debug('tx parent is needed', tx=tx_hash.hex())
-                self._needed_txs_index[tx_hash] = (height, not_none(tx.hash))
+            with tx_storage.allow_partially_validated_context():
+                tx_exists = tx_storage.transaction_exists(dep_hash)
+            if not tx_exists:
+                self.log.debug('tx parent is needed', tx=dep_hash.hex())
+                self._needed_txs_index[dep_hash] = (height, not_none(tx.hash))
+
+        # also, remove the given transaction from needed, because we already have it
+        self._needed_txs_index.pop(tx.hash, None)

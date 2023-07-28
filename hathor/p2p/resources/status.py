@@ -58,7 +58,7 @@ class StatusResource(Resource):
         for conn in self.manager.connections.iter_ready_connections():
             remote = conn.transport.getPeer()
             status = {}
-            status[conn.state.sync_manager.name] = conn.state.sync_manager.get_status()
+            status[conn.state.sync_agent.name] = conn.state.sync_agent.get_status()
             connected_peers.append({
                 'id': conn.peer.id,
                 'app_version': conn.app_version,

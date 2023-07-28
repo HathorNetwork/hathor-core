@@ -19,7 +19,7 @@ from hathor.p2p.messages import ProtocolMessages
 from hathor.transaction import BaseTransaction
 
 
-class SyncManager(ABC):
+class SyncAgent(ABC):
     @abstractmethod
     def is_started(self) -> bool:
         """Whether the manager started running"""
@@ -55,14 +55,17 @@ class SyncManager(ABC):
         """Whether the manager entered an error state"""
         raise NotImplementedError
 
+    @abstractmethod
     def is_sync_enabled(self) -> bool:
         """Return true if the sync is enabled."""
         raise NotImplementedError
 
+    @abstractmethod
     def enable_sync(self) -> None:
         """Enable sync."""
         raise NotImplementedError
 
+    @abstractmethod
     def disable_sync(self) -> None:
         """Disable sync."""
         raise NotImplementedError

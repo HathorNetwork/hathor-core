@@ -67,10 +67,8 @@ class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
             dot2 = GraphvizVisualizer(manager2.tx_storage, include_verifications=True).dot()
             dot2.render('dot2-post')
 
-        node_sync = conn12.proto1.state.sync_manager
-        self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
-        node_sync = conn12.proto2.state.sync_manager
-        self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
+        self.assertSyncedProgress(conn12.proto1.state.sync_agent)
+        self.assertSyncedProgress(conn12.proto2.state.sync_agent)
         self.assertTipsEqual(manager1, manager2)
         self.assertConsensusEqual(manager1, manager2)
         self.assertConsensusValid(manager1)

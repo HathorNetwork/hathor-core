@@ -119,3 +119,12 @@ def test_get_feature_activation_bit_list(signal_bits: int, expected_bit_list: li
     result = block._get_feature_activation_bit_list()
 
     assert result == expected_bit_list
+
+
+def test_get_feature_activation_bit_value() -> None:
+    block = Block(signal_bits=0b0000_0100)
+
+    assert block.get_feature_activation_bit_value(0) == 0
+    assert block.get_feature_activation_bit_value(1) == 0
+    assert block.get_feature_activation_bit_value(2) == 1
+    assert block.get_feature_activation_bit_value(3) == 0

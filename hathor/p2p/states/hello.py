@@ -108,6 +108,9 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Must have whitelist capability.')
             return
 
+        # another status can use the informed capabilities
+        protocol.capabilities = set(data['capabilities'])
+
         my_sync_versions = self._get_sync_versions()
         try:
             remote_sync_versions = _parse_sync_versions(data)

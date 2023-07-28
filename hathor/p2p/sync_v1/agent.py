@@ -26,7 +26,7 @@ from zope.interface import implementer
 
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
-from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
@@ -172,7 +172,7 @@ class SendDataPush:
         self.priority_queue.clear()
 
 
-class NodeSyncTimestamp(SyncManager):
+class NodeSyncTimestamp(SyncAgent):
     """ An algorithm to sync the DAG between two peers using the timestamp of the transactions.
 
     This algorithm must assume that a new item may arrive while it is running. The item's timestamp

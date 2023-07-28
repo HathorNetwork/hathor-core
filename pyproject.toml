@@ -53,7 +53,7 @@ types-pyyaml = "=6.0.12.9"
 [tool.poetry.dependencies]
 python = ">=3.9,<4"
 twisted = "~22.10.0"
-autobahn = "~22.7.1"
+autobahn = "~23.6.2"
 base58 = "~2.1.1"
 colorama = "~0.4.6"
 configargparse = "~1.5.3"
@@ -78,7 +78,7 @@ sentry-sdk = {version = "^1.5.11", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
 hathorlib = "0.3.0"
 pydantic = "~1.10.11"
-pyyaml = "~6.0"
+pyyaml = "^6.0.1"
 
 [tool.poetry.extras]
 sentry = ["sentry-sdk", "structlog-sentry"]

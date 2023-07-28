@@ -25,6 +25,7 @@ from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager
+from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
@@ -590,8 +591,12 @@ class TransactionStorage(ABC):
     def get_all_transactions(self) -> Iterator[BaseTransaction]:
         """Return all vertices (transactions and blocks) within the allowed scope.
         """
+        # It is necessary to retain a copy of the current scope because this method will yield
+        # and the scope may undergo changes. By doing so, we ensure the usage of the scope at the
+        # time of iterator creation.
+        scope = self.get_allow_scope()
         for tx in self._get_all_transactions():
-            if self.get_allow_scope().is_allowed(tx):
+            if scope.is_allowed(tx):
                 yield tx
 
     @abstractmethod
@@ -644,6 +649,11 @@ class TransactionStorage(ABC):
         if timestamp is None:
             self._best_block_tips_cache = best_tip_blocks[:]
         return best_tip_blocks
+
+    @abstractmethod
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        assert self.indexes is not None
+        return self.indexes.height.get_n_height_tips(n_blocks)
 
     def get_weight_best_block(self) -> float:
         heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
@@ -1039,6 +1049,14 @@ class TransactionStorage(ABC):
                 assert isinstance(tx, Transaction)
                 yield tx
 
+    def iter_mempool_tips_from_best_index(self) -> Iterator[Transaction]:
+        """Get tx tips in the mempool, using the best available index (mempool_tips or tx_tips)"""
+        assert self.indexes is not None
+        if self.indexes.mempool_tips is not None:
+            yield from self.indexes.mempool_tips.iter(self)
+        else:
+            yield from self.iter_mempool_tips_from_tx_tips()
+
     def iter_mempool_from_best_index(self) -> Iterator[Transaction]:
         """Get all transactions in the mempool, using the best available index (mempool_tips or tx_tips)"""
         assert self.indexes is not None
@@ -1074,6 +1092,8 @@ class BaseTransactionStorage(TransactionStorage):
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
 
+        self._latest_n_height_tips: list[HeightInfo] = []
+
     @property
     def latest_timestamp(self) -> int:
         assert self.indexes is not None
@@ -1101,6 +1121,16 @@ class BaseTransactionStorage(TransactionStorage):
 
     def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> list[bytes]:
         return super().get_best_block_tips(timestamp, skip_cache=skip_cache)
+
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        block = self.get_best_block()
+        if self._latest_n_height_tips:
+            best_block = self._latest_n_height_tips[0]
+            if block.hash == best_block.id and n_blocks <= len(self._latest_n_height_tips):
+                return self._latest_n_height_tips[:n_blocks]
+
+        self._latest_n_height_tips = super().get_n_height_tips(n_blocks)
+        return self._latest_n_height_tips[:n_blocks]
 
     def get_weight_best_block(self) -> float:
         return super().get_weight_best_block()

@@ -50,6 +50,7 @@ class FeatureService:
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
         previous_boundary_height = height - offset_to_previous_boundary
+        assert previous_boundary_height >= 0
         previous_boundary_block = self._get_ancestor_at_height(block=block, height=previous_boundary_height)
         previous_boundary_state = self.get_state(block=previous_boundary_block, feature=feature)
 
@@ -167,6 +168,7 @@ def _get_ancestor_iteratively(*, block: Block, ancestor_height: int) -> Block:
     """Given a block, returns its ancestor at a specific height by iterating over its ancestors. This is slow."""
     # TODO: there are further optimizations to be done here, the latest common block height could be persisted in
     #  metadata, so we could still use the height index if the requested height is before that height.
+    assert ancestor_height >= 0
     ancestor = block
     while ancestor.get_height() > ancestor_height:
         ancestor = ancestor.get_block_parent()

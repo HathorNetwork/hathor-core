@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
-from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, IndexEntry
+from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, HeightInfo, IndexEntry
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -111,7 +111,7 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
             raise ValueError(f'parent hash required (current height: {cur_height}, new height: {height})')
         elif height == cur_height + 1:
             self._db.put((self._cf, key), value)
-        elif cur_tip != entry.hash:
+        elif self.get(height) != entry.hash:
             if can_reorg:
                 self._del_from_height(height)
                 self._db.put((self._cf, key), value)
@@ -119,7 +119,7 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
                 raise ValueError('adding would cause a re-org, use can_reorg=True to accept re-orgs')
         else:
             # nothing to do (there are more blocks, but the block at height currently matches the added block)
-            assert cur_tip == entry.hash
+            pass
 
     def add_new(self, height: int, block_hash: bytes, timestamp: int) -> None:
         self._add(height, IndexEntry(block_hash, timestamp), can_reorg=False)
@@ -141,11 +141,28 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
         assert value is not None  # must never be empty, at least genesis has been added
         return self._from_value(value).hash
 
-    def get_height_tip(self) -> tuple[int, bytes]:
+    def get_height_tip(self) -> HeightInfo:
         it = self._db.iteritems(self._cf)
         it.seek_to_last()
         (_, key), value = it.get()
         assert key is not None and value is not None  # must never be empty, at least genesis has been added
         height = self._from_key(key)
         entry = self._from_value(value)
-        return height, entry.hash
+        return HeightInfo(height, entry.hash)
+
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        if n_blocks < 1:
+            raise ValueError('n_blocks must be a positive, non-zero, integer')
+        info_list: list[HeightInfo] = []
+        # we need to iterate in reverse order
+        it: Any = reversed(self._db.iteritems(self._cf))  # XXX: mypy doesn't know what reversed does to this iterator
+        it.seek_to_last()
+        for (_, key), value in it:
+            # stop when we have enough elements, otherwise the iterator will stop naturally when it reaches the genesis
+            if len(info_list) == n_blocks:
+                break
+            assert key is not None and value is not None  # must never be empty, at least genesis has been added
+            height = self._from_key(key)
+            entry = self._from_value(value)
+            info_list.append(HeightInfo(height, entry.hash))
+        return info_list
