@@ -52,7 +52,7 @@ from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
-from hathor.types import Address, BlockInfo, VertexId
+from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
 from hathor.wallet import BaseWallet
 
@@ -216,9 +216,6 @@ class HathorManager:
 
         # This is included in some logs to provide more context
         self.environment_info = environment_info
-
-        # Memoize latest best blockchain
-        self._latest_best_blockchain: list[BlockInfo] = []
 
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
@@ -714,31 +711,6 @@ class HathorManager:
             can_include_intervals = sorted(self.tx_storage.get_tx_tips(must_include_interval.begin - 1))
         can_include = [i.data for i in can_include_intervals]
         return ParentTxs(max_timestamp, can_include, must_include)
-
-    def get_best_blockchain(self, n_blocks: int) -> list['BlockInfo']:
-        """ Get a list with N blocks from the best blockchain
-        in descending order.
-        """
-        if not (n_blocks > 0):
-            raise ValueError(
-                'Invalid N. N must be greater than 0.'
-            )
-
-        block = self.tx_storage.get_best_block()
-        if self._latest_best_blockchain:
-            best_block = self._latest_best_blockchain[0]
-            if block.hash_hex == best_block.hash_hex and n_blocks <= len(self._latest_best_blockchain):
-                return self._latest_best_blockchain[:n_blocks]
-
-        best_blockchain: list[BlockInfo] = []
-        while len(best_blockchain) < n_blocks:
-            best_blockchain.append(block.to_blockinfo())
-            if block.is_genesis:
-                break
-            block = block.get_block_parent()
-
-        self._latest_best_blockchain = best_blockchain
-        return best_blockchain
 
     def allow_mining_without_peers(self) -> None:
         """Allow mining without being synced to at least one peer.

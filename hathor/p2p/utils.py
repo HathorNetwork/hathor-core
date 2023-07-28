@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import datetime
+import re
 from typing import Any, Generator, Optional
 from urllib.parse import parse_qs, urlparse
 
@@ -28,6 +29,7 @@ from twisted.internet.defer import inlineCallbacks
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf import HathorSettings
+from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import GENESIS_HASH
 
@@ -200,3 +202,28 @@ def format_address(addr: IAddress) -> str:
         return f'{host}:{port}'
     else:
         return str(addr)
+
+
+def to_height_info(raw: tuple[int, str]) -> HeightInfo:
+    """ Instantiate HeightInfo from a literal tuple.
+    """
+    if not (isinstance(raw, list) and len(raw) == 2):
+        raise ValueError(f"height_info_raw must be a tuple with length 2. We got {raw}.")
+
+    height, id = raw
+
+    if not isinstance(id, str):
+        raise ValueError(f"id (hash) must be a string. We got {id}.")
+    hash_pattern = r'[a-fA-F\d]{64}'
+    if not re.match(hash_pattern, id):
+        raise ValueError(f"id (hash) must be valid. We got {id}.")
+    if not isinstance(height, int):
+        raise ValueError(f"height must be an integer. We got {height}.")
+    if height < 0:
+        raise ValueError(f"height must be greater than or equal to 0. We got {height}.")
+
+    return HeightInfo(height, bytes.fromhex(id))
+
+
+def to_serializable_best_blockchain(best_blockchain: list[HeightInfo]) -> list[tuple[int, str]]:
+    return [(hi.height, hi.id.hex()) for hi in best_blockchain]

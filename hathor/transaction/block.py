@@ -35,7 +35,6 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
-from hathor.types import BlockInfo
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
@@ -306,9 +305,6 @@ class Block(BaseTransaction):
         json['height'] = self.get_metadata().height
 
         return json
-
-    def to_blockinfo(self) -> BlockInfo:
-        return BlockInfo(self.hash_hex, self.get_height(), self.weight)
 
     def has_basic_block_parent(self) -> bool:
         """Whether all block parent is in storage and is at least basic-valid."""

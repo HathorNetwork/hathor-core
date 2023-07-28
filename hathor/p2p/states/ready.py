@@ -23,8 +23,8 @@ from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
-from hathor.p2p.states.utils import to_height_info
 from hathor.p2p.sync_agent import SyncAgent
+from hathor.p2p.utils import to_height_info, to_serializable_best_blockchain
 from hathor.transaction import BaseTransaction
 from hathor.util import json_dumps, json_loads
 
@@ -233,7 +233,6 @@ class ReadyState(BaseState):
                 f'N out of bounds. Valid range: [1, {settings.MAX_BEST_BLOCKCHAIN_BLOCKS}].'
             )
             return
-        self.protocol.my_peer
 
         best_blockchain = self.protocol.node.tx_storage.get_n_height_tips(n_blocks)
         self.send_best_blockchain(best_blockchain)
@@ -241,7 +240,7 @@ class ReadyState(BaseState):
     def send_best_blockchain(self, best_blockchain: list[HeightInfo]) -> None:
         """ Send a BEST-BLOCKCHAIN command with a best blockchain of N blocks.
         """
-        serialiable_best_blockchain = [(hi.height, hi.id.hex()) for hi in best_blockchain]
+        serialiable_best_blockchain = to_serializable_best_blockchain(best_blockchain)
         self.send_message(ProtocolMessages.BEST_BLOCKCHAIN, json_dumps(serialiable_best_blockchain))
 
     def handle_best_blockchain(self, payload: str) -> None:

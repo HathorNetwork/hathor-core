@@ -6,6 +6,7 @@ from hathor.manager import DEFAULT_CAPABILITIES
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.resources import StatusResource
 from hathor.p2p.states import ReadyState
+from hathor.p2p.utils import to_height_info
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
 from hathor.util import json_dumps
@@ -344,7 +345,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertFalse(state2.lc_get_best_blockchain.running)
 
     @inlineCallbacks
-    def test_best_blockchain_within_connected_peers(self):
+    def test_best_blockchain_from_status_resource(self):
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -361,19 +362,19 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # connected_peers
         # assert there is the genesis block
-        best_blockchain = connections['connected_peers'][0]['best_blockchain']
-        self.assertEqual(len(best_blockchain), 1)
-        # assert the block_info height is from genesis
-        raw_block_info_height = best_blockchain[0][1]
-        self.assertEqual(raw_block_info_height, 0)
+        peer_best_blockchain = connections['connected_peers'][0]['peer_best_blockchain']
+        self.assertEqual(len(peer_best_blockchain), 1)
+        # assert the height_info height is from genesis
+        raw_height_info_height = peer_best_blockchain[0][0]
+        self.assertEqual(raw_height_info_height, 0)
 
         # dag
         # assert there is the genesis block
-        best_blockchain = dag['best_blockchain']
-        self.assertEqual(len(best_blockchain), 1)
-        # assert the block_info height is from genesis
-        raw_block_info_height = best_blockchain[0][1]
-        self.assertEqual(raw_block_info_height, 0)
+        peer_best_blockchain = dag['best_blockchain']
+        self.assertEqual(len(peer_best_blockchain), 1)
+        # assert the height_info height is from genesis
+        raw_height_info_height = peer_best_blockchain[0][0]
+        self.assertEqual(raw_height_info_height, 0)
 
         # mine 20 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
@@ -392,42 +393,42 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         dag = data.get('dag')
 
         # connected_peers
-        # assert default best_blockchain length
-        best_blockchain = connections['connected_peers'][0]['best_blockchain']
-        self.assertEqual(len(best_blockchain), settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
+        # assert default peer_best_blockchain length
+        peer_best_blockchain = connections['connected_peers'][0]['peer_best_blockchain']
+        self.assertEqual(len(peer_best_blockchain), settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
 
-        # assert a raw_block_info can be converted to BlockInfo
+        # assert a raw_height_info can be converted to HeightInfo
         try:
-            raw_block_info = best_blockchain[0]
-            block_info = BlockInfo.from_raw(raw_block_info)
+            raw_height_info = peer_best_blockchain[0]
+            height_info = to_height_info(raw_height_info)
             # assert the first element height is from the lastest block mined
-            self.assertEqual(block_info.height, 20)
+            self.assertEqual(height_info.height, 20)
         except ValueError:
             self.fail('Block info not valid')
 
         # assert decreasing order for a sequence of heights
-        height_sequence = [b[1] for b in best_blockchain]
+        height_sequence = [hi[0] for hi in peer_best_blockchain]
         try:
             self.assertTrue(check_decreasing_monotonicity(height_sequence))
         except ValueError as e:
             self.fail(str(e))
 
         # dag
-        # assert default best_blockchain length
-        best_blockchain = dag['best_blockchain']
-        self.assertEqual(len(best_blockchain), settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
+        # assert default peer_best_blockchain length
+        peer_best_blockchain = dag['best_blockchain']
+        self.assertEqual(len(peer_best_blockchain), settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
 
-        # assert a raw_block_info can be converted to BlockInfo
+        # assert a raw_height_info can be converted to HeightInfo
         try:
-            raw_block_info = best_blockchain[0]
-            block_info = BlockInfo.from_raw(raw_block_info)
+            raw_height_info = peer_best_blockchain[0]
+            height_info = to_height_info(raw_height_info)
             # assert the first element height is from the lastest block mined
-            self.assertEqual(block_info.height, 20)
+            self.assertEqual(height_info.height, 20)
         except ValueError:
             self.fail('Block info not valid')
 
         # assert decreasing order for a sequence of heights
-        height_sequence = [b[1] for b in best_blockchain]
+        height_sequence = [hi[0] for hi in peer_best_blockchain]
         try:
             self.assertTrue(check_decreasing_monotonicity(height_sequence))
         except ValueError as e:
