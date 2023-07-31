@@ -6,7 +6,7 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Iterator, Optional, TypeVar, cast
+from typing import Optional, cast
 
 import requests
 from hathorlib.scripts import DataScript
@@ -717,48 +717,3 @@ class EventMocker:
             type=EventType.VERTEX_METADATA_CHANGED,
             data=cls.tx_data
         )
-
-
-T = TypeVar('T')
-
-
-def zip_chunkify(flat_list: list[T], chunked_list: list[list[T]]) -> Iterator[tuple[list[T], list[T]]]:
-    """
-    Takes two lists, one flat and one chunked. Chunks the first one into chunks of the same size as the second.
-    Returns a zipped list where each item is a tuple of chunks, one from each list.
-
-    >>> list(zip_chunkify([], []))
-    []
-    >>> list(zip_chunkify([], [[]]))
-    [([], [])]
-    >>> list(zip_chunkify([], [[], []]))
-    [([], []), ([], [])]
-    >>> list(zip_chunkify([1], [[2]]))
-    [([1], [2])]
-    >>> list(zip_chunkify([1, 1], [[2]]))
-    Traceback (most recent call last):
-     ...
-    ValueError: lists should have the same amount of items
-    >>> list(zip_chunkify([1], [[2], [2]]))
-    Traceback (most recent call last):
-     ...
-    ValueError: lists should have the same amount of items
-    >>> list(zip_chunkify([1, 1], [[2], [2]]))
-    [([1], [2]), ([1], [2])]
-    >>> list(zip_chunkify([0, 2, 4, 6, 8, 10, 12], [[1], [3, 5], [7], [9, 11, 13]]))
-    [([0], [1]), ([2, 4], [3, 5]), ([6], [7]), ([8, 10, 12], [9, 11, 13])]
-    """
-
-    flat_list_len = len(flat_list)
-    chunked_list_len = sum(map(len, chunked_list))
-
-    if flat_list_len != chunked_list_len:
-        raise ValueError(f'lists should have the same amount of items. '
-                         f'{flat_list_len} (flat) != {chunked_list_len} (chunked)')
-
-    flat_iter = iter(flat_list)
-
-    for chunk in chunked_list:
-        items = [next(flat_iter) for _ in chunk]
-
-        yield items, chunk
