@@ -160,7 +160,23 @@ class GetFeaturesResponse(Response):
 
 FeatureResource.openapi = {
     '/feature': {
-        'x-visibility': 'private',
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '50r/s',
+                    'burst': 100,
+                    'delay': 50
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
         'get': {
             'operationId': 'feature',
             'summary': 'Feature Activation',
