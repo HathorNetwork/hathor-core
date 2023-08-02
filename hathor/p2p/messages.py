@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import List, NamedTuple
+from typing import NamedTuple
 
 
 class GetNextPayload(NamedTuple):
@@ -25,7 +25,7 @@ class NextPayload(NamedTuple):
     timestamp: int
     next_timestamp: int
     next_offset: int
-    hashes: List[bytes]
+    hashes: list[bytes]
 
 
 class GetTipsPayload(NamedTuple):
@@ -38,7 +38,7 @@ class TipsPayload(NamedTuple):
     length: int
     timestamp: int
     merkle_tree: bytes
-    hashes: List[str]
+    hashes: list[str]
     has_more: bool
 
 
@@ -77,6 +77,12 @@ class ProtocolMessages(Enum):
     # Pong is a response to a PING command.
     PONG = 'PONG'
 
+    # Request a list of blocks from the best blockchain
+    GET_BEST_BLOCKCHAIN = 'GET-BEST-BLOCKCHAIN'
+
+    # Send back the blockchain requested
+    BEST_BLOCKCHAIN = 'BEST-BLOCKCHAIN'
+
     # ---
     # Hathor Specific Messages
     # ---
@@ -103,14 +109,12 @@ class ProtocolMessages(Enum):
     GET_BEST_BLOCK = 'GET-BEST-BLOCK'  # Request the best block of the peer
     BEST_BLOCK = 'BEST-BLOCK'  # Send the best block to your peer
 
-    GET_BLOCK_TXS = 'GET-BLOCK-TXS'  # TODO: rename, maybe GET-TX-RANGE or repurpose GET-TRANSACTIONS above
+    GET_TRANSACTIONS_BFS = 'GET-TRANSACTIONS-BFS'
     TRANSACTION = 'TRANSACTION'
+    TRANSACTIONS_END = 'TRANSACTIONS-END'
 
-    GET_MEMPOOL = 'GET-MEMPOOL'  # TODO: rename, maybe GET-TX-RANGE or repurpose GET-TRANSACTIONS above
-    MEMPOOL_END = 'MEMPOOL-END'  # End of mempool sync
-
-    GET_COMMON_CHAIN = 'GET-COMMON-CHAIN'
-    COMMON_CHAIN = 'COMMON-CHAIN'
+    GET_MEMPOOL = 'GET-MEMPOOL'
+    MEMPOOL_END = 'MEMPOOL-END'
 
     GET_PEER_BLOCK_HASHES = 'GET-PEER-BLOCK-HASHES'
     PEER_BLOCK_HASHES = 'PEER-BLOCK-HASHES'

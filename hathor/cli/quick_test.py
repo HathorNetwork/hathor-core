@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 
 from hathor.cli.run_node import RunNode
 
@@ -25,9 +25,9 @@ class QuickTest(RunNode):
         parser.add_argument('--no-wait', action='store_true', help='If set will not wait for a new tx before exiting')
         return parser
 
-    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
-        super().prepare(args, register_resources=False)
-        self._no_wait = args.no_wait
+    def prepare(self, *, register_resources: bool = True) -> None:
+        super().prepare(register_resources=False)
+        self._no_wait = self._args.no_wait
 
         self.log.info('patching on_new_tx to quit on success')
         orig_on_new_tx = self.manager.on_new_tx

@@ -13,16 +13,15 @@
 # limitations under the License.
 
 import os
-from typing import List, Tuple
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.sysctl.exception import SysctlException
 from hathor.sysctl.sysctl import Sysctl
 
 
-def parse_text(text: str) -> List[str]:
+def parse_text(text: str) -> list[str]:
     """Parse text per line skipping empty lines and comments."""
-    ret: List[str] = []
+    ret: list[str] = []
     for line in text.splitlines():
         line = line.strip()
         if not line:
@@ -73,7 +72,7 @@ class ConnectionsManagerSysctl(Sysctl):
         """Force a sync rotate."""
         self.connections._sync_rotate_if_needed(force=True)
 
-    def get_global_send_tips_rate_limit(self) -> Tuple[int, float]:
+    def get_global_send_tips_rate_limit(self) -> tuple[int, float]:
         """Return the global rate limiter for SEND_TIPS."""
         limit = self.connections.rate_limiter.get_limit(self.connections.GlobalRateLimiter.SEND_TIPS)
         if limit is None:
@@ -106,11 +105,11 @@ class ConnectionsManagerSysctl(Sysctl):
             self.connections.lc_sync_update.stop()
             self.connections.lc_sync_update.start(self.connections.lc_sync_update_interval, now=False)
 
-    def get_always_enable_sync(self) -> List[str]:
+    def get_always_enable_sync(self) -> list[str]:
         """Return the list of sync-always-enabled peers."""
         return list(self.connections.always_enable_sync)
 
-    def set_always_enable_sync(self, values: List[str]) -> None:
+    def set_always_enable_sync(self, values: list[str]) -> None:
         """Change the list of sync-always-enabled peers."""
         self.connections.set_always_enable_sync(values)
 
@@ -118,7 +117,7 @@ class ConnectionsManagerSysctl(Sysctl):
         """Update the list of sync-always-enabled peers from a file."""
         if not os.path.isfile(file_path):
             raise SysctlException(f'file not found: {file_path}')
-        values: List[str]
+        values: list[str]
         with open(file_path, 'r') as fp:
             values = parse_text(fp.read())
         self.connections.set_always_enable_sync(values)

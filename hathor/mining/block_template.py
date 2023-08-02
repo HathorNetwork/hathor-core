@@ -16,7 +16,7 @@
 Module for abstractions around generating mining templates.
 """
 
-from typing import Dict, Iterable, List, NamedTuple, Optional, Set, Tuple, Type, Union
+from typing import Iterable, NamedTuple, Optional, Union
 
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock
 from hathor.transaction.storage import TransactionStorage
@@ -24,14 +24,14 @@ from hathor.util import Random
 
 
 class BlockTemplate(NamedTuple):
-    versions: Set[int]
+    versions: set[int]
     reward: int  # reward unit value, 64.00 HTR is 6400
     weight: float  # calculated from the DAA
     timestamp_now: int  # the reference timestamp the template was generated for
     timestamp_min: int  # min valid timestamp
     timestamp_max: int  # max valid timestamp
-    parents: List[bytes]  # required parents, will always have a block and at most 2 txs
-    parents_any: List[bytes]  # list of extra parents to choose from when there are more options
+    parents: list[bytes]  # required parents, will always have a block and at most 2 txs
+    parents_any: list[bytes]  # list of extra parents to choose from when there are more options
     height: int  # metadata
     score: float  # metadata
 
@@ -48,7 +48,7 @@ class BlockTemplate(NamedTuple):
     def generate_mining_block(self, rng: Random, merge_mined: bool = False, address: Optional[bytes] = None,
                               timestamp: Optional[int] = None, data: Optional[bytes] = None,
                               storage: Optional[TransactionStorage] = None, include_metadata: bool = False,
-                              ) -> Union[Block, MergeMinedBlock]:
+                              signal_bits: int = 0) -> Union[Block, MergeMinedBlock]:
         """ Generates a block by filling the template with the given options and random parents (if multiple choices).
 
         Note that if a timestamp is given it will be coerced into the [timestamp_min, timestamp_max] range.
@@ -62,15 +62,15 @@ class BlockTemplate(NamedTuple):
         base_timestamp = timestamp if timestamp is not None else self.timestamp_now
         block_timestamp = min(max(base_timestamp, self.timestamp_min), self.timestamp_max)
         tx_outputs = [TxOutput(self.reward, output_script)]
-        cls: Union[Type['Block'], Type['MergeMinedBlock']] = MergeMinedBlock if merge_mined else Block
+        cls: Union[type['Block'], type['MergeMinedBlock']] = MergeMinedBlock if merge_mined else Block
         block = cls(outputs=tx_outputs, parents=parents, timestamp=block_timestamp,
-                    data=data or b'', storage=storage, weight=self.weight)
+                    data=data or b'', storage=storage, weight=self.weight, signal_bits=signal_bits)
         if include_metadata:
             block._metadata = TransactionMetadata(height=self.height, score=self.score)
         block.get_metadata(use_storage=False)
         return block
 
-    def get_random_parents(self, rng: Random) -> Tuple[bytes, bytes, bytes]:
+    def get_random_parents(self, rng: Random) -> tuple[bytes, bytes, bytes]:
         """ Get parents from self.parents plus a random choice from self.parents_any to make it 3 in total.
 
         Return type is tuple just to make it clear that the length is always 3.
@@ -80,7 +80,7 @@ class BlockTemplate(NamedTuple):
         p1, p2, p3 = self.parents[:] + more_parents
         return p1, p2, p3
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'data': self.generate_minimaly_valid_block().get_struct_without_nonce().hex(),
             'versions': sorted(self.versions),
@@ -96,7 +96,7 @@ class BlockTemplate(NamedTuple):
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'BlockTemplate':
+    def from_dict(cls, data: dict) -> 'BlockTemplate':
         return cls(
             versions=set(data['versions']),
             reward=int(data['reward']),
@@ -111,7 +111,7 @@ class BlockTemplate(NamedTuple):
         )
 
 
-class BlockTemplates(List[BlockTemplate]):
+class BlockTemplates(list[BlockTemplate]):
     def __init__(self, templates: Iterable[BlockTemplate], storage: Optional[TransactionStorage] = None):
         super().__init__(templates)
         self.storage = storage
@@ -124,9 +124,10 @@ class BlockTemplates(List[BlockTemplate]):
     def generate_mining_block(self, rng: Random, merge_mined: bool = False, address: Optional[bytes] = None,
                               timestamp: Optional[int] = None, data: Optional[bytes] = None,
                               storage: Optional[TransactionStorage] = None, include_metadata: bool = False,
-                              ) -> Union[Block, MergeMinedBlock]:
+                              signal_bits: int = 0) -> Union[Block, MergeMinedBlock]:
         """ Randomly choose a template and use that for generating a block, see BlockTemplate.generate_mining_block"""
         return self.choose_random_template(rng).generate_mining_block(rng, merge_mined=merge_mined, address=address,
                                                                       timestamp=timestamp, data=data,
                                                                       storage=storage or self.storage,
-                                                                      include_metadata=include_metadata)
+                                                                      include_metadata=include_metadata,
+                                                                      signal_bits=signal_bits)

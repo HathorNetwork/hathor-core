@@ -11,8 +11,9 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 import cgi
-from typing import Union
+from typing import Type, TypeVar, Union
 
 from pydantic import Field, ValidationError, validator
 from twisted.web.http import Request
@@ -20,6 +21,8 @@ from twisted.web.http import Request
 from hathor.api_util import get_args
 from hathor.utils.list import single_or_none
 from hathor.utils.pydantic import BaseModel
+
+T = TypeVar('T', bound='QueryParams')
 
 
 class QueryParams(BaseModel):
@@ -31,7 +34,7 @@ class QueryParams(BaseModel):
     _list_to_single_item_validator = validator('*', pre=True, allow_reuse=True)(single_or_none)
 
     @classmethod
-    def from_request(cls, request: Request) -> Union['QueryParams', 'ErrorResponse']:
+    def from_request(cls: Type[T], request: Request) -> Union[T, 'ErrorResponse']:
         """Creates an instance from a Twisted Request."""
         encoding = 'utf8'
 

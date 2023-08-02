@@ -13,12 +13,12 @@
 # limitations under the License.
 
 from argparse import Namespace
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 
 from hathor.cli.run_node import RunNode
 
 
-def get_ipython(extra_args: List[Any], imported_objects: Dict[str, Any]) -> Callable[[], None]:
+def get_ipython(extra_args: list[Any], imported_objects: dict[str, Any]) -> Callable[[], None]:
     from IPython import start_ipython
 
     def run_ipython():
@@ -28,18 +28,18 @@ def get_ipython(extra_args: List[Any], imported_objects: Dict[str, Any]) -> Call
 
 
 class Shell(RunNode):
-    def start_manager(self, args: Namespace) -> None:
+    def start_manager(self) -> None:
         pass
 
-    def register_signal_handlers(self, args: Namespace) -> None:
+    def register_signal_handlers(self) -> None:
         pass
 
-    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
-        super().prepare(args, register_resources=False)
+    def prepare(self, *, register_resources: bool = True) -> None:
+        super().prepare(register_resources=False)
 
-        imported_objects: Dict[str, Any] = {}
+        imported_objects: dict[str, Any] = {}
         imported_objects['tx_storage'] = self.tx_storage
-        if args.wallet:
+        if self._args.wallet:
             imported_objects['wallet'] = self.wallet
         imported_objects['manager'] = self.manager
         self.shell = get_ipython(self.extra_args, imported_objects)
@@ -51,9 +51,9 @@ class Shell(RunNode):
         print('------------------------')
         print()
 
-    def parse_args(self, argv: List[str]) -> Namespace:
+    def parse_args(self, argv: list[str]) -> Namespace:
         # TODO: add help for the `--` extra argument separator
-        extra_args: List[str] = []
+        extra_args: list[str] = []
         if '--' in argv:
             idx = argv.index('--')
             extra_args = argv[idx + 1:]

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
@@ -39,14 +39,14 @@ class NetfilterMatchRemoteURL(NetfilterMatch):
         self.url = url
         self.update_interval = update_interval
         self.lc_update = LoopingCall(self.update)
-        self.items: List[str] = []
-        self.matches: List[NetfilterMatch] = []
+        self.items: list[str] = []
+        self.matches: list[NetfilterMatch] = []
         self.method = 'GET'
         self.headers = {
             'User-Agent': ['hathor-core'],
         }
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         data = super().to_json()
         data['match_params']['name'] = self.name
         data['match_params']['url'] = self.url

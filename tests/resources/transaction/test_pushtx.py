@@ -1,4 +1,4 @@
-from typing import Generator, List, Optional
+from typing import Generator, Optional
 
 from twisted.internet.defer import inlineCallbacks
 
@@ -29,8 +29,8 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(PushTxResource(self.manager))
         self.web_tokens = StubSite(SendTokensResource(self.manager))
 
-    def get_tx(self, inputs: Optional[List[WalletInputInfo]] = None,
-               outputs: Optional[List[WalletOutputInfo]] = None) -> Transaction:
+    def get_tx(self, inputs: Optional[list[WalletInputInfo]] = None,
+               outputs: Optional[list[WalletOutputInfo]] = None) -> Transaction:
         if not outputs:
             address = self.get_address(0)
             assert address is not None

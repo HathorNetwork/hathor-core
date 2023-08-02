@@ -22,11 +22,23 @@ class FeatureState(Enum):
     Attributes:
         DEFINED: Represents that a feature is defined. It's the first state for each feature.
         STARTED: Represents that the activation process for some feature is started.
+        MUST_SIGNAL: Represents that a feature is going to be locked-in, and that miners must signal support for it.
+        LOCKED_IN: Represents that a feature is going to be activated.
         ACTIVE: Represents that a certain feature is activated.
         FAILED: Represents that a certain feature is not and will never be activated.
     """
 
-    DEFINED = 0
-    STARTED = 1
-    ACTIVE = 2
-    FAILED = 3
+    DEFINED = 'DEFINED'
+    STARTED = 'STARTED'
+    MUST_SIGNAL = 'MUST_SIGNAL'
+    LOCKED_IN = 'LOCKED_IN'
+    ACTIVE = 'ACTIVE'
+    FAILED = 'FAILED'
+
+    @staticmethod
+    def get_signaling_states() -> set['FeatureState']:
+        """
+        Return the states for which a feature is considered in its signaling period, that is, voting to either
+        support it or not through bit signals is valid during those states.
+        """
+        return {FeatureState.STARTED, FeatureState.MUST_SIGNAL, FeatureState.LOCKED_IN}

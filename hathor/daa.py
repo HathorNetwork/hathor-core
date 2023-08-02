@@ -21,7 +21,7 @@ NOTE: This module could use a better name.
 
 from enum import IntFlag
 from math import log
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
@@ -83,14 +83,14 @@ def calculate_next_weight(parent_block: 'Block', timestamp: int) -> float:
     from hathor.transaction import sum_weights
 
     root = parent_block
-    N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_metadata().height - 1)
+    N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_height() - 1)
     K = N // 2
     T = AVG_TIME_BETWEEN_BLOCKS
     S = 5
     if N < 10:
         return MIN_BLOCK_WEIGHT
 
-    blocks: List['Block'] = []
+    blocks: list['Block'] = []
     while len(blocks) < N + 1:
         blocks.append(root)
         root = root.get_block_parent()

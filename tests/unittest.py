@@ -1,8 +1,9 @@
 import os
+import secrets
 import shutil
 import tempfile
 import time
-from typing import Iterator, List, Optional
+from typing import Iterator, Optional
 from unittest import main as ut_main
 
 from structlog import get_logger
@@ -99,6 +100,7 @@ class TestCase(unittest.TestCase):
     _enable_sync_v1: bool
     _enable_sync_v2: bool
     use_memory_storage: bool = USE_MEMORY_STORAGE
+    seed_config: Optional[int] = None
 
     def setUp(self):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
@@ -108,7 +110,9 @@ class TestCase(unittest.TestCase):
         self.clock.advance(time.time())
         self.log = logger.new()
         self.reset_peer_id_pool()
-        self.rng = Random()
+        self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config
+        self.log.debug('set seed', seed=self.seed)
+        self.rng = Random(self.seed)
         self._pending_cleanups = []
 
     def tearDown(self):
@@ -119,10 +123,10 @@ class TestCase(unittest.TestCase):
     def reset_peer_id_pool(self) -> None:
         self._free_peer_id_pool = self.new_peer_id_pool()
 
-    def new_peer_id_pool(self) -> List[PeerId]:
+    def new_peer_id_pool(self) -> list[PeerId]:
         return PEER_ID_POOL.copy()
 
-    def get_random_peer_id_from_pool(self, pool: Optional[List[PeerId]] = None,
+    def get_random_peer_id_from_pool(self, pool: Optional[list[PeerId]] = None,
                                      rng: Optional[Random] = None) -> PeerId:
         if pool is None:
             pool = self._free_peer_id_pool
@@ -139,7 +143,7 @@ class TestCase(unittest.TestCase):
         self.tmpdirs.append(tmpdir)
         return tmpdir
 
-    def _create_test_wallet(self):
+    def _create_test_wallet(self, unlocked=False):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
         """
@@ -148,27 +152,40 @@ class TestCase(unittest.TestCase):
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'MYPASS')
         wallet.generate_keys(count=20)
-        wallet.lock()
+        if not unlocked:
+            wallet.lock()
         return wallet
+
+    def get_builder(self, network: str) -> TestBuilder:
+        builder = TestBuilder()
+        builder.set_rng(self.rng) \
+            .set_reactor(self.clock) \
+            .set_network(network)
+        return builder
+
+    def create_peer_from_builder(self, builder, start_manager=True):
+        artifacts = builder.build()
+        manager = artifacts.manager
+
+        if artifacts.rocksdb_storage:
+            self._pending_cleanups.append(artifacts.rocksdb_storage.close)
+
+        manager.avg_time_between_blocks = 0.0001
+
+        if start_manager:
+            manager.start()
+            self.run_to_completion()
+
+        return manager
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
                     checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
-                    pubsub=None, event_storage=None, event_ws_factory=None):
-        if enable_sync_v1 is None:
-            assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
-                                                      'the test class or pass `enable_sync_v1` by argument')
-            enable_sync_v1 = self._enable_sync_v1
-        if enable_sync_v2 is None:
-            assert hasattr(self, '_enable_sync_v2'), ('`_enable_sync_v2` has no default by design, either set one on '
-                                                      'the test class or pass `enable_sync_v2` by argument')
-            enable_sync_v2 = self._enable_sync_v2
-        assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
+                    pubsub=None, event_storage=None, enable_event_queue=None, use_memory_storage=None):
 
-        builder = TestBuilder() \
-            .set_rng(self.rng) \
-            .set_reactor(self.clock) \
-            .set_network(network) \
+        enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
+
+        builder = self.get_builder(network) \
             .set_full_verification(full_verification)
 
         if checkpoints is not None:
@@ -193,13 +210,13 @@ class TestCase(unittest.TestCase):
         if event_manager:
             builder.set_event_manager(event_manager)
 
-        if event_ws_factory:
-            builder.enable_event_manager(event_ws_factory=event_ws_factory)
+        if enable_event_queue:
+            builder.enable_event_queue()
 
         if tx_storage is not None:
             builder.set_tx_storage(tx_storage)
 
-        if self.use_memory_storage:
+        if use_memory_storage or self.use_memory_storage:
             builder.use_memory()
         else:
             directory = tempfile.mkdtemp()
@@ -227,11 +244,7 @@ class TestCase(unittest.TestCase):
         if utxo_index:
             builder.enable_utxo_index()
 
-        artifacts = builder.build()
-        manager = artifacts.manager
-
-        if artifacts.rocksdb_storage:
-            self._pending_cleanups.append(artifacts.rocksdb_storage.close)
+        manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         # XXX: just making sure that tests set this up correctly
         if enable_sync_v2:
@@ -245,11 +258,6 @@ class TestCase(unittest.TestCase):
             assert SyncVersion.V1 not in manager.connections._sync_factories
             assert SyncVersion.V1_1 not in manager.connections._sync_factories
 
-        manager.avg_time_between_blocks = 0.0001
-
-        if start_manager:
-            manager.start()
-            self.run_to_completion()
         return manager
 
     def run_to_completion(self):
@@ -275,7 +283,33 @@ class TestCase(unittest.TestCase):
                 self.assertIn(dep, valid_deps, message)
             valid_deps.add(tx.hash)
 
+    def _syncVersionFlags(self, enable_sync_v1=None, enable_sync_v2=None):
+        """Internal: use this to check and get the flags and optionally provide override values."""
+        if enable_sync_v1 is None:
+            assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
+                                                      'the test class or pass `enable_sync_v1` by argument')
+            enable_sync_v1 = self._enable_sync_v1
+        if enable_sync_v2 is None:
+            assert hasattr(self, '_enable_sync_v2'), ('`_enable_sync_v2` has no default by design, either set one on '
+                                                      'the test class or pass `enable_sync_v2` by argument')
+            enable_sync_v2 = self._enable_sync_v2
+        assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
+        return enable_sync_v1, enable_sync_v2
+
     def assertTipsEqual(self, manager1, manager2):
+        _, enable_sync_v2 = self._syncVersionFlags()
+        if enable_sync_v2:
+            self.assertTipsEqualSyncV2(manager1, manager2)
+        else:
+            self.assertTipsEqualSyncV1(manager1, manager2)
+
+    def assertTipsNotEqual(self, manager1, manager2):
+        s1 = set(manager1.tx_storage.get_all_tips())
+        s2 = set(manager2.tx_storage.get_all_tips())
+        self.assertNotEqual(s1, s2)
+
+    def assertTipsEqualSyncV1(self, manager1, manager2):
+        # XXX: this is the original implementation of assertTipsEqual
         s1 = set(manager1.tx_storage.get_all_tips())
         s2 = set(manager2.tx_storage.get_all_tips())
         self.assertEqual(s1, s2)
@@ -284,18 +318,44 @@ class TestCase(unittest.TestCase):
         s2 = set(manager2.tx_storage.get_tx_tips())
         self.assertEqual(s1, s2)
 
-    def assertTipsNotEqual(self, manager1, manager2):
-        s1 = set(manager1.tx_storage.get_all_tips())
-        s2 = set(manager2.tx_storage.get_all_tips())
-        self.assertNotEqual(s1, s2)
+    def assertTipsEqualSyncV2(self, manager1, manager2, *, strict_sync_v2_indexes=True):
+        # tx tips
+        if strict_sync_v2_indexes:
+            tips1 = manager1.tx_storage.indexes.mempool_tips.get()
+            tips2 = manager2.tx_storage.indexes.mempool_tips.get()
+        else:
+            tips1 = {tx.hash for tx in manager1.tx_storage.iter_mempool_tips_from_best_index()}
+            tips2 = {tx.hash for tx in manager2.tx_storage.iter_mempool_tips_from_best_index()}
+        self.log.debug('tx tips1', len=len(tips1), list=shorten_hash(tips1))
+        self.log.debug('tx tips2', len=len(tips2), list=shorten_hash(tips2))
+        self.assertEqual(tips1, tips2)
+
+        # best block
+        s1 = set(manager1.tx_storage.get_best_block_tips())
+        s2 = set(manager2.tx_storage.get_best_block_tips())
+        self.log.debug('block tips1', len=len(s1), list=shorten_hash(s1))
+        self.log.debug('block tips2', len=len(s2), list=shorten_hash(s2))
+        self.assertEqual(s1, s2)
+
+        # best block (from height index)
+        b1 = manager1.tx_storage.indexes.height.get_tip()
+        b2 = manager2.tx_storage.indexes.height.get_tip()
+        self.assertEqual(b1, b2)
 
     def assertConsensusEqual(self, manager1, manager2):
+        _, enable_sync_v2 = self._syncVersionFlags()
+        if enable_sync_v2:
+            self.assertConsensusEqualSyncV2(manager1, manager2)
+        else:
+            self.assertConsensusEqualSyncV1(manager1, manager2)
+
+    def assertConsensusEqualSyncV1(self, manager1, manager2):
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         for tx1 in manager1.tx_storage.get_all_transactions():
             tx2 = manager2.tx_storage.get_transaction(tx1.hash)
             tx1_meta = tx1.get_metadata()
             tx2_meta = tx2.get_metadata()
-            # conflict_with's type is Optional[List[bytes]], so we convert to a set because order does not matter.
+            # conflict_with's type is Optional[list[bytes]], so we convert to a set because order does not matter.
             self.assertEqual(set(tx1_meta.conflict_with or []), set(tx2_meta.conflict_with or []))
             # Soft verification
             if tx1_meta.voided_by is None:
@@ -307,6 +367,44 @@ class TestCase(unittest.TestCase):
                 self.assertGreaterEqual(len(tx2_meta.voided_by), 1)
             # Hard verification
             # self.assertEqual(tx1_meta.voided_by, tx2_meta.voided_by)
+
+    def assertConsensusEqualSyncV2(self, manager1, manager2, *, strict_sync_v2_indexes=True):
+        # The current sync algorithm does not propagate voided blocks/txs
+        # so the count might be different even though the consensus is equal
+        # One peer might have voided txs that the other does not have
+
+        # to start off, both nodes must have the same tips
+        self.assertTipsEqualSyncV2(manager1, manager2, strict_sync_v2_indexes=strict_sync_v2_indexes)
+
+        # the following is specific to sync-v2
+
+        # helper function:
+        def get_all_executed_or_voided(tx_storage):
+            """Get all txs separated into three sets: executed, voided, partial"""
+            tx_executed = set()
+            tx_voided = set()
+            tx_partial = set()
+            for tx in tx_storage.get_all_transactions():
+                assert tx.hash is not None
+                tx_meta = tx.get_metadata()
+                if not tx_meta.validation.is_fully_connected():
+                    tx_partial.add(tx.hash)
+                elif not tx_meta.voided_by:
+                    tx_executed.add(tx.hash)
+                else:
+                    tx_voided.add(tx.hash)
+            return tx_executed, tx_voided, tx_partial
+
+        # extract all the transactions from each node, split into three sets
+        tx_executed1, tx_voided1, tx_partial1 = get_all_executed_or_voided(manager1.tx_storage)
+        tx_executed2, tx_voided2, tx_partial2 = get_all_executed_or_voided(manager2.tx_storage)
+
+        # both must have the exact same executed set
+        self.assertEqual(tx_executed1, tx_executed2)
+
+        # XXX: the rest actually doesn't matter
+        self.log.debug('node1 rest', len_voided=len(tx_voided1), len_partial=len(tx_partial1))
+        self.log.debug('node2 rest', len_voided=len(tx_voided2), len_partial=len(tx_partial2))
 
     def assertConsensusValid(self, manager):
         for tx in manager.tx_storage.get_all_transactions():
@@ -358,6 +456,20 @@ class TestCase(unittest.TestCase):
                 self.assertTrue(parent_meta.voided_by)
                 self.assertTrue(meta.voided_by)
                 self.assertTrue(parent_meta.voided_by.issubset(meta.voided_by))
+
+    def assertSyncedProgress(self, node_sync):
+        """Check "synced" status of p2p-manager, uses self._enable_sync_vX to choose which check to run."""
+        enable_sync_v1, enable_sync_v2 = self._syncVersionFlags()
+        if enable_sync_v2:
+            self.assertV2SyncedProgress(node_sync)
+        elif enable_sync_v1:
+            self.assertV1SyncedProgress(node_sync)
+
+    def assertV1SyncedProgress(self, node_sync):
+        self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
+
+    def assertV2SyncedProgress(self, node_sync):
+        self.assertEqual(node_sync.synced_height, node_sync.peer_height)
 
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:

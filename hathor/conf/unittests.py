@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 
 SETTINGS = HathorSettings(
     P2PKH_VERSION_BYTE=b'\x28',
@@ -33,6 +34,10 @@ SETTINGS = HathorSettings(
     GENESIS_TX2_HASH=bytes.fromhex('33e14cb555a96967841dcbe0f95e9eab5810481d01de8f4f73afb8cce365e869'),
     REWARD_SPEND_MIN_BLOCKS=10,
     SLOW_ASSERTS=True,
-    ENABLE_EVENT_QUEUE_FEATURE=True,
     MAX_TX_WEIGHT_DIFF_ACTIVATION=0.0,
+    FEATURE_ACTIVATION=FeatureActivationSettings(
+        evaluation_interval=4,
+        max_signal_bits=4,
+        default_threshold=3
+    )
 )

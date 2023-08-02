@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
-
 from hathor.p2p.netfilter import get_table
 from hathor.p2p.netfilter.matches import NetfilterMatchPeerId
 from hathor.p2p.netfilter.rule import NetfilterRule
 from hathor.p2p.netfilter.targets import NetfilterReject
 
 
-def add_peer_id_blacklist(peer_id_blacklist: List[str]) -> None:
+def add_peer_id_blacklist(peer_id_blacklist: list[str]) -> None:
     """ Add a list of peer ids to a blacklist using netfilter reject
     """
     post_peerid = get_table('filter').get_chain('post_peerid')

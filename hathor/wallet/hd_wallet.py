@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import hashlib
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 from mnemonic import Mnemonic
 
@@ -86,8 +86,8 @@ class HDWallet(BaseWallet):
         """
         super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
 
-        # Dict[string(base58), BIP32Key]
-        self.keys: Dict[str, Any] = {}
+        # dict[string(base58), BIP32Key]
+        self.keys: dict[str, Any] = {}
 
         # Last index that the address was shared
         # We use this index to know which address should be shared with the user
@@ -311,7 +311,7 @@ class HDWallet(BaseWallet):
         if not self.words or not self.mnemonic.check(self.words):
             raise InvalidWords
 
-    def get_input_aux_data(self, data_to_sign: bytes, private_key: 'Key') -> Tuple[bytes, bytes]:
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: 'Key') -> tuple[bytes, bytes]:
         """ Sign the data to be used in input and get public key compressed in bytes
 
             :param data_to_sign: Data to be signed

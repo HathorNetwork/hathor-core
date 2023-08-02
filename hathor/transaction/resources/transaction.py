@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict
+from typing import Any
 
 from hathor.api_util import (
     Resource,
@@ -34,7 +34,7 @@ settings = HathorSettings()
 GET_LIST_ARGS = ['count', 'type']
 
 
-def update_serialized_tokens_array(tx: BaseTransaction, serialized: Dict[str, Any]) -> None:
+def update_serialized_tokens_array(tx: BaseTransaction, serialized: dict[str, Any]) -> None:
     """ A token creation tx to_json does not add its hash to the array of tokens
         We manually have to add it here to make it equal to the other transactions
     """
@@ -44,7 +44,7 @@ def update_serialized_tokens_array(tx: BaseTransaction, serialized: Dict[str, An
         serialized['tokens'] = [h.hex() for h in tx.tokens]
 
 
-def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
+def get_tx_extra_data(tx: BaseTransaction) -> dict[str, Any]:
     """ Get the data of a tx to be returned to the frontend
         Returns success, tx serializes, metadata and spent outputs
     """
@@ -78,7 +78,7 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
                     break
 
     # Maps the token uid to the token_data value
-    token_uid_map: Dict[bytes, int] = {settings.HATHOR_TOKEN_UID: 0}
+    token_uid_map: dict[bytes, int] = {settings.HATHOR_TOKEN_UID: 0}
 
     # Sending also output information for each input
     inputs = []

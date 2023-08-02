@@ -34,7 +34,7 @@ class SysctlTest(unittest.TestCase):
         )
         net.register(
             'rate_limit',
-            MagicMock(return_value=(4, 1)),  # Tuple[int, float]
+            MagicMock(return_value=(4, 1)),  # tuple[int, float]
             MagicMock(),
         )
         core = Sysctl()

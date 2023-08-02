@@ -19,7 +19,7 @@ import asyncio
 import random
 import string
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, AsyncIterator, Optional, Union
 from urllib.parse import urljoin
 
 from aiohttp import ClientSession, ClientWebSocketResponse
@@ -42,7 +42,7 @@ class APIError(HathorError):
 
 
 class JsonRpcError(HathorError):
-    def __init__(self, code: int, message: Optional[str] = None, data: Optional[Dict] = None):
+    def __init__(self, code: int, message: Optional[str] = None, data: Optional[dict] = None):
         self.code = code
         self.message = message
         self.data = data
@@ -61,12 +61,12 @@ class IHathorClient(ABC):
     """
 
     @abstractmethod
-    async def version(self) -> Tuple[int, int, int]:
+    async def version(self) -> tuple[int, int, int]:
         """Get the parsed version returned from `/v1a/version`, a tuple with (major, minor, patch)"""
         raise NotImplementedError
 
     @abstractmethod
-    async def status(self) -> Dict[str, Any]:
+    async def status(self) -> dict[str, Any]:
         """Get the parsed dict returned from `/v1a/status`, format described in `hathor.p2p.resources.status`"""
         raise NotImplementedError
 
@@ -124,14 +124,14 @@ class HathorClient(IHathorClient):
     def _get_url(self, url: str) -> str:
         return urljoin(self._base_url, url.lstrip('/'))
 
-    async def version(self) -> Tuple[int, int, int]:
+    async def version(self) -> tuple[int, int, int]:
         async with self.session.get(self._get_url('version')) as resp:
             data = await resp.json()
             ver = data['version']
             major, minor, patch = ver.split('.')
             return (int(major), int(minor), int(patch))
 
-    async def status(self) -> Dict[str, Any]:
+    async def status(self) -> dict[str, Any]:
         async with self.session.get(self._get_url('status')) as resp:
             return await resp.json()
 
@@ -141,7 +141,7 @@ class HathorClient(IHathorClient):
         params: MultiDict[Any] = MultiDict()
         if address is not None:
             params.add('address', address)
-        caps: Set[Capabilities] = set()
+        caps: set[Capabilities] = set()
         if merged_mining:
             caps.add(Capabilities.MERGED_MINING)
         if caps:
@@ -170,7 +170,7 @@ class HathorClient(IHathorClient):
 
 class MiningChannel(IMiningChannel):
     _ws: ClientWebSocketResponse
-    _requests: Dict[str, asyncio.Future]
+    _requests: dict[str, asyncio.Future]
     _queue: asyncio.Future
     _task: asyncio.Task
 
@@ -206,7 +206,7 @@ class MiningChannel(IMiningChannel):
             else:
                 self._handle_response(data)
 
-    def _handle_request(self, data: Dict) -> None:
+    def _handle_request(self, data: dict) -> None:
         # only request accepted is a 'mining.notify' notification
         if data['method'] != 'mining.notify':
             self.log.warn('unknown method received', data=data)
@@ -216,7 +216,7 @@ class MiningChannel(IMiningChannel):
             self._queue = self.loop.create_future()
         self._queue.set_result(block_templates)
 
-    def _handle_response(self, data: Dict) -> None:
+    def _handle_response(self, data: dict) -> None:
         _id = data.get('id')
         id: Optional[str] = str(_id) if _id else None
         error = data.get('error')
@@ -248,18 +248,18 @@ class MiningChannel(IMiningChannel):
         await self._ws.close()
 
     async def submit(self, block: Block) -> Optional[BlockTemplate]:
-        resp: Union[bool, Dict] = await self._do_request('mining.submit', {
+        resp: Union[bool, dict] = await self._do_request('mining.submit', {
             'hexdata': bytes(block).hex(),
         })
         if resp:
-            assert isinstance(resp, Dict)
+            assert isinstance(resp, dict)
             error = resp.get('error')
             if error:
                 raise APIError(error)
             return BlockTemplate.from_dict(resp['result'])
         return None
 
-    async def _do_request(self, method: str, params: Union[Dict, List]) -> Any:
+    async def _do_request(self, method: str, params: Union[dict, list]) -> Any:
         while True:
             id = ''.join(random.choices(string.printable, k=10))
             if id not in self._requests:
@@ -284,12 +284,12 @@ class HathorClientStub(IHathorClient):
     def __init__(self, manager: HathorManager):
         self.manager = manager
 
-    async def version(self) -> Tuple[int, int, int]:
+    async def version(self) -> tuple[int, int, int]:
         from hathor.version import __version__
         major, minor, patch = __version__.split('.')
         return (int(major), int(minor), int(patch))
 
-    async def status(self) -> Dict[str, Any]:
+    async def status(self) -> dict[str, Any]:
         return {}
 
     async def get_block_template(self, address: Optional[str] = None, merged_mining: bool = False) -> Block:
@@ -344,7 +344,7 @@ class MiningChannelStub(IMiningChannel):
             return None
 
 
-def create_tx_from_dict(data: Dict[str, Any], update_hash: bool = False,
+def create_tx_from_dict(data: dict[str, Any], update_hash: bool = False,
                         storage: Optional[TransactionStorage] = None) -> BaseTransaction:
     import base64
 

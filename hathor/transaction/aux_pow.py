@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, NamedTuple
+from typing import NamedTuple
 
 from structlog import get_logger
 
@@ -26,7 +26,7 @@ class BitcoinAuxPow(NamedTuple):
     header_head: bytes  # 36 bytes
     coinbase_head: bytes  # variable length (at least 47 bytes)
     coinbase_tail: bytes  # variable length (at least 18 bytes)
-    merkle_path: List[bytes]  # each element has 32 bytes
+    merkle_path: list[bytes]  # each element has 32 bytes
     header_tail: bytes  # 12 bytes
 
     @classmethod

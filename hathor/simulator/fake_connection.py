@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Deque, Optional
+from typing import TYPE_CHECKING, Optional
 
 from OpenSSL.crypto import X509
 from structlog import get_logger
@@ -41,7 +41,8 @@ class HathorStringTransport(StringTransport):
 
 
 class FakeConnection:
-    def __init__(self, manager1: 'HathorManager', manager2: 'HathorManager', *, latency: float = 0):
+    def __init__(self, manager1: 'HathorManager', manager2: 'HathorManager', *, latency: float = 0,
+                 autoreconnect: bool = False):
         """
         :param: latency: Latency between nodes in seconds
         """
@@ -51,20 +52,14 @@ class FakeConnection:
         self.manager2 = manager2
 
         self.latency = latency
-        self.is_connected = True
-
-        self._proto1 = manager1.connections.server_factory.buildProtocol(HostnameAddress(b'fake', 0))
-        self._proto2 = manager2.connections.client_factory.buildProtocol(HostnameAddress(b'fake', 0))
-
-        self.tr1 = HathorStringTransport(self._proto2.my_peer)
-        self.tr2 = HathorStringTransport(self._proto1.my_peer)
+        self.autoreconnect = autoreconnect
+        self.is_connected = False
 
         self._do_buffering = True
-        self._buf1: Deque[str] = deque()
-        self._buf2: Deque[str] = deque()
+        self._buf1: deque[str] = deque()
+        self._buf2: deque[str] = deque()
 
-        self._proto1.makeConnection(self.tr1)
-        self._proto2.makeConnection(self.tr2)
+        self.reconnect()
 
     @property
     def proto1(self):
@@ -78,6 +73,35 @@ class FakeConnection:
         """Disable timeout in both peers."""
         self._proto1.disable_idle_timeout()
         self._proto2.disable_idle_timeout()
+
+    def is_both_synced(self) -> bool:
+        """Short-hand check that can be used to make "step loops" without having to guess the number of iterations."""
+        from hathor.p2p.states.ready import ReadyState
+        conn1_aborting = self._proto1.aborting
+        conn2_aborting = self._proto2.aborting
+        if conn1_aborting or conn2_aborting:
+            self.log.debug('conn aborting', conn1_aborting=conn1_aborting, conn2_aborting=conn2_aborting)
+            return False
+        state1 = self._proto1.state
+        state2 = self._proto2.state
+        state1_is_ready = isinstance(state1, ReadyState)
+        state2_is_ready = isinstance(state2, ReadyState)
+        if not state1_is_ready or not state2_is_ready:
+            self.log.debug('peer not ready', peer1_ready=state1_is_ready, peer2_ready=state2_is_ready)
+            return False
+        assert isinstance(state1, ReadyState)  # mypy can't infer this from the above
+        assert isinstance(state2, ReadyState)  # mypy can't infer this from the above
+        state1_is_errored = state1.sync_agent.is_errored()
+        state2_is_errored = state2.sync_agent.is_errored()
+        if state1_is_errored or state2_is_errored:
+            self.log.debug('peer errored', peer1_errored=state1_is_errored, peer2_errored=state2_is_errored)
+            return False
+        state1_is_synced = state1.sync_agent.is_synced()
+        state2_is_synced = state2.sync_agent.is_synced()
+        if not state1_is_synced or not state2_is_synced:
+            self.log.debug('peer not synced', peer1_synced=state1_is_synced, peer2_synced=state2_is_synced)
+            return False
+        return True
 
     def can_step(self) -> bool:
         """Short-hand check that can be used to make "step loops" without having to guess the number of iterations."""
@@ -96,13 +120,13 @@ class FakeConnection:
             return True
         assert isinstance(state1, ReadyState)  # mypy can't infer this from the above
         assert isinstance(state2, ReadyState)  # mypy can't infer this from the above
-        state1_is_errored = state1.sync_manager.is_errored()
-        state2_is_errored = state2.sync_manager.is_errored()
+        state1_is_errored = state1.sync_agent.is_errored()
+        state2_is_errored = state2.sync_agent.is_errored()
         if state1_is_errored or state2_is_errored:
             self.log.debug('peer errored', peer1_errored=state1_is_errored, peer2_errored=state2_is_errored)
             return False
-        state1_is_synced = state1.sync_manager.is_synced()
-        state2_is_synced = state2.sync_manager.is_synced()
+        state1_is_synced = state1.sync_agent.is_synced()
+        state2_is_synced = state2.sync_agent.is_synced()
         if not state1_is_synced or not state2_is_synced:
             self.log.debug('peer not synced', peer1_synced=state1_is_synced, peer2_synced=state2_is_synced)
             return True
@@ -155,6 +179,9 @@ class FakeConnection:
                 if debug:
                     self.log.debug('[2->1] delivered', line=line2)
 
+        if self.autoreconnect and self._proto1.aborting and self._proto2.aborting:
+            self.reconnect()
+
         return True
 
     def run_until_empty(self, max_steps: Optional[int] = None, debug: bool = False, force: bool = False) -> None:
@@ -177,6 +204,20 @@ class FakeConnection:
         self.tr2.loseConnection()
         self._proto2.connectionLost(reason)
         self.is_connected = False
+
+    def reconnect(self) -> None:
+        from twisted.python.failure import Failure
+        if self.is_connected:
+            self.disconnect(Failure(Exception('forced reconnection')))
+        self._buf1.clear()
+        self._buf2.clear()
+        self._proto1 = self.manager1.connections.server_factory.buildProtocol(HostnameAddress(b'fake', 0))
+        self._proto2 = self.manager2.connections.client_factory.buildProtocol(HostnameAddress(b'fake', 0))
+        self.tr1 = HathorStringTransport(self._proto2.my_peer)
+        self.tr2 = HathorStringTransport(self._proto1.my_peer)
+        self._proto1.makeConnection(self.tr1)
+        self._proto2.makeConnection(self.tr2)
+        self.is_connected = True
 
     def is_empty(self):
         if self._do_buffering and (self._buf1 or self._buf2):

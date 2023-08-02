@@ -12,12 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import List, Optional, TypeVar
+from typing import Optional, TypeVar
 
 T = TypeVar('T')
 
 
-def single_or_none(_list: List[T]) -> Optional[T]:
+def single_or_none(_list: list[T]) -> Optional[T]:
     """Function to convert a list with at most one element to the given element or None.
     >>> single_or_none([]) is None
     True

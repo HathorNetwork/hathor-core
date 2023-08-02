@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 from asyncio import AbstractEventLoop
 from collections import defaultdict
 from math import floor
-from typing import Any, Callable, DefaultDict, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 # XXX: as annoying as it is, a simple `if: raise` is not enough, but putting the whole module inside works
 if sys.platform != 'win32':
@@ -31,8 +31,8 @@ if sys.platform != 'win32':
 
     from aiohttp import ClientSession
 
-    Key = Tuple[str, ...]
-    ProcGroup = DefaultDict[Key, List['ProcItem']]
+    Key = tuple[str, ...]
+    ProcGroup = defaultdict[Key, list['ProcItem']]
 
     # Global color variable.
     Color: Optional['DefaultColor'] = None
@@ -45,10 +45,10 @@ if sys.platform != 'win32':
         enabled: bool
         last_update: float
         error: str
-        proc_list: List['ProcItem']
+        proc_list: list['ProcItem']
 
         @classmethod
-        def create_from_api(cls, data: Dict[str, Any]) -> 'ProfileData':
+        def create_from_api(cls, data: dict[str, Any]) -> 'ProfileData':
             self = cls()
             self.hostname = data['hostname']
             self.version = data['version']
@@ -69,7 +69,7 @@ if sys.platform != 'win32':
         total_time: float
 
         @classmethod
-        def create_from_api(cls, data: Tuple[Key, Dict[str, Any]]) -> 'ProcItem':
+        def create_from_api(cls, data: tuple[Key, dict[str, Any]]) -> 'ProcItem':
             self = cls()
             self.key = tuple(data[0])
             stats = data[1]
@@ -87,7 +87,7 @@ if sys.platform != 'win32':
             self.max_rows = max_rows
             self.source_width = source_width
 
-            self.last_child_stack: List[bool] = []
+            self.last_child_stack: list[bool] = []
             self.rows: int = 0
 
         def print_tree(self) -> None:
@@ -176,7 +176,7 @@ if sys.platform != 'win32':
             else:
                 return '{:02d}:{:02d}.{:02d}'.format(minutes, seconds, floor(100 * frac))
 
-    def group_by_parent(proc_list: List[ProcItem]) -> ProcGroup:
+    def group_by_parent(proc_list: list[ProcItem]) -> ProcGroup:
         """Group the processes by their parents.
 
         It converts from the format received by the API and the format used by the printer.
@@ -192,8 +192,8 @@ if sys.platform != 'win32':
         """Group processes that consumes less than `threadhold` of CPU."""
         new_groups: ProcGroup = defaultdict(list)
         for key, children in groups.items():
-            hidden_procs: DefaultDict[str, List[ProcItem]] = defaultdict(list)
-            new_children: List[ProcItem] = []
+            hidden_procs: defaultdict[str, list[ProcItem]] = defaultdict(list)
+            new_children: list[ProcItem] = []
             for proc in children:
                 if proc.percent_cpu < threshold:
                     local_key = proc.key[-1]
@@ -424,7 +424,7 @@ if sys.platform != 'win32':
 
             height, width = self.win.getmaxyx()
 
-            proc_list: List[ProcItem] = data.proc_list
+            proc_list: list[ProcItem] = data.proc_list
             groups: ProcGroup = group_by_parent(proc_list)
             if self.group_cpu_percent:
                 groups = group_cpu_percent(groups)
@@ -451,10 +451,10 @@ if sys.platform != 'win32':
         def __init__(self, manager: 'ScreenManager', win: Any) -> None:
             super().__init__(manager, win)
 
-            self._logs: List[Tuple[str, int]] = []
+            self._logs: list[tuple[str, int]] = []
 
             fetcher: 'ProfileAPIClient' = self.manager.fetcher
-            self.cmd_map: Dict[str, Any] = {
+            self.cmd_map: dict[str, Any] = {
                 'start': fetcher.send_start_cmd,
                 'stop': fetcher.send_stop_cmd,
                 'reset': fetcher.send_reset_cmd,
@@ -564,7 +564,7 @@ if sys.platform != 'win32':
 
             self.fetcher: 'ProfileAPIClient' = fetcher
 
-            self.screen_list: Dict[str, Window] = {
+            self.screen_list: dict[str, Window] = {
                 'help': HelpWindow(self, self.stdscr),
                 'main': MainWindow(self, self.stdscr),
                 'control': ControlWindow(self, self.stdscr),
@@ -695,7 +695,7 @@ if sys.platform != 'win32':
         async def run(self) -> Any:
             while True:
                 try:
-                    data_dict: Dict[str, Any] = await self.fetch()
+                    data_dict: dict[str, Any] = await self.fetch()
                     data = ProfileData.create_from_api(data_dict)
                     self.last_update = time.time()
                     self.error = ''
@@ -717,7 +717,7 @@ if sys.platform != 'win32':
 
     class DefaultColor:
         def __init__(self) -> None:
-            self._color_map: Dict[Tuple[int, int], int] = {}
+            self._color_map: dict[tuple[int, int], int] = {}
 
             A_NONE = 0
             A_BOLD = curses.A_BOLD

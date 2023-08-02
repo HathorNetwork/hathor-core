@@ -13,13 +13,13 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Callable, Dict
+from typing import Callable
 
 from hathor.p2p.messages import ProtocolMessages
 from hathor.transaction import BaseTransaction
 
 
-class SyncManager(ABC):
+class SyncAgent(ABC):
     @abstractmethod
     def is_started(self) -> bool:
         """Whether the manager started running"""
@@ -36,7 +36,7 @@ class SyncManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
         """Command dict to add to the protocol handler"""
         raise NotImplementedError
 
@@ -55,14 +55,17 @@ class SyncManager(ABC):
         """Whether the manager entered an error state"""
         raise NotImplementedError
 
+    @abstractmethod
     def is_sync_enabled(self) -> bool:
         """Return true if the sync is enabled."""
         raise NotImplementedError
 
+    @abstractmethod
     def enable_sync(self) -> None:
         """Enable sync."""
         raise NotImplementedError
 
+    @abstractmethod
     def disable_sync(self) -> None:
         """Disable sync."""
         raise NotImplementedError

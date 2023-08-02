@@ -14,7 +14,7 @@
 
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Set, cast
+from typing import TYPE_CHECKING, Any, Generator, Optional, cast
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
@@ -82,14 +82,15 @@ class HathorProtocol:
     transport: Optional[ITransport]
     state: Optional[BaseState]
     connection_time: float
-    _state_instances: Dict[PeerState, BaseState]
+    _state_instances: dict[PeerState, BaseState]
     connection_string: Optional[str]
     expected_peer_id: Optional[str]
-    warning_flags: Set[str]
+    warning_flags: set[str]
     aborting: bool
     diff_timestamp: Optional[int]
     idle_timeout: int
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
+    capabilities: set[str]  # capabilities received from the peer in HelloState
 
     def __init__(self, network: str, my_peer: PeerId, p2p_manager: 'ConnectionsManager',
                  *, use_ssl: bool, inbound: bool) -> None:
@@ -143,7 +144,7 @@ class HathorProtocol:
         self.expected_peer_id: Optional[str] = None
 
         # Set of warning flags that may be added during the connection process
-        self.warning_flags: Set[str] = set()
+        self.warning_flags: set[str] = set()
 
         # This property is used to indicate the connection is being dropped (either because of a prototcol error or
         # because the remote disconnected), and the following buffered lines are ignored.
@@ -156,6 +157,8 @@ class HathorProtocol:
         self.sync_version = None
 
         self.log = logger.new()
+
+        self.capabilities = set()
 
     def change_state(self, state_enum: PeerState) -> None:
         """Called to change the state of the connection."""
@@ -193,7 +196,7 @@ class HathorProtocol:
             return self.peer.id[:7]
         return None
 
-    def get_logger_context(self) -> Dict[str, Optional[str]]:
+    def get_logger_context(self) -> dict[str, Optional[str]]:
         """Return the context for logging."""
         return {
             'remote': self.get_short_remote(),
@@ -363,21 +366,21 @@ class HathorProtocol:
         if not self.is_state(self.PeerState.READY):
             return False
         assert isinstance(self.state, ReadyState)
-        return self.state.sync_manager.is_sync_enabled()
+        return self.state.sync_agent.is_sync_enabled()
 
     def enable_sync(self) -> None:
         """Enable sync for this connection."""
         assert self.is_state(self.PeerState.READY)
         assert isinstance(self.state, ReadyState)
         self.log.info('enable sync')
-        self.state.sync_manager.enable_sync()
+        self.state.sync_agent.enable_sync()
 
     def disable_sync(self) -> None:
         """Disable sync for this connection."""
         assert self.is_state(self.PeerState.READY)
         assert isinstance(self.state, ReadyState)
         self.log.info('disable sync')
-        self.state.sync_manager.disable_sync()
+        self.state.sync_agent.disable_sync()
 
 
 class HathorLineReceiver(LineReceiver, HathorProtocol):

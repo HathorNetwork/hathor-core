@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Set
+from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
@@ -41,7 +41,7 @@ class ConsensusAlgorithmContext:
     pubsub: PubSubManager
     block_algorithm: 'BlockConsensusAlgorithm'
     transaction_algorithm: 'TransactionConsensusAlgorithm'
-    txs_affected: Set[BaseTransaction]
+    txs_affected: set[BaseTransaction]
     reorg_common_block: Optional[Block]
 
     def __init__(self, consensus: 'ConsensusAlgorithm', pubsub: PubSubManager) -> None:

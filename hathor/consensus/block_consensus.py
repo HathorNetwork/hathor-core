@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from itertools import chain
-from typing import TYPE_CHECKING, Iterable, List, Optional, Set, cast
+from typing import TYPE_CHECKING, Iterable, Optional, cast
 
 from structlog import get_logger
 
@@ -113,7 +113,7 @@ class BlockConsensusAlgorithm:
         assert storage.indexes is not None
 
         # Union of voided_by of parents
-        voided_by: Set[bytes] = self.union_voided_by_from_parents(block)
+        voided_by: set[bytes] = self.union_voided_by_from_parents(block)
 
         # Update accumulated weight of the transactions voiding us.
         assert block.hash not in voided_by
@@ -146,7 +146,7 @@ class BlockConsensusAlgorithm:
             # we need to check that block is not voided.
             meta = block.get_metadata()
             if not meta.voided_by:
-                storage.indexes.height.add_new(meta.height, block.hash, block.timestamp)
+                storage.indexes.height.add_new(block.get_height(), block.hash, block.timestamp)
                 storage.update_best_block_tips_cache([block.hash])
             # The following assert must be true, but it is commented out for performance reasons.
             if settings.SLOW_ASSERTS:
@@ -206,10 +206,11 @@ class BlockConsensusAlgorithm:
                     # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
                     # we need to check that block is not voided.
                     meta = block.get_metadata()
+                    height = block.get_height()
                     if not meta.voided_by:
-                        self.log.debug('index new winner block', height=meta.height, block=block.hash_hex)
+                        self.log.debug('index new winner block', height=height, block=block.hash_hex)
                         # We update the height cache index with the new winner chain
-                        storage.indexes.height.update_new_chain(meta.height, block)
+                        storage.indexes.height.update_new_chain(height, block)
                         storage.update_best_block_tips_cache([block.hash])
                         # It is only a re-org if common_block not in heads
                         if common_block not in heads:
@@ -219,14 +220,14 @@ class BlockConsensusAlgorithm:
                     if not meta.voided_by:
                         self.context.mark_as_reorg(common_block)
 
-    def union_voided_by_from_parents(self, block: Block) -> Set[bytes]:
+    def union_voided_by_from_parents(self, block: Block) -> set[bytes]:
         """Return the union of the voided_by of block's parents.
 
         It does not include the hash of blocks because the hash of blocks
         are not propagated through the chains. For further information, see
         the docstring of the ConsensusAlgorithm class.
         """
-        voided_by: Set[bytes] = set()
+        voided_by: set[bytes] = set()
         for parent in block.get_parents():
             assert parent.hash is not None
             parent_meta = parent.get_metadata()
@@ -247,7 +248,7 @@ class BlockConsensusAlgorithm:
         """Update block's metadata voided_by from parents.
         Return True if the block is voided and False otherwise."""
         assert block.storage is not None
-        voided_by: Set[bytes] = self.union_voided_by_from_parents(block)
+        voided_by: set[bytes] = self.union_voided_by_from_parents(block)
         if voided_by:
             meta = block.get_metadata()
             if meta.voided_by:
@@ -259,7 +260,7 @@ class BlockConsensusAlgorithm:
             return True
         return False
 
-    def add_voided_by_to_multiple_chains(self, block: Block, heads: List[Block], first_block: Block) -> None:
+    def add_voided_by_to_multiple_chains(self, block: Block, heads: list[Block], first_block: Block) -> None:
         # We need to go through all side chains because there may be non-voided blocks
         # that must be voided.
         # For instance, imagine two chains with intersection with both heads voided.
@@ -290,7 +291,7 @@ class BlockConsensusAlgorithm:
             storage = block.storage
             heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
             best_score = 0.0
-            best_heads: List[Block]
+            best_heads: list[Block]
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
                 if head_meta.score <= best_score - settings.WEIGHT_TOL:
@@ -431,8 +432,8 @@ class BlockConsensusAlgorithm:
         assert block.storage is not None
         storage = block.storage
 
-        from hathor.transaction.storage.traversal import BFSWalk
-        bfs = BFSWalk(storage, is_dag_verifications=True, is_left_to_right=False)
+        from hathor.transaction.storage.traversal import BFSTimestampWalk
+        bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_left_to_right=False)
         for tx in bfs.run(block, skip_root=True):
             if tx.is_block:
                 bfs.skip_neighbors(tx)
@@ -446,7 +447,7 @@ class BlockConsensusAlgorithm:
             meta.first_block = None
             self.context.save(tx)
 
-    def _score_block_dfs(self, block: BaseTransaction, used: Set[bytes],
+    def _score_block_dfs(self, block: BaseTransaction, used: set[bytes],
                          mark_as_best_chain: bool, newest_timestamp: int) -> float:
         """ Internal method to run a DFS. It is used by `calculate_score()`.
         """
@@ -469,8 +470,8 @@ class BlockConsensusAlgorithm:
                 score = sum_weights(score, x)
 
             else:
-                from hathor.transaction.storage.traversal import BFSWalk
-                bfs = BFSWalk(storage, is_dag_verifications=True, is_left_to_right=False)
+                from hathor.transaction.storage.traversal import BFSTimestampWalk
+                bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_left_to_right=False)
                 for tx in bfs.run(parent, skip_root=False):
                     assert tx.hash is not None
                     assert not tx.is_block
@@ -526,7 +527,7 @@ class BlockConsensusAlgorithm:
         parent = self._find_first_parent_in_best_chain(block)
         newest_timestamp = parent.timestamp
 
-        used: Set[bytes] = set()
+        used: set[bytes] = set()
         return self._score_block_dfs(block, used, mark_as_best_chain, newest_timestamp)
 
 

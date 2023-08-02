@@ -29,14 +29,12 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.scripts import P2PKH, parse_address_script
-from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.transaction.transaction_metadata import ValidationState
 from hathor.transaction.util import int_to_bytes
+from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import (
     add_blocks_unlock_reward,
-    add_new_block,
     add_new_blocks,
     add_new_transactions,
     create_script_with_sigops,
@@ -52,17 +50,19 @@ class BaseTransactionTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.wallet = Wallet()
-        self.tx_storage = TransactionMemoryStorage()
-        self.genesis = self.tx_storage.get_all_genesis()
-        self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
-        self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+
+        # this makes sure we can spend the genesis outputs
+        self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True, use_memory_storage=True)
+        self.tx_storage = self.manager.tx_storage
 
         # read genesis keys
         self.genesis_private_key = get_genesis_key()
         self.genesis_public_key = self.genesis_private_key.public_key()
 
-        # this makes sure we can spend the genesis outputs
-        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True)
+        self.genesis = self.tx_storage.get_all_genesis()
+        self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
+        self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
@@ -96,22 +96,6 @@ class BaseTransactionTest(unittest.TestCase):
             self.assertEqual(block_from_chain, block_from_list)
             self.assertTrue(block_from_chain.has_basic_block_parent())
         self.assertEqual(block_from_chain.get_next_block_best_chain(), None)
-
-    def test_checkpoint_validation(self):
-        from hathor.transaction.transaction_metadata import ValidationState
-
-        # manually validate with sync_checkpoints=True
-        block1 = add_new_block(self.manager, propagate=False)
-        block1.validate_full(sync_checkpoints=True)
-        self.assertTrue(block1.get_metadata().validation.is_checkpoint())
-        self.manager.propagate_tx(block1)
-        del block1
-
-        # use on_new_tx with sync_checkpoints=True
-        block2 = self.manager.generate_mining_block()
-        block2.resolve()
-        self.assertTrue(self.manager.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=False))
-        self.assertEqual(block2.get_metadata().validation, ValidationState.CHECKPOINT_FULL)
 
     def test_script(self):
         genesis_block = self.genesis_blocks[0]
@@ -838,21 +822,52 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(InvalidOutputValue):
             TxOutput(-1, script)
 
-    def test_tx_version(self):
+    def test_tx_version_and_signal_bits(self):
         from hathor.transaction.base_transaction import TxVersion
 
-        # test the 1st byte of version field is ignored
-        version = TxVersion(0xFF00)
+        # test invalid type
+        with self.assertRaises(AssertionError) as cm:
+            TxVersion('test')
+
+        self.assertEqual(str(cm.exception), "Value 'test' must be an integer")
+
+        # test one byte max value
+        with self.assertRaises(AssertionError) as cm:
+            TxVersion(0x100)
+
+        self.assertEqual(str(cm.exception), 'Value 0x100 must not be larger than one byte')
+
+        # test invalid version
+        with self.assertRaises(ValueError) as cm:
+            TxVersion(10)
+
+        self.assertEqual(str(cm.exception), 'Invalid version: 10')
+
+        # test get the correct class
+        version = TxVersion(0x00)
         self.assertEqual(version.get_cls(), Block)
-        version = TxVersion(0xFF01)
+        version = TxVersion(0x01)
         self.assertEqual(version.get_cls(), Transaction)
+
+        # test Block.__init__() fails
+        with self.assertRaises(AssertionError) as cm:
+            Block(signal_bits=0x100)
+
+        self.assertEqual(str(cm.exception), 'signal_bits 0x100 must not be larger than one byte')
+
+        with self.assertRaises(AssertionError) as cm:
+            Block(version=0x200)
+
+        self.assertEqual(str(cm.exception), 'version 0x200 must not be larger than one byte')
 
         # test serialization doesn't mess up with version
         block = Block(
-            version=0xFF00,
+            signal_bits=0xF0,
+            version=0x0F,
             nonce=100,
             weight=1)
         block2 = block.clone()
+        self.assertEqual(block.signal_bits, block2.signal_bits)
         self.assertEqual(block.version, block2.version)
 
     def test_output_sum_ignore_authority(self):

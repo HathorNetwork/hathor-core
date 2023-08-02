@@ -15,7 +15,7 @@
 import io
 import struct
 import sys
-from argparse import ArgumentParser, FileType, Namespace
+from argparse import ArgumentParser, FileType
 from typing import TYPE_CHECKING, Iterator
 
 from hathor.cli.db_export import MAGIC_HEADER
@@ -26,10 +26,10 @@ if TYPE_CHECKING:
 
 
 class DbImport(RunNode):
-    def start_manager(self, args: Namespace) -> None:
+    def start_manager(self) -> None:
         pass
 
-    def register_signal_handlers(self, args: Namespace) -> None:
+    def register_signal_handlers(self) -> None:
         pass
 
     @classmethod
@@ -39,14 +39,14 @@ class DbImport(RunNode):
                             help='Save the export to this file')
         return parser
 
-    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
-        super().prepare(args, register_resources=False)
+    def prepare(self, *, register_resources: bool = True) -> None:
+        super().prepare(register_resources=False)
 
         # allocating io.BufferedReader here so we "own" it
-        self.in_file = io.BufferedReader(args.import_file)
+        self.in_file = io.BufferedReader(self._args.import_file)
 
     def run(self) -> None:
-        from hathor.util import progress
+        from hathor.util import tx_progress
 
         header = self.in_file.read(len(MAGIC_HEADER))
         if header != MAGIC_HEADER:
@@ -60,7 +60,7 @@ class DbImport(RunNode):
         self.tx_storage.pre_init()
         actual_tx_count = 0
         actual_block_count = 0
-        for tx in progress(self._import_txs(), log=self.log, total=total):
+        for tx in tx_progress(self._import_txs(), log=self.log, total=total):
             if tx.is_block:
                 actual_block_count += 1
             else:

@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, FrozenSet, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
@@ -154,7 +154,7 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
         assert len(value) == 4 + 32
         return bytes(value)
 
-    def _from_value_needed(self, value: bytes) -> Tuple[int, bytes]:
+    def _from_value_needed(self, value: bytes) -> tuple[int, bytes]:
         import struct
         assert len(value) == 4 + 32
         height, = struct.unpack('!I', value[:4])
@@ -264,7 +264,7 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
             if not dry_run:
                 self._db.write(batch)
 
-    def _drain_all_sorted_ready(self, tx_storage: 'TransactionStorage', batch: 'rocksdb.WriteBatch') -> List[bytes]:
+    def _drain_all_sorted_ready(self, tx_storage: 'TransactionStorage', batch: 'rocksdb.WriteBatch') -> list[bytes]:
         ready = list(self._drain_all_ready(tx_storage, batch))
         ready.sort(key=lambda tx_hash: tx_storage.get_transaction(tx_hash).timestamp)
         return ready
@@ -312,20 +312,20 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
             it.seek(seek_key)
         self.log.debug('seek end')
 
-    def known_children(self, tx: BaseTransaction) -> List[bytes]:
+    def known_children(self, tx: BaseTransaction) -> list[bytes]:
         assert tx.hash is not None
         assert tx.storage is not None
         it_rev_deps = map(tx.storage.get_transaction, self._get_rev_deps(tx.hash))
         return [not_none(rev.hash) for rev in it_rev_deps if tx.hash in rev.parents]
 
-    def _get_rev_deps(self, tx: bytes) -> FrozenSet[bytes]:
+    def _get_rev_deps(self, tx: bytes) -> frozenset[bytes]:
         """Get all txs that depend on the given tx (i.e. its reverse depdendencies)."""
         return frozenset(self._iter_rev_deps_of(tx))
 
     def has_needed_tx(self) -> bool:
         return any(self._iter_needed())
 
-    def _iter_needed(self) -> Iterator[Tuple[bytes, int, bytes]]:
+    def _iter_needed(self) -> Iterator[tuple[bytes, int, bytes]]:
         """Iterate over needed txs items, which is a tuple of (tx_dep_hash, height, tx_requested_hash)"""
         it = self._db.iteritems(self._cf)
         seek_key = self._to_key_needed()
@@ -351,11 +351,6 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
         key_needed = self._to_key_needed(tx)
         self._db.delete((self._cf, key_needed))
 
-    def get_next_needed_tx(self) -> bytes:
-        # This strategy maximizes the chance to download multiple txs on the same stream
-        # Find the tx with highest "height"
-        # XXX: we could cache this onto `needed_txs` so we don't have to fetch txs every time
-        # TODO: improve this by using some sorted data structure to make this better than O(n)
-        height, start_hash, tx = max((h, s, t) for t, h, s in self._iter_needed())
-        self.log.debug('next needed tx start', start=start_hash.hex(), height=height, needed_tx=tx.hex())
-        return start_hash
+    def iter_next_needed_txs(self) -> Iterator[bytes]:
+        for tx_hash, _, __ in self._iter_needed():
+            yield tx_hash

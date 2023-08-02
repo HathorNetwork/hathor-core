@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import hashlib
-from typing import List, Optional
+from typing import Optional
 
 import base58
 from cryptography.hazmat.primitives import hashes
@@ -27,7 +27,7 @@ from hathor.transaction.transaction import Transaction
 settings = HathorSettings()
 
 
-def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: List[bytes]) -> bytes:
+def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: list[bytes]) -> bytes:
     """ Generate the redeem script for the multisig output
 
         <signatures_required> <pubkey 1> <pubkey 2> ... <pubkey N> <pubkey_count> <OP_CHECKMULTISIG>
@@ -36,7 +36,7 @@ def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: 
         :type signatures_required: int
 
         :param public_key_bytes: Array of public keys that created the multisig wallet
-        :type public_key_bytes: List[bytes]
+        :type public_key_bytes: list[bytes]
 
         :return: The redeem script for the multisig wallet
         :rtype: bytes

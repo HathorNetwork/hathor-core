@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Callable, Dict, Iterator, NamedTuple, Optional, Tuple
+from typing import Any, Callable, Iterator, NamedTuple, Optional
 
 from pydantic import validate_arguments
 
@@ -31,8 +31,8 @@ class Sysctl:
     """A node in the sysctl tree."""
 
     def __init__(self) -> None:
-        self._children: Dict[str, 'Sysctl'] = {}
-        self._commands: Dict[str, SysctlCommand] = {}
+        self._children: dict[str, 'Sysctl'] = {}
+        self._commands: dict[str, SysctlCommand] = {}
 
     def put_child(self, path: str, sysctl: 'Sysctl') -> None:
         """Add a child to the tree."""
@@ -93,7 +93,7 @@ class Sysctl:
             return p2
         return f'{p1}.{p2}'
 
-    def get_all(self, prefix: str = '') -> Iterator[Tuple[str, Any]]:
+    def get_all(self, prefix: str = '') -> Iterator[tuple[str, Any]]:
         """Return all paths and values, usually for backup."""
         for path, child in self._children.items():
             yield from child.get_all(self.path_join(prefix, path))

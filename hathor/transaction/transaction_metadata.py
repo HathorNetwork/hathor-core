@@ -13,9 +13,11 @@
 # limitations under the License.
 
 from collections import defaultdict
-from enum import IntEnum, unique
-from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Optional
 
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.transaction.validation_state import ValidationState
 from hathor.util import practically_equal
 
 if TYPE_CHECKING:
@@ -25,99 +27,33 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage
 
 
-@unique
-class ValidationState(IntEnum):
-    """
-
-    Possible transitions:
-
-    - Initial
-        -> Basic: parents exist, graph information checks-out
-        -> Invalid: all information to reach `Basic` was available, but something doesn't check out
-        -> Checkpoint: is a block which hash matches a known checkpoint is a parent of a Checkpoint-valid tx
-    - Basic
-        -> Full: all parents reached `Full`, and validation+consensus ran successfully
-        -> Invalid: all information to reach `Full` was available, but something doesn't check out
-    - Checkpoint
-        -> Checkpoint-Full: when all the chain of parents and inputs up to the genesis exist in the database
-    - Full: final
-    - Checkpoint-Full: final
-    - Invalid: final
-
-    `BASIC` means only the validations that can run without access to the dependencies (parents+inputs, except for
-    blocks the block parent has to exist and be at least BASIC) have been run. For example, if it's `BASIC` the weight
-    of a tx has been validated and is correct, but it may be spending a tx that has already been spent, we will not run
-    this validation until _all_ the dependencies have reached `FULL` or any of them `INVALID` (which should
-    automatically invalidate this tx). In theory it should be possible to have even more granular validation (if one of
-    the inputs exists, validate that we can spend it), but the complexity for that is too high.
-
-    """
-    INITIAL = 0  # aka, not validated
-    BASIC = 1  # only graph info has been validated
-    CHECKPOINT = 2  # validation can be safely assumed because it traces up to a known checkpoint
-    FULL = 3  # fully validated
-    CHECKPOINT_FULL = 4  # besides being checkpoint valid, it is fully connected
-    INVALID = -1  # not valid, this does not mean not best chain, orphan chains can be valid
-
-    def is_initial(self) -> bool:
-        """Short-hand property"""
-        return self is ValidationState.INITIAL
-
-    def is_at_least_basic(self) -> bool:
-        """Until a validation is final, it is possible to change its state when more information is available."""
-        return self >= ValidationState.BASIC
-
-    def is_valid(self) -> bool:
-        """Short-hand property."""
-        return self in {ValidationState.FULL, ValidationState.CHECKPOINT, ValidationState.CHECKPOINT_FULL}
-
-    def is_checkpoint(self) -> bool:
-        """Short-hand property."""
-        return self in {ValidationState.CHECKPOINT, ValidationState.CHECKPOINT_FULL}
-
-    def is_fully_connected(self) -> bool:
-        """Short-hand property."""
-        return self in {ValidationState.FULL, ValidationState.CHECKPOINT_FULL}
-
-    def is_partial(self) -> bool:
-        """Short-hand property."""
-        return self in {ValidationState.INITIAL, ValidationState.BASIC, ValidationState.CHECKPOINT}
-
-    def is_invalid(self) -> bool:
-        """Short-hand property."""
-        return self is ValidationState.INVALID
-
-    def is_final(self) -> bool:
-        """Until a validation is final, it is possible to change its state when more information is available."""
-        return self in {ValidationState.FULL, ValidationState.CHECKPOINT_FULL, ValidationState.INVALID}
-
-    @classmethod
-    def from_name(cls, name: str) -> 'ValidationState':
-        value = getattr(cls, name.upper(), None)
-        if value is None:
-            raise ValueError('invalid name')
-        return value
-
-
 class TransactionMetadata:
     hash: Optional[bytes]
-    spent_outputs: Dict[int, List[bytes]]
+    spent_outputs: dict[int, list[bytes]]
     # XXX: the following Optional[] types use None to replace empty set/list to reduce memory use
-    conflict_with: Optional[List[bytes]]
-    voided_by: Optional[Set[bytes]]
-    received_by: List[int]
-    children: List[bytes]
-    twins: List[bytes]
+    conflict_with: Optional[list[bytes]]
+    voided_by: Optional[set[bytes]]
+    received_by: list[int]
+    children: list[bytes]
+    twins: list[bytes]
     accumulated_weight: float
     score: float
     first_block: Optional[bytes]
-    height: int
+    height: Optional[int]
     validation: ValidationState
     # XXX: this is only used to defer the reward-lock verification from the transaction spending a reward to the first
     # block that confirming this transaction, it is important to always have this set to be able to distinguish an old
     # metadata (that does not have this calculated, from a tx with a new format that does have this calculated)
     min_height: int
 
+    # A list of feature activation bit counts. Must only be used by Blocks, is None otherwise.
+    # Each list index corresponds to a bit position, and its respective value is the rolling count of active bits from
+    # the previous boundary block up to this block, including it. LSB is on the left.
+    feature_activation_bit_counts: Optional[list[int]]
+
+    # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
+    # is None otherwise.
+    feature_states: Optional[dict[Feature, FeatureState]] = None
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']
 
@@ -125,8 +61,16 @@ class TransactionMetadata:
     _last_voided_by_hash: Optional[int]
     _last_spent_by_hash: Optional[int]
 
-    def __init__(self, spent_outputs: Optional[Dict[int, List[bytes]]] = None, hash: Optional[bytes] = None,
-                 accumulated_weight: float = 0, score: float = 0, height: int = 0, min_height: int = 0) -> None:
+    def __init__(
+        self,
+        spent_outputs: Optional[dict[int, list[bytes]]] = None,
+        hash: Optional[bytes] = None,
+        accumulated_weight: float = 0,
+        score: float = 0,
+        height: Optional[int] = None,
+        min_height: int = 0,
+        feature_activation_bit_counts: Optional[list[int]] = None
+    ) -> None:
         from hathor.transaction.genesis import is_genesis
 
         # Hash of the transaction.
@@ -180,6 +124,8 @@ class TransactionMetadata:
 
         # Validation
         self.validation = ValidationState.INITIAL
+
+        self.feature_activation_bit_counts = feature_activation_bit_counts
 
         # Genesis specific:
         if hash is not None and is_genesis(hash):
@@ -240,9 +186,9 @@ class TransactionMetadata:
         """Override the default Equals behavior"""
         if not isinstance(other, TransactionMetadata):
             return False
-        for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
-                      'children', 'accumulated_weight', 'twins', 'score',
-                      'first_block', 'validation', 'min_height']:
+        for field in ['hash', 'conflict_with', 'voided_by', 'received_by', 'children',
+                      'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
+                      'min_height', 'feature_activation_bit_counts', 'feature_states']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -262,8 +208,8 @@ class TransactionMetadata:
 
         return True
 
-    def to_json(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def to_json(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         data['hash'] = self.hash and self.hash.hex()
         data['spent_outputs'] = []
         for idx, hashes in self.spent_outputs.items():
@@ -277,6 +223,11 @@ class TransactionMetadata:
         data['score'] = self.score
         data['height'] = self.height
         data['min_height'] = self.min_height
+        data['feature_activation_bit_counts'] = self.feature_activation_bit_counts
+
+        if self.feature_states is not None:
+            data['feature_states'] = {feature.value: state.value for feature, state in self.feature_states.items()}
+
         if self.first_block is not None:
             data['first_block'] = self.first_block.hex()
         else:
@@ -284,7 +235,7 @@ class TransactionMetadata:
         data['validation'] = self.validation.name.lower()
         return data
 
-    def to_json_extended(self, tx_storage: 'TransactionStorage') -> Dict[str, Any]:
+    def to_json_extended(self, tx_storage: 'TransactionStorage') -> dict[str, Any]:
         data = self.to_json()
         first_block_height: Optional[int]
         if self.first_block is not None:
@@ -296,7 +247,7 @@ class TransactionMetadata:
         return data
 
     @classmethod
-    def create_from_json(cls, data: Dict[str, Any]) -> 'TransactionMetadata':
+    def create_from_json(cls, data: dict[str, Any]) -> 'TransactionMetadata':
         from hathor.transaction.genesis import is_genesis
 
         meta = cls()
@@ -326,6 +277,14 @@ class TransactionMetadata:
         meta.score = data.get('score', 0)
         meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
         meta.min_height = data.get('min_height', 0)
+        meta.feature_activation_bit_counts = data.get('feature_activation_bit_counts', [])
+
+        feature_states_raw = data.get('feature_states')
+        if feature_states_raw:
+            meta.feature_states = {
+                Feature(feature): FeatureState(feature_state)
+                for feature, feature_state in feature_states_raw.items()
+            }
 
         first_block_raw = data.get('first_block', None)
         if first_block_raw:
@@ -362,7 +321,7 @@ class TransactionMetadata:
             if not self.voided_by:
                 self.voided_by = None
 
-    def get_frozen_voided_by(self) -> FrozenSet[bytes]:
+    def get_frozen_voided_by(self) -> frozenset[bytes]:
         """Return a frozen set copy of voided_by."""
         if self.voided_by is None:
             return frozenset()

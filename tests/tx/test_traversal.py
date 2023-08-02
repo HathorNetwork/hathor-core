@@ -1,6 +1,6 @@
 from math import inf
 
-from hathor.transaction.storage.traversal import BFSWalk, DFSWalk
+from hathor.transaction.storage.traversal import BFSOrderWalk, BFSTimestampWalk, DFSWalk
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions, add_new_tx
 
@@ -86,9 +86,9 @@ class _TraversalTestCase(unittest.TestCase):
         self.assertTrue(seen_v.union(seen_f).issubset(seen_vf))
 
 
-class BaseBFSWalkTestCase(_TraversalTestCase):
+class BaseBFSTimestampWalkTestCase(_TraversalTestCase):
     def gen_walk(self, **kwargs):
-        return BFSWalk(self.manager.tx_storage, **kwargs)
+        return BFSTimestampWalk(self.manager.tx_storage, **kwargs)
 
     def _run_lr(self, walk, skip_root=True):
         seen = set()
@@ -109,16 +109,59 @@ class BaseBFSWalkTestCase(_TraversalTestCase):
         return seen
 
 
-class SyncV1BFSWalkTestCase(unittest.SyncV1Params, BaseBFSWalkTestCase):
+class SyncV1BFSTimestampWalkTestCase(unittest.SyncV1Params, BaseBFSTimestampWalkTestCase):
     __test__ = True
 
 
-class SyncV2BFSWalkTestCase(unittest.SyncV2Params, BaseBFSWalkTestCase):
+class SyncV2BFSTimestampWalkTestCase(unittest.SyncV2Params, BaseBFSTimestampWalkTestCase):
+    __test__ = True
+
+
+class BaseBFSOrderWalkTestCase(_TraversalTestCase):
+    def gen_walk(self, **kwargs):
+        return BFSOrderWalk(self.manager.tx_storage, **kwargs)
+
+    def _run_lr(self, walk, skip_root=True):
+        seen = set()
+        distance = {}
+        distance[self.root_tx.hash] = 0
+        last_dist = 0
+        for tx in walk.run(self.root_tx, skip_root=skip_root):
+            seen.add(tx.hash)
+            it = walk._get_iterator(tx, is_left_to_right=False)
+            dist = 1 + min(distance.get(_hash, inf) for _hash in it)
+            self.assertIsInstance(dist, int)
+            distance[tx.hash] = dist
+            self.assertGreaterEqual(dist, last_dist)
+            last_dist = dist
+        return seen
+
+    def _run_rl(self, walk):
+        seen = set()
+        distance = {}
+        distance[self.root_tx.hash] = 0
+        last_dist = 0
+        for tx in walk.run(self.root_tx, skip_root=True):
+            seen.add(tx.hash)
+            it = walk._get_iterator(tx, is_left_to_right=True)
+            dist = 1 + min(distance.get(_hash, inf) for _hash in it)
+            self.assertIsInstance(dist, int)
+            distance[tx.hash] = dist
+            self.assertGreaterEqual(dist, last_dist)
+            last_dist = dist
+        return seen
+
+
+class SyncV1BFSOrderWalkTestCase(unittest.SyncV1Params, BaseBFSOrderWalkTestCase):
+    __test__ = True
+
+
+class SyncV2BFSOrderWalkTestCase(unittest.SyncV2Params, BaseBFSOrderWalkTestCase):
     __test__ = True
 
 
 # sync-bridge should behave like sync-v2
-class SyncBridgeBFSWalkTestCase(unittest.SyncBridgeParams, SyncV2BFSWalkTestCase):
+class SyncBridgeBFSOrderWalkTestCase(unittest.SyncBridgeParams, SyncV2BFSOrderWalkTestCase):
     pass
 
 

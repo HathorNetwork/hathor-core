@@ -16,7 +16,7 @@ import base64
 import binascii
 import struct
 from json import JSONDecodeError
-from typing import Any, Dict, NamedTuple
+from typing import Any, NamedTuple
 
 from hathor.api_util import Resource, get_missing_params_msg, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -32,7 +32,7 @@ PARAMS_PUT = ['hex_tx', 'new_values', 'input_value']
 
 
 class DecodedPostParams(NamedTuple):
-    value_dict: Dict[bytes, int]
+    value_dict: dict[bytes, int]
     fallback_address: bytes
     min_timestamp: int
     oracle_pubkey_hash: bytes
@@ -42,7 +42,7 @@ class DecodedPostParams(NamedTuple):
 
 
 class DecodedPutParams(NamedTuple):
-    new_value_dict: Dict[bytes, int]
+    new_value_dict: dict[bytes, int]
     input_value: int
     tx_bytes: bytes
 
@@ -62,7 +62,7 @@ class NanoContractMatchValueResource(Resource):
         """ Creates a nano contract tx and returns it in hexadecimal format.
 
         Post data should be a json with the following items:
-        values: List[{'address', 'value'}], with bet address and value
+        values: list[{'address', 'value'}], with bet address and value
         fallback_address: if none of the addresses above is the winner, this address
                           can execute the contract
         oracle_pubkey_hash: oracle's public key hashed
@@ -111,7 +111,7 @@ class NanoContractMatchValueResource(Resource):
         ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
         return json_dumpb(ret)
 
-    def decode_post_params(self, data: Dict[str, Any]) -> DecodedPostParams:
+    def decode_post_params(self, data: dict[str, Any]) -> DecodedPostParams:
         """Decode the data required on POST request. Raise an error if any of the
         fields is not of the expected type.
         """
@@ -159,7 +159,7 @@ class NanoContractMatchValueResource(Resource):
 
         Post data should be a json with the following items:
         hex_tx: tx being updated, in hex value
-        new_values: List[{'address', 'value'}], with bet address and value
+        new_values: list[{'address', 'value'}], with bet address and value
         input_value: amount this wallet should stake in the nano contract
 
         :rtype: string (json)
@@ -220,7 +220,7 @@ class NanoContractMatchValueResource(Resource):
         ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
         return json_dumpb(ret)
 
-    def decode_put_params(self, data: Dict[str, Any]) -> DecodedPutParams:
+    def decode_put_params(self, data: dict[str, Any]) -> DecodedPutParams:
         """Decode the data required on PUT request. Raise an error if any of the
         fields is not of the expected type.
         """

@@ -842,6 +842,26 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertTrue(addresses_indexes.is_address_empty(address))
         self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
 
+    def test_height_index(self):
+        from hathor.indexes.height_index import HeightInfo
+
+        # make height 100
+        H = 100
+        blocks = add_new_blocks(self.manager, H - settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=15)
+        height_index = self.manager.tx_storage.indexes.height
+        self.assertEqual(height_index.get_height_tip(), HeightInfo(100, blocks[-1].hash))
+        self.assertEqual(height_index.get_n_height_tips(1), [HeightInfo(100, blocks[-1].hash)])
+        self.assertEqual(height_index.get_n_height_tips(2),
+                         [HeightInfo(100, blocks[-1].hash), HeightInfo(99, blocks[-2].hash)])
+        self.assertEqual(height_index.get_n_height_tips(3),
+                         [HeightInfo(100, blocks[-1].hash),
+                          HeightInfo(99, blocks[-2].hash),
+                          HeightInfo(98, blocks[-3].hash)])
+        self.assertEqual(len(height_index.get_n_height_tips(100)), 100)
+        self.assertEqual(len(height_index.get_n_height_tips(101)), 101)
+        self.assertEqual(len(height_index.get_n_height_tips(102)), 101)
+        self.assertEqual(height_index.get_n_height_tips(103), height_index.get_n_height_tips(104))
+
 
 class BaseMemoryIndexesTest(BaseIndexesTest):
     def setUp(self):
@@ -860,7 +880,7 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
 
         # this makes sure we can spend the genesis outputs
         self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
-                                        utxo_index=True)
+                                        use_memory_index=True, utxo_index=True)
         self.blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = self.blocks[-1]
 

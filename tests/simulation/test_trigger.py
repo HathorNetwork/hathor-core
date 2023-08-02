@@ -1,4 +1,3 @@
-from hathor.p2p.peer_id import PeerId
 from hathor.simulator import Simulator
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from tests import unittest
@@ -11,8 +10,7 @@ class TriggerTestCase(unittest.TestCase):
         self.simulator = Simulator()
         self.simulator.start()
 
-        peer_id = PeerId()
-        self.manager1 = self.simulator.create_peer(peer_id=peer_id)
+        self.manager1 = self.simulator.create_peer()
         self.manager1.allow_mining_without_peers()
 
         print('-' * 30)

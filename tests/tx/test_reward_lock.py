@@ -3,6 +3,7 @@ import pytest
 from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key
 from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
@@ -32,6 +33,16 @@ class BaseTransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
+    def _add_reward_block(self):
+        reward_block = self.manager.generate_mining_block(
+            address=get_address_from_public_key(self.genesis_public_key)
+        )
+        reward_block.resolve()
+        self.assertTrue(self.manager.propagate_tx(reward_block))
+        # XXX: calculate unlock height AFTER adding the block so the height is correctly calculated
+        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
+        return reward_block, unlock_height
+
     def _spend_reward_tx(self, manager, reward_block):
         value = reward_block.outputs[0].value
         address = get_address_from_public_key(self.genesis_public_key)
@@ -54,13 +65,8 @@ class BaseTransactionTest(unittest.TestCase):
         return tx
 
     def test_classic_reward_lock(self):
-        from hathor.transaction.exceptions import RewardLocked
-
         # add block with a reward we can spend
-        reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
-        reward_block.resolve()
-        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
-        self.assertTrue(self.manager.propagate_tx(reward_block))
+        reward_block, unlock_height = self._add_reward_block()
 
         # reward cannot be spent while not enough blocks are added
         for _ in range(settings.REWARD_SPEND_MIN_BLOCKS):
@@ -76,13 +82,8 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertTrue(self.manager.propagate_tx(tx, fails_silently=False))
 
     def test_block_with_not_enough_height(self):
-        from hathor.transaction.exceptions import RewardLocked
-
         # add block with a reward we can spend
-        reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
-        reward_block.resolve()
-        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
-        self.assertTrue(self.manager.propagate_tx(reward_block))
+        reward_block, unlock_height = self._add_reward_block()
 
         # add one less block than needed
         add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
@@ -100,10 +101,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     def test_block_with_enough_height(self):
         # add block with a reward we can spend
-        reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
-        reward_block.resolve()
-        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
-        self.assertTrue(self.manager.propagate_tx(reward_block))
+        reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
         add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
@@ -118,13 +116,9 @@ class BaseTransactionTest(unittest.TestCase):
 
     def test_mempool_tx_with_not_enough_height(self):
         from hathor.exception import InvalidNewTransaction
-        from hathor.transaction.exceptions import RewardLocked
 
         # add block with a reward we can spend
-        reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
-        reward_block.resolve()
-        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
-        self.assertTrue(self.manager.propagate_tx(reward_block))
+        reward_block, unlock_height = self._add_reward_block()
 
         # add one less block than needed
         add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
@@ -139,10 +133,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     def test_mempool_tx_with_enough_height(self):
         # add block with a reward we can spend
-        reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
-        reward_block.resolve()
-        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
-        self.assertTrue(self.manager.propagate_tx(reward_block))
+        reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
         add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
@@ -153,13 +144,8 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
 
     def test_mempool_tx_invalid_after_reorg(self):
-        from hathor.transaction.exceptions import RewardLocked
-
         # add block with a reward we can spend
-        reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
-        reward_block.resolve()
-        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
-        self.assertTrue(self.manager.propagate_tx(reward_block))
+        reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
         blocks = add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
@@ -191,13 +177,8 @@ class BaseTransactionTest(unittest.TestCase):
 
     @pytest.mark.xfail(reason='this is no longer the case, timestamp will not matter', strict=True)
     def test_classic_reward_lock_timestamp_expected_to_fail(self):
-        from hathor.transaction.exceptions import RewardLocked
-
         # add block with a reward we can spend
-        reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
-        reward_block.resolve()
-        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
-        self.assertTrue(self.manager.propagate_tx(reward_block))
+        reward_block, unlock_height = self._add_reward_block()
 
         # we add enough blocks that this output could be spent based on block height
         blocks = add_blocks_unlock_reward(self.manager)

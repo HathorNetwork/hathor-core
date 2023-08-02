@@ -1,9 +1,7 @@
-from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
-from hathor.event.websocket import EventWebsocketFactory
 from tests import unittest
 from tests.utils import add_new_blocks, get_genesis_key, zip_chunkify
 
@@ -19,7 +17,7 @@ class BaseEventReorgTest(unittest.TestCase):
         self.event_storage = EventMemoryStorage()
         self.manager = self.create_peer(
             self.network,
-            event_ws_factory=Mock(spec_set=EventWebsocketFactory),
+            enable_event_queue=True,
             full_verification=False,
             event_storage=self.event_storage
         )

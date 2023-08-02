@@ -22,7 +22,7 @@ from multiprocessing.sharedctypes import Array, Value
 from os import cpu_count
 from string import hexdigits
 from time import sleep
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterator, NamedTuple, Optional, Union, cast
 from uuid import UUID, uuid4
 
 from structlog import get_logger
@@ -126,7 +126,7 @@ class MinerJob(NamedTuple):
     nonce_size: Any = Value('I')
     weight: Any = Value('d')
 
-    def update_job(self, params: Dict[str, Any]) -> bool:
+    def update_job(self, params: dict[str, Any]) -> bool:
         """
         Updates job variables shared between processes.
         Should contain the following params:
@@ -138,7 +138,7 @@ class MinerJob(NamedTuple):
         }
 
         :param params: Hathor Stratum job method request params
-        :type params: Dict
+        :type params: dict
 
         :return: True if the update is sucessful
         :rtype: bool
@@ -225,14 +225,14 @@ class JSONRPC(LineReceiver, ABC):
             })
 
     @abstractmethod
-    def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
+    def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
         """ Handles any valid request.
 
         :param method: JSON-RPC 2.0 request method
         :type method: str
 
         :param params: JSON-RPC 2.0 request params
-        :type params: Optional[Union[List, Dict]]
+        :type params: Optional[Union[list, dict]]
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
@@ -252,18 +252,18 @@ class JSONRPC(LineReceiver, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def handle_error(self, error: Dict, data: Any, msgid: Optional[str]) -> None:
+    def handle_error(self, error: dict, data: Any, msgid: Optional[str]) -> None:
         """ Handles any valid error.
 
         :param error: JSON-RPC 2.0 error message
-        :type error: Dict
+        :type error: dict
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[UUID]
         """
         raise NotImplementedError
 
-    def send_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Union[str, int, None] = None,
+    def send_request(self, method: str, params: Optional[Union[list, dict]], msgid: Union[str, int, None] = None,
                      ok: Optional[bool] = None) -> None:
         """ Sends a JSON-RPC 2.0 request.
 
@@ -271,12 +271,12 @@ class JSONRPC(LineReceiver, ABC):
         :type method: str
 
         :param params: JSON-RPC 2.0 request params
-        :type params: Optional[Union[List, Dict]]
+        :type params: Optional[Union[list, dict]]
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[UUID]
         """
-        data: Dict[str, Any] = {'method': method, 'params': params}
+        data: dict[str, Any] = {'method': method, 'params': params}
         self.log.debug('send request', method=method, params=params)
         # XXX: keeping the same msgid type the client sent
         data['id'] = msgid
@@ -299,11 +299,11 @@ class JSONRPC(LineReceiver, ABC):
         self.log.debug('send result', data=data)
         return self.send_json(data)
 
-    def send_error(self, error: Dict, msgid: Optional[str] = None, data: Any = None) -> None:
+    def send_error(self, error: dict, msgid: Optional[str] = None, data: Any = None) -> None:
         """ Sends a JSON-RPC 2.0 error.
 
         :param error: JSON-RPC 2.0 error message
-        :type error: Dict
+        :type error: dict
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[UUID]
@@ -318,11 +318,11 @@ class JSONRPC(LineReceiver, ABC):
         if error['code'] <= UNRECOVERABLE_ERROR_CODE_MAX and self.transport is not None:
             self.transport.loseConnection()
 
-    def send_json(self, json: Dict) -> None:
+    def send_json(self, json: dict) -> None:
         """ Encodes a JSON and send it through the LineReceiver interface.
 
         :param json: JSON-RPC 2.0 message
-        :type json: Dict
+        :type json: dict
         """
         try:
             message = json_dumpb(json)
@@ -350,8 +350,8 @@ class StratumProtocol(JSONRPC):
 
     address: IAddress
     current_job: Optional[ServerJob]
-    jobs: Dict[UUID, ServerJob]
-    job_ids: List[UUID]
+    jobs: dict[UUID, ServerJob]
+    job_ids: list[UUID]
     factory: 'StratumFactory'
     manager: 'HathorManager'
     miner_id: Optional[UUID]
@@ -398,14 +398,14 @@ class StratumProtocol(JSONRPC):
         assert self.miner_id is not None
         self.factory.miner_protocols.pop(self.miner_id, None)
 
-    def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
+    def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
         """ Handles subscribe and submit requests.
 
         :param method: JSON-RPC 2.0 request method
         :type method: str
 
         :param params: JSON-RPC 2.0 request params
-        :type params: Optional[Union[List, Dict]]
+        :type params: Optional[Union[list, dict]]
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
@@ -417,10 +417,10 @@ class StratumProtocol(JSONRPC):
                 return self.send_error(NODE_SYNCING, msgid)
 
         if method in ['mining.subscribe', 'subscribe']:
-            params = cast(Dict, params)
+            params = cast(dict, params)
             return self.handle_subscribe(params, msgid)
         if method in ['mining.submit', 'submit']:
-            params = cast(Dict, params)
+            params = cast(dict, params)
             return self.handle_submit(params, msgid)
 
         self.send_error(METHOD_NOT_FOUND, msgid, data={'method': method, 'supported_methods': ['submit', 'subscribe']})
@@ -429,11 +429,11 @@ class StratumProtocol(JSONRPC):
         """ Logs any result since there are not supposed to be any """
         self.log.debug('handle result', msgid=msgid, result=result)
 
-    def handle_error(self, error: Dict, data: Any, msgid: Optional[str]) -> None:
+    def handle_error(self, error: dict, data: Any, msgid: Optional[str]) -> None:
         """ Logs any errors since there are not supposed to be any """
         self.log.error('handle error', msgid=msgid, error=error)
 
-    def handle_subscribe(self, params: Dict, msgid: Optional[str]) -> None:
+    def handle_subscribe(self, params: dict, msgid: Optional[str]) -> None:
         """ Handles subscribe request by answering it and triggering a job request.
 
         :param msgid: JSON-RPC 2.0 message id
@@ -471,11 +471,11 @@ class StratumProtocol(JSONRPC):
         self.subscribed = True
         self.job_request()
 
-    def handle_submit(self, params: Dict, msgid: Optional[str]) -> None:
+    def handle_submit(self, params: dict, msgid: Optional[str]) -> None:
         """ Handles submit request by validating and propagating the result
 
         :param params: a dict containing a valid uui4 hex as `job_id` and a valid transaction nonce as `nonce`
-        :type params: Dict
+        :type params: dict
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[UUID]
@@ -723,13 +723,13 @@ class StratumFactory(Factory):
     Interfaces with nodes to keep mining jobs up to date and to submit successful ones.
     """
     reactor: Reactor
-    jobs: Set[UUID]
+    jobs: set[UUID]
     manager: 'HathorManager'
-    miner_protocols: Dict[UUID, StratumProtocol]
-    tx_queue: List[bytes]
-    mining_tx_pool: Dict[bytes, BaseTransaction]
-    mined_txs: Dict[bytes, Transaction]
-    deferreds_tx: Dict[bytes, Deferred]
+    miner_protocols: dict[UUID, StratumProtocol]
+    tx_queue: list[bytes]
+    mining_tx_pool: dict[bytes, BaseTransaction]
+    mined_txs: dict[bytes, Transaction]
+    deferreds_tx: dict[bytes, Deferred]
 
     def __init__(self, manager: 'HathorManager', reactor: Reactor = reactor):
         self.log = logger.new()
@@ -790,10 +790,10 @@ class StratumFactory(Factory):
         """
         return int(self.reactor.seconds())
 
-    def get_stats(self) -> List[MinerStatistics]:
+    def get_stats(self) -> list[MinerStatistics]:
         return [protocol.get_stats() for protocol in self.miner_protocols.values()]
 
-    def get_stats_resource(self) -> List[Dict]:
+    def get_stats_resource(self) -> list[dict]:
         return [stat._asdict() for stat in self.get_stats()]
 
 
@@ -812,8 +812,8 @@ class StratumClient(JSONRPC):
 
     queue: MQueue
     proc_count: Optional[int]
-    job: Dict
-    miners: List[Process]
+    job: dict
+    miners: list[Process]
     loop: Optional[task.LoopingCall]
     signal: Any
     job_data: MinerJob
@@ -870,14 +870,14 @@ class StratumClient(JSONRPC):
     def connectionMade(self) -> None:
         self.send_request('subscribe', {'address': self.address}, self._next_id())
 
-    def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
+    def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
         """ Handles job requests.
 
         :param method: JSON-RPC 2.0 request method
         :type method: str
 
         :param params: Hathor Stratum job request params
-        :type params: Dict
+        :type params: dict
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
@@ -894,7 +894,7 @@ class StratumClient(JSONRPC):
         """ Logs any result since there are not supposed to be any """
         self.log.debug('handle result', result=result)
 
-    def handle_error(self, error: Dict, data: Any, msgid: Optional[str]) -> None:
+    def handle_error(self, error: dict, data: Any, msgid: Optional[str]) -> None:
         """ Logs any error since there are not supposed to be any """
         self.log.warn('handle_error', error=error, data=data)
 
@@ -919,7 +919,7 @@ def miner_job(index: int, process_num: int, job_data: MinerJob, signal: 'ctypes.
     :param queue: queue used to submit solutions to supervisor process
     :type queue: MQueue
     """
-    def update_job() -> Tuple[bytes, int, Any, int, int]:
+    def update_job() -> tuple[bytes, int, Any, int, int]:
         while signal.value == StratumClient.SLEEP:
             sleep(StratumClient.NAP_DURATION)
         return (

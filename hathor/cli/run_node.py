@@ -15,28 +15,35 @@
 import os
 import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable
 
 from pydantic import ValidationError
 from structlog import get_logger
 
+from hathor.cli.run_node_args import RunNodeArgs
 from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
 from hathor.exception import PreInitializationError
+from hathor.feature_activation.feature import Feature
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 
 
 class RunNode:
-    UNSAFE_ARGUMENTS: List[Tuple[str, Callable[[Namespace], bool]]] = [
+    UNSAFE_ARGUMENTS: list[tuple[str, Callable[[RunNodeArgs], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
         ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
+        ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue))
     ]
 
     @classmethod
     def create_parser(cls) -> ArgumentParser:
+        """
+        Create a new parser with the run_node CLI arguments.
+        Arguments must also be added to hathor.cli.run_node_args.RunNodeArgs
+        """
         from hathor.cli.util import create_parser
         parser = create_parser()
 
@@ -85,7 +92,6 @@ class RunNode:
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
         fvargs = parser.add_mutually_exclusive_group()
         fvargs.add_argument('--x-full-verification', action='store_true', help='Fully validate the local database')
-        fvargs.add_argument('--x-fast-init-beta', action='store_true', help=SUPPRESS)
         parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
         parser.add_argument('--allow-non-standard-script', action='store_true', help='Accept non-standard scripts on '
                             '/push-tx API')
@@ -107,14 +113,19 @@ class RunNode:
         parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
                             help='Peer IDs to forbid connection')
         parser.add_argument('--config-yaml', type=str, help='Configuration yaml filepath')
+        possible_features = [feature.value for feature in Feature]
+        parser.add_argument('--signal-support', default=[], action='append', choices=possible_features,
+                            help=f'Signal support for a feature. One of {possible_features}')
+        parser.add_argument('--signal-not-support', default=[], action='append', choices=possible_features,
+                            help=f'Signal not support for a feature. One of {possible_features}')
         return parser
 
-    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
+    def prepare(self, *, register_resources: bool = True) -> None:
         from setproctitle import setproctitle
-        setproctitle('{}hathor-core'.format(args.procname_prefix))
+        setproctitle('{}hathor-core'.format(self._args.procname_prefix))
 
-        if args.recursion_limit:
-            sys.setrecursionlimit(args.recursion_limit)
+        if self._args.recursion_limit:
+            sys.setrecursionlimit(self._args.recursion_limit)
         else:
             sys.setrecursionlimit(5000)
 
@@ -125,7 +136,7 @@ class RunNode:
                 print('Maximum number of open file descriptors is too low. Minimum required is 256.')
                 sys.exit(-2)
 
-        self.check_unsafe_arguments(args)
+        self.check_unsafe_arguments()
         self.check_python_version()
 
         from hathor.util import reactor
@@ -133,28 +144,34 @@ class RunNode:
 
         from hathor.builder import CliBuilder, ResourcesBuilder
         from hathor.exception import BuilderError
-        builder = CliBuilder()
+        builder = CliBuilder(self._args)
         try:
-            self.manager = builder.create_manager(reactor, args)
+            self.manager = builder.create_manager(reactor)
         except BuilderError as err:
             self.log.error(str(err))
             sys.exit(2)
 
         self.tx_storage = self.manager.tx_storage
         self.wallet = self.manager.wallet
-        self.start_manager(args)
+        self.start_manager()
 
-        if args.stratum:
-            self.reactor.listenTCP(args.stratum, self.manager.stratum_factory)
-
-        if register_resources:
-            resources_builder = ResourcesBuilder(self.manager, builder.event_ws_factory)
-            status_server = resources_builder.build(args)
-            if args.status:
-                self.reactor.listenTCP(args.status, status_server)
+        if self._args.stratum:
+            self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
         from hathor.conf import HathorSettings
+        from hathor.feature_activation.feature_service import FeatureService
         settings = HathorSettings()
+
+        feature_service = FeatureService(
+            feature_settings=settings.FEATURE_ACTIVATION,
+            tx_storage=self.manager.tx_storage
+        )
+
+        if register_resources:
+            resources_builder = ResourcesBuilder(self.manager, self._args, builder.event_ws_factory, feature_service)
+            status_server = resources_builder.build()
+            if self._args.status:
+                self.reactor.listenTCP(self._args.status, status_server)
 
         from hathor.builder.builder import BuildArtifacts
         self.artifacts = BuildArtifacts(
@@ -171,13 +188,14 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
+            feature_service=feature_service
         )
 
-    def start_sentry_if_possible(self, args: Namespace) -> None:
+    def start_sentry_if_possible(self) -> None:
         """Start Sentry integration if possible."""
-        if not args.sentry_dsn:
+        if not self._args.sentry_dsn:
             return
-        self.log.info('Starting Sentry', dsn=args.sentry_dsn)
+        self.log.info('Starting Sentry', dsn=self._args.sentry_dsn)
         try:
             import sentry_sdk
             from structlog_sentry import SentryProcessor  # noqa: F401
@@ -189,21 +207,21 @@ class RunNode:
         from hathor.conf import HathorSettings
         settings = HathorSettings()
         sentry_sdk.init(
-            dsn=args.sentry_dsn,
+            dsn=self._args.sentry_dsn,
             release=hathor.__version__,
             environment=settings.NETWORK_NAME,
         )
 
-    def start_manager(self, args: Namespace) -> None:
-        self.start_sentry_if_possible(args)
+    def start_manager(self) -> None:
+        self.start_sentry_if_possible()
         self.manager.start()
 
-    def register_signal_handlers(self, args: Namespace) -> None:
+    def register_signal_handlers(self) -> None:
         """Register signal handlers."""
         import signal
         sigusr1 = getattr(signal, 'SIGUSR1', None)
         if sigusr1 is not None:
-            # USR1 is avaiable in this OS.
+            # USR1 is available in this OS.
             signal.signal(sigusr1, self.signal_usr1_handler)
 
     def signal_usr1_handler(self, sig: int, frame: Any) -> None:
@@ -212,13 +230,13 @@ class RunNode:
         if self.manager and self.manager.connections:
             self.manager.connections.disconnect_all_peers(force=True)
 
-    def check_unsafe_arguments(self, args: Namespace) -> None:
+    def check_unsafe_arguments(self) -> None:
         unsafe_args_found = []
         for arg_cmdline, arg_test_fn in self.UNSAFE_ARGUMENTS:
-            if arg_test_fn(args):
+            if arg_test_fn(self._args):
                 unsafe_args_found.append(arg_cmdline)
 
-        if args.unsafe_mode is None:
+        if self._args.unsafe_mode is None:
             if unsafe_args_found:
                 message = [
                     'You need to enable --unsafe-mode to run with these arguments.',
@@ -251,9 +269,9 @@ class RunNode:
             from hathor.conf import HathorSettings
             settings = HathorSettings()
 
-            if args.unsafe_mode != settings.NETWORK_NAME:
+            if self._args.unsafe_mode != settings.NETWORK_NAME:
                 message.extend([
-                    f'Unsafe mode enabled for wrong network ({args.unsafe_mode} != {settings.NETWORK_NAME}).',
+                    f'Unsafe mode enabled for wrong network ({self._args.unsafe_mode} != {settings.NETWORK_NAME}).',
                     '',
                 ])
                 fail = True
@@ -318,12 +336,15 @@ class RunNode:
         if argv is None:
             import sys
             argv = sys.argv[1:]
-        self.parser = self.create_parser()
-        args = self.parse_args(argv)
 
-        if args.config_yaml:
-            os.environ['HATHOR_CONFIG_YAML'] = args.config_yaml
-        elif args.testnet:
+        self.parser = self.create_parser()
+        raw_args = self.parse_args(argv)
+
+        self._args = RunNodeArgs.parse_obj(vars(raw_args))
+
+        if self._args.config_yaml:
+            os.environ['HATHOR_CONFIG_YAML'] = self._args.config_yaml
+        elif self._args.testnet:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
 
         try:
@@ -333,10 +354,10 @@ class RunNode:
                 'An error was found while trying to initialize HathorSettings. See above for details.'
             ) from e
 
-        self.prepare(args)
-        self.register_signal_handlers(args)
-        if args.sysctl:
-            self.init_sysctl(args.sysctl)
+        self.prepare()
+        self.register_signal_handlers()
+        if self._args.sysctl:
+            self.init_sysctl(self._args.sysctl)
 
     def init_sysctl(self, description: str) -> None:
         """Initialize sysctl and listen for connections.
@@ -362,7 +383,7 @@ class RunNode:
         endpoint = serverFromString(self.reactor, description)
         endpoint.listen(factory)
 
-    def parse_args(self, argv: List[str]) -> Namespace:
+    def parse_args(self, argv: list[str]) -> Namespace:
         return self.parser.parse_args(argv)
 
     def run(self) -> None:

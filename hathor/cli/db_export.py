@@ -14,7 +14,7 @@
 
 import io
 import struct
-from argparse import ArgumentParser, FileType, Namespace
+from argparse import ArgumentParser, FileType
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from hathor.cli.run_node import RunNode
@@ -26,10 +26,10 @@ MAGIC_HEADER = b'HathDB'
 
 
 class DbExport(RunNode):
-    def start_manager(self, args: Namespace) -> None:
+    def start_manager(self) -> None:
         pass
 
-    def register_signal_handlers(self, args: Namespace) -> None:
+    def register_signal_handlers(self) -> None:
         pass
 
     @classmethod
@@ -58,26 +58,26 @@ class DbExport(RunNode):
         parser.add_argument('--export-skip-voided', action='store_true', help='Do not export voided txs/blocks')
         return parser
 
-    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
-        super().prepare(args, register_resources=False)
+    def prepare(self, *, register_resources: bool = True) -> None:
+        super().prepare(register_resources=False)
 
         # allocating io.BufferedWriter here so we "own" it
-        self.out_file = io.BufferedWriter(args.export_file)
+        self.out_file = io.BufferedWriter(self._args.export_file)
         if not self.out_file.seekable():
             raise ValueError('file cannot be used because it is not seekable')
 
         self._iter_tx: Iterator['BaseTransaction']
-        if args.export_iterator == 'metadata':
+        if self._args.export_iterator == 'metadata':
             self._iter_tx = self.tx_storage._topological_sort_metadata()
-        elif args.export_iterator == 'timestamp_index':
+        elif self._args.export_iterator == 'timestamp_index':
             self._iter_tx = self.tx_storage._topological_sort_timestamp_index()
-        elif args.export_iterator == 'dfs':
+        elif self._args.export_iterator == 'dfs':
             self._iter_tx = self.tx_storage._topological_sort_dfs()
         else:
-            raise ValueError(f'unknown iterator "{args.export_iterator}"')
+            raise ValueError(f'unknown iterator "{self._args.export_iterator}"')
 
-        self.export_height = args.export_max_height
-        self.skip_voided = args.export_skip_voided
+        self.export_height = self._args.export_max_height
+        self.skip_voided = self._args.export_skip_voided
 
     def iter_tx(self) -> Iterator['BaseTransaction']:
         from hathor.conf import HathorSettings
@@ -95,7 +95,8 @@ class DbExport(RunNode):
             yield tx
 
     def run(self) -> None:
-        from hathor.util import progress
+        from hathor.transaction import Block
+        from hathor.util import tx_progress
         self.log.info('export')
         self.out_file.write(MAGIC_HEADER)
         tx_count = 0
@@ -108,13 +109,14 @@ class DbExport(RunNode):
         # estimated total, this will obviously be wrong if we're not exporting everything, but it's still better than
         # nothing, and it's probably better to finish sooner than expected, rather than later than expected
         total = self.tx_storage.get_vertices_count()
-        for tx in progress(self.iter_tx(), log=self.log, total=total):
+        for tx in tx_progress(self.iter_tx(), log=self.log, total=total):
             assert tx.hash is not None
             tx_meta = tx.get_metadata()
             if tx.is_block:
+                assert isinstance(tx, Block)
                 if not tx_meta.voided_by:
                     # XXX: max() shouldn't be needed, but just in case
-                    best_height = max(best_height, tx_meta.height)
+                    best_height = max(best_height, tx.get_height())
                 block_count += 1
             else:
                 tx_count += 1

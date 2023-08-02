@@ -27,7 +27,6 @@ BLOCK_DIFFICULTY_N_BLOCKS: 20
 
 REWARD_SPEND_MIN_BLOCKS: 10
 SLOW_ASSERTS: true
-ENABLE_EVENT_QUEUE_FEATURE: true
 MAX_TX_WEIGHT_DIFF_ACTIVATION: 0.0
 
 CHECKPOINTS:
@@ -46,10 +45,10 @@ FEATURE_ACTIVATION:
     NOP_FEATURE_1:
       bit: 0
       start_height: 0
-      timeout_height: 1000
+      timeout_height: 2000
       version: 0.0.0
     NOP_FEATURE_2:
       bit: 1
       start_height: 0
-      timeout_height: 1001
+      timeout_height: 2001
       version: 0.0.0

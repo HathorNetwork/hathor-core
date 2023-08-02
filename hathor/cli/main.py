@@ -16,7 +16,7 @@ import os
 import sys
 from collections import defaultdict
 from types import ModuleType
-from typing import Dict, List, Optional
+from typing import Optional
 
 from structlog import get_logger
 
@@ -26,9 +26,9 @@ logger = get_logger()
 class CliManager:
     def __init__(self) -> None:
         self.basename: str = os.path.basename(sys.argv[0])
-        self.command_list: Dict[str, ModuleType] = {}
-        self.cmd_description: Dict[str, str] = {}
-        self.groups: Dict[str, List[str]] = defaultdict(list)
+        self.command_list: dict[str, ModuleType] = {}
+        self.cmd_description: dict[str, str] = {}
+        self.groups: dict[str, list[str]] = defaultdict(list)
         self.longest_cmd: int = 0
 
         from . import (

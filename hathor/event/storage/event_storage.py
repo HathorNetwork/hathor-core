@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Iterator, Optional
+from typing import Iterable, Iterator, Optional
 
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.node_state import NodeState
@@ -23,6 +23,11 @@ class EventStorage(ABC):
     @abstractmethod
     def save_event(self, event: BaseEvent) -> None:
         """ Saves an event in the storage"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_events(self, events: Iterable[BaseEvent]) -> None:
+        """ Saves an event batch in the storage"""
         raise NotImplementedError
 
     @abstractmethod

@@ -1,8 +1,5 @@
-from unittest.mock import Mock
-
 from hathor.event.model.event_type import EventType
 from hathor.event.storage.memory_storage import EventMemoryStorage
-from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import HathorEvents
 from tests import unittest
 
@@ -16,7 +13,7 @@ class BaseEventManagerTest(unittest.TestCase):
         self.event_storage = EventMemoryStorage()
         self.manager = self.create_peer(
             self.network,
-            event_ws_factory=Mock(spec_set=EventWebsocketFactory),
+            enable_event_queue=True,
             full_verification=False,
             event_storage=self.event_storage
         )

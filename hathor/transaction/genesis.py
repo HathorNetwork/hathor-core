@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from hathor.conf import HathorSettings
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
@@ -64,7 +64,7 @@ def _get_genesis_hash() -> bytes:
 GENESIS_HASH = _get_genesis_hash()
 
 
-def _get_genesis_transactions_unsafe(tx_storage: Optional['TransactionStorage']) -> List[BaseTransaction]:
+def _get_genesis_transactions_unsafe(tx_storage: Optional['TransactionStorage']) -> list[BaseTransaction]:
     """You shouldn't get genesis directly. Please, get it from your storage instead."""
     genesis = []
     for tx in GENESIS:

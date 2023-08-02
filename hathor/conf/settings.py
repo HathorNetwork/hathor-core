@@ -46,6 +46,10 @@ class HathorSettings(NamedTuple):
     # enable peer whitelist
     ENABLE_PEER_WHITELIST: bool = False
 
+    # weather to use the whitelist with sync-v2 peers, does not affect whether the whitelist is enabled or not, it will
+    # always be enabled for sync-v1 if it is enabled
+    USE_PEER_WHITELIST_ON_SYNC_V2: bool = True
+
     DECIMAL_PLACES: int = DECIMAL_PLACES
 
     # Genesis pre-mined tokens
@@ -343,6 +347,7 @@ class HathorSettings(NamedTuple):
     # Capabilities
     CAPABILITY_WHITELIST: str = 'whitelist'
     CAPABILITY_SYNC_VERSION: str = 'sync-version'
+    CAPABILITY_GET_BEST_BLOCKCHAIN: str = 'get-best-blockchain'
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None
@@ -377,8 +382,6 @@ class HathorSettings(NamedTuple):
     # Identifier used in metadata's voided_by to mark a tx as partially validated.
     PARTIALLY_VALIDATED_ID: bytes = b'pending-validation'
 
-    ENABLE_EVENT_QUEUE_FEATURE: bool = False
-
     EVENT_API_DEFAULT_BATCH_SIZE: int = 100
 
     EVENT_API_MAX_BATCH_SIZE: int = 1000
@@ -391,6 +394,18 @@ class HathorSettings(NamedTuple):
 
     # All settings related to Feature Activation
     FEATURE_ACTIVATION: FeatureActivationSettings = FeatureActivationSettings()
+
+    # Maximum number of GET_TIPS delayed calls per connection while running sync.
+    MAX_GET_TIPS_DELAYED_CALLS: int = 5
+
+    # Maximum number of blocks in the best blockchain list.
+    MAX_BEST_BLOCKCHAIN_BLOCKS: int = 20
+
+    # Default number of blocks in the best blockchain list.
+    DEFAULT_BEST_BLOCKCHAIN_BLOCKS: int = 10
+
+    # Time in seconds to request the best blockchain from peers.
+    BEST_BLOCKCHAIN_INTERVAL: int = 5  # seconds
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
@@ -413,7 +428,7 @@ def _parse_checkpoints(checkpoints: Union[dict[int, str], list[Checkpoint]]) -> 
         ]
 
     if not isinstance(checkpoints, list):
-        raise TypeError(f'expected \'Dict[int, str]\' or \'List[Checkpoint]\', got {checkpoints}')
+        raise TypeError(f'expected \'dict[int, str]\' or \'list[Checkpoint]\', got {checkpoints}')
 
     return checkpoints
 

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, NamedTuple, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Optional, Union
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -29,7 +29,7 @@ from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
-from hathor.p2p.sync_factory import SyncManagerFactory
+from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -49,11 +49,11 @@ WHITELIST_REQUEST_TIMEOUT = 45
 
 
 class _SyncRotateInfo(NamedTuple):
-    candidates: List[str]
-    old: Set[str]
-    new: Set[str]
-    to_disable: Set[str]
-    to_enable: Set[str]
+    candidates: list[str]
+    old: set[str]
+    new: set[str]
+    to_disable: set[str]
+    to_enable: set[str]
 
 
 class _ConnectingPeer(NamedTuple):
@@ -78,12 +78,12 @@ class ConnectionsManager:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
 
     manager: Optional['HathorManager']
-    connections: Set[HathorProtocol]
-    connected_peers: Dict[str, HathorProtocol]
-    connecting_peers: Dict[IStreamClientEndpoint, _ConnectingPeer]
-    handshaking_peers: Set[HathorProtocol]
+    connections: set[HathorProtocol]
+    connected_peers: dict[str, HathorProtocol]
+    connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
+    handshaking_peers: set[HathorProtocol]
     whitelist_only: bool
-    _sync_factories: Dict[SyncVersion, SyncManagerFactory]
+    _sync_factories: dict[SyncVersion, SyncAgentFactory]
 
     rate_limiter: RateLimiter
 
@@ -98,8 +98,9 @@ class ConnectionsManager:
                  enable_sync_v1: bool,
                  enable_sync_v2: bool,
                  enable_sync_v1_1: bool) -> None:
-        from hathor.p2p.sync_v1_1_factory import SyncV11Factory
-        from hathor.p2p.sync_v1_factory import SyncV1Factory
+        from hathor.p2p.sync_v1.factory_v1_0 import SyncV10Factory
+        from hathor.p2p.sync_v1.factory_v1_1 import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
 
         if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
@@ -146,7 +147,7 @@ class ConnectionsManager:
         self.received_peer_storage = PeerStorage()
 
         # List of known peers.
-        self.peer_storage = PeerStorage()  # Dict[string (peer.id), PeerId]
+        self.peer_storage = PeerStorage()  # dict[string (peer.id), PeerId]
 
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
@@ -158,7 +159,7 @@ class ConnectionsManager:
         self.lc_sync_update_interval: float = 5  # seconds
 
         # Peers that always have sync enabled.
-        self.always_enable_sync: Set[str] = set()
+        self.always_enable_sync: set[str] = set()
 
         # Timestamp of the last time sync was updated.
         self._last_sync_rotate: float = 0.
@@ -181,11 +182,11 @@ class ConnectionsManager:
         # sync-manager factories
         self._sync_factories = {}
         if enable_sync_v1:
-            self._sync_factories[SyncVersion.V1] = SyncV1Factory(self)
+            self._sync_factories[SyncVersion.V1] = SyncV10Factory(self)
         if enable_sync_v1_1:
             self._sync_factories[SyncVersion.V1_1] = SyncV11Factory(self)
         if enable_sync_v2:
-            self._sync_factories[SyncVersion.V2] = SyncV1Factory(self)
+            self._sync_factories[SyncVersion.V2] = SyncV2Factory(self)
 
     def set_manager(self, manager: 'HathorManager') -> None:
         """Set the manager. This method must be called before start()."""
@@ -247,7 +248,7 @@ class ConnectionsManager:
             len(self.peer_storage)
         )
 
-    def get_sync_versions(self) -> Set[SyncVersion]:
+    def get_sync_versions(self) -> set[SyncVersion]:
         """Set of versions that were enabled and are supported."""
         assert self.manager is not None
         if self.manager.has_sync_version_capability():
@@ -257,7 +258,7 @@ class ConnectionsManager:
             # XXX: this is to make it easy to simulate old behavior if we disable the sync-version capability
             return {SyncVersion.V1}
 
-    def get_sync_factory(self, sync_version: SyncVersion) -> SyncManagerFactory:
+    def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
         """Get the sync factory for a given version, support MUST be checked beforehand or it will raise an assert."""
         assert sync_version in self._sync_factories, 'get_sync_factory must be called for a supported version'
         return self._sync_factories[sync_version]
@@ -572,6 +573,11 @@ class ConnectionsManager:
         deferred.addCallback(self._connect_to_callback, peer, endpoint, connection_string, peer_id)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
         self.log.info('connect to ', endpoint=description, peer=str(peer))
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_CONNECTING,
+            peer=peer,
+            peers_count=self._get_peers_count()
+        )
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> IStreamServerEndpoint:
         """ Start to listen to new connection according to the description.
@@ -649,9 +655,9 @@ class ConnectionsManager:
         except Exception:
             self.log.error('_sync_rotate_if_needed failed', exc_info=True)
 
-    def set_always_enable_sync(self, values: List[str]) -> None:
+    def set_always_enable_sync(self, values: list[str]) -> None:
         """Set a new list of peers to always enable sync. This operation completely replaces the previous list."""
-        new: Set[str] = set(values)
+        new: set[str] = set(values)
 
         old = self.always_enable_sync
         if new == old:
@@ -676,14 +682,14 @@ class ConnectionsManager:
 
     def _calculate_sync_rotate(self) -> _SyncRotateInfo:
         """Calculate new sync rotation."""
-        current_enabled: Set[str] = set()
+        current_enabled: set[str] = set()
         for peer_id, conn in self.connected_peers.items():
             if conn.is_sync_enabled():
                 current_enabled.add(peer_id)
 
         candidates = list(self.connected_peers.keys())
         self.rng.shuffle(candidates)
-        selected_peers: Set[str] = set(candidates[:self.MAX_ENABLED_SYNC])
+        selected_peers: set[str] = set(candidates[:self.MAX_ENABLED_SYNC])
 
         to_disable = current_enabled - selected_peers
         to_enable = selected_peers - current_enabled

@@ -31,13 +31,23 @@ class GeometricMiner(AbstractMiner):
     """ Simulate block mining with actually solving the block. It is supposed to be used
     with Simulator class. The mining part is simulated using the geometrical distribution.
     """
-    def __init__(self, manager: 'HathorManager', rng: Random, *, hashpower: float):
+    def __init__(
+        self,
+        manager: 'HathorManager',
+        rng: Random,
+        *,
+        hashpower: float,
+        signal_bits: Optional[list[int]] = None
+    ) -> None:
         """
         :param: hashpower: Number of hashes per second
+        :param: signal_bits: a list of signal_bits to be used in each mined block, in order. If there are more mined
+            blocks than values provided, 0 is used.
         """
         super().__init__(manager, rng)
 
         self._hashpower = hashpower
+        self._signal_bits = signal_bits or []
         self._block: Optional[Block] = None
         self._blocks_found: int = 0
 
@@ -58,6 +68,15 @@ class GeometricMiner(AbstractMiner):
             self._block = None
             self._schedule_next_block()
 
+    def _generate_mining_block(self) -> 'Block':
+        """Generates a block ready to be mined."""
+        try:
+            signal_bits = self._signal_bits.pop(0)
+        except IndexError:
+            signal_bits = 0
+
+        return self._manager.generate_mining_block(signal_bits=signal_bits)
+
     def _schedule_next_block(self):
         if self._block:
             self._block.nonce = self._rng.getrandbits(32)
@@ -68,7 +87,7 @@ class GeometricMiner(AbstractMiner):
             self._block = None
 
         if self._manager.can_start_mining():
-            block = self._manager.generate_mining_block()
+            block = self._generate_mining_block()
             geometric_p = 2**(-block.weight)
             trials = self._rng.geometric(geometric_p)
             dt = 1.0 * trials / self._hashpower

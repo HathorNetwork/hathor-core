@@ -21,7 +21,6 @@ import time
 from argparse import ArgumentParser, Namespace
 from json.decoder import JSONDecodeError
 from multiprocessing import Process, Queue
-from typing import Tuple
 
 import requests
 
@@ -72,7 +71,7 @@ def execute(args: Namespace) -> None:
 
     total = 0
     conn_retries = 0
-    q_in: Queue[Tuple[Block, int, int, int]]
+    q_in: Queue[tuple[Block, int, int, int]]
     q_out: Queue[Block]
     q_in, q_out = Queue(), Queue()
     while True:

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable, Optional, Set
+from typing import Iterable, Optional
 
 from structlog import get_logger
 
@@ -22,7 +22,7 @@ logger = get_logger()
 
 
 class MemoryMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
-    _index: Set[bytes]
+    _index: set[bytes]
 
     def __init__(self):
         self.log = logger.new()

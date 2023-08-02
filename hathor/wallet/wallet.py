@@ -15,7 +15,7 @@
 import hashlib
 import json
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives import hashes
@@ -39,7 +39,7 @@ class Wallet(BaseWallet):
         only contain wallet associated files.
 
         :param keys: keys to initialize this wallet
-        :type keys: Dict[string(base58), :py:class:`hathor.wallet.keypair.KeyPair`]
+        :type keys: dict[string(base58), :py:class:`hathor.wallet.keypair.KeyPair`]
 
         :param directory: where to store wallet associated files
         :type directory: string
@@ -53,9 +53,9 @@ class Wallet(BaseWallet):
         super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
 
         self.filepath = os.path.join(directory, filename)
-        self.keys: Dict[str, Any] = keys or {}  # Dict[string(b58_address), KeyPair]
+        self.keys: dict[str, Any] = keys or {}  # dict[string(b58_address), KeyPair]
 
-        # Set[string(base58)]
+        # set[string(base58)]
         self.unused_keys = set(key.address for key in self.keys.values() if not key.used)
 
         self.password: Optional[bytes] = None
@@ -204,7 +204,7 @@ class Wallet(BaseWallet):
     def is_locked(self):
         return self.password is None
 
-    def get_input_aux_data(self, data_to_sign: bytes, private_key: _EllipticCurvePrivateKey) -> Tuple[bytes, bytes]:
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: _EllipticCurvePrivateKey) -> tuple[bytes, bytes]:
         """ Sign the data to be used in input and get public key compressed in bytes
 
             :param data_to_sign: Data to be signed

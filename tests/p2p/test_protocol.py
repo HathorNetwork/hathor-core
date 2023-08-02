@@ -1,4 +1,5 @@
 from json import JSONDecodeError
+from typing import Optional
 
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
@@ -24,6 +25,14 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.manager1 = self.create_peer(self.network, peer_id=self.peer_id1)
         self.manager2 = self.create_peer(self.network, peer_id=self.peer_id2)
         self.conn = FakeConnection(self.manager1, self.manager2)
+
+    def assertAndStepConn(self, conn: FakeConnection, regex1: bytes, regex2: Optional[bytes] = None) -> None:
+        """If only one regex is given it is tested on both cons, if two are given they'll be used respectively."""
+        if regex2 is None:
+            regex2 = regex1
+        self.assertRegex(conn.peek_tr1_value(), regex1)
+        self.assertRegex(conn.peek_tr2_value(), regex2)
+        conn.run_one_step()
 
     def assertIsConnected(self, conn=None):
         if conn is None:
@@ -157,20 +166,6 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.conn.tr1.disconnecting)
         self.assertFalse(self.conn.tr2.disconnecting)
 
-    @inlineCallbacks
-    def test_invalid_peer_id(self):
-        self.conn.run_one_step()  # HELLO
-        self.conn.run_one_step()  # PEER-ID
-        self.conn.run_one_step()  # READY
-        self.conn.run_one_step()  # GET-PEERS
-        self.conn.run_one_step()  # GET-TIPS
-        self.conn.run_one_step()  # PEERS
-        self.conn.run_one_step()  # TIPS
-        invalid_payload = {'id': '123', 'entrypoints': ['tcp://localhost:1234']}
-        yield self._send_cmd(self.conn.proto1, 'PEER-ID', json_dumps(invalid_payload))
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
-        self.assertTrue(self.conn.tr1.disconnecting)
-
     def test_invalid_same_peer_id(self):
         manager3 = self.create_peer(self.network, peer_id=self.peer_id1)
         conn = FakeConnection(self.manager1, manager3)
@@ -218,14 +213,13 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.run_until_empty()
         conn.run_until_empty()
         self.run_to_completion()
-        # one of the peers will close the connection. We don't know which on, as it depends
+        # one of the peers will close the connection. We don't know which one, as it depends
         # on the peer ids
-        conn1_value = self.conn.peek_tr1_value() + self.conn.peek_tr2_value()
-        conn2_value = conn.peek_tr1_value() + conn.peek_tr2_value()
-        if b'ERROR' in conn1_value:
+
+        if self.conn.tr1.disconnecting or self.conn.tr2.disconnecting:
             conn_dead = self.conn
             conn_alive = conn
-        elif b'ERROR' in conn2_value:
+        elif conn.tr1.disconnecting or conn.tr2.disconnecting:
             conn_dead = conn
             conn_alive = self.conn
         else:
@@ -247,6 +241,85 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self._check_result_only_cmd(conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(conn.tr1.disconnecting)
         conn.run_one_step()  # ERROR
+
+    def test_send_invalid_unicode(self):
+        # \xff is an invalid unicode.
+        self.conn.proto1.dataReceived(b'\xff\r\n')
+        self.assertTrue(self.conn.tr1.disconnecting)
+
+    def test_on_disconnect(self):
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.conn.disconnect(Failure(Exception('testing')))
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+
+    def test_on_disconnect_after_hello(self):
+        self.conn.run_one_step()  # HELLO
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.conn.disconnect(Failure(Exception('testing')))
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+
+    def test_on_disconnect_after_peer_id(self):
+        self.conn.run_one_step()  # HELLO
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        # No peer id in the peer_storage (known_peers)
+        self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
+        # The peer READY now depends on a message exchange from both peers, so we need one more step
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
+        self.assertIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+        # Peer id 2 in the peer_storage (known_peers) after connection
+        self.assertIn(self.peer_id2.id, self.manager1.connections.peer_storage)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.conn.disconnect(Failure(Exception('testing')))
+        # Peer id 2 in the peer_storage (known_peers) after disconnection but before looping call
+        self.assertIn(self.peer_id2.id, self.manager1.connections.peer_storage)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+
+        self.clock.advance(10)
+        # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call
+        self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
+
+    def test_idle_connection(self):
+        self.clock.advance(settings.PEER_IDLE_TIMEOUT - 10)
+        self.assertIsConnected(self.conn)
+        self.clock.advance(15)
+        self.assertIsNotConnected(self.conn)
+
+
+class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTestCase):
+    __test__ = True
+
+    def test_two_connections(self):
+        self.conn.run_one_step()  # HELLO
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
+        self.conn.run_one_step()  # GET-PEERS
+        self.conn.run_one_step()  # GET-TIPS
+
+        manager3 = self.create_peer(self.network)
+        conn = FakeConnection(self.manager1, manager3)
+        conn.run_one_step()  # HELLO
+        conn.run_one_step()  # PEER-ID
+        conn.run_one_step()  # READY
+        conn.run_one_step()  # GET-PEERS
+
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEERS')
+        self.conn.run_one_step()
+
+    @inlineCallbacks
+    def test_get_data(self):
+        self.conn.run_one_step()  # HELLO
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
+        self.conn.run_one_step()  # GET-PEERS
+        self.conn.run_one_step()  # GET-TIPS
+        self.conn.run_one_step()  # PEERS
+        self.conn.run_one_step()  # TIPS
+        self.assertIsConnected()
+        missing_tx = '00000000228dfcd5dec1c9c6263f6430a5b4316bb9e3decb9441a6414bfd8697'
+        yield self._send_cmd(self.conn.proto1, 'GET-DATA', missing_tx)
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
+        self.conn.run_one_step()
 
     def test_valid_hello_and_peer_id(self):
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
@@ -287,74 +360,15 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertEqual(b'PING\r\n', self.conn.peek_tr2_value())
         self.conn.run_one_step()  # PING
         self.conn.run_one_step()  # GET-TIPS
+        self.conn.run_one_step()  # GET-BEST-BLOCKCHAIN
         self.assertEqual(b'PONG\r\n', self.conn.peek_tr1_value())
         self.assertEqual(b'PONG\r\n', self.conn.peek_tr2_value())
         while b'PONG\r\n' in self.conn.peek_tr1_value():
             self.conn.run_one_step()
         self.assertEqual(self.clock.seconds(), self.conn.proto1.last_message)
 
-    def test_send_invalid_unicode(self):
-        # \xff is an invalid unicode.
-        self.conn.proto1.dataReceived(b'\xff\r\n')
-        self.assertTrue(self.conn.tr1.disconnecting)
-
-    def test_on_disconnect(self):
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
-        self.conn.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
-
-    def test_on_disconnect_after_hello(self):
-        self.conn.run_one_step()  # HELLO
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
-        self.conn.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
-
-    def test_on_disconnect_after_peer_id(self):
-        self.conn.run_one_step()  # HELLO
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
-        # No peer id in the peer_storage (known_peers)
-        self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
-        # The peer READY now depends on a message exchange from both peers, so we need one more step
-        self.conn.run_one_step()  # PEER-ID
-        self.conn.run_one_step()  # READY
-        self.assertIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
-        # Peer id 2 in the peer_storage (known_peers) after connection
-        self.assertIn(self.peer_id2.id, self.manager1.connections.peer_storage)
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
-        self.conn.disconnect(Failure(Exception('testing')))
-        # Peer id 2 in the peer_storage (known_peers) after disconnection but before looping call
-        self.assertIn(self.peer_id2.id, self.manager1.connections.peer_storage)
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
-
-        self.clock.advance(10)
-        # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call
-        self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
-
-    def test_two_connections(self):
-        self.conn.run_one_step()  # HELLO
-        self.conn.run_one_step()  # PEER-ID
-        self.conn.run_one_step()  # READY
-        self.conn.run_one_step()  # GET-PEERS
-        self.conn.run_one_step()  # GET-TIPS
-
-        manager3 = self.create_peer(self.network)
-        conn = FakeConnection(self.manager1, manager3)
-        conn.run_one_step()  # HELLO
-        conn.run_one_step()  # PEER-ID
-        conn.run_one_step()  # READY
-        conn.run_one_step()  # GET-PEERS
-
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEERS')
-        self.conn.run_one_step()
-
-    def test_idle_connection(self):
-        self.clock.advance(settings.PEER_IDLE_TIMEOUT - 10)
-        self.assertIsConnected(self.conn)
-        self.clock.advance(15)
-        self.assertIsNotConnected(self.conn)
-
     @inlineCallbacks
-    def test_get_data(self):
+    def test_invalid_peer_id(self):
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
@@ -362,19 +376,124 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.run_one_step()  # GET-TIPS
         self.conn.run_one_step()  # PEERS
         self.conn.run_one_step()  # TIPS
-        self.assertIsConnected()
-        missing_tx = '00000000228dfcd5dec1c9c6263f6430a5b4316bb9e3decb9441a6414bfd8697'
-        yield self._send_cmd(self.conn.proto1, 'GET-DATA', missing_tx)
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
-        self.conn.run_one_step()
-
-
-class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTestCase):
-    __test__ = True
+        invalid_payload = {'id': '123', 'entrypoints': ['tcp://localhost:1234']}
+        yield self._send_cmd(self.conn.proto1, 'PEER-ID', json_dumps(invalid_payload))
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
+        self.assertTrue(self.conn.tr1.disconnecting)
 
 
 class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTestCase):
     __test__ = True
+
+    def test_two_connections(self):
+        self.assertAndStepConn(self.conn, b'^HELLO')
+        self.assertAndStepConn(self.conn, b'^PEER-ID')
+        self.assertAndStepConn(self.conn, b'^READY')
+        self.assertAndStepConn(self.conn, b'^GET-PEERS')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^PEERS')
+        self.assertAndStepConn(self.conn, b'^BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^RELAY')
+        self.assertIsConnected()
+
+        # disable timeout because we will make several steps on a new conn and this might get left behind
+        self.conn.disable_idle_timeout()
+
+        manager3 = self.create_peer(self.network, enable_sync_v2=True)
+        conn = FakeConnection(self.manager1, manager3)
+        self.assertAndStepConn(conn, b'^HELLO')
+        self.assertAndStepConn(conn, b'^PEER-ID')
+        self.assertAndStepConn(conn, b'^READY')
+        self.assertAndStepConn(conn, b'^GET-PEERS')
+
+        self.clock.advance(5)
+        self.assertIsConnected()
+        self.assertAndStepConn(self.conn, b'^GET-TIPS')
+        self.assertAndStepConn(self.conn, b'^PING')
+
+        for _ in range(19):
+            self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN')
+
+        # peer1 should now send a PEERS with the new peer that just connected
+        self.assertAndStepConn(self.conn, b'^PEERS',    b'^GET-BEST-BLOCKCHAIN')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN',    b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^TIPS',     b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^TIPS',     b'^TIPS-END')
+        self.assertAndStepConn(self.conn, b'^TIPS-END', b'^PONG')
+        self.assertAndStepConn(self.conn, b'^PONG',     b'^BEST-BLOCKCHAIN')
+        self.assertIsConnected()
+
+    @inlineCallbacks
+    def test_get_data(self):
+        self.assertAndStepConn(self.conn, b'^HELLO')
+        self.assertAndStepConn(self.conn, b'^PEER-ID')
+        self.assertAndStepConn(self.conn, b'^READY')
+        self.assertAndStepConn(self.conn, b'^GET-PEERS')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^PEERS')
+        self.assertAndStepConn(self.conn, b'^BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^RELAY')
+        self.assertIsConnected()
+        missing_tx = '00000000228dfcd5dec1c9c6263f6430a5b4316bb9e3decb9441a6414bfd8697'
+        payload = {'until_first_block': missing_tx, 'start_from': [settings.GENESIS_BLOCK_HASH.hex()]}
+        yield self._send_cmd(self.conn.proto1, 'GET-TRANSACTIONS-BFS', json_dumps(payload))
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
+        self.conn.run_one_step()
+
+    def test_valid_hello_and_peer_id(self):
+        self.assertAndStepConn(self.conn, b'^HELLO')
+        self.assertAndStepConn(self.conn, b'^PEER-ID')
+        self.assertAndStepConn(self.conn, b'^READY')
+        self.assertAndStepConn(self.conn, b'^GET-PEERS')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^PEERS')
+        self.assertAndStepConn(self.conn, b'^BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^RELAY')
+
+        # this will tick the ping-pong mechanism and looping calls
+        self.clock.advance(5)
+        self.assertIsConnected()
+        self.assertAndStepConn(self.conn, b'^GET-TIPS')
+        self.assertAndStepConn(self.conn, b'^PING')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN')
+        self.assertAndStepConn(self.conn, b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^TIPS-END')
+        self.assertAndStepConn(self.conn, b'^PONG')
+        self.assertIsConnected()
+
+        self.clock.advance(5)
+        self.assertAndStepConn(self.conn, b'^BEST-BLOCKCHAIN')
+        self.assertAndStepConn(self.conn, b'^PING')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^PONG')
+        self.assertAndStepConn(self.conn, b'^BEST-BLOCK')
+        self.assertIsConnected()
+
+    def test_send_ping(self):
+        self.assertAndStepConn(self.conn, b'^HELLO')
+        self.assertAndStepConn(self.conn, b'^PEER-ID')
+        self.assertAndStepConn(self.conn, b'^READY')
+        self.assertAndStepConn(self.conn, b'^GET-PEERS')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^PEERS')
+        self.assertAndStepConn(self.conn, b'^BEST-BLOCK')
+        self.assertAndStepConn(self.conn, b'^RELAY')
+
+        # this will tick the ping-pong mechanism and looping calls
+        self.clock.advance(5)
+        self.assertAndStepConn(self.conn, b'^GET-TIPS')
+        self.assertAndStepConn(self.conn, b'^PING')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN')
+        self.assertAndStepConn(self.conn, b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^TIPS-END')
+        self.assertEqual(b'PONG\r\n', self.conn.peek_tr1_value())
+        self.assertEqual(b'PONG\r\n', self.conn.peek_tr2_value())
+        while b'PONG\r\n' in self.conn.peek_tr1_value():
+            self.conn.run_one_step()
+        self.assertEqual(self.clock.seconds(), self.conn.proto1.last_message)
 
 
 # sync-bridge should behave like sync-v2

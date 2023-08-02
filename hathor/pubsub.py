@@ -14,7 +14,7 @@
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Deque, Dict, List, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 from twisted.internet.interfaces import IReactorFromThreads
 
@@ -29,6 +29,10 @@ class HathorEvents(Enum):
         NETWORK_NEW_TX_ACCEPTED:
             Triggered when a new tx/block is accepted in the network
             Publishes a tx/block object
+
+        NETWORK_PEER_CONNECTING:
+            Triggered when a peer starts connecting to the network
+            Publishes the peer id and the peers count
 
         NETWORK_PEER_CONNECTION_FAILURE:
             Triggered when a peer connection to the network fails
@@ -82,9 +86,6 @@ class HathorEvents(Enum):
         WALLET_ELEMENT_VOIDED:
             Triggered when a wallet element is marked as voided
 
-        LOAD_FINISHED
-            Triggered when manager finishes reading local data and it is ready to sync
-
         REORG_STARTED
             Trigerred when consensus algorithm finds that a reorg started to happen
 
@@ -93,6 +94,8 @@ class HathorEvents(Enum):
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
+
+    NETWORK_PEER_CONNECTING = 'network:peer_connecting'
 
     NETWORK_PEER_CONNECTION_FAILED = 'network:peer_connection_failed'
 
@@ -125,8 +128,6 @@ class HathorEvents(Enum):
     WALLET_ELEMENT_WINNER = 'wallet:element_winner'
 
     WALLET_ELEMENT_VOIDED = 'wallet:element_voided'
-
-    LOAD_FINISHED = 'manager:load_finished'
 
     REORG_STARTED = 'reorg:started'
 
@@ -161,11 +162,11 @@ class PubSubManager:
     It is used to let independent objects respond to events.
     """
 
-    _subscribers: Dict[HathorEvents, List[PubSubCallable]]
+    _subscribers: dict[HathorEvents, list[PubSubCallable]]
 
     def __init__(self, reactor: Reactor) -> None:
         self._subscribers = defaultdict(list)
-        self.queue: Deque[Tuple[PubSubCallable, HathorEvents, EventArguments]] = deque()
+        self.queue: deque[tuple[PubSubCallable, HathorEvents, EventArguments]] = deque()
         self.reactor = reactor
 
     def subscribe(self, key: HathorEvents, fn: PubSubCallable) -> None:

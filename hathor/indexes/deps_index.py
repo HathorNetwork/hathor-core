@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Iterator, List
+from typing import TYPE_CHECKING, Iterator
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
@@ -45,7 +45,8 @@ def get_requested_from_height(tx: BaseTransaction) -> int:
     """
     assert tx.storage is not None
     if tx.is_block:
-        return tx.get_metadata().height
+        assert isinstance(tx, Block)
+        return tx.get_height()
     first_block = tx.get_metadata().first_block
     if first_block is None:
         # XXX: consensus did not run yet to update first_block, what should we do?
@@ -54,7 +55,7 @@ def get_requested_from_height(tx: BaseTransaction) -> int:
         return INF_HEIGHT
     block = tx.storage.get_transaction(first_block)
     assert isinstance(block, Block)
-    return block.get_metadata().height
+    return block.get_height()
 
 
 class DepsIndex(BaseIndex):
@@ -117,10 +118,7 @@ class DepsIndex(BaseIndex):
         return SCOPE
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
-        tx_meta = tx.get_metadata()
-        if tx_meta.voided_by:
-            return
-        self.add_tx(tx, partial=False)
+        self.add_tx(tx)
 
     def update(self, tx: BaseTransaction) -> None:
         assert tx.hash is not None
@@ -167,7 +165,7 @@ class DepsIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def known_children(self, tx: BaseTransaction) -> List[bytes]:
+    def known_children(self, tx: BaseTransaction) -> list[bytes]:
         """Return the hashes of all reverse dependencies that are children of the given tx.
 
         That is, they depend on `tx` because they are children of `tx`, and not because `tx` is an input. This is
@@ -192,6 +190,6 @@ class DepsIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_next_needed_tx(self) -> bytes:
-        """Choose the start hash for downloading the needed txs"""
+    def iter_next_needed_txs(self) -> Iterator[bytes]:
+        """Iterate over the next needed transactions."""
         raise NotImplementedError

@@ -14,7 +14,7 @@
 
 from abc import abstractmethod
 from collections.abc import Collection
-from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, cast
+from typing import TYPE_CHECKING, Iterable, Iterator, Optional, cast
 
 import structlog
 
@@ -70,7 +70,7 @@ class MempoolTipsIndex(BaseIndex):
 
     # originally tx_storage.get_mempool_tips_index
     @abstractmethod
-    def get(self) -> Set[bytes]:
+    def get(self) -> set[bytes]:
         """
         Get the set of mempool tips indexed.
 
@@ -107,8 +107,8 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         assert tx.hash is not None
         assert tx.storage is not None
         tx_meta = tx.get_metadata()
-        to_remove: Set[bytes] = set()
-        to_remove_parents: Set[bytes] = set()
+        to_remove: set[bytes] = set()
+        to_remove_parents: set[bytes] = set()
         tx_storage = tx.storage
         for tip_tx in self.iter(tx_storage):
             assert tip_tx.hash is not None
@@ -185,8 +185,8 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         yield from cast(Iterator[Transaction], it)
 
     def iter_all(self, tx_storage: 'TransactionStorage') -> Iterator[Transaction]:
-        from hathor.transaction.storage.traversal import BFSWalk
-        bfs = BFSWalk(tx_storage, is_dag_verifications=True, is_left_to_right=False)
+        from hathor.transaction.storage.traversal import BFSTimestampWalk
+        bfs = BFSTimestampWalk(tx_storage, is_dag_verifications=True, is_left_to_right=False)
         for tx in bfs.run(self.iter(tx_storage), skip_root=False):
             assert isinstance(tx, Transaction)
             if tx.get_metadata().first_block is not None:
@@ -194,5 +194,5 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             else:
                 yield tx
 
-    def get(self) -> Set[bytes]:
+    def get(self) -> set[bytes]:
         return set(iter(self._index))
