@@ -171,7 +171,7 @@ FeatureResource.openapi = {
             ],
             'per-ip': [
                 {
-                    'rate': '3r/s',
+                    'rate': '1r/s',
                     'burst': 10,
                     'delay': 3
                 }
