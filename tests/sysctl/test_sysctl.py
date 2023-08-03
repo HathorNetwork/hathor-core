@@ -177,7 +177,7 @@ class SysctlTest(unittest.TestCase):
 
     def test_proto_get_unknown(self) -> None:
         self.proto.lineReceived(b'net.unknown')
-        self.assertEqual(b'[error] path net.unknown not found\n', self.tr.value())
+        self.assertEqual(b'[error] net.unknown not found\n', self.tr.value())
 
     def test_proto_get_readonly(self) -> None:
         self.proto.lineReceived(b'net.readonly')
@@ -185,7 +185,7 @@ class SysctlTest(unittest.TestCase):
 
     def test_proto_get_writeonly(self) -> None:
         self.proto.lineReceived(b'core.writeonly')
-        self.assertEqual(b'[error] cannot read from the path core.writeonly\n', self.tr.value())
+        self.assertEqual(b'[error] cannot read from core.writeonly\n', self.tr.value())
 
     ##################
     # Protocol: Set
@@ -205,11 +205,11 @@ class SysctlTest(unittest.TestCase):
 
     def test_proto_set_readonly(self) -> None:
         self.proto.lineReceived(b'net.readonly=0.50')
-        self.assertEqual(b'[error] cannot write to the path net.readonly\n', self.tr.value())
+        self.assertEqual(b'[error] cannot write to net.readonly\n', self.tr.value())
 
     def test_proto_set_unknown(self) -> None:
         self.proto.lineReceived(b'net.unknown=0.50')
-        self.assertEqual(b'[error] path net.unknown not found\n', self.tr.value())
+        self.assertEqual(b'[error] net.unknown not found\n', self.tr.value())
 
     def test_proto_set_tuple(self) -> None:
         self.proto.lineReceived(b'net.rate_limit=8, 2')
