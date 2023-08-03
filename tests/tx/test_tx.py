@@ -1137,6 +1137,60 @@ class BaseTransactionTest(unittest.TestCase):
         tx.update_hash()
         tx.verify_sigops_input()
 
+    def test_compare_bytes_equal(self) -> None:
+        # create some block
+        [block1] = add_new_blocks(self.manager, 1, advance_clock=1)
+
+        # clone it to make sure we have a new instance
+        block2 = block1.clone()
+
+        # the storage already has block1 and should correctly return True
+        self.assertTrue(self.tx_storage.compare_bytes_with_local_tx(block2))
+
+    def test_compare_bytes_different(self) -> None:
+        # create some block
+        [block1] = add_new_blocks(self.manager, 1, advance_clock=1)
+
+        # clone it and change something, doesn't matter what it is
+        # XXX: note the hash is not being update on purpose, we expect a failure even if the hash hasn't changed
+        block2 = block1.clone()
+        block2.weight += 1
+
+        # the storage already has block1 and should correctly return False
+        self.assertFalse(self.tx_storage.compare_bytes_with_local_tx(block2))
+
+    def test_compare_bytes_partially_validated_equal(self) -> None:
+        from hathor.transaction.validation_state import ValidationState
+
+        # create some block, make it partially valid and save it
+        [block1] = add_new_blocks(self.manager, 1, advance_clock=1)
+        block1.set_validation(ValidationState.BASIC)
+        with self.tx_storage.allow_partially_validated_context():
+            self.tx_storage.save_transaction(block1)
+
+        # clone it to make sure we have a new instance
+        block2 = block1.clone()
+
+        # the storage already has block1 and should correctly return True
+        self.assertTrue(self.tx_storage.compare_bytes_with_local_tx(block2))
+
+    def test_compare_bytes_partially_validated_different(self) -> None:
+        from hathor.transaction.validation_state import ValidationState
+
+        # create some block, make it partially valid and save it
+        [block1] = add_new_blocks(self.manager, 1, advance_clock=1)
+        block1.set_validation(ValidationState.BASIC)
+        with self.tx_storage.allow_partially_validated_context():
+            self.tx_storage.save_transaction(block1)
+
+        # clone it and change something, doesn't matter what it is
+        # XXX: note the hash is not being update on purpose, we expect a failure even if the hash hasn't changed
+        block2 = block1.clone()
+        block2.weight += 1
+
+        # the storage already has block1 and should correctly return False
+        self.assertFalse(self.tx_storage.compare_bytes_with_local_tx(block2))
+
 
 class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
     __test__ = True
