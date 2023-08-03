@@ -226,4 +226,6 @@ def to_height_info(raw: tuple[int, str]) -> HeightInfo:
 
 
 def to_serializable_best_blockchain(best_blockchain: list[HeightInfo]) -> list[tuple[int, str]]:
+    """ Converts the list of HeightInfo to a tuple list that can be serializable to json afterwards.
+    """
     return [(hi.height, hi.id.hex()) for hi in best_blockchain]

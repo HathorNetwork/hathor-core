@@ -94,8 +94,8 @@ class StatusResource(Resource):
             best_block_tips.append({'hash': tx.hash_hex, 'height': meta.height})
 
         best_block = self.manager.tx_storage.get_best_block()
-        best_blockchain = to_serializable_best_blockchain(
-                self.manager.tx_storage.get_n_height_tips(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS))
+        raw_best_blockchain = self.manager.tx_storage.get_n_height_tips(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
+        best_blockchain = to_serializable_best_blockchain(raw_best_blockchain)
 
         data = {
             'server': {
