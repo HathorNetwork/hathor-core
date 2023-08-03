@@ -58,8 +58,9 @@ class BitcoinAuxPow(NamedTuple):
             raise AuxPowNoMagicError('cannot find MAGIC_NUMBER')
         if magic_index < len(self.coinbase_head) - len(MAGIC_NUMBER):
             raise AuxPowUnexpectedMagicError('unexpected MAGIC_NUMBER')
-        if len(self.merkle_path) > MAX_MERKLE_PATH_LENGTH:
-            raise AuxPowLongMerklePathError('`merkle_path` too long')
+        merkle_path_length = len(self.merkle_path)
+        if merkle_path_length > MAX_MERKLE_PATH_LENGTH:
+            raise AuxPowLongMerklePathError(f'merkle_path too long: {merkle_path_length} > {MAX_MERKLE_PATH_LENGTH}')
 
     def __bytes__(self) -> bytes:
         """ Convert to byte representation.
