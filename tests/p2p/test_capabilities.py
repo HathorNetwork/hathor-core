@@ -1,6 +1,6 @@
 from hathor.conf import HathorSettings
 from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
-from hathor.p2p.sync_v2.manager import NodeBlockSync
+from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.simulator import FakeConnection
 from tests import unittest
 
