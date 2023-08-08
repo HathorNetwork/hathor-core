@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Optional
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_factory import SyncAgentFactory
-from hathor.p2p.sync_v2.manager import NodeBlockSync
+from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.util import Reactor
 
 if TYPE_CHECKING:
