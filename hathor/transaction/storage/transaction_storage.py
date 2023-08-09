@@ -643,6 +643,12 @@ class TransactionStorage(ABC):
             if meta.voided_by and meta.voided_by != set([block_hash]):
                 # If anyone but the block itself is voiding this block, then it must be skipped.
                 continue
+
+            if timestamp is not None:
+                # If block is a best_tip at `timestamp`, it cannot be from the future.
+                block = self.get_transaction(block_hash)
+                assert block.timestamp <= timestamp
+
             if abs(meta.score - best_score) < 1e-10:
                 best_tip_blocks.append(block_hash)
             elif meta.score > best_score:
