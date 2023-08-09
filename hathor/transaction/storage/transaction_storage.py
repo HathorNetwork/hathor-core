@@ -514,7 +514,9 @@ class TransactionStorage(ABC):
     def compare_bytes_with_local_tx(self, tx: BaseTransaction) -> bool:
         """Compare byte-per-byte `tx` with the local transaction."""
         assert tx.hash is not None
-        local_tx = self.get_transaction(tx.hash)
+        # XXX: we have to accept any scope because we only want to know what bytes we have stored
+        with tx_allow_context(self, allow_scope=TxAllowScope.ALL):
+            local_tx = self.get_transaction(tx.hash)
         local_tx_bytes = bytes(local_tx)
         tx_bytes = bytes(tx)
         if tx_bytes == local_tx_bytes:

@@ -25,7 +25,7 @@ from hathor.util import verified_cast
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
-    from hathor.p2p.sync_v2.manager import NodeBlockSync
+    from hathor.p2p.sync_v2.agent import NodeBlockSync
 
 logger = get_logger()
 
