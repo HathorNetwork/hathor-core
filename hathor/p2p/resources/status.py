@@ -17,7 +17,11 @@ import time
 import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
+from hathor.p2p.utils import to_serializable_best_blockchain
 from hathor.util import json_dumpb
+
+settings = HathorSettings()
 
 
 @register_resource
@@ -70,6 +74,7 @@ class StatusResource(Resource):
                 'plugins': status,
                 'warning_flags': [flag.value for flag in conn.warning_flags],
                 'protocol_version': str(conn.sync_version),
+                'peer_best_blockchain': to_serializable_best_blockchain(conn.state.peer_best_blockchain),
             })
 
         known_peers = []
@@ -89,6 +94,8 @@ class StatusResource(Resource):
             best_block_tips.append({'hash': tx.hash_hex, 'height': meta.height})
 
         best_block = self.manager.tx_storage.get_best_block()
+        raw_best_blockchain = self.manager.tx_storage.get_n_height_tips(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
+        best_blockchain = to_serializable_best_blockchain(raw_best_blockchain)
 
         data = {
             'server': {
@@ -114,10 +121,35 @@ class StatusResource(Resource):
                     'hash': best_block.hash_hex,
                     'height': best_block.get_metadata().height,
                 },
+                'best_blockchain': best_blockchain,
             }
         }
         return json_dumpb(data)
 
+
+_openapi_height_info = [59, '0000045de9ac8365c43ccc96222873cb80c340c6c9c8949b56d2e2e51b6a3dbe']
+_openapi_connected_peer = {
+    'id': '5578ab3bcaa861fb9d07135b8b167dd230d4487b147be8fd2c94a79bd349d123',
+    'app_version': 'Hathor v0.14.0-beta',
+    'uptime': 118.37029600143433,
+    'address': '192.168.1.1:54321',
+    'state': 'READY',
+    'last_message': 1539271481,
+    'plugins': {
+        'node-sync-timestamp': {
+            'is_enabled': True,
+            'latest_timestamp': 1685310912,
+            'synced_timestamp': 1685310912
+         }
+    },
+    'warning_flags': ['no_entrypoints'],
+    'protocol_version': 'sync-v1.1',
+    'peer_best_blockchain': [_openapi_height_info]
+}
+_openapi_connecting_peer = {
+    'deferred': '<bound method TCP4ClientEndpoint.connect of <twisted.internet.endpoints.TCP4ClientEndpoint object at 0x10b16b470>>',  # noqa
+    'address': '192.168.1.1:54321'
+}
 
 StatusResource.openapi = {
     '/status': {
@@ -164,7 +196,7 @@ StatusResource.openapi = {
                                         },
                                         'known_peers': [],
                                         'connections': {
-                                            'connected_peers': [],
+                                            'connected_peers': [_openapi_connected_peer],
                                             'handshaking_peers': [
                                                 {
                                                     'address': '192.168.1.1:54321',
@@ -173,28 +205,24 @@ StatusResource.openapi = {
                                                     'app_version': 'Unknown'
                                                 }
                                             ],
-                                            'connecting_peers': [
-                                                {
-                                                    'deferred': ('<bound method TCP4ClientEndpoint.connect of <twisted'
-                                                                 '.internet.endpoints.TCP4ClientEndpoint object at '
-                                                                 '0x10b16b470>>'),
-                                                    'address': '192.168.1.1:54321'
-                                                }
-                                            ]
+                                            'connecting_peers': [_openapi_connecting_peer]
                                         },
                                         'dag': {
                                             'first_timestamp': 1539271481,
                                             'latest_timestamp': 1539271483,
                                             'best_block_tips': [
                                                 {
-                                                    'hash': '000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038',  # noqa: E501
+                                                    'hash':
+                                                    '000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038',  # noqa
                                                     'height': 0
                                                 }
                                             ],
                                             'best_block': {
-                                                'hash': '000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038',  # noqa: E501
+                                                'hash':
+                                                '000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038',  # noqa
                                                 'height': 0
-                                            }
+                                            },
+                                            'best_blockchain': [_openapi_height_info]
                                         }
                                     }
                                 }
