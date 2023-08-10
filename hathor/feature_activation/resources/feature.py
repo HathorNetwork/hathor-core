@@ -89,7 +89,13 @@ class FeatureResource(Resource):
 
     def get_features(self) -> bytes:
         best_block = self.tx_storage.get_best_block()
-        bit_counts = best_block.get_feature_activation_bit_counts()
+
+        best_block_height = best_block.get_height()
+        bit_counts_block_height = best_block_height - self._feature_settings.evaluation_interval
+        bit_counts_block = self.tx_storage.get_transaction_by_height(bit_counts_block_height)
+        assert isinstance(bit_counts_block, Block)
+
+        bit_counts = bit_counts_block.get_feature_activation_bit_counts()
         features = []
 
         for feature, criteria in self._feature_settings.features.items():

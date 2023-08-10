@@ -65,6 +65,11 @@ def _get_blocks_and_storage() -> tuple[list[Block], TransactionStorage]:
 
         0b0000,  # 24: boundary block
         0b0000,
+        0b0000,
+        0b0000,
+
+        0b0000,  # 25: boundary block
+        0b0000,
     ]
     storage = Mock()
     storage.get_metadata = Mock(return_value=None)
@@ -147,6 +152,7 @@ def test_get_state_from_defined(
     start_height: int,
     expected_state: FeatureState
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -177,6 +183,7 @@ def test_get_state_from_started_to_failed(
     block_height: int,
     timeout_height: int,
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -208,6 +215,7 @@ def test_get_state_from_started_to_must_signal_on_timeout(
     block_height: int,
     timeout_height: int,
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -239,6 +247,7 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
     block_height: int,
     default_threshold: int
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         default_threshold=default_threshold,
@@ -271,6 +280,7 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
     block_height: int,
     custom_threshold: int
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -310,6 +320,7 @@ def test_get_state_from_started_to_started(
     lock_in_on_timeout: bool,
     timeout_height: int,
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -339,6 +350,7 @@ def test_get_state_from_must_signal_to_locked_in(
     tx_storage: TransactionStorage,
     block_height: int,
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -370,6 +382,7 @@ def test_get_state_from_locked_in_to_active(
     block_height: int,
     minimum_activation_height: int,
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -402,6 +415,7 @@ def test_get_state_from_locked_in_to_locked_in(
     block_height: int,
     minimum_activation_height: int,
 ) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -428,6 +442,7 @@ def test_get_state_from_locked_in_to_locked_in(
 
 @pytest.mark.parametrize('block_height', [20, 21, 22, 23])
 def test_get_state_from_active(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -453,6 +468,7 @@ def test_get_state_from_active(block_mocks: list[Block], tx_storage: Transaction
 
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -483,6 +499,7 @@ def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStor
 
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -508,6 +525,7 @@ def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStor
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
 def test_get_state_from_failed(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
+    block_height += 4
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
@@ -573,11 +591,9 @@ def test_get_bits_description(tx_storage: TransactionStorage) -> None:
 @pytest.mark.parametrize(
     ['block_height', 'ancestor_height'],
     [
-        (21, 21),
         (21, 100),
         (10, 15),
         (10, 11),
-        (0, 0),
     ]
 )
 def test_get_ancestor_at_height_invalid(
@@ -594,7 +610,7 @@ def test_get_ancestor_at_height_invalid(
         service._get_ancestor_at_height(block=block, height=ancestor_height)
 
     assert str(e.value) == (
-        f"ancestor height must be lower than the block's height: {ancestor_height} >= {block_height}"
+        f"ancestor height must be lower than or equal the block's height: {ancestor_height} > {block_height}"
     )
 
 

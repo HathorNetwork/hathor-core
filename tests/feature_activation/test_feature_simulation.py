@@ -87,19 +87,19 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         miner = self.simulator.create_miner(manager, hashpower=1e6)
         miner.start()
 
-        get_state_mock = Mock(wraps=feature_service.get_state)
+        _get_state_mock = Mock(wraps=feature_service._get_state)
         get_ancestor_iteratively_mock = Mock(wraps=feature_service_module._get_ancestor_iteratively)
 
         with (
-            patch.object(FeatureService, 'get_state', get_state_mock),
+            patch.object(FeatureService, '_get_state', _get_state_mock),
             patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
         ):
             # at the beginning, the feature is DEFINED:
-            trigger = StopAfterNMinedBlocks(miner, quantity=10)
+            trigger = StopAfterNMinedBlocks(miner, quantity=14)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
-                block_height=10,
+                block_height=14,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -114,18 +114,18 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     )
                 ]
             )
-            # so we query states all the way down to genesis:
-            assert self._get_state_mock_block_height_calls(get_state_mock) == [10, 8, 4, 0]
+            # # so we query states all the way down to genesis:
+            assert self._get_state_mock_block_height_calls(_get_state_mock) == [8, 4, 0]
             # no blocks are voided, so we only use the height index, and not get_ancestor_iteratively:
             assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
+            _get_state_mock.reset_mock()
 
-            # at block 19, the feature is DEFINED, just before becoming STARTED:
+            # at block 23, the feature is DEFINED, just before becoming STARTED:
             trigger = StopAfterNMinedBlocks(miner, quantity=9)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
-                block_height=19,
+                block_height=23,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -141,16 +141,16 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 ]
             )
             # so we query states from block 19 to 8, as it's cached:
-            assert self._get_state_mock_block_height_calls(get_state_mock) == [19, 16, 12, 8]
+            assert self._get_state_mock_block_height_calls(_get_state_mock) == [16, 12, 8]
             assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
+            _get_state_mock.reset_mock()
 
-            # at block 20, the feature becomes STARTED:
+            # at block 24, the feature becomes STARTED:
             trigger = StopAfterNMinedBlocks(miner, quantity=1)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
-                block_height=20,
+                block_height=24,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -165,62 +165,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     )
                 ]
             )
-            assert self._get_state_mock_block_height_calls(get_state_mock) == [20, 16]
+            assert self._get_state_mock_block_height_calls(_get_state_mock) == [20, 16]
             assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
+            _get_state_mock.reset_mock()
 
-            # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
+            # at block 59, the feature is STARTED, just before becoming MUST_SIGNAL:
             trigger = StopAfterNMinedBlocks(miner, quantity=35)
-            self.simulator.run(36000, trigger=trigger)
-            result = self._get_result(web_client)
-            assert result == dict(
-                block_height=55,
-                features=[
-                    dict(
-                        name='NOP_FEATURE_1',
-                        state='STARTED',
-                        acceptance=0,
-                        threshold=0.75,
-                        start_height=20,
-                        timeout_height=60,
-                        minimum_activation_height=72,
-                        lock_in_on_timeout=True,
-                        version='0.0.0'
-                    )
-                ]
-            )
-            assert (
-                self._get_state_mock_block_height_calls(get_state_mock) == [55, 52, 48, 44, 40, 36, 32, 28, 24, 20]
-            )
-            assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
-
-            # at block 56, the feature becomes MUST_SIGNAL:
-            trigger = StopAfterNMinedBlocks(miner, quantity=1)
-            self.simulator.run(36000, trigger=trigger)
-            result = self._get_result(web_client)
-            assert result == dict(
-                block_height=56,
-                features=[
-                    dict(
-                        name='NOP_FEATURE_1',
-                        state='MUST_SIGNAL',
-                        acceptance=0,
-                        threshold=0.75,
-                        start_height=20,
-                        timeout_height=60,
-                        minimum_activation_height=72,
-                        lock_in_on_timeout=True,
-                        version='0.0.0'
-                    )
-                ]
-            )
-            assert self._get_state_mock_block_height_calls(get_state_mock) == [56, 52]
-            assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
-
-            # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
-            trigger = StopAfterNMinedBlocks(miner, quantity=3)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
@@ -228,7 +178,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
-                        state='MUST_SIGNAL',
+                        state='STARTED',
                         acceptance=0,
                         threshold=0.75,
                         start_height=20,
@@ -240,12 +190,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 ]
             )
             assert (
-                self._get_state_mock_block_height_calls(get_state_mock) == [59, 56]
+                self._get_state_mock_block_height_calls(_get_state_mock) == [52, 48, 44, 40, 36, 32, 28, 24, 20]
             )
             assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
+            _get_state_mock.reset_mock()
 
-            # at block 60, the feature becomes LOCKED_IN:
+            # at block 60, the feature becomes MUST_SIGNAL:
             trigger = StopAfterNMinedBlocks(miner, quantity=1)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
@@ -254,6 +204,56 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
+                        state='MUST_SIGNAL',
+                        acceptance=0,
+                        threshold=0.75,
+                        start_height=20,
+                        timeout_height=60,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
+                        version='0.0.0'
+                    )
+                ]
+            )
+            assert self._get_state_mock_block_height_calls(_get_state_mock) == [56, 52]
+            assert get_ancestor_iteratively_mock.call_count == 0
+            _get_state_mock.reset_mock()
+
+            # at block 63, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
+            trigger = StopAfterNMinedBlocks(miner, quantity=3)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
+            assert result == dict(
+                block_height=63,
+                features=[
+                    dict(
+                        name='NOP_FEATURE_1',
+                        state='MUST_SIGNAL',
+                        acceptance=0,
+                        threshold=0.75,
+                        start_height=20,
+                        timeout_height=60,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
+                        version='0.0.0'
+                    )
+                ]
+            )
+            assert (
+                self._get_state_mock_block_height_calls(_get_state_mock) == [56]
+            )
+            assert get_ancestor_iteratively_mock.call_count == 0
+            _get_state_mock.reset_mock()
+
+            # at block 64, the feature becomes LOCKED_IN:
+            trigger = StopAfterNMinedBlocks(miner, quantity=1)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
+            assert result == dict(
+                block_height=64,
+                features=[
+                    dict(
+                        name='NOP_FEATURE_1',
                         state='LOCKED_IN',
                         acceptance=None,
                         threshold=0.75,
@@ -265,16 +265,16 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     )
                 ]
             )
-            assert self._get_state_mock_block_height_calls(get_state_mock) == [60, 56]
+            assert self._get_state_mock_block_height_calls(_get_state_mock) == [60, 56]
             assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
+            _get_state_mock.reset_mock()
 
-            # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
+            # at block 75, the feature is LOCKED_IN, just before becoming ACTIVE:
             trigger = StopAfterNMinedBlocks(miner, quantity=11)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
-                block_height=71,
+                block_height=75,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -290,17 +290,17 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 ]
             )
             assert (
-                self._get_state_mock_block_height_calls(get_state_mock) == [71, 68, 64, 60]
+                self._get_state_mock_block_height_calls(_get_state_mock) == [68, 64, 60]
             )
             assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
+            _get_state_mock.reset_mock()
 
-            # at block 72, the feature becomes ACTIVE, forever:
+            # at block 76, the feature becomes ACTIVE, forever:
             trigger = StopAfterNMinedBlocks(miner, quantity=1)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
-                block_height=72,
+                block_height=76,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -315,9 +315,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     )
                 ]
             )
-            assert self._get_state_mock_block_height_calls(get_state_mock) == [72, 68]
+            assert self._get_state_mock_block_height_calls(_get_state_mock) == [72, 68]
             assert get_ancestor_iteratively_mock.call_count == 0
-            get_state_mock.reset_mock()
+            _get_state_mock.reset_mock()
 
     def test_reorg(self) -> None:
         artifacts = self.simulator.create_artifacts(self.builder)
@@ -358,11 +358,11 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         miner.start()
 
         # at the beginning, the feature is DEFINED:
-        trigger = StopAfterNMinedBlocks(miner, quantity=0)
+        trigger = StopAfterNMinedBlocks(miner, quantity=4)
         self.simulator.run(36000, trigger=trigger)
         result = self._get_result(web_client)
         assert result == dict(
-            block_height=0,
+            block_height=4,
             features=[
                 dict(
                     name='NOP_FEATURE_1',
@@ -378,12 +378,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
-        # at block 4, the feature becomes STARTED with 0% acceptance
+        # at block 8, the feature becomes STARTED with 0% acceptance
         trigger = StopAfterNMinedBlocks(miner, quantity=4)
         self.simulator.run(36000, trigger=trigger)
         result = self._get_result(web_client)
         assert result == dict(
-            block_height=4,
+            block_height=8,
             features=[
                 dict(
                     name='NOP_FEATURE_1',
@@ -399,12 +399,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
-        # at block 7, acceptance was 25%
+        # at block 11, acceptance was 25%
         trigger = StopAfterNMinedBlocks(miner, quantity=3)
         self.simulator.run(36000, trigger=trigger)
         result = self._get_result(web_client)
         assert result == dict(
-            block_height=7,
+            block_height=11,
             features=[
                 dict(
                     name='NOP_FEATURE_1',
@@ -420,12 +420,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
-        # at block 11, acceptance was 75%, so the feature will be locked-in in the next block
+        # at block 15, acceptance was 75%, so the feature will be locked-in in the next block
         trigger = StopAfterNMinedBlocks(miner, quantity=4)
         self.simulator.run(36000, trigger=trigger)
         result = self._get_result(web_client)
         assert result == dict(
-            block_height=11,
+            block_height=15,
             features=[
                 dict(
                     name='NOP_FEATURE_1',
@@ -441,12 +441,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
-        # at block 12, the feature is locked-in
+        # at block 16, the feature is locked-in
         trigger = StopAfterNMinedBlocks(miner, quantity=1)
         self.simulator.run(36000, trigger=trigger)
         result = self._get_result(web_client)
         assert result == dict(
-            block_height=12,
+            block_height=16,
             features=[
                 dict(
                     name='NOP_FEATURE_1',
@@ -462,12 +462,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
-        # at block 16, the feature is activated
+        # at block 20, the feature is activated
         trigger = StopAfterNMinedBlocks(miner, quantity=4)
         self.simulator.run(36000, trigger=trigger)
         result = self._get_result(web_client)
         assert result == dict(
-            block_height=16,
+            block_height=20,
             features=[
                 dict(
                     name='NOP_FEATURE_1',
@@ -485,15 +485,16 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
         miner.stop()
 
-        # We then create a new manager with a miner that mines one more block (17 vs 16), so its blockchain wins when
+        # TODO: We need to simulate a reorg of size smaller than one evaluation interval
+        # We then create a new manager with a miner that mines one more block (21 vs 20), so its blockchain wins when
         # both managers are connected. This causes a reorg and the feature goes back to the STARTED state.
         manager2 = self.simulator.create_peer()
         manager2.allow_mining_without_peers()
 
-        miner2 = self.simulator.create_miner(manager2, hashpower=1e6)
+        miner2 = self.simulator.create_miner(manager2, hashpower=1e8)
 
         miner2.start()
-        trigger = StopAfterNMinedBlocks(miner2, quantity=17)
+        trigger = StopAfterNMinedBlocks(miner2, quantity=21)
         self.simulator.run(36000, trigger=trigger)
         miner2.stop()
 
@@ -503,7 +504,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
         result = self._get_result(web_client)
         assert result == dict(
-            block_height=17,
+            block_height=21,
             features=[
                 dict(
                     name='NOP_FEATURE_1',
@@ -574,20 +575,20 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
         miner.start()
 
-        get_state_mock = Mock(wraps=feature_service.get_state)
+        _get_state_mock = Mock(wraps=feature_service._get_state)
         get_ancestor_iteratively_mock = Mock(wraps=feature_service_module._get_ancestor_iteratively)
 
         with (
-            patch.object(FeatureService, 'get_state', get_state_mock),
+            patch.object(FeatureService, '_get_state', _get_state_mock),
             patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
         ):
             assert artifacts1.tx_storage.get_vertices_count() == 3  # genesis vertices in the storage
 
-            trigger = StopAfterNMinedBlocks(miner, quantity=64)
+            trigger = StopAfterNMinedBlocks(miner, quantity=68)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
-                block_height=64,
+                block_height=68,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -604,11 +605,11 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             )
             # feature states have to be calculated for all blocks in evaluation interval boundaries, as this is the
             # first run:
-            assert self._get_state_mock_block_height_calls(get_state_mock) == list(range(64, -4, -4))
+            assert self._get_state_mock_block_height_calls(_get_state_mock) == list(range(64, -4, -4))
             # no blocks are voided, so we only use the height index:
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert artifacts1.tx_storage.get_vertices_count() == 67
-            get_state_mock.reset_mock()
+            assert artifacts1.tx_storage.get_vertices_count() == 71
+            _get_state_mock.reset_mock()
 
         miner.stop()
         manager1.stop()
@@ -629,21 +630,21 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         )
         web_client = StubSite(feature_resource)
 
-        get_state_mock = Mock(wraps=feature_service.get_state)
+        _get_state_mock = Mock(wraps=feature_service._get_state)
         get_ancestor_iteratively_mock = Mock(wraps=feature_service_module._get_ancestor_iteratively)
 
         with (
-            patch.object(FeatureService, 'get_state', get_state_mock),
+            patch.object(FeatureService, '_get_state', _get_state_mock),
             patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
         ):
             # the new storage starts populated
-            assert artifacts2.tx_storage.get_vertices_count() == 67
+            assert artifacts2.tx_storage.get_vertices_count() == 71
             self.simulator.run(3600)
 
             result = self._get_result(web_client)
 
             assert result == dict(
-                block_height=64,
+                block_height=68,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -659,10 +660,10 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
                 ]
             )
             # features states are not queried for previous blocks, as they have it cached:
-            assert self._get_state_mock_block_height_calls(get_state_mock) == [64]
+            assert self._get_state_mock_block_height_calls(_get_state_mock) == [64]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert artifacts2.tx_storage.get_vertices_count() == 67
-            get_state_mock.reset_mock()
+            assert artifacts2.tx_storage.get_vertices_count() == 71
+            _get_state_mock.reset_mock()
 
 
 class SyncV1MemoryStorageFeatureSimulationTest(unittest.SyncV1Params, BaseMemoryStorageFeatureSimulationTest):

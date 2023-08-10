@@ -34,6 +34,19 @@ class FeatureService:
         return state == FeatureState.ACTIVE
 
     def get_state(self, *, block: Block, feature: Feature) -> FeatureState:
+        height = block.get_height()  # 200 / 210
+        offset_to_boundary = height % self._feature_settings.evaluation_interval  # 0 / 10
+        closest_boundary_height = height - offset_to_boundary  # 200
+        previous_boundary_height = closest_boundary_height - self._feature_settings.evaluation_interval  # 100
+
+        previous_boundary_block = self._get_ancestor_at_height(
+            block=block,
+            height=max(previous_boundary_height, 0)
+        )
+
+        return self._get_state(block=previous_boundary_block, feature=feature)
+
+    def _get_state(self, *, block: Block, feature: Feature) -> FeatureState:
         """Returns the state of a feature at a certain block. Uses block metadata to cache states."""
 
         # per definition, the genesis block is in the DEFINED state for all features
@@ -52,7 +65,7 @@ class FeatureService:
         previous_boundary_height = height - offset_to_previous_boundary
         assert previous_boundary_height >= 0
         previous_boundary_block = self._get_ancestor_at_height(block=block, height=previous_boundary_height)
-        previous_boundary_state = self.get_state(block=previous_boundary_block, feature=feature)
+        previous_boundary_state = self._get_state(block=previous_boundary_block, feature=feature)
 
         if offset_to_boundary != 0:
             return previous_boundary_state
@@ -151,8 +164,8 @@ class FeatureService:
         Given a block, returns its ancestor at a specific height.
         Uses the height index if the block is in the best blockchain, or search iteratively otherwise.
         """
-        assert height < block.get_height(), (
-            f"ancestor height must be lower than the block's height: {height} >= {block.get_height()}"
+        assert height <= block.get_height(), (
+            f"ancestor height must be lower than or equal the block's height: {height} > {block.get_height()}"
         )
 
         metadata = block.get_metadata()
