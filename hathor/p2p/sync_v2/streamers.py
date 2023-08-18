@@ -160,6 +160,11 @@ class BlockchainStreaming(_StreamingBase):
             self.node_sync.send_blocks_end(StreamEnd.LIMIT_EXCEEDED)
             return
 
+        if cur.get_metadata().voided_by:
+            self.stop()
+            self.node_sync.send_blocks_end(StreamEnd.STREAM_BECAME_VOIDED)
+            return
+
         self.counter += 1
 
         self.log.debug('send next block', blk_id=cur.hash.hex())
@@ -201,8 +206,9 @@ class TransactionsStreaming(_StreamingBase):
     def start(self) -> None:
         super().start()
         last_blk = self.storage.get_transaction(self.last_block_hash)
+        last_blk_meta = last_blk.get_metadata()
         assert isinstance(last_blk, Block)
-        self.last_block_height = last_blk.get_height()
+        self.last_block_height = last_blk_meta.get_height(soft=True)
 
     # TODO: make this generic too?
     def send_next(self) -> None:
