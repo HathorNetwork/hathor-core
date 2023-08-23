@@ -31,7 +31,12 @@ class Trigger(ABC):
 
 
 class StopAfterNMinedBlocks(Trigger):
-    """Stop the simulation after `miner` finds N blocks. Note that these blocks might be orphan."""
+    """
+    Stop the simulation after `miner` finds at least N blocks. Note that these blocks might be orphan.
+
+    Use `miner.pause_after_exactly()` instead of this trigger if you need "exactly N blocks" behavior, instead of
+    "at least N blocks".
+    """
     def __init__(self, miner: 'AbstractMiner', *, quantity: int) -> None:
         self.miner = miner
         self.quantity = quantity
