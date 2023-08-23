@@ -26,6 +26,8 @@ from hathor.cli.run_node import RunNodeArgs
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.exception import BuilderError
+from hathor.feature_activation.bit_signaling_service import BitSignalingService
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.manager import ConnectionsManager
@@ -189,6 +191,19 @@ class CliBuilder:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
+        self.feature_service = FeatureService(
+            feature_settings=settings.FEATURE_ACTIVATION,
+            tx_storage=tx_storage
+        )
+
+        bit_signaling_service = BitSignalingService(
+            feature_settings=settings.FEATURE_ACTIVATION,
+            feature_service=self.feature_service,
+            tx_storage=tx_storage,
+            support_features=self._args.signal_support,
+            not_support_features=self._args.signal_not_support
+        )
+
         p2p_manager = ConnectionsManager(
             reactor,
             network=network,
@@ -216,7 +231,8 @@ class CliBuilder:
             checkpoints=settings.CHECKPOINTS,
             environment_info=get_environment_info(args=str(self._args), peer_id=peer_id.id),
             full_verification=full_verification,
-            enable_event_queue=self._args.x_enable_event_queue
+            enable_event_queue=self._args.x_enable_event_queue,
+            bit_signaling_service=bit_signaling_service
         )
 
         p2p_manager.set_manager(self.manager)

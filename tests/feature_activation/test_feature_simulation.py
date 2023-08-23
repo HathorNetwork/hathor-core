@@ -75,8 +75,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        feature_service = artifacts.feature_service
-        feature_service._feature_settings = feature_settings
+        feature_service = FeatureService(
+            feature_settings=feature_settings,
+            tx_storage=artifacts.tx_storage
+        )
         feature_resource = FeatureResource(
             feature_settings=feature_settings,
             feature_service=feature_service,
@@ -338,8 +340,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             }
         )
-        feature_service = artifacts.feature_service
-        feature_service._feature_settings = feature_settings
+        feature_service = FeatureService(
+            feature_settings=feature_settings,
+            tx_storage=artifacts.tx_storage
+        )
         feature_resource = FeatureResource(
             feature_settings=feature_settings,
             feature_service=feature_service,
@@ -562,8 +566,10 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             }
         )
 
-        feature_service = artifacts1.feature_service
-        feature_service._feature_settings = feature_settings
+        feature_service = FeatureService(
+            feature_settings=feature_settings,
+            tx_storage=artifacts1.tx_storage
+        )
         feature_resource = FeatureResource(
             feature_settings=feature_settings,
             feature_service=feature_service,
@@ -620,8 +626,10 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         artifacts2 = self.simulator.create_artifacts(builder)
 
         # new feature_service is created with the same storage generated above
-        feature_service = artifacts2.feature_service
-        feature_service._feature_settings = feature_settings
+        feature_service = FeatureService(
+            feature_settings=feature_settings,
+            tx_storage=artifacts2.tx_storage
+        )
         feature_resource = FeatureResource(
             feature_settings=feature_settings,
             feature_service=feature_service,

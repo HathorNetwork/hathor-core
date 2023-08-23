@@ -159,16 +159,15 @@ class RunNode:
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
         from hathor.conf import HathorSettings
-        from hathor.feature_activation.feature_service import FeatureService
         settings = HathorSettings()
 
-        feature_service = FeatureService(
-            feature_settings=settings.FEATURE_ACTIVATION,
-            tx_storage=self.manager.tx_storage
-        )
-
         if register_resources:
-            resources_builder = ResourcesBuilder(self.manager, self._args, builder.event_ws_factory, feature_service)
+            resources_builder = ResourcesBuilder(
+                self.manager,
+                self._args,
+                builder.event_ws_factory,
+                builder.feature_service
+            )
             status_server = resources_builder.build()
             if self._args.status:
                 self.reactor.listenTCP(self._args.status, status_server)
@@ -188,7 +187,6 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
-            feature_service=feature_service
         )
 
     def start_sentry_if_possible(self) -> None:
