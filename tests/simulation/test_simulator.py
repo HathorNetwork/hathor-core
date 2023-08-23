@@ -44,7 +44,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.add_connection(conn12)
         self.simulator.run(60)
 
-        miner2 = self.simulator.create_miner(manager2, hashpower=100e6)
+        miner2 = self.simulator.create_miner(manager2, hashpower=10e9)
         miner2.start()
         self.simulator.run(120)
 
@@ -57,7 +57,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         gen_tx1.stop()
         gen_tx2.stop()
 
-        self.assertTrue(self.simulator.run(600, trigger=StopWhenSynced(conn12)))
+        self.assertTrue(self.simulator.run(3000, trigger=StopWhenSynced(conn12)))
 
         self.assertTrue(conn12.is_connected)
         self.assertTipsEqual(manager1, manager2)
