@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 from typing import TYPE_CHECKING, Optional
 
 from hathor.conf import HathorSettings
@@ -50,6 +51,7 @@ class GeometricMiner(AbstractMiner):
         self._signal_bits = signal_bits or []
         self._block: Optional[Block] = None
         self._blocks_found: int = 0
+        self._blocks_before_pause: float = math.inf
 
     def _on_new_tx(self, key: HathorEvents, args: 'EventArguments') -> None:
         """ Called when a new tx or block is received. It updates the current mining to the
@@ -81,12 +83,17 @@ class GeometricMiner(AbstractMiner):
         return block
 
     def _schedule_next_block(self):
+        if self._blocks_before_pause <= 0:
+            self._delayed_call = None
+            return
+
         if self._block:
             self._block.nonce = self._rng.getrandbits(32)
             self._block.update_hash()
             self.log.debug('randomized step: found new block', hash=self._block.hash_hex, nonce=self._block.nonce)
             self._manager.propagate_tx(self._block, fails_silently=False)
             self._blocks_found += 1
+            self._blocks_before_pause -= 1
             self._block = None
 
         if self._manager.can_start_mining():
@@ -110,3 +117,16 @@ class GeometricMiner(AbstractMiner):
 
     def get_blocks_found(self) -> int:
         return self._blocks_found
+
+    def pause_after_exactly(self, *, n_blocks: int) -> None:
+        """
+        Configure the miner to pause mining blocks after exactly `n_blocks` are propagated. If called more than once,
+        will unpause the miner and pause again according to the new argument.
+
+        Use this instead of the `StopAfterNMinedBlocks` trigger if you need "exactly N blocks" behavior, instead of
+        "at least N blocks".
+        """
+        self._blocks_before_pause = n_blocks
+
+        if not self._delayed_call:
+            self._delayed_call = self._clock.callLater(0, self._schedule_next_block)
