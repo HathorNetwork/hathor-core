@@ -310,11 +310,14 @@ class RunNode:
                 sys.exit(-1)
 
     def check_python_version(self) -> None:
-        MIN_VER = (3, 8)
-        RECOMMENDED_VER = (3, 9)
+        # comments to help grep's
+        MIN_VER = (3, 9)  # Python-3.9
+        MIN_STABLE = (3, 10)  # Python-3.10
+        RECOMMENDED_VER = (3, 10)  # Python-3.10
         cur = sys.version_info
-        min_pretty = '.'.join(map(str, MIN_VER))
         cur_pretty = '.'.join(map(str, cur))
+        min_pretty = '.'.join(map(str, MIN_VER))
+        min_stable_pretty = '.'.join(map(str, MIN_STABLE))
         recommended_pretty = '.'.join(map(str, RECOMMENDED_VER))
         if cur < MIN_VER:
             self.log.critical('\n'.join([
@@ -327,6 +330,17 @@ class RunNode:
                 '',
             ]))
             sys.exit(-1)
+        elif cur < MIN_STABLE:
+            self.log.warning('\n'.join([
+                '',
+                '********************************************************',
+                f'The detected Python version {cur_pretty} is deprecated and support for it will be removed in the'
+                ' next release.',
+                f'The minimum supported Python version will be {min_stable_pretty}',
+                f'The recommended Python version is {recommended_pretty}',
+                '********************************************************',
+                '',
+            ]))
 
     def __init__(self, *, argv=None):
         self.log = logger.new()
