@@ -13,21 +13,83 @@
 #  limitations under the License.
 
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from hathor.cli.events_simulator.scenarios.only_load_events import ONLY_LOAD_EVENTS
-from hathor.cli.events_simulator.scenarios.reorg_events import REORG_EVENTS
-from hathor.cli.events_simulator.scenarios.single_chain_blocks_and_transactions_events import (
-    SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS_EVENTS,
-)
-from hathor.cli.events_simulator.scenarios.single_chain_one_block_events import SINGLE_CHAIN_ONE_BLOCK_EVENTS
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
+    from hathor.simulator import Simulator
 
 
 class Scenario(Enum):
-    """
-    NOTE: The lists of events used in each scenario's enum value below were obtained from the tests in
-    tests.event.test_simulation.TestEventSimulation
-    """
-    ONLY_LOAD = ONLY_LOAD_EVENTS
-    SINGLE_CHAIN_ONE_BLOCK = SINGLE_CHAIN_ONE_BLOCK_EVENTS
-    SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS = SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS_EVENTS
-    REORG = REORG_EVENTS
+    ONLY_LOAD = 'ONLY_LOAD'
+    SINGLE_CHAIN_ONE_BLOCK = 'SINGLE_CHAIN_ONE_BLOCK'
+    SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS = 'SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS'
+    REORG = 'REORG'
+
+    def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
+        simulate_fns = {
+            Scenario.ONLY_LOAD: simulate_only_load,
+            Scenario.SINGLE_CHAIN_ONE_BLOCK: simulate_single_chain_one_block,
+            Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS: simulate_single_chain_blocks_and_transactions,
+            Scenario.REORG: simulate_reorg,
+        }
+
+        simulate_fn = simulate_fns[self]
+
+        simulate_fn(simulator, manager)
+
+
+def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> None:
+    simulator.run(60)
+
+
+def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorManager') -> None:
+    from tests.utils import add_new_blocks
+    add_new_blocks(manager, 1)
+    simulator.run(60)
+
+
+def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
+    from hathor import daa
+    from hathor.conf import HathorSettings
+    from tests.utils import add_new_blocks, gen_new_tx
+
+    settings = HathorSettings()
+    assert manager.wallet is not None
+    address = manager.wallet.get_unused_address(mark_as_used=False)
+
+    add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    simulator.run(60)
+
+    tx = gen_new_tx(manager, address, 1000)
+    tx.weight = daa.minimum_tx_weight(tx)
+    tx.update_hash()
+    assert manager.propagate_tx(tx, fails_silently=False)
+    simulator.run(60)
+
+    tx = gen_new_tx(manager, address, 2000)
+    tx.weight = daa.minimum_tx_weight(tx)
+    tx.update_hash()
+    assert manager.propagate_tx(tx, fails_silently=False)
+    simulator.run(60)
+
+    add_new_blocks(manager, 1)
+    simulator.run(60)
+
+
+def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
+    from hathor.simulator import FakeConnection
+    from tests.utils import add_new_blocks
+
+    builder = simulator.get_default_builder()
+    manager2 = simulator.create_peer(builder)
+
+    add_new_blocks(manager, 1)
+    simulator.run(60)
+
+    add_new_blocks(manager2, 2)
+    simulator.run(60)
+
+    connection = FakeConnection(manager, manager2)
+    simulator.add_connection(connection)
+    simulator.run(60)
