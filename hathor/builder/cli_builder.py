@@ -232,6 +232,7 @@ class CliBuilder:
             environment_info=get_environment_info(args=str(self._args), peer_id=peer_id.id),
             full_verification=full_verification,
             enable_event_queue=self._args.x_enable_event_queue,
+            feature_service=self.feature_service,
             bit_signaling_service=bit_signaling_service
         )
 

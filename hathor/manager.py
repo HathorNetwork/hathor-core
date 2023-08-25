@@ -40,6 +40,8 @@ from hathor.exception import (
     SpendingVoidedError,
 )
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -98,6 +100,7 @@ class HathorManager:
                  tx_storage: TransactionStorage,
                  p2p_manager: ConnectionsManager,
                  event_manager: EventManager,
+                 feature_service: FeatureService,
                  bit_signaling_service: BitSignalingService,
                  network: str,
                  hostname: Optional[str] = None,
@@ -172,6 +175,7 @@ class HathorManager:
         self._event_manager.save_event_queue_state(enable_event_queue)
         self._enable_event_queue = enable_event_queue
 
+        self._feature_service = feature_service
         self._bit_signaling_service = bit_signaling_service
 
         self.consensus_algorithm = consensus_algorithm
@@ -1096,6 +1100,33 @@ class HathorManager:
             self.wallet.on_new_tx(tx)
 
         self.log_new_object(tx, 'new {}', quiet=quiet)
+        self._log_feature_states(tx)
+
+    def _log_feature_states(self, vertex: BaseTransaction) -> None:
+        """Log features states for a block. Used as part of the Feature Activation Phased Testing."""
+        if not settings.FEATURE_ACTIVATION.enable_usage or not isinstance(vertex, Block):
+            return
+
+        feature_descriptions = self._feature_service.get_bits_description(block=vertex)
+        state_by_feature = {
+            feature.value: description.state.value
+            for feature, description in feature_descriptions.items()
+        }
+
+        self.log.info(
+            'New block accepted with feature activation states',
+            block_height=vertex.get_height(),
+            features_states=state_by_feature
+        )
+
+        features = [Feature.NOP_FEATURE_1, Feature.NOP_FEATURE_2, Feature.NOP_FEATURE_3]
+        for feature in features:
+            self._log_if_feature_is_active(vertex, feature)
+
+    def _log_if_feature_is_active(self, block: Block, feature: Feature) -> None:
+        """Log if a feature is ACTIVE for a block. Used as part of the Feature Activation Phased Testing."""
+        if self._feature_service.is_feature_active(block=block, feature=feature):
+            self.log.info('Feature is ACTIVE for block', feature=feature.value, block_height=block.get_height())
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         endpoint = self.connections.listen(description, use_ssl)

@@ -14,6 +14,7 @@
 
 from hathor.checkpoint import Checkpoint as cp
 from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 
 SETTINGS = HathorSettings(
     P2PKH_VERSION_BYTE=b'\x49',
@@ -51,4 +52,8 @@ SETTINGS = HathorSettings(
         cp(1_500_000, bytes.fromhex('000000000c3591805f4748480b59ac1788f754fc004930985a487580e2b5de8f')),
         cp(1_600_000, bytes.fromhex('00000000060adfdfd7d488d4d510b5779cf35a3c50df7bcff941fbb6957be4d2')),
     ],
+    FEATURE_ACTIVATION=FeatureActivationSettings(
+        enable_usage=True,
+        default_threshold=30240
+    )
 )

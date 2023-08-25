@@ -155,6 +155,7 @@ class Builder:
         event_manager = self._get_or_create_event_manager()
         indexes = self._get_or_create_indexes_manager()
         tx_storage = self._get_or_create_tx_storage(indexes)
+        feature_service = self._get_or_create_feature_service(tx_storage)
         bit_signaling_service = self._get_or_create_bit_signaling_service(tx_storage)
 
         if self._enable_address_index:
@@ -188,6 +189,7 @@ class Builder:
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
             environment_info=get_environment_info(self._cmdline, peer_id.id),
+            feature_service=feature_service,
             bit_signaling_service=bit_signaling_service,
             **kwargs
         )
