@@ -14,6 +14,8 @@
 
 from hathor.checkpoint import Checkpoint as cp
 from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 
 SETTINGS = HathorSettings(
@@ -54,6 +56,35 @@ SETTINGS = HathorSettings(
     ],
     FEATURE_ACTIVATION=FeatureActivationSettings(
         enable_usage=True,
-        default_threshold=30240
+        default_threshold=30240,
+        features={
+            Feature.NOP_FEATURE_1: Criteria(
+              bit=0,
+              start_height=3_144_960,  # N (right now the best block is 3093551 on testnet)
+              timeout_height=3_225_600,  # N + 2 * 40320 (4 weeks after the start)
+              minimum_activation_height=3_265_920,  # N + 3 * 40320 (6 weeks after the start)
+              lock_in_on_timeout=False,
+              version='0.56.0',
+              signal_support_by_default=True
+            ),
+            Feature.NOP_FEATURE_2: Criteria(
+              bit=1,
+              start_height=3_144_960,  # N (right now the best block is 3093551 on testnet)
+              timeout_height=3_225_600,  # N + 2 * 40320 (4 weeks after the start)
+              minimum_activation_height=0,
+              lock_in_on_timeout=True,
+              version='0.56.0',
+              signal_support_by_default=False
+            ),
+            Feature.NOP_FEATURE_3: Criteria(
+              bit=2,
+              start_height=3_144_960,  # N (right now the best block is 3093551 on testnet)
+              timeout_height=3_225_600,  # N + 2 * 40320 (4 weeks after the start)
+              minimum_activation_height=0,
+              lock_in_on_timeout=False,
+              version='0.56.0',
+              signal_support_by_default=False
+            )
+        }
     )
 )
