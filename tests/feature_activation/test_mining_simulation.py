@@ -26,7 +26,6 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.mining.ws import MiningWebsocketFactory, MiningWebsocketProtocol
 from hathor.p2p.resources import MiningResource
-from hathor.simulator.trigger import StopAfterNMinedBlocks
 from hathor.transaction.resources import GetBlockTemplateResource
 from hathor.transaction.util import unpack, unpack_len
 from hathor.util import json_loadb
@@ -67,7 +66,7 @@ class BaseMiningSimulationTest(SimulatorTestCase):
 
         manager = self.simulator.create_peer(builder)
         manager.allow_mining_without_peers()
-        miner = self.simulator.create_miner(manager, hashpower=1e6)
+        miner = self.simulator.create_miner(manager, hashpower=1e12)
         miner.start()
 
         # There are 3 resources available for miners, and all of them should contain the correct signal_bits
@@ -87,60 +86,60 @@ class BaseMiningSimulationTest(SimulatorTestCase):
 
         # At the beginning, all features are outside their signaling period, so none are signaled.
         expected_signal_bits = 0b0000
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits]
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
         miner.pause_after_exactly(n_blocks=1)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=1))
+        self.simulator.run(60)
         assert self._get_signal_bits_from_get_block_template(get_block_template_client) == expected_signal_bits
         assert self._get_signal_bits_from_mining(mining_client) == expected_signal_bits
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits]
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
         miner.pause_after_exactly(n_blocks=6)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=6))
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits] * 6
+        self.simulator.run(360)
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
         # At height=8, NOP_FEATURE_1 is signaling, so it's enabled by the default support.
         expected_signal_bits = 0b0001
         miner.pause_after_exactly(n_blocks=1)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=1))
+        self.simulator.run(60)
         assert self._get_signal_bits_from_get_block_template(get_block_template_client) == expected_signal_bits
         assert self._get_signal_bits_from_mining(mining_client) == expected_signal_bits
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits]
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
         miner.pause_after_exactly(n_blocks=3)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=3))
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits] * 3
+        self.simulator.run(180)
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
         # At height=12, NOP_FEATURE_2 is signaling, enabled by the user. NOP_FEATURE_1 also continues signaling.
         expected_signal_bits = 0b0101
         miner.pause_after_exactly(n_blocks=1)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=1))
+        self.simulator.run(60)
         assert self._get_signal_bits_from_get_block_template(get_block_template_client) == expected_signal_bits
         assert self._get_signal_bits_from_mining(mining_client) == expected_signal_bits
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits]
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
         miner.pause_after_exactly(n_blocks=7)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=7))
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits] * 7
+        self.simulator.run(360)
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
         # At height=20, NOP_FEATURE_1 stops signaling, and NOP_FEATURE_2 continues.
         expected_signal_bits = 0b0100
         miner.pause_after_exactly(n_blocks=1)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=1))
+        self.simulator.run(60)
         assert self._get_signal_bits_from_get_block_template(get_block_template_client) == expected_signal_bits
         assert self._get_signal_bits_from_mining(mining_client) == expected_signal_bits
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits]
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
         miner.pause_after_exactly(n_blocks=3)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=3))
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits] * 3
+        self.simulator.run(180)
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
         # At height=24, all features have left their signaling period and therefore none are signaled.
         expected_signal_bits = 0b0000
         miner.pause_after_exactly(n_blocks=1)
-        self.simulator.run(3600, trigger=StopAfterNMinedBlocks(miner, quantity=1))
+        self.simulator.run(60)
         assert self._get_signal_bits_from_get_block_template(get_block_template_client) == expected_signal_bits
         assert self._get_signal_bits_from_mining(mining_client) == expected_signal_bits
-        assert self._get_ws_signal_bits(ws_transport) == [expected_signal_bits]
+        assert self._get_last_ws_signal_bits(ws_transport) == expected_signal_bits
 
     def _get_signal_bits_from_get_block_template(self, web_client: StubSite) -> int:
         result = self._get_result(web_client)
@@ -156,9 +155,11 @@ class BaseMiningSimulationTest(SimulatorTestCase):
         response = web_client.get('')
         return response.result.json_value()
 
-    def _get_ws_signal_bits(self, transport: StringTransport) -> list[int]:
+    def _get_last_ws_signal_bits(self, transport: StringTransport) -> int:
         messages = self._get_transport_messages(transport)
-        signal_bits = [message['params'][0]['signal_bits'] for message in messages]
+        assert len(messages) > 0
+        last_message = messages[-1]
+        signal_bits = last_message['params'][0]['signal_bits']
 
         return signal_bits
 

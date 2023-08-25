@@ -124,7 +124,7 @@ class GeometricMiner(AbstractMiner):
         will unpause the miner and pause again according to the new argument.
 
         Use this instead of the `StopAfterNMinedBlocks` trigger if you need "exactly N blocks" behavior, instead of
-        "at least N blocks". Use both to prevent the simulator from running more steps than necessary.
+        "at least N blocks".
         """
         self._blocks_before_pause = n_blocks
 
