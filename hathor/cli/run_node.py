@@ -24,6 +24,7 @@ from hathor.cli.run_node_args import RunNodeArgs
 from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
 from hathor.exception import PreInitializationError
 from hathor.feature_activation.feature import Feature
+from hathor.sysctl.runner import SysctlRunner
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -391,7 +392,8 @@ class RunNode:
         builder = SysctlBuilder(self.artifacts)
         root = builder.build()
 
-        factory = SysctlFactory(root)
+        runner = SysctlRunner(root)
+        factory = SysctlFactory(runner)
         endpoint = serverFromString(self.reactor, description)
         endpoint.listen(factory)
 
