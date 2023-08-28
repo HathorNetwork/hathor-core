@@ -38,4 +38,31 @@ CHECKPOINTS:
 
 FEATURE_ACTIVATION:
   enable_usage: true
-  default_threshold: 30240 # 30240 = 75% of evaluation_interval (40320)
+  default_threshold: 30_240 # 30240 = 75% of evaluation_interval (40320)
+  features:
+    NOP_FEATURE_1:
+      bit: 0
+      start_height: 3_144_960 # N (right now the best block is 3093551 on testnet)
+      timeout_height: 3_225_600 # N + 2 * 40320 (4 weeks after the start)
+      minimum_activation_height: 3_265_920 # N + 3 * 40320 (6 weeks after the start)
+      lock_in_on_timeout: false
+      version: 0.56.0
+      signal_support_by_default: true
+
+    NOP_FEATURE_2:
+      bit: 1
+      start_height: 3_144_960 # N (right now the best block is 3093551 on testnet)
+      timeout_height: 3_225_600 # N + 2 * 40320 (4 weeks after the start)
+      minimum_activation_height: 0
+      lock_in_on_timeout: true
+      version: 0.56.0
+      signal_support_by_default: false
+
+    NOP_FEATURE_3:
+      bit: 2
+      start_height: 3_144_960 # N (right now the best block is 3093551 on testnet)
+      timeout_height: 3_225_600 # N + 2 * 40320 (4 weeks after the start)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.56.0
+      signal_support_by_default: false
