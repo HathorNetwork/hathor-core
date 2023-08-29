@@ -392,8 +392,8 @@ class RunNode:
 
         from hathor.builder.sysctl_builder import SysctlBuilder
         from hathor.sysctl.factory import SysctlFactory
-        from hathor.sysctl.runner import SysctlRunner
         from hathor.sysctl.init_file_loader import SysctlInitFileLoader
+        from hathor.sysctl.runner import SysctlRunner
 
         builder = SysctlBuilder(self.artifacts)
         root = builder.build()

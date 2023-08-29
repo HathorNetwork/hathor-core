@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 from hathor.builder.sysctl_builder import SysctlBuilder
 from hathor.cli.run_node import RunNode
-from hathor.sysctl.exception import SysctlRunnerException
+from hathor.sysctl.exception import SysctlEntryNotFound, SysctlRunnerException
 from hathor.sysctl.init_file_loader import SysctlInitFileLoader
 from hathor.sysctl.runner import SysctlRunner
 from tests import unittest
@@ -41,14 +41,14 @@ class SysctlInitTest(unittest.TestCase):
             'manager.metrics.websocket_factory.return_value': None
         })
 
-        with self.assertRaises(SysctlRunnerException) as context:
+        with self.assertRaises(SysctlEntryNotFound) as context:
             root = SysctlBuilder(artifacts).build()
             runner = SysctlRunner(root)
             loader = SysctlInitFileLoader(runner, sysctl_init_file_path)
             loader.load()
 
         # assert message in the caught exception
-        expected_msg = 'path invalid.property not found'
+        expected_msg = 'invalid.property'
         self.assertEqual(str(context.exception), expected_msg)
 
     def test_sysctl_builder_fail_with_invalid_value(self):
