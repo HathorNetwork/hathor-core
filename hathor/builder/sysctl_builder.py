@@ -15,10 +15,7 @@
 from typing import Optional
 
 from hathor.builder import BuildArtifacts
-from hathor.conf.settings import HathorSettings
 from hathor.sysctl import ConnectionsManagerSysctl, Sysctl, WebsocketManagerSysctl
-
-settings = HathorSettings
 
 
 class SysctlBuilder:
