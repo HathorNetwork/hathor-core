@@ -29,7 +29,7 @@ from structlog import get_logger
 from twisted.internet import task
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IAddress, IDelayedCall
-from twisted.internet.protocol import Factory, connectionDone
+from twisted.internet.protocol import ServerFactory, connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
@@ -717,7 +717,7 @@ class StratumProtocol(JSONRPC):
         )
 
 
-class StratumFactory(Factory):
+class StratumFactory(ServerFactory):
     """
     Twisted factory of server Hathor Stratum protocols.
     Interfaces with nodes to keep mining jobs up to date and to submit successful ones.

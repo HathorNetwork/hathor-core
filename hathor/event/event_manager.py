@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Iterable, Iterator, Optional
+from typing import Callable, Iterator, Optional
 
 from structlog import get_logger
 
@@ -24,8 +24,11 @@ from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 from hathor.util import Reactor, progress
+from hathor.utils.iter import batch_iterator
 
 logger = get_logger()
+
+N_LOAD_EVENTS_PER_BATCH = 10_000
 
 _GROUP_START_EVENTS = {
     EventType.REORG_STARTED,
@@ -258,20 +261,30 @@ class EventManager:
         if not self._should_reload_events():
             return
 
-        def create_event_batch() -> Iterable[BaseEvent]:
-            assert self._event_ws_factory is not None
-            self.log.info('Starting creating events from existing database...')
+        self.log.info('Started creating events from existing database...')
+        event_iterator = self._create_event_iterator(topological_iterator, total_vertices)
+        event_batches = batch_iterator(event_iterator, N_LOAD_EVENTS_PER_BATCH)
 
-            for vertex in progress(topological_iterator, log=self.log, total=total_vertices):
-                event = self._handle_event_creation(
-                    event_type=EventType.NEW_VERTEX_ACCEPTED,
-                    event_args=EventArguments(tx=vertex)
-                )
+        for batch in event_batches:
+            self._event_storage.save_events(batch)
 
-                yield event
-                self._event_ws_factory.broadcast_event(event)
-                self._last_event = event
+        self.log.info('Finished creating events from existing database.')
 
-            self.log.info('Finished creating events from existing database.')
+    def _create_event_iterator(
+        self,
+        topological_iterator: Iterator[BaseTransaction],
+        total_vertices: int
+    ) -> Iterator[BaseEvent]:
+        """Given a topological iterator of txs, create an iterator of events while also tracking progress and
+        broadcasting them."""
+        assert self._event_ws_factory is not None
 
-        self._event_storage.save_events(create_event_batch())
+        for vertex in progress(topological_iterator, log=self.log, total=total_vertices):
+            event = self._handle_event_creation(
+                event_type=EventType.NEW_VERTEX_ACCEPTED,
+                event_args=EventArguments(tx=vertex)
+            )
+
+            yield event
+            self._event_ws_factory.broadcast_event(event)
+            self._last_event = event

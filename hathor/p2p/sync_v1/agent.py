@@ -31,7 +31,8 @@ from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import Reactor, json_dumps, json_loads, verified_cast
+from hathor.util import Reactor, json_dumps, json_loads
+from hathor.utils.zope import asserted_cast
 
 settings = HathorSettings()
 logger = get_logger()
@@ -60,8 +61,8 @@ class SendDataPush:
         self.node_sync = node_sync
         self.protocol: 'HathorProtocol' = node_sync.protocol
         assert self.protocol.transport is not None
-        self.consumer = verified_cast(IConsumer, self.protocol.transport)
-
+        consumer = asserted_cast(IConsumer, self.protocol.transport)
+        self.consumer = consumer
         self.is_running: bool = False
         self.is_producing: bool = False
 

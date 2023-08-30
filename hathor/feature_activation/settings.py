@@ -41,6 +41,9 @@ class Settings(BaseModel, validate_all=True):
     # neither their values changed, to preserve history.
     features: dict[Feature, Criteria] = {}
 
+    # Boolean indicating whether feature activation can be used.
+    enable_usage: bool = False
+
     @validator('default_threshold')
     def _validate_default_threshold(cls, default_threshold: int, values: dict[str, Any]) -> int:
         """Validates that the default_threshold is not greater than the evaluation_interval."""

@@ -21,11 +21,11 @@ from zope.interface import implementer
 
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.traversal import BFSOrderWalk
-from hathor.util import verified_cast
+from hathor.utils.zope import asserted_cast
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
-    from hathor.p2p.sync_v2.manager import NodeBlockSync
+    from hathor.p2p.sync_v2.agent import NodeBlockSync
 
 logger = get_logger()
 
@@ -60,7 +60,8 @@ class _StreamingBase:
         self.node_sync = node_sync
         self.protocol: 'HathorProtocol' = node_sync.protocol
         assert self.protocol.transport is not None
-        self.consumer = verified_cast(IConsumer, self.protocol.transport)
+        consumer = asserted_cast(IConsumer, self.protocol.transport)
+        self.consumer = consumer
 
         self.counter = 0
         self.limit = limit

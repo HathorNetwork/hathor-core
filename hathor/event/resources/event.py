@@ -76,7 +76,23 @@ class GetEventsResponse(Response):
 
 EventResource.openapi = {
     '/event': {
-        'x-visibility': 'private',
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '50r/s',
+                    'burst': 100,
+                    'delay': 50
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
         'get': {
             'operationId': 'event',
             'summary': 'Hathor Events',

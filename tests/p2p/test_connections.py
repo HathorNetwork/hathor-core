@@ -23,6 +23,6 @@ class ConnectionsTest(unittest.TestCase):
         endpoint = 'tcp://127.0.0.1:8005'
         manager.connections.connect_to(endpoint, use_ssl=True)
 
-        self.assertNotIn(endpoint, manager.connections.iter_not_ready_endpoints())
+        self.assertIn(endpoint, manager.connections.iter_not_ready_endpoints())
         self.assertNotIn(endpoint, manager.connections.iter_ready_connections())
         self.assertNotIn(endpoint, manager.connections.iter_all_connections())

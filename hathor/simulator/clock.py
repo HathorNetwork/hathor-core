@@ -94,3 +94,10 @@ class MemoryReactorHeapClock(MemoryReactor, HeapClock):
     def __init__(self):
         MemoryReactor.__init__(self)
         HeapClock.__init__(self)
+
+    def run(self):
+        """
+        We have to override MemoryReactor.run() because the original Twisted implementation weirdly calls stop() inside
+        run(), and we need the reactor running during our tests.
+        """
+        self.running = True

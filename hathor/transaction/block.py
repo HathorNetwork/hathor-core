@@ -35,6 +35,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.util import not_none
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
@@ -112,8 +113,13 @@ class Block(BaseTransaction):
         """
         assert self.storage is not None
         # maximum min-height of any parent tx
-        return max((self.storage.get_transaction(tx).get_metadata().min_height for tx in self.get_tx_parents()),
-                   default=0)
+        min_height = 0
+        for tx_hash in self.get_tx_parents():
+            tx = self.storage.get_transaction(tx_hash)
+            tx_min_height = tx.get_metadata().min_height
+            min_height = max(min_height, not_none(tx_min_height))
+
+        return min_height
 
     def calculate_feature_activation_bit_counts(self) -> list[int]:
         """
@@ -350,6 +356,7 @@ class Block(BaseTransaction):
         """Validate that the block height is enough to confirm all transactions being confirmed."""
         meta = self.get_metadata()
         assert meta.height is not None
+        assert meta.min_height is not None
         if meta.height < meta.min_height:
             raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
 

@@ -35,6 +35,7 @@ class TxAllowScope(Flag):
     VALID = auto()
     PARTIAL = auto()
     INVALID = auto()
+    ALL = VALID | PARTIAL | INVALID
 
     def is_allowed(self, tx: BaseTransaction) -> bool:
         """True means it is allowed to be used in the storage (as argument or as return), False means not allowed."""

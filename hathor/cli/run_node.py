@@ -156,21 +156,22 @@ class RunNode:
         self.start_manager()
 
         if self._args.stratum:
+            assert self.manager.stratum_factory is not None
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
         from hathor.conf import HathorSettings
-        from hathor.feature_activation.feature_service import FeatureService
         settings = HathorSettings()
 
-        feature_service = FeatureService(
-            feature_settings=settings.FEATURE_ACTIVATION,
-            tx_storage=self.manager.tx_storage
-        )
-
         if register_resources:
-            resources_builder = ResourcesBuilder(self.manager, self._args, builder.event_ws_factory, feature_service)
+            resources_builder = ResourcesBuilder(
+                self.manager,
+                self._args,
+                builder.event_ws_factory,
+                builder.feature_service
+            )
             status_server = resources_builder.build()
             if self._args.status:
+                assert status_server is not None
                 self.reactor.listenTCP(self._args.status, status_server)
 
         from hathor.builder.builder import BuildArtifacts
@@ -188,7 +189,6 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
-            feature_service=feature_service
         )
 
     def start_sentry_if_possible(self) -> None:
@@ -312,11 +312,14 @@ class RunNode:
                 sys.exit(-1)
 
     def check_python_version(self) -> None:
-        MIN_VER = (3, 8)
-        RECOMMENDED_VER = (3, 9)
+        # comments to help grep's
+        MIN_VER = (3, 9)  # Python-3.9
+        MIN_STABLE = (3, 10)  # Python-3.10
+        RECOMMENDED_VER = (3, 10)  # Python-3.10
         cur = sys.version_info
-        min_pretty = '.'.join(map(str, MIN_VER))
         cur_pretty = '.'.join(map(str, cur))
+        min_pretty = '.'.join(map(str, MIN_VER))
+        min_stable_pretty = '.'.join(map(str, MIN_STABLE))
         recommended_pretty = '.'.join(map(str, RECOMMENDED_VER))
         if cur < MIN_VER:
             self.log.critical('\n'.join([
@@ -329,6 +332,17 @@ class RunNode:
                 '',
             ]))
             sys.exit(-1)
+        elif cur < MIN_STABLE:
+            self.log.warning('\n'.join([
+                '',
+                '********************************************************',
+                f'The detected Python version {cur_pretty} is deprecated and support for it will be removed in the'
+                ' next release.',
+                f'The minimum supported Python version will be {min_stable_pretty}',
+                f'The recommended Python version is {recommended_pretty}',
+                '********************************************************',
+                '',
+            ]))
 
     def __init__(self, *, argv=None):
         self.log = logger.new()
@@ -375,11 +389,13 @@ class RunNode:
 
         from hathor.builder.sysctl_builder import SysctlBuilder
         from hathor.sysctl.factory import SysctlFactory
+        from hathor.sysctl.runner import SysctlRunner
 
         builder = SysctlBuilder(self.artifacts)
         root = builder.build()
 
-        factory = SysctlFactory(root)
+        runner = SysctlRunner(root)
+        factory = SysctlFactory(runner)
         endpoint = serverFromString(self.reactor, description)
         endpoint.listen(factory)
 
