@@ -44,7 +44,7 @@ def update_serialized_tokens_array(tx: BaseTransaction, serialized: dict[str, An
         serialized['tokens'] = [h.hex() for h in tx.tokens]
 
 
-def get_tx_extra_data(tx: BaseTransaction) -> dict[str, Any]:
+def get_tx_extra_data(tx: BaseTransaction, *, detail_tokens: bool = True) -> dict[str, Any]:
     """ Get the data of a tx to be returned to the frontend
         Returns success, tx serializes, metadata and spent outputs
     """
@@ -116,18 +116,19 @@ def get_tx_extra_data(tx: BaseTransaction) -> dict[str, Any]:
 
     serialized['inputs'] = inputs
 
-    detailed_tokens = []
-    for token_uid_hex in serialized['tokens']:
-        tokens_index = tx.storage.indexes.tokens
-        assert tokens_index is not None
-        token_info = tokens_index.get_token_info(bytes.fromhex(token_uid_hex))
-        detailed_tokens.append({
-            'uid': token_uid_hex,
-            'name': token_info.get_name(),
-            'symbol': token_info.get_symbol(),
-        })
+    if detail_tokens:
+        detailed_tokens = []
+        for token_uid_hex in serialized['tokens']:
+            tokens_index = tx.storage.indexes.tokens
+            assert tokens_index is not None
+            token_info = tokens_index.get_token_info(bytes.fromhex(token_uid_hex))
+            detailed_tokens.append({
+                'uid': token_uid_hex,
+                'name': token_info.get_name(),
+                'symbol': token_info.get_symbol(),
+            })
 
-    serialized['tokens'] = detailed_tokens
+        serialized['tokens'] = detailed_tokens
 
     return {
         'success': True,

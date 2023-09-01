@@ -4,7 +4,7 @@ from hathor.conf import HathorSettings
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from tests import unittest
-from tests.utils import add_new_blocks, get_genesis_key
+from tests.utils import BURN_ADDRESS, add_new_blocks, get_genesis_key
 
 settings = HathorSettings()
 
@@ -37,7 +37,7 @@ class BaseEventReorgTest(unittest.TestCase):
         self.log.debug('make reorg block')
         block_to_replace = blocks[8]
         tb0 = self.manager.make_custom_block_template(block_to_replace.parents[0], block_to_replace.parents[1:])
-        b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage)
+        b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage, address=BURN_ADDRESS)
         b0.weight = 10
         b0.resolve()
         b0.verify()
