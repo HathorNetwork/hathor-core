@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import base64
-import json
 import math
 import struct
 from collections import OrderedDict
 from enum import Enum
+from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Callable, Generator, Optional, cast
 
 from structlog import get_logger
@@ -34,7 +34,7 @@ from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import HathorError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
-from hathor.util import Reactor, collect_n
+from hathor.util import Reactor, collect_n, json_dumps, json_loads
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -407,7 +407,7 @@ class NodeBlockSync(SyncAgent):
     def send_tips(self, tx_id: bytes) -> None:
         """ Send a TIPS message.
         """
-        self.send_message(ProtocolMessages.TIPS, json.dumps([tx_id.hex()]))
+        self.send_message(ProtocolMessages.TIPS, json_dumps([tx_id.hex()]))
 
     def handle_tips(self, payload: str) -> None:
         """ Handle a TIPS message.
@@ -416,7 +416,11 @@ class NodeBlockSync(SyncAgent):
         if self._receiving_tips is None:
             self.protocol.send_error_and_close_connection('TIPS not expected')
             return
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         data = [bytes.fromhex(x) for x in data]
         # filter-out txs we already have
         self._receiving_tips.extend(tx_id for tx_id in data if not self.partial_vertex_exists(tx_id))
@@ -437,7 +441,7 @@ class NodeBlockSync(SyncAgent):
         """ Send a RELAY message.
         """
         self.log.debug('send_relay', enable=enable)
-        self.send_message(ProtocolMessages.RELAY, json.dumps(enable))
+        self.send_message(ProtocolMessages.RELAY, json_dumps(enable))
 
     def handle_relay(self, payload: str) -> None:
         """ Handle a RELAY message.
@@ -446,7 +450,11 @@ class NodeBlockSync(SyncAgent):
             # XXX: "legacy" nothing means enable
             self._is_relaying = True
         else:
-            val = json.loads(payload)
+            try:
+                val = json_loads(payload)
+            except JSONDecodeError:
+                self.protocol.send_error_and_close_connection('malformed JSON')
+                return
             if isinstance(val, bool):
                 self._is_relaying = val
             else:
@@ -566,14 +574,18 @@ class NodeBlockSync(SyncAgent):
     def send_get_peer_block_hashes(self, heights: list[int]) -> None:
         """ Send a GET-PEER-BLOCK-HASHES message.
         """
-        payload = json.dumps(heights)
+        payload = json_dumps(heights)
         self.send_message(ProtocolMessages.GET_PEER_BLOCK_HASHES, payload)
 
     def handle_get_peer_block_hashes(self, payload: str) -> None:
         """ Handle a GET-PEER-BLOCK-HASHES message.
         """
         assert self.tx_storage.indexes is not None
-        heights = json.loads(payload)
+        try:
+            heights = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         if len(heights) > 20:
             self.protocol.send_error_and_close_connection('GET-PEER-BLOCK-HASHES: too many heights')
             return
@@ -589,13 +601,17 @@ class NodeBlockSync(SyncAgent):
                 self.reactor.callLater(3, self.handle_get_peer_block_hashes, payload)
                 return
             data.append((h, blk_hash.hex()))
-        payload = json.dumps(data)
+        payload = json_dumps(data)
         self.send_message(ProtocolMessages.PEER_BLOCK_HASHES, payload)
 
     def handle_peer_block_hashes(self, payload: str) -> None:
         """ Handle a PEER-BLOCK-HASHES message.
         """
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         data = [(h, bytes.fromhex(block_hash)) for (h, block_hash) in data]
         deferred = self._deferred_peer_block_hashes
         self._deferred_peer_block_hashes = None
@@ -605,7 +621,7 @@ class NodeBlockSync(SyncAgent):
     def send_get_next_blocks(self, start_hash: bytes, end_hash: bytes) -> None:
         """ Send a PEER-BLOCK-HASHES message.
         """
-        payload = json.dumps(dict(
+        payload = json_dumps(dict(
             start_hash=start_hash.hex(),
             end_hash=end_hash.hex(),
         ))
@@ -619,7 +635,11 @@ class NodeBlockSync(SyncAgent):
         if self._is_streaming:
             self.protocol.send_error_and_close_connection('GET-NEXT-BLOCKS received before previous one finished')
             return
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         self.send_next_blocks(
             start_hash=bytes.fromhex(data['start_hash']),
             end_hash=bytes.fromhex(data['end_hash']),
@@ -813,12 +833,16 @@ class NodeBlockSync(SyncAgent):
         best_block = self.tx_storage.get_best_block()
         meta = best_block.get_metadata()
         data = {'block': best_block.hash_hex, 'height': meta.height}
-        self.send_message(ProtocolMessages.BEST_BLOCK, json.dumps(data))
+        self.send_message(ProtocolMessages.BEST_BLOCK, json_dumps(data))
 
     def handle_best_block(self, payload: str) -> None:
         """ Handle a BEST-BLOCK message.
         """
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         assert self.protocol.connections is not None
         self.log.debug('got best block', **data)
         data['block'] = bytes.fromhex(data['block'])
@@ -851,7 +875,7 @@ class NodeBlockSync(SyncAgent):
         start_from_hexlist = [tx.hex() for tx in start_from]
         until_first_block_hex = until_first_block.hex()
         self.log.debug('send_get_transactions_bfs', start_from=start_from_hexlist, last_block=until_first_block_hex)
-        payload = json.dumps(dict(
+        payload = json_dumps(dict(
             start_from=start_from_hexlist,
             until_first_block=until_first_block_hex,
         ))
@@ -864,7 +888,11 @@ class NodeBlockSync(SyncAgent):
         if self._is_streaming:
             self.log.warn('ignore GET-TRANSACTIONS-BFS, already streaming')
             return
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         # XXX: todo verify this limit while parsing the payload.
         start_from = data['start_from']
         if len(start_from) > MAX_GET_TRANSACTIONS_BFS_LEN:
@@ -1040,13 +1068,17 @@ class NodeBlockSync(SyncAgent):
         }
         if origin is not None:
             data['origin'] = origin
-        payload = json.dumps(data)
+        payload = json_dumps(data)
         self.send_message(ProtocolMessages.GET_DATA, payload)
 
     def handle_get_data(self, payload: str) -> None:
         """ Handle a GET-DATA message.
         """
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         txid_hex = data['txid']
         origin = data.get('origin', '')
         # self.log.debug('handle_get_data', payload=hash_hex)
