@@ -80,7 +80,7 @@ def execute(args: Namespace) -> None:
 
     log.info('Started simulating events', scenario=args.scenario, seed=simulator.seed)
 
-    forwarding_ws_factory.start()
+    forwarding_ws_factory.start(stream_id='simulator')
     scenario.simulate(simulator, manager)
     reactor.listenTCP(args.port, site)
     reactor.run()

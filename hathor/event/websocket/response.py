@@ -31,11 +31,13 @@ class EventResponse(Response):
         type: The type of the response.
         event: The event.
         latest_event_id: The ID of the latest event known by the server.
+        stream_id: The ID of the current stream.
     """
 
     type: str = Field(default='EVENT', const=True)
     event: BaseEvent
     latest_event_id: NonNegativeInt
+    stream_id: str
 
 
 class InvalidRequestType(Enum):

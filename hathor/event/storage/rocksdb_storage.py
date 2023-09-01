@@ -30,6 +30,7 @@ _CF_NAME_META = b'event-metadata'
 _KEY_LAST_GROUP_ID = b'last-group-id'
 _KEY_NODE_STATE = b'node-state'
 _KEY_EVENT_QUEUE_ENABLED = b'event-queue-enabled'
+_KEY_STREAM_ID = b'stream-id'
 
 
 class EventRocksDBStorage(EventStorage):
@@ -112,6 +113,7 @@ class EventRocksDBStorage(EventStorage):
         self._last_group_id = None
 
         self._db.delete((self._cf_meta, _KEY_LAST_GROUP_ID))
+        self._db.delete((self._cf_meta, _KEY_STREAM_ID))
         self._db.drop_column_family(self._cf_event)
 
         self._cf_event = self._rocksdb_storage.get_or_create_column_family(_CF_NAME_EVENT)
@@ -147,3 +149,17 @@ class EventRocksDBStorage(EventStorage):
             return False
 
         return bool.from_bytes(enabled_bytes, byteorder='big')
+
+    def save_stream_id(self, stream_id: str) -> None:
+        self._db.put(
+            (self._cf_meta, _KEY_STREAM_ID),
+            stream_id.encode('utf8')
+        )
+
+    def get_stream_id(self) -> Optional[str]:
+        stream_id_bytes: bytes = self._db.get((self._cf_meta, _KEY_STREAM_ID))
+
+        if stream_id_bytes is None:
+            return None
+
+        return stream_id_bytes.decode('utf8')

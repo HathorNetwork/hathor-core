@@ -21,7 +21,7 @@ from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
-from hathor.util import Reactor
+from hathor.util import Reactor, not_none
 
 logger = get_logger()
 
@@ -37,6 +37,9 @@ class EventWebsocketFactory(WebSocketServerFactory):
     # The last event id broadcast by this factory.
     _latest_event_id: Optional[int] = None
 
+    # The unique stream ID
+    _stream_id: Optional[str] = None
+
     def __init__(self, reactor: Reactor, event_storage: EventStorage):
         super().__init__()
         self.log = logger.new()
@@ -49,13 +52,14 @@ class EventWebsocketFactory(WebSocketServerFactory):
         if latest_event is not None:
             self._latest_event_id = latest_event.id
 
-    def start(self):
+    def start(self, *, stream_id: str) -> None:
         """Start the WebSocket server. Required to be able to send events."""
         assert self._is_running is False, 'Cannot start, EventWebsocketFactory is already running'
 
         self._is_running = True
+        self._stream_id = stream_id
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the WebSocket server. No events can be sent."""
         assert self._is_running is True, 'Cannot stop, EventWebsocketFactory is not running'
 
@@ -108,6 +112,10 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
         assert self._latest_event_id is not None, '_latest_event_id must be set.'
 
-        response = EventResponse(event=event, latest_event_id=self._latest_event_id)
+        response = EventResponse(
+            event=event,
+            latest_event_id=self._latest_event_id,
+            stream_id=not_none(self._stream_id)
+        )
 
         connection.send_event_response(response)
