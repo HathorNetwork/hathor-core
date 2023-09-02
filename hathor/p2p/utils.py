@@ -28,12 +28,10 @@ from cryptography.x509.oid import NameOID
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.interfaces import IAddress
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import GENESIS_HASH
-
-settings = HathorSettings()
 
 
 def discover_hostname() -> Optional[str]:
@@ -83,6 +81,7 @@ def get_genesis_short_hash() -> str:
 def get_settings_hello_dict() -> dict[str, Any]:
     """ Return a dict of settings values that must be validated in the hello state
     """
+    settings = get_settings()
     settings_dict = {}
     for key in settings.P2P_SETTINGS_HASH_FIELDS:
         value = getattr(settings, key)

@@ -21,7 +21,7 @@ from mnemonic import Mnemonic
 from structlog import get_logger
 
 from hathor.builder import BuildArtifacts, Builder
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
@@ -116,7 +116,7 @@ class Simulator:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
-        self.settings = HathorSettings()
+        self.settings = get_settings()
         self._network = 'testnet'
         self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()

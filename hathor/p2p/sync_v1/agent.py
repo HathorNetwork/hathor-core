@@ -24,7 +24,7 @@ from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.interfaces import IConsumer, IDelayedCall, IPushProducer
 from zope.interface import implementer
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
@@ -34,7 +34,6 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import Reactor, json_dumps, json_loads
 from hathor.utils.zope import asserted_cast
 
-settings = HathorSettings()
 logger = get_logger()
 
 if TYPE_CHECKING:
@@ -191,6 +190,7 @@ class NodeSyncTimestamp(SyncAgent):
         :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
         :type reactor: Reactor
         """
+        self._settings = get_settings()
         self.protocol = protocol
         self.manager = protocol.node
         self.downloader = downloader
@@ -228,7 +228,7 @@ class NodeSyncTimestamp(SyncAgent):
 
         # Maximum difference between our latest timestamp and synced timestamp to consider
         # that the peer is synced (in seconds).
-        self.sync_threshold: int = settings.P2P_SYNC_THRESHOLD
+        self.sync_threshold: int = self._settings.P2P_SYNC_THRESHOLD
 
         # Indicate whether the sync manager has been started.
         self._started: bool = False
@@ -624,7 +624,7 @@ class NodeSyncTimestamp(SyncAgent):
         """Try to send a TIPS message. If rate limit has been reached, it schedules to send it later."""
         if not self.global_rate_limiter.add_hit(self.GlobalRateLimiter.SEND_TIPS):
             self.log.debug('send_tips throttled')
-            if len(self._send_tips_call_later) >= settings.MAX_GET_TIPS_DELAYED_CALLS:
+            if len(self._send_tips_call_later) >= self._settings.MAX_GET_TIPS_DELAYED_CALLS:
                 self.protocol.send_error_and_close_connection(
                     'Too many GET_TIPS message'
                 )
