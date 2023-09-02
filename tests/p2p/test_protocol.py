@@ -4,14 +4,14 @@ from typing import Optional
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.simulator import FakeConnection
 from hathor.util import json_dumps
 from tests import unittest
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseHathorProtocolTestCase(unittest.TestCase):

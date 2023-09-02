@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, Block, TxInput, TxOutput, TxVersion
@@ -48,7 +48,7 @@ from hathor.util import not_none
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
-settings = HathorSettings()
+settings = get_settings()
 cpu = get_cpu_profiler()
 
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).

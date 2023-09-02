@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Generator
 from structlog import get_logger
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class PeerIdState(BaseState):

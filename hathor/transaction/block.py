@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
@@ -41,7 +41,7 @@ from hathor.utils.int import get_bit_list
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
-settings = HathorSettings()
+settings = get_settings()
 cpu = get_cpu_profiler()
 
 # Signal bits (B), version (B), outputs len (B)

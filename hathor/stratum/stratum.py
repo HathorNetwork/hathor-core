@@ -33,7 +33,7 @@ from twisted.internet.protocol import ServerFactory, connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.p2p.utils import format_address
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 
 
 def valid_uuid(uuid: Any) -> bool:

@@ -15,14 +15,14 @@
 from collections.abc import Collection
 from typing import TYPE_CHECKING, Iterable, Iterator, NewType
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
     import structlog
 
 
-settings = HathorSettings()
+settings = get_settings()
 
 # the following type is used to help a little bit to distinguish when we're using a byte sequence that should only be
 # internally used

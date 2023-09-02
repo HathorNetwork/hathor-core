@@ -4,7 +4,7 @@ from io import StringIO
 from structlog.testing import capture_logs
 
 from hathor.cli.multisig_spend import create_parser, execute
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
@@ -13,7 +13,7 @@ from hathor.wallet.util import generate_multisig_address, generate_multisig_rede
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseMultiSigSpendTest(unittest.TestCase):

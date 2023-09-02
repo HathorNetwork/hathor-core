@@ -1,6 +1,6 @@
 import pytest
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import get_address_from_public_key
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
@@ -10,7 +10,7 @@ from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, get_genesis_key
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseTransactionTest(unittest.TestCase):

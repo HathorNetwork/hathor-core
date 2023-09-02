@@ -19,12 +19,12 @@ import base58
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import get_hash160, get_private_key_from_bytes
 from hathor.transaction.scripts import HathorScript, Opcode
 from hathor.transaction.transaction import Transaction
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: list[bytes]) -> bytes:

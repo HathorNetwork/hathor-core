@@ -15,14 +15,14 @@
 from struct import error as StructError, pack
 from typing import Any, Optional
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import VerboseCallback, clean_token_string, int_to_bytes, unpack, unpack_len
 
-settings = HathorSettings()
+settings = get_settings()
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'

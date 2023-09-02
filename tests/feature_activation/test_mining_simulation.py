@@ -19,7 +19,7 @@ from unittest.mock import Mock
 
 from twisted.internet.testing import StringTransport
 
-from hathor.conf import HathorSettings as get_settings
+from hathor.conf import get_settings as get_settings
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria

@@ -3,14 +3,14 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from tests import unittest
 from tests.utils import HAS_ROCKSDB
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class FakeTransaction(NamedTuple):

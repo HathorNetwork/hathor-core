@@ -14,7 +14,7 @@
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
@@ -24,7 +24,7 @@ from hathor.transaction import BaseTransaction
 from hathor.util import not_none
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()

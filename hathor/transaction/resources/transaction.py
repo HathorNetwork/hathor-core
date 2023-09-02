@@ -24,12 +24,12 @@ from hathor.api_util import (
     validate_tx_hash,
 )
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import json_dumpb
 
-settings = HathorSettings()
+settings = get_settings()
 
 GET_LIST_ARGS = ['count', 'type']
 

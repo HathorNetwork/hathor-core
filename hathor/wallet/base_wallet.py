@@ -24,7 +24,7 @@ from pycoin.key.Key import Key
 from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput
@@ -35,7 +35,7 @@ from hathor.transaction.transaction import Transaction
 from hathor.util import Reactor
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 
 # check interval for maybe_spent_txs

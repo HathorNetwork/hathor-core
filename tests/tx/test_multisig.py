@@ -1,6 +1,6 @@
 import base58
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes, get_public_key_bytes_compressed
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
@@ -10,7 +10,7 @@ from hathor.wallet.util import generate_multisig_address, generate_multisig_rede
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseMultisigTestCase(unittest.TestCase):

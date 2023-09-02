@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import (
@@ -12,7 +12,7 @@ from tests.utils import (
     gen_new_tx,
 )
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseConsensusTestCase(unittest.TestCase):

@@ -18,7 +18,7 @@ from typing import Any, NamedTuple, Optional
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
@@ -259,7 +259,7 @@ class Builder:
 
     def _get_or_create_settings(self) -> HathorSettingsType:
         if self._settings is None:
-            self._settings = HathorSettings()
+            self._settings = get_settings()
         return self._settings
 
     def _get_reactor(self) -> Reactor:

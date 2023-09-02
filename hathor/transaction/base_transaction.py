@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 
 MAX_NONCE = 2**32
 MAX_NUM_INPUTS = settings.MAX_NUM_INPUTS

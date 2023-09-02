@@ -1,7 +1,7 @@
 from twisted.python.failure import Failure
 
 from hathor.checkpoint import Checkpoint as cp
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.p2p.protocol import PeerIdState
 from hathor.p2p.sync_version import SyncVersion
@@ -10,7 +10,7 @@ from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):

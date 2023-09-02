@@ -1,9 +1,9 @@
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.daa import TestMode, _set_test_mode, calculate_block_difficulty, minimum_tx_weight
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 def get_genesis_output():

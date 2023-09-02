@@ -24,7 +24,7 @@ from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.interfaces import IConsumer, IDelayedCall, IPushProducer
 from zope.interface import implementer
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
@@ -34,7 +34,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import Reactor, json_dumps, json_loads
 from hathor.utils.zope import asserted_cast
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 
 if TYPE_CHECKING:

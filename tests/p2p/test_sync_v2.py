@@ -1,7 +1,7 @@
 import pytest
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks, StopAfterNTransactions, StopWhenTrue, Trigger
@@ -9,7 +9,7 @@ from hathor.transaction.storage.traversal import DFSWalk
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseRandomSimulatorTestCase(SimulatorTestCase):

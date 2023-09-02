@@ -1,6 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.indexes.height_index import HeightInfo
 from hathor.manager import DEFAULT_CAPABILITIES
 from hathor.p2p.messages import ProtocolMessages
@@ -14,7 +14,7 @@ from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseGetBestBlockchainTestCase(SimulatorTestCase):

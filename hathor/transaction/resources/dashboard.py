@@ -14,10 +14,10 @@
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.util import json_dumpb
 
-settings = HathorSettings()
+settings = get_settings()
 
 ARGS = ['block', 'tx']
 

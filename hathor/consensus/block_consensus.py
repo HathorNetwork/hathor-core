@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Iterable, Optional, cast
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
 from hathor.util import classproperty, not_none
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from hathor.consensus.context import ConsensusAlgorithmContext
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()

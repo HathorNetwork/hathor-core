@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, TypedDict, cas
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.indexes.rocksdb_utils import (
     InternalUid,
     RocksDBIndexUtils,
@@ -34,7 +34,7 @@ from hathor.util import collect_n, json_dumpb, json_loadb
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 
 _CF_NAME_TOKENS_INDEX = b'tokens-index'

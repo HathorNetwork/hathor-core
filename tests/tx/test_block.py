@@ -16,7 +16,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction import Block, TransactionMetadata
 from hathor.transaction.genesis import BLOCK_GENESIS
 from hathor.transaction.storage import TransactionStorage
@@ -47,7 +47,7 @@ def block_mocks() -> list[Block]:
     ]
 
     for i, bits in enumerate(feature_activation_bits):
-        settings = HathorSettings()
+        settings = get_settings()
         genesis_hash = settings.GENESIS_BLOCK_HASH
         block_hash = genesis_hash if i == 0 else b'some_hash'
 

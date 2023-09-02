@@ -21,7 +21,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, parse_args, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
@@ -31,7 +31,7 @@ from hathor.util import json_dumpb, json_loadb
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 
 ARGS = ['hex_tx']

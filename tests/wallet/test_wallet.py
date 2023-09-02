@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from cryptography.hazmat.primitives import serialization
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
 from hathor.transaction import Transaction, TxInput
 from hathor.wallet import Wallet
@@ -14,7 +14,7 @@ from hathor.wallet.keypair import KeyPair
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_block, create_tokens, get_genesis_key
 
-settings = HathorSettings()
+settings = get_settings()
 
 BLOCK_REWARD = 300
 

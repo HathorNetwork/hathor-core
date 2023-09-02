@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, NamedTuple, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.manager import ConnectionsManager, PeerConnectionsMetrics
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import sum_weights
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory  # noqa: F401
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 
 
 class WeightValue(NamedTuple):

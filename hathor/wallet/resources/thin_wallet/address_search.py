@@ -18,7 +18,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
@@ -27,7 +27,7 @@ from hathor.wallet.exceptions import InvalidAddress
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 @register_resource

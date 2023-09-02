@@ -2,7 +2,7 @@ from struct import error as StructError
 
 import pytest
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.indexes.tokens_index import TokenUtxoInfo
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
@@ -13,7 +13,7 @@ from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, int
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseTokenTest(unittest.TestCase):

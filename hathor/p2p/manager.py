@@ -22,7 +22,7 @@ from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 
 # The timeout in seconds for the whitelist GET request
 WHITELIST_REQUEST_TIMEOUT = 45

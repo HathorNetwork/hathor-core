@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.profiler import get_cpu_profiler
 from hathor.util import iwindows
 
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 cpu = get_cpu_profiler()
 
 MIN_BLOCK_WEIGHT = settings.MIN_BLOCK_WEIGHT

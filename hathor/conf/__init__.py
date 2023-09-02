@@ -14,7 +14,7 @@
 
 from pathlib import Path
 
-from hathor.conf.get_settings import HathorSettings
+from hathor.conf.get_settings import get_settings
 
 parent_dir = Path(__file__).parent
 
@@ -26,5 +26,5 @@ __all__ = [
     'MAINNET_SETTINGS_FILEPATH',
     'TESTNET_SETTINGS_FILEPATH',
     'UNITTESTS_SETTINGS_FILEPATH',
-    'HathorSettings',
+    'get_settings',
 ]

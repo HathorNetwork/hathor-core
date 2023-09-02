@@ -23,7 +23,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
@@ -41,7 +41,7 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import not_none
 
-settings = HathorSettings()
+settings = get_settings()
 cpu = get_cpu_profiler()
 
 # these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be

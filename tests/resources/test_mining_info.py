@@ -1,12 +1,12 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.resources import MiningInfoResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_new_blocks
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):

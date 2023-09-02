@@ -28,13 +28,13 @@ from twisted.internet.interfaces import ISSLTransport
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
 
 from hathor import daa
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class InvalidPeerIdException(Exception):

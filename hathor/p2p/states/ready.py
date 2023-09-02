@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class ReadyState(BaseState):

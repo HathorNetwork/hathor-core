@@ -4,13 +4,13 @@ import tempfile
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.peer_id import InvalidPeerIdException, PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from tests import unittest
 from tests.unittest import TestBuilder
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class PeerIdTest(unittest.TestCase):

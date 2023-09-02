@@ -25,14 +25,14 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb, reactor
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 
 # Timeout for the pow resolution in stratum (in seconds)

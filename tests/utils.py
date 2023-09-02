@@ -12,7 +12,7 @@ import requests
 from hathorlib.scripts import DataScript
 from twisted.internet.task import Clock
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import TxData, TxMetadata
@@ -31,7 +31,7 @@ except ImportError:
 else:
     HAS_ROCKSDB = True
 
-settings = HathorSettings()
+settings = get_settings()
 
 MIN_TIMESTAMP = genesis.GENESIS[-1].timestamp + 1
 

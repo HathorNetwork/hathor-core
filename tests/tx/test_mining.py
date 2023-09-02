@@ -1,11 +1,11 @@
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.mining import BlockTemplate
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import add_new_blocks
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseMiningTest(unittest.TestCase):

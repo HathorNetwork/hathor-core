@@ -1,12 +1,12 @@
 from typing import Any
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from tests import unittest
 from tests.utils import add_new_blocks, get_genesis_key
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseEventReorgTest(unittest.TestCase):

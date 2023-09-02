@@ -17,9 +17,9 @@ import struct
 from math import ceil, floor
 from typing import Any, Callable, Optional
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 
-settings = HathorSettings()
+settings = get_settings()
 
 VerboseCallback = Optional[Callable[[str, Any], None]]
 

@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from structlog import get_logger
 
 from hathor.cli.run_node_args import RunNodeArgs
-from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
+from hathor.conf import TESTNET_SETTINGS_FILEPATH, get_settings
 from hathor.exception import PreInitializationError
 from hathor.feature_activation.feature import Feature
 
@@ -159,8 +159,8 @@ class RunNode:
             assert self.manager.stratum_factory is not None
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
+        from hathor.conf import get_settings
+        settings = get_settings()
 
         if register_resources:
             resources_builder = ResourcesBuilder(
@@ -204,8 +204,8 @@ class RunNode:
             sys.exit(-3)
 
         import hathor
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
+        from hathor.conf import get_settings
+        settings = get_settings()
         sentry_sdk.init(
             dsn=self._args.sentry_dsn,
             release=hathor.__version__,
@@ -266,8 +266,8 @@ class RunNode:
                 '',
             ]
 
-            from hathor.conf import HathorSettings
-            settings = HathorSettings()
+            from hathor.conf import get_settings
+            settings = get_settings()
 
             if self._args.unsafe_mode != settings.NETWORK_NAME:
                 message.extend([
@@ -362,7 +362,7 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
 
         try:
-            HathorSettings()
+            get_settings()
         except (TypeError, ValidationError) as e:
             raise PreInitializationError(
                 'An error was found while trying to initialize HathorSettings. See above for details.'

@@ -27,7 +27,7 @@ from twisted.python.threadpool import ThreadPool
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
@@ -59,7 +59,7 @@ from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
 from hathor.wallet import BaseWallet
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 cpu = get_cpu_profiler()
 

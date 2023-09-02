@@ -1,13 +1,13 @@
 from itertools import chain
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.daa import TestMode, _set_test_mode, get_weight_decay_amount
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseBlockchainTestCase(unittest.TestCase):

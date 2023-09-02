@@ -27,10 +27,10 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_private_key,
 )
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.util import not_none
 
-settings = HathorSettings()
+settings = get_settings()
 
 _BACKEND = default_backend()
 

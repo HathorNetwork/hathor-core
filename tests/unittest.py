@@ -10,7 +10,7 @@ from structlog import get_logger
 from twisted.trial import unittest
 
 from hathor.builder import BuildArtifacts, Builder
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
@@ -22,7 +22,7 @@ from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
 logger = get_logger()
 main = ut_main
-settings = HathorSettings()
+settings = get_settings()
 USE_MEMORY_STORAGE = os.environ.get('HATHOR_TEST_MEMORY_STORAGE', 'false').lower() == 'true'
 
 

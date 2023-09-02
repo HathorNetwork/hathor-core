@@ -34,8 +34,8 @@ class DbExport(RunNode):
 
     @classmethod
     def create_parser(cls) -> ArgumentParser:
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
+        from hathor.conf import get_settings
+        settings = get_settings()
 
         def max_height(arg: str) -> Optional[int]:
             if arg.lower() == 'checkpoint':
@@ -80,8 +80,8 @@ class DbExport(RunNode):
         self.skip_voided = self._args.export_skip_voided
 
     def iter_tx(self) -> Iterator['BaseTransaction']:
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
+        from hathor.conf import get_settings
+        settings = get_settings()
         soft_voided_ids = set(settings.SOFT_VOIDED_TX_IDS)
 
         for tx in self._iter_tx:

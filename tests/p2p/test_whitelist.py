@@ -1,11 +1,11 @@
 from unittest.mock import patch
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from tests import unittest
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):

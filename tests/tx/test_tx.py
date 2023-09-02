@@ -3,7 +3,7 @@ import hashlib
 from math import isinf, isnan
 
 from hathor import daa
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode, _set_test_mode
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
@@ -41,7 +41,7 @@ from tests.utils import (
     get_genesis_key,
 )
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseTransactionTest(unittest.TestCase):

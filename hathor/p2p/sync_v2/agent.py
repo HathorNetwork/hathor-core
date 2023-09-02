@@ -24,7 +24,7 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
@@ -39,7 +39,7 @@ from hathor.util import Reactor, collect_n
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 
 MAX_GET_TRANSACTIONS_BFS_LEN: int = 8

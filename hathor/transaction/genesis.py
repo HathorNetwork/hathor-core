@@ -14,13 +14,13 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
-settings = HathorSettings()
+settings = get_settings()
 
 BLOCK_GENESIS = Block(
     hash=settings.GENESIS_BLOCK_HASH,

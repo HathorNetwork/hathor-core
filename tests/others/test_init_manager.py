@@ -1,6 +1,6 @@
 from typing import Iterator
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.pubsub import PubSubManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -14,7 +14,7 @@ from tests.utils import (
     add_new_transactions,
 )
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):

@@ -28,7 +28,7 @@ import aiohttp
 from structlog import get_logger
 
 from hathor.client import IHathorClient, IMiningChannel
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.difficulty import Hash, PDiff, Target, Weight
 from hathor.merged_mining.bitcoin import (
@@ -51,7 +51,7 @@ from hathor.transaction.exceptions import ScriptError, TxValidationError
 from hathor.util import MaxSizeOrderedDict, Random, ichunks
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 
 
 MAGIC_NUMBER = b'Hath'  # bytes.fromhex('48617468') or 0x68746148.to_bytes(4, 'little')

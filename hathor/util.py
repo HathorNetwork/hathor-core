@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, S
 from structlog import get_logger
 
 import hathor
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.reactor.reactor import reactor as hathor_reactor
 from hathor.reactor.reactor_protocol import ReactorProtocol
 from hathor.types import TokenUid
@@ -45,7 +45,7 @@ Reactor = ReactorProtocol
 reactor = hathor_reactor
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 
 
 T = TypeVar('T')

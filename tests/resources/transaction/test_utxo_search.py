@@ -1,13 +1,13 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction.resources import UtxoSearchResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):

@@ -28,12 +28,12 @@ from cryptography.x509.oid import NameOID
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.interfaces import IAddress
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import GENESIS_HASH
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 def discover_hostname() -> Optional[str]:

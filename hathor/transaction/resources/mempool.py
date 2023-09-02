@@ -18,11 +18,11 @@ from typing import TYPE_CHECKING, Iterator
 
 from hathor.api_util import Resource, get_args, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction import Transaction
 from hathor.util import json_dumpb
 
-settings = HathorSettings()
+settings = get_settings()
 
 if TYPE_CHECKING:
     from twisted.web.http import Request

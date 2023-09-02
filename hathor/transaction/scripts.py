@@ -24,7 +24,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import (
     decode_address,
     get_address_b58_from_bytes,
@@ -49,7 +49,7 @@ from hathor.transaction.exceptions import (
     VerifyFailed,
 )
 
-settings = HathorSettings()
+settings = get_settings()
 
 # XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some
 #      or the other type, there are many places that require an assert to prevent the wrong type from being used,

@@ -24,7 +24,7 @@ from hathor.api_util import (
     set_cors,
 )
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 @register_resource

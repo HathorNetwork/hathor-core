@@ -18,7 +18,7 @@ from typing import Iterator, Optional
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block, TxOutput
@@ -26,7 +26,7 @@ from hathor.transaction.scripts import parse_address_script
 from hathor.util import sorted_merger
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_settings()
 
 SCOPE = Scope(
     include_blocks=True,

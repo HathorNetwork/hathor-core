@@ -18,11 +18,11 @@ from typing import Iterator
 
 from graphviz import Digraph
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionStorage
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class GraphvizVisualizer:

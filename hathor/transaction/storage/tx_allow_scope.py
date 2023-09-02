@@ -16,14 +16,14 @@ from contextlib import contextmanager
 from enum import Flag, auto
 from typing import TYPE_CHECKING, Generator
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction.base_transaction import BaseTransaction
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class TxAllowScope(Flag):

@@ -1,12 +1,12 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction.resources import MempoolResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseMempoolTest(_BaseResourceTest._ResourceTest):

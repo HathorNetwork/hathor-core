@@ -20,7 +20,7 @@ from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.indexes import AddressIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
@@ -28,7 +28,7 @@ from hathor.pubsub import EventArguments, HathorEvents
 from hathor.util import json_dumpb, json_loadb, json_loads, reactor
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 
 # CONTROLLED_TYPES define each Rate Limit parameter for each message type that should be limited

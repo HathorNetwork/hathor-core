@@ -1,4 +1,4 @@
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
@@ -6,7 +6,7 @@ from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseTimelockTransactionTestCase(unittest.TestCase):

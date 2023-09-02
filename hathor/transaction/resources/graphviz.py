@@ -20,14 +20,14 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, parse_int, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.graphviz import GraphvizVisualizer
 from hathor.util import json_dumpb
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class FileFormat(Enum):

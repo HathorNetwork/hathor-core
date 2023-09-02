@@ -2,7 +2,7 @@ import math
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction, TxInput, TxOutput, genesis
@@ -17,7 +17,7 @@ from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx, create_tokens
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseSendTokensTest(_BaseResourceTest._ResourceTest):

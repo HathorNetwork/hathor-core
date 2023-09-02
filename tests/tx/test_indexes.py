@@ -1,6 +1,6 @@
 import pytest
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
 from hathor.storage.rocksdb_storage import RocksDBStorage
@@ -19,7 +19,7 @@ from tests.utils import (
     get_genesis_key,
 )
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseIndexesTest(unittest.TestCase):

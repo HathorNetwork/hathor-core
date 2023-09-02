@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.testing import StringTransport
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.util import json_dumpb, json_dumps, json_loadb
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
@@ -13,7 +13,7 @@ from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWeb
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseWebsocketTest(_BaseResourceTest._ResourceTest):

@@ -5,7 +5,7 @@ import pytest
 from structlog.testing import capture_logs
 
 from hathor.cli.twin_tx import create_parser, execute
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.util import json_loadb
 from tests import unittest
@@ -19,7 +19,7 @@ from tests.utils import (
     run_server,
 )
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseTwinTxTest(unittest.TestCase):

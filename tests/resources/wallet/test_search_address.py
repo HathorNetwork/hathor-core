@@ -1,6 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
 from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressSearchResource
@@ -8,7 +8,7 @@ from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):

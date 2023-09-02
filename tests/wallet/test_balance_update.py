@@ -1,4 +1,4 @@
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
@@ -7,7 +7,7 @@ from hathor.wallet.exceptions import PrivateKeyNotFound
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):

@@ -15,7 +15,7 @@
 import math
 from typing import TYPE_CHECKING, Optional
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.manager import HathorEvents
 from hathor.simulator.miner.abstract_miner import AbstractMiner
 from hathor.util import Random
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from hathor.pubsub import EventArguments
     from hathor.transaction import Block
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class GeometricMiner(AbstractMiner):

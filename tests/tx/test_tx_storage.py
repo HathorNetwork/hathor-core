@@ -8,7 +8,7 @@ from twisted.internet.defer import gatherResults, inlineCallbacks
 from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
@@ -26,7 +26,7 @@ from tests.utils import (
     create_tokens,
 )
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 class BaseTransactionStorageTest(unittest.TestCase):

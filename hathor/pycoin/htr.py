@@ -14,9 +14,9 @@
 
 from pycoin.networks.bitcoinish import create_bitcoinish_network
 
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 
-settings = HathorSettings()
+settings = get_settings()
 
 network = create_bitcoinish_network(
     symbol='HTR', network_name='Hathor', subnet_name='mainnet',

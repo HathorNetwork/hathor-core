@@ -17,11 +17,11 @@ import time
 import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.p2p.utils import to_serializable_best_blockchain
 from hathor.util import json_dumpb
 
-settings = HathorSettings()
+settings = get_settings()
 
 
 @register_resource

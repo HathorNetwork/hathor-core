@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from structlog import get_logger
 
 from hathor import daa
-from hathor.conf import HathorSettings
+from hathor.conf import get_settings
 from hathor.transaction.exceptions import RewardLocked
 from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
     from hathor.transaction import Transaction
 
-settings = HathorSettings()
+settings = get_settings()
 logger = get_logger()
 
 
