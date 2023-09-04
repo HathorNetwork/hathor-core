@@ -1019,7 +1019,7 @@ class NodeBlockSync(SyncAgent):
             assert tx is not None
             if tx.hash != tx_id:
                 self.protocol.send_error_and_close_connection(f'DATA mempool {tx_id.hex()} hash mismatch')
-                raise
+                return
         return tx
 
     def get_data(self, tx_id: bytes, origin: _GetDataOrigin) -> Deferred[BaseTransaction]:
