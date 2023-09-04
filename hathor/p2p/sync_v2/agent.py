@@ -52,6 +52,10 @@ class PeerState(Enum):
     SYNCING_MEMPOOL = 'syncing-mempool'
 
 
+class _GetDataOrigin(Enum):
+    MEMPOOL = 'mempool'
+
+
 class NodeBlockSync(SyncAgent):
     """ An algorithm to sync two peers based on their blockchain.
     """
@@ -1000,9 +1004,10 @@ class NodeBlockSync(SyncAgent):
                 self.log.debug('tx streaming in progress', txs_received=self._tx_received)
 
     @inlineCallbacks
-    def get_tx(self, tx_id: bytes) -> Generator[Deferred, Any, BaseTransaction]:
+    def get_tx_mempool(self, tx_id: bytes) -> Generator[Deferred, Any, BaseTransaction]:
         """ Async method to get a transaction from the db/cache or to download it.
         """
+        assert self.state is PeerState.SYNCING_MEMPOOL, 'get_tx_mempool must only be called on mempool state'
         tx = self._get_tx_cache.get(tx_id)
         if tx is not None:
             self.log.debug('tx in cache', tx=tx_id.hex())
@@ -1010,23 +1015,23 @@ class NodeBlockSync(SyncAgent):
         try:
             tx = self.tx_storage.get_transaction(tx_id)
         except TransactionDoesNotExist:
-            tx = yield self.get_data(tx_id, 'mempool')
+            tx = yield self.get_data(tx_id, _GetDataOrigin.MEMPOOL)
             assert tx is not None
             if tx.hash != tx_id:
                 self.protocol.send_error_and_close_connection(f'DATA mempool {tx_id.hex()} hash mismatch')
                 raise
         return tx
 
-    def get_data(self, tx_id: bytes, origin: str) -> Deferred[BaseTransaction]:
+    def get_data(self, tx_id: bytes, origin: _GetDataOrigin) -> Deferred[BaseTransaction]:
         """ Async method to request a tx by id.
         """
         # TODO: deal with stale `get_data` calls
-        if origin != 'mempool':
+        if origin is not _GetDataOrigin.MEMPOOL:
             raise ValueError(f'origin={origin} not supported, only origin=mempool is supported')
         deferred = self._deferred_txs.get(tx_id, None)
         if deferred is None:
             deferred = self._deferred_txs[tx_id] = Deferred()
-            self.send_get_data(tx_id, origin=origin)
+            self.send_get_data(tx_id, origin=origin.name)
             self.log.debug('get_data of new tx_id', deferred=deferred, key=tx_id.hex())
         else:
             # XXX: can we re-use deferred objects like this?

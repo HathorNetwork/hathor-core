@@ -79,7 +79,7 @@ class SyncMempoolManager:
         while self.missing_tips:
             self.log.debug('We have missing tips! Let\'s start!', missing_tips=[x.hex() for x in self.missing_tips])
             tx_id = next(iter(self.missing_tips))
-            tx: BaseTransaction = yield self.sync_agent.get_tx(tx_id)
+            tx: BaseTransaction = yield self.sync_agent.get_tx_mempool(tx_id)
             # Stack used by the DFS in the dependencies.
             # We use a deque for performance reasons.
             self.log.debug('start mempool DSF', tx=tx.hash_hex)
@@ -98,7 +98,7 @@ class SyncMempoolManager:
                 assert tx == stack.pop()
             else:
                 self.log.debug('Iterate in the DFS.', missing_dep=missing_dep.hex())
-                tx_dep = yield self.sync_agent.get_tx(missing_dep)
+                tx_dep = yield self.sync_agent.get_tx_mempool(missing_dep)
                 stack.append(tx_dep)
                 if len(stack) > self.MAX_STACK_LENGTH:
                     stack.popleft()
