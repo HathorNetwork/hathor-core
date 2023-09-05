@@ -459,18 +459,19 @@ class TransactionStorage(ABC):
     def remove_transaction(self, tx: BaseTransaction) -> None:
         """Remove the tx.
 
-        :param tx: Trasaction to be removed
+        :param tx: Transaction to be removed
         """
         if self.indexes is not None:
             self.del_from_indexes(tx, remove_all=True, relax_assert=True)
 
     def remove_transactions(self, txs: list[BaseTransaction]) -> None:
-        """Will remove all of the transactions on the list from the database.
+        """Will remove all the transactions on the list from the database.
 
         Special notes:
 
         - will refuse and raise an error when removing all transactions would leave dangling transactions, that is,
-          transactions without existing parent
+          transactions without existing parent. That is, it expects the `txs` list to include all children of deleted
+          txs, from both the confirmation and funds DAGs
         - inputs's spent_outputs should not have any of the transactions being removed as spending transactions,
           this method will update and save those transaction's metadata
         - parent's children metadata will be updated to reflect the removals
@@ -486,6 +487,8 @@ class TransactionStorage(ABC):
             for parent in set(tx.parents) - txset:
                 parents_to_update[parent].append(tx.hash)
             dangling_children.update(set(tx_meta.children) - txset)
+            for spending_txs in tx_meta.spent_outputs.values():
+                dangling_children.update(set(spending_txs) - txset)
             for tx_input in tx.inputs:
                 spent_tx = tx.get_spent_tx(tx_input)
                 spent_tx_meta = spent_tx.get_metadata()
@@ -514,7 +517,9 @@ class TransactionStorage(ABC):
     def compare_bytes_with_local_tx(self, tx: BaseTransaction) -> bool:
         """Compare byte-per-byte `tx` with the local transaction."""
         assert tx.hash is not None
-        local_tx = self.get_transaction(tx.hash)
+        # XXX: we have to accept any scope because we only want to know what bytes we have stored
+        with tx_allow_context(self, allow_scope=TxAllowScope.ALL):
+            local_tx = self.get_transaction(tx.hash)
         local_tx_bytes = bytes(local_tx)
         tx_bytes = bytes(tx)
         if tx_bytes == local_tx_bytes:
@@ -1065,13 +1070,18 @@ class TransactionStorage(ABC):
         else:
             yield from self.iter_mempool_from_tx_tips()
 
-    def compute_transactions_that_became_invalid(self) -> list[BaseTransaction]:
-        """ This method will look for transactions in the mempool that have became invalid due to the reward lock.
+    def compute_transactions_that_became_invalid(self, new_best_height: int) -> list[BaseTransaction]:
+        """ This method will look for transactions in the mempool that have become invalid due to the reward lock.
+        It compares each tx's `min_height` to the `new_best_height`, accounting for the fact that the tx can be
+        confirmed by the next block.
         """
         from hathor.transaction.validation_state import ValidationState
         to_remove: list[BaseTransaction] = []
         for tx in self.iter_mempool_from_best_index():
-            if tx.is_spent_reward_locked():
+            tx_min_height = tx.get_metadata().min_height
+            assert tx_min_height is not None
+            # We use +1 here because a tx is valid if it can be confirmed by the next block
+            if new_best_height + 1 < tx_min_height:
                 tx.set_validation(ValidationState.INVALID)
                 to_remove.append(tx)
         return to_remove

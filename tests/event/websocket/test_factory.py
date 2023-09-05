@@ -20,7 +20,7 @@ from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
-from hathor.simulator.clock import HeapClock
+from hathor.simulator.clock import MemoryReactorHeapClock
 from tests.utils import EventMocker
 
 
@@ -109,7 +109,7 @@ def test_broadcast_multiple_events_multiple_connections():
 )
 def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_event: bool) -> None:
     n_starting_events = 10
-    clock = HeapClock()
+    clock = MemoryReactorHeapClock()
     factory = _get_factory(n_starting_events, clock)
     connection = Mock(spec_set=EventWebsocketProtocol)
     connection.send_event_response = Mock()
@@ -137,7 +137,10 @@ def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_
     connection.send_event_response.assert_has_calls(calls)
 
 
-def _get_factory(n_starting_events: int = 0, clock: HeapClock = HeapClock()) -> EventWebsocketFactory:
+def _get_factory(
+    n_starting_events: int = 0,
+    clock: MemoryReactorHeapClock = MemoryReactorHeapClock()
+) -> EventWebsocketFactory:
     event_storage = EventMemoryStorage()
 
     for event_id in range(n_starting_events):

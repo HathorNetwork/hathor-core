@@ -30,7 +30,7 @@ class BaseMiningTest(unittest.TestCase):
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-    def test_block_template_after_genesis(self):
+    def test_block_template_after_genesis(self) -> None:
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         block_templates = manager.get_block_templates()
@@ -47,9 +47,10 @@ class BaseMiningTest(unittest.TestCase):
             parents_any=[],
             height=1,  # genesis is 0
             score=sum_weights(self.genesis_blocks[0].weight, 1.0),
+            signal_bits=0
         ))
 
-    def test_regular_block_template(self):
+    def test_regular_block_template(self) -> None:
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # add 100 blocks
@@ -69,6 +70,7 @@ class BaseMiningTest(unittest.TestCase):
             parents_any=[],
             height=101,  # genesis is 0
             score=sum_weights(blocks[-1].get_metadata().score, 1.0),
+            signal_bits=0
         ))
 
         self.assertConsensusValid(manager)

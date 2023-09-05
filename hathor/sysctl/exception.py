@@ -26,3 +26,7 @@ class SysctlReadOnlyEntry(SysctlException):
 
 class SysctlWriteOnlyEntry(SysctlException):
     pass
+
+
+class SysctlRunnerException(SysctlException):
+    pass

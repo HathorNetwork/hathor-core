@@ -12,19 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
-
 from twisted.internet.protocol import Factory
 
 from hathor.sysctl.protocol import SysctlProtocol
-
-if TYPE_CHECKING:
-    from hathor.sysctl.sysctl import Sysctl
+from hathor.sysctl.runner import SysctlRunner
 
 
 class SysctlFactory(Factory):
-    def __init__(self, root: 'Sysctl') -> None:
-        self.root = root
+    def __init__(self, runner: SysctlRunner) -> None:
+        self.runner = runner
 
     def buildProtocol(self, addr):
-        return SysctlProtocol(self.root)
+        return SysctlProtocol(self.runner)

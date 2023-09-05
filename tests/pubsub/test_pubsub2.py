@@ -12,36 +12,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Callable, cast
+from typing import Callable
 from unittest.mock import Mock, patch
 
 import pytest
-from twisted.internet.posixbase import PosixReactorBase
-from twisted.internet.task import Clock
 from twisted.internet.testing import MemoryReactorClock
 
 from hathor.pubsub import HathorEvents, PubSubManager
-
-
-def test_clock() -> None:
-    """
-    Running the PubSub with a Clock makes it call the handler function with callLater, so a plain function call
-    gets executed before the handler.
-    """
-    reactor = Clock()
-    pubsub = PubSubManager(cast(PosixReactorBase, reactor))
-    handler = Mock()
-
-    pubsub.subscribe(HathorEvents.MANAGER_ON_START, handler)
-    pubsub.publish(HathorEvents.MANAGER_ON_START)
-
-    handler(HathorEvents.MANAGER_ON_STOP)
-
-    reactor.advance(0)
-
-    assert len(handler.call_args_list) == 2
-    assert handler.call_args_list[0].args[0] == HathorEvents.MANAGER_ON_STOP
-    assert handler.call_args_list[1].args[0] == HathorEvents.MANAGER_ON_START
 
 
 @pytest.mark.parametrize('is_in_main_thread', [False, True])
@@ -52,12 +29,12 @@ def test_memory_reactor_clock_not_running(is_in_main_thread: bool) -> None:
     """
     reactor = MemoryReactorClock()
     reactor.running = False
-    pubsub = PubSubManager(cast(PosixReactorBase, reactor))
+    pubsub = PubSubManager(reactor)
     handler = Mock()
 
     pubsub.subscribe(HathorEvents.MANAGER_ON_START, handler)
 
-    with patch('hathor.util.isInIOThread', lambda: is_in_main_thread):
+    with patch('hathor.pubsub.isInIOThread', lambda: is_in_main_thread):
         pubsub.publish(HathorEvents.MANAGER_ON_START)
 
     handler(HathorEvents.MANAGER_ON_STOP)
@@ -74,12 +51,12 @@ def test_memory_reactor_clock_running_no_threading() -> None:
     """
     reactor = MemoryReactorClock()
     reactor.running = True
-    pubsub = PubSubManager(cast(PosixReactorBase, reactor))
+    pubsub = PubSubManager(reactor)
     handler = Mock()
 
     pubsub.subscribe(HathorEvents.MANAGER_ON_START, handler)
 
-    with patch('hathor.util.isInIOThread', lambda: True):
+    with patch('hathor.pubsub.isInIOThread', lambda: True):
         pubsub.publish(HathorEvents.MANAGER_ON_START)
 
     handler(HathorEvents.MANAGER_ON_STOP)
@@ -98,7 +75,7 @@ def test_memory_reactor_clock_running_with_threading() -> None:
     """
     reactor = MemoryReactorClock()
     reactor.running = True
-    pubsub = PubSubManager(cast(PosixReactorBase, reactor))
+    pubsub = PubSubManager(reactor)
     handler = Mock()
 
     def fake_call_from_thread(f: Callable) -> None:
@@ -109,7 +86,10 @@ def test_memory_reactor_clock_running_with_threading() -> None:
 
     pubsub.subscribe(HathorEvents.MANAGER_ON_START, handler)
 
-    with patch('hathor.util.isInIOThread', lambda: False):
+    with (
+        patch('hathor.pubsub.isInIOThread', lambda: False),
+        patch('hathor.utils.zope.verifyObject', lambda _a, _b: True)
+    ):
         pubsub.publish(HathorEvents.MANAGER_ON_START)
 
     handler(HathorEvents.MANAGER_ON_STOP)

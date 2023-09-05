@@ -21,6 +21,7 @@ from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
+from hathor.util import not_none
 
 logger = get_logger()
 settings = HathorSettings()
@@ -110,7 +111,7 @@ class ConsensusAlgorithm:
                           prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
             # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
             #      reward lock
-            to_remove = storage.compute_transactions_that_became_invalid()
+            to_remove = storage.compute_transactions_that_became_invalid(new_best_height)
             if to_remove:
                 self.log.warn('some transactions on the mempool became invalid and will be removed',
                               count=len(to_remove))
@@ -135,7 +136,8 @@ class ConsensusAlgorithm:
                                    reorg_size=reorg_size)
 
         # finally signal an index update for all affected transactions
-        for tx_affected in context.txs_affected:
+        sorted_txs_affected = sorted(context.txs_affected, key=lambda tx: not_none(tx.hash))
+        for tx_affected in sorted_txs_affected:
             assert tx_affected.storage is not None
             assert tx_affected.storage.indexes is not None
             tx_affected.storage.indexes.update(tx_affected)

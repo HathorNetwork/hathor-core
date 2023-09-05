@@ -34,6 +34,8 @@ def register_resource(resource_class: ResourceClass) -> ResourceClass:
 def get_registered_resources() -> list[type[Resource]]:
     """ Returns a list with all the resources registered for the docs
     """
+    import hathor.event.resources.event  # noqa: 401
+    import hathor.feature_activation.resources.feature  # noqa: 401
     import hathor.p2p.resources  # noqa: 401
     import hathor.profiler.resources  # noqa: 401
     import hathor.stratum.resources  # noqa: 401

@@ -44,7 +44,7 @@ class TransactionMetadata:
     # XXX: this is only used to defer the reward-lock verification from the transaction spending a reward to the first
     # block that confirming this transaction, it is important to always have this set to be able to distinguish an old
     # metadata (that does not have this calculated, from a tx with a new format that does have this calculated)
-    min_height: int
+    min_height: Optional[int]
 
     # A list of feature activation bit counts. Must only be used by Blocks, is None otherwise.
     # Each list index corresponds to a bit position, and its respective value is the rolling count of active bits from
@@ -68,7 +68,7 @@ class TransactionMetadata:
         accumulated_weight: float = 0,
         score: float = 0,
         height: Optional[int] = None,
-        min_height: int = 0,
+        min_height: Optional[int] = None,
         feature_activation_bit_counts: Optional[list[int]] = None
     ) -> None:
         from hathor.transaction.genesis import is_genesis
@@ -276,7 +276,7 @@ class TransactionMetadata:
         meta.accumulated_weight = data['accumulated_weight']
         meta.score = data.get('score', 0)
         meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
-        meta.min_height = data.get('min_height', 0)
+        meta.min_height = data.get('min_height')
         meta.feature_activation_bit_counts = data.get('feature_activation_bit_counts', [])
 
         feature_states_raw = data.get('feature_states')

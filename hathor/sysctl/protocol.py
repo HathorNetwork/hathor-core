@@ -13,85 +13,69 @@
 # limitations under the License.
 
 import inspect
-import json
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import Callable, Optional
 
 from pydantic import ValidationError
 from twisted.protocols.basic import LineReceiver
 
-from hathor.sysctl.exception import SysctlEntryNotFound, SysctlException, SysctlReadOnlyEntry, SysctlWriteOnlyEntry
-
-if TYPE_CHECKING:
-    from hathor.sysctl.sysctl import Sysctl
+from hathor.sysctl.exception import (
+    SysctlEntryNotFound,
+    SysctlException,
+    SysctlReadOnlyEntry,
+    SysctlRunnerException,
+    SysctlWriteOnlyEntry,
+)
+from hathor.sysctl.runner import SysctlRunner
 
 
 class SysctlProtocol(LineReceiver):
     delimiter = b'\n'
 
-    def __init__(self, root: 'Sysctl') -> None:
-        self.root = root
+    def __init__(self, runner: SysctlRunner) -> None:
+        self.runner = runner
 
     def lineReceived(self, raw: bytes) -> None:
         try:
             line = raw.decode('utf-8').strip()
         except UnicodeDecodeError:
             self.sendError('command is not utf-8 valid')
+
         if line.startswith('!help'):
             _, _, path = line.partition(' ')
             self.help(path)
             return
-        elif line == '!backup':
+        elif line.startswith('!backup'):
             self.backup()
             return
-        head, separator, tail = line.partition('=')
-        head = head.strip()
-        tail = tail.strip()
-        if separator == '=':
-            self.set(head, tail)
-        else:
-            self.get(head)
+
+        try:
+            feedback = self.runner.run(line)
+            if feedback:
+                self.sendLine(feedback)
+        except SysctlEntryNotFound:
+            path, _, _ = self.runner.get_line_parts(line)
+            self.sendError(f'{path} not found')
+        except SysctlReadOnlyEntry:
+            path, _, _ = self.runner.get_line_parts(line)
+            self.sendError(f'cannot write to {path}')
+        except SysctlWriteOnlyEntry:
+            path, _, _ = self.runner.get_line_parts(line)
+            self.sendError(f'cannot read from {path}')
+        except SysctlException as e:
+            self.sendError(str(e))
+        except ValidationError as e:
+            self.sendError(str(e))
+        except SysctlRunnerException as e:
+            self.sendError(str(e))
 
     def sendError(self, msg: str) -> None:
         """Send an error message to the client. Used when a command fails."""
         self.sendLine(f'[error] {msg}'.encode('utf-8'))
 
-    def set(self, path: str, value_str: str) -> None:
-        """Run a `set` command in sysctl."""
-        try:
-            value = self._deserialize(value_str)
-        except json.JSONDecodeError:
-            self.sendError('value: wrong format')
-            return
-
-        try:
-            self.root.set(path, value)
-        except SysctlEntryNotFound:
-            self.sendError(f'{path} not found')
-        except SysctlReadOnlyEntry:
-            self.sendError(f'cannot write to {path}')
-        except SysctlException as e:
-            self.sendError(str(e))
-        except ValidationError as e:
-            self.sendError(str(e))
-        except TypeError as e:
-            self.sendError(str(e))
-
-    def get(self, path: str) -> None:
-        """Run a `get` command in sysctl."""
-        try:
-            value = self.root.get(path)
-        except SysctlEntryNotFound:
-            self.sendError(f'{path} not found')
-        except SysctlWriteOnlyEntry:
-            self.sendError(f'cannot read from {path}')
-        else:
-            output = self._serialize(value)
-            self.sendLine(output.encode('utf-8'))
-
     def backup(self) -> None:
         """Run a `backup` command, sending all parameters to the client."""
-        for key, value in self.root.get_all():
-            output = f'{key}={self._serialize(value)}'
+        for key, value in self.runner.root.get_all():
+            output = f'{key}={self.runner.serialize(value)}'
             self.sendLine(output.encode('utf-8'))
 
     def help(self, path: str) -> None:
@@ -100,7 +84,7 @@ class SysctlProtocol(LineReceiver):
             self._send_all_commands()
             return
         try:
-            cmd = self.root.get_command(path)
+            cmd = self.runner.root.get_command(path)
         except SysctlEntryNotFound:
             self.sendError(f'{path} not found')
             return
@@ -112,28 +96,17 @@ class SysctlProtocol(LineReceiver):
         self.sendLine('\n'.join(output).encode('utf-8'))
 
     def _send_all_commands(self) -> None:
-        all_paths = list(self.root.get_all_paths())
+        all_paths = list(self.runner.root.get_all_paths())
         for path in sorted(all_paths):
             self.sendLine(path.encode('utf-8'))
 
-    def _serialize(self, value: Any) -> str:
-        """Serialize the return of a sysctl getter."""
-        output: str
-        if isinstance(value, tuple):
-            parts = (json.dumps(x) for x in value)
-            output = ', '.join(parts)
-        else:
-            output = json.dumps(value)
+    def _get_all_commands(self) -> list[str]:
+        """Get a list of all commands availale in the sysctl."""
+        all_paths = list(self.runner.root.get_all_paths())
+        output: list[str] = []
+        for path in sorted(all_paths):
+            output.append(path)
         return output
-
-    def _deserialize(self, value_str: str) -> Any:
-        """Deserialize a value sent by the client."""
-        if len(value_str) == 0:
-            return ()
-        parts = [x.strip() for x in value_str.split(',')]
-        if len(parts) > 1:
-            return tuple(json.loads(x) for x in parts)
-        return json.loads(value_str)
 
     def _get_method_help(self, method_name: str, method: Optional[Callable]) -> list[str]:
         """Return a list of strings with the help for `method`."""
