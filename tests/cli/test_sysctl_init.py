@@ -1,3 +1,4 @@
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -161,7 +162,7 @@ class SysctlInitTest(unittest.TestCase):
             always_enabled_peers_file_path = str(Path(always_enabled_peers_file.name))
 
         file_content = [
-            f'p2p.always_enable_sync.readtxt="{always_enabled_peers_file_path}"'
+            f'p2p.always_enable_sync.readtxt={json.dumps(always_enabled_peers_file_path)}'
         ]
 
         # set the sysctl.txt file
