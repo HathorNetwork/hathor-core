@@ -16,7 +16,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.transaction import Block
+from hathor.transaction import Block, Transaction, BaseTransaction
 from hathor.transaction.storage import TransactionStorage
 
 
@@ -27,11 +27,41 @@ class FeatureService:
         self._feature_settings = feature_settings
         self._tx_storage = tx_storage
 
-    def is_feature_active(self, *, block: Block, feature: Feature) -> bool:
+    def is_feature_active(self, *, vertex: BaseTransaction, feature: Feature) -> bool:
+        if isinstance(vertex, Block):
+            return self._is_feature_active_for_block(block=vertex, feature=feature)
+
+        if isinstance(vertex, Transaction):
+            return self._is_feature_active_for_transaction(transaction=vertex, feature=feature)
+
+        raise NotImplementedError
+
+    def _is_feature_active_for_block(self, *, block: Block, feature: Feature) -> bool:
         """Returns whether a Feature is active at a certain block."""
         state = self.get_state(block=block, feature=feature)
 
         return state == FeatureState.ACTIVE
+
+    def _is_feature_active_for_transaction(self, *, transaction: Transaction, feature: Feature) -> bool:
+        best_tip_hashes = self._tx_storage.get_best_block_tips()
+        best_tips = [self._tx_storage.get_transaction(tx_hash) for tx_hash in best_tip_hashes]
+        lowest_best_tip = min(best_tips, key=lambda block: block.get_height())
+        # lowest_best_tip = min(best_tips, key=Block.get_height)
+        assert isinstance(lowest_best_tip, Block)
+        best_block_height = lowest_best_tip.get_height()
+
+        offset_to_closest_boundary = best_block_height % self._feature_settings.evaluation_interval
+        closest_boundary_height = best_block_height - offset_to_closest_boundary
+        second_closest_boundary_height = closest_boundary_height - self._feature_settings.evaluation_interval
+
+        if second_closest_boundary_height < 0:
+            return False
+
+        second_closest_boundary_block = self._get_ancestor_at_height(
+            block=lowest_best_tip,
+            height=second_closest_boundary_height
+        )
+
 
     def get_state(self, *, block: Block, feature: Feature) -> FeatureState:
         """Returns the state of a feature at a certain block. Uses block metadata to cache states."""
