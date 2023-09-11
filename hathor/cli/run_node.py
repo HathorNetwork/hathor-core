@@ -266,8 +266,8 @@ class RunNode:
                 '',
             ]
 
-            from hathor.conf import HathorSettings
-            settings = HathorSettings()
+            from hathor.conf.get_settings import get_settings
+            settings = get_settings()
 
             if self._args.unsafe_mode != settings.NETWORK_NAME:
                 message.extend([

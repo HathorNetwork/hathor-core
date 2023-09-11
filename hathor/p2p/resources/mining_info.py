@@ -16,12 +16,10 @@ from math import log
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.daa import get_mined_tokens
 from hathor.difficulty import Weight
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 
 @register_resource
@@ -33,6 +31,7 @@ class MiningInfoResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
+        self._settings = get_settings()
         self.manager = manager
 
     def render_GET(self, request):
@@ -48,7 +47,7 @@ class MiningInfoResource(Resource):
 
         # We can use any address.
         burn_address = bytes.fromhex(
-            settings.P2PKH_VERSION_BYTE.hex() + 'acbfb94571417423c1ed66f706730c4aea516ac5762cccb8'
+            self._settings.P2PKH_VERSION_BYTE.hex() + 'acbfb94571417423c1ed66f706730c4aea516ac5762cccb8'
         )
         block = self.manager.generate_mining_block(address=burn_address)
 

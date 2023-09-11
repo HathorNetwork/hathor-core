@@ -23,7 +23,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
@@ -41,7 +41,6 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import not_none
 
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 # these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be
@@ -87,6 +86,7 @@ class TransactionStorage(ABC):
     _migrations: list[BaseMigration]
 
     def __init__(self) -> None:
+        self._settings = get_settings()
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -252,7 +252,7 @@ class TransactionStorage(ABC):
         """Check the network name is as expected and try to set it when none is present"""
         from hathor.transaction.storage.exceptions import WrongNetworkError
 
-        network = settings.NETWORK_NAME
+        network = self._settings.NETWORK_NAME
         stored_network = self.get_network()
 
         if stored_network is None:
@@ -440,7 +440,7 @@ class TransactionStorage(ABC):
     def _validate_partial_marker_consistency(self, tx_meta: TransactionMetadata) -> None:
         voided_by = tx_meta.get_frozen_voided_by()
         # XXX: PARTIALLY_VALIDATED_ID must be included if the tx is fully connected and must not be included otherwise
-        has_partially_validated_marker = settings.PARTIALLY_VALIDATED_ID in voided_by
+        has_partially_validated_marker = self._settings.PARTIALLY_VALIDATED_ID in voided_by
         validation_is_fully_connected = tx_meta.validation.is_fully_connected()
         assert (not has_partially_validated_marker) == validation_is_fully_connected, \
                'Inconsistent ValidationState and voided_by'
