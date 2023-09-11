@@ -16,14 +16,12 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
 from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, HeightInfo, IndexEntry
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
-settings = HathorSettings()
 logger = get_logger()
 
 _CF_NAME_HEIGHT_INDEX = b'height-index'

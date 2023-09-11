@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Iterable, cast
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, sum_weights
 from hathor.util import classproperty
@@ -25,7 +25,6 @@ if TYPE_CHECKING:
     from hathor.consensus.context import ConsensusAlgorithmContext
 
 logger = get_logger()
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()
@@ -35,6 +34,7 @@ class TransactionConsensusAlgorithm:
     """Implement the consensus algorithm for transactions."""
 
     def __init__(self, context: 'ConsensusAlgorithmContext') -> None:
+        self._settings = get_settings()
         self.context = context
 
     @classproperty
@@ -180,7 +180,7 @@ class TransactionConsensusAlgorithm:
             parent_meta = parent.get_metadata()
             if parent_meta.voided_by:
                 voided_by.update(self.context.consensus.filter_out_soft_voided_entries(parent, parent_meta.voided_by))
-        assert settings.SOFT_VOIDED_ID not in voided_by
+        assert self._settings.SOFT_VOIDED_ID not in voided_by
         assert not (self.context.consensus.soft_voided_tx_ids & voided_by)
 
         # Union of voided_by of inputs
@@ -189,13 +189,13 @@ class TransactionConsensusAlgorithm:
             spent_meta = spent_tx.get_metadata()
             if spent_meta.voided_by:
                 voided_by.update(spent_meta.voided_by)
-                voided_by.discard(settings.SOFT_VOIDED_ID)
-        assert settings.SOFT_VOIDED_ID not in voided_by
+                voided_by.discard(self._settings.SOFT_VOIDED_ID)
+        assert self._settings.SOFT_VOIDED_ID not in voided_by
 
         # Update accumulated weight of the transactions voiding us.
         assert tx.hash not in voided_by
         for h in voided_by:
-            if h == settings.SOFT_VOIDED_ID:
+            if h == self._settings.SOFT_VOIDED_ID:
                 continue
             tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
@@ -207,7 +207,7 @@ class TransactionConsensusAlgorithm:
         assert not meta.voided_by or meta.voided_by == {tx.hash}
         assert meta.accumulated_weight == tx.weight
         if tx.hash in self.context.consensus.soft_voided_tx_ids:
-            voided_by.add(settings.SOFT_VOIDED_ID)
+            voided_by.add(self._settings.SOFT_VOIDED_ID)
             voided_by.add(tx.hash)
         if meta.conflict_with:
             voided_by.add(tx.hash)
@@ -221,7 +221,7 @@ class TransactionConsensusAlgorithm:
 
         # Check conflicts of the transactions voiding us.
         for h in voided_by:
-            if h == settings.SOFT_VOIDED_ID:
+            if h == self._settings.SOFT_VOIDED_ID:
                 continue
             if h == tx.hash:
                 continue
@@ -300,7 +300,7 @@ class TransactionConsensusAlgorithm:
                 candidate.update_accumulated_weight(stop_value=meta.accumulated_weight)
                 tx_meta = candidate.get_metadata()
                 d = tx_meta.accumulated_weight - meta.accumulated_weight
-                if abs(d) < settings.WEIGHT_TOL:
+                if abs(d) < self._settings.WEIGHT_TOL:
                     tie_list.append(candidate)
                 elif d > 0:
                     is_highest = False
