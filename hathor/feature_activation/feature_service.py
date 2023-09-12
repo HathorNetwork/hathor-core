@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import cast
+from typing import Optional
 
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
@@ -39,18 +39,28 @@ class FeatureService:
     def is_feature_active_for_transaction(self, *, transaction: Transaction, feature: Feature) -> bool:
         current_best_block = self._tx_storage.get_best_block()
 
-        if not self.is_feature_active_for_block(block=current_best_block, feature=feature):
-            return False
-
-        first_active_boundary_block = self.get_first_active_block(current_best_block, feature)
+        first_active_boundary_block = self._get_first_active_block(current_best_block, feature)
         expected_second_active_boundary_block_timestamp = first_active_boundary_block.timestamp + 40_320 * 30
         is_active = transaction.timestamp >= expected_second_active_boundary_block_timestamp
 
         return is_active
 
-    def get_first_active_block(self, block: Block, feature: Feature) -> Block:
-        assert "block is active"
-        pass
+    def _get_first_active_block(self, block: Block, feature: Feature) -> Optional[Block]:
+        if not self.is_feature_active_for_block(block=block, feature=feature):
+            return None
+
+        parent = block.get_block_parent()
+        parent_state = self.get_state(block=parent, feature=feature)
+
+        if parent_state is FeatureState.LOCKED_IN:
+            return block
+
+        block_height = block.get_height()
+        offset_to_boundary = block_height % self._feature_settings.evaluation_interval
+        closest_boundary_height = block_height - offset_to_boundary
+        closest_boundary = self._get_ancestor_at_height(block=block, height=closest_boundary_height)
+
+        return self._get_first_active_block(closest_boundary, feature)
 
     """
 
@@ -293,7 +303,7 @@ class FeatureService:
         if not old_best_block_is_after_second_active_boundary:
             return True
 
-        self.log.critical()
+        # TODO: self.log.critical()
         return False
 
     def _get_affected_boundary_heights(self, *, common_height: int, old_best_height: int) -> set[int]:

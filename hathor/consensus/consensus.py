@@ -21,7 +21,7 @@ from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.transaction import BaseTransaction, Block
+from hathor.transaction import BaseTransaction
 from hathor.util import not_none
 
 logger = get_logger()
