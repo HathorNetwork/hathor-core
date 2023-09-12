@@ -18,6 +18,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from hathor.builder import Builder
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation import feature_service as feature_service_module
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
@@ -26,10 +27,11 @@ from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
+from hathor.transaction import Transaction
 from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
+from tests.utils import HAS_ROCKSDB, add_new_blocks
 
 
 class BaseFeatureSimulationTest(SimulatorTestCase):
@@ -74,9 +76,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             }
         )
+        settings = Mock(spec_set=HathorSettings)
+        settings.AVG_TIME_BETWEEN_BLOCKS = 30
+        settings.FEATURE_ACTIVATION = feature_settings
 
         feature_service = FeatureService(
-            feature_settings=feature_settings,
+            settings=settings,
             tx_storage=artifacts.tx_storage
         )
         feature_resource = FeatureResource(
@@ -86,9 +91,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         )
         web_client = StubSite(feature_resource)
 
-        miner = self.simulator.create_miner(manager, hashpower=1e6)
-        miner.start()
-
         get_state_mock = Mock(wraps=feature_service.get_state)
         get_ancestor_iteratively_mock = Mock(wraps=feature_service_module._get_ancestor_iteratively)
 
@@ -97,8 +99,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
         ):
             # at the beginning, the feature is DEFINED:
-            trigger = StopAfterNMinedBlocks(miner, quantity=10)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 10)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=10,
@@ -120,12 +122,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert self._get_state_mock_block_height_calls(get_state_mock) == [10, 8, 4, 0]
             # no blocks are voided, so we only use the height index, and not get_ancestor_iteratively:
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 19, the feature is DEFINED, just before becoming STARTED:
-            trigger = StopAfterNMinedBlocks(miner, quantity=9)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 9)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=19,
@@ -146,12 +151,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # so we query states from block 19 to 8, as it's cached:
             assert self._get_state_mock_block_height_calls(get_state_mock) == [19, 16, 12, 8]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 20, the feature becomes STARTED:
-            trigger = StopAfterNMinedBlocks(miner, quantity=1)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 1)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=20,
@@ -171,12 +179,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             )
             assert self._get_state_mock_block_height_calls(get_state_mock) == [20, 16]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
-            trigger = StopAfterNMinedBlocks(miner, quantity=35)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 35)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=55,
@@ -198,12 +209,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 self._get_state_mock_block_height_calls(get_state_mock) == [55, 52, 48, 44, 40, 36, 32, 28, 24, 20]
             )
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 56, the feature becomes MUST_SIGNAL:
-            trigger = StopAfterNMinedBlocks(miner, quantity=1)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 1)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=56,
@@ -223,12 +237,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             )
             assert self._get_state_mock_block_height_calls(get_state_mock) == [56, 52]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
-            trigger = StopAfterNMinedBlocks(miner, quantity=3)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 3)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=59,
@@ -250,12 +267,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 self._get_state_mock_block_height_calls(get_state_mock) == [59, 56]
             )
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 60, the feature becomes LOCKED_IN:
-            trigger = StopAfterNMinedBlocks(miner, quantity=1)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 1)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=60,
@@ -275,12 +295,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             )
             assert self._get_state_mock_block_height_calls(get_state_mock) == [60, 56]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
-            trigger = StopAfterNMinedBlocks(miner, quantity=11)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 11)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=71,
@@ -302,12 +325,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 self._get_state_mock_block_height_calls(get_state_mock) == [71, 68, 64, 60]
             )
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 72, the feature becomes ACTIVE, forever:
-            trigger = StopAfterNMinedBlocks(miner, quantity=1)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 1)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=72,
@@ -327,12 +353,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             )
             assert self._get_state_mock_block_height_calls(get_state_mock) == [72, 68]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 75, the feature is still not ACTIVE for transactions, just before becoming ACTIVE:
-            trigger = StopAfterNMinedBlocks(miner, quantity=3)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 3)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=75,
@@ -352,12 +381,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             )
             assert self._get_state_mock_block_height_calls(get_state_mock) == [75, 72]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert not feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
             # at block 76, the feature becomes ACTIVE for transactions, forever:
-            trigger = StopAfterNMinedBlocks(miner, quantity=1)
-            self.simulator.run(36000, trigger=trigger)
+            blocks = add_new_blocks(manager, 1)
+            self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=76,
@@ -377,7 +409,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             )
             assert self._get_state_mock_block_height_calls(get_state_mock) == [76, 72]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+            assert feature_service.is_feature_active_for_transaction(
+                transaction=Transaction(timestamp=blocks[-1].timestamp + 1),
+                feature=Feature.NOP_FEATURE_1
+            )
             get_state_mock.reset_mock()
 
     def test_reorg(self) -> None:
@@ -440,7 +475,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
-        assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+        assert not feature_service.is_feature_active_for_transaction(
+            transaction=Transaction(timestamp=manager.tx_storage.get_best_block().timestamp + 1),
+            feature=Feature.NOP_FEATURE_1
+        )
 
         # at block 4, the feature becomes STARTED with 0% acceptance
         trigger = StopAfterNMinedBlocks(miner, quantity=4)
@@ -483,7 +521,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
-        assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+        assert not feature_service.is_feature_active_for_transaction(
+            transaction=Transaction(timestamp=manager.tx_storage.get_best_block().timestamp + 1),
+            feature=Feature.NOP_FEATURE_1
+        )
 
         # at block 11, acceptance was 75%, so the feature will be locked-in in the next block
         trigger = StopAfterNMinedBlocks(miner, quantity=4)
@@ -505,7 +546,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
-        assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+        assert not feature_service.is_feature_active_for_transaction(
+            transaction=Transaction(timestamp=manager.tx_storage.get_best_block().timestamp + 1),
+            feature=Feature.NOP_FEATURE_1
+        )
 
         # at block 12, the feature is locked-in
         trigger = StopAfterNMinedBlocks(miner, quantity=1)
@@ -527,7 +571,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
-        assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+        assert not feature_service.is_feature_active_for_transaction(
+            transaction=Transaction(timestamp=manager.tx_storage.get_best_block().timestamp + 1),
+            feature=Feature.NOP_FEATURE_1
+        )
 
         # at block 16, the feature is activated
         trigger = StopAfterNMinedBlocks(miner, quantity=4)
@@ -549,7 +596,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
-        assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+        assert not feature_service.is_feature_active_for_transaction(
+            transaction=Transaction(timestamp=manager.tx_storage.get_best_block().timestamp + 1),
+            feature=Feature.NOP_FEATURE_1
+        )
 
         miner.stop()
 
@@ -586,7 +636,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
-        assert not feature_service.is_feature_active_for_transactions(feature=Feature.NOP_FEATURE_1)
+        assert not feature_service.is_feature_active_for_transaction(
+            transaction=Transaction(timestamp=manager.tx_storage.get_best_block().timestamp + 1),
+            feature=Feature.NOP_FEATURE_1
+        )
 
 
 class BaseMemoryStorageFeatureSimulationTest(BaseFeatureSimulationTest):

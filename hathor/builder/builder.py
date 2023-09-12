@@ -146,9 +146,6 @@ class Builder:
 
         peer_id = self._get_peer_id()
 
-        soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
-
         p2p_manager = self._get_p2p_manager()
 
         wallet = self._get_or_create_wallet()
@@ -157,6 +154,9 @@ class Builder:
         tx_storage = self._get_or_create_tx_storage(indexes)
         feature_service = self._get_or_create_feature_service(tx_storage)
         bit_signaling_service = self._get_or_create_bit_signaling_service(tx_storage)
+
+        soft_voided_tx_ids = self._get_soft_voided_tx_ids()
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub, feature_service)
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -405,7 +405,7 @@ class Builder:
         if self._feature_service is None:
             settings = self._get_or_create_settings()
             self._feature_service = FeatureService(
-                feature_settings=settings.FEATURE_ACTIVATION,
+                settings=settings,
                 tx_storage=tx_storage
             )
 

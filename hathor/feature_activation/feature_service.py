@@ -38,10 +38,15 @@ class FeatureService:
 
     def is_feature_active_for_transaction(self, *, transaction: Transaction, feature: Feature) -> bool:
         current_best_block = self._tx_storage.get_best_block()
-
         first_active_boundary_block = self._get_first_active_block(current_best_block, feature)
-        expected_second_active_boundary_block_timestamp = first_active_boundary_block.timestamp + 40_320 * 30
-        is_active = transaction.timestamp >= expected_second_active_boundary_block_timestamp
+
+        if not first_active_boundary_block:
+            return False
+
+        avg_time_between_boundaries = self._feature_settings.evaluation_interval * self._avg_time_between_blocks
+        expected_second_active_boundary_timestamp = first_active_boundary_block.timestamp + avg_time_between_boundaries
+        assert transaction.timestamp is not None
+        is_active = transaction.timestamp >= expected_second_active_boundary_timestamp
 
         return is_active
 
@@ -55,12 +60,13 @@ class FeatureService:
         if parent_state is FeatureState.LOCKED_IN:
             return block
 
-        block_height = block.get_height()
-        offset_to_boundary = block_height % self._feature_settings.evaluation_interval
-        closest_boundary_height = block_height - offset_to_boundary
-        closest_boundary = self._get_ancestor_at_height(block=block, height=closest_boundary_height)
+        height = block.get_height()
+        offset_to_boundary = height % self._feature_settings.evaluation_interval
+        offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
+        previous_boundary_height = height - offset_to_previous_boundary
+        previous_boundary_block = self._get_ancestor_at_height(block=block, height=previous_boundary_height)
 
-        return self._get_first_active_block(closest_boundary, feature)
+        return self._get_first_active_block(previous_boundary_block, feature)
 
     """
 
@@ -351,6 +357,7 @@ class FeatureService:
     ) -> bool:
         avg_time_between_boundaries = self._feature_settings.evaluation_interval * self._avg_time_between_blocks
 
+        # TODO: Merge logic with is_feature_active_for_transaction
         for first_active_boundary_block in first_active_boundary_blocks:
             assert self._is_first_active_boundary_block(boundary_block=first_active_boundary_block)
             expected_second_active_boundary_timestamp = (
