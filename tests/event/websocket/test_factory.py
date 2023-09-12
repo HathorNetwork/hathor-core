@@ -29,7 +29,7 @@ def test_started_register():
     connection = Mock(spec_set=EventWebsocketProtocol)
     connection.send_invalid_request_response = Mock()
 
-    factory.start()
+    factory.start(stream_id='stream_id')
     factory.register(connection)
 
     connection.send_invalid_request_response.assert_not_called()
@@ -50,7 +50,7 @@ def test_stopped_register():
     connection = Mock(spec_set=EventWebsocketProtocol)
     connection.send_invalid_request_response = Mock()
 
-    factory.start()
+    factory.start(stream_id='stream_id')
     factory.stop()
     factory.register(connection)
 
@@ -59,6 +59,7 @@ def test_stopped_register():
 
 @pytest.mark.parametrize('can_receive_event', [False, True])
 def test_broadcast_event(can_receive_event: bool) -> None:
+    stream_id = 'stream_id'
     n_starting_events = 10
     factory = _get_factory(n_starting_events)
     event = EventMocker.create_event(n_starting_events - 1)
@@ -66,18 +67,19 @@ def test_broadcast_event(can_receive_event: bool) -> None:
     connection.can_receive_event = Mock(return_value=can_receive_event)
     connection.send_event_response = Mock()
 
-    factory.start()
+    factory.start(stream_id=stream_id)
     factory.register(connection)
     factory.broadcast_event(event)
 
     if not can_receive_event:
         return connection.send_event_response.assert_not_called()
 
-    response = EventResponse(event=event, latest_event_id=n_starting_events - 1)
+    response = EventResponse(event=event, latest_event_id=n_starting_events - 1, stream_id=stream_id)
     connection.send_event_response.assert_called_once_with(response)
 
 
 def test_broadcast_multiple_events_multiple_connections():
+    stream_id = 'stream_id'
     factory = _get_factory(10)
     connection1 = Mock(spec_set=EventWebsocketProtocol)
     connection1.can_receive_event = Mock(return_value=True)
@@ -86,7 +88,7 @@ def test_broadcast_multiple_events_multiple_connections():
     connection2.can_receive_event = Mock(return_value=True)
     connection2.send_event_response = Mock()
 
-    factory.start()
+    factory.start(stream_id=stream_id)
     factory.register(connection1)
     factory.register(connection2)
 
@@ -108,6 +110,7 @@ def test_broadcast_multiple_events_multiple_connections():
     ]
 )
 def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_event: bool) -> None:
+    stream_id = 'stream_id'
     n_starting_events = 10
     clock = MemoryReactorHeapClock()
     factory = _get_factory(n_starting_events, clock)
@@ -118,7 +121,7 @@ def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_
         side_effect=lambda: next_expected_event_id + connection.send_event_response.call_count
     )
 
-    factory.start()
+    factory.start(stream_id=stream_id)
     factory.register(connection)
     factory.send_next_event_to_connection(connection)
 
@@ -130,7 +133,7 @@ def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_
     calls = []
     for _id in range(next_expected_event_id, n_starting_events):
         event = EventMocker.create_event(_id)
-        response = EventResponse(event=event, latest_event_id=n_starting_events - 1)
+        response = EventResponse(event=event, latest_event_id=n_starting_events - 1, stream_id=stream_id)
         calls.append(call(response))
 
     assert connection.send_event_response.call_count == n_starting_events - next_expected_event_id

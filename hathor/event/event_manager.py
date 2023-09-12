@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from typing import Callable, Iterator, Optional
+from uuid import uuid4
 
 from structlog import get_logger
 
@@ -23,7 +24,7 @@ from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
-from hathor.util import Reactor, progress
+from hathor.util import Reactor, not_none, progress
 from hathor.utils.iter import batch_iterator
 
 logger = get_logger()
@@ -55,6 +56,7 @@ class EventManager:
     _peer_id: str
     _is_running: bool = False
     _previous_node_state: Optional[NodeState] = None
+    _stream_id: Optional[str] = None
     _last_event: Optional[BaseEvent] = None
     _last_existing_group_id: Optional[int] = None
 
@@ -86,16 +88,20 @@ class EventManager:
 
         if self._should_reload_events():
             self._event_storage.reset_events()
+            self._stream_id = str(uuid4())
+            self._event_storage.save_stream_id(self._stream_id)
         else:
             self._last_event = self._event_storage.get_last_event()
             self._last_existing_group_id = self._event_storage.get_last_group_id()
+            self._stream_id = not_none(self._event_storage.get_stream_id())
 
         self._assert_closed_event_group()
         self._subscribe_events()
 
         self._peer_id = peer_id
-        self._event_ws_factory.start()
+        self._event_ws_factory.start(stream_id=not_none(self._stream_id))
         self._is_running = True
+        self.log.info('Starting Event Manager', stream_id=self._stream_id)
 
     def stop(self) -> None:
         """Stops the EventManager."""

@@ -53,7 +53,7 @@ class EventStorage(ABC):
     @abstractmethod
     def reset_events(self) -> None:
         """
-        Reset event-related data: events, last_event, and last_group_id.
+        Reset event-related data: events, last_event, last_group_id, and stream_id.
         This should be used to clear old events from the database when reloading events.
         """
         raise NotImplementedError
@@ -61,7 +61,7 @@ class EventStorage(ABC):
     @abstractmethod
     def reset_all(self) -> None:
         """
-        Reset all data and metadata: events, last_event, last_group_id, node_state, and event_queue_enabled.
+        Reset all data and metadata: events, last_event, last_group_id, stream_id, node_state, and event_queue_enabled.
         This should be used for a full wipe out of the event storage.
         """
         raise NotImplementedError
@@ -84,4 +84,14 @@ class EventStorage(ABC):
     @abstractmethod
     def get_event_queue_state(self) -> bool:
         """Get whether the event queue feature is enabled from the storage"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_stream_id(self, stream_id: str) -> None:
+        """Save the Stream ID."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_stream_id(self) -> Optional[str]:
+        """Get the Stream ID."""
         raise NotImplementedError
