@@ -14,10 +14,10 @@
 
 from typing import Optional
 
-from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block, Transaction
 from hathor.transaction.storage import TransactionStorage
 
@@ -25,9 +25,15 @@ from hathor.transaction.storage import TransactionStorage
 class FeatureService:
     __slots__ = ('_feature_settings', '_avg_time_between_blocks', '_tx_storage')
 
-    def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
-        self._feature_settings = settings.FEATURE_ACTIVATION
-        self._avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
+    def __init__(
+        self,
+        *,
+        feature_settings: FeatureSettings,
+        avg_time_between_blocks: int,
+        tx_storage: TransactionStorage
+    ) -> None:
+        self._feature_settings = feature_settings
+        self._avg_time_between_blocks = avg_time_between_blocks
         self._tx_storage = tx_storage
 
     def is_feature_active_for_block(self, *, block: Block, feature: Feature) -> bool:
@@ -251,9 +257,12 @@ class FeatureService:
         Given a block, returns its ancestor at a specific height.
         Uses the height index if the block is in the best blockchain, or search iteratively otherwise.
         """
-        assert height < block.get_height(), (
-            f"ancestor height must be lower than the block's height: {height} >= {block.get_height()}"
+        assert height <= block.get_height(), (
+            f"ancestor height must not be greater than the block's height: {height} > {block.get_height()}"
         )
+
+        if height == block.get_height():
+            return block
 
         metadata = block.get_metadata()
 
@@ -294,7 +303,7 @@ class FeatureService:
             return True
 
         first_active_boundary_blocks = self._get_first_active_boundary_blocks(
-            common_block=common_block,
+            old_best_block=old_best_block,
             boundary_heights=affected_boundary_heights
         )
 
@@ -321,11 +330,11 @@ class FeatureService:
 
         return affected_boundary_heights
 
-    def _get_first_active_boundary_blocks(self, *, common_block: Block, boundary_heights: set[int]) -> set[Block]:
+    def _get_first_active_boundary_blocks(self, *, old_best_block: Block, boundary_heights: set[int]) -> set[Block]:
         first_active_boundary_blocks = set()
 
         for height in boundary_heights:
-            block = self._get_ancestor_at_height(block=common_block, height=height)
+            block = self._get_ancestor_at_height(block=old_best_block, height=height)
 
             if self._is_first_active_boundary_block(boundary_block=block):
                 first_active_boundary_blocks.add(block)
@@ -336,7 +345,7 @@ class FeatureService:
         assert boundary_block.get_height() % self._feature_settings.evaluation_interval == 0
         descriptions = self.get_bits_description(block=boundary_block)
 
-        for feature, description in descriptions:
+        for feature, description in descriptions.items():
             if description.state is not FeatureState.ACTIVE:
                 continue
 

@@ -110,6 +110,7 @@ def feature_settings() -> FeatureSettings:
 def service(feature_settings: FeatureSettings, tx_storage: TransactionStorage) -> FeatureService:
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
 
@@ -160,6 +161,7 @@ def test_get_state_from_defined(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -191,6 +193,7 @@ def test_get_state_from_started_to_failed(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -222,6 +225,7 @@ def test_get_state_from_started_to_must_signal_on_timeout(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -254,6 +258,7 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -285,6 +290,7 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -324,6 +330,7 @@ def test_get_state_from_started_to_started(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -353,6 +360,7 @@ def test_get_state_from_must_signal_to_locked_in(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -385,6 +393,7 @@ def test_get_state_from_locked_in_to_active(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -417,6 +426,7 @@ def test_get_state_from_locked_in_to_locked_in(
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -442,6 +452,7 @@ def test_get_state_from_active(block_mocks: list[Block], tx_storage: Transaction
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -465,7 +476,11 @@ def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStor
             )
         }
     )
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        avg_time_between_blocks=30,
+        tx_storage=tx_storage
+    )
     block = block_mocks[block_height]
     calculate_new_state_mock = Mock(wraps=service._calculate_new_state)
 
@@ -497,6 +512,7 @@ def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStor
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -521,6 +537,7 @@ def test_get_state_from_failed(block_mocks: list[Block], tx_storage: Transaction
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
     block = block_mocks[block_height]
@@ -549,6 +566,7 @@ def test_get_bits_description(tx_storage: TransactionStorage) -> None:
     )
     service = FeatureService(
         feature_settings=feature_settings,
+        avg_time_between_blocks=30,
         tx_storage=tx_storage
     )
 
@@ -573,11 +591,9 @@ def test_get_bits_description(tx_storage: TransactionStorage) -> None:
 @pytest.mark.parametrize(
     ['block_height', 'ancestor_height'],
     [
-        (21, 21),
         (21, 100),
         (10, 15),
         (10, 11),
-        (0, 0),
     ]
 )
 def test_get_ancestor_at_height_invalid(
@@ -587,26 +603,32 @@ def test_get_ancestor_at_height_invalid(
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        avg_time_between_blocks=30,
+        tx_storage=tx_storage
+    )
     block = block_mocks[block_height]
 
     with pytest.raises(AssertionError) as e:
         service._get_ancestor_at_height(block=block, height=ancestor_height)
 
     assert str(e.value) == (
-        f"ancestor height must be lower than the block's height: {ancestor_height} >= {block_height}"
+        f"ancestor height must not be greater than the block's height: {ancestor_height} > {block_height}"
     )
 
 
 @pytest.mark.parametrize(
     ['block_height', 'ancestor_height'],
     [
+        (21, 21),
         (21, 20),
         (21, 10),
         (21, 0),
         (15, 10),
         (15, 0),
         (1, 0),
+        (0, 0)
     ]
 )
 def test_get_ancestor_at_height(
@@ -616,13 +638,17 @@ def test_get_ancestor_at_height(
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        avg_time_between_blocks=30,
+        tx_storage=tx_storage
+    )
     block = block_mocks[block_height]
     result = service._get_ancestor_at_height(block=block, height=ancestor_height)
 
     assert result == block_mocks[ancestor_height]
     assert result.get_height() == ancestor_height
-    assert cast(Mock, tx_storage.get_transaction_by_height).call_count == 1
+    assert cast(Mock, tx_storage.get_transaction_by_height).call_count <= 1
 
 
 @pytest.mark.parametrize(
@@ -643,7 +669,11 @@ def test_get_ancestor_at_height_voided(
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        avg_time_between_blocks=30,
+        tx_storage=tx_storage
+    )
     block = block_mocks[block_height]
     block.get_metadata().voided_by = {b'some'}
     result = service._get_ancestor_at_height(block=block, height=ancestor_height)

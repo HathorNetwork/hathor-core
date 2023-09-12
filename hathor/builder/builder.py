@@ -405,7 +405,8 @@ class Builder:
         if self._feature_service is None:
             settings = self._get_or_create_settings()
             self._feature_service = FeatureService(
-                settings=settings,
+                feature_settings=settings.FEATURE_ACTIVATION,
+                avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
                 tx_storage=tx_storage
             )
 
