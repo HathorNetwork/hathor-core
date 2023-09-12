@@ -19,10 +19,9 @@ from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, Block, TxInput, TxOutput, TxVersion
+from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import (
     ConflictingInputs,
@@ -48,7 +47,6 @@ from hathor.util import not_none
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
@@ -155,7 +153,7 @@ class Transaction(BaseTransaction):
         """ Calculates min height derived from own spent block rewards"""
         min_height = 0
         for blk in self.iter_spent_rewards():
-            min_height = max(min_height, blk.get_height() + settings.REWARD_SPEND_MIN_BLOCKS + 1)
+            min_height = max(min_height, blk.get_height() + self._settings.REWARD_SPEND_MIN_BLOCKS + 1)
         return min_height
 
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
@@ -278,7 +276,7 @@ class Transaction(BaseTransaction):
         :return: the token uid
         """
         if index == 0:
-            return settings.HATHOR_TOKEN_UID
+            return self._settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
@@ -322,11 +320,11 @@ class Transaction(BaseTransaction):
     def verify_weight(self) -> None:
         """Validate minimum tx difficulty."""
         min_tx_weight = daa.minimum_tx_weight(self)
-        max_tx_weight = min_tx_weight + settings.MAX_TX_WEIGHT_DIFF
-        if self.weight < min_tx_weight - settings.WEIGHT_TOL:
+        max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
+        if self.weight < min_tx_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
                               f'smaller than the minimum weight ({min_tx_weight})')
-        elif min_tx_weight > settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and self.weight > max_tx_weight:
+        elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and self.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
 
@@ -375,7 +373,7 @@ class Transaction(BaseTransaction):
 
     def verify_number_of_inputs(self) -> None:
         """Verify number of inputs is in a valid range"""
-        if len(self.inputs) > MAX_NUM_INPUTS:
+        if len(self.inputs) > self._settings.MAX_NUM_INPUTS:
             raise TooManyInputs('Maximum number of inputs exceeded')
 
         if len(self.inputs) == 0:
@@ -399,7 +397,7 @@ class Transaction(BaseTransaction):
                     tx_input.tx_id.hex(), tx_input.index))
             n_txops += get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
 
-        if n_txops > settings.MAX_TX_SIGOPS_INPUT:
+        if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(
                 'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(self.hash_hex, n_txops))
 
@@ -424,7 +422,7 @@ class Transaction(BaseTransaction):
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(0, False, False)
+        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo(0, False, False)
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
@@ -486,7 +484,7 @@ class Transaction(BaseTransaction):
         withdraw = 0
         deposit = 0
         for token_uid, token_info in token_dict.items():
-            if token_uid == settings.HATHOR_TOKEN_UID:
+            if token_uid == self._settings.HATHOR_TOKEN_UID:
                 continue
 
             if token_info.amount == 0:
@@ -507,7 +505,7 @@ class Transaction(BaseTransaction):
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
+        htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
         if htr_info.amount != htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
                 htr_info.amount,
@@ -541,9 +539,9 @@ class Transaction(BaseTransaction):
 
         spent_outputs: set[tuple[VertexId, int]] = set()
         for input_tx in self.inputs:
-            if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
+            if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
                 raise InvalidInputDataSize('size: {} and max-size: {}'.format(
-                    len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
+                    len(input_tx.data), self._settings.MAX_INPUT_DATA_SIZE
                 ))
 
             try:
@@ -610,7 +608,7 @@ class Transaction(BaseTransaction):
         assert isinstance(best_height, int)
         spent_height = block.get_height()
         spend_blocks = best_height - spent_height
-        needed_height = settings.REWARD_SPEND_MIN_BLOCKS - spend_blocks
+        needed_height = self._settings.REWARD_SPEND_MIN_BLOCKS - spend_blocks
         return max(needed_height, 0)
 
     def verify_script(self, input_tx: TxInput, spent_tx: BaseTransaction) -> None:

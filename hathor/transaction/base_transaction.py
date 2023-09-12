@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -54,11 +54,8 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()
-settings = HathorSettings()
 
 MAX_NONCE = 2**32
-MAX_NUM_INPUTS = settings.MAX_NUM_INPUTS
-MAX_NUM_OUTPUTS = settings.MAX_NUM_OUTPUTS
 
 MAX_OUTPUT_VALUE = 2**63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
 _MAX_OUTPUT_VALUE_32 = 2**31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
@@ -184,6 +181,7 @@ class BaseTransaction(ABC):
         assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
+        self._settings = get_settings()
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
         self.signal_bits = signal_bits
@@ -560,7 +558,7 @@ class BaseTransaction(ABC):
         """
         tx_meta = self.get_metadata()
         assert not tx_meta.validation.is_fully_connected()
-        tx_meta.add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        tx_meta.add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
 
     def _unmark_partially_validated(self) -> None:
         """ This function is used to remove the partially-validated mark from the voided-by metadata.
@@ -570,7 +568,7 @@ class BaseTransaction(ABC):
         """
         tx_meta = self.get_metadata()
         assert tx_meta.validation.is_fully_connected()
-        tx_meta.del_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        tx_meta.del_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
 
     @abstractmethod
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
@@ -631,7 +629,7 @@ class BaseTransaction(ABC):
 
                 if parent.is_block:
                     if self.is_block and not parent.is_genesis:
-                        if self.timestamp - parent.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
+                        if self.timestamp - parent.timestamp > self._settings.MAX_DISTANCE_BETWEEN_BLOCKS:
                             raise TimestampError('Distance between blocks is too big'
                                                  ' ({} seconds)'.format(self.timestamp - parent.timestamp))
                     if my_parents_txs > 0:
@@ -684,7 +682,7 @@ class BaseTransaction(ABC):
 
     def verify_number_of_outputs(self) -> None:
         """Verify number of outputs does not exceeds the limit"""
-        if len(self.outputs) > MAX_NUM_OUTPUTS:
+        if len(self.outputs) > self._settings.MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
     def verify_sigops_output(self) -> None:
@@ -696,7 +694,7 @@ class BaseTransaction(ABC):
         for tx_output in self.outputs:
             n_txops += get_sigops_count(tx_output.script)
 
-        if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
+        if n_txops > self._settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 self.hash_hex, n_txops))
 
@@ -719,9 +717,9 @@ class BaseTransaction(ABC):
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
 
-            if len(output.script) > settings.MAX_OUTPUT_SCRIPT_SIZE:
+            if len(output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
                 raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(
-                    len(output.script), settings.MAX_OUTPUT_SCRIPT_SIZE
+                    len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
     def resolve(self, update_time: bool = False) -> bool:
@@ -912,7 +910,7 @@ class BaseTransaction(ABC):
             self._metadata.voided_by = set()
         else:
             self._metadata.validation = ValidationState.INITIAL
-            self._metadata.voided_by = {settings.PARTIALLY_VALIDATED_ID}
+            self._metadata.voided_by = {self._settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
 
         self._update_height_metadata()

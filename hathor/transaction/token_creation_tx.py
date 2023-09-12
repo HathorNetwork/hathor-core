@@ -15,14 +15,11 @@
 from struct import error as StructError, pack
 from typing import Any, Optional
 
-from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import VerboseCallback, clean_token_string, int_to_bytes, unpack, unpack_len
-
-settings = HathorSettings()
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
@@ -259,15 +256,15 @@ class TokenCreationTransaction(Transaction):
         """
         name_len = len(self.token_name)
         symbol_len = len(self.token_symbol)
-        if name_len == 0 or name_len > settings.MAX_LENGTH_TOKEN_NAME:
+        if name_len == 0 or name_len > self._settings.MAX_LENGTH_TOKEN_NAME:
             raise TransactionDataError('Invalid token name length ({})'.format(name_len))
-        if symbol_len == 0 or symbol_len > settings.MAX_LENGTH_TOKEN_SYMBOL:
+        if symbol_len == 0 or symbol_len > self._settings.MAX_LENGTH_TOKEN_SYMBOL:
             raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
 
         # Can't create token with hathor name or symbol
-        if clean_token_string(self.token_name) == clean_token_string(settings.HATHOR_TOKEN_NAME):
+        if clean_token_string(self.token_name) == clean_token_string(self._settings.HATHOR_TOKEN_NAME):
             raise TransactionDataError('Invalid token name ({})'.format(self.token_name))
-        if clean_token_string(self.token_symbol) == clean_token_string(settings.HATHOR_TOKEN_SYMBOL):
+        if clean_token_string(self.token_symbol) == clean_token_string(self._settings.HATHOR_TOKEN_SYMBOL):
             raise TransactionDataError('Invalid token symbol ({})'.format(self.token_symbol))
 
 

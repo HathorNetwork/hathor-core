@@ -20,13 +20,10 @@ from structlog import get_logger
 from twisted.internet.address import HostnameAddress
 from twisted.internet.testing import StringTransport
 
-from hathor.conf import HathorSettings
-
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
     from hathor.p2p.peer_id import PeerId
 
-settings = HathorSettings()
 logger = get_logger()
 
 
