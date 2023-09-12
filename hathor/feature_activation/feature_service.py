@@ -37,17 +37,12 @@ class FeatureService:
         return state == FeatureState.ACTIVE
 
     def is_feature_active_for_transaction(self, *, transaction: Transaction, feature: Feature) -> bool:
-        best_tip_hashes = self._tx_storage.get_best_block_tips()
-        best_tips = [
-            cast(Block, self._tx_storage.get_transaction(tx_hash))
-            for tx_hash in best_tip_hashes
-        ]
-        lowest_best_tip = min(best_tips, key=Block.get_height)
+        current_best_block = self._tx_storage.get_best_block()
 
-        if not self.is_feature_active_for_block(block=lowest_best_tip, feature=feature):
+        if not self.is_feature_active_for_block(block=current_best_block, feature=feature):
             return False
 
-        first_active_boundary_block = self.get_first_active_block(lowest_best_tip, feature)
+        first_active_boundary_block = self.get_first_active_block(current_best_block, feature)
         expected_second_active_boundary_block_timestamp = first_active_boundary_block.timestamp + 40_320 * 30
         is_active = transaction.timestamp >= expected_second_active_boundary_block_timestamp
 
