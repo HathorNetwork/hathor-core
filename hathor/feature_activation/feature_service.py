@@ -12,26 +12,115 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from typing import cast
+
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.transaction import Block
+from hathor.transaction import Block, Transaction
 from hathor.transaction.storage import TransactionStorage
 
 
 class FeatureService:
-    __slots__ = ('_feature_settings', '_tx_storage')
+    __slots__ = ('_feature_settings', '_avg_time_between_blocks', '_tx_storage')
 
-    def __init__(self, *, feature_settings: FeatureSettings, tx_storage: TransactionStorage) -> None:
-        self._feature_settings = feature_settings
+    def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
+        self._feature_settings = settings.FEATURE_ACTIVATION
+        self._avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
         self._tx_storage = tx_storage
 
-    def is_feature_active(self, *, block: Block, feature: Feature) -> bool:
+    def is_feature_active_for_block(self, *, block: Block, feature: Feature) -> bool:
         """Returns whether a Feature is active at a certain block."""
         state = self.get_state(block=block, feature=feature)
 
         return state == FeatureState.ACTIVE
+
+    def is_feature_active_for_transaction(self, *, transaction: Transaction, feature: Feature) -> bool:
+        best_tip_hashes = self._tx_storage.get_best_block_tips()
+        best_tips = [
+            cast(Block, self._tx_storage.get_transaction(tx_hash))
+            for tx_hash in best_tip_hashes
+        ]
+        lowest_best_tip = min(best_tips, key=Block.get_height)
+
+        if not self.is_feature_active_for_block(block=lowest_best_tip, feature=feature):
+            return False
+
+        first_active_boundary_block = self.get_first_active_block(lowest_best_tip, feature)
+        expected_second_active_boundary_block_timestamp = first_active_boundary_block.timestamp + 40_320 * 30
+        is_active = transaction.timestamp >= expected_second_active_boundary_block_timestamp
+
+        return is_active
+
+    def get_first_active_block(self, block: Block, feature: Feature) -> Block:
+        assert "block is active"
+        pass
+
+    """
+
+    block_ac_0
+    block_ac_1
+    block_ac_2
+
+    if tx.timestamp >= block_ac_2.timestamp:
+        if best_block >= block_ac_1:
+            ret ACTIVE
+
+        if tx.timestamp >= block_ac_3.timestamp:
+            if best_block >= block_ac_2:
+                ret ACTIVE
+
+            if tx.timestamp >= block_ac_4.timestamp:
+                if best_block >= block_ac_3:
+                    ret ACTIVE
+
+                raise
+
+    ret INACTIVE
+
+    """
+
+    """
+    current best block tem q ter height maior que o EB anterior ao expected closest EB
+    """
+
+    """
+
+    never reorg 40.320/2 blocks (either exit or soft CP)
+
+    tx is active if tx.timestamp >= block_ac_2.timestamp
+        and current_best_block >= block_ac_1
+
+        ... and use density? use 40.320/2 between current_best_block and block_ac_1? WHAT FUCK
+
+    """
+
+    """
+
+    ac_0
+    expected_ac_1_timestamp
+    expected_ac_2_timestamp
+
+    tx is active if tx.timestamp >= expected_ac_2_timestamp
+
+    on expected_ac_1_timestamp, ac_0 becomes a soft CP
+        IF
+
+
+    """
+
+    """
+
+    tx is active if tx.timestamp >= expected_ac_1_timestamp
+
+    problema: um reorg muda o ac_0, e já passei do expected_ac_1_timestamp:
+
+        se eu ja passei do expected_ac_1_timestamp, e o reorg TIRA o ac_0, ele é INVALIDO
+        se eu ja passei do expected_ac_1_timestamp, e o reorg coloca um new_ac_0 com
+            new_ac_0.timestamp >= expected_ac_1_timestamp, ele é INVALIDO
+
+    """
 
     def get_state(self, *, block: Block, feature: Feature) -> FeatureState:
         """Returns the state of a feature at a certain block. Uses block metadata to cache states."""
@@ -162,6 +251,111 @@ class FeatureService:
             return ancestor
 
         return _get_ancestor_iteratively(block=block, ancestor_height=height)
+
+    def reorg_is_valid(self, *, common_block: Block, old_best_block: Block) -> bool:
+        """
+        se entre o common_block e o old_best_height NAO tem um EB:
+            return False
+
+        tem um ou mais EBs
+
+        se NENHUM EB é um first_active_EB:
+            reutrn False
+
+        algum é um first_active_EB
+
+        se old_best_tip.timestamp < expected_ac_1_timestamp
+            return False
+
+        eu ja tinha chegado no expected_ac_1_timestamp, talvez tenham txs q usaram o active
+
+        return True
+        """
+        common_height = common_block.get_height()
+        old_best_height = old_best_block.get_height()
+
+        affected_boundary_heights = self._get_affected_boundary_heights(
+            common_height=common_height,
+            old_best_height=old_best_height
+        )
+
+        if not affected_boundary_heights:
+            return True
+
+        first_active_boundary_blocks = self._get_first_active_boundary_blocks(
+            common_block=common_block,
+            boundary_heights=affected_boundary_heights
+        )
+
+        if not first_active_boundary_blocks:
+            return True
+
+        old_best_block_is_after_second_active_boundary = self._old_best_block_is_after_second_active_boundary(
+            first_active_boundary_blocks=first_active_boundary_blocks,
+            old_best_block=old_best_block
+        )
+
+        if not old_best_block_is_after_second_active_boundary:
+            return True
+
+        self.log.critical()
+        return False
+
+    def _get_affected_boundary_heights(self, *, common_height: int, old_best_height: int) -> set[int]:
+        affected_boundary_heights = set()
+
+        for height in range(common_height + 1, old_best_height + 1):
+            if height % self._feature_settings.evaluation_interval == 0:
+                affected_boundary_heights.add(height)
+
+        return affected_boundary_heights
+
+    def _get_first_active_boundary_blocks(self, *, common_block: Block, boundary_heights: set[int]) -> set[Block]:
+        first_active_boundary_blocks = set()
+
+        for height in boundary_heights:
+            block = self._get_ancestor_at_height(block=common_block, height=height)
+
+            if self._is_first_active_boundary_block(boundary_block=block):
+                first_active_boundary_blocks.add(block)
+
+        return first_active_boundary_blocks
+
+    def _is_first_active_boundary_block(self, *, boundary_block: Block) -> bool:
+        assert boundary_block.get_height() % self._feature_settings.evaluation_interval == 0
+        descriptions = self.get_bits_description(block=boundary_block)
+
+        for feature, description in descriptions:
+            if description.state is not FeatureState.ACTIVE:
+                continue
+
+            parent = boundary_block.get_block_parent()
+            parent_descriptions = self.get_bits_description(block=parent)
+            parent_state = parent_descriptions[feature].state
+
+            if parent_state is FeatureState.LOCKED_IN:
+                return True
+
+        return False
+
+    def _old_best_block_is_after_second_active_boundary(
+        self,
+        *,
+        first_active_boundary_blocks: set[Block],
+        old_best_block: Block
+    ) -> bool:
+        avg_time_between_boundaries = self._feature_settings.evaluation_interval * self._avg_time_between_blocks
+
+        for first_active_boundary_block in first_active_boundary_blocks:
+            assert self._is_first_active_boundary_block(boundary_block=first_active_boundary_block)
+            expected_second_active_boundary_timestamp = (
+                first_active_boundary_block.timestamp + avg_time_between_boundaries
+            )
+
+            if expected_second_active_boundary_timestamp <= old_best_block.timestamp:
+                return True
+
+        return False
 
 
 def _get_ancestor_iteratively(*, block: Block, ancestor_height: int) -> Block:

@@ -18,9 +18,10 @@ from hathor.conf import HathorSettings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Block
 from hathor.util import not_none
 
 logger = get_logger()
@@ -56,9 +57,10 @@ class ConsensusAlgorithm:
     b0 will not be propagated to the voided_by of b1, b2, and b3.
     """
 
-    def __init__(self, soft_voided_tx_ids: set[bytes], pubsub: PubSubManager) -> None:
+    def __init__(self, soft_voided_tx_ids: set[bytes], pubsub: PubSubManager, feature_service: FeatureService) -> None:
         self.log = logger.new()
         self._pubsub = pubsub
+        self._feature_service = feature_service
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
@@ -130,6 +132,13 @@ class ConsensusAlgorithm:
             reorg_size = old_best_block.get_height() - context.reorg_common_block.get_height()
             assert old_best_block != new_best_block
             assert reorg_size > 0
+
+            if not self._feature_service.reorg_is_valid(
+                common_block=context.reorg_common_block,
+                old_best_block=old_best_block
+            ):
+                raise Exception  # exit?
+
             context.pubsub.publish(HathorEvents.REORG_STARTED, old_best_height=best_height,
                                    old_best_block=old_best_block, new_best_height=new_best_height,
                                    new_best_block=new_best_block, common_block=context.reorg_common_block,
