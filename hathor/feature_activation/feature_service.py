@@ -44,13 +44,13 @@ class FeatureService:
 
     def is_feature_active_for_transaction(self, *, transaction: Transaction, feature: Feature) -> bool:
         current_best_block = self._tx_storage.get_best_block()
-        first_active_boundary_block = self._get_first_active_block(current_best_block, feature)
+        first_active_block = self._get_first_active_block(current_best_block, feature)
 
-        if not first_active_boundary_block:
+        if not first_active_block:
             return False
 
         avg_time_between_boundaries = self._feature_settings.evaluation_interval * self._avg_time_between_blocks
-        expected_second_active_boundary_timestamp = first_active_boundary_block.timestamp + avg_time_between_boundaries
+        expected_second_active_boundary_timestamp = first_active_block.timestamp + avg_time_between_boundaries
         assert transaction.timestamp is not None
         is_active = transaction.timestamp >= expected_second_active_boundary_timestamp
 
