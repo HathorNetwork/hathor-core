@@ -1,8 +1,9 @@
 from hathor.daa import TestMode
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.transaction.storage import TransactionCacheStorage
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_new_transactions
 
 CACHE_SIZE = 5
 

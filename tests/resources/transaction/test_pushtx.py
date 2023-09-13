@@ -4,14 +4,16 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
+from hathor.util import not_none
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_tx_with_data_script, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_tx_with_data_script, create_tokens
 
 settings = HathorSettings()
 
@@ -101,7 +103,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # invalid transaction, without forcing
         tx.timestamp = 5
-        tx.inputs = [TxInput(blocks[1].hash, 0, b'')]
+        tx.inputs = [TxInput(not_none(blocks[1].hash), 0, b'')]
         script_type_out = parse_address_script(blocks[1].outputs[0].script)
         assert script_type_out is not None
         private_key = self.manager.wallet.get_private_key(script_type_out.address)

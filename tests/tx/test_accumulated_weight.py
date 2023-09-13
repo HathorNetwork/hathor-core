@@ -1,7 +1,8 @@
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
 
 class BaseAccumulatedWeightTestCase(unittest.TestCase):

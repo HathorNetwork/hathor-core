@@ -80,11 +80,21 @@ function check_deprecated_typing() {
 	return 0
 }
 
+function check_do_not_import_tests_in_hathor() {
+	if grep -R '\<.*import .*tests.*\>\|\<.*from .*tests.* import\>' "hathor"; then
+		echo 'do not import test definitions in the hathor module'
+		echo 'move them from tests to hathor instead'
+		return 1
+	fi
+	return 0
+}
+
 # List of functions to be executed
 checks=(
 	check_version_match
 	check_do_not_use_builtin_random_in_tests
 	check_deprecated_typing
+	check_do_not_import_tests_in_hathor
 )
 
 # Initialize a variable to track if any check fails

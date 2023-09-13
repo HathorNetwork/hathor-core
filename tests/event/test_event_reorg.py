@@ -1,8 +1,9 @@
 from hathor.conf import HathorSettings
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
+from hathor.simulator.utils import add_new_blocks
 from tests import unittest
-from tests.utils import BURN_ADDRESS, add_new_blocks, get_genesis_key
+from tests.utils import BURN_ADDRESS, get_genesis_key
 
 settings = HathorSettings()
 
