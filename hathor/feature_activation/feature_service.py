@@ -42,17 +42,18 @@ class FeatureService:
 
         return state == FeatureState.ACTIVE
 
-    def is_feature_active_for_transaction(self, *, transaction: Transaction, feature: Feature) -> bool:
-        current_best_block = self._tx_storage.get_best_block()
+    def is_feature_active_for_transaction(self, feature: Feature) -> bool:
+        current_best_block = self._tx_storage.get_best_block()  # TODO: Use get_best_block_tips(tx.timestamp)?
         first_active_block = self._get_first_active_block(current_best_block, feature)
 
         if not first_active_block:
             return False
 
         avg_time_between_boundaries = self._feature_settings.evaluation_interval * self._avg_time_between_blocks
-        expected_second_active_boundary_timestamp = first_active_block.timestamp + avg_time_between_boundaries
-        assert transaction.timestamp is not None
-        is_active = transaction.timestamp >= expected_second_active_boundary_timestamp
+        activation_threshold = first_active_block.timestamp + avg_time_between_boundaries
+        assert current_best_block.timestamp is not None
+        margin = 0  # TODO: Add some margin to be safe, maybe 2 * the maximum timestamp difference between peers
+        is_active = current_best_block.timestamp > activation_threshold + margin
 
         return is_active
 
@@ -291,6 +292,9 @@ class FeatureService:
 
         return True
         """
+        avg_time_between_boundaries = self._feature_settings.evaluation_interval * self._avg_time_between_blocks
+        is_valid = old_best_block.timestamp < common_block.timestamp + avg_time_between_boundaries
+        return is_valid
         common_height = common_block.get_height()
         old_best_height = old_best_block.get_height()
 
