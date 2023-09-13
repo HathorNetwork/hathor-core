@@ -1,9 +1,9 @@
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.resources import BlockAtHeightResource
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks
 
 
 class BaseBlockAtHeightTest(_BaseResourceTest._ResourceTest):

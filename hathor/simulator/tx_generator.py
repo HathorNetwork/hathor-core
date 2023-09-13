@@ -21,8 +21,8 @@ from hathor import daa
 from hathor.conf.get_settings import get_settings
 from hathor.transaction.exceptions import RewardLocked
 from hathor.util import Random
+from hathor.utils.simulator import NoCandidatesError, gen_new_double_spending, gen_new_tx
 from hathor.wallet.exceptions import InsufficientFunds
-from tests.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager

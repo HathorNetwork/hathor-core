@@ -14,13 +14,13 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
+from hathor.utils.simulator import add_new_blocks
 from tests.unittest import TestBuilder
 from tests.utils import (
     BURN_ADDRESS,
     HAS_ROCKSDB,
     MIN_TIMESTAMP,
     add_blocks_unlock_reward,
-    add_new_blocks,
     add_new_transactions,
     add_new_tx,
     create_tokens,

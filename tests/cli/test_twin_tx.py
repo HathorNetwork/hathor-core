@@ -8,10 +8,10 @@ from hathor.cli.twin_tx import create_parser, execute
 from hathor.conf import HathorSettings
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.util import json_loadb
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
 from tests.utils import (
     add_blocks_unlock_reward,
-    add_new_blocks,
     add_new_transactions,
     execute_mining,
     execute_tx_gen,

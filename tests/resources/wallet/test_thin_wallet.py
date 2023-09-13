@@ -7,6 +7,7 @@ from hathor.crypto.util import decode_address
 from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
+from hathor.utils.simulator import add_new_blocks
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -15,7 +16,7 @@ from hathor.wallet.resources.thin_wallet import (
 )
 from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_new_tx, create_tokens
 
 settings = HathorSettings()
 

@@ -6,8 +6,9 @@ import tempfile
 import pytest
 
 from hathor.prometheus import PrometheusMetricsExporter
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_new_transactions
 
 
 class BasePrometheusTest(unittest.TestCase):

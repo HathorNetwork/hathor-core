@@ -1,6 +1,7 @@
 from hathor.crypto.util import decode_address
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx
+from tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):

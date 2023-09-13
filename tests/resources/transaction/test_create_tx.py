@@ -6,9 +6,10 @@ from hathor.daa import TestMode, _set_test_mode
 from hathor.transaction import Transaction
 from hathor.transaction.resources import CreateTxResource
 from hathor.transaction.scripts import P2PKH, create_base_script
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx
+from tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
 class BaseTransactionTest(_BaseResourceTest._ResourceTest):

@@ -44,7 +44,7 @@ def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> Non
 
 
 def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorManager') -> None:
-    from tests.utils import add_new_blocks
+    from hathor.utils.simulator import add_new_blocks
     add_new_blocks(manager, 1)
     simulator.run(60)
 
@@ -52,7 +52,7 @@ def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorMana
 def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor import daa
     from hathor.conf import HathorSettings
-    from tests.utils import add_new_blocks, gen_new_tx
+    from hathor.utils.simulator import add_new_blocks, gen_new_tx
 
     settings = HathorSettings()
     assert manager.wallet is not None
@@ -79,7 +79,7 @@ def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manage
 
 def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor.simulator import FakeConnection
-    from tests.utils import add_new_blocks
+    from hathor.utils.simulator import add_new_blocks
 
     builder = simulator.get_default_builder()
     manager2 = simulator.create_peer(builder)

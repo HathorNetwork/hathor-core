@@ -1,8 +1,9 @@
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
+from hathor.utils.simulator import add_new_blocks
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_double_spending
+from tests.utils import add_blocks_unlock_reward, add_new_double_spending
 
 
 class BaseTwinTransactionTestCase(unittest.TestCase):

@@ -8,10 +8,11 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
+from hathor.utils.simulator import add_new_blocks
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks
+from tests.utils import add_blocks_unlock_reward
 
 settings = HathorSettings()
 

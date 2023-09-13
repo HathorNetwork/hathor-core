@@ -7,11 +7,12 @@ from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
+from hathor.utils.simulator import add_new_blocks
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_tx_with_data_script, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_tx_with_data_script, create_tokens
 
 settings = HathorSettings()
 

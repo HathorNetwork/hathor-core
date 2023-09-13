@@ -2,15 +2,9 @@ from unittest.mock import MagicMock
 
 from hathor.conf import HathorSettings
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.utils.simulator import add_new_block, add_new_blocks, gen_new_tx
 from tests import unittest
-from tests.utils import (
-    add_blocks_unlock_reward,
-    add_new_block,
-    add_new_blocks,
-    add_new_double_spending,
-    add_new_transactions,
-    gen_new_tx,
-)
+from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 settings = HathorSettings()
 

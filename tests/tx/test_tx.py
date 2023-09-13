@@ -30,15 +30,10 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.utils.simulator import add_new_blocks
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import (
-    add_blocks_unlock_reward,
-    add_new_blocks,
-    add_new_transactions,
-    create_script_with_sigops,
-    get_genesis_key,
-)
+from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
 
 
 class BaseTransactionTest(unittest.TestCase):

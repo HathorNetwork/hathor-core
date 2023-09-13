@@ -6,18 +6,10 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
 from hathor.util import iwindows
+from hathor.utils.simulator import add_new_block, add_new_blocks, gen_new_tx
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import (
-    HAS_ROCKSDB,
-    add_blocks_unlock_reward,
-    add_custom_tx,
-    add_new_block,
-    add_new_blocks,
-    add_new_tx,
-    gen_new_tx,
-    get_genesis_key,
-)
+from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
 
 settings = HathorSettings()
 

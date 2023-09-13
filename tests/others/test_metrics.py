@@ -8,9 +8,10 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
+from hathor.utils.simulator import add_new_blocks
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import HAS_ROCKSDB, add_new_blocks
+from tests.utils import HAS_ROCKSDB
 
 
 class BaseMetricsTest(unittest.TestCase):

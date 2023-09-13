@@ -4,8 +4,9 @@ from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode, get_weight_decay_amount
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_new_transactions
 
 settings = HathorSettings()
 

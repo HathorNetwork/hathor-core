@@ -2,9 +2,10 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.transaction.resources import MempoolResource
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
 settings = HathorSettings()
 

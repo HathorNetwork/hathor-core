@@ -3,9 +3,9 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.manager import HathorManager
 from hathor.p2p.resources.healthcheck import HealthcheckReadinessResource
 from hathor.simulator import FakeConnection
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks
 
 
 class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):

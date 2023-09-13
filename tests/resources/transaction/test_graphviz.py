@@ -2,9 +2,10 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction import Transaction
 from hathor.transaction.resources import GraphvizFullResource, GraphvizNeighboursResource
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
 
 class BaseGraphvizTest(_BaseResourceTest._ResourceTest):

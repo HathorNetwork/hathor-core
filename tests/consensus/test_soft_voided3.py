@@ -2,9 +2,10 @@ from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
+from hathor.utils.simulator import gen_new_tx
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import add_custom_tx, gen_custom_tx, gen_new_tx
+from tests.utils import add_custom_tx, gen_custom_tx
 
 settings = HathorSettings()
 

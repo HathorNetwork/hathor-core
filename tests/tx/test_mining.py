@@ -2,8 +2,8 @@ from hathor.conf import HathorSettings
 from hathor.mining import BlockTemplate
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.utils.simulator import add_new_blocks
 from tests import unittest
-from tests.utils import add_new_blocks
 
 settings = HathorSettings()
 

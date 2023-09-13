@@ -4,10 +4,11 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.daa import TestMode, _set_test_mode
 from hathor.p2p.resources import MiningResource
+from hathor.utils.simulator import add_new_blocks
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, resolve_block_bytes
+from tests.utils import add_blocks_unlock_reward, resolve_block_bytes
 
 
 class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
