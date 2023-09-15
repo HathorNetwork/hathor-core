@@ -10,6 +10,7 @@ class SysctlInitFileLoader:
         self.init_file = init_file
 
     def load(self) -> None:
+        """Read the init_file and execute each line as a syctl command in the runner."""
         with open(self.init_file, 'r', encoding='utf-8') as file:
             lines = file.readlines()
 
