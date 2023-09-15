@@ -373,8 +373,7 @@ class RunNode:
         self.prepare()
         self.register_signal_handlers()
         if self._args.sysctl:
-            self.init_sysctl(
-                self._args.sysctl, self._args.sysctl_init_file)
+            self.init_sysctl(self._args.sysctl, self._args.sysctl_init_file)
 
     def init_sysctl(self, description: str, sysctl_init_file: Optional[str] = None) -> None:
         """Initialize sysctl, listen for connections and apply settings from config file if required.
