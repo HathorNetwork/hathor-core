@@ -81,6 +81,25 @@ class SysctlInitTest(unittest.TestCase):
         expected_msg = 'value: wrong format'
         self.assertEqual(str(context.exception), expected_msg)
 
+    def test_syctl_init_file_fail_with_empty_or_invalid_file(self):
+        # prepare to register only p2p commands
+        artifacts = Mock(**{
+            'p2p_manager': Mock(),
+            'manager.metrics.websocket_factory.return_value': None
+        })
+
+        with self.assertRaises(AssertionError):
+            root = SysctlBuilder(artifacts).build()
+            runner = SysctlRunner(root)
+            loader = SysctlInitFileLoader(runner, None)
+            loader.load()
+
+        with self.assertRaises(AssertionError):
+            root = SysctlBuilder(artifacts).build()
+            runner = SysctlRunner(root)
+            loader = SysctlInitFileLoader(runner, "")
+            loader.load()
+
     @patch('twisted.internet.endpoints.serverFromString')  # avoid open sock
     def test_command_option_sysctl_init_file(self, mock_endpoint):
         class CustomRunNode(RunNode):
