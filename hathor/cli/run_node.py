@@ -398,8 +398,9 @@ class RunNode:
         root = builder.build()
         runner = SysctlRunner(root)
 
-        init_file_loader = SysctlInitFileLoader(runner, sysctl_init_file)
-        init_file_loader.load()
+        if sysctl_init_file:
+            init_file_loader = SysctlInitFileLoader(runner, sysctl_init_file)
+            init_file_loader.load()
 
         factory = SysctlFactory(runner)
         endpoint = serverFromString(self.reactor, description)
