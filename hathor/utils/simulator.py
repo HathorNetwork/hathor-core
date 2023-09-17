@@ -12,11 +12,165 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import base64
 from typing import Optional, cast
+from twisted.internet.task import Clock
 
-from hathor.crypto.util import decode_address
+from hathorlib.scripts import DataScript
+
+from hathor.conf import HathorSettings
 from hathor.manager import HathorManager
-from hathor.transaction import Transaction
+from hathor.crypto.util import decode_address, get_private_key_from_bytes
+from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.scripts import P2PKH
+from hathor.transaction.util import get_deposit_amount
+
+
+settings = HathorSettings()
+BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
+
+
+def add_blocks_unlock_reward(manager):
+    """This method adds new blocks to a 'burn address' to make sure the existing
+    block rewards can be spent. It uses a 'burn address' so the manager's wallet
+    is not impacted.
+    """
+    return add_new_blocks(manager,
+                          settings.REWARD_SPEND_MIN_BLOCKS,
+                          advance_clock=1,
+                          address=BURN_ADDRESS)
+
+
+def get_genesis_key():
+    private_key_bytes = base64.b64decode(
+        'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgOCgCddzDZsfKgiMJLOt97eov9RLwHeePyBIK2WPF8MChRA'
+        'NCAAQ/XSOK+qniIY0F3X+lDrb55VQx5jWeBLhhzZnH6IzGVTtlAj9Ki73DVBm5+VXK400Idd6ddzS7FahBYYC7IaTl'
+    )
+    return get_private_key_from_bytes(private_key_bytes)
+
+
+def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None,
+                  mint_amount: int = 300, token_name: str = 'TestCoin',
+                  token_symbol: str = 'TTC', propagate: bool = True,
+                  use_genesis: bool = True,
+                  nft_data: Optional[str] = None) -> TokenCreationTransaction:
+    """Creates a new token and propagates a tx with the following UTXOs:
+    0. some tokens (already mint some tokens so they can be transferred);
+    1. mint authority;
+    2. melt authority;
+    3. deposit change;
+
+    :param manager: hathor manager
+    :type manager: :class:`hathor.manager.HathorManager`
+
+    :param address_b58: address where tokens will be transferred to
+    :type address_b58: string
+
+    :param token_name: the token name for the new token
+    :type token_name: str
+
+    :param token_symbol: the token symbol for the new token
+    :type token_symbol: str
+
+    :param use_genesis: If True will use genesis outputs to create token, otherwise will use manager wallet
+    :type token_symbol: bool
+
+    :param nft_data: If not None we create a first output as the NFT data script
+    :type nft_data: str
+
+    :return: the propagated transaction so others can spend their outputs
+    """
+    wallet = manager.wallet
+    assert wallet is not None
+
+    if address_b58 is None:
+        address_b58 = wallet.get_unused_address(mark_as_used=True)
+    address = decode_address(address_b58)
+    script = P2PKH.create_output_script(address)
+
+    deposit_amount = get_deposit_amount(mint_amount)
+    if nft_data:
+        # NFT creation needs 0.01 HTR of fee
+        deposit_amount += 1
+    genesis = manager.tx_storage.get_all_genesis()
+    genesis_blocks = [tx for tx in genesis if tx.is_block]
+    genesis_txs = [tx for tx in genesis if not tx.is_block]
+    genesis_block = genesis_blocks[0]
+    genesis_private_key = get_genesis_key()
+
+    change_output: Optional[TxOutput]
+    parents: list[bytes]
+    if use_genesis:
+        genesis_hash = genesis_block.hash
+        assert genesis_hash is not None
+        deposit_input = [TxInput(genesis_hash, 0, b'')]
+        change_output = TxOutput((genesis_block.outputs[0].value -
+                                  deposit_amount),
+                                 script, 0)
+        parents = [cast(bytes, tx.hash) for tx in genesis_txs]
+        timestamp = int(manager.reactor.seconds())
+    else:
+        total_reward = 0
+        deposit_input = []
+        while total_reward < deposit_amount:
+            block = add_new_block(manager, advance_clock=1, address=address)
+            deposit_input.append(TxInput(block.hash, 0, b''))
+            total_reward += block.outputs[0].value
+
+        if total_reward > deposit_amount:
+            change_output = TxOutput(total_reward - deposit_amount, script, 0)
+        else:
+            change_output = None
+
+        add_blocks_unlock_reward(manager)
+        timestamp = int(manager.reactor.seconds())
+        parents = manager.get_new_tx_parents(timestamp)
+
+    outputs = []
+    if nft_data:
+        script_data = DataScript.create_output_script(nft_data)
+        output_data = TxOutput(1, script_data, 0)
+        outputs.append(output_data)
+    # mint output
+    if mint_amount > 0:
+        outputs.append(TxOutput(mint_amount, script, 0b00000001))
+    # authority outputs
+    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
+    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
+    # deposit output
+    if change_output:
+        outputs.append(change_output)
+
+    tx = TokenCreationTransaction(
+        weight=1,
+        parents=parents,
+        storage=manager.tx_storage,
+        inputs=deposit_input,
+        outputs=outputs,
+        token_name=token_name,
+        token_symbol=token_symbol,
+        timestamp=timestamp
+    )
+    data_to_sign = tx.get_sighash_all()
+    if use_genesis:
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign,
+                                                            genesis_private_key)
+    else:
+        private_key = wallet.get_private_key(address_b58)
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign,
+                                                            private_key)
+
+    for input_ in tx.inputs:
+        input_.data = P2PKH.create_input_data(public_bytes, signature)
+
+    tx.resolve()
+    if propagate:
+        tx.verify()
+        manager.propagate_tx(tx, fails_silently=False)
+        assert isinstance(manager.reactor, Clock)
+        manager.reactor.advance(8)
+    return tx
 
 
 def gen_new_tx(manager, address, value, verify=True):
