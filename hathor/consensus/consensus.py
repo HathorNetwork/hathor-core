@@ -14,7 +14,7 @@
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
@@ -24,7 +24,6 @@ from hathor.transaction import BaseTransaction
 from hathor.util import not_none
 
 logger = get_logger()
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()
@@ -57,6 +56,7 @@ class ConsensusAlgorithm:
     """
 
     def __init__(self, soft_voided_tx_ids: set[bytes], pubsub: PubSubManager) -> None:
+        self._settings = get_settings()
         self.log = logger.new()
         self._pubsub = pubsub
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
@@ -76,7 +76,7 @@ class ConsensusAlgorithm:
         try:
             self._unsafe_update(base)
         except Exception:
-            meta.add_voided_by(settings.CONSENSUS_FAIL_ID)
+            meta.add_voided_by(self._settings.CONSENSUS_FAIL_ID)
             assert base.storage is not None
             base.storage.save_transaction(base, only_metadata=True)
             raise
@@ -87,7 +87,7 @@ class ConsensusAlgorithm:
 
         # XXX: first make sure we can run the consensus update on this tx:
         meta = base.get_metadata()
-        assert meta.voided_by is None or (settings.PARTIALLY_VALIDATED_ID not in meta.voided_by)
+        assert meta.voided_by is None or (self._settings.PARTIALLY_VALIDATED_ID not in meta.voided_by)
         assert meta.validation.is_fully_connected()
 
         # this context instance will live only while this update is running
@@ -152,9 +152,9 @@ class ConsensusAlgorithm:
             return voided_by
         ret = set()
         for h in voided_by:
-            if h == settings.SOFT_VOIDED_ID:
+            if h == self._settings.SOFT_VOIDED_ID:
                 continue
-            if h == settings.CONSENSUS_FAIL_ID:
+            if h == self._settings.CONSENSUS_FAIL_ID:
                 continue
             if h == tx.hash:
                 continue

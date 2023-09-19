@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Iterable, Optional, cast
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
 from hathor.util import classproperty, not_none
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from hathor.consensus.context import ConsensusAlgorithmContext
 
 logger = get_logger()
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()
@@ -36,6 +35,7 @@ class BlockConsensusAlgorithm:
     """Implement the consensus algorithm for blocks."""
 
     def __init__(self, context: 'ConsensusAlgorithmContext') -> None:
+        self._settings = get_settings()
         self.context = context
 
     @classproperty
@@ -149,7 +149,7 @@ class BlockConsensusAlgorithm:
                 storage.indexes.height.add_new(block.get_height(), block.hash, block.timestamp)
                 storage.update_best_block_tips_cache([block.hash])
             # The following assert must be true, but it is commented out for performance reasons.
-            if settings.SLOW_ASSERTS:
+            if self._settings.SLOW_ASSERTS:
                 assert len(storage.get_best_block_tips(skip_cache=True)) == 1
         else:
             # Resolve all other cases, but (i).
@@ -179,7 +179,7 @@ class BlockConsensusAlgorithm:
             score = self.calculate_score(block)
 
             # Finally, check who the winner is.
-            if score <= best_score - settings.WEIGHT_TOL:
+            if score <= best_score - self._settings.WEIGHT_TOL:
                 # Just update voided_by from parents.
                 self.update_voided_by_from_parents(block)
 
@@ -200,7 +200,7 @@ class BlockConsensusAlgorithm:
                 common_block = self._find_first_parent_in_best_chain(block)
                 self.add_voided_by_to_multiple_chains(block, heads, common_block)
 
-                if score >= best_score + settings.WEIGHT_TOL:
+                if score >= best_score + self._settings.WEIGHT_TOL:
                     # We have a new winner candidate.
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
                     # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
@@ -294,10 +294,10 @@ class BlockConsensusAlgorithm:
             best_heads: list[Block]
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
-                if head_meta.score <= best_score - settings.WEIGHT_TOL:
+                if head_meta.score <= best_score - self._settings.WEIGHT_TOL:
                     continue
 
-                if head_meta.score >= best_score + settings.WEIGHT_TOL:
+                if head_meta.score >= best_score + self._settings.WEIGHT_TOL:
                     best_heads = [head]
                     best_score = head_meta.score
                 else:

@@ -159,8 +159,8 @@ class RunNode:
             assert self.manager.stratum_factory is not None
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
+        from hathor.conf.get_settings import get_settings
+        settings = get_settings()
 
         if register_resources:
             resources_builder = ResourcesBuilder(
@@ -204,8 +204,8 @@ class RunNode:
             sys.exit(-3)
 
         import hathor
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
+        from hathor.conf.get_settings import get_settings
+        settings = get_settings()
         sentry_sdk.init(
             dsn=self._args.sentry_dsn,
             release=hathor.__version__,

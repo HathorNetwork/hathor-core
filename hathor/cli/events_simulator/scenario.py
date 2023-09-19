@@ -51,10 +51,10 @@ def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorMana
 
 def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor import daa
-    from hathor.conf import HathorSettings
+    from hathor.conf.get_settings import get_settings
     from tests.utils import add_new_blocks, gen_new_tx
 
-    settings = HathorSettings()
+    settings = get_settings()
     assert manager.wallet is not None
     address = manager.wallet.get_unused_address(mark_as_used=False)
 

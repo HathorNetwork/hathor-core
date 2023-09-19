@@ -18,7 +18,7 @@ from typing import Iterator, Optional
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block, TxOutput
@@ -26,7 +26,6 @@ from hathor.transaction.scripts import parse_address_script
 from hathor.util import sorted_merger
 
 logger = get_logger()
-settings = HathorSettings()
 
 SCOPE = Scope(
     include_blocks=True,
@@ -61,6 +60,7 @@ class UtxoIndexItem:
     @classmethod
     def from_tx_output(cls, tx: BaseTransaction, index: int, tx_output: TxOutput) -> 'UtxoIndexItem':
         assert tx.hash is not None
+        settings = get_settings()
 
         if tx_output.is_token_authority():
             raise ValueError('UtxoIndexItem cannot be used with a token authority output')
@@ -206,6 +206,7 @@ class UtxoIndex(BaseIndex):
                    target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         """ Search UTXOs for a given token_uid+address+target_value, if no token_uid is given, HTR is assumed.
         """
+        settings = get_settings()
         actual_token_uid = token_uid if token_uid is not None else settings.HATHOR_TOKEN_UID
         iter_nolock = self._iter_utxos_nolock(token_uid=actual_token_uid, address=address,
                                               target_amount=target_amount)
