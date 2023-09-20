@@ -113,12 +113,14 @@ class SysctlInitTest(unittest.TestCase):
             'p2p.max_enabled_sync': 7,
             'p2p.rate_limit.global.send_tips': (5, 3),
             'p2p.sync_update_interval': 17,
+            'p2p.always_enable_sync': ['peer-1', 'peer-2'],
         }
 
         file_content = [
             'p2p.max_enabled_sync=7',
             'p2p.rate_limit.global.send_tips=5,3',
             'p2p.sync_update_interval=17',
+            'p2p.always_enable_sync=["peer-1","peer-2"]',
         ]
 
         with tempfile.NamedTemporaryFile(
@@ -154,6 +156,10 @@ class SysctlInitTest(unittest.TestCase):
         self.assertEqual(
                 curr_sync_update_interval,
                 expected_sysctl_dict['p2p.sync_update_interval'])
+
+        curr_always_enabled_sync = list(conn.always_enable_sync)
+        self.assertTrue(
+                set(curr_always_enabled_sync).issuperset(set(expected_sysctl_dict['p2p.always_enable_sync'])))
 
         # assert always_enabled_sync when it is set with a file
         expected_sysctl_dict = {
