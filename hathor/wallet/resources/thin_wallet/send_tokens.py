@@ -25,14 +25,13 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb, reactor
 
-settings = HathorSettings()
 logger = get_logger()
 
 # Timeout for the pow resolution in stratum (in seconds)
@@ -56,6 +55,7 @@ class SendTokensResource(Resource):
 
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
+        self._settings = get_settings()
         self.manager = manager
         self.sleep_seconds = 0
         self.log = logger.new()
@@ -72,7 +72,7 @@ class SendTokensResource(Resource):
         set_cors(request, 'POST')
 
         # Validating if we still have unused threads to solve the pow
-        if len(self.manager.pow_thread_pool.working) == settings.MAX_POW_THREADS:
+        if len(self.manager.pow_thread_pool.working) == self._settings.MAX_POW_THREADS:
             return self.return_POST(
                 False,
                 'The server is currently fully loaded to send tokens. Wait a moment and try again, please.',
@@ -133,7 +133,7 @@ class SendTokensResource(Resource):
 
         context = _Context(tx=tx, request=request)
 
-        if settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
+        if self._settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
             self._render_POST_stratum(context)
         else:
             self._render_POST(context)
@@ -186,7 +186,7 @@ class SendTokensResource(Resource):
         # response failed, should stop mining
         tx = context.tx
         self.log.warn('connection closed while resolving transaction proof of work', tx=tx)
-        if settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
+        if self._settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
             funds_hash = tx.get_funds_hash()
             self._cleanup_stratum(funds_hash)
             # start new job in stratum, so the miner doesn't waste more time on this tx

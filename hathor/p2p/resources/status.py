@@ -17,11 +17,9 @@ import time
 import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.p2p.utils import to_serializable_best_blockchain
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 
 @register_resource
@@ -34,6 +32,7 @@ class StatusResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
+        self._settings = get_settings()
         self.manager = manager
 
     def render_GET(self, request):
@@ -94,7 +93,7 @@ class StatusResource(Resource):
             best_block_tips.append({'hash': tx.hash_hex, 'height': meta.height})
 
         best_block = self.manager.tx_storage.get_best_block()
-        raw_best_blockchain = self.manager.tx_storage.get_n_height_tips(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
+        raw_best_blockchain = self.manager.tx_storage.get_n_height_tips(self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
         best_blockchain = to_serializable_best_blockchain(raw_best_blockchain)
 
         data = {

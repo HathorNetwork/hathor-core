@@ -24,7 +24,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.crypto.util import (
     decode_address,
     get_address_b58_from_bytes,
@@ -48,8 +48,6 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
-
-settings = HathorSettings()
 
 # XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some
 #      or the other type, there are many places that require an assert to prevent the wrong type from being used,
@@ -691,6 +689,7 @@ class NanoContractMatchValues:
 def create_base_script(address: str, timelock: Optional[Any] = None) -> BaseScript:
     """ Verifies if address is P2PKH or Multisig and return the corresponding BaseScript implementation.
     """
+    settings = get_settings()
     baddress = decode_address(address)
     if baddress[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
         return P2PKH(address, timelock)
@@ -713,6 +712,7 @@ def create_output_script(address: bytes, timelock: Optional[Any] = None) -> byte
 
         :rtype: bytes
     """
+    settings = get_settings()
     # XXX: if the address class can somehow be simplified create_base_script could be used here
     if address[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
         return P2PKH.create_output_script(address, timelock)
@@ -906,6 +906,7 @@ def count_sigops(data: bytes) -> int:
         :return: number of signature operations the script would do if it was executed
         :rtype: int
     """
+    settings = get_settings()
     n_ops: int = 0
     data_len: int = len(data)
     pos: int = 0
@@ -1534,6 +1535,8 @@ def op_checkmultisig(stack: Stack, log: list[str], extras: ScriptExtras) -> None
     :raises MissingStackItems: if stack is empty or it has less signatures than the minimum required
     :raises VerifyFailed: verification failed
     """
+    settings = get_settings()
+
     if not len(stack):
         raise MissingStackItems('OP_CHECKMULTISIG: empty stack')
 

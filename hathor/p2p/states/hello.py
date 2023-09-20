@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from structlog import get_logger
 
 import hathor
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states.base import BaseState
@@ -30,12 +30,11 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-settings = HathorSettings()
-
 
 class HelloState(BaseState):
     def __init__(self, protocol: 'HathorProtocol') -> None:
         super().__init__(protocol)
+        self._settings = get_settings()
         self.log = logger.new(**protocol.get_logger_context())
         self.cmd_map.update({
             ProtocolMessages.HELLO: self.handle_hello,
@@ -103,7 +102,7 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Invalid payload.')
             return
 
-        if settings.ENABLE_PEER_WHITELIST and settings.CAPABILITY_WHITELIST not in data['capabilities']:
+        if self._settings.ENABLE_PEER_WHITELIST and self._settings.CAPABILITY_WHITELIST not in data['capabilities']:
             # If peer is not sending whitelist capability we must close the connection
             protocol.send_error_and_close_connection('Must have whitelist capability.')
             return
@@ -142,7 +141,7 @@ class HelloState(BaseState):
             return
 
         dt = data['timestamp'] - protocol.node.reactor.seconds()
-        if abs(dt) > settings.MAX_FUTURE_TIMESTAMP_ALLOWED / 2:
+        if abs(dt) > self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED / 2:
             protocol.send_error_and_close_connection('Nodes timestamps too far apart.')
             return
 
@@ -173,6 +172,7 @@ class HelloState(BaseState):
 
 def _parse_sync_versions(hello_data: dict[str, Any]) -> set[SyncVersion]:
     """Versions that are not recognized will not be included."""
+    settings = get_settings()
     if settings.CAPABILITY_SYNC_VERSION in hello_data['capabilities']:
         if 'sync_versions' not in hello_data:
             raise HathorError('protocol error, expected sync_versions field')
