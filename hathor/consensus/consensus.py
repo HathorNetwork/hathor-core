@@ -136,7 +136,7 @@ class ConsensusAlgorithm:
                                    reorg_size=reorg_size)
 
         # finally signal an index update for all affected transactions
-        sorted_txs_affected = sorted(context.txs_affected, key=lambda tx: not_none(tx.hash))
+        sorted_txs_affected = sorted(context.txs_affected, key=lambda tx: not_none(tx.timestamp), reverse=True)
         for tx_affected in sorted_txs_affected:
             assert tx_affected.storage is not None
             assert tx_affected.storage.indexes is not None

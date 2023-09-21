@@ -1,5 +1,3 @@
-from typing import Any
-
 from hathor.conf import HathorSettings
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
@@ -54,11 +52,9 @@ class BaseEventReorgTest(unittest.TestCase):
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
             (EventType.LOAD_FINISHED, {}),
-            *sorted_by_hash(
-                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[0].hash_hex}),
-                (EventType.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
-                (EventType.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
-            ),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[0].hash_hex}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[0].hash_hex}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[1].hash_hex}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[1].hash_hex}),
@@ -80,11 +76,9 @@ class BaseEventReorgTest(unittest.TestCase):
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[9].hash_hex}),
             (EventType.REORG_STARTED, {'reorg_size': 2, 'previous_best_block': blocks[9].hash_hex,
                                        'new_best_block': b0.hash_hex}),
-            *sorted_by_hash(
-                (EventType.VERTEX_METADATA_CHANGED, {'hash': b0.hash_hex}),
-                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[9].hash_hex}),
-                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[8].hash_hex}),
-            ),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': b0.hash_hex}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[9].hash_hex}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[8].hash_hex}),
             (EventType.REORG_FINISHED, {}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': b0.hash_hex}),
         ]
@@ -96,10 +90,6 @@ class BaseEventReorgTest(unittest.TestCase):
 
             for expected_data_key, expected_data_value in expected_partial_data.items():
                 self.assertEqual(actual_event.data.dict()[expected_data_key], expected_data_value)
-
-
-def sorted_by_hash(*events: tuple[EventType, dict[str, Any]]) -> list[tuple[EventType, dict[str, Any]]]:
-    return sorted(events, key=lambda event: event[1]['hash'])
 
 
 class SyncV1EventReorgTest(unittest.SyncV1Params, BaseEventReorgTest):
