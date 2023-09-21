@@ -32,6 +32,7 @@ from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
+from hathor.types import AddressB58, Amount, TokenUid
 from hathor.util import Reactor
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
@@ -134,6 +135,13 @@ class BaseWallet:
 
     def _manually_initialize(self) -> None:
         pass
+
+    def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, Amount]:
+        """Return balance per address for a given token. This method ignores locks."""
+        balances: defaultdict[AddressB58, Amount] = defaultdict(Amount)
+        for utxo_info, unspent_tx in self.unspent_txs[token_uid].items():
+            balances[unspent_tx.address] += unspent_tx.value
+        return dict(balances)
 
     def start(self) -> None:
         """ Start the pubsub subscription if wallet has a pubsub
