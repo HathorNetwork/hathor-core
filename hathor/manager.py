@@ -653,12 +653,6 @@ class HathorManager:
                     f'hash {tx_hash.hex()} was found'
                 )
 
-    def add_listen_address(self, addr: str) -> None:
-        self.listen_addresses.append(addr)
-
-    def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
-        self.peer_discoveries.append(peer_discovery)
-
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
         """Select which transactions will be confirmed by a new transaction.
 

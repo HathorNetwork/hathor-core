@@ -286,13 +286,9 @@ class NodeBlockSync(SyncAgent):
         """ Actual implementation of the sync step logic in run_sync.
         """
         yield self.run_sync_blocks()
-        return
 
-        if self.receiving_stream:
-            # If we're receiving a stream, wait for it to finish before running sync.
-            # If we're sending a stream, do the sync to update the peer's synced block
-            self.log.debug('receiving stream, try again later')
-            return
+        assert not self.receiving_stream
+        assert not self.mempool_manager.is_running()
 
         if self._pending_download:
             # import pudb; pudb.set_trace()
@@ -302,11 +298,6 @@ class NodeBlockSync(SyncAgent):
                 return
 
         return
-
-        if self.mempool_manager.is_running():
-            # It's running a mempool sync, so we wait until it finishes
-            self.log.debug('running mempool sync, try again later')
-            return
 
         bestblock = self.tx_storage.get_best_block()
         meta = bestblock.get_metadata()
