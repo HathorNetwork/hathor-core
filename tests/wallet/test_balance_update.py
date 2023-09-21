@@ -436,6 +436,9 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # hathor balance remains the same
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], hathor_balance)
 
+        balances_per_address = self.manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
+        self.assertEqual(hathor_balance.available, sum(x for x in balances_per_address.values()))
+
 
 class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
     __test__ = True

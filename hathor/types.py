@@ -17,6 +17,7 @@
 
 VertexId = bytes        # NewType('TxId', bytes)
 Address = bytes         # NewType('Address', bytes)
+AddressB58 = str
 TxOutputScript = bytes  # NewType('TxOutputScript', bytes)
 Timestamp = int         # NewType('Timestamp', int)
 TokenUid = VertexId     # NewType('TokenUid', VertexId)
