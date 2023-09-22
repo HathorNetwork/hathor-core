@@ -101,6 +101,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None,
 
     change_output: Optional[TxOutput]
     parents: list[bytes]
+
     if use_genesis:
         genesis_hash = genesis_block.hash
         assert genesis_hash is not None

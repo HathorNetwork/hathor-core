@@ -26,6 +26,7 @@ class Scenario(Enum):
     SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS = 'SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS'
     REORG = 'REORG'
     CUSTOM_TOKEN_TRANSACTIONS = 'CUSTOM_TOKEN_TRANSACTIONS'
+    VOID_CREATE_TOKEN_INPUT = 'VOID_CREATE_TOKEN_INPUT'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
         simulate_fns = {
@@ -33,7 +34,8 @@ class Scenario(Enum):
             Scenario.SINGLE_CHAIN_ONE_BLOCK: simulate_single_chain_one_block,
             Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS: simulate_single_chain_blocks_and_transactions,
             Scenario.REORG: simulate_reorg,
-            Scenario.CUSTOM_TOKEN_TRANSACTIONS: simulate_custom_token_transactions
+            Scenario.CUSTOM_TOKEN_TRANSACTIONS: simulate_custom_token_transactions,
+            Scenario.VOID_CREATE_TOKEN_INPUT: simulate_void_create_token_input
         }
 
         simulate_fn = simulate_fns[self]
@@ -172,6 +174,8 @@ def simulate_custom_token_transactions(simulator: 'Simulator',
     token_creation_tx.weight = daa.minimum_tx_weight(token_creation_tx)
     token_creation_tx.update_hash()
 
+    print("token_creation_tx", token_creation_tx.hash_hex)
+
     assert manager.propagate_tx(token_creation_tx, fails_silently=False)
 
     # delegate (mint|melt) to another address
@@ -202,55 +206,62 @@ def simulate_custom_token_transactions(simulator: 'Simulator',
                                  propagate=False,
                                  outputs=delegate_mint_outputs)
 
-    # Delegate Melt ---
+    print("delegate_mint_tx", delegate_mint_tx.hash_hex)
 
-    delegate_melt_inputs = [TxInput(token_creation_tx.hash, 2, b'')]
-    delegate_melt_change_authority_script = P2PKH.create_output_script(
-            decode_address(wallet_address))
-    delegate_melt_receiver_authority_script = P2PKH.create_output_script(
-            decode_address(wallet_address2))
-    delegate_melt_outputs = [
-            # TxOutput(value: int, script: TxOutputScript, token_data: int=0)
-            TxOutput(0b0000_0001,
-                     delegate_melt_change_authority_script,
-                     TxOutput.TOKEN_AUTHORITY_MASK | 1),
-            TxOutput(0b0000_0001,
-                     delegate_melt_receiver_authority_script,
-                     TxOutput.TOKEN_AUTHORITY_MASK | 1),
-            ]
-    delegate_melt_tx = create_tx(manager=manager,
-                                 input_address=wallet_address,
-                                 wallet=manager.wallet,
-                                 tokens=[token_creation_tx.hash],
-                                 inputs=delegate_melt_inputs,
-                                 propagate=False,
-                                 outputs=delegate_melt_outputs)
-
-    assert manager.propagate_tx(delegate_melt_tx, fails_silently=False)
     assert manager.propagate_tx(delegate_mint_tx, fails_silently=False)
-
-    # Mint 10 tokens ---
-
-    mint_token_inputs = [TxInput(delegate_mint_tx.hash, 2, b'')]
-    mint_token_change_authority_script = P2PKH.create_output_script(
-            decode_address(wallet_address))
-    mint_token_outputs = [
-            # Create a new mint authority
-            TxOutput(0b0000_0001, mint_token_change_authority_script,
-                     TxOutput.TOKEN_AUTHORITY_MASK | 1),
-            # Create 10 new tokens
-            TxOutput(10, mint_token_change_authority_script,
-                     TxOutput.TOKEN_AUTHORITY_MASK | 1),
-            ]
-    mint_token_tx = create_tx(manager=manager,
-                              input_address=wallet_address,
-                              wallet=manager.wallet,
-                              tokens=[token_creation_tx.hash],
-                              inputs=mint_token_inputs,
-                              propagate=False,
-                              outputs=mint_token_outputs)
-
-    assert manager.propagate_tx(mint_token_tx, fails_silently=False)
 
     add_new_blocks(manager, 1)
     simulator.run(60)
+
+
+def simulate_void_create_token_input(simulator: 'Simulator',
+                                     manager: 'HathorManager') -> None:
+    from hathor.simulator import FakeConnection
+    from hathor import daa
+    from hathor.conf import HathorSettings
+    from hathor.utils.simulator import add_new_blocks
+    from hathor.wallet import Wallet
+    from hathor.utils.simulator import create_tokens
+
+    builder = simulator.get_default_builder()
+    manager2 = simulator.create_peer(builder)
+
+    settings = HathorSettings()
+    assert manager.wallet is not None
+
+    wallet = Wallet()
+    wallet.unlock(b'MYPASS')
+    wallet.generate_keys()
+    wallet_address = wallet.get_unused_address()
+
+    manager.wallet = wallet
+
+    add_new_blocks(manager2, settings.REWARD_SPEND_MIN_BLOCKS + 15)
+
+    simulator.run(60)
+
+    add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+
+    simulator.run(60)
+
+    token_creation_tx = create_tokens(manager, wallet_address, 50, 'TEST',
+                                      'TEST', False, False)
+    token_creation_tx.weight = daa.minimum_tx_weight(token_creation_tx)
+    token_creation_tx.update_hash()
+
+    assert manager.propagate_tx(token_creation_tx, fails_silently=False)
+
+    add_new_blocks(manager2, 2)
+
+    simulator.run(60)
+
+    connection = FakeConnection(manager, manager2)
+    simulator.add_connection(connection)
+
+    simulator.run(60)
+
+    manager.wallet.update_balance()
+
+    print(settings.HATHOR_TOKEN_UID)
+    print("HTR balance per address", manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID))
+    print("HTR balance per address", manager2.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID))
