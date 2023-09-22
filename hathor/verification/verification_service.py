@@ -68,7 +68,7 @@ class VerificationService:
     def verify_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> None:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
-        To be implemented by tx/block, used by `self.validate_basic`. Should not modify the validation state."""
+        Used by `self.validate_basic`. Should not modify the validation state."""
         match vertex.version:
             case TxVersion.REGULAR_BLOCK | TxVersion.MERGE_MINED_BLOCK:
                 assert isinstance(vertex, Block)
@@ -82,7 +82,7 @@ class VerificationService:
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
 
-        To be implemented by tx/block, used by `self.validate_full`. Should not modify the validation state."""
+        Used by `self.validate_full`. Should not modify the validation state."""
         match vertex.version:
             case TxVersion.REGULAR_BLOCK | TxVersion.MERGE_MINED_BLOCK:
                 assert isinstance(vertex, Block)
