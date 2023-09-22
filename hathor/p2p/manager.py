@@ -157,6 +157,9 @@ class ConnectionsManager:
         # List of known peers.
         self.peer_storage = PeerStorage()  # dict[string (peer.id), PeerId]
 
+        # Maximum unseen time before removing a peer (seconds).
+        self.max_peer_unseen_dt: float = 30 * 60   # 30-minutes
+
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
         self.lc_reconnect.clock = self.reactor
@@ -394,11 +397,15 @@ class ConnectionsManager:
             protocol.enable_sync()
 
         # Notify other peers about this new peer connection.
+        self.relay_peer_to_ready_connections(protocol.peer)
+
+    def relay_peer_to_ready_connections(self, peer: PeerId) -> None:
+        """Relay peer to all ready connections."""
         for conn in self.iter_ready_connections():
-            if conn != protocol:
-                assert conn.state is not None
-                assert isinstance(conn.state, ReadyState)
-                conn.state.send_peers([protocol])
+            if conn.peer == peer:
+                continue
+            assert isinstance(conn.state, ReadyState)
+            conn.state.send_peers([peer])
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
@@ -459,12 +466,28 @@ class ConnectionsManager:
         peer = self.received_peer_storage.add_or_merge(peer)
         self.connect_to_if_not_connected(peer, int(self.reactor.seconds()))
 
+    def peers_cleanup(self) -> None:
+        """Clean up aged peers."""
+        now = self.reactor.seconds()
+        to_be_removed: list[PeerId] = []
+        for peer in self.peer_storage.values():
+            assert peer.id is not None
+            if self.is_peer_connected(peer.id):
+                continue
+            dt = now - peer.last_seen
+            if dt > self.max_peer_unseen_dt:
+                to_be_removed.append(peer)
+
+        for peer in to_be_removed:
+            self.peer_storage.remove(peer)
+
     def reconnect_to_all(self) -> None:
         """ It is called by the `lc_reconnect` timer and tries to connect to all known
         peers.
 
         TODO(epnichols): Should we always connect to *all*? Should there be a max #?
         """
+        self.peers_cleanup()
         # when we have no connected peers left, run the discovery process again
         assert self.manager is not None
         now = self.reactor.seconds()

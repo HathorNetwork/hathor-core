@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
-
 import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -34,10 +32,13 @@ class StatusResource(Resource):
     def __init__(self, manager):
         self._settings = get_settings()
         self.manager = manager
+        self.reactor = manager.reactor
 
     def render_GET(self, request):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
+
+        now = self.reactor.seconds()
 
         connecting_peers = []
         # TODO: refactor as not to use a private item
@@ -53,7 +54,7 @@ class StatusResource(Resource):
             handshaking_peers.append({
                 'address': '{}:{}'.format(remote.host, remote.port),
                 'state': conn.state.state_name,
-                'uptime': time.time() - conn.connection_time,
+                'uptime': now - conn.connection_time,
                 'app_version': conn.app_version,
             })
 
@@ -65,12 +66,13 @@ class StatusResource(Resource):
             connected_peers.append({
                 'id': conn.peer.id,
                 'app_version': conn.app_version,
-                'uptime': time.time() - conn.connection_time,
+                'current_time': now,
+                'uptime': now - conn.connection_time,
                 'address': '{}:{}'.format(remote.host, remote.port),
                 'state': conn.state.state_name,
                 # 'received_bytes': conn.received_bytes,
                 'rtt': list(conn.state.rtt_window),
-                'last_message': time.time() - conn.last_message,
+                'last_message': now - conn.last_message,
                 'plugins': status,
                 'warning_flags': [flag.value for flag in conn.warning_flags],
                 'protocol_version': str(conn.sync_version),
@@ -82,6 +84,7 @@ class StatusResource(Resource):
             known_peers.append({
                 'id': peer.id,
                 'entrypoints': peer.entrypoints,
+                'last_seen': now - peer.last_seen,
                 'flags': [flag.value for flag in peer.flags],
             })
 
@@ -103,7 +106,7 @@ class StatusResource(Resource):
                 'app_version': app,
                 'state': self.manager.state.value,
                 'network': self.manager.network,
-                'uptime': time.time() - self.manager.start_time,
+                'uptime': now - self.manager.start_time,
                 'entrypoints': self.manager.connections.my_peer.entrypoints,
             },
             'peers_whitelist': self.manager.peers_whitelist,

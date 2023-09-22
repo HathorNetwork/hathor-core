@@ -411,16 +411,18 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         self.assertAndStepConn(self.conn, b'^GET-TIPS')
         self.assertAndStepConn(self.conn, b'^PING')
 
-        for _ in range(19):
+        for _ in range(20):
             self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN')
 
-        # peer1 should now send a PEERS with the new peer that just connected
-        self.assertAndStepConn(self.conn, b'^PEERS',    b'^GET-BEST-BLOCKCHAIN')
-        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN',    b'^TIPS')
-        self.assertAndStepConn(self.conn, b'^TIPS',     b'^TIPS')
-        self.assertAndStepConn(self.conn, b'^TIPS',     b'^TIPS-END')
-        self.assertAndStepConn(self.conn, b'^TIPS-END', b'^PONG')
-        self.assertAndStepConn(self.conn, b'^PONG',     b'^BEST-BLOCKCHAIN')
+        self.assertAndStepConn(self.conn, b'^GET-PEERS',           b'^GET-PEERS')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN', b'^GET-BEST-BLOCKCHAIN')
+        self.assertAndStepConn(self.conn, b'^GET-PEERS',           b'^GET-PEERS')
+        self.assertAndStepConn(self.conn, b'^PEERS',               b'^GET-BEST-BLOCKCHAIN')
+        self.assertAndStepConn(self.conn, b'^GET-BEST-BLOCKCHAIN', b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^TIPS',                b'^TIPS')
+        self.assertAndStepConn(self.conn, b'^TIPS',                b'^TIPS-END')
+        self.assertAndStepConn(self.conn, b'^TIPS-END',            b'^PONG')
+        self.assertAndStepConn(self.conn, b'^PONG',                b'^BEST-BLOCKCHAIN')
         self.assertIsConnected()
 
     @inlineCallbacks

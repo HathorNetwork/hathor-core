@@ -47,6 +47,11 @@ class ReadyState(BaseState):
         self.lc_ping = LoopingCall(self.send_ping_if_necessary)
         self.lc_ping.clock = self.reactor
 
+        # LC to send GET_PEERS every once in a while.
+        self.lc_get_peers = LoopingCall(self.send_get_peers)
+        self.lc_get_peers.clock = self.reactor
+        self.get_peers_interval: int = 5 * 60   # Once every 5 minutes.
+
         # Minimum interval between PING messages (in seconds).
         self.ping_interval: int = 3
 
@@ -110,6 +115,8 @@ class ReadyState(BaseState):
             self.protocol.on_peer_ready()
 
         self.lc_ping.start(1, now=False)
+
+        self.lc_get_peers.start(self.get_peers_interval, now=False)
         self.send_get_peers()
 
         if self.lc_get_best_blockchain is not None:
@@ -120,6 +127,9 @@ class ReadyState(BaseState):
     def on_exit(self) -> None:
         if self.lc_ping.running:
             self.lc_ping.stop()
+
+        if self.lc_get_peers.running:
+            self.lc_get_peers.stop()
 
         if self.lc_get_best_blockchain is not None and self.lc_get_best_blockchain.running:
             self.lc_get_best_blockchain.stop()
@@ -146,22 +156,21 @@ class ReadyState(BaseState):
         """ Executed when a GET-PEERS command is received. It just responds with
         a list of all known peers.
         """
-        if self.protocol.connections:
-            self.send_peers(self.protocol.connections.iter_ready_connections())
+        for peer in self.protocol.connections.peer_storage.values():
+            self.send_peers([peer])
 
-    def send_peers(self, connections: Iterable['HathorProtocol']) -> None:
-        """ Send a PEERS command with a list of all connected peers.
+    def send_peers(self, peer_list: Iterable['PeerId']) -> None:
+        """ Send a PEERS command with a list of peers.
         """
-        peers = []
-        for conn in connections:
-            assert conn.peer is not None
-            peers.append({
-                'id': conn.peer.id,
-                'entrypoints': conn.peer.entrypoints,
-                'last_message': conn.last_message,
-            })
-        self.send_message(ProtocolMessages.PEERS, json_dumps(peers))
-        self.log.debug('send peers', peers=peers)
+        data = []
+        for peer in peer_list:
+            if peer.entrypoints:
+                data.append({
+                    'id': peer.id,
+                    'entrypoints': peer.entrypoints,
+                })
+        self.send_message(ProtocolMessages.PEERS, json_dumps(data))
+        self.log.debug('send peers', peers=data)
 
     def handle_peers(self, payload: str) -> None:
         """ Executed when a PEERS command is received. It updates the list

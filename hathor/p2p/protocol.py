@@ -293,7 +293,10 @@ class HathorProtocol:
         """
         assert self.state is not None
 
-        self.last_message = self.reactor.seconds()
+        now = self.reactor.seconds()
+        self.last_message = now
+        if self.peer is not None:
+            self.peer.last_seen = now
         self.reset_idle_timeout()
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):

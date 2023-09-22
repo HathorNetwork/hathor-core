@@ -15,6 +15,7 @@
 import base64
 import hashlib
 from enum import Enum
+from math import inf
 from typing import TYPE_CHECKING, Any, Generator, Optional, cast
 
 from cryptography import x509
@@ -61,6 +62,7 @@ class PeerId:
     retry_timestamp: int    # should only try connecting to this peer after this timestamp
     retry_interval: int     # how long to wait for next connection retry. It will double for each failure
     retry_attempts: int     # how many retries were made
+    last_seen: float        # last time this peer was seen
     flags: set[str]
 
     def __init__(self, auto_generate_keys: bool = True) -> None:
@@ -73,6 +75,7 @@ class PeerId:
         self.retry_timestamp = 0
         self.retry_interval = 5
         self.retry_attempts = 0
+        self.last_seen = inf
         self.flags = set()
         self._certificate_options: Optional[CertificateOptions] = None
 
