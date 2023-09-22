@@ -356,14 +356,14 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
         self.conn.run_one_step()  # TIPS
         self.assertIsConnected()
         self.clock.advance(5)
-        self.assertEqual(b'PING\r\n', self.conn.peek_tr1_value())
-        self.assertEqual(b'PING\r\n', self.conn.peek_tr2_value())
+        self.assertRegex(self.conn.peek_tr1_value(), b'^PING .*\r\n')
+        self.assertRegex(self.conn.peek_tr2_value(), b'^PING .*\r\n')
         self.conn.run_one_step()  # PING
         self.conn.run_one_step()  # GET-TIPS
         self.conn.run_one_step()  # GET-BEST-BLOCKCHAIN
-        self.assertEqual(b'PONG\r\n', self.conn.peek_tr1_value())
-        self.assertEqual(b'PONG\r\n', self.conn.peek_tr2_value())
-        while b'PONG\r\n' in self.conn.peek_tr1_value():
+        self.assertRegex(self.conn.peek_tr1_value(), b'PONG .*\r\n')
+        self.assertRegex(self.conn.peek_tr2_value(), b'PONG .*\r\n')
+        while b'PONG ' in self.conn.peek_tr1_value():
             self.conn.run_one_step()
         self.assertEqual(self.clock.seconds(), self.conn.proto1.last_message)
 
@@ -489,8 +489,8 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         self.assertAndStepConn(self.conn, b'^TIPS')
         self.assertAndStepConn(self.conn, b'^TIPS')
         self.assertAndStepConn(self.conn, b'^TIPS-END')
-        self.assertEqual(b'PONG\r\n', self.conn.peek_tr1_value())
-        self.assertEqual(b'PONG\r\n', self.conn.peek_tr2_value())
+        self.assertRegex(self.conn.peek_tr1_value(), b'^PONG .*\r\n')
+        self.assertRegex(self.conn.peek_tr2_value(), b'^PONG .*\r\n')
         while b'PONG\r\n' in self.conn.peek_tr1_value():
             self.conn.run_one_step()
         self.assertEqual(self.clock.seconds(), self.conn.proto1.last_message)

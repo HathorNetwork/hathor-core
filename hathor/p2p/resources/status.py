@@ -69,6 +69,7 @@ class StatusResource(Resource):
                 'address': '{}:{}'.format(remote.host, remote.port),
                 'state': conn.state.state_name,
                 # 'received_bytes': conn.received_bytes,
+                'rtt': list(conn.state.rtt_window),
                 'last_message': time.time() - conn.last_message,
                 'plugins': status,
                 'warning_flags': [flag.value for flag in conn.warning_flags],
