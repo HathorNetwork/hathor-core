@@ -57,6 +57,7 @@ class HathorServerFactory(protocol.ServerFactory):
             p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
             inbound=True,
+            remote_address=addr,
         )
         p.factory = self
         return p
@@ -90,6 +91,7 @@ class HathorClientFactory(protocol.ClientFactory):
             p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
             inbound=False,
+            remote_address=addr,
         )
         p.factory = self
         return p
