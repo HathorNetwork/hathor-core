@@ -262,10 +262,10 @@ class CliBuilder:
             dns_hosts.extend(self._args.dns)
 
         if dns_hosts:
-            self.manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
+            p2p_manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
 
         if self._args.bootstrap:
-            self.manager.add_peer_discovery(BootstrapPeerDiscovery(self._args.bootstrap))
+            p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(self._args.bootstrap))
 
         if self._args.test_mode_tx_weight:
             _set_test_mode(TestMode.TEST_TX_WEIGHT)
@@ -281,7 +281,7 @@ class CliBuilder:
             self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         for description in self._args.listen:
-            self.manager.add_listen_address(description)
+            p2p_manager.add_listen_address(description)
 
         if self._args.peer_id_blacklist:
             self.log.info('with peer id blacklist', blacklist=self._args.peer_id_blacklist)
