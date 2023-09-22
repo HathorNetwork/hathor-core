@@ -12,8 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import Transaction
+from hathor.verification import vertex_verification
 
 cpu = get_cpu_profiler()
 
@@ -29,7 +31,7 @@ def verify_basic(transaction: Transaction) -> None:
 
 
 @cpu.profiler(key=lambda tx: 'tx-verify!{}'.format(tx.hash.hex()))
-def verify(tx: Transaction, *, reject_locked_reward: bool = True) -> None:
+def verify(tx: Transaction, *, settings: HathorSettings, reject_locked_reward: bool = True) -> None:
     """ Common verification for all transactions:
        (i) number of inputs is at most 256
       (ii) number of outputs is at most 256
@@ -47,7 +49,7 @@ def verify(tx: Transaction, *, reject_locked_reward: bool = True) -> None:
     tx.verify_without_storage()
     tx.verify_sigops_input()
     tx.verify_inputs()  # need to run verify_inputs first to check if all inputs exist
-    tx.verify_parents()
+    vertex_verification.verify_parents(tx, settings=settings)
     tx.verify_sum()
     if reject_locked_reward:
         tx.verify_reward_locked()

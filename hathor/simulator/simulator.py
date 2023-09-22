@@ -30,6 +30,7 @@ from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
 from hathor.util import Random
+from hathor.verification import vertex_verification
 from hathor.wallet import HDWallet
 
 if TYPE_CHECKING:
@@ -69,8 +70,8 @@ class Simulator:
             logger.new().debug('Skipping BaseTransaction.resolve() for simulator')
             return True
 
-        cls._original_verify_pow = BaseTransaction.verify_pow
-        BaseTransaction.verify_pow = verify_pow
+        cls._original_verify_pow = vertex_verification.verify_pow
+        vertex_verification.verify_pow = verify_pow
 
         cls._original_resolve = BaseTransaction.resolve
         BaseTransaction.resolve = resolve
@@ -86,7 +87,7 @@ class Simulator:
         """ Remove the patches previously applied.
         """
         from hathor.transaction import BaseTransaction
-        BaseTransaction.verify_pow = cls._original_verify_pow
+        vertex_verification.verify_pow = cls._original_verify_pow
         BaseTransaction.resolve = cls._original_resolve
 
         from hathor import daa

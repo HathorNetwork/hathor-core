@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
 from hathor.transaction import BaseTransaction, Block, Transaction, TxVersion
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -20,7 +21,10 @@ from hathor.verification import block_verification, token_creation_transaction_v
 
 
 class VerificationService:
-    __slots__ = ()
+    __slots__ = ('_settings', )
+
+    def __init__(self, *, settings: HathorSettings) -> None:
+        self._settings = settings
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -72,7 +76,11 @@ class VerificationService:
         match vertex.version:
             case TxVersion.REGULAR_BLOCK | TxVersion.MERGE_MINED_BLOCK:
                 assert isinstance(vertex, Block)
-                block_verification.verify_basic(vertex, skip_block_weight_verification=skip_block_weight_verification)
+                block_verification.verify_basic(
+                    vertex,
+                    settings=self._settings,
+                    skip_block_weight_verification=skip_block_weight_verification
+                )
             case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert isinstance(vertex, Transaction)
                 transaction_verification.verify_basic(vertex)
@@ -86,13 +94,21 @@ class VerificationService:
         match vertex.version:
             case TxVersion.REGULAR_BLOCK | TxVersion.MERGE_MINED_BLOCK:
                 assert isinstance(vertex, Block)
-                block_verification.verify(vertex)
+                block_verification.verify(vertex, settings=self._settings)
             case TxVersion.REGULAR_TRANSACTION:
                 assert isinstance(vertex, Transaction)
-                transaction_verification.verify(vertex, reject_locked_reward=reject_locked_reward)
+                transaction_verification.verify(
+                    vertex,
+                    settings=self._settings,
+                    reject_locked_reward=reject_locked_reward
+                )
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert isinstance(vertex, TokenCreationTransaction)
-                token_creation_transaction_verification.verify(vertex, reject_locked_reward=reject_locked_reward)
+                token_creation_transaction_verification.verify(
+                    vertex,
+                    settings=self._settings,
+                    reject_locked_reward=reject_locked_reward
+                )
             case _:
                 raise NotImplementedError
 

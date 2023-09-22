@@ -12,14 +12,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.verification import transaction_verification
 
 
-def verify(tx: TokenCreationTransaction, *, reject_locked_reward: bool = True) -> None:
+def verify(tx: TokenCreationTransaction, *, settings: HathorSettings, reject_locked_reward: bool = True) -> None:
     """ Run all validations as regular transactions plus validation on token info.
 
     We also overload verify_sum to make some different checks
     """
-    transaction_verification.verify(tx, reject_locked_reward=reject_locked_reward)
+    transaction_verification.verify(tx, settings=settings, reject_locked_reward=reject_locked_reward)
     tx.verify_token_info()

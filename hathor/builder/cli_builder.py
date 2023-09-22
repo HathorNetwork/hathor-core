@@ -203,7 +203,7 @@ class CliBuilder:
             not_support_features=self._args.signal_not_support
         )
 
-        verification_service = VerificationService()
+        verification_service = VerificationService(settings=settings)
 
         p2p_manager = ConnectionsManager(
             reactor,

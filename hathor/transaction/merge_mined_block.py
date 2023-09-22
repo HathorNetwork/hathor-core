@@ -18,6 +18,7 @@ from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
 from hathor.transaction.block import Block
 from hathor.transaction.util import VerboseCallback
+from hathor.verification import block_verification
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -77,7 +78,7 @@ class MergeMinedBlock(Block):
 
     def verify_without_storage(self) -> None:
         self.verify_aux_pow()
-        super().verify_without_storage()
+        block_verification.verify_without_storage(self, settings=self._settings)
 
     def verify_aux_pow(self) -> None:
         """ Verify auxiliary proof-of-work (for merged mining).

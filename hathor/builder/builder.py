@@ -160,7 +160,7 @@ class Builder:
         tx_storage = self._get_or_create_tx_storage(indexes)
         feature_service = self._get_or_create_feature_service(tx_storage)
         bit_signaling_service = self._get_or_create_bit_signaling_service(tx_storage)
-        verification_service = self._get_or_create_verification_service()
+        verification_service = self._get_or_create_verification_service(settings)
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -429,9 +429,9 @@ class Builder:
 
         return self._bit_signaling_service
 
-    def _get_or_create_verification_service(self) -> VerificationService:
+    def _get_or_create_verification_service(self, settings: HathorSettingsType) -> VerificationService:
         if self._verification_service is None:
-            self._verification_service = VerificationService()
+            self._verification_service = VerificationService(settings=settings)
 
         return self._verification_service
 

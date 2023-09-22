@@ -28,19 +28,7 @@ from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_settings
-from hathor.transaction.exceptions import (
-    DuplicatedParents,
-    IncorrectParents,
-    InvalidOutputScriptSize,
-    InvalidOutputValue,
-    InvalidToken,
-    ParentDoesNotExist,
-    PowError,
-    TimestampError,
-    TooManyOutputs,
-    TooManySigOps,
-    WeightError,
-)
+from hathor.transaction.exceptions import InvalidOutputValue, TooManyOutputs, WeightError
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.transaction.validation_state import ValidationState
@@ -69,14 +57,6 @@ _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 # Weight (d), timestamp (I), and parents len (B)
 _GRAPH_FORMAT_STRING = '!dIB'
-
-# tx should have 2 parents, both other transactions
-_TX_PARENTS_TXS = 2
-_TX_PARENTS_BLOCKS = 0
-
-# blocks have 3 parents, 2 txs and 1 block
-_BLOCK_PARENTS_TXS = 2
-_BLOCK_PARENTS_BLOCKS = 1
 
 # The int value of one byte
 _ONE_BYTE = 0xFF
@@ -540,136 +520,10 @@ class BaseTransaction(ABC):
         To be implemented by tx/block, used by `self.validate_checkpoint`. Should not modify the validation state."""
         raise NotImplementedError
 
-    def verify_parents(self) -> None:
-        """All parents must exist and their timestamps must be smaller than ours.
-
-        Also, txs should have 2 other txs as parents, while blocks should have 2 txs + 1 block.
-
-        Parents must be ordered with blocks first, followed by transactions.
-
-        :raises TimestampError: when our timestamp is less or equal than our parent's timestamp
-        :raises ParentDoesNotExist: when at least one of our parents does not exist
-        :raises IncorrectParents: when tx does not confirm the correct number/type of parent txs
-        """
-        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
-        assert self.storage is not None
-
-        # check if parents are duplicated
-        parents_set = set(self.parents)
-        if len(self.parents) > len(parents_set):
-            raise DuplicatedParents('Tx has duplicated parents: {}', [tx_hash.hex() for tx_hash in self.parents])
-
-        my_parents_txs = 0      # number of tx parents
-        my_parents_blocks = 0   # number of block parents
-        min_timestamp: Optional[int] = None
-
-        for parent_hash in self.parents:
-            try:
-                parent = self.storage.get_transaction(parent_hash)
-                assert parent.hash is not None
-                if self.timestamp <= parent.timestamp:
-                    raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
-                        self.hash_hex,
-                        self.timestamp,
-                        parent.hash_hex,
-                        parent.timestamp,
-                    ))
-
-                if parent.is_block:
-                    if self.is_block and not parent.is_genesis:
-                        if self.timestamp - parent.timestamp > self._settings.MAX_DISTANCE_BETWEEN_BLOCKS:
-                            raise TimestampError('Distance between blocks is too big'
-                                                 ' ({} seconds)'.format(self.timestamp - parent.timestamp))
-                    if my_parents_txs > 0:
-                        raise IncorrectParents('Parents which are blocks must come before transactions')
-                    for pi_hash in parent.parents:
-                        pi = self.storage.get_transaction(parent_hash)
-                        if not pi.is_block:
-                            min_timestamp = (
-                                min(min_timestamp, pi.timestamp) if min_timestamp is not None
-                                else pi.timestamp
-                            )
-                    my_parents_blocks += 1
-                else:
-                    if min_timestamp and parent.timestamp < min_timestamp:
-                        raise TimestampError('tx={} timestamp={}, parent={} timestamp={}, min_timestamp={}'.format(
-                            self.hash_hex,
-                            self.timestamp,
-                            parent.hash_hex,
-                            parent.timestamp,
-                            min_timestamp
-                        ))
-                    my_parents_txs += 1
-            except TransactionDoesNotExist:
-                raise ParentDoesNotExist('tx={} parent={}'.format(self.hash_hex, parent_hash.hex()))
-
-        # check for correct number of parents
-        if self.is_block:
-            parents_txs = _BLOCK_PARENTS_TXS
-            parents_blocks = _BLOCK_PARENTS_BLOCKS
-        else:
-            parents_txs = _TX_PARENTS_TXS
-            parents_blocks = _TX_PARENTS_BLOCKS
-        if my_parents_blocks != parents_blocks:
-            raise IncorrectParents('wrong number of parents (block type): {}, expecting {}'.format(
-                my_parents_blocks, parents_blocks))
-        if my_parents_txs != parents_txs:
-            raise IncorrectParents('wrong number of parents (tx type): {}, expecting {}'.format(
-                my_parents_txs, parents_txs))
-
-    def verify_pow(self, override_weight: Optional[float] = None) -> None:
-        """Verify proof-of-work
-
-        :raises PowError: when the hash is equal or greater than the target
-        """
-        assert self.hash is not None
-        numeric_hash = int(self.hash_hex, self.HEX_BASE)
-        minimum_target = self.get_target(override_weight)
-        if numeric_hash >= minimum_target:
-            raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
-
     def verify_number_of_outputs(self) -> None:
         """Verify number of outputs does not exceeds the limit"""
         if len(self.outputs) > self._settings.MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
-
-    def verify_sigops_output(self) -> None:
-        """ Count sig operations on all outputs and verify that the total sum is below the limit
-        """
-        from hathor.transaction.scripts import get_sigops_count
-        n_txops = 0
-
-        for tx_output in self.outputs:
-            n_txops += get_sigops_count(tx_output.script)
-
-        if n_txops > self._settings.MAX_TX_SIGOPS_OUTPUT:
-            raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
-                self.hash_hex, n_txops))
-
-    def verify_outputs(self) -> None:
-        """Verify there are no hathor authority UTXOs and outputs are all positive
-
-        :raises InvalidToken: when there's a hathor authority utxo
-        :raises InvalidOutputValue: output has negative value
-        :raises TooManyOutputs: when there are too many outputs
-        """
-        self.verify_number_of_outputs()
-        for index, output in enumerate(self.outputs):
-            # no hathor authority UTXO
-            if (output.get_token_index() == 0) and output.is_token_authority():
-                raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'.format(
-                    output.to_human_readable()))
-
-            # output value must be positive
-            if output.value <= 0:
-                raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
-                    output.value, index))
-
-            if len(output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
-                raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(
-                    len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
-                ))
 
     def resolve(self, update_time: bool = False) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work

@@ -43,6 +43,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
+from hathor.verification import vertex_verification
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -324,19 +325,19 @@ class Transaction(BaseTransaction):
         self.verify_number_of_inputs()
         self.verify_number_of_outputs()
         self.verify_outputs()
-        self.verify_sigops_output()
+        vertex_verification.verify_sigops_output(self, settings=self._settings)
         self.verify_sigops_input()
         self.verify_inputs(skip_script=True)  # need to run verify_inputs first to check if all inputs exist
-        self.verify_parents()
+        vertex_verification.verify_parents(self, settings=self._settings)
         self.verify_sum()
 
     def verify_without_storage(self) -> None:
         """ Run all verifications that do not need a storage.
         """
-        self.verify_pow()
+        vertex_verification.verify_pow(self)
         self.verify_number_of_inputs()
         self.verify_outputs()
-        self.verify_sigops_output()
+        vertex_verification.verify_sigops_output(self, settings=self._settings)
 
     def verify_number_of_inputs(self) -> None:
         """Verify number of inputs is in a valid range"""
@@ -373,7 +374,7 @@ class Transaction(BaseTransaction):
 
         :raises InvalidToken: output references non existent token uid
         """
-        super().verify_outputs()
+        vertex_verification.verify_outputs(self, settings=self._settings)
         for output in self.outputs:
             # check index is valid
             if output.get_token_index() > len(self.tokens):
