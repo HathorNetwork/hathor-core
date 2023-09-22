@@ -64,7 +64,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.block = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents,
                            nonce=100781, storage=self.tx_storage)
         self.block.resolve()
-        self.block.verify()
+        self.manager.verification_service.verify(self.block)
         self.block.get_metadata().validation = ValidationState.FULL
 
         tx_parents = [tx.hash for tx in self.genesis_txs]
@@ -114,7 +114,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(1, len(self.genesis_blocks))
         self.assertEqual(2, len(self.genesis_txs))
         for tx in self.genesis:
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
         for tx in self.genesis:
             tx2 = self.tx_storage.get_transaction(tx.hash)
@@ -526,7 +526,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             block.parents = parents
         block.weight = 10
         self.assertTrue(block.resolve())
-        block.verify()
+        self.manager.verification_service.verify(block)
         self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)
         return block

@@ -1154,7 +1154,7 @@ class NodeBlockSync(SyncAgent):
                 if isinstance(tx, Block) and not tx.has_basic_block_parent():
                     self.log.warn('on_new_tx(): block parent needs to be at least basic-valid', tx=tx.hash_hex)
                     return False
-                if not tx.validate_basic():
+                if not self.manager.verification_service.validate_basic(tx):
                     self.log.warn('on_new_tx(): basic validation failed', tx=tx.hash_hex)
                     return False
 

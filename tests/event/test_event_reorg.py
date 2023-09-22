@@ -40,7 +40,7 @@ class BaseEventReorgTest(unittest.TestCase):
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage, address=BURN_ADDRESS)
         b0.weight = 10
         b0.resolve()
-        b0.verify()
+        self.manager.verification_service.verify(b0)
         self.manager.propagate_tx(b0, fails_silently=False)
         self.log.debug('reorg block propagated')
         self.run_to_completion()

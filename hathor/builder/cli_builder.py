@@ -35,6 +35,7 @@ from hathor.p2p.utils import discover_hostname
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
 from hathor.util import Random, Reactor
+from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -202,6 +203,8 @@ class CliBuilder:
             not_support_features=self._args.signal_not_support
         )
 
+        verification_service = VerificationService()
+
         p2p_manager = ConnectionsManager(
             reactor,
             network=network,
@@ -231,7 +234,8 @@ class CliBuilder:
             full_verification=full_verification,
             enable_event_queue=self._args.x_enable_event_queue,
             feature_service=self.feature_service,
-            bit_signaling_service=bit_signaling_service
+            bit_signaling_service=bit_signaling_service,
+            verification_service=verification_service,
         )
 
         p2p_manager.set_manager(self.manager)
