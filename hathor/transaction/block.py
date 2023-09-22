@@ -321,12 +321,6 @@ class Block(BaseTransaction):
             return False
         return metadata.validation.is_at_least_basic()
 
-    def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
-        """Partially run validations, the ones that need parents/inputs are skipped."""
-        if not skip_block_weight_verification:
-            self.verify_weight()
-        self.verify_reward()
-
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.hash is not None
         assert self.storage is not None
@@ -395,27 +389,6 @@ class Block(BaseTransaction):
     def get_base_hash(self) -> bytes:
         from hathor.merged_mining.bitcoin import sha256d_hash
         return sha256d_hash(self.get_header_without_nonce())
-
-    @cpu.profiler(key=lambda self: 'block-verify!{}'.format(self.hash.hex()))
-    def verify(self, reject_locked_reward: bool = True) -> None:
-        """
-            (1) confirms at least two pending transactions and references last block
-            (2) solves the pow with the correct weight (done in HathorManager)
-            (3) creates the correct amount of tokens in the output (done in HathorManager)
-            (4) all parents must exist and have timestamp smaller than ours
-            (5) data field must contain at most BLOCK_DATA_MAX_SIZE bytes
-        """
-        # TODO Should we validate a limit of outputs?
-        if self.is_genesis:
-            # TODO do genesis validation
-            return
-
-        self.verify_without_storage()
-
-        # (1) and (4)
-        self.verify_parents()
-
-        self.verify_height()
 
     def get_height(self) -> int:
         """Returns the block's height."""

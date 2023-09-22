@@ -212,7 +212,7 @@ class SendTokensResource(Resource):
     def _stratum_thread_verify(self, context: _Context) -> _Context:
         """ Method to verify the transaction that runs in a separated thread
         """
-        context.tx.verify()
+        self.manager.verification_service.verify(context.tx)
         return context
 
     def _stratum_timeout(self, result: Failure, timeout: int, *, context: _Context) -> None:
@@ -264,7 +264,7 @@ class SendTokensResource(Resource):
         if context.should_stop_mining_thread:
             raise CancelledError()
         context.tx.update_hash()
-        context.tx.verify()
+        self.manager.verification_service.verify(context.tx)
         return context
 
     def _cb_tx_resolve(self, context: _Context) -> None:

@@ -284,15 +284,6 @@ class Transaction(BaseTransaction):
         json['tokens'] = [h.hex() for h in self.tokens]
         return json
 
-    def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
-        """Partially run validations, the ones that need parents/inputs are skipped."""
-        if self.is_genesis:
-            # TODO do genesis validation?
-            return
-        self.verify_parents_basic()
-        self.verify_weight()
-        self.verify_without_storage()
-
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.storage is not None
         if self.is_genesis:
@@ -327,30 +318,6 @@ class Transaction(BaseTransaction):
         elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and self.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
-
-    @cpu.profiler(key=lambda self: 'tx-verify!{}'.format(self.hash.hex()))
-    def verify(self, reject_locked_reward: bool = True) -> None:
-        """ Common verification for all transactions:
-           (i) number of inputs is at most 256
-          (ii) number of outputs is at most 256
-         (iii) confirms at least two pending transactions
-          (iv) solves the pow (we verify weight is correct in HathorManager)
-           (v) validates signature of inputs
-          (vi) validates public key and output (of the inputs) addresses
-         (vii) validate that both parents are valid
-        (viii) validate input's timestamps
-          (ix) validate inputs and outputs sum
-        """
-        if self.is_genesis:
-            # TODO do genesis validation
-            return
-        self.verify_without_storage()
-        self.verify_sigops_input()
-        self.verify_inputs()  # need to run verify_inputs first to check if all inputs exist
-        self.verify_parents()
-        self.verify_sum()
-        if reject_locked_reward:
-            self.verify_reward_locked()
 
     def verify_unsigned_skip_pow(self) -> None:
         """ Same as .verify but skipping pow and signature verification."""

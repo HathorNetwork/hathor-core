@@ -204,7 +204,7 @@ def gen_new_tx(manager, address, value, verify=True):
     tx.parents = manager.get_new_tx_parents(tx.timestamp)
     tx.resolve()
     if verify:
-        tx.verify()
+        manager.verification_service.verify(tx)
     return tx
 
 
@@ -266,7 +266,7 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None,
     if weight is not None:
         block.weight = weight
     block.resolve()
-    block.validate_full()
+    manager.verification_service.validate_full(block)
     if propagate:
         manager.propagate_tx(block, fails_silently=False)
     if advance_clock:
@@ -554,7 +554,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
 
     tx.resolve()
     if propagate:
-        tx.verify()
+        manager.verification_service.verify(tx)
         manager.propagate_tx(tx, fails_silently=False)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
@@ -643,7 +643,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     tx.resolve()
 
     if propagate:
-        tx.verify()
+        manager.verification_service.verify(tx)
         manager.propagate_tx(tx, fails_silently=False)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
