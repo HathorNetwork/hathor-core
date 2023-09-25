@@ -27,7 +27,7 @@ from twisted.python.threadpool import ThreadPool
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
@@ -60,16 +60,8 @@ from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate
 from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
-settings = HathorSettings()
 logger = get_logger()
 cpu = get_cpu_profiler()
-
-
-DEFAULT_CAPABILITIES = [
-    settings.CAPABILITY_WHITELIST,
-    settings.CAPABILITY_SYNC_VERSION,
-    settings.CAPABILITY_GET_BEST_BLOCKCHAIN
-]
 
 
 class HathorManager:
@@ -95,6 +87,7 @@ class HathorManager:
     def __init__(self,
                  reactor: Reactor,
                  *,
+                 settings: HathorSettings,
                  pubsub: PubSubManager,
                  consensus_algorithm: ConsensusAlgorithm,
                  peer_id: PeerId,
@@ -130,6 +123,7 @@ class HathorManager:
                 'Either enable it, or use the reset-event-queue CLI command to remove all event-related data'
             )
 
+        self.settings = settings
         self._cmd_path: Optional[str] = None
 
         self.log = logger.new()
@@ -223,7 +217,7 @@ class HathorManager:
         if capabilities is not None:
             self.capabilities = capabilities
         else:
-            self.capabilities = DEFAULT_CAPABILITIES
+            self.capabilities = self.get_default_capabilities()
 
         # This is included in some logs to provide more context
         self.environment_info = environment_info
@@ -232,6 +226,13 @@ class HathorManager:
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
+
+    def get_default_capabilities(self) -> list[str]:
+        return [
+            self.settings.CAPABILITY_WHITELIST,
+            self.settings.CAPABILITY_SYNC_VERSION,
+            self.settings.CAPABILITY_GET_BEST_BLOCKCHAIN
+        ]
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -443,7 +444,7 @@ class HathorManager:
             # It's safe to skip block weight verification during initialization because
             # we trust the difficulty stored in metadata
             skip_block_weight_verification = True
-            if block_count % settings.VERIFY_WEIGHT_EVERY_N_BLOCKS == 0:
+            if block_count % self.settings.VERIFY_WEIGHT_EVERY_N_BLOCKS == 0:
                 skip_block_weight_verification = False
 
             try:
@@ -628,14 +629,14 @@ class HathorManager:
                 soft_voided_meta = soft_voided_tx.get_metadata()
                 voided_set = soft_voided_meta.voided_by or set()
                 # If the tx is not marked as soft voided, then we can't continue the initialization
-                if settings.SOFT_VOIDED_ID not in voided_set:
+                if self.settings.SOFT_VOIDED_ID not in voided_set:
                     self.log.error(
                         'Error initializing node. Your database is not compatible with the current version of the'
                         ' full node. You must use the latest available snapshot or sync from the beginning.'
                     )
                     sys.exit(-1)
 
-                assert {soft_voided_id, settings.SOFT_VOIDED_ID}.issubset(voided_set)
+                assert {soft_voided_id, self.settings.SOFT_VOIDED_ID}.issubset(voided_set)
 
     def _verify_checkpoints(self) -> None:
         """ Method to verify if all checkpoints that exist in the database have the correct hash and are winners.
@@ -774,7 +775,7 @@ class HathorManager:
         """
         parent_block = self.tx_storage.get_transaction(parent_block_hash)
         assert isinstance(parent_block, Block)
-        parent_txs = self.generate_parent_txs(parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS)
+        parent_txs = self.generate_parent_txs(parent_block.timestamp + self.settings.MAX_DISTANCE_BETWEEN_BLOCKS)
         if timestamp is None:
             current_timestamp = int(max(self.tx_storage.latest_timestamp, self.reactor.seconds()))
         else:
@@ -810,7 +811,7 @@ class HathorManager:
         timestamp_abs_min = parent_block.timestamp + 1
         # and absolute maximum limited by max time between blocks
         if not parent_block.is_genesis:
-            timestamp_abs_max = parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS - 1
+            timestamp_abs_max = parent_block.timestamp + self.settings.MAX_DISTANCE_BETWEEN_BLOCKS - 1
         else:
             timestamp_abs_max = 0xffffffff
         assert timestamp_abs_max > timestamp_abs_min
@@ -819,12 +820,12 @@ class HathorManager:
         timestamp_min = max(timestamp_abs_min, parent_txs.max_timestamp + 1)
         assert timestamp_min <= timestamp_abs_max
         # when we have weight decay, the max timestamp will be when the next decay happens
-        if with_weight_decay and settings.WEIGHT_DECAY_ENABLED:
+        if with_weight_decay and self.settings.WEIGHT_DECAY_ENABLED:
             # we either have passed the first decay or not, the range will vary depending on that
-            if timestamp_min > timestamp_abs_min + settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
-                timestamp_max_decay = timestamp_min + settings.WEIGHT_DECAY_WINDOW_SIZE
+            if timestamp_min > timestamp_abs_min + self.settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
+                timestamp_max_decay = timestamp_min + self.settings.WEIGHT_DECAY_WINDOW_SIZE
             else:
-                timestamp_max_decay = timestamp_abs_min + settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
+                timestamp_max_decay = timestamp_abs_min + self.settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
             timestamp_max = min(timestamp_abs_max, timestamp_max_decay)
         else:
             timestamp_max = timestamp_abs_max
@@ -833,7 +834,10 @@ class HathorManager:
         # this is the min weight to cause an increase of twice the WEIGHT_TOL, we make sure to generate a template with
         # at least this weight (note that the user of the API can set its own weight, the block sumit API will also
         # protect agains a weight that is too small but using WEIGHT_TOL instead of 2*WEIGHT_TOL)
-        min_significant_weight = calculate_min_significant_weight(parent_block_metadata.score, 2 * settings.WEIGHT_TOL)
+        min_significant_weight = calculate_min_significant_weight(
+            parent_block_metadata.score,
+            2 * self.settings.WEIGHT_TOL
+        )
         weight = max(daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
         height = parent_block.get_height() + 1
         parents = [parent_block.hash] + parent_txs.must_include
@@ -898,15 +902,21 @@ class HathorManager:
         parent_block = self.tx_storage.get_transaction(parent_hash)
         parent_block_metadata = parent_block.get_metadata()
         # this is the smallest weight that won't cause the score to increase, anything equal or smaller is bad
-        min_insignificant_weight = calculate_min_significant_weight(parent_block_metadata.score, settings.WEIGHT_TOL)
+        min_insignificant_weight = calculate_min_significant_weight(
+            parent_block_metadata.score,
+            self.settings.WEIGHT_TOL
+        )
         if blk.weight <= min_insignificant_weight:
             self.log.warn('submit_block(): insignificant weight? accepted anyway', blk=blk.hash_hex, weight=blk.weight)
         return self.propagate_tx(blk, fails_silently=fails_silently)
 
     def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,
-                max_output_script_size: int = settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE) -> None:
+                max_output_script_size: int | None = None) -> None:
         """Used by all APIs that accept a new transaction (like push_tx)
         """
+        if max_output_script_size is None:
+            max_output_script_size = self.settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
+
         is_double_spending = tx.is_double_spending()
         if is_double_spending:
             raise DoubleSpendingError('Invalid transaction. At least one of your inputs has already been spent.')
@@ -968,7 +978,7 @@ class HathorManager:
             self.tx_storage.compare_bytes_with_local_tx(tx)
             already_exists = True
 
-        if tx.timestamp - self.reactor.seconds() > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
+        if tx.timestamp - self.reactor.seconds() > self.settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
             if not fails_silently:
                 raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
                     tx.hash_hex, tx.timestamp))
@@ -1117,7 +1127,7 @@ class HathorManager:
 
     def _log_feature_states(self, vertex: BaseTransaction) -> None:
         """Log features states for a block. Used as part of the Feature Activation Phased Testing."""
-        if not settings.FEATURE_ACTIVATION.enable_usage or not isinstance(vertex, Block):
+        if not self.settings.FEATURE_ACTIVATION.enable_usage or not isinstance(vertex, Block):
             return
 
         feature_descriptions = self._feature_service.get_bits_description(block=vertex)
@@ -1153,10 +1163,10 @@ class HathorManager:
             self.my_peer.entrypoints.append(address)
 
     def has_sync_version_capability(self) -> bool:
-        return settings.CAPABILITY_SYNC_VERSION in self.capabilities
+        return self.settings.CAPABILITY_SYNC_VERSION in self.capabilities
 
     def add_peer_to_whitelist(self, peer_id):
-        if not settings.ENABLE_PEER_WHITELIST:
+        if not self.settings.ENABLE_PEER_WHITELIST:
             return
 
         if peer_id in self.peers_whitelist:
@@ -1165,7 +1175,7 @@ class HathorManager:
             self.peers_whitelist.append(peer_id)
 
     def remove_peer_from_whitelist_and_disconnect(self, peer_id: str) -> None:
-        if not settings.ENABLE_PEER_WHITELIST:
+        if not self.settings.ENABLE_PEER_WHITELIST:
             return
 
         if peer_id in self.peers_whitelist:
@@ -1179,7 +1189,9 @@ class HathorManager:
 
         # We use the avg time between blocks as a basis to know how much time we should use to consider the fullnode
         # as not synced.
-        maximum_timestamp_delta = settings.P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER * settings.AVG_TIME_BETWEEN_BLOCKS
+        maximum_timestamp_delta = (
+            self.settings.P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER * self.settings.AVG_TIME_BETWEEN_BLOCKS
+        )
 
         if current_timestamp - latest_blockchain_timestamp > maximum_timestamp_delta:
             return False
