@@ -15,6 +15,7 @@
 from typing import NamedTuple
 
 from hathor.conf.settings import HathorSettings
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -32,12 +33,12 @@ class VertexVerifiers(NamedTuple):
     token_creation_tx: TokenCreationTransactionVerifier
 
     @classmethod
-    def create(cls, *, settings: HathorSettings) -> 'VertexVerifiers':
+    def create(cls, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm) -> 'VertexVerifiers':
         return VertexVerifiers(
-            block=BlockVerifier(settings=settings),
-            merge_mined_block=MergeMinedBlockVerifier(settings=settings),
-            tx=TransactionVerifier(settings=settings),
-            token_creation_tx=TokenCreationTransactionVerifier(settings=settings),
+            block=BlockVerifier(settings=settings, daa=daa),
+            merge_mined_block=MergeMinedBlockVerifier(settings=settings, daa=daa),
+            tx=TransactionVerifier(settings=settings, daa=daa),
+            token_creation_tx=TokenCreationTransactionVerifier(settings=settings, daa=daa),
         )
 
 

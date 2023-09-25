@@ -21,6 +21,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_settings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -102,6 +103,8 @@ class Builder:
         self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
+        self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
+
         self._vertex_verifiers: Optional[VertexVerifiers] = None
         self._verification_service: Optional[VerificationService] = None
 
@@ -162,6 +165,7 @@ class Builder:
         feature_service = self._get_or_create_feature_service(tx_storage)
         bit_signaling_service = self._get_or_create_bit_signaling_service(tx_storage)
         verification_service = self._get_or_create_verification_service()
+        daa = self._get_or_create_daa()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -186,6 +190,7 @@ class Builder:
             network=self._network,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
+            daa=daa,
             peer_id=peer_id,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
@@ -441,9 +446,17 @@ class Builder:
     def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
         if self._vertex_verifiers is None:
             settings = self._get_or_create_settings()
-            self._vertex_verifiers = VertexVerifiers.create(settings=settings)
+            daa = self._get_or_create_daa()
+            self._vertex_verifiers = VertexVerifiers.create(settings=settings, daa=daa)
 
         return self._vertex_verifiers
+
+    def _get_or_create_daa(self) -> DifficultyAdjustmentAlgorithm:
+        if self._daa is None:
+            settings = self._get_or_create_settings()
+            self._daa = DifficultyAdjustmentAlgorithm(settings=settings)
+
+        return self._daa
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
@@ -545,6 +558,11 @@ class Builder:
     def set_vertex_verifiers(self, vertex_verifiers: VertexVerifiers) -> 'Builder':
         self.check_if_can_modify()
         self._vertex_verifiers = vertex_verifiers
+        return self
+
+    def set_daa(self, daa: DifficultyAdjustmentAlgorithm) -> 'Builder':
+        self.check_if_can_modify()
+        self._daa = daa
         return self
 
     def set_reactor(self, reactor: Reactor) -> 'Builder':

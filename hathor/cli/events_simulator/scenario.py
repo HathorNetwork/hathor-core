@@ -50,7 +50,6 @@ def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorMana
 
 
 def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
-    from hathor import daa
     from hathor.conf.get_settings import get_settings
     from tests.utils import add_new_blocks, gen_new_tx
 
@@ -62,13 +61,13 @@ def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manage
     simulator.run(60)
 
     tx = gen_new_tx(manager, address, 1000)
-    tx.weight = daa.minimum_tx_weight(tx)
+    tx.weight = manager.daa.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx, fails_silently=False)
     simulator.run(60)
 
     tx = gen_new_tx(manager, address, 2000)
-    tx.weight = daa.minimum_tx_weight(tx)
+    tx.weight = manager.daa.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx, fails_silently=False)
     simulator.run(60)

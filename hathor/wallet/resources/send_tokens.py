@@ -20,7 +20,6 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
-from hathor.daa import minimum_tx_weight
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
@@ -125,7 +124,7 @@ class SendTokensResource(Resource):
         tx.parents = values['parents']
         weight = values['weight']
         if weight is None:
-            weight = minimum_tx_weight(tx)
+            weight = self.manager.daa.minimum_tx_weight(tx)
         tx.weight = weight
         tx.resolve()
         self.manager.verification_service.verify(tx)

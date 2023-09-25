@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor import daa
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.exceptions import (
@@ -78,16 +77,15 @@ class BlockVerifier(VertexVerifier):
 
     def verify_weight(self, block: Block) -> None:
         """Validate minimum block difficulty."""
-        block_weight = daa.calculate_block_difficulty(block)
+        block_weight = self._daa.calculate_block_difficulty(block)
         if block.weight < block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({block_weight})')
 
-    @staticmethod
-    def verify_reward(block: Block) -> None:
+    def verify_reward(self, block: Block) -> None:
         """Validate reward amount."""
         parent_block = block.get_block_parent()
-        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
+        tokens_issued_per_block = self._daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if block.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(
                 f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={block.hash_hex} '

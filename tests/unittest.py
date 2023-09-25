@@ -183,7 +183,7 @@ class TestCase(unittest.TestCase):
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
                     checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
-                    pubsub=None, event_storage=None, enable_event_queue=None, use_memory_storage=None):
+                    pubsub=None, event_storage=None, enable_event_queue=None, use_memory_storage=None, daa=None):
 
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
@@ -245,6 +245,9 @@ class TestCase(unittest.TestCase):
 
         if utxo_index:
             builder.enable_utxo_index()
+
+        if daa:
+            builder.set_daa(daa)
 
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 

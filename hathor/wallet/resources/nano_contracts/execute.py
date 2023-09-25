@@ -20,7 +20,6 @@ from typing import Any, NamedTuple
 from hathor.api_util import Resource, get_missing_params_msg, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
-from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
 from hathor.util import json_dumpb, json_loadb
@@ -99,7 +98,7 @@ class NanoContractExecuteResource(Resource):
 
         tx.parents = self.manager.get_new_tx_parents()
         tx.update_timestamp(int(self.manager.reactor.seconds()))
-        tx.weight = minimum_tx_weight(tx)
+        tx.weight = self.manager.daa.minimum_tx_weight(tx)
         tx.resolve()
         success = self.manager.propagate_tx(tx)
 
