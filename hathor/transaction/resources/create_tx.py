@@ -89,7 +89,7 @@ class CreateTxResource(Resource):
             # conservative estimate of the input data size to estimate a valid weight
             tx_input.data = b'\0' * 107
         tx.weight = minimum_tx_weight(fake_signed_tx)
-        tx.verify_unsigned_skip_pow()
+        self.manager.verification_service.verifiers.tx.verify_unsigned_skip_pow(tx)
 
         if tx.is_double_spending():
             raise InvalidNewTransaction('At least one of your inputs has already been spent.')

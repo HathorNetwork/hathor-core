@@ -30,6 +30,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.verification.verification_service import VertexVerifiers
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import (
@@ -46,6 +47,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
+        self._verifiers = VertexVerifiers.create(settings=self._settings)
         self.wallet = Wallet()
 
         # this makes sure we can spend the genesis outputs
@@ -80,7 +82,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         with self.assertRaises(InputOutputMismatch):
-            tx.verify_sum()
+            self._verifiers.tx.verify_sum(tx)
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -120,7 +122,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input.data = data_wrong
 
         with self.assertRaises(InvalidInputData):
-            tx.verify_inputs()
+            self._verifiers.tx.verify_inputs(tx)
 
     def test_too_many_inputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -131,13 +133,13 @@ class BaseTransactionTest(unittest.TestCase):
         tx = Transaction(inputs=inputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyInputs):
-            tx.verify_number_of_inputs()
+            self._verifiers.tx.verify_number_of_inputs(tx)
 
     def test_no_inputs(self):
         tx = Transaction(inputs=[], storage=self.tx_storage)
 
         with self.assertRaises(NoInputError):
-            tx.verify_number_of_inputs()
+            self._verifiers.tx.verify_number_of_inputs(tx)
 
     def test_too_many_outputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -148,7 +150,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx = Transaction(outputs=outputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
-            tx.verify_number_of_outputs()
+            self._verifiers.tx.verify_number_of_outputs(tx)
 
     def _gen_tx_spending_genesis_block(self):
         parents = [tx.hash for tx in self.genesis_txs]
@@ -246,11 +248,11 @@ class BaseTransactionTest(unittest.TestCase):
         )
 
         with self.assertRaises(AuxPowNoMagicError):
-            b.verify_aux_pow()
+            self._verifiers.merge_mined_block.verify_aux_pow(b)
 
         # adding the MAGIC_NUMBER makes it work:
         b.aux_pow = b.aux_pow._replace(coinbase_head=b.aux_pow.coinbase_head + MAGIC_NUMBER)
-        b.verify_aux_pow()
+        self._verifiers.merge_mined_block.verify_aux_pow(b)
 
     def test_merge_mined_multiple_magic(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -312,9 +314,9 @@ class BaseTransactionTest(unittest.TestCase):
         assert bytes(b1) != bytes(b2)
         assert b1.calculate_hash() == b2.calculate_hash()
 
-        b1.verify_aux_pow()  # OK
+        self._verifiers.merge_mined_block.verify_aux_pow(b1)  # OK
         with self.assertRaises(AuxPowUnexpectedMagicError):
-            b2.verify_aux_pow()
+            self._verifiers.merge_mined_block.verify_aux_pow(b2)
 
     def test_merge_mined_long_merkle_path(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -341,11 +343,11 @@ class BaseTransactionTest(unittest.TestCase):
         )
 
         with self.assertRaises(AuxPowLongMerklePathError):
-            b.verify_aux_pow()
+            self._verifiers.merge_mined_block.verify_aux_pow(b)
 
         # removing one path makes it work
         b.aux_pow.merkle_path.pop()
-        b.verify_aux_pow()
+        self._verifiers.merge_mined_block.verify_aux_pow(b)
 
     def test_block_outputs(self):
         from hathor.transaction.exceptions import TooManyOutputs
@@ -365,7 +367,7 @@ class BaseTransactionTest(unittest.TestCase):
             storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
-            block.verify_outputs()
+            self._verifiers.block.verify_outputs(block)
 
     def test_tx_number_parents(self):
         genesis_block = self.genesis_blocks[0]
@@ -534,7 +536,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx.weight += self._settings.MAX_TX_WEIGHT_DIFF + 0.1
         tx.update_hash()
         with self.assertRaises(WeightError):
-            tx.verify_weight()
+            self._verifiers.tx.verify_weight(tx)
 
     def test_weight_nan(self):
         # this should succeed
@@ -682,34 +684,34 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertFalse(tx_equal.is_genesis)
 
         # Pow error
-        tx2.verify_pow()
+        self._verifiers.tx.verify_pow(tx2)
         tx2.weight = 100
         with self.assertRaises(PowError):
-            tx2.verify_pow()
+            self._verifiers.tx.verify_pow(tx2)
 
         # Verify parent timestamps
-        tx2.verify_parents()
+        self._verifiers.tx.verify_parents(tx2)
         tx2_timestamp = tx2.timestamp
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            tx2.verify_parents()
+            self._verifiers.tx.verify_parents(tx2)
         tx2.timestamp = tx2_timestamp
 
         # Verify inputs timestamps
-        tx2.verify_inputs()
+        self._verifiers.tx.verify_inputs(tx2)
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            tx2.verify_inputs()
+            self._verifiers.tx.verify_inputs(tx2)
         tx2.timestamp = tx2_timestamp
 
         # Validate maximum distance between blocks
         block = blocks[0]
         block2 = blocks[1]
         block2.timestamp = block.timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS
-        block2.verify_parents()
+        self._verifiers.block.verify_parents(block2)
         block2.timestamp += 1
         with self.assertRaises(TimestampError):
-            block2.verify_parents()
+            self._verifiers.block.verify_parents(block2)
 
     def test_block_big_nonce(self):
         block = self.genesis_blocks[0]
@@ -886,7 +888,7 @@ class BaseTransactionTest(unittest.TestCase):
         _output = TxOutput(value, script)
 
         tx = Transaction(inputs=[_input], outputs=[_output], storage=self.tx_storage)
-        tx.verify_outputs()
+        self._verifiers.tx.verify_outputs(tx)
 
     def test_txout_script_limit_exceeded(self):
         with self.assertRaises(InvalidOutputScriptSize):
@@ -910,7 +912,7 @@ class BaseTransactionTest(unittest.TestCase):
             outputs=[_output],
             storage=self.tx_storage
         )
-        tx.verify_inputs(skip_script=True)
+        self._verifiers.tx.verify_inputs(tx, skip_script=True)
 
     def test_txin_data_limit_exceeded(self):
         with self.assertRaises(InvalidInputDataSize):
@@ -1063,7 +1065,7 @@ class BaseTransactionTest(unittest.TestCase):
         output3 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output3], storage=self.tx_storage)
         tx.update_hash()
-        tx.verify_sigops_output()
+        self._verifiers.tx.verify_sigops_output(tx)
 
     def test_sigops_output_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1075,7 +1077,7 @@ class BaseTransactionTest(unittest.TestCase):
         output4 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output4]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
-        tx.verify_sigops_output()
+        self._verifiers.tx.verify_sigops_output(tx)
 
     def test_sigops_input_single_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1117,7 +1119,7 @@ class BaseTransactionTest(unittest.TestCase):
         input3 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input3], outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
-        tx.verify_sigops_input()
+        self._verifiers.tx.verify_sigops_input(tx)
 
     def test_sigops_input_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1131,7 +1133,7 @@ class BaseTransactionTest(unittest.TestCase):
         input4 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input4]*num_inputs, outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
-        tx.verify_sigops_input()
+        self._verifiers.tx.verify_sigops_input(tx)
 
     def test_compare_bytes_equal(self) -> None:
         # create some block
