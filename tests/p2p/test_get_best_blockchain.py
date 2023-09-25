@@ -2,7 +2,6 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.indexes.height_index import HeightInfo
-from hathor.manager import DEFAULT_CAPABILITIES
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.resources import StatusResource
 from hathor.p2p.states import ReadyState
@@ -229,7 +228,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         protocol2 = connected_peers1[0]
         self.assertTrue(protocol2.capabilities.issuperset(set(cababilities_without_get_best_blockchain)))
         protocol1 = connected_peers2[0]
-        self.assertTrue(protocol1.capabilities.issuperset(set(DEFAULT_CAPABILITIES)))
+        default_capabilities = manager2.get_default_capabilities()
+        self.assertTrue(protocol1.capabilities.issuperset(set(default_capabilities)))
 
         # assert the peers don't engage in get_best_blockchain messages
         state2 = protocol2.state

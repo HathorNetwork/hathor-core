@@ -181,6 +181,7 @@ class Builder:
 
         manager = HathorManager(
             reactor,
+            settings=settings,
             network=self._network,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
