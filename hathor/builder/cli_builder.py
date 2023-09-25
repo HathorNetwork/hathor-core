@@ -35,7 +35,7 @@ from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
 from hathor.util import Random, Reactor
-from hathor.verification.verification_service import VerificationService
+from hathor.verification.verification_service import VerificationService, VertexVerifiers
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -202,7 +202,8 @@ class CliBuilder:
             not_support_features=self._args.signal_not_support
         )
 
-        verification_service = VerificationService()
+        vertex_verifiers = VertexVerifiers.create(settings=settings)
+        verification_service = VerificationService(verifiers=vertex_verifiers)
 
         p2p_manager = ConnectionsManager(
             reactor,
