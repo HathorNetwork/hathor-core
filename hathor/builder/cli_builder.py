@@ -220,6 +220,7 @@ class CliBuilder:
 
         self.manager = HathorManager(
             reactor,
+            settings=settings,
             network=network,
             hostname=hostname,
             pubsub=pubsub,
