@@ -27,9 +27,10 @@ from twisted.internet.defer import inlineCallbacks
 from twisted.internet.interfaces import ISSLTransport
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
 
-from hathor import daa
 from hathor.conf.get_settings import get_settings
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -344,7 +345,8 @@ class PeerId:
                     break
                 host = connection_string_to_host(entrypoint)
                 # TODO: don't use `daa.TEST_MODE` for this
-                result = yield discover_dns(host, daa.TEST_MODE)
+                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
+                result = yield discover_dns(host, test_mode)
                 if protocol.connection_string in result:
                     # Found the entrypoint
                     found_entrypoint = True
@@ -363,7 +365,8 @@ class PeerId:
                 if connection_host == host:
                     found_entrypoint = True
                     break
-                result = yield discover_dns(host, daa.TEST_MODE)
+                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
+                result = yield discover_dns(host, test_mode)
                 if connection_host in [connection_string_to_host(x) for x in result]:
                     # Found the entrypoint
                     found_entrypoint = True

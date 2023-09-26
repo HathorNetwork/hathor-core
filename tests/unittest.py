@@ -12,7 +12,7 @@ from twisted.trial import unittest
 from hathor.builder import BuildArtifacts, Builder
 from hathor.conf import HathorSettings
 from hathor.conf.get_settings import get_settings
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator.clock import MemoryReactorHeapClock
@@ -104,7 +104,6 @@ class TestCase(unittest.TestCase):
     seed_config: Optional[int] = None
 
     def setUp(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         self.tmpdirs = []
         self.clock = TestMemoryReactorClock()
         self.clock.advance(time.time())
@@ -183,7 +182,7 @@ class TestCase(unittest.TestCase):
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
                     checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
-                    pubsub=None, event_storage=None, enable_event_queue=None, use_memory_storage=None, daa=None):
+                    pubsub=None, event_storage=None, enable_event_queue=None, use_memory_storage=None):
 
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
@@ -246,9 +245,8 @@ class TestCase(unittest.TestCase):
         if utxo_index:
             builder.enable_utxo_index()
 
-        if daa:
-            builder.set_daa(daa)
-
+        daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
+        builder.set_daa(daa)
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         # XXX: just making sure that tests set this up correctly

@@ -3,7 +3,7 @@ import hashlib
 from math import isinf, isnan
 
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     BlockWithInputs,
@@ -630,8 +630,8 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertEquals(tx.timestamp, ts)
 
     def test_propagation_error(self):
-        _set_test_mode(TestMode.DISABLED)
         manager = self.create_peer('testnet', unlock_wallet=True)
+        manager.daa.TEST_MODE = TestMode.DISABLED
 
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]

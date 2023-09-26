@@ -9,7 +9,7 @@ from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -155,7 +155,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
     def test_vertices_count(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         blocks_count = 1
         txs_count = 2
@@ -532,7 +532,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         return block
 
     def test_best_block_tips_cache(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         self.manager.wallet.unlock(b'MYPASS')
         spent_blocks = add_new_blocks(self.manager, 10)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [spent_blocks[-1].hash])
@@ -544,7 +544,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(self.tx_storage._best_block_tips_cache, [latest_blocks[-1].hash])
 
     def test_topological_sort(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         _total = 0
         blocks = add_new_blocks(self.manager, 1, advance_clock=1)
         _total += len(blocks)
