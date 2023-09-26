@@ -22,7 +22,7 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional
 
 from structlog import get_logger
 
@@ -520,26 +520,6 @@ class BaseTransaction(ABC):
         To be implemented by tx/block, used by `self.validate_checkpoint`. Should not modify the validation state."""
         raise NotImplementedError
 
-    def resolve(self, update_time: bool = False) -> bool:
-        """Run a CPU mining looking for the nonce that solves the proof-of-work
-
-        The `self.weight` must be set before calling this method.
-
-        :param update_time: update timestamp every 2 seconds
-        :return: True if a solution was found
-        :rtype: bool
-        """
-        hash_bytes = self.start_mining(update_time=update_time)
-
-        if hash_bytes:
-            self.hash = hash_bytes
-            metadata = getattr(self, '_metadata', None)
-            if metadata is not None and metadata.hash is not None:
-                metadata.hash = hash_bytes
-            return True
-        else:
-            return False
-
     def get_funds_hash(self) -> bytes:
         """Return the sha256 of the funds part of the transaction
 
@@ -608,41 +588,6 @@ class BaseTransaction(ABC):
         """ Update the hash of the transaction.
         """
         self.hash = self.calculate_hash()
-
-    def start_mining(self, start: int = 0, end: int = MAX_NONCE, sleep_seconds: float = 0.0, update_time: bool = True,
-                     *, should_stop: Callable[[], bool] = lambda: False) -> Optional[VertexId]:
-        """Starts mining until it solves the problem, i.e., finds the nonce that satisfies the conditions
-
-        :param start: beginning of the search interval
-        :param end: end of the search interval
-        :param sleep_seconds: the number of seconds it will sleep after each attempt
-        :param update_time: update timestamp every 2 seconds
-        :return The hash of the solved PoW or None when it is not found
-        """
-        pow_part1 = self.calculate_hash1()
-        target = self.get_target()
-        self.nonce = start
-        last_time = time.time()
-        while self.nonce < end:
-            if update_time:
-                now = time.time()
-                if now - last_time > 2:
-                    if should_stop():
-                        return None
-                    self.timestamp = int(now)
-                    pow_part1 = self.calculate_hash1()
-                    last_time = now
-                    self.nonce = start
-
-            result = self.calculate_hash2(pow_part1.copy())
-            if int(result.hex(), self.HEX_BASE) < target:
-                return result
-            self.nonce += 1
-            if sleep_seconds > 0:
-                time.sleep(sleep_seconds)
-                if should_stop():
-                    return None
-        return None
 
     def get_metadata(self, *, force_reload: bool = False, use_storage: bool = True) -> TransactionMetadata:
         """Return this tx's metadata.

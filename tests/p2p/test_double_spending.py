@@ -42,19 +42,19 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx1.weight = 10
         tx1.parents = self.manager1.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager1.cpu_mining_service.resolve(tx1)
 
         tx2 = Transaction.create_from_struct(tx1.get_struct())
         tx2.weight = 10
         tx2.parents = tx2.parents[::-1]
         tx2.timestamp = int(self.clock.seconds())
-        tx2.resolve()
+        self.manager1.cpu_mining_service.resolve(tx2)
         self.assertNotEqual(tx1.hash, tx2.hash)
 
         tx3 = Transaction.create_from_struct(tx1.get_struct())
         tx3.weight = 11
         tx3.timestamp = int(self.clock.seconds())
-        tx3.resolve()
+        self.manager1.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx1.hash, tx3.hash)
         self.assertNotEqual(tx2.hash, tx3.hash)
 
@@ -156,7 +156,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx1.weight = 5
         tx1.parents = self.manager1.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager1.cpu_mining_service.resolve(tx1)
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 500
@@ -170,7 +170,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx4.weight = 5
         tx4.parents = self.manager1.get_new_tx_parents()
         tx4.timestamp = int(self.clock.seconds())
-        tx4.resolve()
+        self.manager1.cpu_mining_service.resolve(tx4)
 
         self.assertEqual(tx1.inputs[0].tx_id, tx4.inputs[0].tx_id)
         self.assertEqual(tx1.inputs[0].index, tx4.inputs[0].index)
@@ -193,7 +193,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx2.weight = 5
         tx2.parents = tx1.parents
         tx2.timestamp = int(self.clock.seconds())
-        tx2.resolve()
+        self.manager1.cpu_mining_service.resolve(tx2)
         self.clock.advance(15)
         self.manager1.propagate_tx(tx2)
         self.clock.advance(15)
@@ -212,7 +212,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx3.weight = 5
         tx3.parents = [tx1.hash, tx1.parents[0]]
         tx3.timestamp = int(self.clock.seconds())
-        tx3.resolve()
+        self.manager1.cpu_mining_service.resolve(tx3)
         self.clock.advance(15)
         self.assertTrue(self.manager1.propagate_tx(tx3))
         self.clock.advance(15)
@@ -243,7 +243,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx5.weight = 5
         tx5.parents = tx1.parents
         tx5.timestamp = int(self.clock.seconds())
-        tx5.resolve()
+        self.manager1.cpu_mining_service.resolve(tx5)
         self.clock.advance(15)
         self.manager1.propagate_tx(tx5)
         self.clock.advance(15)
@@ -259,7 +259,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx6.weight = 1
         tx6.parents = [tx4.hash, tx5.hash]
         tx6.timestamp = int(self.clock.seconds())
-        tx6.resolve()
+        self.manager1.cpu_mining_service.resolve(tx6)
         self.clock.advance(15)
         self.manager1.propagate_tx(tx6)
         self.clock.advance(15)
@@ -280,7 +280,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx7.weight = 10
         tx7.parents = [tx4.hash, tx5.hash]
         tx7.timestamp = int(self.clock.seconds())
-        tx7.resolve()
+        self.manager1.cpu_mining_service.resolve(tx7)
         self.clock.advance(15)
         self.manager1.propagate_tx(tx7, False)
         self.clock.advance(15)

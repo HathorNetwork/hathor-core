@@ -26,7 +26,7 @@ class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
 
         self.tx2 = Transaction.create_from_struct(tx.get_struct())
         self.tx2.parents = [tx.parents[1], tx.parents[0]]
-        self.tx2.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx2)
 
         self.manager.propagate_tx(self.tx2)
 

@@ -52,7 +52,7 @@ class BaseTokenTest(unittest.TestCase):
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.manager.tx_storage)
 
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(BlockWithTokensError):
             self.manager.verification_service.verify(block)
 
@@ -72,7 +72,7 @@ class BaseTokenTest(unittest.TestCase):
         data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx)
 
@@ -82,7 +82,7 @@ class BaseTokenTest(unittest.TestCase):
         data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx)
 
@@ -92,7 +92,7 @@ class BaseTokenTest(unittest.TestCase):
         data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx)
 
@@ -113,7 +113,7 @@ class BaseTokenTest(unittest.TestCase):
         data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
 
         # missing tokens
@@ -123,7 +123,7 @@ class BaseTokenTest(unittest.TestCase):
         data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx3.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx3)
 
@@ -156,7 +156,7 @@ class BaseTokenTest(unittest.TestCase):
         data = P2PKH.create_input_data(public_bytes, signature)
         tx2.inputs[0].data = data
         tx2.inputs[1].data = data
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
@@ -191,7 +191,7 @@ class BaseTokenTest(unittest.TestCase):
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx3.inputs[0].data = data
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx3)
 
@@ -217,7 +217,7 @@ class BaseTokenTest(unittest.TestCase):
         data = P2PKH.create_input_data(public_bytes, signature)
         tx4.inputs[0].data = data
         tx4.inputs[1].data = data
-        tx4.resolve()
+        self.manager.cpu_mining_service.resolve(tx4)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx4)
 
@@ -229,7 +229,7 @@ class BaseTokenTest(unittest.TestCase):
         data_to_sign = tx5.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx5.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx5.resolve()
+        self.manager.cpu_mining_service.resolve(tx5)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx5)
 
@@ -263,7 +263,7 @@ class BaseTokenTest(unittest.TestCase):
         data = P2PKH.create_input_data(public_bytes, signature)
         tx2.inputs[0].data = data
         tx2.inputs[1].data = data
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
@@ -302,7 +302,7 @@ class BaseTokenTest(unittest.TestCase):
         data = P2PKH.create_input_data(public_bytes, signature)
         tx3.inputs[0].data = data
         tx3.inputs[1].data = data
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx3)
 
@@ -317,7 +317,7 @@ class BaseTokenTest(unittest.TestCase):
         data = P2PKH.create_input_data(public_bytes, signature)
         tx4.inputs[0].data = data
         tx4.inputs[1].data = data
-        tx4.resolve()
+        self.manager.cpu_mining_service.resolve(tx4)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx4)
 
@@ -336,7 +336,7 @@ class BaseTokenTest(unittest.TestCase):
         data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx2)
 
@@ -348,7 +348,7 @@ class BaseTokenTest(unittest.TestCase):
         data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx3.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx3)
 
@@ -402,7 +402,7 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[0].data = data
         tx2.inputs[1].data = data
         tx2.inputs[2].data = data
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
@@ -422,7 +422,7 @@ class BaseTokenTest(unittest.TestCase):
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.parents = [tx.parents[1], tx.parents[0]]
         tx3.weight = 3
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx3.hash, tx2.hash)
         self.assertTrue(tx3.weight > tx2.weight)
         self.manager.propagate_tx(tx3)
@@ -447,7 +447,7 @@ class BaseTokenTest(unittest.TestCase):
             data_to_sign = tx.get_sighash_all()
             public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
             tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-            tx.resolve()
+            self.manager.cpu_mining_service.resolve(tx)
 
         # test token name and symbol
         tx = create_tokens(self.manager, self.address_b58)
@@ -540,7 +540,7 @@ class BaseTokenTest(unittest.TestCase):
         data = P2PKH.create_input_data(public_bytes, signature)
         tx2.inputs[0].data = data
         tx2.inputs[1].data = data
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx2)
 
@@ -593,7 +593,7 @@ class BaseTokenTest(unittest.TestCase):
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.manager.tx_storage)
 
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(block)
 

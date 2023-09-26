@@ -43,6 +43,7 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.mining import BlockTemplate, BlockTemplates
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -98,6 +99,7 @@ class HathorManager:
                  feature_service: FeatureService,
                  bit_signaling_service: BitSignalingService,
                  verification_service: VerificationService,
+                 cpu_mining_service: CpuMiningService,
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
@@ -176,6 +178,7 @@ class HathorManager:
         self._feature_service = feature_service
         self._bit_signaling_service = bit_signaling_service
         self.verification_service = verification_service
+        self.cpu_mining_service = cpu_mining_service
 
         self.consensus_algorithm = consensus_algorithm
 

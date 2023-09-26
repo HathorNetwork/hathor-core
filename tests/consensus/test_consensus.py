@@ -82,7 +82,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
-        b0.resolve()
+        manager.cpu_mining_service.resolve(b0)
         manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
@@ -144,7 +144,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         # So, it is not enough to revert and this block will be voided as well.
         b0 = manager.generate_mining_block()
         b0.parents = [blocks[-1].hash, conflicting_tx.hash, conflicting_tx.parents[0]]
-        b0.resolve()
+        manager.cpu_mining_service.resolve(b0)
         manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
@@ -200,7 +200,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
-        b0.resolve()
+        manager.cpu_mining_service.resolve(b0)
         manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
@@ -254,7 +254,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         b0 = manager.generate_mining_block()
         b0.parents = [b0.parents[0], conflicting_tx.hash, conflicting_tx.parents[0]]
         b0.weight = 10
-        b0.resolve()
+        manager.cpu_mining_service.resolve(b0)
         manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 

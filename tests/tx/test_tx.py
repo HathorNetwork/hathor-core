@@ -217,7 +217,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         block.inputs = tx_inputs
 
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
 
         with self.assertRaises(BlockWithInputs):
             self.manager.verification_service.verify(block)
@@ -387,21 +387,21 @@ class BaseTransactionTest(unittest.TestCase):
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
 
         # in first test, only with 1 parent
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(tx)
 
         # test with 3 parents
         parents = [tx.hash for tx in self.genesis]
         tx.parents = parents
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(tx)
 
         # 2 parents, 1 tx and 1 block
         parents = [self.genesis_txs[0].hash, self.genesis_blocks[0].hash]
         tx.parents = parents
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(tx)
 
@@ -420,7 +420,7 @@ class BaseTransactionTest(unittest.TestCase):
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.tx_storage)
 
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(ParentDoesNotExist):
             self.manager.verification_service.verify(block)
 
@@ -438,7 +438,7 @@ class BaseTransactionTest(unittest.TestCase):
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.tx_storage)
 
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(block)
 
@@ -461,7 +461,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx.inputs[0].data = data
 
         # test with an inexistent index
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
             self.manager.verification_service.verify(tx)
 
@@ -469,7 +469,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input = [TxInput(genesis_block.hash, len(genesis_block.outputs), data)]
         tx.inputs = _input
         # test with an inexistent index
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
             self.manager.verification_service.verify(tx)
 
@@ -477,7 +477,7 @@ class BaseTransactionTest(unittest.TestCase):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
         _input = [TxInput(random_bytes, 3, data)]
         tx.inputs = _input
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
             self.manager.verification_service.verify(tx)
 
@@ -500,7 +500,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(ConflictingInputs):
             self.manager.verification_service.verify(tx)
 
@@ -522,7 +522,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         self.manager.verification_service.verify(tx)
 
     def test_tx_weight_too_high(self):
@@ -601,7 +601,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(DuplicatedParents):
             self.manager.verification_service.verify(tx)
 
@@ -641,20 +641,20 @@ class BaseTransactionTest(unittest.TestCase):
         # 2. propagate block with weight 1
         block = manager.generate_mining_block()
         block.weight = 1
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         self.assertFalse(manager.propagate_tx(block))
 
         # 3. propagate block with wrong amount of tokens
         block = manager.generate_mining_block()
         output = TxOutput(1, block.outputs[0].script)
         block.outputs = [output]
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         self.assertFalse(manager.propagate_tx(block))
 
         # 4. propagate block from the future
         block = manager.generate_mining_block()
         block.timestamp = int(self.clock.seconds()) + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED + 100
-        block.resolve(update_time=False)
+        manager.cpu_mining_service.resolve(block, update_time=False)
         self.assertFalse(manager.propagate_tx(block))
 
     def test_tx_methods(self):
@@ -719,7 +719,7 @@ class BaseTransactionTest(unittest.TestCase):
         start = 1 << (8 * 12)
         end = start + 1 << (8*4)
 
-        hash = block.start_mining(start, end)
+        hash = self.manager.cpu_mining_service.start_mining(block, start=start, end=end)
         assert hash is not None
 
         block.hash = hash
@@ -803,7 +803,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input = TxInput(random_bytes, 0, random_bytes)
         tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
         with self.assertRaises(InvalidOutputValue):
-            tx.resolve()
+            self.manager.cpu_mining_service.resolve(tx)
 
         # 'Manually resolving', to validate verify method
         tx.hash = bytes.fromhex('012cba011be3c29f1c406f9015e42698b97169dbc6652d1f5e4d5c5e83138858')
@@ -944,7 +944,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         self.manager.propagate_tx(tx)
 
         # This transaction has an output to address_b58, so we need one more element on the index
@@ -968,7 +968,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         input1.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.manager.propagate_tx(tx2)
 
         # tx2 has two outputs, for address_b58 and new_address_b58
@@ -991,7 +991,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         input2.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         self.manager.propagate_tx(tx3)
 
         # tx3 has one output, for another new address (output3_address_b58) and it's spending an output of address_b58

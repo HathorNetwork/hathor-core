@@ -26,6 +26,7 @@ import requests
 
 from hathor.conf.get_settings import get_settings
 from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.verification.block_verifier import BlockVerifier
 
 _SLEEP_ON_ERROR_SECONDS = 5
@@ -39,7 +40,7 @@ def signal_handler(sig, frame):
 def worker(q_in, q_out):
     signal.signal(signal.SIGINT, signal_handler)
     block, start, end, sleep_seconds = q_in.get()
-    block.start_mining(start, end, sleep_seconds=sleep_seconds)
+    CpuMiningService().start_mining(block, start=start, end=end, sleep_seconds=sleep_seconds)
     q_out.put(block)
 
 

@@ -27,13 +27,14 @@ from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
-from hathor.simulator.tx_generator import RandomTransactionGenerator
-from hathor.simulator.verification import (
+from hathor.simulator.patches import (
     SimulatorBlockVerifier,
+    SimulatorCpuMiningService,
     SimulatorMergeMinedBlockVerifier,
     SimulatorTokenCreationTransactionVerifier,
     SimulatorTransactionVerifier,
 )
+from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
 from hathor.util import Random
 from hathor.verification.verification_service import VertexVerifiers
@@ -52,52 +53,6 @@ SIMULATOR_AVG_TIME_BETWEEN_BLOCKS: int = 64
 
 
 class Simulator:
-    # used to concilite monkeypatching and multiple instances
-    _patches_rc: int = 0
-
-    @classmethod
-    def _apply_patches(cls):
-        """ Applies global patches on modules that aren't easy/possible to configure otherwise.
-
-        Patches:
-
-        - disable Transaction.resolve method
-        """
-        from hathor.transaction import BaseTransaction
-
-        def resolve(self: BaseTransaction, update_time: bool = True) -> bool:
-            self.update_hash()
-            logger.new().debug('Skipping BaseTransaction.resolve() for simulator')
-            return True
-
-        cls._original_resolve = BaseTransaction.resolve
-        BaseTransaction.resolve = resolve
-
-    @classmethod
-    def _remove_patches(cls):
-        """ Remove the patches previously applied.
-        """
-        from hathor.transaction import BaseTransaction
-        BaseTransaction.resolve = cls._original_resolve
-
-    @classmethod
-    def _patches_rc_increment(cls):
-        """ This is used by when starting instances of Simulator to determine when to run _apply_patches"""
-        assert cls._patches_rc >= 0
-        cls._patches_rc += 1
-        if cls._patches_rc == 1:
-            # patches not yet applied
-            cls._apply_patches()
-
-    @classmethod
-    def _patches_rc_decrement(cls):
-        """ This is used by when stopping instances of Simulator to determine when to run _remove_patches"""
-        assert cls._patches_rc > 0
-        cls._patches_rc -= 1
-        if cls._patches_rc == 0:
-            # patches not needed anymore
-            cls._remove_patches()
-
     def __init__(self, seed: Optional[int] = None):
         self.log = logger.new()
         if seed is None:
@@ -115,7 +70,6 @@ class Simulator:
         """Has to be called before any other method can be called."""
         assert not self._started
         self._started = True
-        self._patches_rc_increment()
         first_timestamp = min(tx.timestamp for tx in _get_genesis_transactions_unsafe(None))
         dt = self.rng.randint(3600, 120 * 24 * 3600)
         self._clock.advance(first_timestamp + dt)
@@ -125,7 +79,6 @@ class Simulator:
         """Can only stop after calling start, but it doesn't matter if it's paused or not"""
         assert self._started
         self._started = False
-        self._patches_rc_decrement()
 
     def get_default_builder(self) -> Builder:
         """
@@ -160,6 +113,7 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
+        cpu_mining_service = SimulatorCpuMiningService()
         daa = DifficultyAdjustmentAlgorithm(settings=self.settings)
         vertex_verifiers = VertexVerifiers(
             block=SimulatorBlockVerifier(settings=self.settings, daa=daa),
@@ -174,6 +128,7 @@ class Simulator:
             .set_wallet(wallet) \
             .set_vertex_verifiers(vertex_verifiers) \
             .set_daa(daa) \
+            .set_cpu_mining_service(cpu_mining_service) \
             .build()
 
         artifacts.manager.start()
