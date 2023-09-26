@@ -220,14 +220,6 @@ class TokenCreationTransaction(Transaction):
         json['tokens'] = []
         return json
 
-    def verify(self, reject_locked_reward: bool = True) -> None:
-        """ Run all validations as regular transactions plus validation on token info.
-
-        We also overload verify_sum to make some different checks
-        """
-        super().verify(reject_locked_reward=reject_locked_reward)
-        self.verify_token_info()
-
     def verify_sum(self) -> None:
         """ Besides all checks made on regular transactions, a few extra ones are made:
         - only HTR tokens on the inputs;

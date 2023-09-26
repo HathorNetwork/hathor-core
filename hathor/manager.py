@@ -57,6 +57,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
+from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -102,6 +103,7 @@ class HathorManager:
                  event_manager: EventManager,
                  feature_service: FeatureService,
                  bit_signaling_service: BitSignalingService,
+                 verification_service: VerificationService,
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
@@ -177,6 +179,7 @@ class HathorManager:
 
         self._feature_service = feature_service
         self._bit_signaling_service = bit_signaling_service
+        self.verification_service = verification_service
 
         self.consensus_algorithm = consensus_algorithm
 
@@ -453,7 +456,10 @@ class HathorManager:
                     tx.calculate_min_height()
                     if tx.is_genesis:
                         assert tx.validate_checkpoint(self.checkpoints)
-                    assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
+                    assert self.verification_service.validate_full(
+                        tx,
+                        skip_block_weight_verification=skip_block_weight_verification
+                    )
                     self.tx_storage.add_to_indexes(tx)
                     with self.tx_storage.allow_only_valid_context():
                         self.consensus_algorithm.update(tx)
@@ -464,7 +470,10 @@ class HathorManager:
                         self.sync_v2_step_validations([tx], quiet=True)
                     self.tx_storage.save_transaction(tx, only_metadata=True)
                 else:
-                    assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
+                    assert self.verification_service.validate_basic(
+                        tx,
+                        skip_block_weight_verification=skip_block_weight_verification
+                    )
                     self.tx_storage.save_transaction(tx, only_metadata=True)
             except (InvalidNewTransaction, TxValidationError):
                 self.log.error('unexpected error when initializing', tx=tx, exc_info=True)
@@ -919,7 +928,7 @@ class HathorManager:
             raise NonStandardTxError('Transaction is non standard.')
 
         # Validate tx.
-        success, message = tx.validate_tx_error()
+        success, message = self.verification_service.validate_vertex_error(tx)
         if not success:
             raise InvalidNewTransaction(message)
 
@@ -992,7 +1001,7 @@ class HathorManager:
 
         if not metadata.validation.is_fully_connected():
             try:
-                tx.validate_full(reject_locked_reward=reject_locked_reward)
+                self.verification_service.validate_full(tx, reject_locked_reward=reject_locked_reward)
             except HathorError as e:
                 if not fails_silently:
                     raise InvalidNewTransaction('full validation failed') from e
@@ -1014,7 +1023,11 @@ class HathorManager:
             self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex, exc_info=True)
             return False
 
-        assert tx.validate_full(skip_block_weight_verification=True, reject_locked_reward=reject_locked_reward)
+        assert self.verification_service.validate_full(
+            tx,
+            skip_block_weight_verification=True,
+            reject_locked_reward=reject_locked_reward
+        )
         self.tx_storage.indexes.update(tx)
         if self.tx_storage.indexes.mempool_tips:
             self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
@@ -1068,7 +1081,7 @@ class HathorManager:
                     try:
                         # XXX: `reject_locked_reward` might not apply, partial validation is only used on sync-v2
                         # TODO: deal with `reject_locked_reward` on sync-v2
-                        assert tx.validate_full(reject_locked_reward=False)
+                        assert self.verification_service.validate_full(tx, reject_locked_reward=False)
                     except (AssertionError, HathorError):
                         # TODO
                         raise

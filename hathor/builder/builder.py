@@ -41,6 +41,7 @@ from hathor.transaction.storage import (
     TransactionStorage,
 )
 from hathor.util import Random, Reactor, get_environment_info
+from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
@@ -101,6 +102,8 @@ class Builder:
         self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
+        self._verification_service: Optional[VerificationService] = None
+
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
         self._rocksdb_cache_capacity: Optional[int] = None
@@ -157,6 +160,7 @@ class Builder:
         tx_storage = self._get_or_create_tx_storage(indexes)
         feature_service = self._get_or_create_feature_service(tx_storage)
         bit_signaling_service = self._get_or_create_bit_signaling_service(tx_storage)
+        verification_service = self._get_or_create_verification_service()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -191,6 +195,7 @@ class Builder:
             environment_info=get_environment_info(self._cmdline, peer_id.id),
             feature_service=feature_service,
             bit_signaling_service=bit_signaling_service,
+            verification_service=verification_service,
             **kwargs
         )
 
@@ -424,6 +429,12 @@ class Builder:
 
         return self._bit_signaling_service
 
+    def _get_or_create_verification_service(self) -> VerificationService:
+        if self._verification_service is None:
+            self._verification_service = VerificationService()
+
+        return self._verification_service
+
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.MEMORY
@@ -514,6 +525,11 @@ class Builder:
     def set_event_storage(self, event_storage: EventStorage) -> 'Builder':
         self.check_if_can_modify()
         self._event_storage = event_storage
+        return self
+
+    def set_verification_service(self, verification_service: VerificationService) -> 'Builder':
+        self.check_if_can_modify()
+        self._verification_service = verification_service
         return self
 
     def set_reactor(self, reactor: Reactor) -> 'Builder':

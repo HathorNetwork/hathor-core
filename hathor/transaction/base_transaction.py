@@ -39,7 +39,6 @@ from hathor.transaction.exceptions import (
     TimestampError,
     TooManyOutputs,
     TooManySigOps,
-    TxValidationError,
     WeightError,
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -514,42 +513,6 @@ class BaseTransaction(ABC):
         self.set_validation(ValidationState.CHECKPOINT)
         return True
 
-    def validate_basic(self, skip_block_weight_verification: bool = False) -> bool:
-        """ Run basic validations (all that are possible without dependencies) and update the validation state.
-
-        If no exception is raised, the ValidationState will end up as `BASIC` and return `True`.
-        """
-        self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
-        self.set_validation(ValidationState.BASIC)
-        return True
-
-    def validate_full(self, skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
-                      reject_locked_reward: bool = True) -> bool:
-        """ Run full validations (these need access to all dependencies) and update the validation state.
-
-        If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
-        """
-        from hathor.transaction.transaction_metadata import ValidationState
-
-        meta = self.get_metadata()
-
-        # skip full validation when it is a checkpoint
-        if meta.validation.is_checkpoint():
-            self.set_validation(ValidationState.CHECKPOINT_FULL)
-            return True
-
-        # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
-        #      directly into trying a full validation so we should check it here to make sure the validation states
-        #      ends up being CHECKPOINT_FULL instead of FULL
-        if not meta.validation.is_at_least_basic():
-            # run basic validation if we haven't already
-            self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
-
-        self.verify(reject_locked_reward=reject_locked_reward)
-        validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
-        self.set_validation(validation)
-        return True
-
     def _mark_partially_validated(self) -> None:
         """ This function is used to add the partially-validated mark from the voided-by metadata.
 
@@ -575,20 +538,6 @@ class BaseTransaction(ABC):
         """Check that this tx is a known checkpoint or is parent of another checkpoint-valid tx/block.
 
         To be implemented by tx/block, used by `self.validate_checkpoint`. Should not modify the validation state."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
-        """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
-
-        To be implemented by tx/block, used by `self.validate_basic`. Should not modify the validation state."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def verify(self, reject_locked_reward: bool = True) -> None:
-        """Run all verifications. Raises on error.
-
-        To be implemented by tx/block, used by `self.validate_full`. Should not modify the validation state."""
         raise NotImplementedError
 
     def verify_parents(self) -> None:
@@ -1101,21 +1050,6 @@ class BaseTransaction(ABC):
             ret['outputs'].append(output)
 
         return ret
-
-    def validate_tx_error(self) -> tuple[bool, str]:
-        """ Verify if tx is valid and return success and possible error message
-
-            :return: Success if tx is valid and possible error message, if not
-            :rtype: tuple[bool, str]
-        """
-        success = True
-        message = ''
-        try:
-            self.verify()
-        except TxValidationError as e:
-            success = False
-            message = str(e)
-        return success, message
 
     def clone(self) -> 'BaseTransaction':
         """Return exact copy without sharing memory, including metadata if loaded.
