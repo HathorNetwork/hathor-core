@@ -36,7 +36,7 @@ class BlockTemplate(NamedTuple):
     score: float  # metadata
     signal_bits: int  # signal bits for blocks generated from this template
 
-    def generate_minimaly_valid_block(self) -> BaseTransaction:
+    def generate_minimally_valid_block(self) -> BaseTransaction:
         """ Generates a block, without any extra information that is valid for this template. No random choices."""
         from hathor.transaction import TxOutput, TxVersion
         return TxVersion(min(self.versions)).get_cls()(
@@ -44,6 +44,7 @@ class BlockTemplate(NamedTuple):
             parents=self.parents[:] + sorted(self.parents_any)[:(3 - len(self.parents))],
             outputs=[TxOutput(self.reward, b'')],
             weight=self.weight,
+            signal_bits=self.signal_bits,
         )
 
     def generate_mining_block(self, rng: Random, merge_mined: bool = False, address: Optional[bytes] = None,
@@ -83,7 +84,7 @@ class BlockTemplate(NamedTuple):
 
     def to_dict(self) -> dict:
         return {
-            'data': self.generate_minimaly_valid_block().get_struct_without_nonce().hex(),
+            'data': self.generate_minimally_valid_block().get_struct_without_nonce().hex(),
             'versions': sorted(self.versions),
             'reward': self.reward,
             'weight': self.weight,
