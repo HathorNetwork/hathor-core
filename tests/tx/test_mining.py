@@ -42,7 +42,7 @@ class BaseMiningTest(unittest.TestCase):
             reward=settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
-            timestamp_min=settings.GENESIS_TIMESTAMP + 3,
+            timestamp_min=settings.GENESIS_BLOCK_TIMESTAMP + 3,
             timestamp_max=0xffffffff,  # no limit for next block after genesis
             # parents=[tx.hash for tx in self.genesis_blocks + self.genesis_txs],
             parents=block_templates[0].parents,

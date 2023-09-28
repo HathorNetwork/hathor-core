@@ -18,7 +18,6 @@ from typing import NamedTuple, Optional
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block
-from hathor.transaction.genesis import BLOCK_GENESIS
 from hathor.types import VertexId
 from hathor.util import not_none
 
@@ -41,9 +40,6 @@ class HeightInfo(NamedTuple):
     id: VertexId
 
 
-BLOCK_GENESIS_ENTRY: IndexEntry = IndexEntry(not_none(BLOCK_GENESIS.hash), BLOCK_GENESIS.timestamp)
-
-
 class _AddToIndexItem(NamedTuple):
     height: int
     hash: bytes
@@ -53,6 +49,13 @@ class _AddToIndexItem(NamedTuple):
 class HeightIndex(BaseIndex):
     """Store the block hash for each given height
     """
+
+    def get_genesis_block_entry(self) -> IndexEntry:
+        """Return the index entry for the genesis block."""
+        return IndexEntry(
+            self._settings.GENESIS_BLOCK_HASH,
+            self._settings.GENESIS_BLOCK_TIMESTAMP
+        )
 
     def get_scope(self) -> Scope:
         return SCOPE

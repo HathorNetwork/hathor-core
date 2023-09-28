@@ -31,7 +31,7 @@ from twisted.internet.interfaces import IAddress
 from hathor.conf.get_settings import get_settings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
-from hathor.transaction.genesis import GENESIS_HASH
+from hathor.transaction.genesis import get_representation_for_all_genesis
 
 
 def discover_hostname() -> Optional[str]:
@@ -75,7 +75,8 @@ def description_to_connection_string(description: str) -> tuple[str, Optional[st
 def get_genesis_short_hash() -> str:
     """ Return the first 7 chars of the GENESIS_HASH used for validation that the genesis are the same
     """
-    return GENESIS_HASH.hex()[:7]
+    settings = get_settings()
+    return get_representation_for_all_genesis(settings).hex()[:7]
 
 
 def get_settings_hello_dict() -> dict[str, Any]:

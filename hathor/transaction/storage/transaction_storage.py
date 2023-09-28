@@ -28,7 +28,7 @@ from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
-from hathor.transaction.base_transaction import BaseTransaction
+from hathor.transaction.base_transaction import BaseTransaction, TxOutput
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import (
     TransactionDoesNotExist,
@@ -305,7 +305,13 @@ class TransactionStorage(ABC):
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
         self._saving_genesis = True
-        for tx in self._get_genesis_from_settings():
+        genesis_txs = [
+            self._construct_genesis_block(),
+            self._construct_genesis_tx1(),
+            self._construct_genesis_tx2(),
+        ]
+
+        for tx in genesis_txs:
             try:
                 assert tx.hash is not None
                 tx2 = self.get_transaction(tx.hash)
@@ -317,11 +323,6 @@ class TransactionStorage(ABC):
             assert tx2.hash is not None
             self._genesis_cache[tx2.hash] = tx2
         self._saving_genesis = False
-
-    def _get_genesis_from_settings(self) -> list[BaseTransaction]:
-        """Return all genesis from settings."""
-        from hathor.transaction.genesis import _get_genesis_transactions_unsafe
-        return _get_genesis_transactions_unsafe(self)
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.
@@ -1085,6 +1086,48 @@ class TransactionStorage(ABC):
                 tx.set_validation(ValidationState.INVALID)
                 to_remove.append(tx)
         return to_remove
+
+    def _construct_genesis_block(self) -> Block:
+        """Return the genesis block."""
+        block = Block(
+            storage=self,
+            nonce=self._settings.GENESIS_BLOCK_NONCE,
+            timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
+            weight=self._settings.MIN_BLOCK_WEIGHT,
+            outputs=[
+                TxOutput(self._settings.GENESIS_TOKENS, self._settings.GENESIS_OUTPUT_SCRIPT),
+            ],
+        )
+        block.update_hash()
+
+        assert block.hash == self._settings.GENESIS_BLOCK_HASH
+        return block
+
+    def _construct_genesis_tx1(self) -> Transaction:
+        """Return the genesis tx1."""
+        tx1 = Transaction(
+            storage=self,
+            nonce=self._settings.GENESIS_TX1_NONCE,
+            timestamp=self._settings.GENESIS_TX1_TIMESTAMP,
+            weight=self._settings.MIN_TX_WEIGHT,
+        )
+        tx1.update_hash()
+
+        assert tx1.hash == self._settings.GENESIS_TX1_HASH
+        return tx1
+
+    def _construct_genesis_tx2(self) -> Transaction:
+        """Return the genesis tx2."""
+        tx2 = Transaction(
+            storage=self,
+            nonce=self._settings.GENESIS_TX2_NONCE,
+            timestamp=self._settings.GENESIS_TX2_TIMESTAMP,
+            weight=self._settings.MIN_TX_WEIGHT,
+        )
+        tx2.update_hash()
+
+        assert tx2.hash == self._settings.GENESIS_TX2_HASH
+        return tx2
 
 
 class BaseTransactionStorage(TransactionStorage):

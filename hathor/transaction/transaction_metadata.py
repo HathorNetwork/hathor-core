@@ -15,6 +15,7 @@
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Optional
 
+from hathor.conf.get_settings import get_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.validation_state import ValidationState
@@ -127,8 +128,10 @@ class TransactionMetadata:
 
         self.feature_activation_bit_counts = feature_activation_bit_counts
 
+        settings = get_settings()
+
         # Genesis specific:
-        if hash is not None and is_genesis(hash):
+        if hash is not None and is_genesis(hash, settings=settings):
             self.validation = ValidationState.FULL
 
     def get_tx(self) -> 'BaseTransaction':
@@ -248,10 +251,8 @@ class TransactionMetadata:
 
     @classmethod
     def create_from_json(cls, data: dict[str, Any]) -> 'TransactionMetadata':
-        from hathor.transaction.genesis import is_genesis
-
-        meta = cls()
-        meta.hash = bytes.fromhex(data['hash']) if data['hash'] else None
+        hash_ = bytes.fromhex(data['hash']) if data['hash'] else None
+        meta = cls(hash=hash_)
         for idx, hashes in data['spent_outputs']:
             for h_hex in hashes:
                 meta.spent_outputs[idx].append(bytes.fromhex(h_hex))
@@ -292,9 +293,6 @@ class TransactionMetadata:
 
         _val_name = data.get('validation', None)
         meta.validation = ValidationState.from_name(_val_name) if _val_name is not None else ValidationState.INITIAL
-
-        if meta.hash is not None and is_genesis(meta.hash):
-            meta.validation = ValidationState.FULL
 
         return meta
 
