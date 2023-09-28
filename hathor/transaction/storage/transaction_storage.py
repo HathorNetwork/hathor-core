@@ -320,8 +320,11 @@ class TransactionStorage(ABC):
 
     def _get_genesis_from_settings(self) -> list[BaseTransaction]:
         """Return all genesis from settings."""
-        from hathor.transaction.genesis import _get_genesis_transactions_unsafe
-        return _get_genesis_transactions_unsafe(self)
+        from hathor.transaction.genesis import get_all_genesis
+        all_genesis = get_all_genesis(self._settings)
+        for tx in all_genesis:
+            tx.storage = self
+        return all_genesis
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.

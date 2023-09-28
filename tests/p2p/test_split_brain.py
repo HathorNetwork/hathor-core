@@ -14,9 +14,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        from hathor.transaction.genesis import _get_genesis_transactions_unsafe
 
-        first_timestamp = min(tx.timestamp for tx in _get_genesis_transactions_unsafe(None))
+        first_timestamp = self._settings.GENESIS_TIMESTAMP
         self.clock.advance(first_timestamp + self.rng.randint(3600, 120*24*3600))
 
         self.network = 'testnet'

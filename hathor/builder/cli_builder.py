@@ -31,7 +31,7 @@ from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesM
 from hathor.manager import HathorManager
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.utils import discover_hostname
+from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
 from hathor.util import Random, Reactor
@@ -64,7 +64,6 @@ class CliBuilder:
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
-        from hathor.transaction import genesis
         from hathor.transaction.storage import (
             TransactionCacheStorage,
             TransactionMemoryStorage,
@@ -89,7 +88,7 @@ class CliBuilder:
             'hathor-core v{hathor}',
             hathor=hathor.__version__,
             pid=os.getpid(),
-            genesis=genesis.GENESIS_HASH.hex()[:7],
+            genesis=get_genesis_short_hash(),
             my_peer_id=str(peer_id.id),
             python=python,
             platform=platform.platform(),

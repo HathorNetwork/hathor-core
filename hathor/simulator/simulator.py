@@ -28,7 +28,6 @@ from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
-from hathor.transaction.genesis import _get_genesis_transactions_unsafe
 from hathor.util import Random
 from hathor.wallet import HDWallet
 
@@ -128,7 +127,7 @@ class Simulator:
         assert not self._started
         self._started = True
         self._patches_rc_increment()
-        first_timestamp = min(tx.timestamp for tx in _get_genesis_transactions_unsafe(None))
+        first_timestamp = self.settings.GENESIS_TIMESTAMP
         dt = self.rng.randint(3600, 120 * 24 * 3600)
         self._clock.advance(first_timestamp + dt)
         self.log.debug('randomized step: clock advance start', dt=dt)

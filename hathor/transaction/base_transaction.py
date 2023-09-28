@@ -357,7 +357,7 @@ class BaseTransaction(ABC):
         if self.hash is None:
             return False
         from hathor.transaction.genesis import is_genesis
-        return is_genesis(self.hash)
+        return is_genesis(self.hash, settings=self._settings)
 
     @abstractmethod
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:

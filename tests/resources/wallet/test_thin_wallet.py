@@ -275,7 +275,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
         resource = SendTokensResource(self.manager)
         request = TestDummyRequest('POST', 'thin_wallet/send_tokens', {})
-        dummy_tx = genesis.BLOCK_GENESIS
+        dummy_tx = genesis.get_genesis_block(self._settings)
 
         self.assertIsNotNone(request._finishedDeferreds)
         resource._err_tx_resolve('Error', _Context(tx=dummy_tx, request=request), 'error')

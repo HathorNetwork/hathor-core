@@ -275,9 +275,9 @@ class TestCase(unittest.TestCase):
 
         An initial set can be optionally provided.
         """
-        from hathor.transaction.genesis import GENESIS_HASHES
+        from hathor.transaction.genesis import get_all_genesis_hashes
 
-        valid_deps = set(GENESIS_HASHES if initial is None else initial)
+        valid_deps = set(get_all_genesis_hashes(self._settings) if initial is None else initial)
 
         for tx in tx_sequence:
             assert tx.hash is not None

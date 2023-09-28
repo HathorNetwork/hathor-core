@@ -12,71 +12,75 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from hathor.conf import HathorSettings
+from hathor.conf.settings import HathorSettings
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
-settings = HathorSettings()
 
-BLOCK_GENESIS = Block(
-    hash=settings.GENESIS_BLOCK_HASH,
-    nonce=settings.GENESIS_BLOCK_NONCE,
-    timestamp=settings.GENESIS_TIMESTAMP,
-    weight=settings.MIN_BLOCK_WEIGHT,
-    outputs=[
-        TxOutput(settings.GENESIS_TOKENS, settings.GENESIS_OUTPUT_SCRIPT),
-    ],
-)
-
-TX_GENESIS1 = Transaction(
-    hash=settings.GENESIS_TX1_HASH,
-    nonce=settings.GENESIS_TX1_NONCE,
-    timestamp=settings.GENESIS_TIMESTAMP + 1,
-    weight=settings.MIN_TX_WEIGHT,
-)
-
-TX_GENESIS2 = Transaction(
-    hash=settings.GENESIS_TX2_HASH,
-    nonce=settings.GENESIS_TX2_NONCE,
-    timestamp=settings.GENESIS_TIMESTAMP + 2,
-    weight=settings.MIN_TX_WEIGHT,
-)
-
-GENESIS = [BLOCK_GENESIS, TX_GENESIS1, TX_GENESIS2]
-
-GENESIS_HASHES = [settings.GENESIS_BLOCK_HASH, settings.GENESIS_TX1_HASH, settings.GENESIS_TX2_HASH]
+def get_genesis_block(settings: HathorSettings) -> Block:
+    """Return the genesis block."""
+    return Block(
+        hash=settings.GENESIS_BLOCK_HASH,
+        nonce=settings.GENESIS_BLOCK_NONCE,
+        timestamp=settings.GENESIS_TIMESTAMP,
+        weight=settings.MIN_BLOCK_WEIGHT,
+        outputs=[
+            TxOutput(settings.GENESIS_TOKENS, settings.GENESIS_OUTPUT_SCRIPT),
+        ],
+    )
 
 
-def _get_genesis_hash() -> bytes:
+def get_genesis_tx1(settings: HathorSettings) -> Transaction:
+    """Return the genesis tx1."""
+    return Transaction(
+        hash=settings.GENESIS_TX1_HASH,
+        nonce=settings.GENESIS_TX1_NONCE,
+        timestamp=settings.GENESIS_TIMESTAMP + 1,
+        weight=settings.MIN_TX_WEIGHT,
+    )
+
+
+def get_genesis_tx2(settings: HathorSettings) -> Transaction:
+    """Return the genesis tx2."""
+    return Transaction(
+        hash=settings.GENESIS_TX2_HASH,
+        nonce=settings.GENESIS_TX2_NONCE,
+        timestamp=settings.GENESIS_TIMESTAMP + 2,
+        weight=settings.MIN_TX_WEIGHT,
+    )
+
+
+def get_all_genesis(settings: HathorSettings) -> list[BaseTransaction]:
+    """Return all genesis vertices."""
+    return [
+        get_genesis_block(settings),
+        get_genesis_tx1(settings),
+        get_genesis_tx2(settings)
+    ]
+
+
+def get_all_genesis_hashes(settings: HathorSettings) -> list[bytes]:
+    """Return all genesis hashes."""
+    return [
+        settings.GENESIS_BLOCK_HASH,
+        settings.GENESIS_TX1_HASH,
+        settings.GENESIS_TX2_HASH
+    ]
+
+
+def get_genesis_hash(settings: HathorSettings) -> bytes:
+    """Return a single hash representing all genesis."""
     import hashlib
     h = hashlib.sha256()
-    for tx in GENESIS:
-        tx_hash = tx.hash
-        assert tx_hash is not None
+    for tx_hash in get_all_genesis_hashes(settings):
         h.update(tx_hash)
     return h.digest()
 
 
-GENESIS_HASH = _get_genesis_hash()
-
-
-def _get_genesis_transactions_unsafe(tx_storage: Optional['TransactionStorage']) -> list[BaseTransaction]:
-    """You shouldn't get genesis directly. Please, get it from your storage instead."""
-    genesis = []
-    for tx in GENESIS:
-        tx2 = tx.clone()
-        tx2.storage = tx_storage
-        genesis.append(tx2)
-    return genesis
-
-
-def is_genesis(hash_bytes: bytes) -> bool:
+def is_genesis(hash_bytes: bytes, *, settings: HathorSettings) -> bool:
     """Check whether hash is from a genesis transaction."""
-    for tx in GENESIS:
-        if hash_bytes == tx.hash:
-            return True
-    return False
+    return hash_bytes in get_all_genesis_hashes(settings)

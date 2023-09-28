@@ -18,7 +18,8 @@ from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import TxData, TxMetadata
 from hathor.event.model.event_type import EventType
 from hathor.manager import HathorManager
-from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput, genesis
+from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput
+from hathor.transaction.genesis import get_genesis_tx2
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
@@ -33,14 +34,17 @@ else:
 
 settings = HathorSettings()
 
-MIN_TIMESTAMP = genesis.GENESIS[-1].timestamp + 1
-
 # useful for adding blocks to a different wallet
 BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
 
 
 class NoCandidatesError(Exception):
     pass
+
+
+def get_min_timestamp() -> int:
+    """Return the minimal possible timestamp for a vertex."""
+    return get_genesis_tx2(settings).timestamp + 1
 
 
 def resolve_block_bytes(block_bytes):
