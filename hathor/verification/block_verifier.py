@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import Block
+from hathor.transaction import BaseTransaction, Block
 from hathor.verification.vertex_verifier import VertexVerifier
 
 cpu = get_cpu_profiler()
@@ -25,8 +25,8 @@ class BlockVerifier(VertexVerifier):
     def verify_basic(self, block: Block, *, skip_block_weight_verification: bool = False) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
         if not skip_block_weight_verification:
-            block.verify_weight()
-        block.verify_reward()
+            self.verify_weight(block)
+        self.verify_reward(block)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def verify(self, block: Block) -> None:
@@ -42,9 +42,38 @@ class BlockVerifier(VertexVerifier):
             # TODO do genesis validation
             return
 
-        block.verify_without_storage()
+        self.verify_without_storage(block)
 
         # (1) and (4)
-        block.verify_parents()
+        self.verify_parents(block)
 
+        self.verify_height(block)
+
+    def verify_without_storage(self, block: Block) -> None:
+        """ Run all verifications that do not need a storage.
+        """
+        block.verify_without_storage()
+
+    @staticmethod
+    def verify_height(block: Block) -> None:
+        """Validate that the block height is enough to confirm all transactions being confirmed."""
         block.verify_height()
+
+    def verify_weight(self, block: Block) -> None:
+        """Validate minimum block difficulty."""
+        block.verify_weight()
+
+    @staticmethod
+    def verify_reward(block: Block) -> None:
+        """Validate reward amount."""
+        block.verify_reward()
+
+    @staticmethod
+    def verify_no_inputs(block: Block) -> None:
+        block.verify_no_inputs()
+
+    def verify_outputs(self, block: BaseTransaction) -> None:
+        block.verify_outputs()
+
+    def verify_data(self, block: Block) -> None:
+        block.verify_data()

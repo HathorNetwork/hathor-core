@@ -24,6 +24,9 @@ from multiprocessing import Process, Queue
 
 import requests
 
+from hathor.conf.get_settings import get_settings
+from hathor.verification.block_verifier import BlockVerifier
+
 _SLEEP_ON_ERROR_SECONDS = 5
 _MAX_CONN_RETRIES = math.inf
 
@@ -134,7 +137,9 @@ def execute(args: Namespace) -> None:
                                                                       block.nonce, block.weight))
 
         try:
-            block.verify_without_storage()
+            settings = get_settings()
+            verifier = BlockVerifier(settings=settings)
+            verifier.verify_without_storage(block)
         except HathorError:
             print('[{}] ERROR: Block has not been pushed because it is not valid.'.format(datetime.datetime.now()))
         else:

@@ -25,4 +25,9 @@ class TokenCreationTransactionVerifier(TransactionVerifier):
         We also overload verify_sum to make some different checks
         """
         super().verify(tx, reject_locked_reward=reject_locked_reward)
+        self.verify_token_info(tx)
+
+    def verify_token_info(self, tx: TokenCreationTransaction) -> None:
+        """ Validates token info
+        """
         tx.verify_token_info()

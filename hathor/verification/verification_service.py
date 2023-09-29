@@ -136,6 +136,23 @@ class VerificationService:
             case _:
                 raise NotImplementedError
 
+    def verify_without_storage(self, vertex: BaseTransaction) -> None:
+        match vertex.version:
+            case TxVersion.REGULAR_BLOCK:
+                assert isinstance(vertex, Block)
+                self.verifiers.block.verify_without_storage(vertex)
+            case TxVersion.MERGE_MINED_BLOCK:
+                assert isinstance(vertex, MergeMinedBlock)
+                self.verifiers.merge_mined_block.verify_without_storage(vertex)
+            case TxVersion.REGULAR_TRANSACTION:
+                assert isinstance(vertex, Transaction)
+                self.verifiers.tx.verify_without_storage(vertex)
+            case TxVersion.TOKEN_CREATION_TRANSACTION:
+                assert isinstance(vertex, TokenCreationTransaction)
+                self.verifiers.token_creation_tx.verify_without_storage(vertex)
+            case _:
+                raise NotImplementedError
+
     def validate_vertex_error(self, vertex: BaseTransaction) -> tuple[bool, str]:
         """ Verify if tx is valid and return success and possible error message
 

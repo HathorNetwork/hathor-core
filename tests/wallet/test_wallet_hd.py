@@ -1,6 +1,7 @@
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
+from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.wallet import HDWallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
@@ -42,7 +43,7 @@ class BaseWalletHDTest(unittest.TestCase):
         out = WalletOutputInfo(decode_address(new_address2), self.TOKENS, timelock=None)
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, [out], self.tx_storage)
         tx1.update_hash()
-        tx1.verify_script(tx1.inputs[0], block)
+        TransactionVerifier.verify_script(tx=tx1, input_tx=tx1.inputs[0], spent_tx=block)
         tx1.storage = self.tx_storage
         tx1.get_metadata().validation = ValidationState.FULL
         self.wallet.on_new_tx(tx1)
@@ -62,7 +63,7 @@ class BaseWalletHDTest(unittest.TestCase):
         tx2.storage = self.tx_storage
         tx2.update_hash()
         tx2.storage = self.tx_storage
-        tx2.verify_script(tx2.inputs[0], tx1)
+        TransactionVerifier.verify_script(tx=tx2, input_tx=tx2.inputs[0], spent_tx=tx1)
         tx2.get_metadata().validation = ValidationState.FULL
         self.tx_storage.save_transaction(tx2)
         self.wallet.on_new_tx(tx2)
