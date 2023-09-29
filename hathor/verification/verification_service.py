@@ -12,15 +12,40 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.transaction import BaseTransaction, Block, Transaction, TxVersion
+from typing import NamedTuple
+
+from hathor.conf.settings import HathorSettings
+from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
-from hathor.verification import block_verification, token_creation_transaction_verification, transaction_verification
+from hathor.verification.block_verifier import BlockVerifier
+from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
+from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
+from hathor.verification.transaction_verifier import TransactionVerifier
+
+
+class VertexVerifiers(NamedTuple):
+    block: BlockVerifier
+    merge_mined_block: MergeMinedBlockVerifier
+    tx: TransactionVerifier
+    token_creation_tx: TokenCreationTransactionVerifier
+
+    @classmethod
+    def create(cls, *, settings: HathorSettings) -> 'VertexVerifiers':
+        return VertexVerifiers(
+            block=BlockVerifier(settings=settings),
+            merge_mined_block=MergeMinedBlockVerifier(settings=settings),
+            tx=TransactionVerifier(settings=settings),
+            token_creation_tx=TokenCreationTransactionVerifier(settings=settings),
+        )
 
 
 class VerificationService:
-    __slots__ = ()
+    __slots__ = ('verifiers', )
+
+    def __init__(self, *, verifiers: VertexVerifiers) -> None:
+        self.verifiers = verifiers
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -70,12 +95,24 @@ class VerificationService:
 
         Used by `self.validate_basic`. Should not modify the validation state."""
         match vertex.version:
-            case TxVersion.REGULAR_BLOCK | TxVersion.MERGE_MINED_BLOCK:
+            case TxVersion.REGULAR_BLOCK:
                 assert isinstance(vertex, Block)
-                block_verification.verify_basic(vertex, skip_block_weight_verification=skip_block_weight_verification)
-            case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
+                self.verifiers.block.verify_basic(
+                    vertex,
+                    skip_block_weight_verification=skip_block_weight_verification
+                )
+            case TxVersion.MERGE_MINED_BLOCK:
+                assert isinstance(vertex, MergeMinedBlock)
+                self.verifiers.merge_mined_block.verify_basic(
+                    vertex,
+                    skip_block_weight_verification=skip_block_weight_verification
+                )
+            case TxVersion.REGULAR_TRANSACTION:
                 assert isinstance(vertex, Transaction)
-                transaction_verification.verify_basic(vertex)
+                self.verifiers.tx.verify_basic(vertex)
+            case TxVersion.TOKEN_CREATION_TRANSACTION:
+                assert isinstance(vertex, TokenCreationTransaction)
+                self.verifiers.token_creation_tx.verify_basic(vertex)
             case _:
                 raise NotImplementedError
 
@@ -84,15 +121,18 @@ class VerificationService:
 
         Used by `self.validate_full`. Should not modify the validation state."""
         match vertex.version:
-            case TxVersion.REGULAR_BLOCK | TxVersion.MERGE_MINED_BLOCK:
+            case TxVersion.REGULAR_BLOCK:
                 assert isinstance(vertex, Block)
-                block_verification.verify(vertex)
+                self.verifiers.block.verify(vertex)
+            case TxVersion.MERGE_MINED_BLOCK:
+                assert isinstance(vertex, MergeMinedBlock)
+                self.verifiers.merge_mined_block.verify(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert isinstance(vertex, Transaction)
-                transaction_verification.verify(vertex, reject_locked_reward=reject_locked_reward)
+                self.verifiers.tx.verify(vertex, reject_locked_reward=reject_locked_reward)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert isinstance(vertex, TokenCreationTransaction)
-                token_creation_transaction_verification.verify(vertex, reject_locked_reward=reject_locked_reward)
+                self.verifiers.token_creation_tx.verify(vertex, reject_locked_reward=reject_locked_reward)
             case _:
                 raise NotImplementedError
 
