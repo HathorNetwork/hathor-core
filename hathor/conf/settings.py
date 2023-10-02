@@ -392,6 +392,9 @@ class HathorSettings(NamedTuple):
     # Time to update the peers that are running sync.
     SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds
 
+    # Interval to re-run peer discovery.
+    PEER_DISCOVERY_INTERVAL: int = 5 * 60  # seconds
+
     # All settings related to Feature Activation
     FEATURE_ACTIVATION: FeatureActivationSettings = FeatureActivationSettings()
 

@@ -44,7 +44,6 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.profiler import get_cpu_profiler
@@ -183,8 +182,6 @@ class HathorManager:
 
         self.consensus_algorithm = consensus_algorithm
 
-        self.peer_discoveries: list[PeerDiscovery] = []
-
         self.connections = p2p_manager
 
         self.metrics = Metrics(
@@ -208,9 +205,6 @@ class HathorManager:
 
         # Thread pool used to resolve pow when sending tokens
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
-
-        # List of addresses to listen for new connections (eg: [tcp:8000])
-        self.listen_addresses: list[str] = []
 
         # Full verification execute all validations for transactions and blocks when initializing the node
         # Can be activated on the command line with --full-verification
@@ -277,7 +271,6 @@ class HathorManager:
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self._event_manager.load_started()
-        self.connections.start()
         self.pow_thread_pool.start()
 
         # Disable get transaction lock when initializing components
@@ -300,10 +293,7 @@ class HathorManager:
         # Metric starts to capture data
         self.metrics.start()
 
-        for description in self.listen_addresses:
-            self.listen(description)
-
-        self.do_discovery()
+        self.connections.start()
 
         self.start_time = time.time()
 
@@ -352,13 +342,6 @@ class HathorManager:
         self.tx_storage.flush()
 
         return defer.DeferredList(waits)
-
-    def do_discovery(self) -> None:
-        """
-        Do a discovery and connect on all discovery strategies.
-        """
-        for peer_discovery in self.peer_discoveries:
-            peer_discovery.discover_and_connect(self.connections.connect_to)
 
     def start_profiler(self, *, reset: bool = False) -> None:
         """
@@ -694,12 +677,6 @@ class HathorManager:
                     depended_final_txs.append(tx)
             self.sync_v2_step_validations(depended_final_txs, quiet=True)
             self.log.debug('pending validations finished')
-
-    def add_listen_address(self, addr: str) -> None:
-        self.listen_addresses.append(addr)
-
-    def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
-        self.peer_discoveries.append(peer_discovery)
 
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
         """Select which transactions will be confirmed by a new transaction.
@@ -1140,17 +1117,6 @@ class HathorManager:
         """Log if a feature is ACTIVE for a block. Used as part of the Feature Activation Phased Testing."""
         if self._feature_service.is_feature_active(block=block, feature=feature):
             self.log.info('Feature is ACTIVE for block', feature=feature.value, block_height=block.get_height())
-
-    def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
-        endpoint = self.connections.listen(description, use_ssl)
-        # XXX: endpoint: IStreamServerEndpoint does not intrinsically have a port, but in practice all concrete cases
-        #      that we have will have a _port attribute
-        port = getattr(endpoint, '_port', None)
-
-        if self.hostname:
-            proto, _, _ = description.partition(':')
-            address = '{}://{}:{}'.format(proto, self.hostname, port)
-            self.my_peer.entrypoints.append(address)
 
     def has_sync_version_capability(self) -> bool:
         return settings.CAPABILITY_SYNC_VERSION in self.capabilities
