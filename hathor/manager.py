@@ -87,6 +87,7 @@ class HathorManager:
     class UnhealthinessReason(str, Enum):
         NO_RECENT_ACTIVITY = "Node doesn't have recent blocks"
         NO_SYNCED_PEER = "Node doesn't have a synced peer"
+        BEST_PEER_HEIGHT_TOO_FAR = "Node's peer with highest height is too far ahead."
 
     # This is the interval to be used by the task to check if the node is synced
     CHECK_SYNC_STATE_INTERVAL = 30  # seconds
@@ -1121,6 +1122,9 @@ class HathorManager:
     def has_sync_version_capability(self) -> bool:
         return settings.CAPABILITY_SYNC_VERSION in self.capabilities
 
+    def has_get_best_blockchain_capability(self) -> bool:
+        return settings.CAPABILITY_GET_BEST_BLOCKCHAIN in self.capabilities
+
     def add_peer_to_whitelist(self, peer_id):
         if not settings.ENABLE_PEER_WHITELIST:
             return
@@ -1153,11 +1157,38 @@ class HathorManager:
         return True
 
     def is_healthy(self) -> tuple[bool, Optional[str]]:
+        # This checks whether the last txs (blocks or transactions) we received are recent enough.
         if not self.has_recent_activity():
             return False, HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY
 
+        # This checks if we have a synced peer among those which we are syncing from.
+        # This excludes the ones to which we are connected but not syncing.
         if not self.connections.has_synced_peer():
             return False, HathorManager.UnhealthinessReason.NO_SYNCED_PEER
+
+        if self.has_get_best_blockchain_capability():
+            # This compares the height of our best blockchain with the height of the best blockchain of the peers
+            # we are connected to. If they are too far apart, we are not healthy.
+            best_blockchain_height = sorted(
+                self.tx_storage.get_n_height_tips(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS),
+                key=lambda x: x.height, reverse=True
+            )[0]
+            best_peer_blockchain_height = self.connections.get_best_blockchain_height_among_peers()
+
+            # It could be that none of our peers or we don't have the GET-BEST-BLOCKCHAIN capability enabled.
+            # In this case we can't check the height.
+            if not best_peer_blockchain_height:
+                return True, None
+
+            best_peer_height = best_peer_blockchain_height.height
+            our_height = best_blockchain_height.height
+
+            if best_peer_height - our_height > settings.HEALTHCHECK_MAX_HEIGHT_DIFF:
+                return (
+                    False,
+                    HathorManager.UnhealthinessReason.BEST_PEER_HEIGHT_TOO_FAR
+                    + f" Theirs is {best_peer_blockchain_height.height}, ours is {best_blockchain_height.height}"
+                )
 
         return True, None
 

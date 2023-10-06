@@ -189,6 +189,9 @@ class HathorSettings(NamedTuple):
     # positive, it could be a good idea to decrease the value in this setting.
     P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER: int = 15
 
+    # Maximum height difference between our best block and the highest peer height to consider that we are healthy.
+    HEALTHCHECK_MAX_HEIGHT_DIFF: int = 10
+
     # Whether to warn the other peer of the reason for closing the connection
     WHITELIST_WARN_BLOCKED_PEERS: bool = False
 

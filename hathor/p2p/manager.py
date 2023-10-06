@@ -23,6 +23,7 @@ from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
+from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -302,9 +303,31 @@ class ConnectionsManager:
         for conn in connections:
             assert conn.state is not None
             assert isinstance(conn.state, ReadyState)
-            if conn.state.is_synced():
+            if conn.is_sync_enabled() and conn.state.is_synced():
                 return True
         return False
+
+    def get_best_blockchain_height_among_peers(self) -> Optional[HeightInfo]:
+        """ Return the best blockchain height among all peers.
+
+        Note that not necessarily they all have the same best blockchain,
+        so use this method with caution. We only consider the one with the
+        highest height regardless of whether the blockchains are the same.
+        """
+        connections = list(self.iter_ready_connections())
+        best_height_info = None
+
+        for conn in connections:
+            assert conn.state is not None
+            assert isinstance(conn.state, ReadyState)
+            peer_best_blockchain = list(sorted(conn.state.peer_best_blockchain, key=lambda x: x.height, reverse=True))
+            if not peer_best_blockchain:
+                continue
+            best_peer_height_info = peer_best_blockchain[0]
+            if not best_height_info or best_peer_height_info.height > best_height_info.height:
+                best_height_info = best_peer_height_info
+
+        return best_height_info
 
     def send_tx_to_peers(self, tx: BaseTransaction) -> None:
         """ Send `tx` to all ready peers.

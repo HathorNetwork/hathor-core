@@ -71,6 +71,16 @@ class FakeConnection:
         self._proto1.disable_idle_timeout()
         self._proto2.disable_idle_timeout()
 
+    def disable_sync(self):
+        """Disable sync in both peers."""
+        from hathor.p2p.states.ready import ReadyState
+
+        assert isinstance(self._proto1.state, ReadyState)
+        assert isinstance(self._proto2.state, ReadyState)
+
+        self._proto1.state.sync_agent.disable_sync()
+        self._proto2.state.sync_agent.disable_sync()
+
     def is_both_synced(self) -> bool:
         """Short-hand check that can be used to make "step loops" without having to guess the number of iterations."""
         from hathor.p2p.states.ready import ReadyState

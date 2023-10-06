@@ -18,6 +18,7 @@ import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_settings
+from hathor.manager import HathorManager
 from hathor.p2p.utils import to_serializable_best_blockchain
 from hathor.util import json_dumpb
 
@@ -33,7 +34,7 @@ class StatusResource(Resource):
 
     def __init__(self, manager):
         self._settings = get_settings()
-        self.manager = manager
+        self.manager: HathorManager = manager
 
     def render_GET(self, request):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
