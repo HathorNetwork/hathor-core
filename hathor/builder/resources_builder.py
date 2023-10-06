@@ -87,6 +87,7 @@ class ResourcesBuilder:
             DebugRejectResource,
         )
         from hathor.feature_activation.resources.feature import FeatureResource
+        from hathor.healthcheck.resources import HealthcheckResource
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import (
             AddPeersResource,
@@ -179,6 +180,7 @@ class ResourcesBuilder:
             (b'profiler', ProfilerResource(self.manager), root),
             (b'top', CPUProfilerResource(self.manager, cpu), root),
             (b'mempool', MempoolResource(self.manager), root),
+            (b'health', HealthcheckResource(self.manager), root),
             # mining
             (b'mining', MiningResource(self.manager), root),
             (b'getmininginfo', MiningInfoResource(self.manager), root),
