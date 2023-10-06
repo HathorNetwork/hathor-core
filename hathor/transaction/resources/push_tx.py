@@ -101,9 +101,9 @@ class PushTxResource(Resource):
             self.manager.push_tx(tx, allow_non_standard_script=self.allow_non_standard_script,
                                  max_output_script_size=self.max_output_script_size)
         except (InvalidNewTransaction, TxValidationError) as e:
-            self.log.warn('push tx rejected', exc_info=True)
             success = False
             message = str(e)
+            self.log.warn('push tx rejected', reason=repr(e))
         data = {'success': success, 'message': message}
         if success:
             data['tx'] = tx.to_json()
