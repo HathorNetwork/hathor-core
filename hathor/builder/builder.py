@@ -41,7 +41,7 @@ from hathor.transaction.storage import (
     TransactionStorage,
 )
 from hathor.util import Random, Reactor, get_environment_info
-from hathor.verification.verification_service import VerificationService
+from hathor.verification.verification_service import VerificationService, VertexVerifiers
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
@@ -102,6 +102,7 @@ class Builder:
         self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
+        self._vertex_verifiers: Optional[VertexVerifiers] = None
         self._verification_service: Optional[VerificationService] = None
 
         self._rocksdb_path: Optional[str] = None
@@ -432,9 +433,17 @@ class Builder:
 
     def _get_or_create_verification_service(self) -> VerificationService:
         if self._verification_service is None:
-            self._verification_service = VerificationService()
+            verifiers = self._get_or_create_vertex_verifiers()
+            self._verification_service = VerificationService(verifiers=verifiers)
 
         return self._verification_service
+
+    def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
+        if self._vertex_verifiers is None:
+            settings = self._get_or_create_settings()
+            self._vertex_verifiers = VertexVerifiers.create_defaults(settings=settings)
+
+        return self._vertex_verifiers
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
@@ -531,6 +540,11 @@ class Builder:
     def set_verification_service(self, verification_service: VerificationService) -> 'Builder':
         self.check_if_can_modify()
         self._verification_service = verification_service
+        return self
+
+    def set_vertex_verifiers(self, vertex_verifiers: VertexVerifiers) -> 'Builder':
+        self.check_if_can_modify()
+        self._vertex_verifiers = vertex_verifiers
         return self
 
     def set_reactor(self, reactor: Reactor) -> 'Builder':
