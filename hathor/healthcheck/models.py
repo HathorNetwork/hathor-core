@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 class ComponentType(str, Enum):
@@ -37,7 +37,7 @@ class ComponentHealthCheck:
     def __post_init__(self) -> None:
         self.time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def to_json(self) -> Dict[str, str]:
+    def to_json(self) -> dict[str, str]:
         """Return a dict representation of the object. All field names are converted to camel case."""
         json = {
             "componentType": self.component_type.value,
@@ -67,7 +67,7 @@ class ServiceHealthCheck:
     """This class is used to store the result of a service health check."""
 
     description: str
-    checks: Dict[str, List[ComponentHealthCheck]]
+    checks: dict[str, list[ComponentHealthCheck]]
 
     @property
     def status(self) -> HealthCheckStatus:
@@ -98,7 +98,7 @@ class ServiceHealthCheck:
         else:
             raise ValueError(f"Missing treatment for status {self.status}")
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Return a dict representation of the object. All field names are converted to camel case."""
         return {
             "status": self.status.value,

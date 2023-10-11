@@ -74,10 +74,9 @@ Returns 200 if the fullnode should be considered healthy.
 Returns 503 otherwise. The response will contain the components that were considered for the healthcheck
 and the reason why they were unhealthy.
 
-We currently perform 3 checks in the sync mechanism for the healthcheck:
+We currently perform 2 checks in the sync mechanism for the healthcheck:
 1. Whether the fullnode has recent block activity, i.e. if the fullnode has blocks with recent timestamps.
 2. Whether the fullnode has at least one synced peer
-3. Whether the other fullnodes in the network have a best block that is at most 10 blocks ahead of the fullnode's best block.
             ''',
             'responses': {
                 '200': {
@@ -90,14 +89,16 @@ We currently perform 3 checks in the sync mechanism for the healthcheck:
                                     'value': {
                                         'status': 'pass',
                                         'description': 'Hathor-core v0.56.0',
-                                        'components': [
-                                            {
-                                                'componentName': 'sync',
-                                                'componentType': 'internal',
-                                                'status': 'pass',
-                                                'output': 'Healthy'
-                                            }
-                                        ]
+                                        'checks': {
+                                            'sync': [
+                                                {
+                                                    'componentName': 'sync',
+                                                    'componentType': 'internal',
+                                                    'status': 'pass',
+                                                    'output': 'Healthy'
+                                                }
+                                            ]
+                                        }
                                     }
                                 }
                             }
@@ -114,14 +115,16 @@ We currently perform 3 checks in the sync mechanism for the healthcheck:
                                     'value': {
                                         'status': 'fail',
                                         'description': 'Hathor-core v0.56.0',
-                                        'components': [
-                                            {
-                                                'componentName': 'sync',
-                                                'componentType': 'internal',
-                                                'status': 'fail',
-                                                'output': 'Node doesn\'t have recent blocks'
-                                            }
-                                        ]
+                                        'checks': {
+                                            'sync': [
+                                                {
+                                                    'componentName': 'sync',
+                                                    'componentType': 'internal',
+                                                    'status': 'fail',
+                                                    'output': 'Node doesn\'t have recent blocks'
+                                                }
+                                            ]
+                                        }
                                     }
                                 },
                                 'no_synced_peer': {
@@ -129,14 +132,16 @@ We currently perform 3 checks in the sync mechanism for the healthcheck:
                                     'value': {
                                         'status': 'fail',
                                         'description': 'Hathor-core v0.56.0',
-                                        'components': [
-                                            {
-                                                'componentName': 'sync',
-                                                'componentType': 'internal',
-                                                'status': 'fail',
-                                                'output': 'Node doesn\'t have a synced peer'
-                                            }
-                                        ]
+                                        'checks': {
+                                            'sync': [
+                                                {
+                                                    'componentName': 'sync',
+                                                    'componentType': 'internal',
+                                                    'status': 'fail',
+                                                    'output': 'Node doesn\'t have a synced peer'
+                                                }
+                                            ]
+                                        }
                                     }
                                 },
                                 'peer_best_block_far_ahead': {
@@ -144,14 +149,16 @@ We currently perform 3 checks in the sync mechanism for the healthcheck:
                                     'value': {
                                         'status': 'fail',
                                         'description': 'Hathor-core v0.56.0',
-                                        'components': [
-                                            {
-                                                'componentName': 'sync',
-                                                'componentType': 'internal',
-                                                'status': 'fail',
-                                                'output': 'Node\'s peer with highest height is too far ahead.'
-                                            }
-                                        ]
+                                        'checks': {
+                                            'sync': [
+                                                {
+                                                    'componentName': 'sync',
+                                                    'componentType': 'internal',
+                                                    'status': 'fail',
+                                                    'output': 'Node\'s peer with highest height is too far ahead.'
+                                                }
+                                            ]
+                                        }
                                     }
                                 }
                             }
