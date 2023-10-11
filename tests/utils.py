@@ -1,5 +1,4 @@
 import base64
-import hashlib
 import os
 import string
 import subprocess
@@ -686,12 +685,8 @@ class EventMocker:
     def generate_mocked_event(self, event_id: Optional[int] = None, group_id: Optional[int] = None) -> BaseEvent:
         """ Generates a mocked event with the best block found message
         """
-        _hash = hashlib.sha256(self.generate_random_word(10).encode('utf-8'))
-        peer_id_mock = _hash.hexdigest()
-
         return BaseEvent(
             id=event_id or self.gen_next_id(),
-            peer_id=peer_id_mock,
             timestamp=1658892990,
             type=EventType.VERTEX_METADATA_CHANGED,
             group_id=group_id,
@@ -709,7 +704,6 @@ class EventMocker:
         """ Generates a mocked event with fixed properties, except the ID
         """
         return BaseEvent(
-            peer_id='123',
             id=event_id,
             timestamp=123456,
             type=EventType.VERTEX_METADATA_CHANGED,

@@ -34,7 +34,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
-from hathor.util import Random, Reactor
+from hathor.util import Random, Reactor, not_none
 from hathor.verification.verification_service import VerificationService, VertexVerifiers
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
@@ -157,7 +157,12 @@ class CliBuilder:
         pubsub = PubSubManager(reactor)
 
         if self._args.x_enable_event_queue:
-            self.event_ws_factory = EventWebsocketFactory(reactor, event_storage)
+            self.event_ws_factory = EventWebsocketFactory(
+                peer_id=not_none(peer_id.id),
+                network=network,
+                reactor=reactor,
+                event_storage=event_storage
+            )
 
         event_manager = EventManager(
             event_storage=event_storage,

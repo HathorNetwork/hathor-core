@@ -40,9 +40,18 @@ class EventWebsocketFactory(WebSocketServerFactory):
     # The unique stream ID
     _stream_id: Optional[str] = None
 
-    def __init__(self, reactor: Reactor, event_storage: EventStorage):
+    def __init__(
+        self,
+        *,
+        peer_id: str,
+        network: str,
+        reactor: Reactor,
+        event_storage: EventStorage
+    ) -> None:
         super().__init__()
         self.log = logger.new()
+        self._peer_id = peer_id
+        self._network = network
         self._reactor = reactor
         self._event_storage = event_storage
         self._connections: set[EventWebsocketProtocol] = set()
@@ -113,6 +122,8 @@ class EventWebsocketFactory(WebSocketServerFactory):
         assert self._latest_event_id is not None, '_latest_event_id must be set.'
 
         response = EventResponse(
+            peer_id=self._peer_id,
+            network=self._network,
             event=event,
             latest_event_id=self._latest_event_id,
             stream_id=not_none(self._stream_id)
