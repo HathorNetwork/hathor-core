@@ -204,3 +204,36 @@ class SysctlInitTest(unittest.TestCase):
         curr_always_enabled_sync = list(conn.always_enable_sync)
         self.assertTrue(
                 set(curr_always_enabled_sync).issuperset(set(expected_sysctl_dict['p2p.always_enable_sync'])))
+
+    @patch('twisted.internet.endpoints.serverFromString')  # avoid open sock
+    def test_sysctl_init_file_failing_list_parsing(self, mock_endpoint):
+        class CustomRunNode(RunNode):
+            def start_manager(self) -> None:
+                pass
+
+            def register_signal_handlers(self) -> None:
+                pass
+
+        test_cases = [
+            ['p2p.always_enable_sync=[ "peer-1", "peer-2", ]'],
+            ['p2p.always_enable_sync=["peer-1",,"peer-2"]'],
+            ['p2p.always_enable_sync=["peer-1","\"peer-2\""]'],
+            ['p2p.always_enable_sync=[1,2,]'],
+            ['p2p.always_enable_sync=[1,,2]']
+        ]
+
+        for file_content in test_cases:
+            with tempfile.NamedTemporaryFile(
+                    dir=self.tmp_dir,
+                    suffix='.txt',
+                    prefix='sysctl_',
+                    delete=False) as sysctl_init_file:
+                sysctl_init_file.write('\n'.join(file_content).encode())
+                sysctl_init_file_path = str(Path(sysctl_init_file.name))
+
+            with self.assertRaises(SysctlRunnerException):
+                CustomRunNode(argv=[
+                    '--sysctl', 'tcp:8181',
+                    '--sysctl-init-file', sysctl_init_file_path,  # relative to src/hathor
+                    '--memory-storage',
+                ])

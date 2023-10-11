@@ -21,11 +21,21 @@ from hathor.sysctl.exception import SysctlRunnerException
 if TYPE_CHECKING:
     from hathor.sysctl.sysctl import Sysctl
 
-# - It starts with an opening square bracket [.
-# - It ends with a closing square bracket ].
-# - The elements are separated by commas and can be followed by optional whitespace.
-# - There can be zero or more elements in the array (an empty array is allowed).
-array_pattern = r'^\s*\[\s*(?:[^\[\],]+(?:\s*,\s*[^\[\],]+)*)?\s*\]\s*$'
+# Top level:
+# - Allow numbers, integers and float
+# - Allow string in double quote
+# - Allow mix of numbers with strings
+# - Allow space before, after and between elements
+# - Don't allow empty element like [1,,2]; empty element between 1 and 2
+# - Don't allow comma (,) after last element
+# - Don't allow double quote (") inside string
+# Regex:
+# - \[ - start list
+# - ]] - end list
+# - \s* - accept space in any quantity
+# - \d+ - accept at least 1 number
+# - ^" - negate double quote
+array_pattern = r'\[(?:\s*(\d+\.\d+|\s*\d+)\s*|\s*"([^"]*)"\s*)(?:,\s*(\d+\.\d+|\s*\d+)\s*|,\s*"([^"]*)"\s*)*\]|\[\]'
 
 
 class SysctlRunner:
