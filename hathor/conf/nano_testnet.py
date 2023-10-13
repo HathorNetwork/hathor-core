@@ -36,5 +36,6 @@ SETTINGS = HathorSettings(
     ENABLE_NANO_CONTRACTS=True,
     BLUEPRINTS={
         bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'): 'Bet',
+        bytes.fromhex('494d0ac59a6918b771b122395206fef3f349f84f20dc430188a319d4ead24a3b'): 'SwapDemo',
     },
 )
