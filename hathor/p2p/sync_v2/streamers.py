@@ -143,6 +143,12 @@ class BlockchainStreaming(_StreamingBase):
         assert cur is not None
         assert cur.hash is not None
 
+        meta = cur.get_metadata()
+        if meta.voided_by:
+            self.stop()
+            self.node_sync.send_blocks_end(StreamEnd.STREAM_BECAME_VOIDED)
+            return
+
         if cur.hash == self.end_hash:
             # only send the last when not reverse
             if not self.reverse:
