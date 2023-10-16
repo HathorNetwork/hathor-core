@@ -47,7 +47,9 @@ class HealthcheckResource(Resource):
             checks={c.component_name: [c] for c in components_health_checks},
         )
 
-        if not strict_status_code:
+        if strict_status_code:
+            request.setResponseCode(200)
+        else:
             status_code = health_check.get_http_status_code()
             request.setResponseCode(status_code)
 

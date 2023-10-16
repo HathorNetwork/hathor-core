@@ -2,7 +2,6 @@ from unittest.mock import ANY
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf.get_settings import get_settings
 from hathor.healthcheck.resources.healthcheck import HealthcheckResource
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
@@ -25,6 +24,29 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("/health")
         data = response.json_value()
 
+        self.assertEqual(response.responseCode, 503)
+        self.assertEqual(data, {
+            'status': 'fail',
+            'description': ANY,
+            'checks': {
+                'sync': [{
+                    'componentType': 'internal',
+                    'status': 'fail',
+                    'output': HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY,
+                    'time': ANY
+                }]
+            }
+        })
+
+    @inlineCallbacks
+    def test_strict_status_code(self):
+        """Make sure the 'strict_status_code' parameter is working.
+        The node should return 200 even if it's not ready.
+        """
+        response = yield self.web.get("/health", {b'strict_status_code': b'1'})
+        data = response.json_value()
+
+        self.assertEqual(response.responseCode, 200)
         self.assertEqual(data, {
             'status': 'fail',
             'description': ANY,
@@ -50,6 +72,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("/health")
         data = response.json_value()
 
+        self.assertEqual(response.responseCode, 503)
         self.assertEqual(data, {
             'status': 'fail',
             'description': ANY,
@@ -78,9 +101,10 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
 
         self.assertEqual(self.manager2.state, self.manager2.NodeState.READY)
 
-        response = yield self.web.get("p2p/readiness")
+        response = yield self.web.get("/health")
         data = response.json_value()
 
+        self.assertEqual(response.responseCode, 503)
         self.assertEqual(data, {
             'status': 'fail',
             'description': ANY,
@@ -109,9 +133,10 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             self.conn1.run_one_step(debug=True)
             self.clock.advance(0.1)
 
-        response = yield self.web.get("p2p/readiness")
+        response = yield self.web.get("/health")
         data = response.json_value()
 
+        self.assertEqual(response.responseCode, 200)
         self.assertEqual(data, {
             'status': 'pass',
             'description': ANY,
