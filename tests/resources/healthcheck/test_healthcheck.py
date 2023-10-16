@@ -1,7 +1,10 @@
+from unittest.mock import ANY
+
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.conf.get_settings import get_settings
+from hathor.healthcheck.resources.healthcheck import HealthcheckResource
 from hathor.manager import HathorManager
-from hathor.p2p.resources.healthcheck import HealthcheckReadinessResource
 from hathor.simulator import FakeConnection
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
@@ -13,17 +16,27 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
 
     def setUp(self):
         super().setUp()
-        self.web = StubSite(HealthcheckReadinessResource(self.manager))
+        self.web = StubSite(HealthcheckResource(self.manager))
 
     @inlineCallbacks
     def test_get_no_recent_activity(self):
         """Scenario where the node doesn't have a recent block
         """
-        response = yield self.web.get("p2p/readiness")
+        response = yield self.web.get("/health")
         data = response.json_value()
 
-        self.assertEqual(data['success'], False)
-        self.assertEqual(data['reason'], HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY)
+        self.assertEqual(data, {
+            'status': 'fail',
+            'description': ANY,
+            'checks': {
+                'sync': [{
+                    'componentType': 'internal',
+                    'status': 'fail',
+                    'output': HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY,
+                    'time': ANY
+                }]
+            }
+        })
 
     @inlineCallbacks
     def test_get_no_connected_peer(self):
@@ -34,11 +47,21 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
 
         self.assertEqual(self.manager.has_recent_activity(), True)
 
-        response = yield self.web.get("p2p/readiness")
+        response = yield self.web.get("/health")
         data = response.json_value()
 
-        self.assertEqual(data['success'], False)
-        self.assertEqual(data['reason'], HathorManager.UnhealthinessReason.NO_SYNCED_PEER)
+        self.assertEqual(data, {
+            'status': 'fail',
+            'description': ANY,
+            'checks': {
+                'sync': [{
+                    'componentType': 'internal',
+                    'status': 'fail',
+                    'output': HathorManager.UnhealthinessReason.NO_SYNCED_PEER,
+                    'time': ANY
+                }]
+            }
+        })
 
     @inlineCallbacks
     def test_get_peer_out_of_sync(self):
@@ -58,8 +81,18 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("p2p/readiness")
         data = response.json_value()
 
-        self.assertEqual(data['success'], False)
-        self.assertEqual(data['reason'], HathorManager.UnhealthinessReason.NO_SYNCED_PEER)
+        self.assertEqual(data, {
+            'status': 'fail',
+            'description': ANY,
+            'checks': {
+                'sync': [{
+                    'componentType': 'internal',
+                    'status': 'fail',
+                    'output': HathorManager.UnhealthinessReason.NO_SYNCED_PEER,
+                    'time': ANY
+                }]
+            }
+        })
 
     @inlineCallbacks
     def test_get_ready(self):
@@ -79,7 +112,18 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("p2p/readiness")
         data = response.json_value()
 
-        self.assertEqual(data['success'], True)
+        self.assertEqual(data, {
+            'status': 'pass',
+            'description': ANY,
+            'checks': {
+                'sync': [{
+                    'componentType': 'internal',
+                    'status': 'pass',
+                    'output': 'Healthy',
+                    'time': ANY
+                }]
+            }
+        })
 
 
 class SyncV1StatusTest(unittest.SyncV1Params, BaseHealthcheckReadinessTest):
