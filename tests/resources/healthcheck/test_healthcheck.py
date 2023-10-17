@@ -21,7 +21,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
     def test_get_no_recent_activity(self):
         """Scenario where the node doesn't have a recent block
         """
-        response = yield self.web.get("/health")
+        response = yield self.web.get('/health')
         data = response.json_value()
 
         self.assertEqual(response.responseCode, 503)
@@ -43,7 +43,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
         """Make sure the 'strict_status_code' parameter is working.
         The node should return 200 even if it's not ready.
         """
-        response = yield self.web.get("/health", {b'strict_status_code': b'1'})
+        response = yield self.web.get('/health', {b'strict_status_code': b'1'})
         data = response.json_value()
 
         self.assertEqual(response.responseCode, 200)
@@ -69,7 +69,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
 
         self.assertEqual(self.manager.has_recent_activity(), True)
 
-        response = yield self.web.get("/health")
+        response = yield self.web.get('/health')
         data = response.json_value()
 
         self.assertEqual(response.responseCode, 503)
@@ -101,7 +101,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
 
         self.assertEqual(self.manager2.state, self.manager2.NodeState.READY)
 
-        response = yield self.web.get("/health")
+        response = yield self.web.get('/health')
         data = response.json_value()
 
         self.assertEqual(response.responseCode, 503)
@@ -133,7 +133,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             self.conn1.run_one_step(debug=True)
             self.clock.advance(0.1)
 
-        response = yield self.web.get("/health")
+        response = yield self.web.get('/health')
         data = response.json_value()
 
         self.assertEqual(response.responseCode, 200)

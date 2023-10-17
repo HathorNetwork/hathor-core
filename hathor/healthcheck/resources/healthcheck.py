@@ -11,10 +11,10 @@ def build_sync_health_status(manager: HathorManager) -> ComponentHealthCheck:
     healthy, reason = manager.is_sync_healthy()
 
     return ComponentHealthCheck(
-        component_name="sync",
+        component_name='sync',
         component_type=ComponentType.INTERNAL,
         status=HealthCheckStatus.PASS if healthy else HealthCheckStatus.FAIL,
-        output=reason or "Healthy",
+        output=reason or 'Healthy',
     )
 
 
@@ -43,7 +43,7 @@ class HealthcheckResource(Resource):
         ]
 
         health_check = ServiceHealthCheck(
-            description=f"Hathor-core {hathor.__version__}",
+            description=f'Hathor-core {hathor.__version__}',
             checks={c.component_name: [c] for c in components_health_checks},
         )
 
