@@ -21,7 +21,7 @@ from hathor.transaction import Block, Transaction, TxOutput
 from hathor.types import VertexId
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import add_custom_tx, gen_custom_base_tx
+from tests.utils import add_custom_tx, create_tokens, gen_custom_base_tx
 
 settings = HathorSettings()
 
@@ -40,6 +40,8 @@ class MyBlueprint(Blueprint):
     def _get_action(self, ctx: Context) -> NCAction:
         if len(ctx.actions) != 1:
             raise NCFail('only one action allowed')
+        if self.token_uid not in ctx.actions:
+            raise NCFail('invalid token')
         action = ctx.actions[self.token_uid]
         if action.token_uid != self.token_uid:
             raise NCFail('invalid token')
@@ -259,7 +261,17 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
 
         self.assertNoBlocksVoided()
 
-    def test_nc_consensus_success(self):
+    def test_nc_consensus_success_custom_token(self):
+        token_creation_tx = create_tokens(self.manager, mint_amount=100, use_genesis=False, propagate=False)
+        self._finish_preparing_tx(token_creation_tx)
+        token_creation_tx.timestamp += 1
+        self.manager.cpu_mining_service.resolve(token_creation_tx)
+        self.manager.on_new_tx(token_creation_tx, fails_silently=False)
+
+        self.token_uid = token_creation_tx.hash
+        self.test_nc_consensus_success(is_custom_token=True)
+
+    def test_nc_consensus_success(self, *, is_custom_token: bool = False) -> None:
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
         self.manager.on_new_tx(nc, fails_silently=False)
@@ -267,7 +279,8 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
 
         nc_id = nc.hash
 
-        self.assertTrue(self.simulator.run(600))
+        trigger = StopAfterNMinedBlocks(self.miner, quantity=2)
+        self.assertTrue(self.simulator.run(14400, trigger=trigger))
         nc_loaded = self.manager.tx_storage.get_transaction(nc_id)
         nc_loaded_meta = nc_loaded.get_metadata()
         self.assertIsNotNone(nc_loaded_meta.first_block)
@@ -280,7 +293,9 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
 
         # Make a deposit.
 
-        _inputs, deposit_amount = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
+        _inputs, deposit_amount = self.wallet.get_inputs_from_amount(
+            1, self.manager.tx_storage, token_uid=self.token_uid
+        )
         tx = self.wallet.prepare_transaction(NanoContract, _inputs, [])
         tx = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx)
         self.manager.cpu_mining_service.resolve(tx)
@@ -301,7 +316,14 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
 
         # Make a withdrawal of 1 HTR.
 
-        tx2 = NanoContract(outputs=[TxOutput(1, b'', 0)])
+        _output_token_index = 0
+        _tokens = []
+        if is_custom_token:
+            _tokens.append(self.token_uid)
+            _output_token_index = 1
+
+        tx2 = NanoContract(outputs=[TxOutput(1, b'', _output_token_index)])
+        tx2.tokens = _tokens
         tx2 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx2)
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.on_new_tx(tx2, fails_silently=False)
@@ -319,7 +341,8 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
 
         # Make a withdrawal of the remainder.
 
-        tx3 = NanoContract(outputs=[TxOutput(deposit_amount - 2, b'', 0)])
+        tx3 = NanoContract(outputs=[TxOutput(deposit_amount - 2, b'', _output_token_index)])
+        tx3.tokens = _tokens
         tx3 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx3)
         self.manager.cpu_mining_service.resolve(tx3)
         self.manager.on_new_tx(tx3, fails_silently=False)
