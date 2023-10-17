@@ -3,10 +3,9 @@ import hashlib
 from math import isinf, isnan
 
 from hathor import daa
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode, _set_test_mode
-from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
+from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     BlockWithInputs,
     ConflictingInputs,
@@ -40,8 +39,6 @@ from tests.utils import (
     create_script_with_sigops,
     get_genesis_key,
 )
-
-settings = HathorSettings()
 
 
 class BaseTransactionTest(unittest.TestCase):
@@ -129,7 +126,7 @@ class BaseTransactionTest(unittest.TestCase):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
 
         _input = TxInput(random_bytes, 0, random_bytes)
-        inputs = [_input] * (MAX_NUM_INPUTS + 1)
+        inputs = [_input] * (self._settings.MAX_NUM_INPUTS + 1)
 
         tx = Transaction(inputs=inputs, storage=self.tx_storage)
 
@@ -146,7 +143,7 @@ class BaseTransactionTest(unittest.TestCase):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
 
         output = TxOutput(1, random_bytes)
-        outputs = [output] * (MAX_NUM_OUTPUTS + 1)
+        outputs = [output] * (self._settings.MAX_NUM_OUTPUTS + 1)
 
         tx = Transaction(outputs=outputs, storage=self.tx_storage)
 
@@ -222,7 +219,7 @@ class BaseTransactionTest(unittest.TestCase):
         block.resolve()
 
         with self.assertRaises(BlockWithInputs):
-            block.verify()
+            self.manager.verification_service.verify(block)
 
     def test_merge_mined_no_magic(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -351,7 +348,6 @@ class BaseTransactionTest(unittest.TestCase):
         b.verify_aux_pow()
 
     def test_block_outputs(self):
-        from hathor.transaction import MAX_NUM_OUTPUTS
         from hathor.transaction.exceptions import TooManyOutputs
 
         # a block should have no more than MAX_NUM_OUTPUTS outputs
@@ -359,7 +355,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
-        tx_outputs = [TxOutput(100, output_script)] * (MAX_NUM_OUTPUTS + 1)
+        tx_outputs = [TxOutput(100, output_script)] * (self._settings.MAX_NUM_OUTPUTS + 1)
 
         block = Block(
             nonce=100,
@@ -392,21 +388,21 @@ class BaseTransactionTest(unittest.TestCase):
         # in first test, only with 1 parent
         tx.resolve()
         with self.assertRaises(IncorrectParents):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
         # test with 3 parents
         parents = [tx.hash for tx in self.genesis]
         tx.parents = parents
         tx.resolve()
         with self.assertRaises(IncorrectParents):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
         # 2 parents, 1 tx and 1 block
         parents = [self.genesis_txs[0].hash, self.genesis_blocks[0].hash]
         tx.parents = parents
         tx.resolve()
         with self.assertRaises(IncorrectParents):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_block_unknown_parent(self):
         address = get_address_from_public_key(self.genesis_public_key)
@@ -425,7 +421,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         block.resolve()
         with self.assertRaises(ParentDoesNotExist):
-            block.verify()
+            self.manager.verification_service.verify(block)
 
     def test_block_number_parents(self):
         address = get_address_from_public_key(self.genesis_public_key)
@@ -443,7 +439,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         block.resolve()
         with self.assertRaises(IncorrectParents):
-            block.verify()
+            self.manager.verification_service.verify(block)
 
     def test_tx_inputs_out_of_range(self):
         # we'll try to spend output 3 from genesis transaction, which does not exist
@@ -466,7 +462,7 @@ class BaseTransactionTest(unittest.TestCase):
         # test with an inexistent index
         tx.resolve()
         with self.assertRaises(InexistentInput):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
         # now with index equals of len of outputs
         _input = [TxInput(genesis_block.hash, len(genesis_block.outputs), data)]
@@ -474,7 +470,7 @@ class BaseTransactionTest(unittest.TestCase):
         # test with an inexistent index
         tx.resolve()
         with self.assertRaises(InexistentInput):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
         # now with inexistent tx hash
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -482,7 +478,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx.inputs = _input
         tx.resolve()
         with self.assertRaises(InexistentInput):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_tx_inputs_conflict(self):
         # the new tx inputs will try to spend the same output
@@ -505,7 +501,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         tx.resolve()
         with self.assertRaises(ConflictingInputs):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_regular_tx(self):
         # this should succeed
@@ -526,7 +522,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         tx.resolve()
-        tx.verify()
+        self.manager.verification_service.verify(tx)
 
     def test_tx_weight_too_high(self):
         parents = [tx.hash for tx in self.genesis_txs]
@@ -535,7 +531,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx = Transaction(weight=1, inputs=inputs, outputs=outputs, parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
         tx.weight = daa.minimum_tx_weight(tx)
-        tx.weight += settings.MAX_TX_WEIGHT_DIFF + 0.1
+        tx.weight += self._settings.MAX_TX_WEIGHT_DIFF + 0.1
         tx.update_hash()
         with self.assertRaises(WeightError):
             tx.verify_weight()
@@ -561,7 +557,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx.update_hash()
         self.assertTrue(isnan(tx.weight))
         with self.assertRaises(WeightError):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_weight_inf(self):
         # this should succeed
@@ -584,7 +580,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx.update_hash()
         self.assertTrue(isinf(tx.weight))
         with self.assertRaises(WeightError):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_tx_duplicated_parents(self):
         # the new tx will confirm the same tx twice
@@ -606,7 +602,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         tx.resolve()
         with self.assertRaises(DuplicatedParents):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_update_timestamp(self):
         parents = [tx for tx in self.genesis_txs]
@@ -656,7 +652,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # 4. propagate block from the future
         block = manager.generate_mining_block()
-        block.timestamp = int(self.clock.seconds()) + settings.MAX_FUTURE_TIMESTAMP_ALLOWED + 100
+        block.timestamp = int(self.clock.seconds()) + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED + 100
         block.resolve(update_time=False)
         self.assertFalse(manager.propagate_tx(block))
 
@@ -709,7 +705,7 @@ class BaseTransactionTest(unittest.TestCase):
         # Validate maximum distance between blocks
         block = blocks[0]
         block2 = blocks[1]
-        block2.timestamp = block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS
+        block2.timestamp = block.timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS
         block2.verify_parents()
         block2.timestamp += 1
         with self.assertRaises(TimestampError):
@@ -811,7 +807,7 @@ class BaseTransactionTest(unittest.TestCase):
         # 'Manually resolving', to validate verify method
         tx.hash = bytes.fromhex('012cba011be3c29f1c406f9015e42698b97169dbc6652d1f5e4d5c5e83138858')
         with self.assertRaises(InvalidOutputValue):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
         # Invalid output value
         invalid_output = bytes.fromhex('ffffffff')
@@ -886,7 +882,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
 
         value = genesis_block.outputs[0].value
-        script = b'*' * (settings.MAX_OUTPUT_SCRIPT_SIZE + offset)
+        script = b'*' * (self._settings.MAX_OUTPUT_SCRIPT_SIZE + offset)
         _output = TxOutput(value, script)
 
         tx = Transaction(inputs=[_input], outputs=[_output], storage=self.tx_storage)
@@ -902,7 +898,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     def _test_txin_data_limit(self, offset):
         genesis_block = self.genesis_blocks[0]
-        data = b'*' * (settings.MAX_INPUT_DATA_SIZE + offset)
+        data = b'*' * (self._settings.MAX_INPUT_DATA_SIZE + offset)
         _input = TxInput(genesis_block.hash, 0, data)
 
         value = genesis_block.outputs[0].value
@@ -1037,13 +1033,13 @@ class BaseTransactionTest(unittest.TestCase):
         value = genesis_block.outputs[0].value - 1
         _input = TxInput(genesis_block.hash, 0, b'')
 
-        hscript = create_script_with_sigops(settings.MAX_TX_SIGOPS_OUTPUT + 1)
+        hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_OUTPUT + 1)
         output1 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output1], storage=self.tx_storage)
         tx.update_hash()
         # This calls verify to ensure that verify_sigops_output is being called on verify
         with self.assertRaises(TooManySigOps):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_sigops_output_multi_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1051,19 +1047,19 @@ class BaseTransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
         num_outputs = 5
 
-        hscript = create_script_with_sigops((settings.MAX_TX_SIGOPS_OUTPUT + num_outputs) // num_outputs)
+        hscript = create_script_with_sigops((self._settings.MAX_TX_SIGOPS_OUTPUT + num_outputs) // num_outputs)
         output2 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output2]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
         with self.assertRaises(TooManySigOps):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_sigops_output_single_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
         value = genesis_block.outputs[0].value - 1
         _input = TxInput(genesis_block.hash, 0, b'')
 
-        hscript = create_script_with_sigops(settings.MAX_TX_SIGOPS_OUTPUT - 1)
+        hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_OUTPUT - 1)
         output3 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output3], storage=self.tx_storage)
         tx.update_hash()
@@ -1075,7 +1071,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
         num_outputs = 5
 
-        hscript = create_script_with_sigops((settings.MAX_TX_SIGOPS_OUTPUT - 1) // num_outputs)
+        hscript = create_script_with_sigops((self._settings.MAX_TX_SIGOPS_OUTPUT - 1) // num_outputs)
         output4 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output4]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
@@ -1088,12 +1084,12 @@ class BaseTransactionTest(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)
 
-        hscript = create_script_with_sigops(settings.MAX_TX_SIGOPS_INPUT + 1)
+        hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_INPUT + 1)
         input1 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input1], outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
         with self.assertRaises(TooManySigOps):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_sigops_input_multi_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1103,12 +1099,12 @@ class BaseTransactionTest(unittest.TestCase):
         _output = TxOutput(value, script)
         num_inputs = 5
 
-        hscript = create_script_with_sigops((settings.MAX_TX_SIGOPS_INPUT + num_inputs) // num_inputs)
+        hscript = create_script_with_sigops((self._settings.MAX_TX_SIGOPS_INPUT + num_inputs) // num_inputs)
         input2 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input2]*num_inputs, outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
         with self.assertRaises(TooManySigOps):
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
     def test_sigops_input_single_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1117,7 +1113,7 @@ class BaseTransactionTest(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)
 
-        hscript = create_script_with_sigops(settings.MAX_TX_SIGOPS_INPUT - 1)
+        hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_INPUT - 1)
         input3 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input3], outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
@@ -1131,7 +1127,7 @@ class BaseTransactionTest(unittest.TestCase):
         _output = TxOutput(value, script)
         num_inputs = 5
 
-        hscript = create_script_with_sigops((settings.MAX_TX_SIGOPS_INPUT - 1) // num_inputs)
+        hscript = create_script_with_sigops((self._settings.MAX_TX_SIGOPS_INPUT - 1) // num_inputs)
         input4 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input4]*num_inputs, outputs=[_output], storage=self.tx_storage)
         tx.update_hash()

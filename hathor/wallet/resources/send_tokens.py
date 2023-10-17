@@ -128,7 +128,7 @@ class SendTokensResource(Resource):
             weight = minimum_tx_weight(tx)
         tx.weight = weight
         tx.resolve()
-        tx.verify()
+        self.manager.verification_service.verify(tx)
         return tx
 
     def _cb_tx_resolve(self, tx, request):

@@ -31,10 +31,11 @@ from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesM
 from hathor.manager import HathorManager
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.utils import discover_hostname
+from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
 from hathor.util import Random, Reactor
+from hathor.verification.verification_service import VerificationService, VertexVerifiers
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -56,15 +57,13 @@ class CliBuilder:
 
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
-        from hathor.conf import HathorSettings
-        from hathor.conf.get_settings import get_settings_source
+        from hathor.conf.get_settings import get_settings, get_settings_source
         from hathor.daa import TestMode, _set_test_mode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
-        from hathor.transaction import genesis
         from hathor.transaction.storage import (
             TransactionCacheStorage,
             TransactionMemoryStorage,
@@ -73,7 +72,7 @@ class CliBuilder:
         )
         from hathor.util import get_environment_info
 
-        settings = HathorSettings()
+        settings = get_settings()
 
         # only used for logging its location
         settings_source = get_settings_source()
@@ -89,7 +88,7 @@ class CliBuilder:
             'hathor-core v{hathor}',
             hathor=hathor.__version__,
             pid=os.getpid(),
-            genesis=genesis.GENESIS_HASH.hex()[:7],
+            genesis=get_genesis_short_hash(),
             my_peer_id=str(peer_id.id),
             python=python,
             platform=platform.platform(),
@@ -203,6 +202,9 @@ class CliBuilder:
             not_support_features=self._args.signal_not_support
         )
 
+        vertex_verifiers = VertexVerifiers.create_defaults(settings=settings)
+        verification_service = VerificationService(verifiers=vertex_verifiers)
+
         p2p_manager = ConnectionsManager(
             reactor,
             network=network,
@@ -218,6 +220,7 @@ class CliBuilder:
 
         self.manager = HathorManager(
             reactor,
+            settings=settings,
             network=network,
             hostname=hostname,
             pubsub=pubsub,
@@ -232,7 +235,8 @@ class CliBuilder:
             full_verification=full_verification,
             enable_event_queue=self._args.x_enable_event_queue,
             feature_service=self.feature_service,
-            bit_signaling_service=bit_signaling_service
+            bit_signaling_service=bit_signaling_service,
+            verification_service=verification_service,
         )
 
         p2p_manager.set_manager(self.manager)
@@ -259,10 +263,10 @@ class CliBuilder:
             dns_hosts.extend(self._args.dns)
 
         if dns_hosts:
-            self.manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
+            p2p_manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
 
         if self._args.bootstrap:
-            self.manager.add_peer_discovery(BootstrapPeerDiscovery(self._args.bootstrap))
+            p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(self._args.bootstrap))
 
         if self._args.test_mode_tx_weight:
             _set_test_mode(TestMode.TEST_TX_WEIGHT)
@@ -278,7 +282,7 @@ class CliBuilder:
             self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         for description in self._args.listen:
-            self.manager.add_listen_address(description)
+            p2p_manager.add_listen_address(description)
 
         if self._args.peer_id_blacklist:
             self.log.info('with peer id blacklist', blacklist=self._args.peer_id_blacklist)

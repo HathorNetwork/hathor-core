@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
+from hathor.conf.get_settings import get_settings
 from hathor.indexes.scope import Scope
 from hathor.transaction.base_transaction import BaseTransaction
 
@@ -33,6 +34,7 @@ class BaseIndex(ABC):
     created to generalize how we initialize indexes and keep track of which ones are up-to-date.
     """
     def __init__(self) -> None:
+        self._settings = get_settings()
         self.log = logger.new()
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:

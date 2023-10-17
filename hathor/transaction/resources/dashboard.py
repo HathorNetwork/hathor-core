@@ -14,10 +14,8 @@
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 ARGS = ['block', 'tx']
 
@@ -33,6 +31,7 @@ class DashboardTransactionResource(Resource):
 
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
+        self._settings = get_settings()
         self.manager = manager
 
     def render_GET(self, request):
@@ -69,8 +68,8 @@ class DashboardTransactionResource(Resource):
             })
 
         # Restrict counts
-        block_count = min(block_count, settings.MAX_DASHBOARD_COUNT)
-        tx_count = min(tx_count, settings.MAX_DASHBOARD_COUNT)
+        block_count = min(block_count, self._settings.MAX_DASHBOARD_COUNT)
+        tx_count = min(tx_count, self._settings.MAX_DASHBOARD_COUNT)
 
         transactions, _ = self.manager.tx_storage.get_newest_txs(count=tx_count)
         serialized_tx = [tx.to_json_extended() for tx in transactions]

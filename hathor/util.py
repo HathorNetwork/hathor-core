@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, S
 from structlog import get_logger
 
 import hathor
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.reactor.reactor import reactor as hathor_reactor
 from hathor.reactor.reactor_protocol import ReactorProtocol
 from hathor.types import TokenUid
@@ -45,8 +45,6 @@ Reactor = ReactorProtocol
 reactor = hathor_reactor
 
 logger = get_logger()
-settings = HathorSettings()
-
 
 T = TypeVar('T')
 
@@ -769,6 +767,7 @@ def is_token_uid_valid(token_uid: TokenUid) -> bool:
     >>> is_token_uid_valid(bytes.fromhex('000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb82400'))
     False
     """
+    settings = get_settings()
     if token_uid == settings.HATHOR_TOKEN_UID:
         return True
     elif len(token_uid) == 32:
@@ -792,6 +791,7 @@ class EnvironmentInfo:
 
 
 def get_environment_info(args: str, peer_id: Optional[str]) -> EnvironmentInfo:
+    settings = get_settings()
     environment_info = EnvironmentInfo(
         python_implementation=str(sys.implementation),
         hathor_core_args=args,

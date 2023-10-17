@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
@@ -41,7 +40,6 @@ from hathor.utils.int import get_bit_list
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 # Signal bits (B), version (B), outputs len (B)
@@ -142,7 +140,7 @@ class Block(BaseTransaction):
         Returns the feature_activation_bit_counts metadata attribute from the parent block,
         or no previous counts if this is a boundary block.
         """
-        evaluation_interval = settings.FEATURE_ACTIVATION.evaluation_interval
+        evaluation_interval = self._settings.FEATURE_ACTIVATION.evaluation_interval
         is_boundary_block = self.calculate_height() % evaluation_interval == 0
 
         if is_boundary_block:
@@ -297,7 +295,7 @@ class Block(BaseTransaction):
         :rtype: bytes
         """
         assert index == 0
-        return settings.HATHOR_TOKEN_UID
+        return self._settings.HATHOR_TOKEN_UID
 
     # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
@@ -323,12 +321,6 @@ class Block(BaseTransaction):
             return False
         return metadata.validation.is_at_least_basic()
 
-    def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
-        """Partially run validations, the ones that need parents/inputs are skipped."""
-        if not skip_block_weight_verification:
-            self.verify_weight()
-        self.verify_reward()
-
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.hash is not None
         assert self.storage is not None
@@ -348,7 +340,7 @@ class Block(BaseTransaction):
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""
         block_weight = daa.calculate_block_difficulty(self)
-        if self.weight < block_weight - settings.WEIGHT_TOL:
+        if self.weight < block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {self.hash_hex}: weight ({self.weight}) is '
                               f'smaller than the minimum weight ({block_weight})')
 
@@ -382,7 +374,7 @@ class Block(BaseTransaction):
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
 
     def verify_data(self) -> None:
-        if len(self.data) > settings.BLOCK_DATA_MAX_SIZE:
+        if len(self.data) > self._settings.BLOCK_DATA_MAX_SIZE:
             raise TransactionDataError('block data has {} bytes'.format(len(self.data)))
 
     def verify_without_storage(self) -> None:
@@ -397,27 +389,6 @@ class Block(BaseTransaction):
     def get_base_hash(self) -> bytes:
         from hathor.merged_mining.bitcoin import sha256d_hash
         return sha256d_hash(self.get_header_without_nonce())
-
-    @cpu.profiler(key=lambda self: 'block-verify!{}'.format(self.hash.hex()))
-    def verify(self, reject_locked_reward: bool = True) -> None:
-        """
-            (1) confirms at least two pending transactions and references last block
-            (2) solves the pow with the correct weight (done in HathorManager)
-            (3) creates the correct amount of tokens in the output (done in HathorManager)
-            (4) all parents must exist and have timestamp smaller than ours
-            (5) data field must contain at most BLOCK_DATA_MAX_SIZE bytes
-        """
-        # TODO Should we validate a limit of outputs?
-        if self.is_genesis:
-            # TODO do genesis validation
-            return
-
-        self.verify_without_storage()
-
-        # (1) and (4)
-        self.verify_parents()
-
-        self.verify_height()
 
     def get_height(self) -> int:
         """Returns the block's height."""
@@ -442,14 +413,13 @@ class Block(BaseTransaction):
         bitmask = self._get_feature_activation_bitmask()
         bits = self.signal_bits & bitmask
 
-        bit_list = get_bit_list(bits, min_size=settings.FEATURE_ACTIVATION.max_signal_bits)
+        bit_list = get_bit_list(bits, min_size=self._settings.FEATURE_ACTIVATION.max_signal_bits)
 
         return bit_list
 
-    @classmethod
-    def _get_feature_activation_bitmask(cls) -> int:
+    def _get_feature_activation_bitmask(self) -> int:
         """Returns the bitmask that gets feature activation bits from signal bits."""
-        bitmask = (1 << settings.FEATURE_ACTIVATION.max_signal_bits) - 1
+        bitmask = (1 << self._settings.FEATURE_ACTIVATION.max_signal_bits) - 1
 
         return bitmask
 

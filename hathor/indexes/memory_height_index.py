@@ -14,7 +14,7 @@
 
 from typing import Optional
 
-from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, HeightInfo, IndexEntry
+from hathor.indexes.height_index import HeightIndex, HeightInfo, IndexEntry
 
 
 class MemoryHeightIndex(HeightIndex):
@@ -31,7 +31,7 @@ class MemoryHeightIndex(HeightIndex):
         return None
 
     def force_clear(self) -> None:
-        self._index = [BLOCK_GENESIS_ENTRY]
+        self._index = [self.get_genesis_block_entry()]
 
     def _add(self, height: int, block_hash: bytes, timestamp: int, *, can_reorg: bool) -> None:
         if len(self._index) < height:

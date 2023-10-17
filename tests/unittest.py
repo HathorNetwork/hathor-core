@@ -11,6 +11,7 @@ from twisted.trial import unittest
 
 from hathor.builder import BuildArtifacts, Builder
 from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
@@ -113,6 +114,7 @@ class TestCase(unittest.TestCase):
         self.log.debug('set seed', seed=self.seed)
         self.rng = Random(self.seed)
         self._pending_cleanups = []
+        self._settings = get_settings()
 
     def tearDown(self):
         self.clean_tmpdirs()
@@ -273,9 +275,9 @@ class TestCase(unittest.TestCase):
 
         An initial set can be optionally provided.
         """
-        from hathor.transaction.genesis import GENESIS_HASHES
+        from hathor.transaction.genesis import get_all_genesis_hashes
 
-        valid_deps = set(GENESIS_HASHES if initial is None else initial)
+        valid_deps = set(get_all_genesis_hashes(self._settings) if initial is None else initial)
 
         for tx in tx_sequence:
             assert tx.hash is not None

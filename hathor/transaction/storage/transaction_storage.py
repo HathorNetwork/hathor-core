@@ -23,12 +23,12 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
-from hathor.transaction.base_transaction import BaseTransaction
+from hathor.transaction.base_transaction import BaseTransaction, TxOutput
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import (
     TransactionDoesNotExist,
@@ -41,7 +41,6 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import not_none
 
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 # these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be
@@ -87,6 +86,7 @@ class TransactionStorage(ABC):
     _migrations: list[BaseMigration]
 
     def __init__(self) -> None:
+        self._settings = get_settings()
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -252,7 +252,7 @@ class TransactionStorage(ABC):
         """Check the network name is as expected and try to set it when none is present"""
         from hathor.transaction.storage.exceptions import WrongNetworkError
 
-        network = settings.NETWORK_NAME
+        network = self._settings.NETWORK_NAME
         stored_network = self.get_network()
 
         if stored_network is None:
@@ -305,7 +305,13 @@ class TransactionStorage(ABC):
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
         self._saving_genesis = True
-        for tx in self._get_genesis_from_settings():
+        genesis_txs = [
+            self._construct_genesis_block(),
+            self._construct_genesis_tx1(),
+            self._construct_genesis_tx2(),
+        ]
+
+        for tx in genesis_txs:
             try:
                 assert tx.hash is not None
                 tx2 = self.get_transaction(tx.hash)
@@ -317,11 +323,6 @@ class TransactionStorage(ABC):
             assert tx2.hash is not None
             self._genesis_cache[tx2.hash] = tx2
         self._saving_genesis = False
-
-    def _get_genesis_from_settings(self) -> list[BaseTransaction]:
-        """Return all genesis from settings."""
-        from hathor.transaction.genesis import _get_genesis_transactions_unsafe
-        return _get_genesis_transactions_unsafe(self)
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.
@@ -440,7 +441,7 @@ class TransactionStorage(ABC):
     def _validate_partial_marker_consistency(self, tx_meta: TransactionMetadata) -> None:
         voided_by = tx_meta.get_frozen_voided_by()
         # XXX: PARTIALLY_VALIDATED_ID must be included if the tx is fully connected and must not be included otherwise
-        has_partially_validated_marker = settings.PARTIALLY_VALIDATED_ID in voided_by
+        has_partially_validated_marker = self._settings.PARTIALLY_VALIDATED_ID in voided_by
         validation_is_fully_connected = tx_meta.validation.is_fully_connected()
         assert (not has_partially_validated_marker) == validation_is_fully_connected, \
                'Inconsistent ValidationState and voided_by'
@@ -1085,6 +1086,48 @@ class TransactionStorage(ABC):
                 tx.set_validation(ValidationState.INVALID)
                 to_remove.append(tx)
         return to_remove
+
+    def _construct_genesis_block(self) -> Block:
+        """Return the genesis block."""
+        block = Block(
+            storage=self,
+            nonce=self._settings.GENESIS_BLOCK_NONCE,
+            timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
+            weight=self._settings.MIN_BLOCK_WEIGHT,
+            outputs=[
+                TxOutput(self._settings.GENESIS_TOKENS, self._settings.GENESIS_OUTPUT_SCRIPT),
+            ],
+        )
+        block.update_hash()
+
+        assert block.hash == self._settings.GENESIS_BLOCK_HASH
+        return block
+
+    def _construct_genesis_tx1(self) -> Transaction:
+        """Return the genesis tx1."""
+        tx1 = Transaction(
+            storage=self,
+            nonce=self._settings.GENESIS_TX1_NONCE,
+            timestamp=self._settings.GENESIS_TX1_TIMESTAMP,
+            weight=self._settings.MIN_TX_WEIGHT,
+        )
+        tx1.update_hash()
+
+        assert tx1.hash == self._settings.GENESIS_TX1_HASH
+        return tx1
+
+    def _construct_genesis_tx2(self) -> Transaction:
+        """Return the genesis tx2."""
+        tx2 = Transaction(
+            storage=self,
+            nonce=self._settings.GENESIS_TX2_NONCE,
+            timestamp=self._settings.GENESIS_TX2_TIMESTAMP,
+            weight=self._settings.MIN_TX_WEIGHT,
+        )
+        tx2.update_hash()
+
+        assert tx2.hash == self._settings.GENESIS_TX2_HASH
+        return tx2
 
 
 class BaseTransactionStorage(TransactionStorage):

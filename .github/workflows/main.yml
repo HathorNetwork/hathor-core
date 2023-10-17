@@ -20,17 +20,17 @@ jobs:
           import os
           import json
           full_matrix = {
-            'python': ['3.9', '3.10', '3.11'],
+            'python': ['3.10', '3.11'],
             # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
             'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
             'include': [
               # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
-              # {'os': 'ubuntu-22.04', 'python': 'pypy-3.9'},
+              # {'os': 'ubuntu-22.04', 'python': 'pypy-3.10'},
             ],
           }
           # this is the fastest one:
           reduced_matrix = {
-            'python': ['3.9'],
+            'python': ['3.11'],
             'os': ['ubuntu-22.04'],
           }
           github_repository = os.environ['GITHUB_REPOSITORY']
@@ -99,4 +99,4 @@ jobs:
         run: poetry run make tests
       - name: Upload coverage
         uses: codecov/codecov-action@v3
-        if: matrix.python == 3.9 && startsWith(matrix.os, 'ubuntu')
+        if: matrix.python == 3.11 && startsWith(matrix.os, 'ubuntu')

@@ -439,7 +439,7 @@ class BaseIndexesTest(unittest.TestCase):
         block2.timestamp = block1.timestamp
         block2.weight = 1.2
         block2.resolve()
-        block2.validate_full()
+        self.manager.verification_service.validate_full(block2)
         self.manager.propagate_tx(block2, fails_silently=False)
         self.graphviz.labels[block2.hash] = 'block2'
 

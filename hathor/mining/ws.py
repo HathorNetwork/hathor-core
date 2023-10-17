@@ -22,14 +22,12 @@ from typing import Any, NamedTuple, Optional, Union
 from autobahn.twisted.websocket import WebSocketServerFactory, WebSocketServerProtocol
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
 from hathor.manager import HathorManager
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.util import json_dumpb, json_loadb
 
 logger = get_logger()
-settings = HathorSettings()
 
 JsonRpcId = Union[str, int, float]
 JsonValue = Optional[Union[dict[str, Any], list[Any], str, int, float]]

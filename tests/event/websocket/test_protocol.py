@@ -90,7 +90,8 @@ def test_send_event_response():
             type=EventType.VERTEX_METADATA_CHANGED,
             data=EventMocker.tx_data
         ),
-        latest_event_id=10
+        latest_event_id=10,
+        stream_id='stream_id'
     )
 
     protocol.send_event_response(response)
@@ -101,7 +102,8 @@ def test_send_event_response():
                        b'"token_name":null,"token_symbol":null,"metadata":{"hash":"abc","spent_outputs":[],' \
                        b'"conflict_with":[],"voided_by":[],"received_by":[],"children":[],"twins":[],' \
                        b'"accumulated_weight":10.0,"score":20.0,"first_block":null,"height":100,' \
-                       b'"validation":"validation"},"aux_pow":null},"group_id":null},"latest_event_id":10}'
+                       b'"validation":"validation"},"aux_pow":null},"group_id":null},"latest_event_id":10,' \
+                       b'"stream_id":"stream_id"}'
 
     protocol.sendMessage.assert_called_once_with(expected_payload)
 

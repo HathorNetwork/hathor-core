@@ -16,14 +16,12 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
-from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, HeightInfo, IndexEntry
+from hathor.indexes.height_index import HeightIndex, HeightInfo, IndexEntry
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
-settings = HathorSettings()
 logger = get_logger()
 
 _CF_NAME_HEIGHT_INDEX = b'height-index'
@@ -46,6 +44,7 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
 
     def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
         self.log = logger.new()
+        HeightIndex.__init__(self)
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_HEIGHT_INDEX)
 
     def get_db_name(self) -> Optional[str]:
@@ -58,7 +57,7 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
     def _init_db(self) -> None:
         """ Initialize the database with the genesis entry."""
         key_genesis = self._to_key(0)
-        value_genesis = self._to_value(BLOCK_GENESIS_ENTRY)
+        value_genesis = self._to_value(self.get_genesis_block_entry())
         self._db.put((self._cf, key_genesis), value_genesis)
 
     def _to_key(self, height: int) -> bytes:

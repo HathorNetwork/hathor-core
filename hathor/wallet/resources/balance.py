@@ -14,10 +14,8 @@
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 
 @register_resource
@@ -30,6 +28,7 @@ class BalanceResource(Resource):
 
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
+        self._settings = get_settings()
         self.manager = manager
 
     def render_GET(self, request):
@@ -44,7 +43,7 @@ class BalanceResource(Resource):
         if not self.manager.wallet:
             return {'success': False, 'message': 'No wallet started on node'}
 
-        data = {'success': True, 'balance': self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]._asdict()}
+        data = {'success': True, 'balance': self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]._asdict()}
         return json_dumpb(data)
 
 

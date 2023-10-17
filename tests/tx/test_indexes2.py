@@ -25,7 +25,7 @@ class SimpleIndexesTestCase(unittest.TestCase):
         # how many transactions will be generated on the same timestamp before increasing it by 1
         self.transactions = []
         repetitions = [1, 1, 10, 10, 10, 2, 1, 0, 0, 5, 5, 5, 0, 1, 1, 10, 10, 10, 1, 2, 3, 1, 100, 100, 1, 100, 0, 1]
-        ts = settings.GENESIS_TIMESTAMP
+        ts = settings.GENESIS_BLOCK_TIMESTAMP
         for rep in repetitions:
             for _ in range(rep):
                 tx = FakeTransaction(self.rng.randbytes(32), ts)

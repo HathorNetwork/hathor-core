@@ -208,7 +208,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx2.timestamp = tx.timestamp + 1
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.resolve()
-        tx2.verify()
+        self.manager.verification_service.verify(tx2)
 
         self.assertNotEqual(len(tx2.inputs), 0)
         token_dict = defaultdict(int)

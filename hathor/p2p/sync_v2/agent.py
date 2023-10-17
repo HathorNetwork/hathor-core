@@ -24,7 +24,7 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
@@ -39,7 +39,6 @@ from hathor.util import Reactor, collect_n
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
 
-settings = HathorSettings()
 logger = get_logger()
 
 MAX_GET_TRANSACTIONS_BFS_LEN: int = 8
@@ -66,6 +65,7 @@ class NodeBlockSync(SyncAgent):
         :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
         :type reactor: Reactor
         """
+        self._settings = get_settings()
         self.protocol = protocol
         self.manager = protocol.node
         self.tx_storage = protocol.node.tx_storage
@@ -85,7 +85,7 @@ class NodeBlockSync(SyncAgent):
 
         # Extra
         self._blk_size = 0
-        self._blk_end_hash = settings.GENESIS_BLOCK_HASH
+        self._blk_end_hash = self._settings.GENESIS_BLOCK_HASH
         self._blk_max_quantity = 0
 
         # indicates whether we're receiving a stream from the peer
@@ -319,7 +319,7 @@ class NodeBlockSync(SyncAgent):
         # Start with the last received block and find the best block full validated in its chain
         block = self._last_received_block
         if block is None:
-            block = cast(Block, self.tx_storage.get_genesis(settings.GENESIS_BLOCK_HASH))
+            block = cast(Block, self.tx_storage.get_genesis(self._settings.GENESIS_BLOCK_HASH))
         else:
             with self.tx_storage.allow_partially_validated_context():
                 while not block.get_metadata().validation.is_valid():
@@ -1154,7 +1154,7 @@ class NodeBlockSync(SyncAgent):
                 if isinstance(tx, Block) and not tx.has_basic_block_parent():
                     self.log.warn('on_new_tx(): block parent needs to be at least basic-valid', tx=tx.hash_hex)
                     return False
-                if not tx.validate_basic():
+                if not self.manager.verification_service.validate_basic(tx):
                     self.log.warn('on_new_tx(): basic validation failed', tx=tx.hash_hex)
                     return False
 

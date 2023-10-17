@@ -17,13 +17,17 @@ from unittest.mock import Mock
 import pytest
 
 from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.transaction import Block, TransactionMetadata
-from hathor.transaction.genesis import BLOCK_GENESIS
-from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
 
 
 def test_calculate_feature_activation_bit_counts_genesis():
-    result = BLOCK_GENESIS.calculate_feature_activation_bit_counts()
+    settings = get_settings()
+    storage = TransactionMemoryStorage()
+    genesis_block = storage.get_transaction(settings.GENESIS_BLOCK_HASH)
+    assert isinstance(genesis_block, Block)
+    result = genesis_block.calculate_feature_activation_bit_counts()
 
     assert result == [0, 0, 0, 0]
 

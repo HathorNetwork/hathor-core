@@ -18,7 +18,6 @@ from tests.unittest import TestBuilder
 from tests.utils import (
     BURN_ADDRESS,
     HAS_ROCKSDB,
-    MIN_TIMESTAMP,
     add_blocks_unlock_reward,
     add_new_blocks,
     add_new_transactions,
@@ -61,10 +60,11 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
         block_parents = [tx.hash for tx in chain(self.genesis_blocks, self.genesis_txs)]
         output = TxOutput(200, P2PKH.create_output_script(BURN_ADDRESS))
-        self.block = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents,
+        previous_timestamp = artifacts.settings.GENESIS_TX2_TIMESTAMP
+        self.block = Block(timestamp=previous_timestamp + 1, weight=12, outputs=[output], parents=block_parents,
                            nonce=100781, storage=self.tx_storage)
         self.block.resolve()
-        self.block.verify()
+        self.manager.verification_service.verify(self.block)
         self.block.get_metadata().validation = ValidationState.FULL
 
         tx_parents = [tx.hash for tx in self.genesis_txs]
@@ -77,7 +77,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
                                '620e78362cf2d908e9057ac235a63'))
 
         self.tx = Transaction(
-            timestamp=MIN_TIMESTAMP + 2, weight=10, nonce=932049, inputs=[tx_input], outputs=[output],
+            timestamp=previous_timestamp + 2, weight=10, nonce=932049, inputs=[tx_input], outputs=[output],
             tokens=[bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')],
             parents=tx_parents, storage=self.tx_storage)
         self.tx.resolve()
@@ -100,21 +100,11 @@ class BaseTransactionStorageTest(unittest.TestCase):
             tx2 = self.tx_storage.get_transaction(tx.hash)
             self.assertTrue(tx is tx2)
 
-        from hathor.transaction.genesis import _get_genesis_transactions_unsafe
-        genesis_from_settings = _get_genesis_transactions_unsafe(None)
-        for tx in genesis_from_settings:
-            tx2 = self.tx_storage.get_transaction(tx.hash)
-            self.assertTrue(tx is not tx2)
-            for tx3 in genesis_set:
-                self.assertTrue(tx is not tx3)
-                if tx2 == tx3:
-                    self.assertTrue(tx2 is tx3)
-
     def test_genesis(self):
         self.assertEqual(1, len(self.genesis_blocks))
         self.assertEqual(2, len(self.genesis_txs))
         for tx in self.genesis:
-            tx.verify()
+            self.manager.verification_service.verify(tx)
 
         for tx in self.genesis:
             tx2 = self.tx_storage.get_transaction(tx.hash)
@@ -526,7 +516,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             block.parents = parents
         block.weight = 10
         self.assertTrue(block.resolve())
-        block.verify()
+        self.manager.verification_service.verify(block)
         self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)
         return block

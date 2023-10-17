@@ -27,10 +27,8 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_private_key,
 )
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.util import not_none
-
-settings = HathorSettings()
 
 _BACKEND = default_backend()
 
@@ -119,8 +117,7 @@ def get_address_b58_from_public_key_hash(public_key_hash: bytes) -> str:
     return base58.b58encode(address).decode('utf-8')
 
 
-def get_address_from_public_key_hash(public_key_hash: bytes,
-                                     version_byte: bytes = settings.P2PKH_VERSION_BYTE) -> bytes:
+def get_address_from_public_key_hash(public_key_hash: bytes, version_byte: Optional[bytes] = None) -> bytes:
     """Gets the address in bytes from the public key hash
 
         :param public_key_hash: hash of public key (sha256 and ripemd160)
@@ -132,9 +129,11 @@ def get_address_from_public_key_hash(public_key_hash: bytes,
         :return: address in bytes
         :rtype: bytes
     """
+    settings = get_settings()
     address = b''
+    actual_version_byte: bytes = version_byte if version_byte is not None else settings.P2PKH_VERSION_BYTE
     # Version byte
-    address += version_byte
+    address += actual_version_byte
     # Pubkey hash
     address += public_key_hash
     checksum = get_checksum(address)
@@ -200,8 +199,7 @@ def get_public_key_from_bytes_compressed(public_key_bytes: bytes) -> ec.Elliptic
     return ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes)
 
 
-def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
-                                            version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> str:
+def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes, version_byte: Optional[bytes] = None) -> str:
     """Gets the b58 address from the hash of the redeem script in multisig.
 
         :param redeem_script_hash: hash of the redeem script (sha256 and ripemd160)
@@ -210,12 +208,13 @@ def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
         :return: address in base 58
         :rtype: string
     """
-    address = get_address_from_redeem_script_hash(redeem_script_hash, version_byte)
+    settings = get_settings()
+    actual_version_byte: bytes = version_byte if version_byte is not None else settings.MULTISIG_VERSION_BYTE
+    address = get_address_from_redeem_script_hash(redeem_script_hash, actual_version_byte)
     return base58.b58encode(address).decode('utf-8')
 
 
-def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
-                                        version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> bytes:
+def get_address_from_redeem_script_hash(redeem_script_hash: bytes, version_byte: Optional[bytes] = None) -> bytes:
     """Gets the address in bytes from the redeem script hash
 
         :param redeem_script_hash: hash of redeem script (sha256 and ripemd160)
@@ -227,9 +226,11 @@ def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
         :return: address in bytes
         :rtype: bytes
     """
+    settings = get_settings()
+    actual_version_byte: bytes = version_byte if version_byte is not None else settings.MULTISIG_VERSION_BYTE
     address = b''
     # Version byte
-    address += version_byte
+    address += actual_version_byte
     # redeem script hash
     address += redeem_script_hash
     checksum = get_checksum(address)

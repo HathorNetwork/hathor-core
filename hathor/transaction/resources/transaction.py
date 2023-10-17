@@ -24,12 +24,10 @@ from hathor.api_util import (
     validate_tx_hash,
 )
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 GET_LIST_ARGS = ['count', 'type']
 
@@ -44,13 +42,14 @@ def update_serialized_tokens_array(tx: BaseTransaction, serialized: dict[str, An
         serialized['tokens'] = [h.hex() for h in tx.tokens]
 
 
-def get_tx_extra_data(tx: BaseTransaction) -> dict[str, Any]:
+def get_tx_extra_data(tx: BaseTransaction, *, detail_tokens: bool = True) -> dict[str, Any]:
     """ Get the data of a tx to be returned to the frontend
         Returns success, tx serializes, metadata and spent outputs
     """
     assert tx.storage is not None
     assert tx.storage.indexes is not None
 
+    settings = get_settings()
     serialized = tx.to_json(decode_script=True)
     serialized['raw'] = tx.get_struct().hex()
     serialized['nonce'] = str(tx.nonce)
@@ -116,18 +115,19 @@ def get_tx_extra_data(tx: BaseTransaction) -> dict[str, Any]:
 
     serialized['inputs'] = inputs
 
-    detailed_tokens = []
-    for token_uid_hex in serialized['tokens']:
-        tokens_index = tx.storage.indexes.tokens
-        assert tokens_index is not None
-        token_info = tokens_index.get_token_info(bytes.fromhex(token_uid_hex))
-        detailed_tokens.append({
-            'uid': token_uid_hex,
-            'name': token_info.get_name(),
-            'symbol': token_info.get_symbol(),
-        })
+    if detail_tokens:
+        detailed_tokens = []
+        for token_uid_hex in serialized['tokens']:
+            tokens_index = tx.storage.indexes.tokens
+            assert tokens_index is not None
+            token_info = tokens_index.get_token_info(bytes.fromhex(token_uid_hex))
+            detailed_tokens.append({
+                'uid': token_uid_hex,
+                'name': token_info.get_name(),
+                'symbol': token_info.get_symbol(),
+            })
 
-    serialized['tokens'] = detailed_tokens
+        serialized['tokens'] = detailed_tokens
 
     return {
         'success': True,
@@ -205,6 +205,7 @@ class TransactionResource(Resource):
             'timestamp': int, the timestamp reference we are in the pagination
             'page': 'previous' or 'next', to indicate if the user wants after or before the hash reference
         """
+        settings = get_settings()
         raw_args = get_args(request)
         parsed = parse_args(raw_args, GET_LIST_ARGS)
         if not parsed['success']:

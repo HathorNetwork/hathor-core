@@ -33,6 +33,10 @@ class _SettingsMetadata(NamedTuple):
 _settings_singleton: Optional[_SettingsMetadata] = None
 
 
+def get_settings() -> Settings:
+    return HathorSettings()
+
+
 def HathorSettings() -> Settings:
     """
     Returns the configuration named tuple.

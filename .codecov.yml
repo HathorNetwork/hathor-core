@@ -1,5 +1,5 @@
 codecov:
-  branch: dev
+  branch: master
 
 coverage:
   # https://docs.codecov.com/docs/coverage-configuration

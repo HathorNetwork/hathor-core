@@ -15,10 +15,8 @@
 import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 
 @register_resource
@@ -31,6 +29,7 @@ class VersionResource(Resource):
 
     def __init__(self, manager):
         # Important to have the manager so we can have access to min_tx_weight_coefficient
+        self._settings = get_settings()
         self.manager = manager
 
     def render_GET(self, request):
@@ -44,14 +43,14 @@ class VersionResource(Resource):
         data = {
             'version': hathor.__version__,
             'network': self.manager.network,
-            'min_weight': settings.MIN_TX_WEIGHT,  # DEPRECATED
-            'min_tx_weight': settings.MIN_TX_WEIGHT,
-            'min_tx_weight_coefficient': settings.MIN_TX_WEIGHT_COEFFICIENT,
-            'min_tx_weight_k': settings.MIN_TX_WEIGHT_K,
-            'token_deposit_percentage': settings.TOKEN_DEPOSIT_PERCENTAGE,
-            'reward_spend_min_blocks': settings.REWARD_SPEND_MIN_BLOCKS,
-            'max_number_inputs': settings.MAX_NUM_INPUTS,
-            'max_number_outputs': settings.MAX_NUM_OUTPUTS,
+            'min_weight': self._settings.MIN_TX_WEIGHT,  # DEPRECATED
+            'min_tx_weight': self._settings.MIN_TX_WEIGHT,
+            'min_tx_weight_coefficient': self._settings.MIN_TX_WEIGHT_COEFFICIENT,
+            'min_tx_weight_k': self._settings.MIN_TX_WEIGHT_K,
+            'token_deposit_percentage': self._settings.TOKEN_DEPOSIT_PERCENTAGE,
+            'reward_spend_min_blocks': self._settings.REWARD_SPEND_MIN_BLOCKS,
+            'max_number_inputs': self._settings.MAX_NUM_INPUTS,
+            'max_number_outputs': self._settings.MAX_NUM_OUTPUTS,
         }
         return json_dumpb(data)
 

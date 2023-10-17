@@ -20,10 +20,8 @@ from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
-settings = HathorSettings()
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -53,6 +51,7 @@ class TxDetails:
     requested_index: int
 
     def __init__(self, tx_id: bytes, deferred: Deferred, connections: list['NodeSyncTimestamp']):
+        self._settings = get_settings()
         self.log = logger.new()
         self.tx_id = tx_id
         self.deferred = deferred
@@ -109,7 +108,7 @@ class TxDetails:
             self.retry_count += 1
 
             # only try next peer if we reach max retries on the current one
-            if self.retry_count >= settings.GET_DATA_RETRIES:
+            if self.retry_count >= self._settings.GET_DATA_RETRIES:
                 self.requested_index += 1
                 self.retry_count = 0
 
@@ -146,6 +145,7 @@ class Downloader:
     window_size: int
 
     def __init__(self, manager: 'HathorManager', window_size: int = 100):
+        self._settings = get_settings()
         self.log = logger.new()
         self.manager = manager
 
@@ -227,7 +227,7 @@ class Downloader:
         # Adding timeout to callback
         fn_timeout = partial(self.on_deferred_timeout, tx_id=tx_id)
         details.downloading_deferred.addTimeout(
-            settings.GET_DATA_TIMEOUT,
+            self._settings.GET_DATA_TIMEOUT,
             connection.reactor,
             onTimeoutCancel=fn_timeout
         )
