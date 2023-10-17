@@ -283,6 +283,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """
         token_dict: dict[TokenUid, TokenInfo] = {}
 
+        for token_uid in self.tokens:
+            token_dict[token_uid] = TokenInfo(0, False, False)
+
         default_info: TokenInfo = TokenInfo(0, False, False)
 
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
