@@ -10,6 +10,7 @@ from structlog import get_logger
 from twisted.trial import unittest
 
 from hathor.builder import BuildArtifacts, Builder
+from hathor.cli.util import setup_logging
 from hathor.conf import HathorSettings
 from hathor.conf.get_settings import get_settings
 from hathor.daa import TestMode, _set_test_mode
@@ -104,6 +105,7 @@ class TestCase(unittest.TestCase):
     seed_config: Optional[int] = None
 
     def setUp(self):
+        setup_logging()
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         self.tmpdirs = []
         self.clock = TestMemoryReactorClock()
@@ -111,7 +113,7 @@ class TestCase(unittest.TestCase):
         self.log = logger.new()
         self.reset_peer_id_pool()
         self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config
-        self.log.debug('set seed', seed=self.seed)
+        self.log.info('set seed', seed=self.seed)
         self.rng = Random(self.seed)
         self._pending_cleanups = []
         self._settings = get_settings()
