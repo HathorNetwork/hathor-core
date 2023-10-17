@@ -227,6 +227,7 @@ class ConnectionsManager:
     def disable_rate_limiter(self) -> None:
         """Disable global rate limiter."""
         self.rate_limiter.unset_limit(self.GlobalRateLimiter.SEND_TIPS)
+        self.rate_limiter.reset(self.GlobalRateLimiter.SEND_TIPS)
 
     def enable_rate_limiter(self, max_hits: int = 16, window_seconds: float = 1) -> None:
         """Enable global rate limiter. This method can be called to change the current rate limit."""

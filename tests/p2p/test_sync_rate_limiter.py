@@ -25,6 +25,8 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.simulator.add_connection(conn12)
         self.simulator.run(3600)
 
+        # Disable to reset all previous hits to the rate limiter.
+        manager2.connections.disable_rate_limiter()
         manager2.connections.enable_rate_limiter(8, 2)
 
         connected_peers2 = list(manager2.connections.connected_peers.values())
