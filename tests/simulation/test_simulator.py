@@ -87,7 +87,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        self.assertTrue(self.simulator.run(3600, trigger=AllTriggers(stop_triggers)))
+        # TODO Add self.assertTrue(...) when the trigger is fixed.
+        #      For further information, see https://github.com/HathorNetwork/hathor-core/pull/815.
+        self.simulator.run(3600, trigger=AllTriggers(stop_triggers))
 
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)

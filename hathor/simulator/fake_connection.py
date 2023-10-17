@@ -71,13 +71,16 @@ class FakeConnection:
         self._proto1.disable_idle_timeout()
         self._proto2.disable_idle_timeout()
 
-    def is_both_synced(self) -> bool:
+    def is_both_synced(self, *, errmsgs: Optional[list[str]] = None) -> bool:
         """Short-hand check that can be used to make "step loops" without having to guess the number of iterations."""
+        if errmsgs is None:
+            errmsgs = []
         from hathor.p2p.states.ready import ReadyState
         conn1_aborting = self._proto1.aborting
         conn2_aborting = self._proto2.aborting
         if conn1_aborting or conn2_aborting:
             self.log.debug('conn aborting', conn1_aborting=conn1_aborting, conn2_aborting=conn2_aborting)
+            errmsgs.append('conn aborting')
             return False
         state1 = self._proto1.state
         state2 = self._proto2.state
@@ -85,6 +88,7 @@ class FakeConnection:
         state2_is_ready = isinstance(state2, ReadyState)
         if not state1_is_ready or not state2_is_ready:
             self.log.debug('peer not ready', peer1_ready=state1_is_ready, peer2_ready=state2_is_ready)
+            errmsgs.append('peer not ready')
             return False
         assert isinstance(state1, ReadyState)  # mypy can't infer this from the above
         assert isinstance(state2, ReadyState)  # mypy can't infer this from the above
@@ -92,21 +96,25 @@ class FakeConnection:
         state2_is_errored = state2.sync_agent.is_errored()
         if state1_is_errored or state2_is_errored:
             self.log.debug('peer errored', peer1_errored=state1_is_errored, peer2_errored=state2_is_errored)
+            errmsgs.append('peer errored')
             return False
         state1_is_synced = state1.sync_agent.is_synced()
         state2_is_synced = state2.sync_agent.is_synced()
         if not state1_is_synced or not state2_is_synced:
             self.log.debug('peer not synced', peer1_synced=state1_is_synced, peer2_synced=state2_is_synced)
+            errmsgs.append('peer not synced')
             return False
         [best_block_info1] = state1.protocol.node.tx_storage.get_n_height_tips(1)
         [best_block_info2] = state2.protocol.node.tx_storage.get_n_height_tips(1)
         if best_block_info1.id != best_block_info2.id:
             self.log.debug('best block is different')
+            errmsgs.append('best block is different')
             return False
         tips1 = {i.data for i in state1.protocol.node.tx_storage.get_tx_tips()}
         tips2 = {i.data for i in state2.protocol.node.tx_storage.get_tx_tips()}
         if tips1 != tips2:
             self.log.debug('tx tips are different')
+            errmsgs.append('tx tips are different')
             return False
         return True
 
