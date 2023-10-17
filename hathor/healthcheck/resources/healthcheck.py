@@ -56,7 +56,6 @@ class HealthcheckResource(Resource):
         return json_dumpb(health_check.to_json())
 
 
-# TODO: Fix below
 HealthcheckResource.openapi = {
     '/health': {
         'x-visibility': 'public',
