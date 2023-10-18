@@ -15,6 +15,8 @@ settings = HathorSettings()
 class BaseRandomSimulatorTestCase(SimulatorTestCase):
     __test__ = True
 
+    seed_config = 2
+
     def _get_partial_blocks(self, tx_storage):
         with tx_storage.allow_partially_validated_context():
             partial_blocks = set()
