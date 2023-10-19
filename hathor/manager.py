@@ -1165,7 +1165,8 @@ class HathorManager:
 
         return True
 
-    def is_healthy(self) -> tuple[bool, Optional[str]]:
+    def is_sync_healthy(self) -> tuple[bool, Optional[str]]:
+        # This checks whether the last txs (blocks or transactions) we received are recent enough.
         if not self.has_recent_activity():
             return False, HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY
 
