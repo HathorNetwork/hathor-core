@@ -756,7 +756,7 @@ class HathorManager:
         assert isinstance(parent_block, Block)
         parent_txs = self.generate_parent_txs(parent_block.timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS)
         if timestamp is None:
-            current_timestamp = int(max(self.tx_storage.latest_timestamp, self.reactor.seconds()))
+            current_timestamp = int(self.reactor.seconds())
         else:
             current_timestamp = timestamp
         return self._make_block_template(parent_block, parent_txs, current_timestamp)
