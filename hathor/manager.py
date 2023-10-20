@@ -31,6 +31,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
+    BlockTemplateTimestampError,
     DoubleSpendingError,
     HathorError,
     InitializationError,
@@ -807,6 +808,13 @@ class HathorManager:
             timestamp_max = min(timestamp_abs_max, timestamp_max_decay)
         else:
             timestamp_max = timestamp_abs_max
+        timestamp_max = min(timestamp_max, int(current_timestamp + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED))
+        if timestamp_max < timestamp_min:
+            raise BlockTemplateTimestampError(
+                f'Unable to create a block template because there is no timestamp available. '
+                f'(min={timestamp_min}, max={timestamp_max}) '
+                f'(current_timestamp={current_timestamp})'
+            )
         timestamp = min(max(current_timestamp, timestamp_min), timestamp_max)
         parent_block_metadata = parent_block.get_metadata()
         # this is the min weight to cause an increase of twice the WEIGHT_TOL, we make sure to generate a template with
