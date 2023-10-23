@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import base64
-import json
 import math
 import struct
 from collections import OrderedDict
 from enum import Enum
+from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Callable, Generator, Optional, cast
 
 from structlog import get_logger
@@ -34,7 +34,7 @@ from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import HathorError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
-from hathor.util import Reactor, collect_n
+from hathor.util import Reactor, collect_n, json_dumps, json_loads
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -50,6 +50,10 @@ class PeerState(Enum):
     SYNCING_BLOCKS = 'syncing-blocks'
     SYNCING_TRANSACTIONS = 'syncing-transactions'
     SYNCING_MEMPOOL = 'syncing-mempool'
+
+
+class _GetDataOrigin(Enum):
+    MEMPOOL = 'mempool'
 
 
 class NodeBlockSync(SyncAgent):
@@ -238,8 +242,7 @@ class NodeBlockSync(SyncAgent):
         """
         # XXX: NOT_FOUND is a valid message, but we shouldn't ever receive it unless the other peer is running with a
         #                modified code or if there is a bug
-        self.log.warn('not found? close connection', payload=payload)
-        self.protocol.send_error_and_close_connection('Unexpected NOT_FOUND')
+        self._close_with_error('Unexpected NOT_FOUND')
 
     def handle_error(self, payload: str) -> None:
         """ Override protocols original handle_error so we can recover a sync in progress.
@@ -250,6 +253,13 @@ class NodeBlockSync(SyncAgent):
 
     def update_synced(self, synced: bool) -> None:
         self._synced = synced
+
+    def _close_with_error(self, error_msg: str, **log_kwargs: Any) -> None:
+        """ Internal method to set error state, close connection and log error.
+        """
+        self.log.warn(error_msg, **log_kwargs)
+        self.state = PeerState.ERROR
+        self.protocol.send_error_and_close_connection(error_msg)
 
     @inlineCallbacks
     def run_sync(self) -> Generator[Any, Any, None]:
@@ -407,19 +417,23 @@ class NodeBlockSync(SyncAgent):
     def send_tips(self, tx_id: bytes) -> None:
         """ Send a TIPS message.
         """
-        self.send_message(ProtocolMessages.TIPS, json.dumps([tx_id.hex()]))
+        self.send_message(ProtocolMessages.TIPS, json_dumps([tx_id.hex()]))
 
     def handle_tips(self, payload: str) -> None:
         """ Handle a TIPS message.
         """
         self.log.debug('tips', receiving_tips=self._receiving_tips)
         if self._receiving_tips is None:
-            self.protocol.send_error_and_close_connection('TIPS not expected')
+            self._close_with_error('TIPS not expected')
             return
-        data = json.loads(payload)
-        data = [bytes.fromhex(x) for x in data]
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
+        tx_ids = [bytes.fromhex(x) for x in data]
         # filter-out txs we already have
-        self._receiving_tips.extend(tx_id for tx_id in data if not self.partial_vertex_exists(tx_id))
+        self._receiving_tips.extend(tx_id for tx_id in tx_ids if not self.partial_vertex_exists(tx_id))
 
     def handle_tips_end(self, _payload: str) -> None:
         """ Handle a TIPS-END message.
@@ -428,7 +442,7 @@ class NodeBlockSync(SyncAgent):
         deferred = self._deferred_tips
         self._deferred_tips = None
         if deferred is None:
-            self.protocol.send_error_and_close_connection('TIPS-END not expected')
+            self._close_with_error('TIPS-END not expected')
             return
         deferred.callback(self._receiving_tips)
         self._receiving_tips = None
@@ -437,7 +451,7 @@ class NodeBlockSync(SyncAgent):
         """ Send a RELAY message.
         """
         self.log.debug('send_relay', enable=enable)
-        self.send_message(ProtocolMessages.RELAY, json.dumps(enable))
+        self.send_message(ProtocolMessages.RELAY, json_dumps(enable))
 
     def handle_relay(self, payload: str) -> None:
         """ Handle a RELAY message.
@@ -446,11 +460,15 @@ class NodeBlockSync(SyncAgent):
             # XXX: "legacy" nothing means enable
             self._is_relaying = True
         else:
-            val = json.loads(payload)
+            try:
+                val = json_loads(payload)
+            except JSONDecodeError:
+                self.protocol.send_error_and_close_connection('malformed JSON')
+                return
             if isinstance(val, bool):
                 self._is_relaying = val
             else:
-                self.protocol.send_error_and_close_connection('RELAY: invalid value')
+                self._close_with_error('RELAY: invalid value')
                 return
 
     def _setup_block_streaming(self, start_hash: bytes, start_height: int, end_hash: bytes, end_height: int,
@@ -544,7 +562,7 @@ class NodeBlockSync(SyncAgent):
                     assert isinstance(blk, Block)
                     if height != blk.get_height():
                         # WTF?! It should never happen.
-                        self.state = PeerState.ERROR
+                        self._close_with_error('unexpected height')
                         return
                     synced = height
                     break
@@ -566,16 +584,20 @@ class NodeBlockSync(SyncAgent):
     def send_get_peer_block_hashes(self, heights: list[int]) -> None:
         """ Send a GET-PEER-BLOCK-HASHES message.
         """
-        payload = json.dumps(heights)
+        payload = json_dumps(heights)
         self.send_message(ProtocolMessages.GET_PEER_BLOCK_HASHES, payload)
 
     def handle_get_peer_block_hashes(self, payload: str) -> None:
         """ Handle a GET-PEER-BLOCK-HASHES message.
         """
         assert self.tx_storage.indexes is not None
-        heights = json.loads(payload)
+        try:
+            heights = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         if len(heights) > 20:
-            self.protocol.send_error_and_close_connection('GET-PEER-BLOCK-HASHES: too many heights')
+            self._close_with_error('GET-PEER-BLOCK-HASHES: too many heights')
             return
         data = []
         for h in heights:
@@ -589,23 +611,27 @@ class NodeBlockSync(SyncAgent):
                 self.reactor.callLater(3, self.handle_get_peer_block_hashes, payload)
                 return
             data.append((h, blk_hash.hex()))
-        payload = json.dumps(data)
+        payload = json_dumps(data)
         self.send_message(ProtocolMessages.PEER_BLOCK_HASHES, payload)
 
     def handle_peer_block_hashes(self, payload: str) -> None:
         """ Handle a PEER-BLOCK-HASHES message.
         """
-        data = json.loads(payload)
-        data = [(h, bytes.fromhex(block_hash)) for (h, block_hash) in data]
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
+        data_response = [(h, bytes.fromhex(block_hash)) for (h, block_hash) in data]
         deferred = self._deferred_peer_block_hashes
         self._deferred_peer_block_hashes = None
         if deferred:
-            deferred.callback(data)
+            deferred.callback(data_response)
 
     def send_get_next_blocks(self, start_hash: bytes, end_hash: bytes) -> None:
         """ Send a PEER-BLOCK-HASHES message.
         """
-        payload = json.dumps(dict(
+        payload = json_dumps(dict(
             start_hash=start_hash.hex(),
             end_hash=end_hash.hex(),
         ))
@@ -617,9 +643,13 @@ class NodeBlockSync(SyncAgent):
         """
         self.log.debug('handle GET-NEXT-BLOCKS')
         if self._is_streaming:
-            self.protocol.send_error_and_close_connection('GET-NEXT-BLOCKS received before previous one finished')
+            self._close_with_error('GET-NEXT-BLOCKS received before previous one finished')
             return
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         self.send_next_blocks(
             start_hash=bytes.fromhex(data['start_hash']),
             end_hash=bytes.fromhex(data['end_hash']),
@@ -684,8 +714,7 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.connections is not None
 
         if self.state is not PeerState.SYNCING_BLOCKS:
-            self.log.error('unexpected BLOCKS-END', state=self.state)
-            self.protocol.send_error_and_close_connection('Not expecting to receive BLOCKS-END message')
+            self._close_with_error('unexpected BLOCKS-END', state=self.state)
             return
 
         self.log.debug('block streaming ended', reason=str(response_code))
@@ -694,8 +723,7 @@ class NodeBlockSync(SyncAgent):
         """ Handle a BLOCKS message.
         """
         if self.state is not PeerState.SYNCING_BLOCKS:
-            self.log.error('unexpected BLOCK', state=self.state)
-            self.protocol.send_error_and_close_connection('Not expecting to receive BLOCK message')
+            self._close_with_error('unexpected BLOCK', state=self.state)
             return
 
         assert self.protocol.connections is not None
@@ -711,9 +739,7 @@ class NodeBlockSync(SyncAgent):
 
         self._blk_received += 1
         if self._blk_received > self._blk_max_quantity + 1:
-            self.log.warn('too many blocks received', last_block=blk.hash_hex)
-            # Too many blocks. Punish peer?
-            self.state = PeerState.ERROR
+            self._close_with_error('too many blocks received', last_block=blk.hash_hex)
             return
 
         if self.partial_vertex_exists(blk.hash):
@@ -762,9 +788,8 @@ class NodeBlockSync(SyncAgent):
             kwargs['error'] = msg
         if exc_info:
             kwargs['exc_info'] = True
-        self.log.warn('invalid new block', **kwargs)
         # Invalid block?!
-        self.state = PeerState.ERROR
+        self._close_with_error('invalid new block', **kwargs)
 
     def handle_many_repeated_blocks(self) -> None:
         """ Call this when a stream sends too many blocks in sequence that we already have.
@@ -813,12 +838,16 @@ class NodeBlockSync(SyncAgent):
         best_block = self.tx_storage.get_best_block()
         meta = best_block.get_metadata()
         data = {'block': best_block.hash_hex, 'height': meta.height}
-        self.send_message(ProtocolMessages.BEST_BLOCK, json.dumps(data))
+        self.send_message(ProtocolMessages.BEST_BLOCK, json_dumps(data))
 
     def handle_best_block(self, payload: str) -> None:
         """ Handle a BEST-BLOCK message.
         """
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         assert self.protocol.connections is not None
         self.log.debug('got best block', **data)
         data['block'] = bytes.fromhex(data['block'])
@@ -851,7 +880,7 @@ class NodeBlockSync(SyncAgent):
         start_from_hexlist = [tx.hex() for tx in start_from]
         until_first_block_hex = until_first_block.hex()
         self.log.debug('send_get_transactions_bfs', start_from=start_from_hexlist, last_block=until_first_block_hex)
-        payload = json.dumps(dict(
+        payload = json_dumps(dict(
             start_from=start_from_hexlist,
             until_first_block=until_first_block_hex,
         ))
@@ -864,12 +893,15 @@ class NodeBlockSync(SyncAgent):
         if self._is_streaming:
             self.log.warn('ignore GET-TRANSACTIONS-BFS, already streaming')
             return
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         # XXX: todo verify this limit while parsing the payload.
         start_from = data['start_from']
         if len(start_from) > MAX_GET_TRANSACTIONS_BFS_LEN:
-            self.log.error('too many transactions in GET-TRANSACTIONS-BFS', state=self.state)
-            self.protocol.send_error_and_close_connection('Too many transactions in GET-TRANSACTIONS-BFS')
+            self._close_with_error('too many transactions in GET-TRANSACTIONS-BFS', state=self.state)
             return
         self.log.debug('handle_get_transactions_bfs', **data)
         start_from = [bytes.fromhex(tx_hash_hex) for tx_hash_hex in start_from]
@@ -923,8 +955,7 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.connections is not None
 
         if self.state is not PeerState.SYNCING_TRANSACTIONS:
-            self.log.error('unexpected TRANSACTIONS-END', state=self.state)
-            self.protocol.send_error_and_close_connection('Not expecting to receive TRANSACTIONS-END message')
+            self._close_with_error('unexpected TRANSACTIONS-END', state=self.state)
             return
 
         self.log.debug('transaction streaming ended', reason=str(response_code))
@@ -945,8 +976,7 @@ class NodeBlockSync(SyncAgent):
 
         self._tx_received += 1
         if self._tx_received > self._tx_max_quantity + 1:
-            self.log.warn('too many txs received')
-            self.state = PeerState.ERROR
+            self._close_with_error('too many txs received')
             return
 
         try:
@@ -960,11 +990,10 @@ class NodeBlockSync(SyncAgent):
                 self.log.debug('tx received', tx_id=tx.hash.hex())
             self.on_new_tx(tx, propagate_to_peers=False, quiet=True, reject_locked_reward=True)
         except HathorError:
-            self.log.warn('invalid new tx', exc_info=True)
             # Invalid block?!
             # Invalid transaction?!
             # Maybe stop syncing and punish peer.
-            self.state = PeerState.ERROR
+            self._close_with_error('invalid new tx', exc_info=True)
             return
         else:
             # XXX: debugging log, maybe add timing info
@@ -972,9 +1001,10 @@ class NodeBlockSync(SyncAgent):
                 self.log.debug('tx streaming in progress', txs_received=self._tx_received)
 
     @inlineCallbacks
-    def get_tx(self, tx_id: bytes) -> Generator[Deferred, Any, BaseTransaction]:
+    def get_tx_mempool(self, tx_id: bytes) -> Generator[Deferred, Any, BaseTransaction]:
         """ Async method to get a transaction from the db/cache or to download it.
         """
+        assert self.state is PeerState.SYNCING_MEMPOOL, 'get_tx_mempool must only be called on mempool state'
         tx = self._get_tx_cache.get(tx_id)
         if tx is not None:
             self.log.debug('tx in cache', tx=tx_id.hex())
@@ -982,23 +1012,23 @@ class NodeBlockSync(SyncAgent):
         try:
             tx = self.tx_storage.get_transaction(tx_id)
         except TransactionDoesNotExist:
-            tx = yield self.get_data(tx_id, 'mempool')
+            tx = yield self.get_data(tx_id, _GetDataOrigin.MEMPOOL)
             assert tx is not None
             if tx.hash != tx_id:
-                self.protocol.send_error_and_close_connection(f'DATA mempool {tx_id.hex()} hash mismatch')
+                self._close_with_error(f'DATA mempool {tx_id.hex()} hash mismatch')
                 raise
         return tx
 
-    def get_data(self, tx_id: bytes, origin: str) -> Deferred[BaseTransaction]:
+    def get_data(self, tx_id: bytes, origin: _GetDataOrigin) -> Deferred[BaseTransaction]:
         """ Async method to request a tx by id.
         """
         # TODO: deal with stale `get_data` calls
-        if origin != 'mempool':
+        if origin is not _GetDataOrigin.MEMPOOL:
             raise ValueError(f'origin={origin} not supported, only origin=mempool is supported')
         deferred = self._deferred_txs.get(tx_id, None)
         if deferred is None:
             deferred = self._deferred_txs[tx_id] = Deferred()
-            self.send_get_data(tx_id, origin=origin)
+            self.send_get_data(tx_id, origin=origin.name)
             self.log.debug('get_data of new tx_id', deferred=deferred, key=tx_id.hex())
         else:
             # XXX: can we re-use deferred objects like this?
@@ -1013,7 +1043,7 @@ class NodeBlockSync(SyncAgent):
         if deferred is None:
             # Peer sent the wrong transaction?!
             # XXX: ban peer?
-            self.protocol.send_error_and_close_connection(f'DATA {origin}: with tx that was not requested')
+            self._close_with_error(f'DATA {origin}: with tx that was not requested')
             return
         self.log.debug('get_data fulfilled', deferred=deferred, key=tx.hash.hex())
         self._get_tx_cache[tx.hash] = tx
@@ -1040,13 +1070,17 @@ class NodeBlockSync(SyncAgent):
         }
         if origin is not None:
             data['origin'] = origin
-        payload = json.dumps(data)
+        payload = json_dumps(data)
         self.send_message(ProtocolMessages.GET_DATA, payload)
 
     def handle_get_data(self, payload: str) -> None:
         """ Handle a GET-DATA message.
         """
-        data = json.loads(payload)
+        try:
+            data = json_loads(payload)
+        except JSONDecodeError:
+            self.protocol.send_error_and_close_connection('malformed JSON')
+            return
         txid_hex = data['txid']
         origin = data.get('origin', '')
         # self.log.debug('handle_get_data', payload=hash_hex)
@@ -1079,7 +1113,7 @@ class NodeBlockSync(SyncAgent):
         if origin:
             if origin != 'mempool':
                 # XXX: ban peer?
-                self.protocol.send_error_and_close_connection(f'DATA {origin}: unsupported origin')
+                self._close_with_error(f'DATA {origin}: unsupported origin')
                 return
             assert tx is not None
             self._on_get_data(tx, origin)
