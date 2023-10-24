@@ -23,6 +23,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 class MemoryInfoIndex(InfoIndex):
     def __init__(self):
+        super().__init__()
         self._block_count = 0
         self._tx_count = 0
         self._first_timestamp = 0
@@ -35,11 +36,10 @@ class MemoryInfoIndex(InfoIndex):
         return None
 
     def force_clear(self) -> None:
-        from hathor.transaction.genesis import BLOCK_GENESIS, TX_GENESIS2
         self._block_count = 1
         self._tx_count = 2
-        self._first_timestamp = BLOCK_GENESIS.timestamp
-        self._latest_timestamp = TX_GENESIS2.timestamp
+        self._first_timestamp = self._settings.GENESIS_BLOCK_TIMESTAMP
+        self._latest_timestamp = self._settings.GENESIS_TX2_TIMESTAMP
 
     def update_timestamps(self, tx: BaseTransaction) -> None:
         if tx.is_genesis:

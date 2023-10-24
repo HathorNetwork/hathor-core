@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from structlog import get_logger
 
 from hathor import daa
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.transaction.exceptions import RewardLocked
 from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
     from hathor.transaction import Transaction
 
-settings = HathorSettings()
 logger = get_logger()
 
 
@@ -45,6 +44,7 @@ class RandomTransactionGenerator:
         :param: rate: Number of transactions per second
         :param: hashpower: Number of hashes per second
         """
+        self._settings = get_settings()
         self.manager = manager
 
         # List of addresses to send tokens. If this list is empty, tokens will be sent to an address
@@ -101,7 +101,7 @@ class RandomTransactionGenerator:
     def new_tx_step1(self):
         """ Generate a new transaction and schedule the mining part of the transaction.
         """
-        balance = self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]
+        balance = self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]
         if balance.available == 0 and self.ignore_no_funds:
             self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
             return

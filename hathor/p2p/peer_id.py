@@ -15,6 +15,7 @@
 import base64
 import hashlib
 from enum import Enum
+from math import inf
 from typing import TYPE_CHECKING, Any, Generator, Optional, cast
 
 from cryptography import x509
@@ -28,13 +29,11 @@ from twisted.internet.interfaces import ISSLTransport
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
 
 from hathor import daa
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
-
-settings = HathorSettings()
 
 
 class InvalidPeerIdException(Exception):
@@ -63,9 +62,11 @@ class PeerId:
     retry_timestamp: int    # should only try connecting to this peer after this timestamp
     retry_interval: int     # how long to wait for next connection retry. It will double for each failure
     retry_attempts: int     # how many retries were made
+    last_seen: float        # last time this peer was seen
     flags: set[str]
 
     def __init__(self, auto_generate_keys: bool = True) -> None:
+        self._settings = get_settings()
         self.id = None
         self.private_key = None
         self.public_key = None
@@ -74,6 +75,7 @@ class PeerId:
         self.retry_timestamp = 0
         self.retry_interval = 5
         self.retry_attempts = 0
+        self.last_seen = inf
         self.flags = set()
         self._certificate_options: Optional[CertificateOptions] = None
 
@@ -255,9 +257,9 @@ class PeerId:
         """
         self.retry_timestamp = now + self.retry_interval
         self.retry_attempts += 1
-        self.retry_interval = self.retry_interval * settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER
-        if self.retry_interval > settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL:
-            self.retry_interval = settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL
+        self.retry_interval = self.retry_interval * self._settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER
+        if self.retry_interval > self._settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL:
+            self.retry_interval = self._settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL
 
     def reset_retry_timestamp(self) -> None:
         """ Resets retry values.
@@ -279,7 +281,11 @@ class PeerId:
     def get_certificate(self) -> x509.Certificate:
         if not self.certificate:
             assert self.private_key is not None
-            certificate = generate_certificate(self.private_key, settings.CA_FILEPATH, settings.CA_KEY_FILEPATH)
+            certificate = generate_certificate(
+                self.private_key,
+                self._settings.CA_FILEPATH,
+                self._settings.CA_KEY_FILEPATH
+            )
             self.certificate = certificate
         return self.certificate
 
@@ -300,7 +306,7 @@ class PeerId:
         assert self.private_key is not None
         openssl_pkey = PKey.from_cryptography_key(self.private_key)
 
-        with open(settings.CA_FILEPATH, 'rb') as f:
+        with open(self._settings.CA_FILEPATH, 'rb') as f:
             ca = x509.load_pem_x509_certificate(data=f.read(), backend=default_backend())
 
         openssl_ca = X509.from_cryptography(ca)

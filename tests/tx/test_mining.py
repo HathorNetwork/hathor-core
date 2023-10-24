@@ -1,6 +1,8 @@
+from typing import Any
+
 from hathor.conf import HathorSettings
 from hathor.mining import BlockTemplate
-from hathor.transaction import sum_weights
+from hathor.transaction import Block, sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import add_new_blocks
@@ -40,7 +42,7 @@ class BaseMiningTest(unittest.TestCase):
             reward=settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
-            timestamp_min=settings.GENESIS_TIMESTAMP + 3,
+            timestamp_min=settings.GENESIS_BLOCK_TIMESTAMP + 3,
             timestamp_max=0xffffffff,  # no limit for next block after genesis
             # parents=[tx.hash for tx in self.genesis_blocks + self.genesis_txs],
             parents=block_templates[0].parents,
@@ -74,6 +76,39 @@ class BaseMiningTest(unittest.TestCase):
         ))
 
         self.assertConsensusValid(manager)
+
+    def test_minimally_valid_block(self) -> None:
+        template = BlockTemplate(
+            versions={0},
+            reward=6400,
+            weight=60,
+            timestamp_now=12345,
+            timestamp_min=12344,
+            timestamp_max=12346,
+            parents=[b'\x01', b'\x02', b'\x03'],
+            parents_any=[],
+            height=999,
+            score=100,
+            signal_bits=0b0101,
+        )
+        block = template.generate_minimally_valid_block()
+        json = block.to_json()
+        expected: dict[str, Any] = dict(
+            data='',
+            hash=None,
+            inputs=[],
+            nonce=0,
+            outputs=[dict(script='', token_data=0, value=6400)],
+            parents=['01', '02', '03'],
+            signal_bits=0b0101,
+            timestamp=12344,
+            tokens=[],
+            version=0,
+            weight=60
+        )
+
+        self.assertTrue(isinstance(block, Block))
+        self.assertEqual(json, expected)
 
 
 class SyncV1MiningTest(unittest.SyncV1Params, BaseMiningTest):

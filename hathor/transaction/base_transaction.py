@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -39,7 +39,6 @@ from hathor.transaction.exceptions import (
     TimestampError,
     TooManyOutputs,
     TooManySigOps,
-    TxValidationError,
     WeightError,
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -54,11 +53,8 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()
-settings = HathorSettings()
 
 MAX_NONCE = 2**32
-MAX_NUM_INPUTS = settings.MAX_NUM_INPUTS
-MAX_NUM_OUTPUTS = settings.MAX_NUM_OUTPUTS
 
 MAX_OUTPUT_VALUE = 2**63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
 _MAX_OUTPUT_VALUE_32 = 2**31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
@@ -184,6 +180,7 @@ class BaseTransaction(ABC):
         assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
+        self._settings = get_settings()
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
         self.signal_bits = signal_bits
@@ -360,7 +357,7 @@ class BaseTransaction(ABC):
         if self.hash is None:
             return False
         from hathor.transaction.genesis import is_genesis
-        return is_genesis(self.hash)
+        return is_genesis(self.hash, settings=self._settings)
 
     @abstractmethod
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
@@ -516,42 +513,6 @@ class BaseTransaction(ABC):
         self.set_validation(ValidationState.CHECKPOINT)
         return True
 
-    def validate_basic(self, skip_block_weight_verification: bool = False) -> bool:
-        """ Run basic validations (all that are possible without dependencies) and update the validation state.
-
-        If no exception is raised, the ValidationState will end up as `BASIC` and return `True`.
-        """
-        self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
-        self.set_validation(ValidationState.BASIC)
-        return True
-
-    def validate_full(self, skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
-                      reject_locked_reward: bool = True) -> bool:
-        """ Run full validations (these need access to all dependencies) and update the validation state.
-
-        If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
-        """
-        from hathor.transaction.transaction_metadata import ValidationState
-
-        meta = self.get_metadata()
-
-        # skip full validation when it is a checkpoint
-        if meta.validation.is_checkpoint():
-            self.set_validation(ValidationState.CHECKPOINT_FULL)
-            return True
-
-        # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
-        #      directly into trying a full validation so we should check it here to make sure the validation states
-        #      ends up being CHECKPOINT_FULL instead of FULL
-        if not meta.validation.is_at_least_basic():
-            # run basic validation if we haven't already
-            self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
-
-        self.verify(reject_locked_reward=reject_locked_reward)
-        validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
-        self.set_validation(validation)
-        return True
-
     def _mark_partially_validated(self) -> None:
         """ This function is used to add the partially-validated mark from the voided-by metadata.
 
@@ -560,7 +521,7 @@ class BaseTransaction(ABC):
         """
         tx_meta = self.get_metadata()
         assert not tx_meta.validation.is_fully_connected()
-        tx_meta.add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        tx_meta.add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
 
     def _unmark_partially_validated(self) -> None:
         """ This function is used to remove the partially-validated mark from the voided-by metadata.
@@ -570,27 +531,13 @@ class BaseTransaction(ABC):
         """
         tx_meta = self.get_metadata()
         assert tx_meta.validation.is_fully_connected()
-        tx_meta.del_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        tx_meta.del_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
 
     @abstractmethod
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         """Check that this tx is a known checkpoint or is parent of another checkpoint-valid tx/block.
 
         To be implemented by tx/block, used by `self.validate_checkpoint`. Should not modify the validation state."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
-        """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
-
-        To be implemented by tx/block, used by `self.validate_basic`. Should not modify the validation state."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def verify(self, reject_locked_reward: bool = True) -> None:
-        """Run all verifications. Raises on error.
-
-        To be implemented by tx/block, used by `self.validate_full`. Should not modify the validation state."""
         raise NotImplementedError
 
     def verify_parents(self) -> None:
@@ -631,7 +578,7 @@ class BaseTransaction(ABC):
 
                 if parent.is_block:
                     if self.is_block and not parent.is_genesis:
-                        if self.timestamp - parent.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
+                        if self.timestamp - parent.timestamp > self._settings.MAX_DISTANCE_BETWEEN_BLOCKS:
                             raise TimestampError('Distance between blocks is too big'
                                                  ' ({} seconds)'.format(self.timestamp - parent.timestamp))
                     if my_parents_txs > 0:
@@ -684,7 +631,7 @@ class BaseTransaction(ABC):
 
     def verify_number_of_outputs(self) -> None:
         """Verify number of outputs does not exceeds the limit"""
-        if len(self.outputs) > MAX_NUM_OUTPUTS:
+        if len(self.outputs) > self._settings.MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
     def verify_sigops_output(self) -> None:
@@ -696,7 +643,7 @@ class BaseTransaction(ABC):
         for tx_output in self.outputs:
             n_txops += get_sigops_count(tx_output.script)
 
-        if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
+        if n_txops > self._settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 self.hash_hex, n_txops))
 
@@ -719,9 +666,9 @@ class BaseTransaction(ABC):
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
 
-            if len(output.script) > settings.MAX_OUTPUT_SCRIPT_SIZE:
+            if len(output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
                 raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(
-                    len(output.script), settings.MAX_OUTPUT_SCRIPT_SIZE
+                    len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
     def resolve(self, update_time: bool = False) -> bool:
@@ -912,7 +859,7 @@ class BaseTransaction(ABC):
             self._metadata.voided_by = set()
         else:
             self._metadata.validation = ValidationState.INITIAL
-            self._metadata.voided_by = {settings.PARTIALLY_VALIDATED_ID}
+            self._metadata.voided_by = {self._settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
 
         self._update_height_metadata()
@@ -1103,21 +1050,6 @@ class BaseTransaction(ABC):
             ret['outputs'].append(output)
 
         return ret
-
-    def validate_tx_error(self) -> tuple[bool, str]:
-        """ Verify if tx is valid and return success and possible error message
-
-            :return: Success if tx is valid and possible error message, if not
-            :rtype: tuple[bool, str]
-        """
-        success = True
-        message = ''
-        try:
-            self.verify()
-        except TxValidationError as e:
-            success = False
-            message = str(e)
-        return success, message
 
     def clone(self) -> 'BaseTransaction':
         """Return exact copy without sharing memory, including metadata if loaded.

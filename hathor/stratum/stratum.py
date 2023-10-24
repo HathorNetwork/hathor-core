@@ -33,7 +33,7 @@ from twisted.internet.protocol import ServerFactory, connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.p2p.utils import format_address
@@ -49,7 +49,6 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
 
 logger = get_logger()
-settings = HathorSettings()
 
 
 def valid_uuid(uuid: Any) -> bool:
@@ -364,6 +363,7 @@ class StratumProtocol(JSONRPC):
 
     def __init__(self, factory: 'StratumFactory', manager: 'HathorManager', address: IAddress,
                  id_generator: Optional[Callable[[], Iterator[Union[str, int]]]] = lambda: count()):
+        self._settings = get_settings()
         self.log = logger.new(address=address)
         self.factory = factory
         self.manager = manager
@@ -374,7 +374,7 @@ class StratumProtocol(JSONRPC):
         self.miner_id = None
         self.miner_address = None
         self.job_ids = []
-        self.mine_txs = settings.STRATUM_MINE_TXS_DEFAULT
+        self.mine_txs = self._settings.STRATUM_MINE_TXS_DEFAULT
         self.estimated_hash_rate = 0.0
         self.completed_jobs = 0
         self.connection_start_time = 0
@@ -665,7 +665,8 @@ class StratumProtocol(JSONRPC):
         assert self.miner_id is not None
 
         # Only get first 32 bytes of peer_id because block data is limited to 100 bytes
-        data = '{}-{}-{}'.format(peer_id[:32], self.miner_id.hex, jobid.hex).encode()[:settings.BLOCK_DATA_MAX_SIZE]
+        data = '{}-{}-{}'.format(peer_id[:32], self.miner_id.hex, jobid.hex).encode()
+        data = data[:self._settings.BLOCK_DATA_MAX_SIZE]
         block = self.manager.generate_mining_block(data=data, address=self.miner_address,
                                                    merge_mined=self.merged_mining)
         self.log.debug('prepared block for mining', block=block)
@@ -687,7 +688,7 @@ class StratumProtocol(JSONRPC):
         :rtype: float
         """
         if len(self.job_ids) <= 1:
-            return settings.MIN_BLOCK_WEIGHT
+            return self._settings.MIN_BLOCK_WEIGHT
 
         mn = self.jobs[self.job_ids[0]].tx.timestamp
         mx = self.jobs[self.job_ids[-1]].tx.timestamp
@@ -701,7 +702,7 @@ class StratumProtocol(JSONRPC):
         hash_rate = acc_weight - log(dt, 2)
         self.estimated_hash_rate = hash_rate
         share_weight = hash_rate + log(self.AVERAGE_JOB_TIME, 2)
-        share_weight = max(share_weight, settings.MIN_SHARE_WEIGHT)
+        share_weight = max(share_weight, self._settings.MIN_SHARE_WEIGHT)
         return share_weight
 
     def get_stats(self) -> MinerStatistics:

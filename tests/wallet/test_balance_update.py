@@ -428,13 +428,16 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
                                   )
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx2.resolve()
-        tx2.verify()
+        self.manager.verification_service.verify(tx2)
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
         # verify balance
         self.assertEqual(self.manager.wallet.balance[token_id], WalletBalance(0, amount - 30))
         # hathor balance remains the same
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], hathor_balance)
+
+        balances_per_address = self.manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
+        self.assertEqual(hathor_balance.available, sum(x for x in balances_per_address.values()))
 
 
 class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):

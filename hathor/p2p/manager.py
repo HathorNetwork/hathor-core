@@ -24,6 +24,7 @@ from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
+from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
@@ -73,6 +74,7 @@ class ConnectionsManager:
     """
     MAX_ENABLED_SYNC = settings.MAX_ENABLED_SYNC
     SYNC_UPDATE_INTERVAL = settings.SYNC_UPDATE_INTERVAL
+    PEER_DISCOVERY_INTERVAL = settings.PEER_DISCOVERY_INTERVAL
 
     class GlobalRateLimiter:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
@@ -114,6 +116,12 @@ class ConnectionsManager:
 
         self.network = network
 
+        # List of addresses to listen for new connections (eg: [tcp:8000])
+        self.listen_addresses: list[str] = []
+
+        # List of peer discovery methods.
+        self.peer_discoveries: list[PeerDiscovery] = []
+
         # Options
         self.localhost_only = False
 
@@ -149,6 +157,9 @@ class ConnectionsManager:
         # List of known peers.
         self.peer_storage = PeerStorage()  # dict[string (peer.id), PeerId]
 
+        # Maximum unseen time before removing a peer (seconds).
+        self.max_peer_unseen_dt: float = 30 * 60   # 30-minutes
+
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
         self.lc_reconnect.clock = self.reactor
@@ -179,6 +190,9 @@ class ConnectionsManager:
         self.enable_sync_v1_1 = enable_sync_v1_1
         self.enable_sync_v2 = enable_sync_v2
 
+        # Timestamp when the last discovery ran
+        self._last_discovery: float = 0.
+
         # sync-manager factories
         self._sync_factories = {}
         if enable_sync_v1:
@@ -198,9 +212,25 @@ class ConnectionsManager:
             indexes.enable_deps_index()
             indexes.enable_mempool_index()
 
+    def add_listen_address(self, addr: str) -> None:
+        """Add address to listen for incoming connections."""
+        self.listen_addresses.append(addr)
+
+    def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
+        """Add a peer discovery method."""
+        self.peer_discoveries.append(peer_discovery)
+
+    def do_discovery(self) -> None:
+        """
+        Do a discovery and connect on all discovery strategies.
+        """
+        for peer_discovery in self.peer_discoveries:
+            peer_discovery.discover_and_connect(self.connect_to)
+
     def disable_rate_limiter(self) -> None:
         """Disable global rate limiter."""
         self.rate_limiter.unset_limit(self.GlobalRateLimiter.SEND_TIPS)
+        self.rate_limiter.reset(self.GlobalRateLimiter.SEND_TIPS)
 
     def enable_rate_limiter(self, max_hits: int = 16, window_seconds: float = 1) -> None:
         """Enable global rate limiter. This method can be called to change the current rate limit."""
@@ -213,8 +243,14 @@ class ConnectionsManager:
     def start(self) -> None:
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
+
         if settings.ENABLE_PEER_WHITELIST:
             self._start_whitelist_reconnect()
+
+        for description in self.listen_addresses:
+            self.listen(description)
+
+        self.do_discovery()
 
     def _start_whitelist_reconnect(self) -> None:
         # The deferred returned by the LoopingCall start method
@@ -361,11 +397,15 @@ class ConnectionsManager:
             protocol.enable_sync()
 
         # Notify other peers about this new peer connection.
+        self.relay_peer_to_ready_connections(protocol.peer)
+
+    def relay_peer_to_ready_connections(self, peer: PeerId) -> None:
+        """Relay peer to all ready connections."""
         for conn in self.iter_ready_connections():
-            if conn != protocol:
-                assert conn.state is not None
-                assert isinstance(conn.state, ReadyState)
-                conn.state.send_peers([protocol])
+            if conn.peer == peer:
+                continue
+            assert isinstance(conn.state, ReadyState)
+            conn.state.send_peers([peer])
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
@@ -424,7 +464,22 @@ class ConnectionsManager:
         if peer.id == self.my_peer.id:
             return
         peer = self.received_peer_storage.add_or_merge(peer)
-        self.connect_to_if_not_connected(peer, 0)
+        self.connect_to_if_not_connected(peer, int(self.reactor.seconds()))
+
+    def peers_cleanup(self) -> None:
+        """Clean up aged peers."""
+        now = self.reactor.seconds()
+        to_be_removed: list[PeerId] = []
+        for peer in self.peer_storage.values():
+            assert peer.id is not None
+            if self.is_peer_connected(peer.id):
+                continue
+            dt = now - peer.last_seen
+            if dt > self.max_peer_unseen_dt:
+                to_be_removed.append(peer)
+
+        for peer in to_be_removed:
+            self.peer_storage.remove(peer)
 
     def reconnect_to_all(self) -> None:
         """ It is called by the `lc_reconnect` timer and tries to connect to all known
@@ -432,15 +487,17 @@ class ConnectionsManager:
 
         TODO(epnichols): Should we always connect to *all*? Should there be a max #?
         """
+        self.peers_cleanup()
         # when we have no connected peers left, run the discovery process again
         assert self.manager is not None
-        if len(self.connected_peers) < 1:
-            self.manager.do_discovery()
-        now = int(self.reactor.seconds())
+        now = self.reactor.seconds()
+        if now - self._last_discovery >= self.PEER_DISCOVERY_INTERVAL:
+            self._last_discovery = now
+            self.do_discovery()
         # We need to use list() here because the dict might change inside connect_to_if_not_connected
         # when the peer is disconnected and without entrypoint
         for peer in list(self.peer_storage.values()):
-            self.connect_to_if_not_connected(peer, now)
+            self.connect_to_if_not_connected(peer, int(now))
 
     def update_whitelist(self) -> Deferred[None]:
         from twisted.web.client import Agent, readBody
@@ -580,7 +637,7 @@ class ConnectionsManager:
         )
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> IStreamServerEndpoint:
-        """ Start to listen to new connection according to the description.
+        """ Start to listen for new connection according to the description.
 
         If `ssl` is True, then the connection will be wraped by a TLS.
 
@@ -607,6 +664,17 @@ class ConnectionsManager:
 
         self.log.info('listen on', endpoint=description)
         endpoint.listen(factory)
+
+        # XXX: endpoint: IStreamServerEndpoint does not intrinsically have a port, but in practice all concrete cases
+        #      that we have will have a _port attribute
+        port = getattr(endpoint, '_port', None)
+        assert self.manager is not None
+        if self.manager.hostname and port is not None:
+            proto, _, _ = description.partition(':')
+            address = '{}://{}:{}'.format(proto, self.manager.hostname, port)
+            assert self.manager.my_peer is not None
+            self.manager.my_peer.entrypoints.append(address)
+
         return endpoint
 
     def get_connection_to_drop(self, protocol: HathorProtocol) -> HathorProtocol:

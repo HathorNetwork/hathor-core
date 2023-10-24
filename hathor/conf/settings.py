@@ -98,7 +98,20 @@ class HathorSettings(NamedTuple):
     GENESIS_OUTPUT_SCRIPT: bytes = bytes.fromhex('76a914a584cf48b161e4a49223ed220df30037ab740e0088ac')
 
     # Genesis timestamps, nonces and hashes
-    GENESIS_TIMESTAMP: int = 1572636343  # used as is for genesis_block, +1 for genesis_tx1 and +2 for genesis_tx2
+
+    # Timestamp used for the genesis block
+    GENESIS_BLOCK_TIMESTAMP: int = 1572636343
+
+    @property
+    def GENESIS_TX1_TIMESTAMP(self) -> int:
+        """Timestamp used for the first genesis transaction."""
+        return self.GENESIS_BLOCK_TIMESTAMP + 1
+
+    @property
+    def GENESIS_TX2_TIMESTAMP(self) -> int:
+        """Timestamp used for the second genesis transaction."""
+        return self.GENESIS_BLOCK_TIMESTAMP + 2
+
     GENESIS_BLOCK_NONCE: int = 3526202
     GENESIS_BLOCK_HASH: bytes = bytes.fromhex('000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038')
     GENESIS_TX1_NONCE: int = 12595
@@ -391,6 +404,9 @@ class HathorSettings(NamedTuple):
 
     # Time to update the peers that are running sync.
     SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds
+
+    # Interval to re-run peer discovery.
+    PEER_DISCOVERY_INTERVAL: int = 5 * 60  # seconds
 
     # All settings related to Feature Activation
     FEATURE_ACTIVATION: FeatureActivationSettings = FeatureActivationSettings()

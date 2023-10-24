@@ -15,7 +15,7 @@
 import os
 import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from pydantic import ValidationError
 from structlog import get_logger
@@ -58,6 +58,8 @@ class RunNode:
         parser.add_argument('--peer', help='json file with peer info')
         parser.add_argument('--sysctl',
                             help='Endpoint description (eg: unix:/path/sysctl.sock, tcp:5000:interface:127.0.0.1)')
+        parser.add_argument('--sysctl-init-file',
+                            help='File path to the sysctl.txt init file (eg: conf/sysctl.txt)')
         parser.add_argument('--listen', action='append', default=[],
                             help='Address to listen for new connections (eg: tcp:8000)')
         parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
@@ -159,8 +161,8 @@ class RunNode:
             assert self.manager.stratum_factory is not None
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
+        from hathor.conf.get_settings import get_settings
+        settings = get_settings()
 
         if register_resources:
             resources_builder = ResourcesBuilder(
@@ -204,8 +206,8 @@ class RunNode:
             sys.exit(-3)
 
         import hathor
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
+        from hathor.conf.get_settings import get_settings
+        settings = get_settings()
         sentry_sdk.init(
             dsn=self._args.sentry_dsn,
             release=hathor.__version__,
@@ -266,8 +268,8 @@ class RunNode:
                 '',
             ]
 
-            from hathor.conf import HathorSettings
-            settings = HathorSettings()
+            from hathor.conf.get_settings import get_settings
+            settings = get_settings()
 
             if self._args.unsafe_mode != settings.NETWORK_NAME:
                 message.extend([
@@ -313,7 +315,7 @@ class RunNode:
 
     def check_python_version(self) -> None:
         # comments to help grep's
-        MIN_VER = (3, 9)  # Python-3.9
+        MIN_VER = (3, 10)  # Python-3.10
         MIN_STABLE = (3, 10)  # Python-3.10
         RECOMMENDED_VER = (3, 10)  # Python-3.10
         cur = sys.version_info
@@ -371,10 +373,10 @@ class RunNode:
         self.prepare()
         self.register_signal_handlers()
         if self._args.sysctl:
-            self.init_sysctl(self._args.sysctl)
+            self.init_sysctl(self._args.sysctl, self._args.sysctl_init_file)
 
-    def init_sysctl(self, description: str) -> None:
-        """Initialize sysctl and listen for connections.
+    def init_sysctl(self, description: str, sysctl_init_file: Optional[str] = None) -> None:
+        """Initialize sysctl, listen for connections and apply settings from config file if required.
 
         Examples of description:
         - tcp:5000
@@ -389,12 +391,17 @@ class RunNode:
 
         from hathor.builder.sysctl_builder import SysctlBuilder
         from hathor.sysctl.factory import SysctlFactory
+        from hathor.sysctl.init_file_loader import SysctlInitFileLoader
         from hathor.sysctl.runner import SysctlRunner
 
         builder = SysctlBuilder(self.artifacts)
         root = builder.build()
-
         runner = SysctlRunner(root)
+
+        if sysctl_init_file:
+            init_file_loader = SysctlInitFileLoader(runner, sysctl_init_file)
+            init_file_loader.load()
+
         factory = SysctlFactory(runner)
         endpoint = serverFromString(self.reactor, description)
         endpoint.listen(factory)

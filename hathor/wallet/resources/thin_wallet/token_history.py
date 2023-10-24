@@ -16,10 +16,8 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 ARGS = ['id', 'count']
 
@@ -33,6 +31,7 @@ class TokenHistoryResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
+        self._settings = get_settings()
         self.manager = manager
 
     def render_GET(self, request: Request) -> bytes:
@@ -69,7 +68,7 @@ class TokenHistoryResource(Resource):
             return json_dumpb({'success': False, 'message': 'Invalid token id'})
 
         try:
-            count = parse_int(parsed['args']['count'], cap=settings.MAX_TX_COUNT)
+            count = parse_int(parsed['args']['count'], cap=self._settings.MAX_TX_COUNT)
         except ValueError as e:
             return json_dumpb({
                 'success': False,

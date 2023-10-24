@@ -14,8 +14,6 @@
 
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import (
-    MAX_NUM_INPUTS,
-    MAX_NUM_OUTPUTS,
     MAX_OUTPUT_VALUE,
     BaseTransaction,
     TxInput,
@@ -38,8 +36,6 @@ __all__ = [
     'TxInput',
     'TxOutput',
     'TxVersion',
-    'MAX_NUM_INPUTS',
-    'MAX_NUM_OUTPUTS',
     'MAX_OUTPUT_VALUE',
     'sum_weights',
 ]

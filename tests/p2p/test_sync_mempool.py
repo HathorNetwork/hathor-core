@@ -32,7 +32,7 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         tx.weight = 10
         tx.parents = self.manager1.get_new_tx_parents()
         tx.resolve()
-        tx.verify()
+        self.manager1.verification_service.verify(tx)
         self.manager1.propagate_tx(tx)
         self.clock.advance(10)
         return tx
@@ -49,7 +49,7 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
     def _add_new_block(self, propagate=True):
         block = self.manager1.generate_mining_block()
         self.assertTrue(block.resolve())
-        block.verify()
+        self.manager1.verification_service.verify(block)
         self.manager1.on_new_tx(block, propagate_to_peers=propagate)
         self.clock.advance(10)
         return block

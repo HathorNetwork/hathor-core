@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from math import inf
+from collections import deque
 from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
@@ -33,12 +33,11 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-settings = HathorSettings()
-
 
 class ReadyState(BaseState):
     def __init__(self, protocol: 'HathorProtocol') -> None:
         super().__init__(protocol)
+        self._settings = get_settings()
 
         self.log = logger.new(**self.protocol.get_logger_context())
 
@@ -48,20 +47,29 @@ class ReadyState(BaseState):
         self.lc_ping = LoopingCall(self.send_ping_if_necessary)
         self.lc_ping.clock = self.reactor
 
+        # LC to send GET_PEERS every once in a while.
+        self.lc_get_peers = LoopingCall(self.send_get_peers)
+        self.lc_get_peers.clock = self.reactor
+        self.get_peers_interval: int = 5 * 60   # Once every 5 minutes.
+
         # Minimum interval between PING messages (in seconds).
         self.ping_interval: int = 3
 
         # Time we sent last PING message.
         self.ping_start_time: Optional[float] = None
 
+        # Salt used in the last PING message.
+        self.ping_salt: Optional[str] = None
+
+        # Salt size in bytes.
+        self.ping_salt_size: int = 32
+
         # Time we got last PONG response to a PING message.
         self.ping_last_response: float = 0
 
         # Round-trip time of the last PING/PONG.
-        self.ping_rtt: float = inf
-
-        # Minimum round-trip time among PING/PONG.
-        self.ping_min_rtt: float = inf
+        self.rtt_window: deque[float] = deque()
+        self.MAX_RTT_WINDOW: int = 200    # Last 200 samples (~= 10 minutes)
 
         # The last blocks from the best blockchain in the peer
         self.peer_best_blockchain: list[HeightInfo] = []
@@ -79,7 +87,7 @@ class ReadyState(BaseState):
 
         # if the peer has the GET-BEST-BLOCKCHAIN capability
         common_capabilities = protocol.capabilities & set(protocol.node.capabilities)
-        if (settings.CAPABILITY_GET_BEST_BLOCKCHAIN in common_capabilities):
+        if (self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN in common_capabilities):
             # set the loop to get the best blockchain from the peer
             self.lc_get_best_blockchain = LoopingCall(self.send_get_best_blockchain)
             self.lc_get_best_blockchain.clock = self.reactor
@@ -107,16 +115,21 @@ class ReadyState(BaseState):
             self.protocol.on_peer_ready()
 
         self.lc_ping.start(1, now=False)
+
+        self.lc_get_peers.start(self.get_peers_interval, now=False)
         self.send_get_peers()
 
         if self.lc_get_best_blockchain is not None:
-            self.lc_get_best_blockchain.start(settings.BEST_BLOCKCHAIN_INTERVAL, now=False)
+            self.lc_get_best_blockchain.start(self._settings.BEST_BLOCKCHAIN_INTERVAL, now=False)
 
         self.sync_agent.start()
 
     def on_exit(self) -> None:
         if self.lc_ping.running:
             self.lc_ping.stop()
+
+        if self.lc_get_peers.running:
+            self.lc_get_peers.stop()
 
         if self.lc_get_best_blockchain is not None and self.lc_get_best_blockchain.running:
             self.lc_get_best_blockchain.stop()
@@ -143,22 +156,21 @@ class ReadyState(BaseState):
         """ Executed when a GET-PEERS command is received. It just responds with
         a list of all known peers.
         """
-        if self.protocol.connections:
-            self.send_peers(self.protocol.connections.iter_ready_connections())
+        for peer in self.protocol.connections.peer_storage.values():
+            self.send_peers([peer])
 
-    def send_peers(self, connections: Iterable['HathorProtocol']) -> None:
-        """ Send a PEERS command with a list of all known peers.
+    def send_peers(self, peer_list: Iterable['PeerId']) -> None:
+        """ Send a PEERS command with a list of peers.
         """
-        peers = []
-        for conn in connections:
-            assert conn.peer is not None
-            peers.append({
-                'id': conn.peer.id,
-                'entrypoints': conn.peer.entrypoints,
-                'last_message': conn.last_message,
-            })
-        self.send_message(ProtocolMessages.PEERS, json_dumps(peers))
-        self.log.debug('send peers', peers=peers)
+        data = []
+        for peer in peer_list:
+            if peer.entrypoints:
+                data.append({
+                    'id': peer.id,
+                    'entrypoints': peer.entrypoints,
+                })
+        self.send_message(ProtocolMessages.PEERS, json_dumps(data))
+        self.log.debug('send peers', peers=data)
 
     def handle_peers(self, payload: str) -> None:
         """ Executed when a PEERS command is received. It updates the list
@@ -186,34 +198,48 @@ class ReadyState(BaseState):
         """ Send a PING command. Usually you would use `send_ping_if_necessary` to
         prevent wasting bandwidth.
         """
+        # Add a salt number to prevent peers from faking rtt.
         self.ping_start_time = self.reactor.seconds()
-        self.send_message(ProtocolMessages.PING)
+        rng = self.protocol.connections.rng
+        self.ping_salt = rng.randbytes(self.ping_salt_size).hex()
+        self.send_message(ProtocolMessages.PING, self.ping_salt)
 
-    def send_pong(self) -> None:
+    def send_pong(self, salt: str) -> None:
         """ Send a PONG command as a response to a PING command.
         """
-        self.send_message(ProtocolMessages.PONG)
+        self.send_message(ProtocolMessages.PONG, salt)
 
     def handle_ping(self, payload: str) -> None:
         """Executed when a PING command is received. It responds with a PONG message."""
-        self.send_pong()
+        self.send_pong(payload)
 
     def handle_pong(self, payload: str) -> None:
         """Executed when a PONG message is received."""
         if self.ping_start_time is None:
             # This should never happen.
             return
+        if self.ping_salt != payload:
+            # Ignore pong without salts.
+            return
         self.ping_last_response = self.reactor.seconds()
-        self.ping_rtt = self.ping_last_response - self.ping_start_time
-        self.ping_min_rtt = min(self.ping_min_rtt, self.ping_rtt)
+        rtt = self.ping_last_response - self.ping_start_time
+        self.rtt_window.appendleft(rtt)
+        if len(self.rtt_window) > self.MAX_RTT_WINDOW:
+            self.rtt_window.pop()
         self.ping_start_time = None
-        self.log.debug('rtt updated', rtt=self.ping_rtt, min_rtt=self.ping_min_rtt)
+        self.ping_salt = None
+        self.log.debug('rtt updated',
+                       latest=rtt,
+                       min=min(self.rtt_window),
+                       max=max(self.rtt_window),
+                       avg=sum(self.rtt_window) / len(self.rtt_window))
 
-    def send_get_best_blockchain(self, n_blocks: int = settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS) -> None:
+    def send_get_best_blockchain(self, n_blocks: Optional[int] = None) -> None:
         """ Send a GET-BEST-BLOCKCHAIN command, requesting a list of the latest
         N blocks from the best blockchain.
         """
-        self.send_message(ProtocolMessages.GET_BEST_BLOCKCHAIN, str(n_blocks))
+        actual_n_blocks: int = n_blocks if n_blocks is not None else self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS
+        self.send_message(ProtocolMessages.GET_BEST_BLOCKCHAIN, str(actual_n_blocks))
 
     def handle_get_best_blockchain(self, payload: str) -> None:
         """ Executed when a GET-BEST-BLOCKCHAIN command is received.
@@ -228,9 +254,9 @@ class ReadyState(BaseState):
             )
             return
 
-        if not (0 < n_blocks <= settings.MAX_BEST_BLOCKCHAIN_BLOCKS):
+        if not (0 < n_blocks <= self._settings.MAX_BEST_BLOCKCHAIN_BLOCKS):
             self.protocol.send_error_and_close_connection(
-                f'N out of bounds. Valid range: [1, {settings.MAX_BEST_BLOCKCHAIN_BLOCKS}].'
+                f'N out of bounds. Valid range: [1, {self._settings.MAX_BEST_BLOCKCHAIN_BLOCKS}].'
             )
             return
 

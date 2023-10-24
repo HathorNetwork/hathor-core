@@ -20,16 +20,23 @@ from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
 
 
+class DecodedTxOutput(BaseModel, extra=Extra.ignore):
+    type: str
+    address: str
+    timelock: Optional[int]
+
+
+class TxOutput(BaseModel, extra=Extra.ignore):
+    value: int
+    token_data: int
+    script: str
+    decoded: Optional[DecodedTxOutput]
+
+
 class TxInput(BaseModel):
     tx_id: str
     index: int
-    data: str
-
-
-class TxOutput(BaseModel):
-    value: int
-    script: str
-    token_data: int
+    spent_output: TxOutput
 
 
 class SpentOutput(BaseModel):
@@ -108,7 +115,23 @@ class TxData(BaseEventData, extra=Extra.ignore):
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'TxData':
-        tx_json = args.tx.to_json(include_metadata=True)
+        from hathor.transaction.resources.transaction import get_tx_extra_data
+        tx_extra_data_json = get_tx_extra_data(args.tx, detail_tokens=False)
+        tx_json = tx_extra_data_json['tx']
+        meta_json = tx_extra_data_json['meta']
+        tx_json['metadata'] = meta_json
+        tx_json['outputs'] = [
+            output | dict(decoded=output['decoded'] or None)
+            for output in tx_json['outputs']
+        ]
+        tx_json['inputs'] = [
+            dict(
+                tx_id=input_['tx_id'],
+                index=input_['index'],
+                spent_output=input_
+            )
+            for input_ in tx_json['inputs']
+        ]
 
         return cls(**tx_json)
 

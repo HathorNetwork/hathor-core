@@ -75,6 +75,7 @@ class SysctlRunner:
         """Deserialize a value sent by the client."""
         if len(value_str) == 0:
             return ()
+
         parts = [x.strip() for x in value_str.split(',')]
         if len(parts) > 1:
             return tuple(json.loads(x) for x in parts)

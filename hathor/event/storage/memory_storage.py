@@ -24,6 +24,7 @@ class EventMemoryStorage(EventStorage):
         self._events: list[BaseEvent] = []
         self._last_event: Optional[BaseEvent] = None
         self._last_group_id: Optional[int] = None
+        self._stream_id: Optional[str] = None
         self._node_state: Optional[NodeState] = None
         self._event_queue_enabled: bool = False
 
@@ -66,6 +67,7 @@ class EventMemoryStorage(EventStorage):
         self._events = []
         self._last_event = None
         self._last_group_id = None
+        self._stream_id = None
 
     def reset_all(self) -> None:
         self.reset_events()
@@ -83,3 +85,9 @@ class EventMemoryStorage(EventStorage):
 
     def get_event_queue_state(self) -> bool:
         return self._event_queue_enabled
+
+    def save_stream_id(self, stream_id: str) -> None:
+        self._stream_id = stream_id
+
+    def get_stream_id(self) -> Optional[str]:
+        return self._stream_id

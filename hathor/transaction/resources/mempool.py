@@ -18,11 +18,9 @@ from typing import TYPE_CHECKING, Iterator
 
 from hathor.api_util import Resource, get_args, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.transaction import Transaction
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -46,6 +44,7 @@ class MempoolResource(Resource):
 
     def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
+        self._settings = get_settings()
         self.manager = manager
 
     def render_GET(self, request: 'Request') -> bytes:
@@ -82,7 +81,7 @@ class MempoolResource(Resource):
             sorted(list(self._get_from_index(index_source)), key=lambda tx: tx.timestamp),
         )
         # Only return up to settings.MEMPOOL_API_TX_LIMIT txs per call (default: 100)
-        data = {'success': True, 'transactions': list(islice(tx_ids, settings.MEMPOOL_API_TX_LIMIT))}
+        data = {'success': True, 'transactions': list(islice(tx_ids, self._settings.MEMPOOL_API_TX_LIMIT))}
         return json_dumpb(data)
 
     def _get_from_index(self, index_source: IndexSource) -> Iterator[Transaction]:

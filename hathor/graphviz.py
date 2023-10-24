@@ -18,16 +18,15 @@ from typing import Iterator
 
 from graphviz import Digraph
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionStorage
-
-settings = HathorSettings()
 
 
 class GraphvizVisualizer:
     def __init__(self, storage: TransactionStorage, include_funds: bool = False,
                  include_verifications: bool = False, only_blocks: bool = False):
+        self._settings = get_settings()
         self.storage = storage
 
         # Indicate whether it should show fund edges
@@ -92,7 +91,7 @@ class GraphvizVisualizer:
         if meta.voided_by and len(meta.voided_by) > 0:
             if meta.voided_by and tx.hash in meta.voided_by:
                 node_attrs.update(self.conflict_attrs)
-            if settings.SOFT_VOIDED_ID in meta.voided_by:
+            if self._settings.SOFT_VOIDED_ID in meta.voided_by:
                 node_attrs.update(self.soft_voided_attrs)
             else:
                 node_attrs.update(self.voided_attrs)
