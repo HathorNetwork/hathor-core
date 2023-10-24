@@ -17,30 +17,13 @@ from itertools import chain
 from struct import pack
 from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional
 
-from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
-from hathor.transaction.exceptions import (
-    ConflictingInputs,
-    DuplicatedParents,
-    IncorrectParents,
-    InexistentInput,
-    InputOutputMismatch,
-    InvalidInputData,
-    InvalidInputDataSize,
-    InvalidToken,
-    NoInputError,
-    RewardLocked,
-    ScriptError,
-    TimestampError,
-    TooManyInputs,
-    TooManySigOps,
-    WeightError,
-)
-from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
+from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
 
@@ -296,78 +279,6 @@ class Transaction(BaseTransaction):
         raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '
                                     'none of its children is checkpoint-valid')
 
-    def verify_parents_basic(self) -> None:
-        """Verify number and non-duplicity of parents."""
-        assert self.storage is not None
-
-        # check if parents are duplicated
-        parents_set = set(self.parents)
-        if len(self.parents) > len(parents_set):
-            raise DuplicatedParents('Tx has duplicated parents: {}', [tx_hash.hex() for tx_hash in self.parents])
-
-        if len(self.parents) != 2:
-            raise IncorrectParents(f'wrong number of parents (tx type): {len(self.parents)}, expecting 2')
-
-    def verify_weight(self) -> None:
-        """Validate minimum tx difficulty."""
-        min_tx_weight = daa.minimum_tx_weight(self)
-        max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
-        if self.weight < min_tx_weight - self._settings.WEIGHT_TOL:
-            raise WeightError(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
-                              f'smaller than the minimum weight ({min_tx_weight})')
-        elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and self.weight > max_tx_weight:
-            raise WeightError(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
-                              f'greater than the maximum allowed ({max_tx_weight})')
-
-    def verify_unsigned_skip_pow(self) -> None:
-        """ Same as .verify but skipping pow and signature verification."""
-        self.verify_number_of_inputs()
-        self.verify_number_of_outputs()
-        self.verify_outputs()
-        self.verify_sigops_output()
-        self.verify_sigops_input()
-        self.verify_inputs(skip_script=True)  # need to run verify_inputs first to check if all inputs exist
-        self.verify_parents()
-        self.verify_sum()
-
-    def verify_without_storage(self) -> None:
-        """ Run all verifications that do not need a storage.
-        """
-        self.verify_pow()
-        self.verify_number_of_inputs()
-        self.verify_outputs()
-        self.verify_sigops_output()
-
-    def verify_number_of_inputs(self) -> None:
-        """Verify number of inputs is in a valid range"""
-        if len(self.inputs) > self._settings.MAX_NUM_INPUTS:
-            raise TooManyInputs('Maximum number of inputs exceeded')
-
-        if len(self.inputs) == 0:
-            if not self.is_genesis:
-                raise NoInputError('Transaction must have at least one input')
-
-    def verify_sigops_input(self) -> None:
-        """ Count sig operations on all inputs and verify that the total sum is below the limit
-        """
-        from hathor.transaction.scripts import get_sigops_count
-        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-        n_txops = 0
-        for tx_input in self.inputs:
-            try:
-                spent_tx = self.get_spent_tx(tx_input)
-            except TransactionDoesNotExist:
-                raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
-            assert spent_tx.hash is not None
-            if tx_input.index >= len(spent_tx.outputs):
-                raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
-                    tx_input.tx_id.hex(), tx_input.index))
-            n_txops += get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
-
-        if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
-            raise TooManySigOps(
-                'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(self.hash_hex, n_txops))
-
     def verify_outputs(self) -> None:
         """Verify outputs reference an existing token uid in the tokens list
 
@@ -406,92 +317,6 @@ class Transaction(BaseTransaction):
 
         return token_dict
 
-    def update_token_info_from_outputs(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        """Iterate over the outputs and add values to token info dict. Updates the dict in-place.
-
-        Also, checks if no token has authorities on the outputs not present on the inputs
-
-        :raises InvalidToken: when there's an error in token operations
-        """
-        # iterate over outputs and add values to token_dict
-        for index, tx_output in enumerate(self.outputs):
-            token_uid = self.get_token_uid(tx_output.get_token_index())
-            token_info = token_dict.get(token_uid)
-            if token_info is None:
-                raise InvalidToken('no inputs for token {}'.format(token_uid.hex()))
-            else:
-                # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
-                if tx_output.can_mint_token() and not token_info.can_mint:
-                    raise InvalidToken('output has mint authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
-                if tx_output.can_melt_token() and not token_info.can_melt:
-                    raise InvalidToken('output has melt authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
-
-                if tx_output.is_token_authority():
-                    # make sure we only have authorities that we know of
-                    if tx_output.value > TxOutput.ALL_AUTHORITIES:
-                        raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
-                else:
-                    # for regular outputs, just subtract from the total amount
-                    sum_tokens = token_info.amount + tx_output.value
-                    token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
-
-    def check_authorities_and_deposit(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
-        and outputs is not 0, make sure inputs have mint/melt authority.
-
-        token_dict sums up all tokens present in the tx and their properties (amount, can_mint, can_melt)
-        amount = outputs - inputs, thus:
-        - amount < 0 when melting
-        - amount > 0 when minting
-
-        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
-        """
-        withdraw = 0
-        deposit = 0
-        for token_uid, token_info in token_dict.items():
-            if token_uid == self._settings.HATHOR_TOKEN_UID:
-                continue
-
-            if token_info.amount == 0:
-                # that's the usual behavior, nothing to do
-                pass
-            elif token_info.amount < 0:
-                # tokens have been melted
-                if not token_info.can_melt:
-                    raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
-                        token_info.amount, token_uid.hex()))
-                withdraw += get_withdraw_amount(token_info.amount)
-            else:
-                # tokens have been minted
-                if not token_info.can_mint:
-                    raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
-                        (-1) * token_info.amount, token_uid.hex()))
-                deposit += get_deposit_amount(token_info.amount)
-
-        # check whether the deposit/withdraw amount is correct
-        htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
-        if htr_info.amount != htr_expected_amount:
-            raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
-                htr_info.amount,
-                htr_expected_amount,
-            ))
-
-    def verify_sum(self) -> None:
-        """Verify that the sum of outputs is equal of the sum of inputs, for each token.
-
-        If there are authority UTXOs involved, tokens can be minted or melted, so the above rule may
-        not be respected.
-
-        :raises InvalidToken: when there's an error in token operations
-        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
-        """
-        token_dict = self.get_token_info_from_inputs()
-        self.update_token_info_from_outputs(token_dict)
-        self.check_authorities_and_deposit(token_dict)
-
     def iter_spent_rewards(self) -> Iterator[Block]:
         """Iterate over all the rewards being spent, assumes tx has been verified."""
         for input_tx in self.inputs:
@@ -499,51 +324,6 @@ class Transaction(BaseTransaction):
             if spent_tx.is_block:
                 assert isinstance(spent_tx, Block)
                 yield spent_tx
-
-    def verify_inputs(self, *, skip_script: bool = False) -> None:
-        """Verify inputs signatures and ownership and all inputs actually exist"""
-        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
-        spent_outputs: set[tuple[VertexId, int]] = set()
-        for input_tx in self.inputs:
-            if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
-                raise InvalidInputDataSize('size: {} and max-size: {}'.format(
-                    len(input_tx.data), self._settings.MAX_INPUT_DATA_SIZE
-                ))
-
-            try:
-                spent_tx = self.get_spent_tx(input_tx)
-                assert spent_tx.hash is not None
-                if input_tx.index >= len(spent_tx.outputs):
-                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
-                        input_tx.tx_id.hex(), input_tx.index))
-            except TransactionDoesNotExist:
-                raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
-
-            if self.timestamp <= spent_tx.timestamp:
-                raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
-                    self.hash.hex() if self.hash else None,
-                    self.timestamp,
-                    spent_tx.hash.hex(),
-                    spent_tx.timestamp,
-                ))
-
-            if not skip_script:
-                self.verify_script(input_tx, spent_tx)
-
-            # check if any other input in this tx is spending the same output
-            key = (input_tx.tx_id, input_tx.index)
-            if key in spent_outputs:
-                raise ConflictingInputs('tx {} inputs spend the same output: {} index {}'.format(
-                    self.hash_hex, input_tx.tx_id.hex(), input_tx.index))
-            spent_outputs.add(key)
-
-    def verify_reward_locked(self) -> None:
-        """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
-        the block rewards spent by this tx itself, and not the inherited `min_height`."""
-        info = self.get_spent_reward_locked_info()
-        if info is not None:
-            raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
 
     def is_spent_reward_locked(self) -> bool:
         """ Check whether any spent reward is currently locked, considering only the block rewards spent by this tx
@@ -577,17 +357,6 @@ class Transaction(BaseTransaction):
         spend_blocks = best_height - spent_height
         needed_height = self._settings.REWARD_SPEND_MIN_BLOCKS - spend_blocks
         return max(needed_height, 0)
-
-    def verify_script(self, input_tx: TxInput, spent_tx: BaseTransaction) -> None:
-        """
-        :type input_tx: TxInput
-        :type spent_tx: Transaction
-        """
-        from hathor.transaction.scripts import script_eval
-        try:
-            script_eval(self, input_tx, spent_tx)
-        except ScriptError as e:
-            raise InvalidInputData(e) from e
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent

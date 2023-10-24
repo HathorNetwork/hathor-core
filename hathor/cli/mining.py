@@ -25,7 +25,6 @@ from multiprocessing import Process, Queue
 import requests
 
 from hathor.conf.get_settings import get_settings
-from hathor.verification.block_verifier import BlockVerifier
 
 _SLEEP_ON_ERROR_SECONDS = 5
 _MAX_CONN_RETRIES = math.inf
@@ -137,6 +136,7 @@ def execute(args: Namespace) -> None:
                                                                       block.nonce, block.weight))
 
         try:
+            from hathor.verification.block_verifier import BlockVerifier
             settings = get_settings()
             verifier = BlockVerifier(settings=settings)
             verifier.verify_without_storage(block)
