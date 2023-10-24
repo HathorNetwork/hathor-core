@@ -360,7 +360,8 @@ class NodeBlockSync(SyncAgent):
         if self.synced_height < self.peer_height:
             # sync from common block
             peer_block_at_height = yield self.get_peer_block_hashes([self.synced_height])
-            self.run_block_sync(peer_block_at_height[0][1], self.synced_height, peer_best_block, peer_best_height)
+            if peer_block_at_height:
+                self.run_block_sync(peer_block_at_height[0][1], self.synced_height, peer_best_block, peer_best_height)
         elif my_height == self.synced_height == self.peer_height:
             # we're synced and on the same height, get their mempool
             self.state = PeerState.SYNCING_MEMPOOL
