@@ -12,8 +12,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor import daa
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block
+from hathor.transaction.exceptions import (
+    BlockWithInputs,
+    InvalidBlockReward,
+    RewardLocked,
+    TransactionDataError,
+    WeightError,
+)
 from hathor.verification.vertex_verifier import VertexVerifier
 
 cpu = get_cpu_profiler()
@@ -52,25 +60,45 @@ class BlockVerifier(VertexVerifier):
     def verify_without_storage(self, block: Block) -> None:
         """ Run all verifications that do not need a storage.
         """
-        block.verify_without_storage()
+        self.verify_pow(block)
+        self.verify_no_inputs(block)
+        self.verify_outputs(block)
+        self.verify_data(block)
+        self.verify_sigops_output(block)
 
     def verify_height(self, block: Block) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
-        block.verify_height()
+        meta = block.get_metadata()
+        assert meta.height is not None
+        assert meta.min_height is not None
+        if meta.height < meta.min_height:
+            raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
 
     def verify_weight(self, block: Block) -> None:
         """Validate minimum block difficulty."""
-        block.verify_weight()
+        min_block_weight = daa.calculate_block_difficulty(block)
+        if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
+            raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
+                              f'smaller than the minimum weight ({min_block_weight})')
 
     def verify_reward(self, block: Block) -> None:
         """Validate reward amount."""
-        block.verify_reward()
+        parent_block = block.get_block_parent()
+        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
+        if block.sum_outputs != tokens_issued_per_block:
+            raise InvalidBlockReward(
+                f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={block.hash_hex} '
+                f'issued={block.sum_outputs} allowed={tokens_issued_per_block}'
+            )
 
     def verify_no_inputs(self, block: Block) -> None:
-        block.verify_no_inputs()
+        inputs = getattr(block, 'inputs', None)
+        if inputs:
+            raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
 
     def verify_outputs(self, block: BaseTransaction) -> None:
         block.verify_outputs()
 
     def verify_data(self, block: Block) -> None:
-        block.verify_data()
+        if len(block.data) > self._settings.BLOCK_DATA_MAX_SIZE:
+            raise TransactionDataError('block data has {} bytes'.format(len(block.data)))
