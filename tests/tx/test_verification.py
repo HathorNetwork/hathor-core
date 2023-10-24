@@ -123,20 +123,20 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.block
         block = self._get_valid_block()
 
-        verify_pow_wrapped = Mock(wraps=block.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=verifier.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=block.verify_number_of_outputs)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=verifier.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=block.verify_sigops_output)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
 
         with (
-            patch.object(Block, 'verify_pow', verify_pow_wrapped),
+            patch.object(BlockVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(Block, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(Block, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(Block, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(BlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
             verifier.verify_without_storage(block)
 
@@ -152,23 +152,23 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.block
         block = self._get_valid_block()
 
-        verify_pow_wrapped = Mock(wraps=block.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=verifier.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=block.verify_number_of_outputs)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=verifier.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=block.verify_sigops_output)
-        verify_parents_wrapped = Mock(wraps=block.verify_parents)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
+        verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_height_wrapped = Mock(wraps=verifier.verify_height)
 
         with (
-            patch.object(Block, 'verify_pow', verify_pow_wrapped),
+            patch.object(BlockVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(Block, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(Block, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(Block, 'verify_sigops_output', verify_sigops_output_wrapped),
-            patch.object(Block, 'verify_parents', verify_parents_wrapped),
+            patch.object(BlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(BlockVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
         ):
             self.manager.verification_service.verify(block)
@@ -204,25 +204,25 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.block
         block = self._get_valid_block()
 
-        verify_pow_wrapped = Mock(wraps=block.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=verifier.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=block.verify_number_of_outputs)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=verifier.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=block.verify_sigops_output)
-        verify_parents_wrapped = Mock(wraps=block.verify_parents)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
+        verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_height_wrapped = Mock(wraps=verifier.verify_height)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
         verify_reward_wrapped = Mock(wraps=verifier.verify_reward)
 
         with (
-            patch.object(Block, 'verify_pow', verify_pow_wrapped),
+            patch.object(BlockVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(Block, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(Block, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(Block, 'verify_sigops_output', verify_sigops_output_wrapped),
-            patch.object(Block, 'verify_parents', verify_parents_wrapped),
+            patch.object(BlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(BlockVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
@@ -262,22 +262,22 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.merge_mined_block
         block = self._get_valid_merge_mined_block()
 
-        verify_pow_wrapped = Mock(wraps=block.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=verifier.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=block.verify_number_of_outputs)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=verifier.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=block.verify_sigops_output)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
 
         verify_aux_pow_wrapped = Mock(wraps=verifier.verify_aux_pow)
 
         with (
-            patch.object(MergeMinedBlock, 'verify_pow', verify_pow_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(MergeMinedBlock, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(MergeMinedBlock, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(MergeMinedBlock, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
         ):
             verifier.verify_without_storage(block)
@@ -297,25 +297,25 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.merge_mined_block
         block = self._get_valid_merge_mined_block()
 
-        verify_pow_wrapped = Mock(wraps=block.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=verifier.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=block.verify_number_of_outputs)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=verifier.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=block.verify_sigops_output)
-        verify_parents_wrapped = Mock(wraps=block.verify_parents)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
+        verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_height_wrapped = Mock(wraps=verifier.verify_height)
 
         verify_aux_pow_wrapped = Mock(wraps=verifier.verify_aux_pow)
 
         with (
-            patch.object(MergeMinedBlock, 'verify_pow', verify_pow_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(MergeMinedBlock, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(MergeMinedBlock, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(MergeMinedBlock, 'verify_sigops_output', verify_sigops_output_wrapped),
-            patch.object(MergeMinedBlock, 'verify_parents', verify_parents_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_height', verify_height_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
         ):
@@ -355,13 +355,13 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.merge_mined_block
         block = self._get_valid_merge_mined_block()
 
-        verify_pow_wrapped = Mock(wraps=block.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=verifier.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=block.verify_number_of_outputs)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=verifier.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=block.verify_sigops_output)
-        verify_parents_wrapped = Mock(wraps=block.verify_parents)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
+        verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_height_wrapped = Mock(wraps=verifier.verify_height)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
         verify_reward_wrapped = Mock(wraps=verifier.verify_reward)
@@ -369,13 +369,13 @@ class BaseVerificationTest(unittest.TestCase):
         verify_aux_pow_wrapped = Mock(wraps=verifier.verify_aux_pow)
 
         with (
-            patch.object(MergeMinedBlock, 'verify_pow', verify_pow_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(MergeMinedBlock, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(MergeMinedBlock, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(MergeMinedBlock, 'verify_sigops_output', verify_sigops_output_wrapped),
-            patch.object(MergeMinedBlock, 'verify_parents', verify_parents_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_height', verify_height_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_reward', verify_reward_wrapped),
@@ -404,20 +404,20 @@ class BaseVerificationTest(unittest.TestCase):
 
         verify_parents_basic_wrapped = Mock(wraps=verifier.verify_parents_basic)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
 
         with (
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(Transaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(Transaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(Transaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(Transaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
             self.manager.verification_service.verify_basic(tx)
 
@@ -434,18 +434,18 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.tx
         tx = self._get_valid_tx()
 
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
 
         with (
-            patch.object(Transaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(Transaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(Transaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(Transaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
             verifier.verify_without_storage(tx)
 
@@ -461,11 +461,11 @@ class BaseVerificationTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager)
         tx = self._get_valid_tx()
 
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
         verify_sigops_input_wrapped = Mock(wraps=verifier.verify_sigops_input)
         verify_inputs_wrapped = Mock(wraps=verifier.verify_inputs)
         verify_script_wrapped = Mock(wraps=verifier.verify_script)
@@ -474,11 +474,11 @@ class BaseVerificationTest(unittest.TestCase):
         verify_reward_locked_wrapped = Mock(wraps=verifier.verify_reward_locked)
 
         with (
-            patch.object(Transaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(Transaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(Transaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(Transaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(TransactionVerifier, 'verify_sigops_input', verify_sigops_input_wrapped),
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
             patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
@@ -507,20 +507,20 @@ class BaseVerificationTest(unittest.TestCase):
 
         verify_parents_basic_wrapped = Mock(wraps=verifier.verify_parents_basic)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
 
         with (
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(Transaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(Transaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(Transaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(Transaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
             self.manager.verification_service.validate_basic(tx)
 
@@ -540,30 +540,30 @@ class BaseVerificationTest(unittest.TestCase):
 
         verify_parents_basic_wrapped = Mock(wraps=verifier.verify_parents_basic)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
         verify_sigops_input_wrapped = Mock(wraps=verifier.verify_sigops_input)
         verify_inputs_wrapped = Mock(wraps=verifier.verify_inputs)
         verify_script_wrapped = Mock(wraps=verifier.verify_script)
-        verify_parents_wrapped = Mock(wraps=tx.verify_parents)
+        verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_sum_wrapped = Mock(wraps=verifier.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=verifier.verify_reward_locked)
 
         with (
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(Transaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(Transaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(Transaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(Transaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(TransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(TransactionVerifier, 'verify_sigops_input', verify_sigops_input_wrapped),
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
             patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
-            patch.object(Transaction, 'verify_parents', verify_parents_wrapped),
+            patch.object(TransactionVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
         ):
@@ -590,20 +590,21 @@ class BaseVerificationTest(unittest.TestCase):
 
         verify_parents_basic_wrapped = Mock(wraps=verifier.verify_parents_basic)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
 
         with (
             patch.object(TokenCreationTransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_number_of_outputs',
+                         verify_number_of_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
             self.manager.verification_service.verify_basic(tx)
 
@@ -620,18 +621,19 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.token_creation_tx
         tx = self._get_valid_token_creation_tx()
 
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
 
         with (
-            patch.object(TokenCreationTransaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_number_of_outputs',
+                         verify_number_of_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
             verifier.verify_without_storage(tx)
 
@@ -646,30 +648,31 @@ class BaseVerificationTest(unittest.TestCase):
         verifier = self.manager.verification_service.verifiers.token_creation_tx
         tx = self._get_valid_token_creation_tx()
 
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
         verify_sigops_input_wrapped = Mock(wraps=verifier.verify_sigops_input)
         verify_inputs_wrapped = Mock(wraps=verifier.verify_inputs)
         verify_script_wrapped = Mock(wraps=verifier.verify_script)
-        verify_parents_wrapped = Mock(wraps=tx.verify_parents)
+        verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_sum_wrapped = Mock(wraps=verifier.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=verifier.verify_reward_locked)
 
         verify_token_info_wrapped = Mock(wraps=verifier.verify_token_info)
 
         with (
-            patch.object(TokenCreationTransaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_number_of_outputs',
+                         verify_number_of_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_sigops_input', verify_sigops_input_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_script', verify_script_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_parents', verify_parents_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
@@ -698,20 +701,21 @@ class BaseVerificationTest(unittest.TestCase):
 
         verify_parents_basic_wrapped = Mock(wraps=verifier.verify_parents_basic)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
 
         with (
             patch.object(TokenCreationTransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_number_of_outputs',
+                         verify_number_of_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
             self.manager.verification_service.validate_basic(tx)
 
@@ -731,15 +735,15 @@ class BaseVerificationTest(unittest.TestCase):
 
         verify_parents_basic_wrapped = Mock(wraps=verifier.verify_parents_basic)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
-        verify_pow_wrapped = Mock(wraps=tx.verify_pow)
+        verify_pow_wrapped = Mock(wraps=verifier.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=verifier.verify_number_of_inputs)
-        verify_outputs_wrapped = Mock(wraps=tx.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=tx.verify_number_of_outputs)
-        verify_sigops_output_wrapped = Mock(wraps=tx.verify_sigops_output)
+        verify_outputs_wrapped = Mock(wraps=verifier.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=verifier.verify_number_of_outputs)
+        verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
         verify_sigops_input_wrapped = Mock(wraps=verifier.verify_sigops_input)
         verify_inputs_wrapped = Mock(wraps=verifier.verify_inputs)
         verify_script_wrapped = Mock(wraps=verifier.verify_script)
-        verify_parents_wrapped = Mock(wraps=tx.verify_parents)
+        verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_sum_wrapped = Mock(wraps=verifier.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=verifier.verify_reward_locked)
 
@@ -748,15 +752,16 @@ class BaseVerificationTest(unittest.TestCase):
         with (
             patch.object(TokenCreationTransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_pow', verify_pow_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_number_of_outputs',
+                         verify_number_of_outputs_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_sigops_input', verify_sigops_input_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_script', verify_script_wrapped),
-            patch.object(TokenCreationTransaction, 'verify_parents', verify_parents_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),

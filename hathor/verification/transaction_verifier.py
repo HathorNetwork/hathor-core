@@ -223,7 +223,12 @@ class TransactionVerifier(VertexVerifier):
 
         :raises InvalidToken: output references non existent token uid
         """
-        tx.verify_outputs()
+        assert isinstance(tx, Transaction)
+        super().verify_outputs(tx)
+        for output in tx.outputs:
+            # check index is valid
+            if output.get_token_index() > len(tx.tokens):
+                raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     def verify_authorities_and_deposit(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs

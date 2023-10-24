@@ -23,7 +23,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
-from hathor.transaction.exceptions import BlockWithTokensError, CheckpointError
+from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.util import not_none
 from hathor.utils.int import get_bit_list
@@ -327,12 +327,6 @@ class Block(BaseTransaction):
         else:
             # TODO: check whether self is a parent of any checkpoint-valid block, this is left for a future PR
             pass
-
-    def verify_outputs(self) -> None:
-        super().verify_outputs()
-        for output in self.outputs:
-            if output.get_token_index() > 0:
-                raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
 
     def get_base_hash(self) -> bytes:
         from hathor.merged_mining.bitcoin import sha256d_hash

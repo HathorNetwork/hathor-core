@@ -30,7 +30,6 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
-from hathor.verification.verification_service import VertexVerifiers
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import (
@@ -47,11 +46,11 @@ class BaseTransactionTest(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self._verifiers = VertexVerifiers.create_defaults(settings=self._settings)
         self.wallet = Wallet()
 
         # this makes sure we can spend the genesis outputs
         self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True, use_memory_storage=True)
+        self._verifiers = self.manager.verification_service.verifiers
         self.tx_storage = self.manager.tx_storage
 
         # read genesis keys

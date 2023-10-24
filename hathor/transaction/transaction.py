@@ -22,7 +22,6 @@ from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
-from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
@@ -278,17 +277,6 @@ class Transaction(BaseTransaction):
                 return
         raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '
                                     'none of its children is checkpoint-valid')
-
-    def verify_outputs(self) -> None:
-        """Verify outputs reference an existing token uid in the tokens list
-
-        :raises InvalidToken: output references non existent token uid
-        """
-        super().verify_outputs()
-        for output in self.outputs:
-            # check index is valid
-            if output.get_token_index() > len(self.tokens):
-                raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     def get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)

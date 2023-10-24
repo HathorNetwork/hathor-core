@@ -17,6 +17,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.exceptions import (
     BlockWithInputs,
+    BlockWithTokensError,
     InvalidBlockReward,
     RewardLocked,
     TransactionDataError,
@@ -97,7 +98,11 @@ class BlockVerifier(VertexVerifier):
             raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
 
     def verify_outputs(self, block: BaseTransaction) -> None:
-        block.verify_outputs()
+        assert isinstance(block, Block)
+        super().verify_outputs(block)
+        for output in block.outputs:
+            if output.get_token_index() > 0:
+                raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
 
     def verify_data(self, block: Block) -> None:
         if len(block.data) > self._settings.BLOCK_DATA_MAX_SIZE:

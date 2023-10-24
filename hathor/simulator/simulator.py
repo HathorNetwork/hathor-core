@@ -28,7 +28,14 @@ from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
+from hathor.simulator.verification import (
+    SimulatorBlockVerifier,
+    SimulatorMergeMinedBlockVerifier,
+    SimulatorTokenCreationTransactionVerifier,
+    SimulatorTransactionVerifier,
+)
 from hathor.util import Random
+from hathor.verification.verification_service import VertexVerifiers
 from hathor.wallet import HDWallet
 
 if TYPE_CHECKING:
@@ -52,24 +59,16 @@ class Simulator:
 
         Patches:
 
-        - disable pow verification
         - disable Transaction.resolve method
         - set DAA test-mode to DISABLED (will actually run the pow function, that won't actually verify the pow)
         - override AVG_TIME_BETWEEN_BLOCKS to 64
         """
         from hathor.transaction import BaseTransaction
 
-        def verify_pow(self: BaseTransaction, *args: Any, **kwargs: Any) -> None:
-            assert self.hash is not None
-            logger.new().debug('Skipping BaseTransaction.verify_pow() for simulator')
-
         def resolve(self: BaseTransaction, update_time: bool = True) -> bool:
             self.update_hash()
             logger.new().debug('Skipping BaseTransaction.resolve() for simulator')
             return True
-
-        cls._original_verify_pow = BaseTransaction.verify_pow
-        BaseTransaction.verify_pow = verify_pow
 
         cls._original_resolve = BaseTransaction.resolve
         BaseTransaction.resolve = resolve
@@ -85,7 +84,6 @@ class Simulator:
         """ Remove the patches previously applied.
         """
         from hathor.transaction import BaseTransaction
-        BaseTransaction.verify_pow = cls._original_verify_pow
         BaseTransaction.resolve = cls._original_resolve
 
         from hathor import daa
@@ -170,10 +168,18 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
+        vertex_verifiers = VertexVerifiers(
+            block=SimulatorBlockVerifier(settings=self.settings),
+            merge_mined_block=SimulatorMergeMinedBlockVerifier(settings=self.settings),
+            tx=SimulatorTransactionVerifier(settings=self.settings),
+            token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=self.settings),
+        )
+
         artifacts = builder \
             .set_reactor(self._clock) \
             .set_rng(Random(self.rng.getrandbits(64))) \
             .set_wallet(wallet) \
+            .set_vertex_verifiers(vertex_verifiers) \
             .build()
 
         artifacts.manager.start()
