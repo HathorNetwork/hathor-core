@@ -191,6 +191,7 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
+            feature_service=self.manager._feature_service
         )
 
     def start_sentry_if_possible(self) -> None:

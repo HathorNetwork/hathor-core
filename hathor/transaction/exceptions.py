@@ -146,6 +146,10 @@ class CheckpointError(BlockError):
     """Block hash does not match checkpoint hash for its height"""
 
 
+class BlockMustSignalError(BlockError):
+    """Block does not signal support for a feature during mandatory signaling."""
+
+
 class ScriptError(HathorError):
     """Base class for script evaluation errors"""
 

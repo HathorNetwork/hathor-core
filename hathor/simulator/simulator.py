@@ -22,7 +22,9 @@ from structlog import get_logger
 
 from hathor.builder import BuildArtifacts, Builder
 from hathor.conf.get_settings import get_settings
+from hathor.conf.settings import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
@@ -168,18 +170,11 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
-        vertex_verifiers = VertexVerifiers(
-            block=SimulatorBlockVerifier(settings=self.settings),
-            merge_mined_block=SimulatorMergeMinedBlockVerifier(settings=self.settings),
-            tx=SimulatorTransactionVerifier(settings=self.settings),
-            token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=self.settings),
-        )
-
         artifacts = builder \
             .set_reactor(self._clock) \
             .set_rng(Random(self.rng.getrandbits(64))) \
             .set_wallet(wallet) \
-            .set_vertex_verifiers(vertex_verifiers) \
+            .set_vertex_verifiers_builder(_build_vertex_verifiers) \
             .build()
 
         artifacts.manager.start()
@@ -303,3 +298,18 @@ class Simulator:
         if trigger is not None:
             return False
         return True
+
+
+def _build_vertex_verifiers(settings: HathorSettings, feature_service: FeatureService) -> VertexVerifiers:
+    """
+    A custom VertexVerifiers builder to be used by the simulator.
+    """
+    return VertexVerifiers(
+        block=SimulatorBlockVerifier(settings=settings, feature_service=feature_service),
+        merge_mined_block=SimulatorMergeMinedBlockVerifier(
+            settings=settings,
+            feature_service=feature_service
+        ),
+        tx=SimulatorTransactionVerifier(settings=settings),
+        token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=settings),
+    )

@@ -19,7 +19,12 @@ import pytest
 
 from hathor.conf import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.feature_service import (
+    BlockIsMissingSignal,
+    BlockIsSignaling,
+    BlockSignalingState,
+    FeatureService,
+)
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
@@ -43,8 +48,8 @@ def _get_blocks_and_storage() -> tuple[list[Block], TransactionStorage]:
         0b0011,
         0b0001,
 
-        0b0000,  # 8: boundary block
-        0b0000,
+        0b0010,  # 8: boundary block
+        0b0110,
         0b0000,
         0b0000,
 
@@ -475,10 +480,11 @@ def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStor
         assert result1 == FeatureState.ACTIVE
         assert calculate_new_state_mock.call_count == 4
 
+        calculate_new_state_mock.reset_mock()
         result2 = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
 
         assert result2 == FeatureState.ACTIVE
-        assert calculate_new_state_mock.call_count == 4
+        assert calculate_new_state_mock.call_count == 0
 
 
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
@@ -651,3 +657,58 @@ def test_get_ancestor_at_height_voided(
     assert result == block_mocks[ancestor_height]
     assert result.get_height() == ancestor_height
     assert cast(Mock, tx_storage.get_transaction_by_height).call_count == 0
+
+
+@pytest.mark.parametrize(
+    ['bit', 'threshold', 'block_height', 'signaling_state'],
+    [
+        (0, 4, 0, BlockIsSignaling()),
+        (0, 4, 3, BlockIsSignaling()),
+        (0, 4, 7, BlockIsSignaling()),
+        (0, 4, 8, BlockIsSignaling()),
+        (0, 4, 11, BlockIsSignaling()),
+        (0, 4, 12, BlockIsSignaling()),
+
+        (1, 4, 0, BlockIsSignaling()),
+        (1, 4, 3, BlockIsSignaling()),
+        (1, 4, 7, BlockIsSignaling()),
+        (1, 4, 8, BlockIsSignaling()),
+        (1, 4, 9, BlockIsSignaling()),
+        (1, 4, 10, BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)),
+        (1, 4, 11, BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)),
+        (1, 4, 12, BlockIsSignaling()),
+
+        (2, 2, 8, BlockIsSignaling()),
+        (2, 2, 9, BlockIsSignaling()),
+        (2, 2, 10, BlockIsSignaling()),
+        (2, 2, 11, BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)),
+        (2, 2, 12, BlockIsSignaling()),
+    ]
+)
+def test_check_must_signal(
+    tx_storage: TransactionStorage,
+    block_mocks: list[Block],
+    bit: int,
+    threshold: int,
+    block_height: int,
+    signaling_state: BlockSignalingState
+) -> None:
+    feature_settings = FeatureSettings(
+        evaluation_interval=4,
+        default_threshold=threshold,
+        features={
+            Feature.NOP_FEATURE_1: Criteria(
+                bit=bit,
+                start_height=0,
+                timeout_height=12,
+                lock_in_on_timeout=True,
+                version='0.0.0'
+            )
+        }
+    )
+    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    block = block_mocks[block_height]
+
+    result = service.is_signaling_mandatory_features(block)
+
+    assert result == signaling_state

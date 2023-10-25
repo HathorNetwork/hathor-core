@@ -160,6 +160,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
         verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_height_wrapped = Mock(wraps=verifier.verify_height)
+        verify_mandatory_signaling_wrapped = Mock(wraps=verifier.verify_mandatory_signaling)
 
         with (
             patch.object(BlockVerifier, 'verify_pow', verify_pow_wrapped),
@@ -170,6 +171,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(BlockVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
+            patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
             self.manager.verification_service.verify(block)
 
@@ -182,6 +184,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
         verify_height_wrapped.assert_called_once()
+        verify_mandatory_signaling_wrapped.assert_called_once()
 
     def test_block_validate_basic(self) -> None:
         verifier = self.manager.verification_service.verifiers.block
@@ -214,6 +217,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_height_wrapped = Mock(wraps=verifier.verify_height)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
         verify_reward_wrapped = Mock(wraps=verifier.verify_reward)
+        verify_mandatory_signaling_wrapped = Mock(wraps=verifier.verify_mandatory_signaling)
 
         with (
             patch.object(BlockVerifier, 'verify_pow', verify_pow_wrapped),
@@ -226,6 +230,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
+            patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
             self.manager.verification_service.validate_full(block)
 
@@ -240,6 +245,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_height_wrapped.assert_called_once()
         verify_weight_wrapped.assert_called_once()
         verify_reward_wrapped.assert_called_once()
+        verify_mandatory_signaling_wrapped.assert_called_once()
 
     def test_merge_mined_block_verify_basic(self) -> None:
         verifier = self.manager.verification_service.verifiers.merge_mined_block
@@ -305,6 +311,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=verifier.verify_sigops_output)
         verify_parents_wrapped = Mock(wraps=verifier.verify_parents)
         verify_height_wrapped = Mock(wraps=verifier.verify_height)
+        verify_mandatory_signaling_wrapped = Mock(wraps=verifier.verify_mandatory_signaling)
 
         verify_aux_pow_wrapped = Mock(wraps=verifier.verify_aux_pow)
 
@@ -318,6 +325,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(MergeMinedBlockVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_height', verify_height_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
             self.manager.verification_service.verify(block)
 
@@ -330,6 +338,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
         verify_height_wrapped.assert_called_once()
+        verify_mandatory_signaling_wrapped.assert_called_once()
 
         # MergeMinedBlock methods
         verify_pow_wrapped.assert_called_once()
@@ -365,6 +374,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_height_wrapped = Mock(wraps=verifier.verify_height)
         verify_weight_wrapped = Mock(wraps=verifier.verify_weight)
         verify_reward_wrapped = Mock(wraps=verifier.verify_reward)
+        verify_mandatory_signaling_wrapped = Mock(wraps=verifier.verify_mandatory_signaling)
 
         verify_aux_pow_wrapped = Mock(wraps=verifier.verify_aux_pow)
 
@@ -380,6 +390,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(MergeMinedBlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_reward', verify_reward_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
+            patch.object(MergeMinedBlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
             self.manager.verification_service.validate_full(block)
 
@@ -394,6 +405,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_height_wrapped.assert_called_once()
         verify_weight_wrapped.assert_called_once()
         verify_reward_wrapped.assert_called_once()
+        verify_mandatory_signaling_wrapped.assert_called_once()
 
         # MergeMinedBlock methods
         verify_pow_wrapped.assert_called_once()
