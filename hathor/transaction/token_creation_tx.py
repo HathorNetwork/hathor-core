@@ -16,10 +16,9 @@ from struct import error as StructError, pack
 from typing import Any, Optional
 
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
-from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
-from hathor.transaction.transaction import TokenInfo, Transaction
-from hathor.transaction.util import VerboseCallback, clean_token_string, int_to_bytes, unpack, unpack_len
+from hathor.transaction.transaction import Transaction
+from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
@@ -219,45 +218,6 @@ class TokenCreationTransaction(Transaction):
         json['token_symbol'] = self.token_symbol
         json['tokens'] = []
         return json
-
-    def verify_sum(self) -> None:
-        """ Besides all checks made on regular transactions, a few extra ones are made:
-        - only HTR tokens on the inputs;
-        - new tokens are actually being minted;
-
-        :raises InvalidToken: when there's an error in token operations
-        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
-        """
-        token_dict = self.get_token_info_from_inputs()
-
-        # we add the created token's info to token_dict, as the creation tx allows for mint/melt
-        assert self.hash is not None
-        token_dict[self.hash] = TokenInfo(0, True, True)
-
-        self.update_token_info_from_outputs(token_dict)
-
-        # make sure tokens are being minted
-        token_info = token_dict[self.hash]
-        if token_info.amount <= 0:
-            raise InvalidToken('Token creation transaction must mint new tokens')
-
-        self.check_authorities_and_deposit(token_dict)
-
-    def verify_token_info(self) -> None:
-        """ Validates token info
-        """
-        name_len = len(self.token_name)
-        symbol_len = len(self.token_symbol)
-        if name_len == 0 or name_len > self._settings.MAX_LENGTH_TOKEN_NAME:
-            raise TransactionDataError('Invalid token name length ({})'.format(name_len))
-        if symbol_len == 0 or symbol_len > self._settings.MAX_LENGTH_TOKEN_SYMBOL:
-            raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
-
-        # Can't create token with hathor name or symbol
-        if clean_token_string(self.token_name) == clean_token_string(self._settings.HATHOR_TOKEN_NAME):
-            raise TransactionDataError('Invalid token name ({})'.format(self.token_name))
-        if clean_token_string(self.token_symbol) == clean_token_string(self._settings.HATHOR_TOKEN_SYMBOL):
-            raise TransactionDataError('Invalid token symbol ({})'.format(self.token_symbol))
 
 
 def decode_string_utf8(encoded: bytes, key: str) -> str:
