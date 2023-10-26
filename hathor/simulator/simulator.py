@@ -28,12 +28,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
-from hathor.simulator.verification import (
-    SimulatorBlockVerifier,
-    SimulatorMergeMinedBlockVerifier,
-    SimulatorTokenCreationTransactionVerifier,
-    SimulatorTransactionVerifier,
-)
+from hathor.simulator.verification import SimulatorVertexVerifier
 from hathor.util import Random
 from hathor.verification.verification_service import VertexVerifiers
 from hathor.wallet import HDWallet
@@ -168,12 +163,8 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
-        vertex_verifiers = VertexVerifiers(
-            block=SimulatorBlockVerifier(settings=self.settings),
-            merge_mined_block=SimulatorMergeMinedBlockVerifier(),
-            tx=SimulatorTransactionVerifier(settings=self.settings),
-            token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=self.settings),
-        )
+        vertex_verifier = SimulatorVertexVerifier(settings=self.settings)
+        vertex_verifiers = VertexVerifiers.create(settings=self.settings, vertex_verifier=vertex_verifier)
 
         artifacts = builder \
             .set_reactor(self._clock) \

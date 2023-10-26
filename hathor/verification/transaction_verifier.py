@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 from hathor import daa
+from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
@@ -40,8 +41,12 @@ from hathor.verification.vertex_verifier import VertexVerifier
 cpu = get_cpu_profiler()
 
 
-class TransactionVerifier(VertexVerifier):
-    __slots__ = ()
+class TransactionVerifier:
+    __slots__ = ('_settings', '_vertex_verifier')
+
+    def __init__(self, *, settings: HathorSettings, vertex_verifier: VertexVerifier) -> None:
+        self._settings = settings
+        self._vertex_verifier = vertex_verifier
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -171,7 +176,7 @@ class TransactionVerifier(VertexVerifier):
         :raises InvalidToken: output references non existent token uid
         """
         assert isinstance(tx, Transaction)
-        super().verify_outputs(tx)
+        self._vertex_verifier.verify_outputs(tx)
         for output in tx.outputs:
             # check index is valid
             if output.get_token_index() > len(tx.tokens):

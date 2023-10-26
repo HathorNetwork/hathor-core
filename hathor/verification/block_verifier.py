@@ -13,7 +13,8 @@
 #  limitations under the License.
 
 from hathor import daa
-from hathor.transaction import BaseTransaction, Block
+from hathor.conf.settings import HathorSettings
+from hathor.transaction import Block
 from hathor.transaction.exceptions import (
     BlockWithInputs,
     BlockWithTokensError,
@@ -25,8 +26,12 @@ from hathor.transaction.exceptions import (
 from hathor.verification.vertex_verifier import VertexVerifier
 
 
-class BlockVerifier(VertexVerifier):
-    __slots__ = ()
+class BlockVerifier:
+    __slots__ = ('_settings', '_vertex_verifier')
+
+    def __init__(self, *, settings: HathorSettings, vertex_verifier: VertexVerifier) -> None:
+        self._settings = settings
+        self._vertex_verifier = vertex_verifier
 
     def verify_height(self, block: Block) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
@@ -58,9 +63,8 @@ class BlockVerifier(VertexVerifier):
         if inputs:
             raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
 
-    def verify_outputs(self, block: BaseTransaction) -> None:
-        assert isinstance(block, Block)
-        super().verify_outputs(block)
+    def verify_outputs(self, block: Block) -> None:
+        self._vertex_verifier.verify_outputs(block)
         for output in block.outputs:
             if output.get_token_index() > 0:
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
