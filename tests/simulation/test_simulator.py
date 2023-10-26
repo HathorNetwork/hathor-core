@@ -157,14 +157,10 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTe
 class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
     __test__ = True
 
-    seed_config = 3
-
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
     __test__ = True
-
-    seed_config = 4
 
     def test_compare_mempool_implementations(self):
         manager1 = self.create_peer()

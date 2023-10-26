@@ -10,7 +10,6 @@ from structlog import get_logger
 from twisted.trial import unittest
 
 from hathor.builder import BuildArtifacts, Builder
-from hathor.cli.util import setup_logging
 from hathor.conf import HathorSettings
 from hathor.conf.get_settings import get_settings
 from hathor.daa import TestMode, _set_test_mode
@@ -105,7 +104,6 @@ class TestCase(unittest.TestCase):
     seed_config: Optional[int] = None
 
     def setUp(self):
-        setup_logging()
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         self.tmpdirs = []
         self.clock = TestMemoryReactorClock()
@@ -473,7 +471,7 @@ class TestCase(unittest.TestCase):
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
 
     def assertV2SyncedProgress(self, node_sync):
-        self.assertEqual(node_sync.synced_height, node_sync.peer_height)
+        self.assertEqual(node_sync.synced_block, node_sync.peer_best_block)
 
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:
