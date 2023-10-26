@@ -269,8 +269,6 @@ class HathorManager:
         if self._enable_event_queue:
             self._event_manager.start(not_none(self.my_peer.id))
 
-        self._bit_signaling_service.start()
-
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self._event_manager.load_started()
@@ -545,6 +543,8 @@ class HathorManager:
 
         self.tx_storage.pre_init()
         assert self.tx_storage.indexes is not None
+
+        self._bit_signaling_service.start()
 
         started_at = int(time.time())
         last_started_at = self.tx_storage.get_last_started_at()
