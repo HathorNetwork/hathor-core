@@ -12,17 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.transaction import Block, MergeMinedBlock
-from hathor.verification.block_verifier import BlockVerifier
+from hathor.transaction import MergeMinedBlock
 
 
-class MergeMinedBlockVerifier(BlockVerifier):
+class MergeMinedBlockVerifier:
     __slots__ = ()
-
-    def verify_without_storage(self, block: Block) -> None:
-        assert isinstance(block, MergeMinedBlock)
-        self.verify_aux_pow(block)
-        super().verify_without_storage(block)
 
     def verify_aux_pow(self, block: MergeMinedBlock) -> None:
         """ Verify auxiliary proof-of-work (for merged mining).

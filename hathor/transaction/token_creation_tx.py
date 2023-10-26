@@ -36,7 +36,7 @@ class TokenCreationTransaction(Transaction):
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
                  signal_bits: int = 0,
-                 version: int = TxVersion.TOKEN_CREATION_TRANSACTION,
+                 version: TxVersion = TxVersion.TOKEN_CREATION_TRANSACTION,
                  weight: float = 0,
                  inputs: Optional[list[TxInput]] = None,
                  outputs: Optional[list[TxOutput]] = None,

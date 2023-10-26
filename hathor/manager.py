@@ -924,9 +924,10 @@ class HathorManager:
             raise NonStandardTxError('Transaction is non standard.')
 
         # Validate tx.
-        success, message = self.verification_service.validate_vertex_error(tx)
-        if not success:
-            raise InvalidNewTransaction(message)
+        try:
+            self.verification_service.verify(tx)
+        except TxValidationError as e:
+            raise InvalidNewTransaction(str(e))
 
         self.propagate_tx(tx, fails_silently=False)
 

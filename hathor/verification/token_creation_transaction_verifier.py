@@ -22,15 +22,7 @@ from hathor.verification.transaction_verifier import TransactionVerifier
 class TokenCreationTransactionVerifier(TransactionVerifier):
     __slots__ = ()
 
-    def verify(self, tx: TokenCreationTransaction, *, reject_locked_reward: bool = True) -> None:
-        """ Run all validations as regular transactions plus validation on token info.
-
-        We also overload verify_sum to make some different checks
-        """
-        super().verify(tx, reject_locked_reward=reject_locked_reward)
-        self.verify_token_info(tx)
-
-    def verify_sum(self, tx: Transaction) -> None:
+    def _verify_sum(self, tx: Transaction) -> None:
         """ Besides all checks made on regular transactions, a few extra ones are made:
         - only HTR tokens on the inputs;
         - new tokens are actually being minted;

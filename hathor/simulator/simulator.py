@@ -170,7 +170,7 @@ class Simulator:
 
         vertex_verifiers = VertexVerifiers(
             block=SimulatorBlockVerifier(settings=self.settings),
-            merge_mined_block=SimulatorMergeMinedBlockVerifier(settings=self.settings),
+            merge_mined_block=SimulatorMergeMinedBlockVerifier(),
             tx=SimulatorTransactionVerifier(settings=self.settings),
             token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=self.settings),
         )

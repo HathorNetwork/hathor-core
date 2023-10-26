@@ -14,15 +14,19 @@
 
 from typing import NamedTuple
 
+from typing_extensions import assert_never
+
 from hathor.conf.settings import HathorSettings
+from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
-from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
 from hathor.verification.transaction_verifier import TransactionVerifier
+
+cpu = get_cpu_profiler()
 
 
 class VertexVerifiers(NamedTuple):
@@ -40,7 +44,7 @@ class VertexVerifiers(NamedTuple):
         """
         return VertexVerifiers(
             block=BlockVerifier(settings=settings),
-            merge_mined_block=MergeMinedBlockVerifier(settings=settings),
+            merge_mined_block=MergeMinedBlockVerifier(),
             tx=TransactionVerifier(settings=settings),
             token_creation_tx=TokenCreationTransactionVerifier(settings=settings),
         )
@@ -101,25 +105,40 @@ class VerificationService:
         Used by `self.validate_basic`. Should not modify the validation state."""
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
-                assert isinstance(vertex, Block)
-                self.verifiers.block.verify_basic(
-                    vertex,
-                    skip_block_weight_verification=skip_block_weight_verification
-                )
+                assert type(vertex) is Block
+                self._verify_basic_block(vertex, skip_weight_verification=skip_block_weight_verification)
             case TxVersion.MERGE_MINED_BLOCK:
-                assert isinstance(vertex, MergeMinedBlock)
-                self.verifiers.merge_mined_block.verify_basic(
-                    vertex,
-                    skip_block_weight_verification=skip_block_weight_verification
-                )
+                assert type(vertex) is MergeMinedBlock
+                self._verify_basic_merge_mined_block(vertex, skip_weight_verification=skip_block_weight_verification)
             case TxVersion.REGULAR_TRANSACTION:
-                assert isinstance(vertex, Transaction)
-                self.verifiers.tx.verify_basic(vertex)
+                assert type(vertex) is Transaction
+                self._verify_basic_tx(vertex)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert isinstance(vertex, TokenCreationTransaction)
-                self.verifiers.token_creation_tx.verify_basic(vertex)
+                assert type(vertex) is TokenCreationTransaction
+                self._verify_basic_token_creation_tx(vertex)
             case _:
-                raise NotImplementedError
+                assert_never(vertex.version)
+
+    def _verify_basic_block(self, block: Block, *, skip_weight_verification: bool) -> None:
+        """Partially run validations, the ones that need parents/inputs are skipped."""
+        if not skip_weight_verification:
+            self.verifiers.block.verify_weight(block)
+        self.verifiers.block.verify_reward(block)
+
+    def _verify_basic_merge_mined_block(self, block: MergeMinedBlock, *, skip_weight_verification: bool) -> None:
+        self._verify_basic_block(block, skip_weight_verification=skip_weight_verification)
+
+    def _verify_basic_tx(self, tx: Transaction) -> None:
+        """Partially run validations, the ones that need parents/inputs are skipped."""
+        if tx.is_genesis:
+            # TODO do genesis validation?
+            return
+        self.verifiers.tx.verify_parents_basic(tx)
+        self.verifiers.tx.verify_weight(tx)
+        self.verify_without_storage(tx)
+
+    def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
+        self._verify_basic_tx(tx)
 
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
@@ -127,48 +146,125 @@ class VerificationService:
         Used by `self.validate_full`. Should not modify the validation state."""
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
-                assert isinstance(vertex, Block)
-                self.verifiers.block.verify(vertex)
+                assert type(vertex) is Block
+                self._verify_block(vertex)
             case TxVersion.MERGE_MINED_BLOCK:
-                assert isinstance(vertex, MergeMinedBlock)
-                self.verifiers.merge_mined_block.verify(vertex)
+                assert type(vertex) is MergeMinedBlock
+                self._verify_merge_mined_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
-                assert isinstance(vertex, Transaction)
-                self.verifiers.tx.verify(vertex, reject_locked_reward=reject_locked_reward)
+                assert type(vertex) is Transaction
+                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert isinstance(vertex, TokenCreationTransaction)
-                self.verifiers.token_creation_tx.verify(vertex, reject_locked_reward=reject_locked_reward)
+                assert type(vertex) is TokenCreationTransaction
+                self._verify_token_creation_tx(vertex, reject_locked_reward=reject_locked_reward)
             case _:
-                raise NotImplementedError
+                assert_never(vertex.version)
+
+    @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
+    def _verify_block(self, block: Block) -> None:
+        """
+            (1) confirms at least two pending transactions and references last block
+            (2) solves the pow with the correct weight (done in HathorManager)
+            (3) creates the correct amount of tokens in the output (done in HathorManager)
+            (4) all parents must exist and have timestamp smaller than ours
+            (5) data field must contain at most BLOCK_DATA_MAX_SIZE bytes
+        """
+        # TODO Should we validate a limit of outputs?
+        if block.is_genesis:
+            # TODO do genesis validation
+            return
+
+        self.verify_without_storage(block)
+
+        # (1) and (4)
+        self.verifiers.block.verify_parents(block)
+
+        self.verifiers.block.verify_height(block)
+
+    def _verify_merge_mined_block(self, block: MergeMinedBlock) -> None:
+        self._verify_block(block)
+
+    @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
+    def _verify_tx(self, tx: Transaction, *, reject_locked_reward: bool) -> None:
+        """ Common verification for all transactions:
+           (i) number of inputs is at most 256
+          (ii) number of outputs is at most 256
+         (iii) confirms at least two pending transactions
+          (iv) solves the pow (we verify weight is correct in HathorManager)
+           (v) validates signature of inputs
+          (vi) validates public key and output (of the inputs) addresses
+         (vii) validate that both parents are valid
+        (viii) validate input's timestamps
+          (ix) validate inputs and outputs sum
+        """
+        if tx.is_genesis:
+            # TODO do genesis validation
+            return
+        self.verify_without_storage(tx)
+        self.verifiers.tx.verify_sigops_input(tx)
+        self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
+        self.verifiers.tx.verify_parents(tx)
+        self._verify_sum(tx)
+        if reject_locked_reward:
+            self.verifiers.tx.verify_reward_locked(tx)
+
+    def _verify_token_creation_tx(self, tx: TokenCreationTransaction, *, reject_locked_reward: bool) -> None:
+        """ Run all validations as regular transactions plus validation on token info.
+
+        We also overload verify_sum to make some different checks
+        """
+        self._verify_tx(tx, reject_locked_reward=reject_locked_reward)
+        self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
-                assert isinstance(vertex, Block)
-                self.verifiers.block.verify_without_storage(vertex)
+                assert type(vertex) is Block
+                self._verify_without_storage_block(vertex)
             case TxVersion.MERGE_MINED_BLOCK:
-                assert isinstance(vertex, MergeMinedBlock)
-                self.verifiers.merge_mined_block.verify_without_storage(vertex)
+                assert type(vertex) is MergeMinedBlock
+                self._verify_without_storage_merge_mined_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
-                assert isinstance(vertex, Transaction)
-                self.verifiers.tx.verify_without_storage(vertex)
+                assert type(vertex) is Transaction
+                self._verify_without_storage_tx(vertex)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert isinstance(vertex, TokenCreationTransaction)
-                self.verifiers.token_creation_tx.verify_without_storage(vertex)
+                assert type(vertex) is TokenCreationTransaction
+                self._verify_without_storage_token_creation_tx(vertex)
+            case _:
+                assert_never(vertex.version)
+
+    def _verify_without_storage_block(self, block: Block) -> None:
+        """ Run all verifications that do not need a storage.
+        """
+        self.verifiers.block.verify_pow(block)
+        self.verifiers.block.verify_no_inputs(block)
+        self.verifiers.block.verify_outputs(block)
+        self.verifiers.block.verify_data(block)
+        self.verifiers.block.verify_sigops_output(block)
+
+    def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
+        self.verifiers.merge_mined_block.verify_aux_pow(block)
+        self._verify_without_storage_block(block)
+
+    def _verify_without_storage_tx(self, tx: Transaction) -> None:
+        """ Run all verifications that do not need a storage.
+        """
+        self.verifiers.tx.verify_pow(tx)
+        self.verifiers.tx.verify_number_of_inputs(tx)
+        self.verifiers.tx.verify_outputs(tx)
+        self.verifiers.tx.verify_sigops_output(tx)
+
+    def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
+        self._verify_without_storage_tx(tx)
+
+    def _verify_sum(self, tx: Transaction) -> None:
+        match tx.version:
+            case TxVersion.REGULAR_TRANSACTION:
+                assert type(tx) is Transaction
+                self.verifiers.tx._verify_sum(tx)
+            case TxVersion.TOKEN_CREATION_TRANSACTION:
+                assert type(tx) is TokenCreationTransaction
+                self.verifiers.token_creation_tx._verify_sum(tx)
             case _:
                 raise NotImplementedError
-
-    def validate_vertex_error(self, vertex: BaseTransaction) -> tuple[bool, str]:
-        """ Verify if tx is valid and return success and possible error message
-
-            :return: Success if tx is valid and possible error message, if not
-            :rtype: tuple[bool, str]
-        """
-        success = True
-        message = ''
-        try:
-            self.verify(vertex)
-        except TxValidationError as e:
-            success = False
-            message = str(e)
-        return success, message
+                # assert_never(tx.version)

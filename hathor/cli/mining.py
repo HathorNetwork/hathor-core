@@ -136,10 +136,11 @@ def execute(args: Namespace) -> None:
                                                                       block.nonce, block.weight))
 
         try:
-            from hathor.verification.block_verifier import BlockVerifier
+            from hathor.verification.verification_service import VerificationService, VertexVerifiers
             settings = get_settings()
-            verifier = BlockVerifier(settings=settings)
-            verifier.verify_without_storage(block)
+            verifiers = VertexVerifiers.create_defaults(settings=settings)
+            verification_service = VerificationService(verifiers=verifiers)
+            verification_service.verify_without_storage(block)
         except HathorError:
             print('[{}] ERROR: Block has not been pushed because it is not valid.'.format(datetime.datetime.now()))
         else:

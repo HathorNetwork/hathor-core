@@ -28,7 +28,7 @@ class MergeMinedBlock(Block):
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
                  signal_bits: int = 0,
-                 version: int = TxVersion.MERGE_MINED_BLOCK,
+                 version: TxVersion = TxVersion.MERGE_MINED_BLOCK,
                  weight: float = 0,
                  outputs: Optional[list[TxOutput]] = None,
                  parents: Optional[list[bytes]] = None,
