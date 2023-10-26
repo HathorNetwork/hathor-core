@@ -42,11 +42,17 @@ class VertexVerifiers(NamedTuple):
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
         """
+        tx_verifier = TransactionVerifier(settings=settings)
+        token_creation_tx_verifier = TokenCreationTransactionVerifier(
+            settings=settings,
+            tx_verifier=tx_verifier,
+        )
+
         return VertexVerifiers(
             block=BlockVerifier(settings=settings),
             merge_mined_block=MergeMinedBlockVerifier(),
-            tx=TransactionVerifier(settings=settings),
-            token_creation_tx=TokenCreationTransactionVerifier(settings=settings),
+            tx=tx_verifier,
+            token_creation_tx=token_creation_tx_verifier,
         )
 
 
@@ -204,7 +210,7 @@ class VerificationService:
         self.verifiers.tx.verify_sigops_input(tx)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_parents(tx)
-        self._verify_sum(tx)
+        self.verifiers.tx.verify_sum(tx)
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 
@@ -214,6 +220,7 @@ class VerificationService:
         We also overload verify_sum to make some different checks
         """
         self._verify_tx(tx, reject_locked_reward=reject_locked_reward)
+        self.verifiers.token_creation_tx.verify_minted_tokens(tx)
         self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
@@ -256,15 +263,3 @@ class VerificationService:
 
     def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_without_storage_tx(tx)
-
-    def _verify_sum(self, tx: Transaction) -> None:
-        match tx.version:
-            case TxVersion.REGULAR_TRANSACTION:
-                assert type(tx) is Transaction
-                self.verifiers.tx._verify_sum(tx)
-            case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert type(tx) is TokenCreationTransaction
-                self.verifiers.token_creation_tx._verify_sum(tx)
-            case _:
-                raise NotImplementedError
-                # assert_never(tx.version)

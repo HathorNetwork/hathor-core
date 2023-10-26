@@ -12,16 +12,21 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import clean_token_string
 from hathor.verification.transaction_verifier import TransactionVerifier
 
 
-class TokenCreationTransactionVerifier(TransactionVerifier):
-    __slots__ = ()
+class TokenCreationTransactionVerifier:
+    __slots__ = ('_settings', '_tx_verifier',)
 
-    def _verify_sum(self, tx: TokenCreationTransaction) -> None:
+    def __init__(self, *, settings: HathorSettings, tx_verifier: TransactionVerifier) -> None:
+        self._settings = settings
+        self._tx_verifier = tx_verifier
+
+    def verify_minted_tokens(self, tx: TokenCreationTransaction) -> None:
         """ Besides all checks made on regular transactions, a few extra ones are made:
         - only HTR tokens on the inputs;
         - new tokens are actually being minted;
@@ -29,11 +34,11 @@ class TokenCreationTransactionVerifier(TransactionVerifier):
         :raises InvalidToken: when there's an error in token operations
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        super()._verify_sum(tx)
-        token_dict = self._get_complete_token_info(tx)
+        assert tx.hash is not None
+        token_dict = self._tx_verifier.get_complete_token_info(tx)
+        token_info = token_dict[tx.hash]
 
         # make sure tokens are being minted
-        token_info = token_dict[tx.hash]
         if token_info.amount <= 0:
             raise InvalidToken('Token creation transaction must mint new tokens')
 

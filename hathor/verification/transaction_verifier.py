@@ -137,7 +137,7 @@ class TransactionVerifier(VertexVerifier):
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def _verify_sum(self, tx: Transaction) -> None:
+    def verify_sum(self, tx: Transaction) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token.
 
         If there are authority UTXOs involved, tokens can be minted or melted, so the above rule may
@@ -146,7 +146,7 @@ class TransactionVerifier(VertexVerifier):
         :raises InvalidToken: when there's an error in token operations
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        token_dict = self._get_complete_token_info(tx)
+        token_dict = self.get_complete_token_info(tx)
         self.verify_authorities_and_deposit(token_dict)
 
     def verify_reward_locked(self, tx: Transaction) -> None:
@@ -250,7 +250,7 @@ class TransactionVerifier(VertexVerifier):
                     sum_tokens = token_info.amount + tx_output.value
                     token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
-    def _get_complete_token_info(self, tx: Transaction) -> dict[TokenUid, TokenInfo]:
+    def get_complete_token_info(self, tx: Transaction) -> dict[TokenUid, TokenInfo]:
         token_dict = tx.get_token_info_from_inputs()
         self.update_token_info_from_outputs(tx, token_dict=token_dict)
 
