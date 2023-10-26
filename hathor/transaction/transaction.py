@@ -57,7 +57,7 @@ class Transaction(BaseTransaction):
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
                  signal_bits: int = 0,
-                 version: int = TxVersion.REGULAR_TRANSACTION,
+                 version: TxVersion = TxVersion.REGULAR_TRANSACTION,
                  weight: float = 0,
                  inputs: Optional[list[TxInput]] = None,
                  outputs: Optional[list[TxOutput]] = None,
