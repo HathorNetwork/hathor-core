@@ -46,8 +46,8 @@ def validated_named_tuple_from_dict(
 
     # This intermediate step shouldn't be necessary, but for some reason pydantic.create_model_from_namedtuple
     # doesn't support default attribute values, so we do this to add them
-    all_attributes = named_tuple_type(**attributes_dict)
+    all_attributes = named_tuple_type(**attributes_dict)  # type: ignore[call-overload]
     validated_attributes = model(**all_attributes._asdict())
     validated_attributes_dict = {k: v for k, v in validated_attributes}
 
-    return named_tuple_type(**validated_attributes_dict)
+    return named_tuple_type(**validated_attributes_dict)  # type: ignore[call-overload]
