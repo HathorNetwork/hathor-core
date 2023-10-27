@@ -364,13 +364,17 @@ class NodeBlockSync(SyncAgent):
         # Get my best block.
         my_best_block = self.get_my_best_block()
 
-        # Find peer's best block
+        # Get peer's best block
         self.peer_best_block = yield self.get_peer_best_block()
         assert self.peer_best_block is not None
 
-        # find best common block
+        # Find best common block
         self.synced_block = yield self.find_best_common_block(my_best_block, self.peer_best_block)
-        assert self.synced_block is not None
+        if self.synced_block is None:
+            # Find best common block failed. Try again soon.
+            # This might happen if a reorg occurs during the search.
+            return
+
         self.log.debug('run_sync_blocks',
                        my_best_block=my_best_block,
                        peer_best_block=self.peer_best_block,
@@ -516,7 +520,7 @@ class NodeBlockSync(SyncAgent):
     @inlineCallbacks
     def find_best_common_block(self,
                                my_best_block: _HeightInfo,
-                               peer_best_block: _HeightInfo) -> Generator[Any, Any, _HeightInfo]:
+                               peer_best_block: _HeightInfo) -> Generator[Any, Any, Optional[_HeightInfo]]:
         """ Search for the highest block/height where we're synced.
         """
         self.log.debug('find_best_common_block', peer_best_block=peer_best_block, my_best_block=my_best_block)
@@ -545,36 +549,49 @@ class NodeBlockSync(SyncAgent):
         # Run an n-ary search in the interval [lo, hi).
         # `lo` is always a height where we are synced.
         # `hi` is always a height where sync state is unknown.
-        hi = min(peer_best_block.height, my_best_block.height)
-        lo = 0
+        hi = min(peer_best_block, my_best_block, key=lambda x: x.height)
+        lo = _HeightInfo(height=0, id=self._settings.GENESIS_BLOCK_HASH)
 
-        lo_block_hash = self._settings.GENESIS_BLOCK_HASH
-
-        while hi - lo > 1:
+        while hi.height - lo.height > 1:
             self.log.info('find_best_common_block n-ary search query', lo=lo, hi=hi)
-            step = math.ceil((hi - lo) / 10)
-            heights = list(range(lo, hi, step))
-            heights.append(hi)
+            step = math.ceil((hi.height - lo.height) / 10)
+            heights = list(range(lo.height, hi.height, step))
+            heights.append(hi.height)
 
-            block_height_list = yield self.get_peer_block_hashes(heights)
-            block_height_list.sort(key=lambda x: x.height, reverse=True)
+            block_info_list = yield self.get_peer_block_hashes(heights)
+            block_info_list.sort(key=lambda x: x.height, reverse=True)
 
-            for height, block_hash in block_height_list:
+            # As we are supposed to be always synced at `lo`, we expect to receive a response
+            # with at least one item equals to lo. If it does not happen, we stop the search
+            # and return None. This might be caused when a reorg occurs during the search.
+            if not block_info_list:
+                self.log.info('n-ary search failed because it got a response with no lo_block_info',
+                              lo=lo,
+                              hi=hi)
+                return None
+            lo_block_info = block_info_list[-1]
+            if lo_block_info != lo:
+                self.log.info('n-ary search failed because lo != lo_block_info',
+                              lo=lo,
+                              hi=hi,
+                              lo_block_info=lo_block_info)
+                return None
+
+            for info in block_info_list:
                 try:
                     # We must check only fully validated transactions.
-                    blk = self.tx_storage.get_transaction(block_hash)
+                    blk = self.tx_storage.get_transaction(info.id)
                 except TransactionDoesNotExist:
-                    hi = height
+                    hi = info
                 else:
                     assert blk.get_metadata().validation.is_fully_connected()
                     assert isinstance(blk, Block)
-                    assert height == blk.get_height()
-                    lo = height
-                    lo_block_hash = block_hash
+                    assert info.height == blk.get_height()
+                    lo = info
                     break
 
         self.log.debug('find_best_common_block n-ary search finished', lo=lo, hi=hi)
-        return _HeightInfo(height=lo, id=lo_block_hash)
+        return lo
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.

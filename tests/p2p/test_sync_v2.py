@@ -1,8 +1,10 @@
 import pytest
+from twisted.internet.defer import inlineCallbacks, succeed
 from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.sync_v2.agent import _HeightInfo
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks, StopAfterNTransactions, StopWhenTrue, Trigger
 from hathor.transaction.storage.traversal import DFSWalk
@@ -243,3 +245,82 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager2)
+
+    def _prepare_sync_v2_find_best_common_block_reorg(self):
+        manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager1.allow_mining_without_peers()
+        miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
+        miner1.start()
+        self.assertTrue(self.simulator.run(24 * 3600))
+        miner1.stop()
+
+        manager2 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        conn12 = FakeConnection(manager1, manager2, latency=0.05)
+        self.simulator.add_connection(conn12)
+
+        self.assertTrue(self.simulator.run(3600))
+        return conn12
+
+    @inlineCallbacks
+    def test_sync_v2_find_best_common_block_reorg_1(self):
+        conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        sync_agent = conn12._proto1.state.sync_agent
+        rng = conn12.manager2.rng
+
+        my_best_block = sync_agent.get_my_best_block()
+        peer_best_block = sync_agent.peer_best_block
+
+        fake_peer_best_block = _HeightInfo(my_best_block.height + 3, rng.randbytes(32))
+        reorg_height = peer_best_block.height - 50
+
+        def fake_get_peer_block_hashes(heights):
+            # return empty as soon as the search lowest height is not the genesis
+            if heights[0] != 0:
+                return []
+
+            # simulate a reorg
+            response = []
+            for h in heights:
+                if h < reorg_height:
+                    vertex_id = conn12.manager2.tx_storage.indexes.height.get(h)
+                else:
+                    vertex_id = rng.randbytes(32)
+                response.append(_HeightInfo(height=h, id=vertex_id))
+            return succeed(response)
+
+        sync_agent.get_peer_block_hashes = fake_get_peer_block_hashes
+        common_block_info = yield sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
+        self.assertIsNone(common_block_info)
+
+    @inlineCallbacks
+    def test_sync_v2_find_best_common_block_reorg_2(self):
+        conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        sync_agent = conn12._proto1.state.sync_agent
+        rng = conn12.manager2.rng
+
+        my_best_block = sync_agent.get_my_best_block()
+        peer_best_block = sync_agent.peer_best_block
+
+        fake_peer_best_block = _HeightInfo(my_best_block.height + 3, rng.randbytes(32))
+        reorg_height = peer_best_block.height - 50
+
+        def fake_get_peer_block_hashes(heights):
+            if heights[0] != 0:
+                return succeed([
+                    _HeightInfo(height=h, id=rng.randbytes(32))
+                    for h in heights
+                ])
+
+            # simulate a reorg
+            response = []
+            for h in heights:
+                if h < reorg_height:
+                    vertex_id = conn12.manager2.tx_storage.indexes.height.get(h)
+                else:
+                    vertex_id = rng.randbytes(32)
+                response.append(_HeightInfo(height=h, id=vertex_id))
+            return succeed(response)
+
+        sync_agent.get_peer_block_hashes = fake_get_peer_block_hashes
+        common_block_info = yield sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
+        self.assertIsNone(common_block_info)
