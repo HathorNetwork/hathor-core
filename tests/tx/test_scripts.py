@@ -23,18 +23,20 @@ from hathor.transaction.scripts import (
     MultiSig,
     Opcode,
     ScriptExtras,
-    binary_to_int,
-    count_sigops,
     create_base_script,
     create_output_script,
+)
+from hathor.transaction.scripts.construct import count_sigops, get_pushdata, get_sigops_count, re_compile
+from hathor.transaction.scripts.execute import (
+    binary_to_int,
     decode_opn,
     evaluate_final_stack,
     get_data_bytes,
     get_data_single_byte,
     get_data_value,
-    get_pushdata,
     get_script_op,
-    get_sigops_count,
+)
+from hathor.transaction.scripts.opcode import (
     op_checkdatasig,
     op_checkmultisig,
     op_checksig,
@@ -51,7 +53,6 @@ from hathor.transaction.scripts import (
     op_integer,
     op_pushdata,
     op_pushdata1,
-    re_compile,
 )
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import HDWallet
