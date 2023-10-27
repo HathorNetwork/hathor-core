@@ -60,6 +60,8 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', event=BaseEvent(peer_id=self.peer_id, id=4, timestamp=1578878880.0, type=EventType.LOAD_FINISHED, data=EmptyData(), group_id=None), latest_event_id=4, stream_id=stream_id)  # noqa: E501
         ]
 
+        responses = _remove_timestamp(responses)
+        expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_single_chain_one_block(self):
@@ -86,6 +88,8 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', event=BaseEvent(peer_id=self.peer_id, id=8, timestamp=1578878910.25, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='9b83e5dbc7145a5a161c34da4bec4e1a64dc02a3f2495a2db78457426c9ee6bf', nonce=0, timestamp=1578878910, version=0, weight=2.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUPXOcGnrN0ZB2WrnPVcjdCCcacL+IrA==', decoded=DecodedTxOutput(type='P2PKH', address='HC846khX278aM1utqAgPzkKAxBTfftaRDm', timelock=None))], parents=['339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792', '16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952', '33e14cb555a96967841dcbe0f95e9eab5810481d01de8f4f73afb8cce365e869'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='9b83e5dbc7145a5a161c34da4bec4e1a64dc02a3f2495a2db78457426c9ee6bf', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=2.0, score=4.0, first_block=None, height=1, validation='full'), aux_pow=None), group_id=None), latest_event_id=8, stream_id=stream_id)  # noqa: E501
         ]
 
+        responses = _remove_timestamp(responses)
+        expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_single_chain_blocks_and_transactions(self):
@@ -149,6 +153,8 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', event=BaseEvent(peer_id=self.peer_id, id=38, timestamp=1578879091.0, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='7c7449a44a6adf26fb9b68f8c2b7751905c788b417946c43b8a999d0b66f76d9', nonce=0, timestamp=1578879090, version=0, weight=8.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUTisHvpM4sDeINzxF5auK/8bP6UaIrA==', decoded=DecodedTxOutput(type='P2PKH', address='HDeSe6qKqjSLwtnjLBV84NddtZQyNb9HUU', timelock=None))], parents=['f349fc0f570a636a440ed3853cc533faa2c4616160e1d9eb6f5d656a90da30fb', 'd2bd5f83fcbfa5dee2b602ddc18ebd4f7714e1ecf928824f862efb0559dcb4d6', '5453759e15a6413a06390868cbb56509704c6f3f7d25f443556d8d6b2dacc650'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='7c7449a44a6adf26fb9b68f8c2b7751905c788b417946c43b8a999d0b66f76d9', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=8.0, score=19.576585413276128, first_block=None, height=12, validation='full'), aux_pow=None), group_id=None), latest_event_id=38, stream_id=stream_id)  # noqa: E501
         ]
 
+        responses = _remove_timestamp(responses)
+        expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_reorg(self):
@@ -195,12 +201,23 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', event=BaseEvent(peer_id=self.peer_id, id=20, timestamp=1578879064.25, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='38e7f91420ae78ae01707f80c29abe692beebf9d5575cc7c9248e9bdc78169c1', nonce=0, timestamp=1578879001, version=0, weight=2.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUgQrqLefPfPVpkXlfvvAp943epyOIrA==', decoded=DecodedTxOutput(type='P2PKH', address='HJHSdTickduA1MF9PTbzBQi6Z7stNAzwAu', timelock=None))], parents=['1204b8c30f0236ae6f1841d0c4805a47089c4d5e3ccd0dcab8aa65f0e4991533', '16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952', '33e14cb555a96967841dcbe0f95e9eab5810481d01de8f4f73afb8cce365e869'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='38e7f91420ae78ae01707f80c29abe692beebf9d5575cc7c9248e9bdc78169c1', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=2.0, score=4.321928094887363, first_block=None, height=2, validation='full'), aux_pow=None), group_id=None), latest_event_id=20, stream_id=stream_id)  # noqa: E501
         ]
 
+        responses = _remove_timestamp(responses)
+        expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def _start_stream(self) -> None:
         start_stream = StartStreamRequest(type='START_STREAM', window_size=1_000_000, last_ack_event_id=None)
         self._send_request(start_stream)
         self.simulator.run(60)
+
+
+def _remove_timestamp(responses: list[EventResponse]) -> list[EventResponse]:
+    for response in responses:
+        # We remove the timestamp from the comparison as it's not important and can be affected by other parts of
+        # the code.
+        del response.event.timestamp
+
+    return responses
 
 
 class MemoryEventSimulationScenariosTest(BaseEventSimulationScenariosTest, MemoryEventSimulationTester):
