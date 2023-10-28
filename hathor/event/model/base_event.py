@@ -66,7 +66,7 @@ class BaseEvent(BaseModel, use_enum_values=True):
         event_type = EventType(values['type'])
         expected_data_type = event_type.data_type()
 
-        if type(v) != expected_data_type:
+        if type(v) is not expected_data_type:
             raise ValueError('event data type does not match event type')
 
         return v
