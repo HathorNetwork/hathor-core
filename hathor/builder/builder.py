@@ -40,7 +40,7 @@ from hathor.transaction.storage import (
     TransactionRocksDBStorage,
     TransactionStorage,
 )
-from hathor.util import Random, Reactor, get_environment_info
+from hathor.util import Random, Reactor, get_environment_info, not_none
 from hathor.verification.verification_service import VerificationService, VertexVerifiers
 from hathor.wallet import BaseWallet, Wallet
 
@@ -396,9 +396,16 @@ class Builder:
 
     def _get_or_create_event_manager(self) -> EventManager:
         if self._event_manager is None:
+            peer_id = self._get_peer_id()
+            settings = self._get_or_create_settings()
             reactor = self._get_reactor()
             storage = self._get_or_create_event_storage()
-            factory = EventWebsocketFactory(reactor, storage)
+            factory = EventWebsocketFactory(
+                peer_id=not_none(peer_id.id),
+                network=settings.NETWORK_NAME,
+                reactor=reactor,
+                event_storage=storage,
+            )
             self._event_manager = EventManager(
                 reactor=reactor,
                 pubsub=self._get_or_create_pubsub(),

@@ -70,7 +70,7 @@ class EventManager:
         pubsub: PubSubManager,
         reactor: Reactor,
         event_ws_factory: Optional[EventWebsocketFactory] = None,
-    ):
+    ) -> None:
         self.log = logger.new()
 
         self._reactor = reactor
@@ -233,7 +233,6 @@ class EventManager:
         """Actually creates a BaseEvent."""
         return BaseEvent.from_event_arguments(
             event_id=0 if self._last_event is None else self._last_event.id + 1,
-            peer_id=self._peer_id,
             timestamp=self._reactor.seconds(),
             event_type=event_type,
             event_args=event_args,

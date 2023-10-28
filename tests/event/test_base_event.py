@@ -25,7 +25,6 @@ from tests.utils import EventMocker
 @pytest.mark.parametrize('group_id', [None, 0, 1, 1000])
 def test_create_base_event(event_id, group_id):
     event = BaseEvent(
-        peer_id='some_peer',
         id=event_id,
         timestamp=123.3,
         type=EventType.VERTEX_METADATA_CHANGED,
@@ -34,7 +33,6 @@ def test_create_base_event(event_id, group_id):
     )
 
     expected = dict(
-        peer_id='some_peer',
         id=event_id,
         timestamp=123.3,
         type='VERTEX_METADATA_CHANGED',
@@ -76,7 +74,6 @@ def test_create_base_event(event_id, group_id):
 def test_create_base_event_fail_id(event_id):
     with pytest.raises(ValidationError):
         BaseEvent(
-            peer_id='some_peer',
             id=event_id,
             timestamp=123.3,
             type=EventType.VERTEX_METADATA_CHANGED,
@@ -88,7 +85,6 @@ def test_create_base_event_fail_id(event_id):
 def test_create_base_event_fail_group_id(group_id):
     with pytest.raises(ValidationError):
         BaseEvent(
-            peer_id='some_peer',
             id=0,
             timestamp=123.3,
             type=EventType.VERTEX_METADATA_CHANGED,
@@ -100,7 +96,6 @@ def test_create_base_event_fail_group_id(group_id):
 def test_create_base_event_fail_data_type():
     with pytest.raises(ValidationError):
         BaseEvent(
-            peer_id='some_peer',
             id=0,
             timestamp=123.3,
             type=EventType.VERTEX_METADATA_CHANGED,
