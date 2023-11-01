@@ -250,7 +250,7 @@ def add_new_transactions(manager, num_txs, advance_clock=None, propagate=True):
 
 
 def add_new_block(manager, advance_clock=None, *, parent_block_hash=None,
-                  data=b'', weight=None, address=None, propagate=True):
+                  data=b'', weight=None, address=None, propagate=True, signal_bits=None):
     """ Create, resolve and propagate a new block
 
         :param manager: Manager object to handle the creation
@@ -262,6 +262,8 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None,
     block = manager.generate_mining_block(parent_block_hash=parent_block_hash, data=data, address=address)
     if weight is not None:
         block.weight = weight
+    if signal_bits is not None:
+        block.signal_bits = signal_bits
     block.resolve()
     manager.verification_service.validate_full(block)
     if propagate:
@@ -272,7 +274,7 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None,
 
 
 def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash=None,
-                   block_data=b'', weight=None, address=None):
+                   block_data=b'', weight=None, address=None, signal_bits=None):
     """ Create, resolve and propagate some blocks
 
         :param manager: Manager object to handle the creation
@@ -288,7 +290,7 @@ def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash
     for _ in range(num_blocks):
         blocks.append(
             add_new_block(manager, advance_clock, parent_block_hash=parent_block_hash,
-                          data=block_data, weight=weight, address=address)
+                          data=block_data, weight=weight, address=address, signal_bits=signal_bits)
         )
         if parent_block_hash:
             parent_block_hash = blocks[-1].hash

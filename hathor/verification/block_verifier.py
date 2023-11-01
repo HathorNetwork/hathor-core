@@ -13,9 +13,12 @@
 #  limitations under the License.
 
 from hathor import daa
+from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.exceptions import (
+    BlockMustSignalError,
     BlockWithInputs,
     BlockWithTokensError,
     InvalidBlockReward,
@@ -29,7 +32,11 @@ cpu = get_cpu_profiler()
 
 
 class BlockVerifier(VertexVerifier):
-    __slots__ = ()
+    __slots__ = ('_feature_service', )
+
+    def __init__(self, *, settings: HathorSettings, feature_service: FeatureService | None = None) -> None:
+        super().__init__(settings=settings)
+        self._feature_service = feature_service
 
     def verify_basic(self, block: Block, *, skip_block_weight_verification: bool = False) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
@@ -45,6 +52,7 @@ class BlockVerifier(VertexVerifier):
             (3) creates the correct amount of tokens in the output (done in HathorManager)
             (4) all parents must exist and have timestamp smaller than ours
             (5) data field must contain at most BLOCK_DATA_MAX_SIZE bytes
+            (6) whether this block must signal feature support
         """
         # TODO Should we validate a limit of outputs?
         if block.is_genesis:
@@ -57,6 +65,8 @@ class BlockVerifier(VertexVerifier):
         self.verify_parents(block)
 
         self.verify_height(block)
+
+        self.verify_mandatory_signaling(block)
 
     def verify_without_storage(self, block: Block) -> None:
         """ Run all verifications that do not need a storage.
@@ -107,3 +117,23 @@ class BlockVerifier(VertexVerifier):
     def verify_data(self, block: Block) -> None:
         if len(block.data) > self._settings.BLOCK_DATA_MAX_SIZE:
             raise TransactionDataError('block data has {} bytes'.format(len(block.data)))
+
+    def verify_mandatory_signaling(self, block: Block) -> None:
+        """Verify whether this block is missing mandatory signaling for any feature."""
+        if not self._settings.FEATURE_ACTIVATION.enable_usage:
+            return
+
+        assert self._feature_service is not None
+
+        signaling_state = self._feature_service.is_signaling_mandatory_features(block)
+
+        match signaling_state:
+            case BlockIsSignaling():
+                return
+            case BlockIsMissingSignal(feature):
+                raise BlockMustSignalError(
+                    f"Block must signal support for feature '{feature.value}' during MUST_SIGNAL phase."
+                )
+            case _:
+                # TODO: This will be changed to assert_never() so mypy can check it.
+                raise NotImplementedError

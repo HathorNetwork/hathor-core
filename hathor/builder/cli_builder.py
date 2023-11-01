@@ -207,7 +207,7 @@ class CliBuilder:
             not_support_features=self._args.signal_not_support
         )
 
-        vertex_verifiers = VertexVerifiers.create_defaults(settings=settings)
+        vertex_verifiers = VertexVerifiers.create_defaults(settings=settings, feature_service=self.feature_service)
         verification_service = VerificationService(verifiers=vertex_verifiers)
 
         p2p_manager = ConnectionsManager(

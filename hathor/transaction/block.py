@@ -110,21 +110,27 @@ class Block(BaseTransaction):
 
         return min_height
 
-    def calculate_feature_activation_bit_counts(self) -> list[int]:
+    def get_feature_activation_bit_counts(self) -> list[int]:
         """
-        Calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation bit
-        counts.
+        Lazily calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation
+        bit counts. After it's calculated for the first time, it's persisted in block metadata and must not be changed.
 
         Each list index corresponds to a bit position, and its respective value is the rolling count of active bits
         from the previous boundary block up to this block, including it. LSB is on the left.
         """
+        metadata = self.get_metadata()
+
+        if metadata.feature_activation_bit_counts is not None:
+            return metadata.feature_activation_bit_counts
+
         previous_counts = self._get_previous_feature_activation_bit_counts()
         bit_list = self._get_feature_activation_bit_list()
 
         count_and_bit_pairs = zip_longest(previous_counts, bit_list, fillvalue=0)
         updated_counts = starmap(add, count_and_bit_pairs)
+        metadata.feature_activation_bit_counts = list(updated_counts)
 
-        return list(updated_counts)
+        return metadata.feature_activation_bit_counts
 
     def _get_previous_feature_activation_bit_counts(self) -> list[int]:
         """
@@ -338,13 +344,6 @@ class Block(BaseTransaction):
         assert meta.height is not None
         return meta.height
 
-    def get_feature_activation_bit_counts(self) -> list[int]:
-        """Returns the block's feature_activation_bit_counts metadata attribute."""
-        metadata = self.get_metadata()
-        assert metadata.feature_activation_bit_counts is not None, 'Blocks must always have this attribute set.'
-
-        return metadata.feature_activation_bit_counts
-
     def _get_feature_activation_bit_list(self) -> list[int]:
         """
         Extracts feature activation bits from the signal bits, as a list where each index corresponds to the bit
@@ -372,15 +371,30 @@ class Block(BaseTransaction):
 
         return feature_states.get(feature)
 
-    def update_feature_state(self, *, feature: Feature, state: FeatureState) -> None:
-        """Updates the state of a feature in metadata and persists it."""
+    def set_feature_state(self, *, feature: Feature, state: FeatureState, save: bool = False) -> None:
+        """
+        Set the state of a feature in metadata, if it's not set. Fails if it's set and the value is different.
+
+        Args:
+            feature: the feature to set the state of.
+            state: the state to set.
+            save: whether to save this block's metadata in storage.
+        """
+        previous_state = self.get_feature_state(feature=feature)
+
+        if state == previous_state:
+            return
+
+        assert previous_state is None
         assert self.storage is not None
+
         metadata = self.get_metadata()
         feature_states = metadata.feature_states or {}
         feature_states[feature] = state
         metadata.feature_states = feature_states
 
-        self.storage.save_transaction(self, only_metadata=True)
+        if save:
+            self.storage.save_transaction(self, only_metadata=True)
 
     def get_feature_activation_bit_value(self, bit: int) -> int:
         """Get the feature activation bit value for a specific bit position."""

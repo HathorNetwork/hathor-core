@@ -15,6 +15,7 @@
 from typing import NamedTuple
 
 from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -33,14 +34,19 @@ class VertexVerifiers(NamedTuple):
     token_creation_tx: TokenCreationTransactionVerifier
 
     @classmethod
-    def create_defaults(cls, *, settings: HathorSettings) -> 'VertexVerifiers':
+    def create_defaults(
+        cls,
+        *,
+        settings: HathorSettings,
+        feature_service: FeatureService | None = None
+    ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
         """
         return VertexVerifiers(
-            block=BlockVerifier(settings=settings),
-            merge_mined_block=MergeMinedBlockVerifier(settings=settings),
+            block=BlockVerifier(settings=settings, feature_service=feature_service),
+            merge_mined_block=MergeMinedBlockVerifier(settings=settings, feature_service=feature_service),
             tx=TransactionVerifier(settings=settings),
             token_creation_tx=TokenCreationTransactionVerifier(settings=settings),
         )

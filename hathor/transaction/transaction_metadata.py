@@ -53,7 +53,8 @@ class TransactionMetadata:
     feature_activation_bit_counts: Optional[list[int]]
 
     # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
-    # is None otherwise.
+    # is None otherwise. This is only used for caching, so it can be safely cleared up, as it would be recalculated
+    # when necessary.
     feature_states: Optional[dict[Feature, FeatureState]] = None
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']

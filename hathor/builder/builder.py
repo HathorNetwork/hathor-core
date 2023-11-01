@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Any, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple, Optional
 
 from structlog import get_logger
 
@@ -63,6 +63,7 @@ class BuildArtifacts(NamedTuple):
     pubsub: PubSubManager
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
+    feature_service: FeatureService
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
@@ -103,6 +104,7 @@ class Builder:
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
         self._vertex_verifiers: Optional[VertexVerifiers] = None
+        self._vertex_verifiers_builder: Callable[[HathorSettingsType, FeatureService], VertexVerifiers] | None = None
         self._verification_service: Optional[VerificationService] = None
 
         self._rocksdb_path: Optional[str] = None
@@ -158,9 +160,9 @@ class Builder:
         wallet = self._get_or_create_wallet()
         event_manager = self._get_or_create_event_manager()
         indexes = self._get_or_create_indexes_manager()
-        tx_storage = self._get_or_create_tx_storage(indexes)
-        feature_service = self._get_or_create_feature_service(tx_storage)
-        bit_signaling_service = self._get_or_create_bit_signaling_service(tx_storage)
+        tx_storage = self._get_or_create_tx_storage()
+        feature_service = self._get_or_create_feature_service()
+        bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
 
         if self._enable_address_index:
@@ -221,6 +223,7 @@ class Builder:
             wallet=wallet,
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
+            feature_service=feature_service,
         )
 
         return self.artifacts
@@ -265,6 +268,7 @@ class Builder:
         return self
 
     def _get_or_create_settings(self) -> HathorSettingsType:
+        """Return the HathorSettings instance set on this builder, or a new one if not set."""
         if self._settings is None:
             self._settings = get_settings()
         return self._settings
@@ -352,7 +356,9 @@ class Builder:
 
         return self._indexes_manager
 
-    def _get_or_create_tx_storage(self, indexes: IndexesManager) -> TransactionStorage:
+    def _get_or_create_tx_storage(self) -> TransactionStorage:
+        indexes = self._get_or_create_indexes_manager()
+
         if self._tx_storage is not None:
             # If a tx storage is provided, set the indexes manager to it.
             self._tx_storage.indexes = indexes
@@ -415,9 +421,11 @@ class Builder:
 
         return self._event_manager
 
-    def _get_or_create_feature_service(self, tx_storage: TransactionStorage) -> FeatureService:
+    def _get_or_create_feature_service(self) -> FeatureService:
+        """Return the FeatureService instance set on this builder, or a new one if not set."""
         if self._feature_service is None:
             settings = self._get_or_create_settings()
+            tx_storage = self._get_or_create_tx_storage()
             self._feature_service = FeatureService(
                 feature_settings=settings.FEATURE_ACTIVATION,
                 tx_storage=tx_storage
@@ -425,12 +433,14 @@ class Builder:
 
         return self._feature_service
 
-    def _get_or_create_bit_signaling_service(self, tx_storage: TransactionStorage) -> BitSignalingService:
+    def _get_or_create_bit_signaling_service(self) -> BitSignalingService:
         if self._bit_signaling_service is None:
             settings = self._get_or_create_settings()
+            tx_storage = self._get_or_create_tx_storage()
+            feature_service = self._get_or_create_feature_service()
             self._bit_signaling_service = BitSignalingService(
                 feature_settings=settings.FEATURE_ACTIVATION,
-                feature_service=self._get_or_create_feature_service(tx_storage),
+                feature_service=feature_service,
                 tx_storage=tx_storage,
                 support_features=self._support_features,
                 not_support_features=self._not_support_features,
@@ -448,7 +458,15 @@ class Builder:
     def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
         if self._vertex_verifiers is None:
             settings = self._get_or_create_settings()
-            self._vertex_verifiers = VertexVerifiers.create_defaults(settings=settings)
+            feature_service = self._get_or_create_feature_service()
+
+            if self._vertex_verifiers_builder:
+                self._vertex_verifiers = self._vertex_verifiers_builder(settings, feature_service)
+            else:
+                self._vertex_verifiers = VertexVerifiers.create_defaults(
+                    settings=settings,
+                    feature_service=feature_service
+                )
 
         return self._vertex_verifiers
 
@@ -552,6 +570,14 @@ class Builder:
     def set_vertex_verifiers(self, vertex_verifiers: VertexVerifiers) -> 'Builder':
         self.check_if_can_modify()
         self._vertex_verifiers = vertex_verifiers
+        return self
+
+    def set_vertex_verifiers_builder(
+        self,
+        builder: Callable[[HathorSettingsType, FeatureService], VertexVerifiers]
+    ) -> 'Builder':
+        self.check_if_can_modify()
+        self._vertex_verifiers_builder = builder
         return self
 
     def set_reactor(self, reactor: Reactor) -> 'Builder':
