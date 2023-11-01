@@ -15,6 +15,7 @@ from hathor.conf.get_settings import get_settings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
+from hathor.simulator import Simulator
 from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.transaction import BaseTransaction
 from hathor.util import Random, Reactor, reactor
@@ -103,7 +104,14 @@ class TestCase(unittest.TestCase):
     use_memory_storage: bool = USE_MEMORY_STORAGE
     seed_config: Optional[int] = None
 
+    def _runFixturesAndTest(self, result):
+        try:
+            return super()._runFixturesAndTest(result)
+        finally:
+            self.assertEqual(0, Simulator._patches_rc)
+
     def setUp(self):
+        self.assertEqual(0, Simulator._patches_rc)
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         self.tmpdirs = []
         self.clock = TestMemoryReactorClock()
@@ -117,6 +125,7 @@ class TestCase(unittest.TestCase):
         self._settings = get_settings()
 
     def tearDown(self):
+        self.assertEqual(0, Simulator._patches_rc)
         self.clean_tmpdirs()
         for fn in self._pending_cleanups:
             fn()

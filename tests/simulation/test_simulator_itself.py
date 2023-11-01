@@ -1,5 +1,3 @@
-import pytest
-
 from hathor.simulator import FakeConnection, Simulator
 from tests import unittest
 
@@ -30,11 +28,10 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         print('-' * 30)
 
     def tearDown(self):
-        super().tearDown()
-
         self.simulator1.stop()
         self.simulator2.stop()
         self.simulator3.stop()
+        super().tearDown()
 
     def create_simulator_peer(self, simulator, peer_id_pool, enable_sync_v1=None, enable_sync_v2=None):
         if enable_sync_v1 is None:
@@ -108,8 +105,6 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         simulator.run(10)
         return nodes
 
-    # XXX: marked as flaky because of a known random issue
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_determinism_full_runs(self):
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)
@@ -117,7 +112,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
         nodes1 = self._simulate_run(1, self.simulator1)
         nodes2 = self._simulate_run(2, self.simulator2)
-        nodes3 = self._simulate_run(2, self.simulator3)
+        nodes3 = self._simulate_run(3, self.simulator3)
 
         # now we check they reached the same state
 
@@ -126,8 +121,6 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
             self.assertConsensusEqual(node1, node2)
             self.assertConsensusEqual(node1, node3)
 
-    # XXX: marked as flaky because of a known random issue
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_determinism_interleaved(self):
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)

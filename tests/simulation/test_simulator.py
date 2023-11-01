@@ -1,5 +1,3 @@
-import pytest
-
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced
 from hathor.verification.vertex_verifier import VertexVerifier
@@ -95,7 +93,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)
 
-    @pytest.mark.flaky(max_runs=5, min_passes=1)
     def test_new_syncing_peer(self):
         nodes = []
         miners = []

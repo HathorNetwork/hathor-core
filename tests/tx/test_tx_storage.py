@@ -89,6 +89,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.tx_storage.enable_lock()
 
     def tearDown(self):
+        super().tearDown()
         shutil.rmtree(self.tmpdir)
 
     def test_genesis_ref(self):

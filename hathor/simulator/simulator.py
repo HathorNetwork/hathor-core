@@ -63,6 +63,8 @@ class Simulator:
         - set DAA test-mode to DISABLED (will actually run the pow function, that won't actually verify the pow)
         - override AVG_TIME_BETWEEN_BLOCKS to 64
         """
+        assert cls._patches_rc == 1
+
         from hathor.transaction import BaseTransaction
 
         def resolve(self: BaseTransaction, update_time: bool = True) -> bool:
@@ -83,6 +85,8 @@ class Simulator:
     def _remove_patches(cls):
         """ Remove the patches previously applied.
         """
+        assert cls._patches_rc == 0
+
         from hathor.transaction import BaseTransaction
         BaseTransaction.resolve = cls._original_resolve
 
