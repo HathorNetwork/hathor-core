@@ -1,7 +1,7 @@
 from itertools import chain
 
 from hathor.conf import HathorSettings
-from hathor.daa import TestMode, _set_test_mode, get_weight_decay_amount
+from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode, _set_test_mode
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
@@ -30,6 +30,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+        self.daa = DifficultyAdjustmentAlgorithm(settings=settings)
 
     def test_single_chain(self):
         """ All new blocks belong to case (i).
@@ -420,42 +421,30 @@ class BaseBlockchainTestCase(unittest.TestCase):
         amount = settings.WEIGHT_DECAY_AMOUNT
 
         for distance in range(0, settings.WEIGHT_DECAY_ACTIVATE_DISTANCE, 10):
-            self.assertEqual(get_weight_decay_amount(distance), 0)
+            self.assertEqual(self.daa.get_weight_decay_amount(distance), 0)
 
         distance = settings.WEIGHT_DECAY_ACTIVATE_DISTANCE - 1
-        self.assertAlmostEqual(get_weight_decay_amount(distance), 0)
+        self.assertAlmostEqual(self.daa.get_weight_decay_amount(distance), 0)
 
         distance = settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
         for k in range(1, 11):
             for _ in range(settings.WEIGHT_DECAY_WINDOW_SIZE):
-                self.assertAlmostEqual(get_weight_decay_amount(distance), k * amount)
+                self.assertAlmostEqual(self.daa.get_weight_decay_amount(distance), k * amount)
                 distance += 1
-        self.assertAlmostEqual(get_weight_decay_amount(distance), 11 * amount)
+        self.assertAlmostEqual(self.daa.get_weight_decay_amount(distance), 11 * amount)
 
     def test_daa_weight_decay_blocks(self):
-        from hathor import daa
-        orig_avg_time_between_blocks = daa.AVG_TIME_BETWEEN_BLOCKS
-        orig_min_block_weight = daa.MIN_BLOCK_WEIGHT
-
-        try:
-            self._test_daa_weight_decay_blocks()
-        finally:
-            daa.AVG_TIME_BETWEEN_BLOCKS = orig_avg_time_between_blocks
-            daa.MIN_BLOCK_WEIGHT = orig_min_block_weight
-
-    def _test_daa_weight_decay_blocks(self):
         _set_test_mode(TestMode.DISABLED)
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
         amount = settings.WEIGHT_DECAY_AMOUNT
 
-        from hathor import daa
-        daa.AVG_TIME_BETWEEN_BLOCKS = settings.AVG_TIME_BETWEEN_BLOCKS
-        daa.MIN_BLOCK_WEIGHT = 2 + 2 * settings.WEIGHT_DECAY_AMOUNT
+        manager.daa.AVG_TIME_BETWEEN_BLOCKS = settings.AVG_TIME_BETWEEN_BLOCKS
+        manager.daa.MIN_BLOCK_WEIGHT = 2 + 2 * settings.WEIGHT_DECAY_AMOUNT
         add_new_blocks(manager, 2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, advance_clock=settings.AVG_TIME_BETWEEN_BLOCKS)
 
-        daa.MIN_BLOCK_WEIGHT = 1
+        manager.daa.MIN_BLOCK_WEIGHT = 1
         base_weight = manager.generate_mining_block().weight
-        self.assertGreater(base_weight, daa.MIN_BLOCK_WEIGHT)
+        self.assertGreater(base_weight, manager.daa.MIN_BLOCK_WEIGHT)
 
         add_new_blocks(manager, 20, advance_clock=settings.AVG_TIME_BETWEEN_BLOCKS)
 
@@ -482,7 +471,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         manager.reactor.advance(1)
         weight = manager.generate_mining_block().weight
-        self.assertAlmostEqual(weight, daa.MIN_BLOCK_WEIGHT)
+        self.assertAlmostEqual(weight, manager.daa.MIN_BLOCK_WEIGHT)
 
 
 class SyncV1BlockchainTestCase(unittest.SyncV1Params, BaseBlockchainTestCase):

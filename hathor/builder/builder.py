@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Any, Callable, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
 
@@ -21,6 +21,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_settings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -70,6 +71,12 @@ class BuildArtifacts(NamedTuple):
     stratum_factory: Optional[StratumFactory]
 
 
+_VertexVerifiersBuilder: TypeAlias = Callable[
+    [HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService],
+    VertexVerifiers
+]
+
+
 class Builder:
     """Builder builds the core objects to run a full node.
 
@@ -103,8 +110,10 @@ class Builder:
         self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
+        self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
+
         self._vertex_verifiers: Optional[VertexVerifiers] = None
-        self._vertex_verifiers_builder: Callable[[HathorSettingsType, FeatureService], VertexVerifiers] | None = None
+        self._vertex_verifiers_builder: _VertexVerifiersBuilder | None = None
         self._verification_service: Optional[VerificationService] = None
 
         self._rocksdb_path: Optional[str] = None
@@ -164,6 +173,7 @@ class Builder:
         feature_service = self._get_or_create_feature_service()
         bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
+        daa = self._get_or_create_daa()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -188,6 +198,7 @@ class Builder:
             network=self._network,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
+            daa=daa,
             peer_id=peer_id,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
@@ -459,16 +470,25 @@ class Builder:
         if self._vertex_verifiers is None:
             settings = self._get_or_create_settings()
             feature_service = self._get_or_create_feature_service()
+            daa = self._get_or_create_daa()
 
             if self._vertex_verifiers_builder:
-                self._vertex_verifiers = self._vertex_verifiers_builder(settings, feature_service)
+                self._vertex_verifiers = self._vertex_verifiers_builder(settings, daa, feature_service)
             else:
                 self._vertex_verifiers = VertexVerifiers.create_defaults(
                     settings=settings,
-                    feature_service=feature_service
+                    daa=daa,
+                    feature_service=feature_service,
                 )
 
         return self._vertex_verifiers
+
+    def _get_or_create_daa(self) -> DifficultyAdjustmentAlgorithm:
+        if self._daa is None:
+            settings = self._get_or_create_settings()
+            self._daa = DifficultyAdjustmentAlgorithm(settings=settings)
+
+        return self._daa
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
@@ -572,12 +592,14 @@ class Builder:
         self._vertex_verifiers = vertex_verifiers
         return self
 
-    def set_vertex_verifiers_builder(
-        self,
-        builder: Callable[[HathorSettingsType, FeatureService], VertexVerifiers]
-    ) -> 'Builder':
+    def set_vertex_verifiers_builder(self, builder: _VertexVerifiersBuilder) -> 'Builder':
         self.check_if_can_modify()
         self._vertex_verifiers_builder = builder
+        return self
+
+    def set_daa(self, daa: DifficultyAdjustmentAlgorithm) -> 'Builder':
+        self.check_if_can_modify()
+        self._daa = daa
         return self
 
     def set_reactor(self, reactor: Reactor) -> 'Builder':

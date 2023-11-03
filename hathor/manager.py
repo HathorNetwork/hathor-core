@@ -25,10 +25,10 @@ from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 from twisted.python.threadpool import ThreadPool
 
-from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
     BlockTemplateTimestampError,
@@ -90,6 +90,7 @@ class HathorManager:
                  settings: HathorSettings,
                  pubsub: PubSubManager,
                  consensus_algorithm: ConsensusAlgorithm,
+                 daa: DifficultyAdjustmentAlgorithm,
                  peer_id: PeerId,
                  tx_storage: TransactionStorage,
                  p2p_manager: ConnectionsManager,
@@ -124,6 +125,7 @@ class HathorManager:
             )
 
         self._settings = settings
+        self.daa = daa
         self._cmd_path: Optional[str] = None
 
         self.log = logger.new()
@@ -824,7 +826,7 @@ class HathorManager:
             parent_block_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
-        weight = max(daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
+        weight = max(self.daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
         height = parent_block.get_height() + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include
@@ -838,7 +840,7 @@ class HathorManager:
             assert len(parents_any) == 0, 'Extra parents to choose from that cannot be chosen'
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
-            reward=daa.get_tokens_issued_per_block(height),
+            reward=self.daa.get_tokens_issued_per_block(height),
             weight=weight,
             timestamp_now=current_timestamp,
             timestamp_min=timestamp_min,
@@ -875,7 +877,7 @@ class HathorManager:
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""
-        return daa.get_tokens_issued_per_block(height)
+        return self.daa.get_tokens_issued_per_block(height)
 
     def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
         """Used by submit block from all mining APIs.

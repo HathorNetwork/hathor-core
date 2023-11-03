@@ -23,7 +23,7 @@ from structlog import get_logger
 from hathor.builder import BuildArtifacts, Builder
 from hathor.conf.get_settings import get_settings
 from hathor.conf.settings import HathorSettings
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode, _set_test_mode
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
@@ -49,6 +49,7 @@ logger = get_logger()
 
 DEFAULT_STEP_INTERVAL: float = 0.25
 DEFAULT_STATUS_INTERVAL: float = 60.0
+SIMULATOR_AVG_TIME_BETWEEN_BLOCKS: int = 64
 
 
 class Simulator:
@@ -63,7 +64,6 @@ class Simulator:
 
         - disable Transaction.resolve method
         - set DAA test-mode to DISABLED (will actually run the pow function, that won't actually verify the pow)
-        - override AVG_TIME_BETWEEN_BLOCKS to 64
         """
         from hathor.transaction import BaseTransaction
 
@@ -77,19 +77,12 @@ class Simulator:
 
         _set_test_mode(TestMode.DISABLED)
 
-        from hathor import daa
-        cls._original_avg_time_between_blocks = daa.AVG_TIME_BETWEEN_BLOCKS
-        daa.AVG_TIME_BETWEEN_BLOCKS = 64
-
     @classmethod
     def _remove_patches(cls):
         """ Remove the patches previously applied.
         """
         from hathor.transaction import BaseTransaction
         BaseTransaction.resolve = cls._original_resolve
-
-        from hathor import daa
-        daa.AVG_TIME_BETWEEN_BLOCKS = cls._original_avg_time_between_blocks
 
     @classmethod
     def _patches_rc_increment(cls):
@@ -115,7 +108,7 @@ class Simulator:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
-        self.settings = get_settings()
+        self.settings = get_settings()._replace(AVG_TIME_BETWEEN_BLOCKS=SIMULATOR_AVG_TIME_BETWEEN_BLOCKS)
         self._network = 'testnet'
         self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
@@ -149,7 +142,8 @@ class Simulator:
             .enable_full_verification() \
             .enable_sync_v1() \
             .enable_sync_v2() \
-            .use_memory()
+            .use_memory() \
+            .set_settings(self.settings)
 
     def create_peer(self, builder: Optional[Builder] = None) -> HathorManager:
         """
@@ -170,11 +164,14 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
+        daa = DifficultyAdjustmentAlgorithm(settings=self.settings)
+
         artifacts = builder \
             .set_reactor(self._clock) \
             .set_rng(Random(self.rng.getrandbits(64))) \
             .set_wallet(wallet) \
             .set_vertex_verifiers_builder(_build_vertex_verifiers) \
+            .set_daa(daa) \
             .build()
 
         artifacts.manager.start()
@@ -300,16 +297,21 @@ class Simulator:
         return True
 
 
-def _build_vertex_verifiers(settings: HathorSettings, feature_service: FeatureService) -> VertexVerifiers:
+def _build_vertex_verifiers(
+    settings: HathorSettings,
+    daa: DifficultyAdjustmentAlgorithm,
+    feature_service: FeatureService
+) -> VertexVerifiers:
     """
     A custom VertexVerifiers builder to be used by the simulator.
     """
     return VertexVerifiers(
-        block=SimulatorBlockVerifier(settings=settings, feature_service=feature_service),
+        block=SimulatorBlockVerifier(settings=settings, daa=daa, feature_service=feature_service),
         merge_mined_block=SimulatorMergeMinedBlockVerifier(
             settings=settings,
+            daa=daa,
             feature_service=feature_service
         ),
-        tx=SimulatorTransactionVerifier(settings=settings),
-        token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=settings),
+        tx=SimulatorTransactionVerifier(settings=settings, daa=daa),
+        token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=settings, daa=daa),
     )

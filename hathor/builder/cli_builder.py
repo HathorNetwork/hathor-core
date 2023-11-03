@@ -23,6 +23,7 @@ from structlog import get_logger
 
 from hathor.cli.run_node import RunNodeArgs
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.exception import BuilderError
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
@@ -207,7 +208,13 @@ class CliBuilder:
             not_support_features=self._args.signal_not_support
         )
 
-        vertex_verifiers = VertexVerifiers.create_defaults(settings=settings, feature_service=self.feature_service)
+        daa = DifficultyAdjustmentAlgorithm(settings=settings)
+
+        vertex_verifiers = VertexVerifiers.create_defaults(
+            settings=settings,
+            daa=daa,
+            feature_service=self.feature_service
+        )
         verification_service = VerificationService(verifiers=vertex_verifiers)
 
         p2p_manager = ConnectionsManager(
@@ -230,6 +237,7 @@ class CliBuilder:
             hostname=hostname,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
+            daa=daa,
             peer_id=peer_id,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,

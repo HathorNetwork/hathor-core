@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor import daa
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
@@ -101,7 +100,7 @@ class TransactionVerifier(VertexVerifier):
 
     def verify_weight(self, tx: Transaction) -> None:
         """Validate minimum tx difficulty."""
-        min_tx_weight = daa.minimum_tx_weight(tx)
+        min_tx_weight = self._daa.minimum_tx_weight(tx)
         max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
         if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '

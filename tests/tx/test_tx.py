@@ -2,7 +2,6 @@ import base64
 import hashlib
 from math import isinf, isnan
 
-from hathor import daa
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode, _set_test_mode
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
@@ -531,7 +530,7 @@ class BaseTransactionTest(unittest.TestCase):
         inputs = [TxInput(b'', 0, b'')]
         tx = Transaction(weight=1, inputs=inputs, outputs=outputs, parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
-        tx.weight = daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa.minimum_tx_weight(tx)
         tx.weight += self._settings.MAX_TX_WEIGHT_DIFF + 0.1
         tx.update_hash()
         with self.assertRaises(WeightError):

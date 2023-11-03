@@ -17,7 +17,6 @@ import base64
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
-from hathor.daa import minimum_tx_weight
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
@@ -88,7 +87,7 @@ class CreateTxResource(Resource):
         for tx_input in fake_signed_tx.inputs:
             # conservative estimate of the input data size to estimate a valid weight
             tx_input.data = b'\0' * 107
-        tx.weight = minimum_tx_weight(fake_signed_tx)
+        tx.weight = self.manager.daa.minimum_tx_weight(fake_signed_tx)
         self.manager.verification_service.verifiers.tx.verify_unsigned_skip_pow(tx)
 
         if tx.is_double_spending():

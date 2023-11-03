@@ -15,6 +15,7 @@
 from typing import Optional
 
 from hathor.conf.settings import HathorSettings
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.transaction import BaseTransaction
 from hathor.transaction.exceptions import (
     DuplicatedParents,
@@ -39,10 +40,11 @@ _BLOCK_PARENTS_BLOCKS = 1
 
 
 class VertexVerifier:
-    __slots__ = ('_settings', )
+    __slots__ = ('_settings', '_daa')
 
-    def __init__(self, *, settings: HathorSettings):
+    def __init__(self, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm):
         self._settings = settings
+        self._daa = daa
 
     def verify_parents(self, vertex: BaseTransaction) -> None:
         """All parents must exist and their timestamps must be smaller than ours.

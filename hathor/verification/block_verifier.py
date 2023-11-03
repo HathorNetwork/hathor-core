@@ -12,8 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor import daa
 from hathor.conf.settings import HathorSettings
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block
@@ -34,8 +34,14 @@ cpu = get_cpu_profiler()
 class BlockVerifier(VertexVerifier):
     __slots__ = ('_feature_service', )
 
-    def __init__(self, *, settings: HathorSettings, feature_service: FeatureService | None = None) -> None:
-        super().__init__(settings=settings)
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService | None = None
+    ) -> None:
+        super().__init__(settings=settings, daa=daa)
         self._feature_service = feature_service
 
     def verify_basic(self, block: Block, *, skip_block_weight_verification: bool = False) -> None:
@@ -87,7 +93,7 @@ class BlockVerifier(VertexVerifier):
 
     def verify_weight(self, block: Block) -> None:
         """Validate minimum block difficulty."""
-        min_block_weight = daa.calculate_block_difficulty(block)
+        min_block_weight = self._daa.calculate_block_difficulty(block)
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
@@ -95,7 +101,7 @@ class BlockVerifier(VertexVerifier):
     def verify_reward(self, block: Block) -> None:
         """Validate reward amount."""
         parent_block = block.get_block_parent()
-        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
+        tokens_issued_per_block = self._daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if block.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(
                 f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={block.hash_hex} '
