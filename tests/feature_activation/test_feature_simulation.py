@@ -226,7 +226,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
             # if we try to propagate a non-signaling block, it is not accepted
             non_signaling_block = manager.generate_mining_block()
-            non_signaling_block.resolve()
+            manager.cpu_mining_service.resolve(non_signaling_block)
             non_signaling_block.signal_bits = 0b10
 
             with pytest.raises(BlockMustSignalError):

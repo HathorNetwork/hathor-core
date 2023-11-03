@@ -115,7 +115,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # Change the order of the transactions to change the hash
         fork_block1 = manager.generate_mining_block()
         fork_block1.parents = [fork_block1.parents[0]] + fork_block1.parents[:0:-1]
-        fork_block1.resolve()
+        manager.cpu_mining_service.resolve(fork_block1)
         manager.verification_service.verify(fork_block1)
 
         # Mine 8 blocks in a row
@@ -167,7 +167,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # Propagate a block connected to the voided chain
         # This block belongs to case (iv).
         fork_block3 = manager.generate_mining_block(parent_block_hash=fork_block1.hash)
-        fork_block3.resolve()
+        manager.cpu_mining_service.resolve(fork_block3)
         manager.verification_service.verify(fork_block3)
         self.assertTrue(manager.propagate_tx(fork_block3))
         fork_meta3 = fork_block3.get_metadata()
@@ -237,7 +237,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Propagate a block connected to the voided chain, case (iii).
         fork_block2 = manager.generate_mining_block(parent_block_hash=sidechain[-1].hash)
-        fork_block2.resolve()
+        manager.cpu_mining_service.resolve(fork_block2)
         manager.verification_service.verify(fork_block2)
         self.assertTrue(manager.propagate_tx(fork_block2))
         sidechain.append(fork_block2)
@@ -285,7 +285,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Propagate a block connected to the side chain, case (v).
         fork_block3 = manager.generate_mining_block(parent_block_hash=fork_block2.hash)
-        fork_block3.resolve()
+        manager.cpu_mining_service.resolve(fork_block3)
         manager.verification_service.verify(fork_block3)
         self.assertTrue(manager.propagate_tx(fork_block3))
         sidechain.append(fork_block3)
@@ -311,7 +311,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # Another side chain has direcly exceeded the best score.
         fork_block4 = manager.generate_mining_block(parent_block_hash=sidechain3[-1].hash)
         fork_block4.weight = 10
-        fork_block4.resolve()
+        manager.cpu_mining_service.resolve(fork_block4)
         manager.verification_service.verify(fork_block4)
         self.assertTrue(manager.propagate_tx(fork_block4))
         sidechain3.append(fork_block4)

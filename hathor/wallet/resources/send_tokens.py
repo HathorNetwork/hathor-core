@@ -126,7 +126,7 @@ class SendTokensResource(Resource):
         if weight is None:
             weight = self.manager.daa.minimum_tx_weight(tx)
         tx.weight = weight
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         self.manager.verification_service.verify(tx)
         return tx
 

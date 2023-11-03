@@ -52,7 +52,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
 
         tx2 = Transaction.create_from_struct(tx.get_struct())
         tx2.parents = [tx.parents[1], tx.parents[0]]
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
 
         self.manager.propagate_tx(tx2)
 

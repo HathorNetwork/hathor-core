@@ -2,6 +2,7 @@ import base64
 
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import BalanceResource
 from tests import unittest
@@ -27,7 +28,10 @@ class BaseBalanceTest(_BaseResourceTest._ResourceTest):
         # Mining new block
         response_mining = yield self.web_mining.get("mining")
         data_mining = response_mining.json_value()
-        block_bytes = resolve_block_bytes(block_bytes=data_mining['block_bytes'])
+        block_bytes = resolve_block_bytes(
+            block_bytes=data_mining['block_bytes'],
+            cpu_mining_service=CpuMiningService()
+        )
         yield self.web_mining.post("mining", {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
 
         # Get new balance after block

@@ -17,6 +17,7 @@ from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import TxData, TxMetadata
 from hathor.event.model.event_type import EventType
 from hathor.manager import HathorManager
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -40,7 +41,7 @@ class NoCandidatesError(Exception):
     pass
 
 
-def resolve_block_bytes(block_bytes):
+def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningService) -> bytes:
     """ From block bytes we create a block and resolve pow
         Return block bytes with hash and nonce after pow
         :rtype: bytes
@@ -48,7 +49,7 @@ def resolve_block_bytes(block_bytes):
     from hathor.transaction import Block
     block_bytes = base64.b64decode(block_bytes)
     block = Block.create_from_struct(block_bytes)
-    block.resolve()
+    cpu_mining_service.resolve(block)
     return block.get_struct()
 
 
@@ -123,7 +124,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     tx2.weight = weight or 25
     tx2.timestamp += inc_timestamp
     if resolve:
-        tx2.resolve()
+        manager.cpu_mining_service.resolve(tx2)
     else:
         tx2.update_hash()
     return tx2
@@ -173,7 +174,7 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
     else:
         tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
 
-    tx2.resolve()
+    manager.cpu_mining_service.resolve(tx2)
     return tx2
 
 
@@ -199,7 +200,7 @@ def gen_new_tx(manager, address, value, verify=True):
 
     tx.weight = 1
     tx.parents = manager.get_new_tx_parents(tx.timestamp)
-    tx.resolve()
+    manager.cpu_mining_service.resolve(tx)
     if verify:
         manager.verification_service.verify(tx)
     return tx
@@ -264,7 +265,7 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None,
         block.weight = weight
     if signal_bits is not None:
         block.signal_bits = signal_bits
-    block.resolve()
+    manager.cpu_mining_service.resolve(block)
     manager.verification_service.validate_full(block)
     if propagate:
         manager.propagate_tx(block, fails_silently=False)
@@ -551,7 +552,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     for input_ in tx.inputs:
         input_.data = P2PKH.create_input_data(public_bytes, signature)
 
-    tx.resolve()
+    manager.cpu_mining_service.resolve(tx)
     if propagate:
         manager.verification_service.verify(tx)
         manager.propagate_tx(tx, fails_silently=False)
@@ -639,7 +640,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     for input_ in tx.inputs:
         input_.data = P2PKH.create_input_data(public_bytes, signature)
 
-    tx.resolve()
+    manager.cpu_mining_service.resolve(tx)
 
     if propagate:
         manager.verification_service.verify(tx)

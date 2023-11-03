@@ -37,7 +37,7 @@ class BaseTransactionTest(unittest.TestCase):
         reward_block = self.manager.generate_mining_block(
             address=get_address_from_public_key(self.genesis_public_key)
         )
-        reward_block.resolve()
+        self.manager.cpu_mining_service.resolve(reward_block)
         self.assertTrue(self.manager.propagate_tx(reward_block))
         # XXX: calculate unlock height AFTER adding the block so the height is correctly calculated
         unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
@@ -60,7 +60,7 @@ class BaseTransactionTest(unittest.TestCase):
         data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         input_.data = P2PKH.create_input_data(public_bytes, signature)
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         tx.update_initial_metadata(save=False)
         return tx
 
@@ -160,7 +160,7 @@ class BaseTransactionTest(unittest.TestCase):
         tb0 = self.manager.make_custom_block_template(block_to_replace.parents[0], block_to_replace.parents[1:])
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage)
         b0.weight = 10
-        b0.resolve()
+        self.manager.cpu_mining_service.resolve(b0)
         self.manager.verification_service.verify(b0)
         self.manager.propagate_tx(b0, fails_silently=False)
 
@@ -187,7 +187,7 @@ class BaseTransactionTest(unittest.TestCase):
         # be greater, so it'll fail
         tx = self._spend_reward_tx(self.manager, reward_block)
         tx.timestamp = blocks[-1].timestamp
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
         with self.assertRaises(RewardLocked):
             self.manager.verification_service.verify(tx)

@@ -1,5 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction.resources import mining
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
@@ -95,7 +96,7 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
         resp = yield self.get_block_template.get('', {b'address': b'HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7'})
         data = resp.json_value()
         block = create_tx_from_dict(data)
-        block.resolve(False)
+        CpuMiningService().resolve(block, update_time=False)
         self.assertTrue(self.manager.propagate_tx(block))
 
 

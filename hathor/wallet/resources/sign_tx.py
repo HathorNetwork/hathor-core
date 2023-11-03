@@ -67,7 +67,7 @@ class SignTxResource(Resource):
                     tx.parents = self.manager.get_new_tx_parents()
                     tx.update_timestamp(int(self.manager.reactor.seconds()))
                     tx.weight = self.manager.daa.minimum_tx_weight(tx)
-                    tx.resolve()
+                    self.manager.cpu_mining_service.resolve(tx)
 
                 data = {'hex_tx': tx.get_struct().hex(), 'success': True}
             except struct.error:

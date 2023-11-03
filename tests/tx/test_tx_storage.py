@@ -63,7 +63,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         previous_timestamp = artifacts.settings.GENESIS_TX2_TIMESTAMP
         self.block = Block(timestamp=previous_timestamp + 1, weight=12, outputs=[output], parents=block_parents,
                            nonce=100781, storage=self.tx_storage)
-        self.block.resolve()
+        self.manager.cpu_mining_service.resolve(self.block)
         self.manager.verification_service.verify(self.block)
         self.block.get_metadata().validation = ValidationState.FULL
 
@@ -80,7 +80,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             timestamp=previous_timestamp + 2, weight=10, nonce=932049, inputs=[tx_input], outputs=[output],
             tokens=[bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')],
             parents=tx_parents, storage=self.tx_storage)
-        self.tx.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx)
         self.tx.get_metadata().validation = ValidationState.FULL
 
         # Disable weakref to test the internal methods. Otherwise, most methods return objects from weakref.
@@ -500,12 +500,12 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.validate_save(tx)
         # 2 token uids
         tx.tokens.append(bytes.fromhex('00001c5c0b69d13b05534c94a69b2c8272294e6b0c536660a3ac264820677024'))
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         tx._metadata.hash = tx.hash
         self.validate_save(tx)
         # no tokens
         tx.tokens = []
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         tx._metadata.hash = tx.hash
         self.validate_save(tx)
 
@@ -515,7 +515,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         if parents is not None:
             block.parents = parents
         block.weight = 10
-        self.assertTrue(block.resolve())
+        self.assertTrue(self.manager.cpu_mining_service.resolve(block))
         self.manager.verification_service.verify(block)
         self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)

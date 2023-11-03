@@ -41,7 +41,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.manager.propagate_tx(tx1)
 
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
@@ -60,7 +60,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         tx2.weight = 10
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         propagated = self.manager.propagate_tx(tx2)
 
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
@@ -80,7 +80,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         tx3.weight = 10
         tx3.parents = self.manager.get_new_tx_parents()
         tx3.timestamp = int(self.clock.seconds())
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         propagated = self.manager.propagate_tx(tx3, False)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
                          WalletBalance(500, sum(blocks_tokens) - 500 - 700))
@@ -100,7 +100,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         tx4.weight = 10
         tx4.parents = self.manager.get_new_tx_parents()
         tx4.timestamp = int(self.clock.seconds())
-        tx4.resolve()
+        self.manager.cpu_mining_service.resolve(tx4)
         propagated = self.manager.propagate_tx(tx4, False)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
                          WalletBalance(500, sum(blocks_tokens[:3])))
@@ -108,7 +108,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
 
         self.clock.advance(8)
         tx2.timestamp = int(self.clock.seconds())
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         propagated = self.manager.propagate_tx(tx2, False)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(blocks_tokens[:3])))
@@ -131,7 +131,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.manager.propagate_tx(tx1)
         self.clock.advance(1)
 
@@ -149,7 +149,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         tx2.weight = 10
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.manager.propagate_tx(tx2)
 
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],

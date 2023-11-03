@@ -35,9 +35,10 @@ def signal_handler(sig, frame):
 
 
 def worker(q_in, q_out):
+    from hathor.mining.cpu_mining_service import CpuMiningService
     signal.signal(signal.SIGINT, signal_handler)
     block, start, end, sleep_seconds = q_in.get()
-    block.start_mining(start, end, sleep_seconds=sleep_seconds)
+    CpuMiningService().start_mining(block, start=start, end=end, sleep_seconds=sleep_seconds)
     q_out.put(block)
 
 
