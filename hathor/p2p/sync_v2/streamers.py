@@ -55,7 +55,7 @@ class StreamEnd(IntFlag):
 
 
 @implementer(IPushProducer)
-class _StreamingBase:
+class _StreamingServerBase:
     def __init__(self, node_sync: 'NodeBlockSync', *, limit: int = DEFAULT_STREAMING_LIMIT):
         self.node_sync = node_sync
         self.protocol: 'HathorProtocol' = node_sync.protocol
@@ -123,7 +123,7 @@ class _StreamingBase:
         self.pauseProducing()
 
 
-class BlockchainStreaming(_StreamingBase):
+class BlockchainStreamingServer(_StreamingServerBase):
     def __init__(self, node_sync: 'NodeBlockSync', start_block: Block, end_hash: bytes,
                  *, limit: int = DEFAULT_STREAMING_LIMIT, reverse: bool = False):
         super().__init__(node_sync, limit=limit)
@@ -186,12 +186,17 @@ class BlockchainStreaming(_StreamingBase):
         self.schedule_if_needed()
 
 
-class TransactionsStreaming(_StreamingBase):
+class TransactionsStreamingServer(_StreamingServerBase):
     """Streams all transactions confirmed by the given block, from right to left (decreasing timestamp).
     """
 
-    def __init__(self, node_sync: 'NodeBlockSync', start_from: list[BaseTransaction], last_block_hash: bytes,
-                 *, limit: int = DEFAULT_STREAMING_LIMIT):
+    def __init__(self,
+                 node_sync: 'NodeBlockSync',
+                 start_from: list[BaseTransaction],
+                 first_block_hash: bytes,
+                 last_block_hash: bytes,
+                 *,
+                 limit: int = DEFAULT_STREAMING_LIMIT) -> None:
         # XXX: is limit needed for tx streaming? Or let's always send all txs for
         # a block? Very unlikely we'll reach this limit
         super().__init__(node_sync, limit=limit)
@@ -199,6 +204,7 @@ class TransactionsStreaming(_StreamingBase):
         assert len(start_from) > 0
         assert start_from[0].storage is not None
         self.storage = start_from[0].storage
+        self.first_block_hash = first_block_hash
         self.last_block_hash = last_block_hash
         self.last_block_height = 0
 

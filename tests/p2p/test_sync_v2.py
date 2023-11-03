@@ -228,15 +228,15 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         sync1 = conn12.proto1.state.sync_agent
         sync1.DEFAULT_STREAMING_LIMIT = 30
         sync1.mempool_manager.MAX_STACK_LENGTH = 30
-        self.assertIsNone(sync1.blockchain_streaming)
-        self.assertIsNone(sync1.transactions_streaming)
+        self.assertIsNone(sync1._blk_streaming_server)
+        self.assertIsNone(sync1._tx_streaming_server)
 
         # Change manager2 default streaming and mempool limits.
         sync2 = conn12.proto2.state.sync_agent
         sync2.DEFAULT_STREAMING_LIMIT = 50
         sync2.mempool_manager.MAX_STACK_LENGTH = 50
-        self.assertIsNone(sync2.blockchain_streaming)
-        self.assertIsNone(sync2.transactions_streaming)
+        self.assertIsNone(sync2._blk_streaming_server)
+        self.assertIsNone(sync2._tx_streaming_server)
 
         # Run until fully synced.
         # trigger = StopWhenTrue(sync2.is_synced)

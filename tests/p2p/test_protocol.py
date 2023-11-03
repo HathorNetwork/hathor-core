@@ -425,7 +425,11 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         self.assertAndStepConn(self.conn, b'^RELAY')
         self.assertIsConnected()
         missing_tx = '00000000228dfcd5dec1c9c6263f6430a5b4316bb9e3decb9441a6414bfd8697'
-        payload = {'until_first_block': missing_tx, 'start_from': [settings.GENESIS_BLOCK_HASH.hex()]}
+        payload = {
+            'first_block_hash': missing_tx,
+            'last_block_hash': missing_tx,
+            'start_from': [settings.GENESIS_BLOCK_HASH.hex()]
+        }
         yield self._send_cmd(self.conn.proto1, 'GET-TRANSACTIONS-BFS', json_dumps(payload))
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
         self.conn.run_one_step()
