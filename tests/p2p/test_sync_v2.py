@@ -72,9 +72,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         self.assertNotEqual(b1.hash, b2.hash)
 
-        partial_blocks = self._get_partial_blocks(manager2.tx_storage)
-        self.assertGreater(len(partial_blocks), 0)
-
         for _ in range(20):
             print()
         print('Stopping manager2...')
@@ -110,8 +107,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             builder3.use_tx_storage_cache()
 
         manager3 = self.simulator.create_peer(builder3)
-        self.assertEqual(partial_blocks, self._get_partial_blocks(manager3.tx_storage))
-        self.assertTrue(manager3.tx_storage.indexes.deps.has_needed_tx())
 
         conn13 = FakeConnection(manager1, manager3, latency=0.05)
         self.simulator.add_connection(conn13)
@@ -224,17 +219,19 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Let the connection start to sync.
         self.simulator.run(1)
 
+        new_streaming_limit = 30
+
         # Change manager1 default streaming and mempool limits.
         sync1 = conn12.proto1.state.sync_agent
-        sync1.DEFAULT_STREAMING_LIMIT = 30
-        sync1.mempool_manager.MAX_STACK_LENGTH = 30
+        sync1.DEFAULT_STREAMING_LIMIT = new_streaming_limit
+        sync1.mempool_manager.MAX_STACK_LENGTH = new_streaming_limit
         self.assertIsNone(sync1._blk_streaming_server)
         self.assertIsNone(sync1._tx_streaming_server)
 
         # Change manager2 default streaming and mempool limits.
         sync2 = conn12.proto2.state.sync_agent
-        sync2.DEFAULT_STREAMING_LIMIT = 50
-        sync2.mempool_manager.MAX_STACK_LENGTH = 50
+        sync2.DEFAULT_STREAMING_LIMIT = new_streaming_limit
+        sync2.mempool_manager.MAX_STACK_LENGTH = new_streaming_limit
         self.assertIsNone(sync2._blk_streaming_server)
         self.assertIsNone(sync2._tx_streaming_server)
 

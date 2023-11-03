@@ -18,12 +18,12 @@ class StreamingError(Exception):
 
 
 class TooManyVerticesReceivedError(StreamingError):
-    """Raised when the other peer sent too many vertices."""
+    """Raised when the other peer has sent too many vertices."""
     pass
 
 
 class TooManyRepeatedVerticesError(StreamingError):
-    """Raised when the other peer sent too many repeated vertices."""
+    """Raised when the other peer has sent too many repeated vertices."""
     pass
 
 
@@ -34,4 +34,9 @@ class BlockNotConnectedToPreviousBlock(StreamingError):
 
 class InvalidVertexError(StreamingError):
     """Raised when the received vertex fails validation."""
+    pass
+
+
+class UnexpectedVertex(StreamingError):
+    """Raised when we are not expecting the received vertex."""
     pass

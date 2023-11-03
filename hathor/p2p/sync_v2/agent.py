@@ -18,7 +18,7 @@ import math
 import struct
 from collections import OrderedDict
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
@@ -39,10 +39,9 @@ from hathor.p2p.sync_v2.streamers import (
 from hathor.p2p.sync_v2.transaction_streaming_client import TransactionStreamingClient
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
-from hathor.transaction.exceptions import HathorError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
-from hathor.util import Reactor, collect_n, not_none
+from hathor.util import Reactor, not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -212,7 +211,8 @@ class NodeBlockSync(SyncAgent):
         if not self._started:
             raise Exception('NodeSyncBlock is already stopped')
         self._started = False
-        self._lc_run.stop()
+        if self._lc_run.running:
+            self._lc_run.stop()
 
     def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
         """ Return a dict of messages of the plugin.
@@ -232,6 +232,7 @@ class NodeBlockSync(SyncAgent):
             ProtocolMessages.GET_PEER_BLOCK_HASHES: self.handle_get_peer_block_hashes,
             ProtocolMessages.PEER_BLOCK_HASHES: self.handle_peer_block_hashes,
             ProtocolMessages.STOP_BLOCK_STREAMING: self.handle_stop_block_streaming,
+            ProtocolMessages.STOP_TRANSACTIONS_STREAMING: self.handle_stop_transactions_streaming,
             ProtocolMessages.GET_TIPS: self.handle_get_tips,
             ProtocolMessages.TIPS: self.handle_tips,
             ProtocolMessages.TIPS_END: self.handle_tips_end,
@@ -277,6 +278,9 @@ class NodeBlockSync(SyncAgent):
         self._is_running = True
         try:
             yield self._run_sync()
+        except Exception:
+            self.protocol.send_error_and_close_connection('internal error')
+            self.log.error('unhandled exception', exc_info=True)
         finally:
             self._is_running = False
 
@@ -286,56 +290,13 @@ class NodeBlockSync(SyncAgent):
         """
         assert not self.receiving_stream
         assert not self.mempool_manager.is_running()
-
         assert self.protocol.connections is not None
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.deps is not None
-
-        if self.tx_storage.indexes.deps.has_needed_tx():
-            self.log.debug('needed tx exist, sync transactions')
-            self.update_synced(False)
-            # TODO: find out whether we can sync transactions from this peer to speed things up
-            yield self.run_sync_transactions()
-            return
 
         is_block_synced = yield self.run_sync_blocks()
         if is_block_synced:
             # our blocks are synced, so sync the mempool
             self.state = PeerState.SYNCING_MEMPOOL
             yield self.mempool_manager.run()
-
-    @inlineCallbacks
-    def run_sync_transactions(self) -> Generator[Any, Any, None]:
-        """ Run a step of the transaction syncing phase.
-        """
-        self.state = PeerState.SYNCING_TRANSACTIONS
-
-        assert self.protocol.connections is not None
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.deps is not None
-
-        # start_hash = self.tx_storage.indexes.deps.get_next_needed_tx()
-        needed_txs, _ = collect_n(self.tx_storage.indexes.deps.iter_next_needed_txs(),
-                                  MAX_GET_TRANSACTIONS_BFS_LEN)
-
-        # Start with the last received block and find the best block full validated in its chain
-        block = self._blk_streaming_client._last_received_block if self._blk_streaming_client else None
-        if block is None:
-            block = cast(Block, self.tx_storage.get_genesis(self._settings.GENESIS_BLOCK_HASH))
-        else:
-            with self.tx_storage.allow_partially_validated_context():
-                while not block.get_metadata().validation.is_valid():
-                    block = block.get_block_parent()
-        assert block is not None
-        assert block.hash is not None
-        block_height = block.get_height()
-
-        self.log.info('run sync transactions', start=[i.hex() for i in needed_txs], end_block_hash=block.hash.hex(),
-                      end_block_height=block_height)
-        try:
-            yield self.start_transactions_streaming(needed_txs, block.hash, block.hash)
-        except StreamingError:
-            self.receiving_stream = False
 
     def get_my_best_block(self) -> _HeightInfo:
         """Return my best block info."""
@@ -404,10 +365,30 @@ class NodeBlockSync(SyncAgent):
         try:
             yield self.start_blockchain_streaming(self.synced_block,
                                                   self.peer_best_block)
-        except StreamingError:
+        except StreamingError as e:
+            self.log.info('block streaming failed', reason=repr(e))
             self.send_stop_block_streaming()
             self.receiving_stream = False
+            return False
 
+        assert self._blk_streaming_client is not None
+        partial_blocks = self._blk_streaming_client._partial_blocks
+        if partial_blocks:
+            self.state = PeerState.SYNCING_TRANSACTIONS
+            try:
+                reason = yield self.start_transactions_streaming(partial_blocks)
+            except StreamingError as e:
+                self.log.info('tx streaming failed', reason=repr(e))
+                self.send_stop_transactions_streaming()
+                self.receiving_stream = False
+                return False
+
+            self.log.info('tx streaming finished', reason=reason)
+            while reason == StreamEnd.LIMIT_EXCEEDED:
+                reason = yield self.resume_transactions_streaming()
+
+        self._blk_streaming_client = None
+        self._tx_streaming_client = None
         return False
 
     def get_tips(self) -> Deferred[list[bytes]]:
@@ -567,6 +548,13 @@ class NodeBlockSync(SyncAgent):
         self.log.debug('find_best_common_block n-ary search finished', lo=lo, hi=hi)
         return lo
 
+    def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> None:
+        """This method is called when a block and its transactions are downloaded."""
+        for tx in vertex_list:
+            self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
+
+        self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
         """
@@ -634,39 +622,42 @@ class NodeBlockSync(SyncAgent):
             self.protocol.send_error_and_close_connection('GET-NEXT-BLOCKS received before previous one finished')
             return
         data = GetNextBlocksPayload.parse_raw(payload)
+        start_block = self._validate_block(data.start_hash)
+        if start_block is None:
+            return
+        end_block = self._validate_block(data.end_hash)
+        if end_block is None:
+            return
         self.send_next_blocks(
-            start_hash=data.start_hash,
+            start_block=start_block,
             end_hash=data.end_hash,
             quantity=data.quantity,
         )
 
-    def send_next_blocks(self, start_hash: bytes, end_hash: bytes, quantity: int) -> None:
+    def _validate_block(self, _hash: VertexId) -> Optional[Block]:
+        """Validate block given in the GET-NEXT-BLOCKS and GET-TRANSACTIONS-BFS messages."""
+        try:
+            blk = self.tx_storage.get_transaction(_hash)
+        except TransactionDoesNotExist:
+            self.log.debug('requested block not found', blk_id=_hash.hex())
+            self.send_message(ProtocolMessages.NOT_FOUND, _hash.hex())
+            return None
+
+        if not isinstance(blk, Block):
+            self.log.debug('request block is not a block', blk_id=_hash.hex())
+            self.send_message(ProtocolMessages.NOT_FOUND, _hash.hex())
+            return None
+
+        return blk
+
+    def send_next_blocks(self, start_block: Block, end_hash: bytes, quantity: int) -> None:
         """ Send a NEXT-BLOCKS message.
         """
         self.log.debug('start NEXT-BLOCKS stream')
-        try:
-            blk = self.tx_storage.get_transaction(start_hash)
-        except TransactionDoesNotExist:
-            # In case the tx does not exist we send a NOT-FOUND message
-            self.log.debug('requested start_hash not found', start_hash=start_hash.hex())
-            self.send_message(ProtocolMessages.NOT_FOUND, start_hash.hex())
-            return
-        assert isinstance(blk, Block)
-        assert blk.hash is not None
-        # XXX: it is not an error for the other peer to request a voided block, we'll pretend it doesn't exist, butf
-        blk_meta = blk.get_metadata()
-        if blk_meta.voided_by:
-            # In case the tx does not exist we send a NOT-FOUND message
-            self.log.debug('requested start_hash is voided, continue anyway', start_hash=start_hash.hex(),
-                           voided_by=[i.hex() for i in blk_meta.voided_by])
-            # XXX: we want to be able to not send this, but we do because the remote node could get stuck otherwise
-            # (tracked by issue #711)
-            # self.send_message(ProtocolMessages.NOT_FOUND, start_hash.hex())
-            # return
         if self._blk_streaming_server is not None and self._blk_streaming_server.is_running:
             self._blk_streaming_server.stop()
         limit = min(quantity, self.DEFAULT_STREAMING_LIMIT)
-        self._blk_streaming_server = BlockchainStreamingServer(self, blk, end_hash, limit=limit)
+        self._blk_streaming_server = BlockchainStreamingServer(self, start_block, end_hash, limit=limit)
         self._blk_streaming_server.start()
 
     def send_blocks(self, blk: Block) -> None:
@@ -749,6 +740,26 @@ class NodeBlockSync(SyncAgent):
         self._blk_streaming_server.stop()
         self._blk_streaming_server = None
 
+    def send_stop_transactions_streaming(self) -> None:
+        """ Send a STOP-TRANSACTIONS-STREAMING message.
+
+        This asks the other peer to stop a running block stream.
+        """
+        self.send_message(ProtocolMessages.STOP_TRANSACTIONS_STREAMING)
+
+    def handle_stop_transactions_streaming(self, payload: str) -> None:
+        """ Handle a STOP-TRANSACTIONS-STREAMING message.
+
+        This means the remote peer wants to stop the current block stream.
+        """
+        if not self._tx_streaming_server or not self._is_streaming:
+            self.log.debug('got stop streaming message with no streaming running')
+            return
+
+        self.log.debug('got stop streaming message')
+        self._tx_streaming_server.stop()
+        self._tx_streaming_server = None
+
     def get_peer_best_block(self) -> Deferred[_HeightInfo]:
         """ Async call to get the remote peer's best block.
         """
@@ -787,14 +798,37 @@ class NodeBlockSync(SyncAgent):
         if deferred:
             deferred.callback(best_block)
 
-    def start_transactions_streaming(self,
-                                     start_from: list[bytes],
-                                     first_block_hash: bytes,
-                                     last_block_hash: bytes) -> Deferred[StreamEnd]:
+    def start_transactions_streaming(self, partial_blocks: list[Block]) -> Deferred[StreamEnd]:
         """Request peer to start streaming transactions to us."""
-        self._tx_streaming_client = TransactionStreamingClient(self, start_from, first_block_hash, last_block_hash)
+        self._tx_streaming_client = TransactionStreamingClient(self,
+                                                               partial_blocks,
+                                                               limit=self.DEFAULT_STREAMING_LIMIT)
+
+        start_from: list[bytes] = []
+        first_block_hash = not_none(partial_blocks[0].hash)
+        last_block_hash = not_none(partial_blocks[-1].hash)
+        self.log.info('requesting transactions streaming',
+                      start_from=[x.hex() for x in start_from],
+                      first_block=first_block_hash.hex(),
+                      last_block=last_block_hash.hex())
         self.send_get_transactions_bfs(start_from, first_block_hash, last_block_hash)
         return self._tx_streaming_client.wait()
+
+    def resume_transactions_streaming(self) -> Deferred[StreamEnd]:
+        """Resume transaction streaming."""
+        assert self._tx_streaming_client is not None
+        idx = self._tx_streaming_client._idx
+        partial_blocks = self._tx_streaming_client.partial_blocks[idx:]
+        assert partial_blocks
+        start_from = list(self._tx_streaming_client._waiting_for)
+        first_block_hash = not_none(partial_blocks[0].hash)
+        last_block_hash = not_none(partial_blocks[-1].hash)
+        self.log.info('requesting transactions streaming',
+                      start_from=[x.hex() for x in start_from],
+                      first_block=first_block_hash.hex(),
+                      last_block=last_block_hash.hex())
+        self.send_get_transactions_bfs(start_from, first_block_hash, last_block_hash)
+        return self._tx_streaming_client.resume()
 
     def send_get_transactions_bfs(self,
                                   start_from: list[bytes],
@@ -833,44 +867,55 @@ class NodeBlockSync(SyncAgent):
             self.log.warn('ignore GET-TRANSACTIONS-BFS, already streaming')
             return
         data = GetTransactionsBFSPayload.parse_raw(payload)
-        # XXX: todo verify this limit while parsing the payload.
+
         if len(data.start_from) > MAX_GET_TRANSACTIONS_BFS_LEN:
             self.log.error('too many transactions in GET-TRANSACTIONS-BFS', state=self.state)
             self.protocol.send_error_and_close_connection('Too many transactions in GET-TRANSACTIONS-BFS')
             return
-        self.send_transactions_bfs(data.start_from, data.first_block_hash, data.last_block_hash)
 
-    def send_transactions_bfs(self,
-                              start_from: list[bytes],
-                              first_block_hash: bytes,
-                              last_block_hash: bytes) -> None:
-        """ Start a transactions BFS stream.
-        """
+        first_block = self._validate_block(data.first_block_hash)
+        if first_block is None:
+            return
+
+        last_block = self._validate_block(data.last_block_hash)
+        if last_block is None:
+            return
+
         start_from_txs = []
-        for start_from_hash in start_from:
+        for start_from_hash in data.start_from:
             try:
-                start_from_txs.append(self.tx_storage.get_transaction(start_from_hash))
+                tx = self.tx_storage.get_transaction(start_from_hash)
             except TransactionDoesNotExist:
                 # In case the tx does not exist we send a NOT-FOUND message
                 self.log.debug('requested start_from_hash not found', start_from_hash=start_from_hash.hex())
                 self.send_message(ProtocolMessages.NOT_FOUND, start_from_hash.hex())
                 return
-        if not self.tx_storage.transaction_exists(first_block_hash):
-            # In case the tx does not exist we send a NOT-FOUND message
-            self.log.debug('requested first_block_hash not found', first_block_hash=first_block_hash.hex())
-            self.send_message(ProtocolMessages.NOT_FOUND, first_block_hash.hex())
-            return
-        if not self.tx_storage.transaction_exists(last_block_hash):
-            # In case the tx does not exist we send a NOT-FOUND message
-            self.log.debug('requested last_block_hash not found', last_block_hash=last_block_hash.hex())
-            self.send_message(ProtocolMessages.NOT_FOUND, last_block_hash.hex())
-            return
+            assert tx.hash is not None
+            assert first_block.hash is not None
+            meta = tx.get_metadata()
+            if meta.first_block != first_block.hash:
+                self.log.debug('requested start_from not confirmed by first_block',
+                               vertex_id=tx.hash.hex(),
+                               first_block=first_block.hash.hex(),
+                               vertex_first_block=meta.first_block)
+                self.send_blocks_end(StreamEnd.INVALID_PARAMS)
+                return
+            start_from_txs.append(tx)
+
+        self.send_transactions_bfs(start_from_txs, first_block, last_block)
+
+    def send_transactions_bfs(self,
+                              start_from: list[BaseTransaction],
+                              first_block: Block,
+                              last_block: Block) -> None:
+        """ Start a transactions BFS stream.
+        """
         if self._tx_streaming_server is not None and self._tx_streaming_server.is_running:
             self._tx_streaming_server.stop()
         self._tx_streaming_server = TransactionsStreamingServer(self,
-                                                                start_from_txs,
-                                                                first_block_hash,
-                                                                last_block_hash,
+                                                                start_from,
+                                                                first_block,
+                                                                last_block,
                                                                 limit=self.DEFAULT_STREAMING_LIMIT)
         self._tx_streaming_server.start()
 
@@ -919,6 +964,7 @@ class NodeBlockSync(SyncAgent):
             self.log.warn('not a transaction', hash=tx.hash_hex)
             # Not a transaction. Punish peer?
             return
+        tx.storage = self.tx_storage
 
         assert self._tx_streaming_client is not None
         self._tx_streaming_client.handle_transaction(tx)
@@ -1057,75 +1103,7 @@ class NodeBlockSync(SyncAgent):
             # in the network, thus, we propagate it as well.
             if tx.can_validate_full():
                 self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                self.on_new_tx(tx, propagate_to_peers=True)
+                self.manager.on_new_tx(tx, propagate_to_peers=True)
             else:
                 self.log.info('skipping tx received in real time from peer',
                               tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-
-    def on_new_tx(self, tx: BaseTransaction, *, quiet: bool = False, propagate_to_peers: bool = True,
-                  sync_checkpoints: bool = False, reject_locked_reward: bool = True) -> bool:
-        """ This method handle everything related to adding potentially partially validated transactions.
-
-        Call this instead of HathorManager.on_new_tx, unless `tx` must be fully validated (for example when receiving
-        realtime DATA pushes).
-        """
-
-        assert self.tx_storage.indexes is not None
-        assert tx.hash is not None
-
-        # XXX: "refresh" the transaction so there isn't a duplicate in memory
-        if self.partial_vertex_exists(tx.hash):
-            with self.tx_storage.allow_partially_validated_context():
-                self.tx_storage.compare_bytes_with_local_tx(tx)
-                tx = self.tx_storage.get_transaction(tx.hash)
-        assert tx.hash is not None
-
-        tx.storage = self.tx_storage
-
-        with self.tx_storage.allow_partially_validated_context():
-            metadata = tx.get_metadata()
-
-        if metadata.validation.is_fully_connected() or tx.can_validate_full():
-            if not self.manager.on_new_tx(tx):
-                return False
-        elif sync_checkpoints:
-            assert self.tx_storage.indexes.deps is not None
-            with self.tx_storage.allow_partially_validated_context():
-                metadata.children = self.tx_storage.indexes.deps.known_children(tx)
-                try:
-                    tx.validate_checkpoint(self.manager.checkpoints)
-                except HathorError:
-                    self.log.warn('on_new_tx(): checkpoint validation failed', tx=tx.hash_hex, exc_info=True)
-                    return False
-                self.tx_storage.save_transaction(tx)
-            self.tx_storage.indexes.deps.add_tx(tx)
-            self.manager.log_new_object(tx, 'new {} partially accepted while syncing checkpoints', quiet=quiet)
-        else:
-            assert self.tx_storage.indexes.deps is not None
-            with self.tx_storage.allow_partially_validated_context():
-                if isinstance(tx, Block) and not tx.has_basic_block_parent():
-                    self.log.warn('on_new_tx(): block parent needs to be at least basic-valid', tx=tx.hash_hex)
-                    return False
-                if not self.manager.verification_service.validate_basic(tx):
-                    self.log.warn('on_new_tx(): basic validation failed', tx=tx.hash_hex)
-                    return False
-
-                # The method below adds the tx as a child of the parents
-                # This needs to be called right before the save because we were adding the children
-                # in the tx parents even if the tx was invalid (failing the verifications above)
-                # then I would have a children that was not in the storage
-                self.tx_storage.save_transaction(tx)
-                self.tx_storage.indexes.deps.add_tx(tx)
-            self.manager.log_new_object(tx, 'new {} partially accepted', quiet=quiet)
-
-        if self.tx_storage.indexes.deps is not None:
-            self.tx_storage.indexes.deps.remove_from_needed_index(tx.hash)
-
-        if self.tx_storage.indexes.deps is not None:
-            try:
-                self.manager.sync_v2_step_validations([tx], quiet=quiet)
-            except (AssertionError, HathorError):
-                self.log.warn('on_new_tx(): step validations failed', tx=tx.hash_hex, exc_info=True)
-                return False
-
-        return True

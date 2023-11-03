@@ -63,6 +63,8 @@ class SyncMempoolManager:
         self._is_running = True
         self.reactor.callLater(0, self._run)
 
+        # TODO Implement a stop() and call it after N minutes.
+
         assert self._deferred is None
         self._deferred = Deferred()
         return self._deferred

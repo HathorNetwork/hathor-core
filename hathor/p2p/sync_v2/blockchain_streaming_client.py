@@ -93,6 +93,17 @@ class BlockchainStreamingClient:
             self.fails(TooManyVerticesReceivedError())
             return
 
+        # TODO Run basic verification. We will uncomment these lines after we finish
+        # refactoring our verification services.
+        #
+        # if not blk.is_genesis:
+        #     try:
+        #         self.manager.verification_service.validate_basic(blk)
+        #     except TxValidationError as e:
+        #         self.fails(InvalidVertexError(repr(e)))
+        #         return
+
+        # Check for repeated blocks.
         assert blk.hash is not None
         is_duplicated = False
         if self.partial_vertex_exists(blk.hash):
@@ -102,6 +113,8 @@ class BlockchainStreamingClient:
             if self._blk_repeated > self.max_repeated_blocks:
                 self.log.debug('too many repeated block received', total_repeated=self._blk_repeated)
                 self.fails(TooManyRepeatedVerticesError())
+            self._last_received_block = blk
+            return
 
         # basic linearity validation, crucial for correctly predicting the next block's height
         if self._reverse:
@@ -113,26 +126,25 @@ class BlockchainStreamingClient:
                 self.fails(BlockNotConnectedToPreviousBlock())
                 return
 
-        try:
-            # this methods takes care of checking if the block already exists,
-            # it will take care of doing at least a basic validation
-            if is_duplicated:
-                self.log.debug('block early terminate?', blk_id=blk.hash.hex())
-            else:
-                self.log.debug('block received', blk_id=blk.hash.hex())
-            self.sync_agent.on_new_tx(blk, propagate_to_peers=False, quiet=True)
-        except HathorError:
-            self.fails(InvalidVertexError())
-            return
+        if is_duplicated:
+            self.log.debug('block early terminate?', blk_id=blk.hash.hex())
         else:
-            self._last_received_block = blk
-            self._blk_repeated = 0
-            # XXX: debugging log, maybe add timing info
-            if self._blk_received % 500 == 0:
-                self.log.debug('block streaming in progress', blocks_received=self._blk_received)
+            self.log.debug('block received', blk_id=blk.hash.hex())
 
-            if not blk.can_validate_full():
-                self._partial_blocks.append(blk)
+        if blk.can_validate_full():
+            try:
+                self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+            except HathorError:
+                self.fails(InvalidVertexError(blk.hash.hex()))
+                return
+        else:
+            self._partial_blocks.append(blk)
+
+        self._last_received_block = blk
+        self._blk_repeated = 0
+        # XXX: debugging log, maybe add timing info
+        if self._blk_received % 500 == 0:
+            self.log.debug('block streaming in progress', blocks_received=self._blk_received)
 
     def handle_blocks_end(self, response_code: StreamEnd) -> None:
         """This method is called by the sync agent when a BLOCKS-END message is received."""

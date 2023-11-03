@@ -11,7 +11,7 @@ settings = HathorSettings()
 
 
 class BaseSoftVoidedTestCase(SimulatorTestCase):
-    seed_config = 5988775361793628169
+    seed_config = 5988775361793628170
 
     def assertNoParentsAreSoftVoided(self, tx):
         for h in tx.parents:

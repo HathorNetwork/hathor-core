@@ -209,7 +209,6 @@ class ConnectionsManager:
             assert self.manager.tx_storage.indexes is not None
             indexes = self.manager.tx_storage.indexes
             self.log.debug('enable sync-v2 indexes')
-            indexes.enable_deps_index()
             indexes.enable_mempool_index()
 
     def add_listen_address(self, addr: str) -> None:

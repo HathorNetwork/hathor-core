@@ -16,7 +16,7 @@ import datetime
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterable, Iterator, NamedTuple, Optional, Union
+from typing import Any, Iterator, NamedTuple, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -455,8 +455,6 @@ class HathorManager:
                     self.tx_storage.indexes.update(tx)
                     if self.tx_storage.indexes.mempool_tips is not None:
                         self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
-                    if self.tx_storage.indexes.deps is not None:
-                        self.sync_v2_step_validations([tx], quiet=True)
                     self.tx_storage.save_transaction(tx, only_metadata=True)
                 else:
                     assert self.verification_service.validate_basic(
@@ -513,10 +511,6 @@ class HathorManager:
                 self.log.error('Error initializing the node. Checkpoint validation error.')
                 sys.exit()
 
-        # restart all validations possible
-        if self.tx_storage.indexes.deps:
-            self._sync_v2_resume_validations()
-
         best_height = self.tx_storage.get_height_best_block()
         if best_height != h:
             self.log.warn('best height doesn\'t match', best_height=best_height, max_height=h)
@@ -572,10 +566,6 @@ class HathorManager:
         except InitializationError:
             self.log.exception('Initialization error when checking checkpoints, cannot continue.')
             sys.exit()
-
-        # restart all validations possible
-        if self.tx_storage.indexes.deps is not None:
-            self._sync_v2_resume_validations()
 
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
@@ -667,24 +657,6 @@ class HathorManager:
                     f'Expected checkpoint {checkpoint} to be found in the height index, but it instead the block with '
                     f'hash {tx_hash.hex()} was found'
                 )
-
-    def _sync_v2_resume_validations(self) -> None:
-        """ This method will resume running validations that did not run because the node exited.
-        """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.deps is not None
-        if self.tx_storage.indexes.deps.has_needed_tx():
-            self.log.debug('run pending validations')
-            depended_final_txs: list[BaseTransaction] = []
-            for tx_hash in self.tx_storage.indexes.deps.iter():
-                if not self.tx_storage.transaction_exists(tx_hash):
-                    continue
-                with self.tx_storage.allow_partially_validated_context():
-                    tx = self.tx_storage.get_transaction(tx_hash)
-                if tx.get_metadata().validation.is_final():
-                    depended_final_txs.append(tx)
-            self.sync_v2_step_validations(depended_final_txs, quiet=True)
-            self.log.debug('pending validations finished')
 
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
         """Select which transactions will be confirmed by a new transaction.
@@ -1063,37 +1035,6 @@ class HathorManager:
         else:
             log_func = self.log.debug
         log_func(message, **kwargs)
-
-    def sync_v2_step_validations(self, txs: Iterable[BaseTransaction], *, quiet: bool) -> None:
-        """ Step all validations until none can be stepped anymore.
-        """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.deps is not None
-        # cur_txs will be empty when there are no more new txs that reached full
-        # validation because of an initial trigger
-        for ready_tx in txs:
-            assert ready_tx.hash is not None
-            self.tx_storage.indexes.deps.remove_ready_for_validation(ready_tx.hash)
-        with self.tx_storage.allow_partially_validated_context():
-            for tx in map(self.tx_storage.get_transaction,
-                          self.tx_storage.indexes.deps.next_ready_for_validation(self.tx_storage)):
-                assert tx.hash is not None
-                tx.update_initial_metadata()
-                with self.tx_storage.allow_only_valid_context():
-                    try:
-                        # XXX: `reject_locked_reward` might not apply, partial validation is only used on sync-v2
-                        # TODO: deal with `reject_locked_reward` on sync-v2
-                        assert self.verification_service.validate_full(tx, reject_locked_reward=False)
-                    except (AssertionError, HathorError):
-                        # TODO
-                        raise
-                    else:
-                        self.tx_storage.add_to_indexes(tx)
-                        self.consensus_algorithm.update(tx)
-                        self.tx_storage.indexes.update(tx)
-                        if self.tx_storage.indexes.mempool_tips:
-                            self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
-                        self.tx_fully_validated(tx, quiet=quiet)
 
     def tx_fully_validated(self, tx: BaseTransaction, *, quiet: bool) -> None:
         """ Handle operations that need to happen once the tx becomes fully validated.
