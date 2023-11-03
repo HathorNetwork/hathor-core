@@ -1,7 +1,7 @@
 from itertools import chain
 
 from hathor.conf import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode, _set_test_mode
+from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
@@ -390,8 +390,8 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
     def test_daa_sanity(self):
         # sanity test the DAA
-        _set_test_mode(TestMode.DISABLED)
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
+        manager.daa.TEST_MODE = TestMode.DISABLED
         N = settings.BLOCK_DIFFICULTY_N_BLOCKS
         T = settings.AVG_TIME_BETWEEN_BLOCKS
         manager.avg_time_between_blocks = T
@@ -417,7 +417,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             self.assertLess(new_weight, base_weight)
 
     def test_daa_weight_decay_amount(self):
-        _set_test_mode(TestMode.DISABLED)
+        self.daa.TEST_MODE = TestMode.DISABLED
         amount = settings.WEIGHT_DECAY_AMOUNT
 
         for distance in range(0, settings.WEIGHT_DECAY_ACTIVATE_DISTANCE, 10):
@@ -434,8 +434,8 @@ class BaseBlockchainTestCase(unittest.TestCase):
         self.assertAlmostEqual(self.daa.get_weight_decay_amount(distance), 11 * amount)
 
     def test_daa_weight_decay_blocks(self):
-        _set_test_mode(TestMode.DISABLED)
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
+        manager.daa.TEST_MODE = TestMode.DISABLED
         amount = settings.WEIGHT_DECAY_AMOUNT
 
         manager.daa.AVG_TIME_BETWEEN_BLOCKS = settings.AVG_TIME_BETWEEN_BLOCKS

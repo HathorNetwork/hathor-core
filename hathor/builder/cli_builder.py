@@ -59,7 +59,7 @@ class CliBuilder:
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
         from hathor.conf.get_settings import get_settings, get_settings_source
-        from hathor.daa import TestMode, _set_test_mode
+        from hathor.daa import TestMode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
@@ -208,7 +208,13 @@ class CliBuilder:
             not_support_features=self._args.signal_not_support
         )
 
-        daa = DifficultyAdjustmentAlgorithm(settings=settings)
+        test_mode = TestMode.DISABLED
+        if self._args.test_mode_tx_weight:
+            test_mode = TestMode.TEST_TX_WEIGHT
+            if self.wallet:
+                self.wallet.test_mode = True
+
+        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
 
         vertex_verifiers = VertexVerifiers.create_defaults(
             settings=settings,
@@ -280,11 +286,6 @@ class CliBuilder:
 
         if self._args.bootstrap:
             p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(self._args.bootstrap))
-
-        if self._args.test_mode_tx_weight:
-            _set_test_mode(TestMode.TEST_TX_WEIGHT)
-            if self.wallet:
-                self.wallet.test_mode = True
 
         if self._args.x_rocksdb_indexes:
             self.log.warn('--x-rocksdb-indexes is now the default, no need to specify it')
