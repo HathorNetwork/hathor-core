@@ -21,7 +21,7 @@ NOTE: This module could use a better name.
 
 from enum import IntFlag
 from math import log
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, Optional
 
 from structlog import get_logger
 
@@ -45,26 +45,21 @@ class TestMode(IntFlag):
     TEST_ALL_WEIGHT = 3
 
 
-TEST_MODE = TestMode.DISABLED
-
-
-def _set_test_mode(mode: TestMode) -> None:
-    global TEST_MODE
-    logger.debug('change DAA test mode', from_mode=TEST_MODE.name, to_mode=mode.name)
-    TEST_MODE = mode
-
-
 class DifficultyAdjustmentAlgorithm:
+    # TODO: This singleton is temporary, and only used in PeerId. It should be removed from there, and then from here.
+    singleton: ClassVar[Optional['DifficultyAdjustmentAlgorithm']] = None
 
-    def __init__(self, *, settings: HathorSettings) -> None:
+    def __init__(self, *, settings: HathorSettings, test_mode: TestMode = TestMode.DISABLED) -> None:
         self._settings = settings
         self.AVG_TIME_BETWEEN_BLOCKS = self._settings.AVG_TIME_BETWEEN_BLOCKS
         self.MIN_BLOCK_WEIGHT = self._settings.MIN_BLOCK_WEIGHT
+        self.TEST_MODE = test_mode
+        DifficultyAdjustmentAlgorithm.singleton = self
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
     def calculate_block_difficulty(self, block: 'Block') -> float:
         """ Calculate block weight according to the ascendents of `block`, using calculate_next_weight."""
-        if TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
+        if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
             return 1.0
 
         if block.is_genesis:
@@ -79,7 +74,7 @@ class DifficultyAdjustmentAlgorithm:
 
         The weight must not be less than `MIN_BLOCK_WEIGHT`.
         """
-        if TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
+        if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
             return 1.0
 
         from hathor.transaction import sum_weights
@@ -166,7 +161,7 @@ class DifficultyAdjustmentAlgorithm:
         """
         # In test mode we don't validate the minimum weight for tx
         # We do this to allow generating many txs for testing
-        if TEST_MODE & TestMode.TEST_TX_WEIGHT:
+        if self.TEST_MODE & TestMode.TEST_TX_WEIGHT:
             return 1.0
 
         if tx.is_genesis:

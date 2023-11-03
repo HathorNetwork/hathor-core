@@ -23,7 +23,7 @@ from structlog import get_logger
 from hathor.builder import BuildArtifacts, Builder
 from hathor.conf.get_settings import get_settings
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode, _set_test_mode
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
@@ -63,7 +63,6 @@ class Simulator:
         Patches:
 
         - disable Transaction.resolve method
-        - set DAA test-mode to DISABLED (will actually run the pow function, that won't actually verify the pow)
         """
         from hathor.transaction import BaseTransaction
 
@@ -74,8 +73,6 @@ class Simulator:
 
         cls._original_resolve = BaseTransaction.resolve
         BaseTransaction.resolve = resolve
-
-        _set_test_mode(TestMode.DISABLED)
 
     @classmethod
     def _remove_patches(cls):

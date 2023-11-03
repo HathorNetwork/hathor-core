@@ -2,7 +2,7 @@ from twisted.internet.defer import succeed
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest
 
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
 from hathor.util import json_dumpb, json_loadb
 from tests import unittest
 
@@ -19,7 +19,7 @@ class _BaseResourceTest:
                 unlock_wallet=unlock_wallet
             )
             self.manager.allow_mining_without_peers()
-            _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+            self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         def tearDown(self):
             return self.manager.stop()
