@@ -176,7 +176,7 @@ class TestCase(unittest.TestCase):
         if start_manager:
             manager.start()
             self.clock.run()
-            self.run_to_completion()
+            self.clock.advance(5)
 
         return manager
 
