@@ -16,6 +16,9 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
+    from re import Match, Pattern
+
+    from hathor.p2p.protocol import HathorLineReceiver
     from hathor.simulator.fake_connection import FakeConnection
     from hathor.simulator.miner import AbstractMiner
     from hathor.simulator.tx_generator import RandomTransactionGenerator
@@ -107,3 +110,32 @@ class All(Trigger):
 
     def should_stop(self) -> bool:
         return all(trigger.should_stop() for trigger in self._sub_triggers)
+
+
+class StopWhenSendLineMatch(Trigger):
+    """Stop the simulation when the node sends a line that matches a designated regex pattern.
+    """
+
+    def __init__(self, protocol: 'HathorLineReceiver', regex: 'Pattern') -> None:
+        # patches protocol.sendLine
+        self.original_send_line = protocol.sendLine
+        setattr(protocol, 'sendLine', self._send_line_wrapper)
+
+        # regex pattern
+        self.regex = regex
+
+        # list of matches
+        self.matches: list['Match'] = []
+
+    def _send_line_wrapper(self, line: str) -> None:
+        """Check if line matches a designated regex pattern."""
+        self.original_send_line(line)
+        match = self.regex.match(line)
+        if match:
+            self.matches.append(match)
+
+    def should_stop(self) -> bool:
+        if self.matches:
+            self.matches = []
+            return True
+        return False
