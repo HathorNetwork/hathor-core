@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Generator, Optional, cast
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IDelayedCall, ITCPTransport, ITransport
+from twisted.internet.interfaces import IAddress, IDelayedCall, ITCPTransport, ITransport
 from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
@@ -92,11 +92,12 @@ class HathorProtocol:
     capabilities: set[str]  # capabilities received from the peer in HelloState
 
     def __init__(self, network: str, my_peer: PeerId, p2p_manager: 'ConnectionsManager',
-                 *, use_ssl: bool, inbound: bool) -> None:
+                 *, use_ssl: bool, inbound: bool, remote_address: IAddress) -> None:
         self._settings = get_settings()
         self.network = network
         self.my_peer = my_peer
         self.connections = p2p_manager
+        self.remote_address = remote_address
 
         assert p2p_manager.manager is not None
         self.node = p2p_manager.manager
@@ -181,8 +182,11 @@ class HathorProtocol:
 
     def get_short_remote(self) -> str:
         """Get remote for logging."""
-        assert self.transport is not None
-        return format_address(self.transport.getPeer())
+        return format_address(self.remote_address)
+
+    def get_remote_ip_address(self) -> Optional[str]:
+        """Return remote address (ipv4 or ipv6)."""
+        return getattr(self.remote_address, 'host', None)
 
     def get_peer_id(self) -> Optional[str]:
         """Get peer id for logging."""
@@ -230,6 +234,8 @@ class HathorProtocol:
         """ Executed when the connection is established.
         """
         assert not self.aborting
+        assert self.transport is not None
+        assert self.remote_address == self.transport.getPeer()
         self.update_log_context()
         self.log.debug('new connection')
 

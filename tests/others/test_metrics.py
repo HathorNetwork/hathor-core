@@ -2,6 +2,7 @@ import tempfile
 from unittest.mock import Mock
 
 import pytest
+from twisted.internet.address import IPv4Address
 
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer_id import PeerId
@@ -214,7 +215,8 @@ class BaseMetricsTest(unittest.TestCase):
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
-                inbound=False
+                inbound=False,
+                remote_address=IPv4Address('TCP', '192.168.0.1', 5000),
             )
             protocol.peer = PeerId()
 

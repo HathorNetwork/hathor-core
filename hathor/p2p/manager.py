@@ -133,6 +133,7 @@ class ConnectionsManager:
 
         # Global maximum number of connections.
         self.max_connections: int = settings.PEER_MAX_CONNECTIONS
+        self.max_connections_per_ip: int = 16
 
         # Global rate limiter for all connections.
         self.rate_limiter = RateLimiter(self.reactor)
@@ -350,6 +351,19 @@ class ConnectionsManager:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
+
+        ip_address = protocol.get_remote_ip_address()
+        if ip_address:
+            count = len([1 for conn in self.connections if conn.get_remote_ip_address() == ip_address])
+            if count >= self.max_connections_per_ip:
+                self.log.warn(
+                    'reached maximum number of connections per ip address',
+                    ip_address=ip_address,
+                    max_connections_per_ip=self.max_connections_per_ip,
+                )
+                protocol.disconnect(force=True)
+                return
+
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
