@@ -30,6 +30,7 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
@@ -223,6 +224,8 @@ class CliBuilder:
         )
         verification_service = VerificationService(verifiers=vertex_verifiers)
 
+        cpu_mining_service = CpuMiningService()
+
         p2p_manager = ConnectionsManager(
             reactor,
             network=network,
@@ -256,6 +259,7 @@ class CliBuilder:
             feature_service=self.feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
+            cpu_mining_service=cpu_mining_service
         )
 
         p2p_manager.set_manager(self.manager)

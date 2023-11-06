@@ -31,12 +31,12 @@ class BaseWalletIndexTest(unittest.TestCase):
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
 
         # Change of parents only, so it's a twin
         tx2 = Transaction.create_from_struct(tx1.get_struct())
         tx2.parents = [tx1.parents[1], tx1.parents[0]]
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.assertNotEqual(tx1.hash, tx2.hash)
 
         self.manager.propagate_tx(tx1)

@@ -40,7 +40,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.weight = 2.0
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.assertTrue(self.manager.propagate_tx(tx1, False))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
@@ -55,7 +55,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx2.parents = [tx1.hash] + self.manager.get_new_tx_parents()[1:]
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.assertTrue(self.manager.propagate_tx(tx2, False))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
@@ -66,7 +66,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.timestamp = tx2.timestamp + 1
         self.assertIn(tx1.hash, tx3.parents)
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx2.hash, tx3.hash)
         self.assertTrue(self.manager.propagate_tx(tx3, False))
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
@@ -97,7 +97,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.weight = 2.0
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.assertTrue(self.manager.propagate_tx(tx1, False))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
@@ -110,7 +110,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx2.parents = [tx1.hash] + self.manager.get_new_tx_parents()[1:]
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.assertTrue(self.manager.propagate_tx(tx2, False))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
@@ -123,7 +123,7 @@ class BaseIndexesTest(unittest.TestCase):
         # tx3.timestamp = tx2.timestamp + 1
         tx3.parents = tx1.parents
         # self.assertIn(tx1.hash, tx3.parents)
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx2.hash, tx3.hash)
         self.assertTrue(self.manager.propagate_tx(tx3, False))
         # self.assertIn(tx3.hash, tx2.get_metadata().voided_by)
@@ -178,7 +178,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx0.weight = 1.0
         tx0.parents = self.manager.get_new_tx_parents()
         tx0.timestamp = int(self.clock.seconds())
-        tx0.resolve()
+        self.manager.cpu_mining_service.resolve(tx0)
         # XXX: tx0.outputs[0] is always the change output for some reason
         self.assertEqual(len(tx0.outputs), 4)
         self.assertEqual(tx0.outputs[1], tx0.outputs[2])
@@ -201,7 +201,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.tx_A.inputs[0].data = P2PKH.create_input_data(
             *self.wallet.get_input_aux_data(self.tx_A.get_sighash_all(), private_key)
         )
-        self.tx_A.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx_A)
         if debug:
             self.assertTrue(self.manager.propagate_tx(self.tx_A, False))
             self.assertFalse(self.tx_A.get_metadata().voided_by)
@@ -218,7 +218,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.tx_B.inputs[0].data = P2PKH.create_input_data(
             *self.wallet.get_input_aux_data(self.tx_B.get_sighash_all(), private_key)
         )
-        self.tx_B.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx_B)
         if debug:
             self.assertTrue(self.manager.propagate_tx(self.tx_B, False))
             self.assertFalse(self.tx_B.get_metadata().voided_by)
@@ -237,7 +237,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.tx_C.inputs[0].data = P2PKH.create_input_data(
             *self.wallet.get_input_aux_data(self.tx_C.get_sighash_all(), private_key)
         )
-        self.tx_C.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx_C)
         if debug:
             self.assertTrue(self.manager.propagate_tx(self.tx_C, False))
             self.assertFalse(self.tx_C.get_metadata().voided_by)
@@ -262,7 +262,7 @@ class BaseIndexesTest(unittest.TestCase):
             self.tx_D.inputs[i].data = P2PKH.create_input_data(
                 *self.wallet.get_input_aux_data(self.tx_D.get_sighash_all(), private_key)
             )
-        self.tx_D.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx_D)
         if debug:
             self.assertTrue(self.manager.propagate_tx(self.tx_D, False))
             self.assertFalse(self.tx_D.get_metadata().voided_by)
@@ -275,7 +275,7 @@ class BaseIndexesTest(unittest.TestCase):
             weight=1.0,
             storage=self.tx_storage,
         )
-        self.block_E.resolve()
+        self.manager.cpu_mining_service.resolve(self.block_E)
         if debug:
             self.assertTrue(self.manager.propagate_tx(self.block_E, False))
             self.assertFalse(self.block_E.get_metadata().voided_by)
@@ -438,7 +438,7 @@ class BaseIndexesTest(unittest.TestCase):
         block2.parents[1:] = [txA2.hash, txB2.hash]
         block2.timestamp = block1.timestamp
         block2.weight = 1.2
-        block2.resolve()
+        self.manager.cpu_mining_service.resolve(block2)
         self.manager.verification_service.validate_full(block2)
         self.manager.propagate_tx(block2, fails_silently=False)
         self.graphviz.labels[block2.hash] = 'block2'
@@ -658,7 +658,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.inputs[0].data = P2PKH.create_input_data(
             *wallet.get_input_aux_data(tx1.get_sighash_all(), wallet.get_private_key(address))
         )
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.assertTrue(self.manager.propagate_tx(tx1, False))
 
         self.assertEqual(
@@ -733,7 +733,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.inputs[0].data = P2PKH.create_input_data(
             *wallet.get_input_aux_data(tx1.get_sighash_all(), wallet.get_private_key(address))
         )
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.assertTrue(self.manager.propagate_tx(tx1, False))
 
         # querying for exact values

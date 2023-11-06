@@ -31,7 +31,7 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes)
         block.weight = 4
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
 
         block_bytes = bytes(block)
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
@@ -56,7 +56,7 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes)
         block.weight = 4
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
 
         block_bytes = bytes(block)
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')

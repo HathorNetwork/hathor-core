@@ -228,7 +228,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         input_data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx.inputs[0].data = input_data
         # XXX: tx.resolve is a bit CPU intensive, but not so much as to make this test disabled by default
-        tx.resolve(False)
+        self.manager.cpu_mining_service.resolve(tx, update_time=False)
         self.assertTrue(self.manager.propagate_tx(tx))
 
     @inlineCallbacks
@@ -275,7 +275,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         tx.inputs[1].data = input_data
         tx.inputs[2].data = input_data
         # XXX: tx.resolve is a bit CPU intensive, but not so much as to make this test disabled by default
-        tx.resolve(False)
+        self.manager.cpu_mining_service.resolve(tx, update_time=False)
         self.assertTrue(self.manager.propagate_tx(tx))
 
     @inlineCallbacks

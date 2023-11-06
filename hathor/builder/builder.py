@@ -30,6 +30,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
@@ -111,6 +112,7 @@ class Builder:
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
         self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
+        self._cpu_mining_service: Optional[CpuMiningService] = None
 
         self._vertex_verifiers: Optional[VertexVerifiers] = None
         self._vertex_verifiers_builder: _VertexVerifiersBuilder | None = None
@@ -174,6 +176,7 @@ class Builder:
         bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
         daa = self._get_or_create_daa()
+        cpu_mining_service = self._get_or_create_cpu_mining_service()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -211,6 +214,7 @@ class Builder:
             feature_service=feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
+            cpu_mining_service=cpu_mining_service,
             **kwargs
         )
 
@@ -490,6 +494,12 @@ class Builder:
 
         return self._daa
 
+    def _get_or_create_cpu_mining_service(self) -> CpuMiningService:
+        if self._cpu_mining_service is None:
+            self._cpu_mining_service = CpuMiningService()
+
+        return self._cpu_mining_service
+
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.MEMORY
@@ -600,6 +610,11 @@ class Builder:
     def set_daa(self, daa: DifficultyAdjustmentAlgorithm) -> 'Builder':
         self.check_if_can_modify()
         self._daa = daa
+        return self
+
+    def set_cpu_mining_service(self, cpu_mining_service: CpuMiningService) -> 'Builder':
+        self.check_if_can_modify()
+        self._cpu_mining_service = cpu_mining_service
         return self
 
     def set_reactor(self, reactor: Reactor) -> 'Builder':

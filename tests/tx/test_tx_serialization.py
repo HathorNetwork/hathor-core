@@ -30,7 +30,7 @@ class _SerializationTest(unittest.TestCase):
         self.tx1.weight = 10
         self.tx1.parents = self.manager.get_new_tx_parents()
         self.tx1.timestamp = int(self.clock.seconds())
-        self.tx1.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx1)
         self.manager.propagate_tx(self.tx1)
 
         # Change of parents only, so it's a twin.
@@ -38,7 +38,7 @@ class _SerializationTest(unittest.TestCase):
         self.tx2 = Transaction.create_from_struct(self.tx1.get_struct())
         self.tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         self.tx2.weight = 9
-        self.tx2.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx2)
 
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(self.tx2)

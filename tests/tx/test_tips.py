@@ -53,7 +53,7 @@ class BaseTipsTestCase(unittest.TestCase):
 
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.parents = [tx2.parents[1], tx2.parents[0]]
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
 
         # Propagate a conflicting twin transaction with tx2
         self.manager.propagate_tx(tx3)
@@ -69,7 +69,7 @@ class BaseTipsTestCase(unittest.TestCase):
         # Creating a new block that confirms tx3, then is will become valid and voiding tx2
         new_block = add_new_block(self.manager, propagate=False)
         new_block.parents = [new_block.parents[0], tx1.hash, tx3.hash]
-        new_block.resolve()
+        self.manager.cpu_mining_service.resolve(new_block)
         self.manager.verification_service.verify(new_block)
         self.manager.propagate_tx(new_block, fails_silently=False)
 
@@ -138,7 +138,7 @@ class BaseTipsTestCase(unittest.TestCase):
         # A new tx with custom parents, so tx3 and tx4 will become two tips
         tx4 = add_new_transactions(self.manager, 1, advance_clock=1, propagate=False)[0]
         tx4.parents = [tx1.hash, tx2.hash]
-        tx4.resolve()
+        self.manager.cpu_mining_service.resolve(tx4)
         self.manager.propagate_tx(tx4, fails_silently=False)
         self.manager.reactor.advance(10)
         self.assertCountEqual(self.get_tips(), set([tx4.hash, tx3.hash]))
@@ -146,7 +146,7 @@ class BaseTipsTestCase(unittest.TestCase):
         # A twin tx with tx4, that will be voided initially, then won't change the tips
         tx5 = Transaction.create_from_struct(tx4.get_struct())
         tx5.parents = [tx2.hash, tx3.hash]
-        tx5.resolve()
+        self.manager.cpu_mining_service.resolve(tx5)
         self.manager.propagate_tx(tx5)
         self.manager.reactor.advance(10)
 
@@ -158,7 +158,7 @@ class BaseTipsTestCase(unittest.TestCase):
         # add new tx confirming tx5, which will become valid and tx4 becomes voided
         tx6 = add_new_transactions(self.manager, 1, advance_clock=1, propagate=False)[0]
         tx6.parents = [tx5.hash, tx2.hash]
-        tx6.resolve()
+        self.manager.cpu_mining_service.resolve(tx6)
         self.manager.propagate_tx(tx6, fails_silently=False)
         self.manager.reactor.advance(10)
         self.assertIsNotNone(tx4.get_metadata(force_reload=True).voided_by)

@@ -19,6 +19,8 @@ from json.decoder import JSONDecodeError
 
 import requests
 
+from hathor.mining.cpu_mining_service import CpuMiningService
+
 
 def create_parser() -> ArgumentParser:
     from hathor.cli.util import create_parser
@@ -89,7 +91,7 @@ def execute(args: Namespace) -> None:
         if args.weight:
             twin.weight = args.weight
 
-        twin.resolve()
+        CpuMiningService().resolve(twin)
         if args.human:
             print(twin.to_json())
         else:

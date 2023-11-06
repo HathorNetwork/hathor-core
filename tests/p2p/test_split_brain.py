@@ -293,7 +293,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # will be bigger than the other one
         b = add_new_block(manager2, advance_clock=1, propagate=False)
         b.weight = 5
-        b.resolve()
+        manager2.cpu_mining_service.resolve(b)
         manager2.propagate_tx(b)
         manager2_blocks += 1
 

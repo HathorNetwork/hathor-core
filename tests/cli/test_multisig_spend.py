@@ -74,7 +74,7 @@ class BaseMultiSigSpendTest(unittest.TestCase):
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 

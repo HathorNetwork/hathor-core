@@ -65,12 +65,6 @@ class TokenCreationTransaction(Transaction):
         assert self.hash is not None
         self.tokens = [self.hash]
 
-    def resolve(self, update_time: bool = True) -> bool:
-        ret = super().resolve(update_time)
-        assert self.hash is not None
-        self.tokens = [self.hash]
-        return ret
-
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.
 

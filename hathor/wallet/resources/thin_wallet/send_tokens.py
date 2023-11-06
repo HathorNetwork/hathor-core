@@ -260,7 +260,11 @@ class SendTokensResource(Resource):
         # TODO Tx should be resolved in the frontend
         def _should_stop():
             return context.should_stop_mining_thread
-        context.tx.start_mining(sleep_seconds=self.sleep_seconds, should_stop=_should_stop)
+        self.manager.cpu_mining_service.start_mining(
+            context.tx,
+            sleep_seconds=self.sleep_seconds,
+            should_stop=_should_stop
+        )
         if context.should_stop_mining_thread:
             raise CancelledError()
         context.tx.update_hash()
