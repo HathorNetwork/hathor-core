@@ -780,6 +780,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_reward_locked)
 
         verify_token_info_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_token_info)
+        verify_minted_tokens_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_minted_tokens)
 
         with (
             patch.object(TokenCreationTransactionVerifier, 'verify_pow', verify_pow_wrapped),
@@ -795,6 +796,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(TokenCreationTransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_minted_tokens', verify_minted_tokens_wrapped),
         ):
             self.manager.verification_service.verify(tx)
 
@@ -813,6 +815,7 @@ class BaseVerificationTest(unittest.TestCase):
 
         # TokenCreationTransaction methods
         verify_token_info_wrapped.assert_called_once()
+        verify_minted_tokens_wrapped.assert_called_once()
 
     def test_token_creation_transaction_validate_basic(self) -> None:
         tx = self._get_valid_token_creation_tx()
@@ -907,6 +910,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_reward_locked)
 
         verify_token_info_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_token_info)
+        verify_minted_tokens_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_minted_tokens)
 
         with (
             patch.object(TokenCreationTransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
@@ -924,6 +928,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(TokenCreationTransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
+            patch.object(TokenCreationTransactionVerifier, 'verify_minted_tokens', verify_minted_tokens_wrapped),
         ):
             self.manager.verification_service.validate_full(tx)
 
@@ -944,6 +949,7 @@ class BaseVerificationTest(unittest.TestCase):
 
         # TokenCreationTransaction methods
         verify_token_info_wrapped.assert_called_once()
+        verify_minted_tokens_wrapped.assert_called_once()
 
 
 class SyncV1VerificationTest(unittest.SyncV1Params, BaseVerificationTest):
