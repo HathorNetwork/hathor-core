@@ -10,6 +10,7 @@ from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -19,7 +20,6 @@ from tests.utils import (
     BURN_ADDRESS,
     HAS_ROCKSDB,
     add_blocks_unlock_reward,
-    add_new_blocks,
     add_new_transactions,
     add_new_tx,
     create_tokens,

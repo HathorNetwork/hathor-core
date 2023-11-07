@@ -3,21 +3,13 @@ import pytest
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
+from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
-from hathor.util import iwindows
+from hathor.util import iwindows, not_none
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import (
-    HAS_ROCKSDB,
-    add_blocks_unlock_reward,
-    add_custom_tx,
-    add_new_block,
-    add_new_blocks,
-    add_new_tx,
-    gen_new_tx,
-    get_genesis_key,
-)
+from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
 
 settings = HathorSettings()
 
@@ -933,7 +925,7 @@ class SyncV2MemoryIndexesTest(unittest.SyncV2Params, BaseMemoryIndexesTest):
         # XXX: this test makes use of the internals of the memory deps-index implementation
         deps_index: MemoryDepsIndex = self.manager.tx_storage.indexes.deps
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
         value = 500
         tx = gen_new_tx(self.manager, address, value)
 
@@ -981,7 +973,7 @@ class SyncV2RocksDBIndexesTest(unittest.SyncV2Params, BaseRocksDBIndexesTest):
         # XXX: this test makes use of the internals of the rocksdb deps-index implementation
         deps_index: RocksDBDepsIndex = self.manager.tx_storage.indexes.deps
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
         value = 500
         tx = gen_new_tx(self.manager, address, value)
 

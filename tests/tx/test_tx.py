@@ -4,6 +4,7 @@ from math import isinf, isnan
 
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     BlockWithInputs,
@@ -31,13 +32,7 @@ from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import (
-    add_blocks_unlock_reward,
-    add_new_blocks,
-    add_new_transactions,
-    create_script_with_sigops,
-    get_genesis_key,
-)
+from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
 
 
 class BaseTransactionTest(unittest.TestCase):

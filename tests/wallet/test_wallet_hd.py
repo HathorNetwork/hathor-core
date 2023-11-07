@@ -1,11 +1,12 @@
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction
 from hathor.wallet import HDWallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_block
+from tests.utils import add_blocks_unlock_reward
 
 settings = HathorSettings()
 

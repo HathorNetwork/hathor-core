@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_settings
+from hathor.simulator.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 from hathor.transaction.exceptions import RewardLocked
 from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
-from tests.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager

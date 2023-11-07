@@ -1,7 +1,8 @@
 from hathor.graphviz import GraphvizVisualizer
+from hathor.simulator.utils import gen_new_tx
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import add_custom_tx, gen_new_tx
+from tests.utils import add_custom_tx
 
 
 class BaseConsensusSimulatorTestCase(SimulatorTestCase):

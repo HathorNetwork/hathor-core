@@ -18,11 +18,12 @@ from hathor.event.model.event_data import TxData, TxMetadata
 from hathor.event.model.event_type import EventType
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_double_spending, gen_new_tx
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
-from hathor.util import Random
+from hathor.util import Random, not_none
 
 try:
     import rocksdb  # noqa: F401
@@ -35,10 +36,6 @@ settings = HathorSettings()
 
 # useful for adding blocks to a different wallet
 BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
-
-
-class NoCandidatesError(Exception):
-    pass
 
 
 def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningService) -> bytes:
@@ -130,79 +127,10 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     return tx2
 
 
-def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
-                            tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
-    if tx is None:
-        tx_candidates = manager.get_new_tx_parents()
-        genesis = manager.tx_storage.get_all_genesis()
-        genesis_txs = [tx for tx in genesis if not tx.is_block]
-        # XXX: it isn't possible to double-spend a genesis transaction, thus we remove it from tx_candidates
-        for genesis_tx in genesis_txs:
-            if genesis_tx.hash in tx_candidates:
-                tx_candidates.remove(genesis_tx.hash)
-        if not tx_candidates:
-            raise NoCandidatesError()
-        # assert tx_candidates, 'Must not be empty, otherwise test was wrongly set up'
-        tx_hash = manager.rng.choice(tx_candidates)
-        tx = cast(Transaction, manager.tx_storage.get_transaction(tx_hash))
-
-    txin = manager.rng.choice(tx.inputs)
-
-    from hathor.transaction.scripts import P2PKH, parse_address_script
-    spent_tx = tx.get_spent_tx(txin)
-    spent_txout = spent_tx.outputs[txin.index]
-    p2pkh = parse_address_script(spent_txout.script)
-    assert isinstance(p2pkh, P2PKH)
-
-    from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
-    value = spent_txout.value
-    wallet = manager.wallet
-    assert wallet is not None
-    private_key = wallet.get_private_key(p2pkh.address)
-    inputs = [WalletInputInfo(tx_id=txin.tx_id, index=txin.index, private_key=private_key)]
-
-    address = wallet.get_unused_address(mark_as_used=True)
-    outputs = [WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)]
-
-    tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
-    tx2.storage = manager.tx_storage
-    tx2.weight = weight
-    tx2.timestamp = max(tx.timestamp + 1, int(manager.reactor.seconds()))
-
-    if use_same_parents:
-        tx2.parents = list(tx.parents)
-    else:
-        tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
-
-    manager.cpu_mining_service.resolve(tx2)
-    return tx2
-
-
 def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
                             tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
     tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
     manager.propagate_tx(tx, fails_silently=False)
-    return tx
-
-
-def gen_new_tx(manager, address, value, verify=True):
-    from hathor.transaction import Transaction
-    from hathor.wallet.base_wallet import WalletOutputInfo
-
-    outputs = []
-    outputs.append(WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
-
-    tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
-    tx.storage = manager.tx_storage
-
-    max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-    tx.timestamp = max(max_ts_spent_tx + 1, int(manager.reactor.seconds()))
-
-    tx.weight = 1
-    tx.parents = manager.get_new_tx_parents(tx.timestamp)
-    manager.cpu_mining_service.resolve(tx)
-    if verify:
-        manager.verification_service.verify(tx)
     return tx
 
 
@@ -248,54 +176,6 @@ def add_new_transactions(manager, num_txs, advance_clock=None, propagate=True):
         tx = add_new_tx(manager, address, value, advance_clock, propagate)
         txs.append(tx)
     return txs
-
-
-def add_new_block(manager, advance_clock=None, *, parent_block_hash=None,
-                  data=b'', weight=None, address=None, propagate=True, signal_bits=None):
-    """ Create, resolve and propagate a new block
-
-        :param manager: Manager object to handle the creation
-        :type manager: :py:class:`hathor.manager.HathorManager`
-
-        :return: Block created
-        :rtype: :py:class:`hathor.transaction.block.Block`
-    """
-    block = manager.generate_mining_block(parent_block_hash=parent_block_hash, data=data, address=address)
-    if weight is not None:
-        block.weight = weight
-    if signal_bits is not None:
-        block.signal_bits = signal_bits
-    manager.cpu_mining_service.resolve(block)
-    manager.verification_service.validate_full(block)
-    if propagate:
-        manager.propagate_tx(block, fails_silently=False)
-    if advance_clock:
-        manager.reactor.advance(advance_clock)
-    return block
-
-
-def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash=None,
-                   block_data=b'', weight=None, address=None, signal_bits=None):
-    """ Create, resolve and propagate some blocks
-
-        :param manager: Manager object to handle the creation
-        :type manager: :py:class:`hathor.manager.HathorManager`
-
-        :param num_blocks: Quantity of blocks to be created
-        :type num_blocks: int
-
-        :return: Blocks created
-        :rtype: list[Block]
-    """
-    blocks = []
-    for _ in range(num_blocks):
-        blocks.append(
-            add_new_block(manager, advance_clock, parent_block_hash=parent_block_hash,
-                          data=block_data, weight=weight, address=address, signal_bits=signal_bits)
-        )
-        if parent_block_hash:
-            parent_block_hash = blocks[-1].hash
-    return blocks
 
 
 def add_blocks_unlock_reward(manager):
@@ -505,7 +385,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         deposit_input = []
         while total_reward < deposit_amount:
             block = add_new_block(manager, advance_clock=1, address=address)
-            deposit_input.append(TxInput(block.hash, 0, b''))
+            deposit_input.append(TxInput(not_none(block.hash), 0, b''))
             total_reward += block.outputs[0].value
 
         if total_reward > deposit_amount:
@@ -595,7 +475,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     burn_input = []
     while total_reward < burn_amount:
         block = add_new_block(manager, advance_clock=1, address=address)
-        burn_input.append(TxInput(block.hash, 0, b''))
+        burn_input.append(TxInput(not_none(block.hash), 0, b''))
         total_reward += block.outputs[0].value
 
     # Create the change output, if needed

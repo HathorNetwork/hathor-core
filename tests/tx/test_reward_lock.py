@@ -2,13 +2,14 @@ import pytest
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, get_genesis_key
+from tests.utils import add_blocks_unlock_reward, get_genesis_key
 
 settings = HathorSettings()
 

@@ -3,12 +3,13 @@ import base64
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.daa import TestMode
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import CreateTxResource
 from hathor.transaction.scripts import P2PKH, create_base_script
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx
+from tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
 class BaseTransactionTest(_BaseResourceTest._ResourceTest):
