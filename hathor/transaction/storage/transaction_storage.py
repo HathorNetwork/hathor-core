@@ -37,7 +37,13 @@ from hathor.transaction.storage.exceptions import (
     TransactionIsNotABlock,
     TransactionNotInAllowedScopeError,
 )
-from hathor.transaction.storage.migrations import BaseMigration, MigrationState, change_score_acc_weight_metadata
+from hathor.transaction.storage.migrations import (
+    BaseMigration,
+    MigrationState,
+    add_closest_ancestor_block,
+    change_score_acc_weight_metadata,
+    include_funds_for_first_block,
+)
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -88,6 +94,8 @@ class TransactionStorage(ABC):
     # history of migrations that have to be applied in the order defined here
     _migration_factories: list[type[BaseMigration]] = [
         change_score_acc_weight_metadata.Migration,
+        add_closest_ancestor_block.Migration,
+        include_funds_for_first_block.Migration,
     ]
 
     _migrations: list[BaseMigration]
