@@ -15,10 +15,13 @@
 from struct import error as StructError, pack
 from typing import Any, Optional
 
+from typing_extensions import override
+
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
-from hathor.transaction.transaction import Transaction
+from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.types import TokenUid
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
@@ -212,6 +215,16 @@ class TokenCreationTransaction(Transaction):
         json['token_symbol'] = self.token_symbol
         json['tokens'] = []
         return json
+
+    @override
+    def get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
+        token_dict = super().get_token_info_from_inputs()
+
+        # we add the created token's info to token_dict, as the creation tx allows for mint/melt
+        assert self.hash is not None
+        token_dict[self.hash] = TokenInfo(0, True, True)
+
+        return token_dict
 
 
 def decode_string_utf8(encoded: bytes, key: str) -> str:
