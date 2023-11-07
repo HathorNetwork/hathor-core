@@ -132,7 +132,7 @@ class EventManager:
         for event in _SUBSCRIBE_EVENTS:
             self._pubsub.subscribe(event, self._handle_hathor_event)
 
-    def load_started(self):
+    def load_started(self) -> None:
         if not self._is_running:
             return
 
@@ -142,7 +142,7 @@ class EventManager:
         )
         self._event_storage.save_node_state(NodeState.LOAD)
 
-    def load_finished(self):
+    def load_finished(self) -> None:
         if not self._is_running:
             return
 
@@ -151,6 +151,15 @@ class EventManager:
             event_args=EventArguments(),
         )
         self._event_storage.save_node_state(NodeState.SYNC)
+
+    def full_node_crashed(self) -> None:
+        if not self._is_running:
+            return
+
+        self._handle_event(
+            event_type=EventType.FULL_NODE_CRASHED,
+            event_args=EventArguments(),
+        )
 
     def _handle_hathor_event(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
         """Handles a PubSub 'HathorEvents' event."""

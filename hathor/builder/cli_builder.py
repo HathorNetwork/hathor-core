@@ -26,6 +26,7 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.exception import BuilderError
+from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
@@ -192,7 +193,15 @@ class CliBuilder:
             full_verification = True
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
+        execution_manager = ExecutionManager(
+            tx_storage=tx_storage,
+            event_manager=event_manager,
+        )
+        consensus_algorithm = ConsensusAlgorithm(
+            soft_voided_tx_ids,
+            pubsub=pubsub,
+            execution_manager=execution_manager
+        )
 
         if self._args.x_enable_event_queue:
             self.log.info('--x-enable-event-queue flag provided. '

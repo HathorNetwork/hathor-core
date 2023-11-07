@@ -25,6 +25,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
+from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
@@ -149,6 +150,8 @@ class Builder:
 
         self._soft_voided_tx_ids: Optional[set[bytes]] = None
 
+        self._execution_manager: ExecutionManager | None = None
+
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
@@ -162,8 +165,9 @@ class Builder:
 
         peer_id = self._get_peer_id()
 
+        execution_manager = self._get_or_create_execution_manager()
         soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub, execution_manager=execution_manager)
 
         p2p_manager = self._get_p2p_manager()
 
@@ -304,6 +308,17 @@ class Builder:
         if self._peer_id is not None:
             return self._peer_id
         raise ValueError('peer_id not set')
+
+    def _get_or_create_execution_manager(self) -> ExecutionManager:
+        if self._execution_manager is None:
+            tx_storage = self._get_or_create_tx_storage()
+            event_manager = self._get_or_create_event_manager()
+            self._execution_manager = ExecutionManager(
+                tx_storage=tx_storage,
+                event_manager=event_manager,
+            )
+
+        return self._execution_manager
 
     def _get_or_create_pubsub(self) -> PubSubManager:
         if self._pubsub is None:

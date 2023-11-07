@@ -243,6 +243,15 @@ class HathorManager:
         self.is_started = True
 
         self.log.info('start manager', network=self.network)
+
+        if self.tx_storage.is_full_node_crashed():
+            self.log.error(
+                'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
+                'The storage is not reliable anymore and, because of that, you must remove your storage and do a '
+                'full sync (either from scratch or from a snapshot).'
+            )
+            sys.exit(-1)
+
         # If it's a full verification, we save on the storage that we are starting it
         # this is required because if we stop the initilization in the middle, the metadata
         # saved on the storage is not reliable anymore, only if we finish it
@@ -989,13 +998,7 @@ class HathorManager:
         tx.update_initial_metadata(save=False)
         self.tx_storage.save_transaction(tx)
         self.tx_storage.add_to_indexes(tx)
-        try:
-            self.consensus_algorithm.update(tx)
-        except HathorError as e:
-            if not fails_silently:
-                raise InvalidNewTransaction('consensus update failed') from e
-            self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex, exc_info=True)
-            return False
+        self.consensus_algorithm.update(tx)
 
         assert self.verification_service.validate_full(
             tx,

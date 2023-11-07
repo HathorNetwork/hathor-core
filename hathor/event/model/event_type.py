@@ -25,6 +25,7 @@ class EventType(Enum):
     REORG_STARTED = 'REORG_STARTED'
     REORG_FINISHED = 'REORG_FINISHED'
     VERTEX_METADATA_CHANGED = 'VERTEX_METADATA_CHANGED'
+    FULL_NODE_CRASHED = 'FULL_NODE_CRASHED'
 
     @classmethod
     def from_hathor_event(cls, hathor_event: HathorEvents) -> 'EventType':
@@ -53,4 +54,5 @@ _EVENT_TYPE_TO_EVENT_DATA: dict[EventType, type[BaseEventData]] = {
     EventType.REORG_STARTED: ReorgData,
     EventType.REORG_FINISHED: EmptyData,
     EventType.VERTEX_METADATA_CHANGED: TxData,
+    EventType.FULL_NODE_CRASHED: EmptyData,
 }

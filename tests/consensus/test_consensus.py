@@ -1,6 +1,7 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
 from hathor.conf import HathorSettings
+from hathor.execution_manager import ExecutionManager
 from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
@@ -33,10 +34,15 @@ class BaseConsensusTestCase(unittest.TestCase):
         class MyError(Exception):
             pass
 
+        execution_manager_mock = Mock(spec_set=ExecutionManager)
+        manager.consensus_algorithm._execution_manager = execution_manager_mock
         manager.consensus_algorithm._unsafe_update = MagicMock(side_effect=MyError)
 
-        with self.assertRaises(MyError):
-            manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx, fails_silently=False)
+
+        execution_manager_mock.crash_and_exit.assert_called_once_with(
+            reason=f"Consensus update failed for tx {tx.hash_hex}"
+        )
 
         tx2 = manager.tx_storage.get_transaction(tx.hash)
         meta2 = tx2.get_metadata()
