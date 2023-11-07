@@ -88,7 +88,7 @@ class CreateTxResource(Resource):
             # conservative estimate of the input data size to estimate a valid weight
             tx_input.data = b'\0' * 107
         tx.weight = self.manager.daa.minimum_tx_weight(fake_signed_tx)
-        self.manager.verification_service.verifiers.tx.verify_unsigned_skip_pow(tx)
+        self._verify_unsigned_skip_pow(tx)
 
         if tx.is_double_spending():
             raise InvalidNewTransaction('At least one of your inputs has already been spent.')
@@ -103,6 +103,19 @@ class CreateTxResource(Resource):
             'hex_data': hex_data,
             'data': data,
         })
+
+    def _verify_unsigned_skip_pow(self, tx: Transaction) -> None:
+        """ Same as .verify but skipping pow and signature verification."""
+        assert type(tx) is Transaction
+        verifier = self.manager.verification_service.verifiers.tx
+        verifier.verify_number_of_inputs(tx)
+        verifier.verify_number_of_outputs(tx)
+        verifier.verify_outputs(tx)
+        verifier.verify_sigops_output(tx)
+        verifier.verify_sigops_input(tx)
+        verifier.verify_inputs(tx, skip_script=True)  # need to run verify_inputs first to check if all inputs exist
+        verifier.verify_parents(tx)
+        verifier.verify_sum(tx)
 
 
 CreateTxResource.openapi = {

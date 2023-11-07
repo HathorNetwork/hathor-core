@@ -75,17 +75,6 @@ class TransactionVerifier(VertexVerifier):
         if reject_locked_reward:
             self.verify_reward_locked(tx)
 
-    def verify_unsigned_skip_pow(self, tx: Transaction) -> None:
-        """ Same as .verify but skipping pow and signature verification."""
-        self.verify_number_of_inputs(tx)
-        self.verify_number_of_outputs(tx)
-        self.verify_outputs(tx)
-        self.verify_sigops_output(tx)
-        self.verify_sigops_input(tx)
-        self.verify_inputs(tx, skip_script=True)  # need to run verify_inputs first to check if all inputs exist
-        self.verify_parents(tx)
-        self.verify_sum(tx)
-
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
         assert tx.storage is not None

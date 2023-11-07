@@ -14,11 +14,12 @@
 
 from typing import NamedTuple
 
+from typing_extensions import assert_never
+
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
-from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.block_verifier import BlockVerifier
@@ -107,76 +108,64 @@ class VerificationService:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
         Used by `self.validate_basic`. Should not modify the validation state."""
+        # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
-                assert isinstance(vertex, Block)
+                assert type(vertex) is Block
                 self.verifiers.block.verify_basic(
                     vertex,
                     skip_block_weight_verification=skip_block_weight_verification
                 )
             case TxVersion.MERGE_MINED_BLOCK:
-                assert isinstance(vertex, MergeMinedBlock)
+                assert type(vertex) is MergeMinedBlock
                 self.verifiers.merge_mined_block.verify_basic(
                     vertex,
                     skip_block_weight_verification=skip_block_weight_verification
                 )
             case TxVersion.REGULAR_TRANSACTION:
-                assert isinstance(vertex, Transaction)
+                assert type(vertex) is Transaction
                 self.verifiers.tx.verify_basic(vertex)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert isinstance(vertex, TokenCreationTransaction)
+                assert type(vertex) is TokenCreationTransaction
                 self.verifiers.token_creation_tx.verify_basic(vertex)
             case _:
-                raise NotImplementedError
+                assert_never(vertex.version)
 
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
 
         Used by `self.validate_full`. Should not modify the validation state."""
+        # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
-                assert isinstance(vertex, Block)
+                assert type(vertex) is Block
                 self.verifiers.block.verify(vertex)
             case TxVersion.MERGE_MINED_BLOCK:
-                assert isinstance(vertex, MergeMinedBlock)
+                assert type(vertex) is MergeMinedBlock
                 self.verifiers.merge_mined_block.verify(vertex)
             case TxVersion.REGULAR_TRANSACTION:
-                assert isinstance(vertex, Transaction)
+                assert type(vertex) is Transaction
                 self.verifiers.tx.verify(vertex, reject_locked_reward=reject_locked_reward)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert isinstance(vertex, TokenCreationTransaction)
+                assert type(vertex) is TokenCreationTransaction
                 self.verifiers.token_creation_tx.verify(vertex, reject_locked_reward=reject_locked_reward)
             case _:
-                raise NotImplementedError
+                assert_never(vertex.version)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
+        # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
-                assert isinstance(vertex, Block)
+                assert type(vertex) is Block
                 self.verifiers.block.verify_without_storage(vertex)
             case TxVersion.MERGE_MINED_BLOCK:
-                assert isinstance(vertex, MergeMinedBlock)
+                assert type(vertex) is MergeMinedBlock
                 self.verifiers.merge_mined_block.verify_without_storage(vertex)
             case TxVersion.REGULAR_TRANSACTION:
-                assert isinstance(vertex, Transaction)
+                assert type(vertex) is Transaction
                 self.verifiers.tx.verify_without_storage(vertex)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert isinstance(vertex, TokenCreationTransaction)
+                assert type(vertex) is TokenCreationTransaction
                 self.verifiers.token_creation_tx.verify_without_storage(vertex)
             case _:
-                raise NotImplementedError
-
-    def validate_vertex_error(self, vertex: BaseTransaction) -> tuple[bool, str]:
-        """ Verify if tx is valid and return success and possible error message
-
-            :return: Success if tx is valid and possible error message, if not
-            :rtype: tuple[bool, str]
-        """
-        success = True
-        message = ''
-        try:
-            self.verify(vertex)
-        except TxValidationError as e:
-            success = False
-            message = str(e)
-        return success, message
+                assert_never(vertex.version)
