@@ -153,6 +153,7 @@ class TransactionStreamingClient:
             try:
                 self.manager.verification_service.verify_basic(tx)
             except TxValidationError as e:
+                self.log.debug('invalid vertex', exc_info=True)
                 self.fails(InvalidVertexError(repr(e)))
                 return
 
@@ -185,6 +186,8 @@ class TransactionStreamingClient:
                     break
         else:
             self.log.debug('pending dependencies', counter=len(self._waiting_for))
+            for tx_hash in self._waiting_for:
+                self.log.debug(f'waiting for {tx_hash.hex()}')
 
         if self._tx_received % 100 == 0:
             self.log.debug('tx streaming in progress', txs_received=self._tx_received)
@@ -228,6 +231,7 @@ class TransactionStreamingClient:
         try:
             yield self.sync_agent.on_block_complete(blk, vertex_list)
         except HathorError as e:
+            self.log.debug('invalid vertex', exc_info=True)
             self.fails(InvalidVertexError(repr(e)))
             return False
 

@@ -135,6 +135,7 @@ class BlockchainStreamingClient:
             try:
                 self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
             except HathorError:
+                self.log.debug('invalid vertex', exc_info=True)
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return
         else:
