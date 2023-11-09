@@ -103,7 +103,7 @@ class TransactionStreamingClient:
         if tx.hash not in self._waiting_for:
             if tx.hash in self._db:
                 # This case might happen during a resume, so we just log and keep syncing.
-                self.log.info('duplicated vertex received', tx_id=tx.hash.hex())
+                self.log.debug('duplicated vertex received', tx_id=tx.hash.hex())
             else:
                 # TODO Uncomment the following code to fail on receiving unexpected vertices.
                 # self.fails(UnexpectedVertex(tx.hash.hex()))
@@ -140,7 +140,7 @@ class TransactionStreamingClient:
         """This method is called by the sync agent when a TRANSACTIONS-END message is received."""
         if self._deferred.called:
             return
-        self.log.info('transactions streaming ended', waiting_for=len(self._waiting_for))
+        self.log.info('transactions streaming ended', reason=response_code, waiting_for=len(self._waiting_for))
         self._deferred.callback(response_code)
 
     def _execute_and_prepare_next(self) -> None:

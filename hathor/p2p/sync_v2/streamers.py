@@ -234,7 +234,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
             else:
                 root = self.start_from
                 skip_root = False
-            self.log.debug('sending transactions from block',
+            self.log.debug('iterating over transactions from block',
                            block=not_none(self.current_block.hash).hex(),
                            height=self.current_block.get_height(),
                            start_from=self.start_from,

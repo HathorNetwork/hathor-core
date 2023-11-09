@@ -59,6 +59,9 @@ class _HeightInfo(NamedTuple):
     def __repr__(self):
         return f'_HeightInfo({self.height}, {self.id.hex()})'
 
+    def __str__(self):
+        return f'({self.height}, {self.id.hex()})'
+
     def to_json(self) -> dict[str, Any]:
         return {
             'height': self.height,
@@ -249,7 +252,7 @@ class NodeBlockSync(SyncAgent):
         """
         # XXX: NOT_FOUND is a valid message, but we shouldn't ever receive it unless the other peer is running with a
         #                modified code or if there is a bug
-        self.log.warn('not found? close connection', payload=payload)
+        self.log.warn('vertex not found? close connection', payload=payload)
         self.protocol.send_error_and_close_connection('Unexpected NOT_FOUND')
 
     def handle_error(self, payload: str) -> None:
@@ -325,7 +328,8 @@ class NodeBlockSync(SyncAgent):
         # Are we synced?
         if self.peer_best_block == my_best_block:
             # Yes, we are synced! \o/
-            self.log.info('blocks are synced', best_block=my_best_block)
+            if not self.is_synced():
+                self.log.info('blocks are synced', best_block=my_best_block)
             self.update_synced(True)
             self.send_relay(enable=True)
             self.synced_block = self.peer_best_block
@@ -337,8 +341,9 @@ class NodeBlockSync(SyncAgent):
             common_block_hash = self.tx_storage.indexes.height.get(self.peer_best_block.height)
             if common_block_hash == self.peer_best_block.id:
                 # If yes, nothing to sync from this peer.
-                self.log.info('nothing to sync because peer is behind me at the same best blockchain',
-                              my_best_block=my_best_block, peer_best_block=self.peer_best_block)
+                if not self.is_synced():
+                    self.log.info('nothing to sync because peer is behind me at the same best blockchain',
+                                  my_best_block=my_best_block, peer_best_block=self.peer_best_block)
                 self.update_synced(True)
                 self.send_relay(enable=True)
                 self.synced_block = self.peer_best_block
@@ -476,6 +481,9 @@ class NodeBlockSync(SyncAgent):
                                    start_block: _HeightInfo,
                                    end_block: _HeightInfo) -> Deferred[StreamEnd]:
         """Request peer to start streaming blocks to us."""
+        self.log.info('requesting blocks streaming',
+                      start_block=start_block,
+                      end_block=end_block)
         self._blk_streaming_client = BlockchainStreamingClient(self, start_block, end_block)
         quantity = self._blk_streaming_client._blk_max_quantity
         self.send_get_next_blocks(start_block.id, end_block.id, quantity)
@@ -508,7 +516,7 @@ class NodeBlockSync(SyncAgent):
         lo = _HeightInfo(height=0, id=self._settings.GENESIS_BLOCK_HASH)
 
         while hi.height - lo.height > 1:
-            self.log.info('find_best_common_block n-ary search query', lo=lo, hi=hi)
+            self.log.debug('find_best_common_block n-ary search query', lo=lo, hi=hi)
             step = math.ceil((hi.height - lo.height) / 10)
             heights = list(range(lo.height, hi.height, step))
             heights.append(hi.height)
@@ -1102,8 +1110,8 @@ class NodeBlockSync(SyncAgent):
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
             if tx.can_validate_full():
-                self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+                self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
                 self.manager.on_new_tx(tx, propagate_to_peers=True)
             else:
-                self.log.info('skipping tx received in real time from peer',
-                              tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+                self.log.debug('skipping tx received in real time from peer',
+                               tx=tx.hash_hex, peer=self.protocol.get_peer_id())

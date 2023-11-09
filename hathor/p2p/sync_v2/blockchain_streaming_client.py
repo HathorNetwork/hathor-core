@@ -111,7 +111,7 @@ class BlockchainStreamingClient:
             self._blk_repeated += 1
             is_duplicated = True
             if self._blk_repeated > self.max_repeated_blocks:
-                self.log.debug('too many repeated block received', total_repeated=self._blk_repeated)
+                self.log.info('too many repeated block received', total_repeated=self._blk_repeated)
                 self.fails(TooManyRepeatedVerticesError())
             self._last_received_block = blk
             return
