@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput
+from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     DuplicatedParents,
@@ -186,7 +186,7 @@ class TransactionVerifier(VertexVerifier):
         :raises InvalidToken: when there's an error in token operations
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        token_dict = self.get_complete_token_info(tx)
+        token_dict = tx.get_complete_token_info()
         self.verify_authorities_and_deposit(token_dict)
 
     def verify_reward_locked(self, tx: Transaction) -> None:
@@ -258,43 +258,3 @@ class TransactionVerifier(VertexVerifier):
                 htr_info.amount,
                 htr_expected_amount,
             ))
-
-    def update_token_info_from_outputs(self, tx: Transaction, *, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        """Iterate over the outputs and add values to token info dict. Updates the dict in-place.
-
-        Also, checks if no token has authorities on the outputs not present on the inputs
-
-        :raises InvalidToken: when there's an error in token operations
-        """
-        # iterate over outputs and add values to token_dict
-        for index, tx_output in enumerate(tx.outputs):
-            token_uid = tx.get_token_uid(tx_output.get_token_index())
-            token_info = token_dict.get(token_uid)
-            if token_info is None:
-                raise InvalidToken('no inputs for token {}'.format(token_uid.hex()))
-            else:
-                # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
-                if tx_output.can_mint_token() and not token_info.can_mint:
-                    raise InvalidToken('output has mint authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
-                if tx_output.can_melt_token() and not token_info.can_melt:
-                    raise InvalidToken('output has melt authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
-
-                if tx_output.is_token_authority():
-                    # make sure we only have authorities that we know of
-                    if tx_output.value > TxOutput.ALL_AUTHORITIES:
-                        raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
-                else:
-                    # for regular outputs, just subtract from the total amount
-                    sum_tokens = token_info.amount + tx_output.value
-                    token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
-
-    def get_complete_token_info(self, tx: Transaction) -> dict[TokenUid, TokenInfo]:
-        """
-        Get a complete token info dict, including data from both inputs and outputs.
-        """
-        token_dict = tx.get_token_info_from_inputs()
-        self.update_token_info_from_outputs(tx, token_dict=token_dict)
-
-        return token_dict
