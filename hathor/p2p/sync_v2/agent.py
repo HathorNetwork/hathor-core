@@ -151,6 +151,10 @@ class NodeBlockSync(SyncAgent):
         self._lc_run = LoopingCall(self.run_sync)
         self._lc_run.clock = self.reactor
         self._is_running = False
+        self._sync_started_at: float = 0
+
+        # Maximum running time to consider a sync stale.
+        self.max_running_time: int = 30 * 60  # seconds
 
         # Whether we propagate transactions or not
         self._is_relaying = False
@@ -265,6 +269,16 @@ class NodeBlockSync(SyncAgent):
     def update_synced(self, synced: bool) -> None:
         self._synced = synced
 
+    def watchdog(self) -> None:
+        """Close connection if sync is stale."""
+        if not self._is_running:
+            return
+
+        dt = self.reactor.seconds() - self._sync_started_at
+        if dt > self.max_running_time:
+            self.log.warn('stale syncing detected, closing connection')
+            self.protocol.send_error_and_close_connection('stale syncing')
+
     @inlineCallbacks
     def run_sync(self) -> Generator[Any, Any, None]:
         """ Async step of the sync algorithm.
@@ -277,8 +291,10 @@ class NodeBlockSync(SyncAgent):
         if self._is_running:
             # Already running...
             self.log.debug('already running')
+            self.watchdog()
             return
         self._is_running = True
+        self._sync_started_at = self.reactor.seconds()
         try:
             yield self._run_sync()
         except Exception:
