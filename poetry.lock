@@ -1379,14 +1379,15 @@ name = "python-healthchecklib"
 version = "0.1.0"
 description = "Opinionated healthcheck library"
 optional = false
-python-versions = ">=3.8.1,<4.0.0"
-files = [
-    {file = "python_healthchecklib-0.1.0-py3-none-any.whl", hash = "sha256:20cdea1924d0605b390b87e7c0fa835f332ffd5fad70c72cc0ee679750b930d5"},
-]
+python-versions = "^3.8.1"
+files = []
+develop = false
 
 [package.source]
-type = "file"
-url = "../python-healthchecklib/dist/python_healthchecklib-0.1.0-py3-none-any.whl"
+type = "git"
+url = "https://github.com/hathornetwork/python-healthcheck-lib"
+reference = "HEAD"
+resolved_reference = "a01437ca68a16dc8b9d451676926431c08bfe51e"
 
 [[package]]
 name = "pywin32"
@@ -2149,4 +2150,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4"
-content-hash = "1a2830d269a9d5a6fe449b5e884438b5f17a5dacd89110b7ada5af2026c4ab97"
+content-hash = "62f6d2fea633d6196a80d5f8ae89ae69054d91b00d5e6477920c972414814356"
