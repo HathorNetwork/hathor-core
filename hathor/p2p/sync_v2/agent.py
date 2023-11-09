@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
-from twisted.internet.task import LoopingCall
+from twisted.internet.task import LoopingCall, deferLater
 
 from hathor.conf.get_settings import get_settings
 from hathor.p2p.messages import ProtocolMessages
@@ -569,10 +569,12 @@ class NodeBlockSync(SyncAgent):
         self.log.debug('find_best_common_block n-ary search finished', lo=lo, hi=hi)
         return lo
 
-    def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> None:
+    @inlineCallbacks
+    def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> Generator[Any, Any, None]:
         """This method is called when a block and its transactions are downloaded."""
         for tx in vertex_list:
             self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
+            yield deferLater(self.reactor, 0, lambda: None)
 
         self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
 
