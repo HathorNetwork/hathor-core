@@ -17,7 +17,12 @@ from typing import TYPE_CHECKING, Iterator
 from structlog import get_logger
 from twisted.internet.defer import Deferred
 
-from hathor.p2p.sync_v2.exception import InvalidVertexError, StreamingError, TooManyVerticesReceivedError
+from hathor.p2p.sync_v2.exception import (
+    InvalidVertexError,
+    StreamingError,
+    TooManyVerticesReceivedError,
+    UnexpectedVertex,
+)
 from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import BaseTransaction
 from hathor.transaction.exceptions import HathorError, TxValidationError
@@ -105,9 +110,8 @@ class TransactionStreamingClient:
                 # This case might happen during a resume, so we just log and keep syncing.
                 self.log.debug('duplicated vertex received', tx_id=tx.hash.hex())
             else:
-                # TODO Uncomment the following code to fail on receiving unexpected vertices.
-                # self.fails(UnexpectedVertex(tx.hash.hex()))
                 self.log.info('unexpected vertex received', tx_id=tx.hash.hex())
+                self.fails(UnexpectedVertex(tx.hash.hex()))
             return
         self._waiting_for.remove(tx.hash)
 
