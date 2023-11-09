@@ -200,6 +200,30 @@ class BaseVerificationTest(unittest.TestCase):
         verify_weight_wrapped.assert_called_once()
         verify_reward_wrapped.assert_called_once()
 
+        # validation should be BASIC
+        self.assertEqual(block.get_metadata().validation, ValidationState.BASIC)
+
+        # full validation should still pass and the validation updated to FULL
+        self.manager.verification_service.validate_full(block)
+        self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
+
+        # and if running basic validation again it shouldn't validate or change the validation state
+        verify_weight_wrapped2 = Mock(wraps=self.verifiers.block.verify_weight)
+        verify_reward_wrapped2 = Mock(wraps=self.verifiers.block.verify_reward)
+
+        with (
+            patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped2),
+            patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped2),
+        ):
+            self.manager.verification_service.validate_basic(block)
+
+        # Block methods
+        verify_weight_wrapped2.assert_not_called()
+        verify_reward_wrapped2.assert_not_called()
+
+        # validation should still be FULL, it must not be BASIC
+        self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
+
     def test_block_validate_full(self) -> None:
         block = self._get_valid_block()
 
@@ -352,6 +376,30 @@ class BaseVerificationTest(unittest.TestCase):
         verify_weight_wrapped.assert_called_once()
         verify_reward_wrapped.assert_called_once()
 
+        # validation should be BASIC
+        self.assertEqual(block.get_metadata().validation, ValidationState.BASIC)
+
+        # full validation should still pass and the validation updated to FULL
+        self.manager.verification_service.validate_full(block)
+        self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
+
+        # and if running basic validation again it shouldn't validate or change the validation state
+        verify_weight_wrapped2 = Mock(wraps=self.verifiers.block.verify_weight)
+        verify_reward_wrapped2 = Mock(wraps=self.verifiers.block.verify_reward)
+
+        with (
+            patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped2),
+            patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped2),
+        ):
+            self.manager.verification_service.validate_basic(block)
+
+        # Block methods
+        verify_weight_wrapped2.assert_not_called()
+        verify_reward_wrapped2.assert_not_called()
+
+        # validation should still be FULL, it must not be BASIC
+        self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
+
     def test_merge_mined_block_validate_full(self) -> None:
         block = self._get_valid_merge_mined_block()
 
@@ -502,6 +550,8 @@ class BaseVerificationTest(unittest.TestCase):
         verify_reward_locked_wrapped.assert_called_once()
 
     def test_transaction_validate_basic(self) -> None:
+        # add enough blocks so that it can be fully validated later on the tests
+        add_blocks_unlock_reward(self.manager)
         tx = self._get_valid_tx()
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -531,6 +581,45 @@ class BaseVerificationTest(unittest.TestCase):
         verify_outputs_wrapped.assert_called_once()
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
+
+        # validation should be BASIC
+        self.assertEqual(tx.get_metadata().validation, ValidationState.BASIC)
+
+        # full validation should still pass and the validation updated to FULL
+        self.manager.verification_service.validate_full(tx)
+        self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
+
+        # and if running basic validation again it shouldn't validate or change the validation state
+        verify_parents_basic_wrapped2 = Mock(wraps=self.verifiers.tx.verify_parents_basic)
+        verify_weight_wrapped2 = Mock(wraps=self.verifiers.tx.verify_weight)
+        verify_pow_wrapped2 = Mock(wraps=self.verifiers.tx.verify_pow)
+        verify_number_of_inputs_wrapped2 = Mock(wraps=self.verifiers.tx.verify_number_of_inputs)
+        verify_outputs_wrapped2 = Mock(wraps=self.verifiers.tx.verify_outputs)
+        verify_number_of_outputs_wrapped2 = Mock(wraps=self.verifiers.tx.verify_number_of_outputs)
+        verify_sigops_output_wrapped2 = Mock(wraps=self.verifiers.tx.verify_sigops_output)
+
+        with (
+            patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped2),
+            patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped2),
+            patch.object(TransactionVerifier, 'verify_pow', verify_pow_wrapped2),
+            patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped2),
+            patch.object(TransactionVerifier, 'verify_outputs', verify_outputs_wrapped2),
+            patch.object(TransactionVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped2),
+            patch.object(TransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
+        ):
+            self.manager.verification_service.validate_basic(tx)
+
+        # Transaction methods
+        verify_parents_basic_wrapped2.assert_not_called()
+        verify_weight_wrapped2.assert_not_called()
+        verify_pow_wrapped2.assert_not_called()
+        verify_number_of_inputs_wrapped2.assert_not_called()
+        verify_outputs_wrapped2.assert_not_called()
+        verify_number_of_outputs_wrapped2.assert_not_called()
+        verify_sigops_output_wrapped2.assert_not_called()
+
+        # validation should still be FULL, it must not be BASIC
+        self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
     def test_transaction_validate_full(self) -> None:
         add_blocks_unlock_reward(self.manager)
@@ -581,6 +670,41 @@ class BaseVerificationTest(unittest.TestCase):
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
+
+        # validation should be FULL
+        self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
+
+        # and if running full validation again it shouldn't validate or change the validation state
+        verify_parents_basic_wrapped2 = Mock(wraps=self.verifiers.tx.verify_parents_basic)
+        verify_weight_wrapped2 = Mock(wraps=self.verifiers.tx.verify_weight)
+        verify_pow_wrapped2 = Mock(wraps=self.verifiers.tx.verify_pow)
+        verify_number_of_inputs_wrapped2 = Mock(wraps=self.verifiers.tx.verify_number_of_inputs)
+        verify_outputs_wrapped2 = Mock(wraps=self.verifiers.tx.verify_outputs)
+        verify_number_of_outputs_wrapped2 = Mock(wraps=self.verifiers.tx.verify_number_of_outputs)
+        verify_sigops_output_wrapped2 = Mock(wraps=self.verifiers.tx.verify_sigops_output)
+
+        with (
+            patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped2),
+            patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped2),
+            patch.object(TransactionVerifier, 'verify_pow', verify_pow_wrapped2),
+            patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped2),
+            patch.object(TransactionVerifier, 'verify_outputs', verify_outputs_wrapped2),
+            patch.object(TransactionVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped2),
+            patch.object(TransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
+        ):
+            self.manager.verification_service.validate_basic(tx)
+
+        # Transaction methods
+        verify_parents_basic_wrapped2.assert_not_called()
+        verify_weight_wrapped2.assert_not_called()
+        verify_pow_wrapped2.assert_not_called()
+        verify_number_of_inputs_wrapped2.assert_not_called()
+        verify_outputs_wrapped2.assert_not_called()
+        verify_number_of_outputs_wrapped2.assert_not_called()
+        verify_sigops_output_wrapped2.assert_not_called()
+
+        # validation should still be FULL, it must not be BASIC
+        self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
     def test_token_creation_transaction_verify_basic(self) -> None:
         tx = self._get_valid_token_creation_tx()
@@ -692,6 +816,7 @@ class BaseVerificationTest(unittest.TestCase):
 
     def test_token_creation_transaction_validate_basic(self) -> None:
         tx = self._get_valid_token_creation_tx()
+        tx.get_metadata().validation = ValidationState.INITIAL
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_parents_basic)
         verify_weight_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_weight)
@@ -721,6 +846,47 @@ class BaseVerificationTest(unittest.TestCase):
         verify_outputs_wrapped.assert_called_once()
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
+
+        # validation should be BASIC
+        self.assertEqual(tx.get_metadata().validation, ValidationState.BASIC)
+
+        # full validation should still pass and the validation updated to FULL
+        self.manager.verification_service.validate_full(tx)
+        self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
+
+        # and if running basic validation again it shouldn't validate or change the validation state
+        verify_parents_basic_wrapped2 = Mock(wraps=self.verifiers.token_creation_tx.verify_parents_basic)
+        verify_weight_wrapped2 = Mock(wraps=self.verifiers.token_creation_tx.verify_weight)
+        verify_pow_wrapped2 = Mock(wraps=self.verifiers.token_creation_tx.verify_pow)
+        verify_number_of_inputs_wrapped2 = Mock(wraps=self.verifiers.token_creation_tx.verify_number_of_inputs)
+        verify_outputs_wrapped2 = Mock(wraps=self.verifiers.token_creation_tx.verify_outputs)
+        verify_number_of_outputs_wrapped2 = Mock(wraps=self.verifiers.token_creation_tx.verify_number_of_outputs)
+        verify_sigops_output_wrapped2 = Mock(wraps=self.verifiers.token_creation_tx.verify_sigops_output)
+
+        with (
+            patch.object(TokenCreationTransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped2),
+            patch.object(TokenCreationTransactionVerifier, 'verify_weight', verify_weight_wrapped2),
+            patch.object(TokenCreationTransactionVerifier, 'verify_pow', verify_pow_wrapped2),
+            patch.object(TokenCreationTransactionVerifier, 'verify_number_of_inputs',
+                         verify_number_of_inputs_wrapped2),
+            patch.object(TokenCreationTransactionVerifier, 'verify_outputs', verify_outputs_wrapped2),
+            patch.object(TokenCreationTransactionVerifier, 'verify_number_of_outputs',
+                         verify_number_of_outputs_wrapped2),
+            patch.object(TokenCreationTransactionVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
+        ):
+            self.manager.verification_service.validate_basic(tx)
+
+        # Transaction methods
+        verify_parents_basic_wrapped2.assert_not_called()
+        verify_weight_wrapped2.assert_not_called()
+        verify_pow_wrapped2.assert_not_called()
+        verify_number_of_inputs_wrapped2.assert_not_called()
+        verify_outputs_wrapped2.assert_not_called()
+        verify_number_of_outputs_wrapped2.assert_not_called()
+        verify_sigops_output_wrapped2.assert_not_called()
+
+        # validation should still be FULL, it must not be BASIC
+        self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
     def test_token_creation_transaction_validate_full(self) -> None:
         tx = self._get_valid_token_creation_tx()

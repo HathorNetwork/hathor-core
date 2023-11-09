@@ -66,6 +66,10 @@ class VerificationService:
 
         If no exception is raised, the ValidationState will end up as `BASIC` and return `True`.
         """
+        # XXX: skip validation if previously validated
+        if vertex.get_metadata().validation.is_at_least_basic():
+            return True
+
         self.verify_basic(vertex, skip_block_weight_verification=skip_block_weight_verification)
         vertex.set_validation(ValidationState.BASIC)
 
