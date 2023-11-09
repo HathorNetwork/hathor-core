@@ -193,9 +193,6 @@ class NodeBlockSync(SyncAgent):
         if not self._is_enabled:
             self.log.debug('sync is disabled')
             return
-        if not self.is_synced():
-            # XXX Should we accept any tx while I am not synced?
-            return
 
         # XXX When we start having many txs/s this become a performance issue
         # Then we could change this to be a streaming of real time data with
