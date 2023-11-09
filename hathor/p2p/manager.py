@@ -98,13 +98,11 @@ class ConnectionsManager:
                  rng: Random,
                  whitelist_only: bool,
                  enable_sync_v1: bool,
-                 enable_sync_v2: bool,
-                 enable_sync_v1_1: bool) -> None:
-        from hathor.p2p.sync_v1.factory_v1_0 import SyncV10Factory
-        from hathor.p2p.sync_v1.factory_v1_1 import SyncV11Factory
+                 enable_sync_v2: bool) -> None:
+        from hathor.p2p.sync_v1.factory import SyncV11Factory
         from hathor.p2p.sync_v2.factory import SyncV2Factory
 
-        if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
+        if not (enable_sync_v1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
         self.log = logger.new()
@@ -187,7 +185,6 @@ class ConnectionsManager:
         self.whitelist_only = whitelist_only
 
         self.enable_sync_v1 = enable_sync_v1
-        self.enable_sync_v1_1 = enable_sync_v1_1
         self.enable_sync_v2 = enable_sync_v2
 
         # Timestamp when the last discovery ran
@@ -196,8 +193,6 @@ class ConnectionsManager:
         # sync-manager factories
         self._sync_factories = {}
         if enable_sync_v1:
-            self._sync_factories[SyncVersion.V1] = SyncV10Factory(self)
-        if enable_sync_v1_1:
             self._sync_factories[SyncVersion.V1_1] = SyncV11Factory(self)
         if enable_sync_v2:
             self._sync_factories[SyncVersion.V2] = SyncV2Factory(self)
@@ -289,9 +284,10 @@ class ConnectionsManager:
         if self.manager.has_sync_version_capability():
             return set(self._sync_factories.keys())
         else:
-            assert SyncVersion.V1 in self._sync_factories, 'sync-versions capability disabled, but sync-v1 not enabled'
+            assert SyncVersion.V1_1 in self._sync_factories, \
+                   'sync-versions capability disabled, but sync-v1 not enabled'
             # XXX: this is to make it easy to simulate old behavior if we disable the sync-version capability
-            return {SyncVersion.V1}
+            return {SyncVersion.V1_1}
 
     def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
         """Get the sync factory for a given version, support MUST be checked beforehand or it will raise an assert."""

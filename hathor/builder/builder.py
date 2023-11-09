@@ -140,8 +140,7 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._enable_sync_v1: bool = False
-        self._enable_sync_v1_1: bool = True
+        self._enable_sync_v1: bool = True
         self._enable_sync_v2: bool = False
 
         self._enable_stratum_server: Optional[bool] = None
@@ -350,7 +349,6 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
             enable_sync_v1=self._enable_sync_v1,
-            enable_sync_v1_1=self._enable_sync_v1_1,
             enable_sync_v2=self._enable_sync_v2,
         )
         return p2p_manager
@@ -637,11 +635,6 @@ class Builder:
         self._enable_sync_v1 = enable_sync_v1
         return self
 
-    def set_enable_sync_v1_1(self, enable_sync_v1_1: bool) -> 'Builder':
-        self.check_if_can_modify()
-        self._enable_sync_v1_1 = enable_sync_v1_1
-        return self
-
     def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v2 = enable_sync_v2
@@ -655,16 +648,6 @@ class Builder:
     def disable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v1 = False
-        return self
-
-    def enable_sync_v1_1(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._enable_sync_v1_1 = True
-        return self
-
-    def disable_sync_v1_1(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._enable_sync_v1_1 = False
         return self
 
     def enable_sync_v2(self) -> 'Builder':

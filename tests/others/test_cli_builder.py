@@ -57,7 +57,6 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
-        self.assertNotIn(SyncVersion.V1, manager.connections._sync_factories)
         self.assertIn(SyncVersion.V1_1, manager.connections._sync_factories)
         self.assertNotIn(SyncVersion.V2, manager.connections._sync_factories)
         self.assertFalse(self.resources_builder._built_prometheus)
@@ -102,22 +101,14 @@ class BuilderTestCase(unittest.TestCase):
     def test_memory_storage_with_rocksdb_indexes(self):
         self._build_with_error(['--memory-storage', '--x-rocksdb-indexes'], 'RocksDB indexes require RocksDB data')
 
-    def test_sync_v1_0_legacy(self):
-        manager = self._build(['--memory-storage', '--x-enable-legacy-sync-v1_0'])
-        self.assertIn(SyncVersion.V1, manager.connections._sync_factories)
-        self.assertIn(SyncVersion.V1_1, manager.connections._sync_factories)
-        self.assertNotIn(SyncVersion.V2, manager.connections._sync_factories)
-
     def test_sync_bridge(self):
         manager = self._build(['--memory-storage', '--x-sync-bridge'])
-        self.assertNotIn(SyncVersion.V1, manager.connections._sync_factories)
         self.assertIn(SyncVersion.V1_1, manager.connections._sync_factories)
         self.assertIn(SyncVersion.V2, manager.connections._sync_factories)
 
     def test_sync_v2_only(self):
         manager = self._build(['--memory-storage', '--x-sync-v2-only'])
         self.assertNotIn(SyncVersion.V1_1, manager.connections._sync_factories)
-        self.assertNotIn(SyncVersion.V1, manager.connections._sync_factories)
         self.assertIn(SyncVersion.V2, manager.connections._sync_factories)
 
     def test_keypair_wallet(self):

@@ -181,4 +181,4 @@ def _parse_sync_versions(hello_data: dict[str, Any]) -> set[SyncVersion]:
         return set(SyncVersion(x) for x in recognized_values)
     else:
         # XXX: implied value when sync-version capability isn't present
-        return {SyncVersion.V1}
+        return {SyncVersion.V1_1}

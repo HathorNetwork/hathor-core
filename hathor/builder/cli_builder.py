@@ -152,8 +152,7 @@ class CliBuilder:
 
         hostname = self.get_hostname()
         network = settings.NETWORK_NAME
-        enable_sync_v1 = self._args.x_enable_legacy_sync_v1_0
-        enable_sync_v1_1 = not self._args.x_sync_v2_only
+        enable_sync_v1 = not self._args.x_sync_v2_only
         enable_sync_v2 = self._args.x_sync_v2_only or self._args.x_sync_bridge
 
         pubsub = PubSubManager(reactor)
@@ -235,7 +234,6 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
             enable_sync_v1=enable_sync_v1,
-            enable_sync_v1_1=enable_sync_v1_1,
             enable_sync_v2=enable_sync_v2,
         )
 
