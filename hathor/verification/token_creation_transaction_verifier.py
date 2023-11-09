@@ -40,7 +40,7 @@ class TokenCreationTransactionVerifier(TransactionVerifier):
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
         assert isinstance(tx, TokenCreationTransaction)
-        token_dict = self.get_complete_token_info(tx)
+        token_dict = tx.get_complete_token_info()
 
         # make sure tokens are being minted
         token_info = token_dict[not_none(tx.hash)]
