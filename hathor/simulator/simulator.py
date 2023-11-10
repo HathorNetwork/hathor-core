@@ -259,11 +259,7 @@ def _build_vertex_verifiers(
     """
     return VertexVerifiers(
         block=SimulatorBlockVerifier(settings=settings, daa=daa, feature_service=feature_service),
-        merge_mined_block=SimulatorMergeMinedBlockVerifier(
-            settings=settings,
-            daa=daa,
-            feature_service=feature_service
-        ),
+        merge_mined_block=SimulatorMergeMinedBlockVerifier(),
         tx=SimulatorTransactionVerifier(settings=settings, daa=daa),
         token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=settings, daa=daa),
     )
