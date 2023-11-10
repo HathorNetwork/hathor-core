@@ -360,7 +360,7 @@ class BaseTransactionTest(unittest.TestCase):
             storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
-            self._verifiers.block.verify_outputs(block)
+            self._verifiers.vertex.verify_outputs(block)
 
     def test_tx_number_parents(self):
         genesis_block = self.genesis_blocks[0]

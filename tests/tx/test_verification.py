@@ -123,20 +123,20 @@ class BaseVerificationTest(unittest.TestCase):
     def test_block_verify_without_storage(self) -> None:
         block = self._get_valid_block()
 
-        vertex_verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_output_token_indexes_wrapped = Mock(wraps=self.verifiers.block.verify_output_token_indexes)
         verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
 
         with (
-            patch.object(VertexVerifier, 'verify_outputs', vertex_verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
@@ -144,12 +144,12 @@ class BaseVerificationTest(unittest.TestCase):
             self.manager.verification_service.verify_without_storage(block)
 
         # Vertex methods
-        vertex_verify_outputs_wrapped.assert_called_once()
+        verify_outputs_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
         verify_no_inputs_wrapped.assert_called_once()
-        verify_outputs_wrapped.assert_called_once()
+        verify_output_token_indexes_wrapped.assert_called_once()
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_data_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
@@ -157,11 +157,11 @@ class BaseVerificationTest(unittest.TestCase):
     def test_block_verify(self) -> None:
         block = self._get_valid_block()
 
-        vertex_verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_output_token_indexes_wrapped = Mock(wraps=self.verifiers.block.verify_output_token_indexes)
         verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
@@ -170,10 +170,10 @@ class BaseVerificationTest(unittest.TestCase):
         verify_mandatory_signaling_wrapped = Mock(wraps=self.verifiers.block.verify_mandatory_signaling)
 
         with (
-            patch.object(VertexVerifier, 'verify_outputs', vertex_verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
@@ -184,12 +184,12 @@ class BaseVerificationTest(unittest.TestCase):
             self.manager.verification_service.verify(block)
 
         # Vertex methods
-        vertex_verify_outputs_wrapped.assert_called_once()
+        verify_outputs_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
         verify_no_inputs_wrapped.assert_called_once()
-        verify_outputs_wrapped.assert_called_once()
+        verify_output_token_indexes_wrapped.assert_called_once()
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_data_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
@@ -240,11 +240,11 @@ class BaseVerificationTest(unittest.TestCase):
     def test_block_validate_full(self) -> None:
         block = self._get_valid_block()
 
-        vertex_verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_output_token_indexes_wrapped = Mock(wraps=self.verifiers.block.verify_output_token_indexes)
         verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
@@ -255,10 +255,10 @@ class BaseVerificationTest(unittest.TestCase):
         verify_mandatory_signaling_wrapped = Mock(wraps=self.verifiers.block.verify_mandatory_signaling)
 
         with (
-            patch.object(VertexVerifier, 'verify_outputs', vertex_verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
@@ -271,12 +271,12 @@ class BaseVerificationTest(unittest.TestCase):
             self.manager.verification_service.validate_full(block)
 
         # Vertex methods
-        vertex_verify_outputs_wrapped.assert_called_once()
+        verify_outputs_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
         verify_no_inputs_wrapped.assert_called_once()
-        verify_outputs_wrapped.assert_called_once()
+        verify_output_token_indexes_wrapped.assert_called_once()
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_data_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
@@ -305,11 +305,11 @@ class BaseVerificationTest(unittest.TestCase):
     def test_merge_mined_block_verify_without_storage(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        vertex_verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_output_token_indexes_wrapped = Mock(wraps=self.verifiers.block.verify_output_token_indexes)
         verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
@@ -317,10 +317,10 @@ class BaseVerificationTest(unittest.TestCase):
         verify_aux_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_aux_pow)
 
         with (
-            patch.object(VertexVerifier, 'verify_outputs', vertex_verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
@@ -329,12 +329,12 @@ class BaseVerificationTest(unittest.TestCase):
             self.manager.verification_service.verify_without_storage(block)
 
         # Vertex methods
-        vertex_verify_outputs_wrapped.assert_called_once()
+        verify_outputs_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
         verify_no_inputs_wrapped.assert_called_once()
-        verify_outputs_wrapped.assert_called_once()
+        verify_output_token_indexes_wrapped.assert_called_once()
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_data_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
@@ -345,11 +345,11 @@ class BaseVerificationTest(unittest.TestCase):
     def test_merge_mined_block_verify(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        vertex_verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_output_token_indexes_wrapped = Mock(wraps=self.verifiers.block.verify_output_token_indexes)
         verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
@@ -360,10 +360,10 @@ class BaseVerificationTest(unittest.TestCase):
         verify_aux_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_aux_pow)
 
         with (
-            patch.object(VertexVerifier, 'verify_outputs', vertex_verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
@@ -375,12 +375,12 @@ class BaseVerificationTest(unittest.TestCase):
             self.manager.verification_service.verify(block)
 
         # Vertex methods
-        vertex_verify_outputs_wrapped.assert_called_once()
+        verify_outputs_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
         verify_no_inputs_wrapped.assert_called_once()
-        verify_outputs_wrapped.assert_called_once()
+        verify_output_token_indexes_wrapped.assert_called_once()
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_data_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
@@ -434,11 +434,11 @@ class BaseVerificationTest(unittest.TestCase):
     def test_merge_mined_block_validate_full(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        vertex_verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_output_token_indexes_wrapped = Mock(wraps=self.verifiers.block.verify_output_token_indexes)
         verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_number_of_outputs)
         verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
@@ -451,10 +451,10 @@ class BaseVerificationTest(unittest.TestCase):
         verify_aux_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_aux_pow)
 
         with (
-            patch.object(VertexVerifier, 'verify_outputs', vertex_verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
@@ -468,12 +468,12 @@ class BaseVerificationTest(unittest.TestCase):
             self.manager.verification_service.validate_full(block)
 
         # Vertex methods
-        vertex_verify_outputs_wrapped.assert_called_once()
+        verify_outputs_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
         verify_no_inputs_wrapped.assert_called_once()
-        verify_outputs_wrapped.assert_called_once()
+        verify_output_token_indexes_wrapped.assert_called_once()
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_data_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
