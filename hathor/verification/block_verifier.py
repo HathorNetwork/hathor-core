@@ -15,7 +15,6 @@
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
-from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.exceptions import (
     BlockMustSignalError,
@@ -27,8 +26,6 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.verification.vertex_verifier import VertexVerifier
-
-cpu = get_cpu_profiler()
 
 
 class BlockVerifier(VertexVerifier):
@@ -43,45 +40,6 @@ class BlockVerifier(VertexVerifier):
     ) -> None:
         super().__init__(settings=settings, daa=daa)
         self._feature_service = feature_service
-
-    def verify_basic(self, block: Block, *, skip_block_weight_verification: bool = False) -> None:
-        """Partially run validations, the ones that need parents/inputs are skipped."""
-        if not skip_block_weight_verification:
-            self.verify_weight(block)
-        self.verify_reward(block)
-
-    @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
-    def verify(self, block: Block) -> None:
-        """
-            (1) confirms at least two pending transactions and references last block
-            (2) solves the pow with the correct weight (done in HathorManager)
-            (3) creates the correct amount of tokens in the output (done in HathorManager)
-            (4) all parents must exist and have timestamp smaller than ours
-            (5) data field must contain at most BLOCK_DATA_MAX_SIZE bytes
-            (6) whether this block must signal feature support
-        """
-        # TODO Should we validate a limit of outputs?
-        if block.is_genesis:
-            # TODO do genesis validation
-            return
-
-        self.verify_without_storage(block)
-
-        # (1) and (4)
-        self.verify_parents(block)
-
-        self.verify_height(block)
-
-        self.verify_mandatory_signaling(block)
-
-    def verify_without_storage(self, block: Block) -> None:
-        """ Run all verifications that do not need a storage.
-        """
-        self.verify_pow(block)
-        self.verify_no_inputs(block)
-        self.verify_outputs(block)
-        self.verify_data(block)
-        self.verify_sigops_output(block)
 
     def verify_height(self, block: Block) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
