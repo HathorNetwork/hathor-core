@@ -502,6 +502,13 @@ class NodeBlockSync(SyncAgent):
         self.send_get_next_blocks(start_block.id, end_block.id, quantity)
         return self._blk_streaming_client.wait()
 
+    def stop_blk_streaming_server(self, response_code: StreamEnd) -> None:
+        """Stop blockchain streaming server."""
+        assert self._blk_streaming_server is not None
+        self._blk_streaming_server.stop()
+        self._blk_streaming_server = None
+        self.send_blocks_end(response_code)
+
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ Helper to send a message.
         """
@@ -678,7 +685,7 @@ class NodeBlockSync(SyncAgent):
         """
         self.log.debug('start NEXT-BLOCKS stream')
         if self._blk_streaming_server is not None and self._blk_streaming_server.is_running:
-            self._blk_streaming_server.stop()
+            self.stop_blk_streaming_server(StreamEnd.PER_REQUEST)
         limit = min(quantity, self.DEFAULT_STREAMING_LIMIT)
         self._blk_streaming_server = BlockchainStreamingServer(self, start_block, end_hash, limit=limit)
         self._blk_streaming_server.start()
@@ -760,8 +767,7 @@ class NodeBlockSync(SyncAgent):
             return
 
         self.log.debug('got stop streaming message')
-        self._blk_streaming_server.stop()
-        self._blk_streaming_server = None
+        self.stop_blk_streaming_server(StreamEnd.PER_REQUEST)
 
     def send_stop_transactions_streaming(self) -> None:
         """ Send a STOP-TRANSACTIONS-STREAMING message.
@@ -780,8 +786,7 @@ class NodeBlockSync(SyncAgent):
             return
 
         self.log.debug('got stop streaming message')
-        self._tx_streaming_server.stop()
-        self._tx_streaming_server = None
+        self.stop_tx_streaming_server(StreamEnd.PER_REQUEST)
 
     def get_peer_best_block(self) -> Deferred[_HeightInfo]:
         """ Async call to get the remote peer's best block.
@@ -853,6 +858,13 @@ class NodeBlockSync(SyncAgent):
         self.send_get_transactions_bfs(start_from, first_block_hash, last_block_hash)
         return self._tx_streaming_client.resume()
 
+    def stop_tx_streaming_server(self, response_code: StreamEnd) -> None:
+        """Stop transaction streaming server."""
+        assert self._tx_streaming_server is not None
+        self._tx_streaming_server.stop()
+        self._tx_streaming_server = None
+        self.send_transactions_end(response_code)
+
     def send_get_transactions_bfs(self,
                                   start_from: list[bytes],
                                   first_block_hash: bytes,
@@ -921,7 +933,7 @@ class NodeBlockSync(SyncAgent):
                                vertex_id=tx.hash.hex(),
                                first_block=first_block.hash.hex(),
                                vertex_first_block=meta.first_block)
-                self.send_blocks_end(StreamEnd.INVALID_PARAMS)
+                self.send_transactions_end(StreamEnd.INVALID_PARAMS)
                 return
             start_from_txs.append(tx)
 
@@ -934,7 +946,7 @@ class NodeBlockSync(SyncAgent):
         """ Start a transactions BFS stream.
         """
         if self._tx_streaming_server is not None and self._tx_streaming_server.is_running:
-            self._tx_streaming_server.stop()
+            self.stop_tx_streaming_server(StreamEnd.PER_REQUEST)
         self._tx_streaming_server = TransactionsStreamingServer(self,
                                                                 start_from,
                                                                 first_block,

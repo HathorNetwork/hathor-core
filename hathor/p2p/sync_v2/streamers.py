@@ -41,6 +41,7 @@ class StreamEnd(IntFlag):
     TX_NOT_CONFIRMED = 4
     INVALID_PARAMS = 5
     INTERNAL_ERROR = 6
+    PER_REQUEST = 7
 
     def __str__(self):
         if self is StreamEnd.END_HASH_REACHED:
@@ -57,6 +58,8 @@ class StreamEnd(IntFlag):
             return 'streamed with invalid parameters'
         elif self is StreamEnd.INTERNAL_ERROR:
             return 'internal error'
+        elif self is StreamEnd.PER_REQUEST:
+            return 'stopped per request'
         else:
             raise ValueError(f'invalid StreamEnd value: {self.value}')
 
@@ -99,11 +102,14 @@ class _StreamingServerBase:
         try:
             self.send_next()
         except Exception:
-            self.stop()
-            self.sync_agent.send_blocks_end(StreamEnd.INTERNAL_ERROR)
+            self._stop_streaming_server(StreamEnd.INTERNAL_ERROR)
             raise
         else:
             self.schedule_if_needed()
+
+    def _stop_streaming_server(self, response_code: StreamEnd) -> None:
+        """Stop streaming server."""
+        raise NotImplementedError
 
     def start(self) -> None:
         """Start pushing."""
@@ -153,6 +159,9 @@ class BlockchainStreamingServer(_StreamingServerBase):
         self.end_hash = end_hash
         self.reverse = reverse
 
+    def _stop_streaming_server(self, response_code: StreamEnd) -> None:
+        self.sync_agent.stop_blk_streaming_server(response_code)
+
     def send_next(self) -> None:
         """Push next block to peer."""
         assert self.is_running
@@ -165,8 +174,7 @@ class BlockchainStreamingServer(_StreamingServerBase):
 
         meta = cur.get_metadata()
         if meta.voided_by:
-            self.stop()
-            self.sync_agent.send_blocks_end(StreamEnd.STREAM_BECAME_VOIDED)
+            self.sync_agent.stop_blk_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
             return
 
         if cur.hash == self.end_hash:
@@ -174,8 +182,7 @@ class BlockchainStreamingServer(_StreamingServerBase):
             if not self.reverse:
                 self.log.debug('send next block', blk_id=cur.hash.hex())
                 self.sync_agent.send_blocks(cur)
-            self.stop()
-            self.sync_agent.send_blocks_end(StreamEnd.END_HASH_REACHED)
+            self.sync_agent.stop_blk_streaming_server(StreamEnd.END_HASH_REACHED)
             return
 
         if self.counter >= self.limit:
@@ -183,8 +190,7 @@ class BlockchainStreamingServer(_StreamingServerBase):
             if not self.reverse:
                 self.log.debug('send next block', blk_id=cur.hash.hex())
                 self.sync_agent.send_blocks(cur)
-            self.stop()
-            self.sync_agent.send_blocks_end(StreamEnd.LIMIT_EXCEEDED)
+            self.sync_agent.stop_blk_streaming_server(StreamEnd.LIMIT_EXCEEDED)
             return
 
         self.counter += 1
@@ -199,8 +205,7 @@ class BlockchainStreamingServer(_StreamingServerBase):
 
         # XXX: don't send the genesis or the current block
         if self.current_block is None or self.current_block.is_genesis:
-            self.stop()
-            self.sync_agent.send_blocks_end(StreamEnd.NO_MORE_BLOCKS)
+            self.sync_agent.stop_blk_streaming_server(StreamEnd.NO_MORE_BLOCKS)
             return
 
 
@@ -235,6 +240,9 @@ class TransactionsStreamingServer(_StreamingServerBase):
         self.bfs = BFSOrderWalk(self.tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
         self.iter = self.get_iter()
 
+    def _stop_streaming_server(self, response_code: StreamEnd) -> None:
+        self.sync_agent.stop_tx_streaming_server(response_code)
+
     def get_iter(self) -> Iterator[BaseTransaction]:
         """Return an iterator that yields all transactions confirmed by each block in sequence."""
         root: Union[BaseTransaction, Iterable[BaseTransaction]]
@@ -258,8 +266,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
 
             # Check if this block is still in the best blockchain.
             if self.current_block.get_metadata().voided_by:
-                self.stop()
-                self.sync_agent.send_blocks_end(StreamEnd.STREAM_BECAME_VOIDED)
+                self.sync_agent.stop_tx_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
                 return
 
             self.current_block = self.current_block.get_next_block_best_chain()
@@ -275,8 +282,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
         except StopIteration:
             # nothing more to send
             self.log.debug('no more transactions, stopping streaming')
-            self.stop()
-            self.sync_agent.send_transactions_end(StreamEnd.END_HASH_REACHED)
+            self.sync_agent.stop_tx_streaming_server(StreamEnd.END_HASH_REACHED)
             return
 
         # Skip blocks.
@@ -290,8 +296,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
         cur_metadata = cur.get_metadata()
         if cur_metadata.first_block is None:
             self.log.debug('reached a tx that is not confirmed, stopping streaming')
-            self.stop()
-            self.sync_agent.send_transactions_end(StreamEnd.TX_NOT_CONFIRMED)
+            self.sync_agent.stop_tx_streaming_server(StreamEnd.TX_NOT_CONFIRMED)
             return
 
         # Check if tx is confirmed by the `self.current_block` or any next block.
@@ -308,6 +313,6 @@ class TransactionsStreamingServer(_StreamingServerBase):
 
         self.counter += 1
         if self.counter >= self.limit:
-            self.stop()
-            self.sync_agent.send_transactions_end(StreamEnd.LIMIT_EXCEEDED)
+            self.log.debug('limit exceeded, stopping streaming')
+            self.sync_agent.stop_tx_streaming_server(StreamEnd.LIMIT_EXCEEDED)
             return
