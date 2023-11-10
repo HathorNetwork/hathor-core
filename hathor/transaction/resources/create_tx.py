@@ -111,7 +111,8 @@ class CreateTxResource(Resource):
         verifiers = self.manager.verification_service.verifiers
         verifiers.tx.verify_number_of_inputs(tx)
         verifiers.vertex.verify_number_of_outputs(tx)
-        verifiers.tx.verify_outputs(tx)
+        verifiers.vertex.verify_outputs(tx)
+        verifiers.tx.verify_output_token_indexes(tx)
         verifiers.vertex.verify_sigops_output(tx)
         verifiers.tx.verify_sigops_input(tx)
         # need to run verify_inputs first to check if all inputs exist

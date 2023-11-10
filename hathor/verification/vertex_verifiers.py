@@ -67,7 +67,7 @@ class VertexVerifiers(NamedTuple):
         """
         block_verifier = BlockVerifier(settings=settings, daa=daa, feature_service=feature_service)
         merge_mined_block_verifier = MergeMinedBlockVerifier()
-        tx_verifier = TransactionVerifier(settings=settings, vertex_verifier=vertex_verifier, daa=daa)
+        tx_verifier = TransactionVerifier(settings=settings, daa=daa)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
 
         return VertexVerifiers(

@@ -881,7 +881,8 @@ class BaseTransactionTest(unittest.TestCase):
         _output = TxOutput(value, script)
 
         tx = Transaction(inputs=[_input], outputs=[_output], storage=self.tx_storage)
-        self._verifiers.tx.verify_outputs(tx)
+        self._verifiers.vertex.verify_outputs(tx)
+        self._verifiers.tx.verify_output_token_indexes(tx)
 
     def test_txout_script_limit_exceeded(self):
         with self.assertRaises(InvalidOutputScriptSize):

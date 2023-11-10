@@ -236,7 +236,8 @@ class VerificationService:
         """
         self.verifiers.vertex.verify_pow(tx)
         self.verifiers.tx.verify_number_of_inputs(tx)
-        self.verifiers.tx.verify_outputs(tx)
+        self.verifiers.vertex.verify_outputs(tx)
+        self.verifiers.tx.verify_output_token_indexes(tx)
         self.verifiers.vertex.verify_sigops_output(tx)
 
     def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
