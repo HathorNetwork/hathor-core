@@ -116,9 +116,9 @@ class TransactionStreamingClient:
 
         assert tx.hash is not None
         self.log.debug('tx received', tx_id=tx.hash.hex())
-
         self._queue.append(tx)
         assert len(self._queue) <= self._tx_max_quantity
+
         if not self._is_processing:
             self.reactor.callLater(0, self.process_queue)
 
@@ -135,6 +135,7 @@ class TransactionStreamingClient:
         self._is_processing = True
         try:
             tx = self._queue.popleft()
+            self.log.debug('processing tx', tx_id=tx.hash.hex())
             yield self._process_transaction(tx)
         finally:
             self._is_processing = False

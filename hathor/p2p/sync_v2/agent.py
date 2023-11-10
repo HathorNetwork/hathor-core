@@ -494,11 +494,12 @@ class NodeBlockSync(SyncAgent):
                                    start_block: _HeightInfo,
                                    end_block: _HeightInfo) -> Deferred[StreamEnd]:
         """Request peer to start streaming blocks to us."""
-        self.log.info('requesting blocks streaming',
-                      start_block=start_block,
-                      end_block=end_block)
         self._blk_streaming_client = BlockchainStreamingClient(self, start_block, end_block)
         quantity = self._blk_streaming_client._blk_max_quantity
+        self.log.info('requesting blocks streaming',
+                      start_block=start_block,
+                      end_block=end_block,
+                      quantity=quantity)
         self.send_get_next_blocks(start_block.id, end_block.id, quantity)
         return self._blk_streaming_client.wait()
 
@@ -579,11 +580,14 @@ class NodeBlockSync(SyncAgent):
     @inlineCallbacks
     def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> Generator[Any, Any, None]:
         """This method is called when a block and its transactions are downloaded."""
+        # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         for tx in vertex_list:
-            self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
+            if not self.tx_storage.transaction_exists(tx.hash):
+                self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
             yield deferLater(self.reactor, 0, lambda: None)
 
-        self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+        if not self.tx_storage.transaction_exists(blk.hash):
+            self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
