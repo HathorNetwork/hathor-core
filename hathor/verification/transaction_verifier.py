@@ -141,18 +141,6 @@ class TransactionVerifier:
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def verify_sum(self, tx: Transaction) -> None:
-        """Verify that the sum of outputs is equal of the sum of inputs, for each token.
-
-        If there are authority UTXOs involved, tokens can be minted or melted, so the above rule may
-        not be respected.
-
-        :raises InvalidToken: when there's an error in token operations
-        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
-        """
-        token_dict = tx.get_complete_token_info()
-        self.verify_authorities_and_deposit(token_dict)
-
     def verify_reward_locked(self, tx: Transaction) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
         the block rewards spent by this tx itself, and not the inherited `min_height`."""
@@ -179,7 +167,7 @@ class TransactionVerifier:
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def verify_authorities_and_deposit(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verify_sum(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
 
