@@ -64,10 +64,10 @@ class HelloState(BaseState):
         return data
 
     def _get_sync_versions(self) -> set[SyncVersion]:
-        """Shortcut to ConnectionManager.get_sync_versions"""
+        """Shortcut to ConnectionManager.get_enabled_sync_versions"""
         connections_manager = self.protocol.connections
         assert connections_manager is not None
-        return connections_manager.get_sync_versions()
+        return connections_manager.get_enabled_sync_versions()
 
     def on_enter(self) -> None:
         # After a connection is made, we just send a HELLO message.

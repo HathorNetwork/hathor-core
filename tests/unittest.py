@@ -248,14 +248,8 @@ class TestCase(unittest.TestCase):
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         # XXX: just making sure that tests set this up correctly
-        if enable_sync_v2:
-            assert SyncVersion.V2 in manager.connections._sync_factories
-        else:
-            assert SyncVersion.V2 not in manager.connections._sync_factories
-        if enable_sync_v1:
-            assert SyncVersion.V1_1 in manager.connections._sync_factories
-        else:
-            assert SyncVersion.V1_1 not in manager.connections._sync_factories
+        assert manager.connections.is_sync_version_enabled(SyncVersion.V2) == enable_sync_v2
+        assert manager.connections.is_sync_version_enabled(SyncVersion.V1_1) == enable_sync_v1
 
         return manager
 
