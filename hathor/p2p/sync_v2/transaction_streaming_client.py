@@ -80,6 +80,7 @@ class TransactionStreamingClient:
         # In-memory database of transactions already received but still
         # waiting for dependencies.
         self._db: dict[VertexId, BaseTransaction] = {}
+        self._existing_deps: set[VertexId] = set()
 
         self._prepare_block(self.partial_blocks[0])
         assert self._waiting_for
@@ -159,6 +160,9 @@ class TransactionStreamingClient:
             if tx.hash in self._db:
                 # This case might happen during a resume, so we just log and keep syncing.
                 self.log.debug('duplicated vertex received', tx_id=tx.hash.hex())
+            elif tx.hash in self._existing_deps:
+                # This case might happen if we already have the transaction from another sync.
+                self.log.debug('existing vertex received', tx_id=tx.hash.hex())
             else:
                 self.log.info('unexpected vertex received', tx_id=tx.hash.hex())
                 self.fails(UnexpectedVertex(tx.hash.hex()))
@@ -187,6 +191,7 @@ class TransactionStreamingClient:
         """Return missing dependencies."""
         for dep in tx.get_all_dependencies():
             if self.tx_storage.transaction_exists(dep):
+                self._existing_deps.add(dep)
                 continue
             if dep in self._db:
                 continue
@@ -237,6 +242,7 @@ class TransactionStreamingClient:
         """Reset everything for the next block. It also adds blocks that have no dependencies."""
         self._waiting_for.clear()
         self._db.clear()
+        self._existing_deps.clear()
 
         # Add pending dependencies from block.
         for dep in blk.get_all_dependencies():
