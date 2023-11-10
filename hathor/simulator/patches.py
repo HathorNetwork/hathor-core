@@ -18,41 +18,16 @@ from structlog import get_logger
 
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction import BaseTransaction
-from hathor.verification.block_verifier import BlockVerifier
-from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
-from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
-from hathor.verification.transaction_verifier import TransactionVerifier
+from hathor.verification.vertex_verifier import VertexVerifier
 
 logger = get_logger()
 
 
-def _verify_pow(vertex: BaseTransaction) -> None:
-    assert vertex.hash is not None
-    logger.new().debug('Skipping VertexVerifier.verify_pow() for simulator')
-
-
-class SimulatorBlockVerifier(BlockVerifier):
+class SimulatorVertexVerifier(VertexVerifier):
     @classmethod
     def verify_pow(cls, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
-        _verify_pow(vertex)
-
-
-class SimulatorMergeMinedBlockVerifier(MergeMinedBlockVerifier):
-    @classmethod
-    def verify_pow(cls, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
-        _verify_pow(vertex)
-
-
-class SimulatorTransactionVerifier(TransactionVerifier):
-    @classmethod
-    def verify_pow(cls, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
-        _verify_pow(vertex)
-
-
-class SimulatorTokenCreationTransactionVerifier(TokenCreationTransactionVerifier):
-    @classmethod
-    def verify_pow(cls, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
-        _verify_pow(vertex)
+        assert vertex.hash is not None
+        logger.new().debug('Skipping VertexVerifier.verify_pow() for simulator')
 
 
 class SimulatorCpuMiningService(CpuMiningService):
