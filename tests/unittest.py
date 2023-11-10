@@ -228,11 +228,9 @@ class TestCase(unittest.TestCase):
             builder.force_memory_index()
 
         if enable_sync_v1 is True:
-            # Enable Sync v1.1 (instead of v1.0)
-            builder.enable_sync_v1_1()
+            builder.enable_sync_v1()
         elif enable_sync_v1 is False:
-            # Disable Sync v1.1 (instead of v1.0)
-            builder.disable_sync_v1_1()
+            builder.disable_sync_v1()
 
         if enable_sync_v2 is True:
             builder.enable_sync_v2()
@@ -255,10 +253,8 @@ class TestCase(unittest.TestCase):
         else:
             assert SyncVersion.V2 not in manager.connections._sync_factories
         if enable_sync_v1:
-            assert SyncVersion.V1 not in manager.connections._sync_factories
             assert SyncVersion.V1_1 in manager.connections._sync_factories
         else:
-            assert SyncVersion.V1 not in manager.connections._sync_factories
             assert SyncVersion.V1_1 not in manager.connections._sync_factories
 
         return manager
