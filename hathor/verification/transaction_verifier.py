@@ -36,23 +36,15 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
-from hathor.verification.vertex_verifier import VertexVerifier
 
 cpu = get_cpu_profiler()
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_vertex_verifier', '_daa')
+    __slots__ = ('_settings', '_daa')
 
-    def __init__(
-        self,
-        *,
-        settings: HathorSettings,
-        vertex_verifier: VertexVerifier,
-        daa: DifficultyAdjustmentAlgorithm,
-    ) -> None:
+    def __init__(self, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm) -> None:
         self._settings = settings
-        self._vertex_verifier = vertex_verifier
         self._daa = daa
 
     def verify_parents_basic(self, tx: Transaction) -> None:
@@ -177,12 +169,11 @@ class TransactionVerifier:
             if not tx.is_genesis:
                 raise NoInputError('Transaction must have at least one input')
 
-    def verify_outputs(self, tx: Transaction) -> None:
+    def verify_output_token_indexes(self, tx: Transaction) -> None:
         """Verify outputs reference an existing token uid in the tokens list
 
         :raises InvalidToken: output references non existent token uid
         """
-        self._vertex_verifier.verify_outputs(tx)
         for output in tx.outputs:
             # check index is valid
             if output.get_token_index() > len(tx.tokens):
