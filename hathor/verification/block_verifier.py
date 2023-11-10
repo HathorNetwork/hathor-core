@@ -25,22 +25,19 @@ from hathor.transaction.exceptions import (
     TransactionDataError,
     WeightError,
 )
-from hathor.verification.vertex_verifier import VertexVerifier
 
 
 class BlockVerifier:
-    __slots__ = ('_settings', '_vertex_verifier', '_daa', '_feature_service')
+    __slots__ = ('_settings', '_daa', '_feature_service')
 
     def __init__(
         self,
         *,
         settings: HathorSettings,
-        vertex_verifier: VertexVerifier,
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService | None = None
     ) -> None:
         self._settings = settings
-        self._vertex_verifier = vertex_verifier
         self._daa = daa
         self._feature_service = feature_service
 
@@ -74,8 +71,7 @@ class BlockVerifier:
         if inputs:
             raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
 
-    def verify_outputs(self, block: Block) -> None:
-        self._vertex_verifier.verify_outputs(block)
+    def verify_output_token_indexes(self, block: Block) -> None:
         for output in block.outputs:
             if output.get_token_index() > 0:
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))

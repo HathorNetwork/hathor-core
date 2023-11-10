@@ -222,7 +222,8 @@ class VerificationService:
         """
         self.verifiers.vertex.verify_pow(block)
         self.verifiers.block.verify_no_inputs(block)
-        self.verifiers.block.verify_outputs(block)
+        self.verifiers.vertex.verify_outputs(block)
+        self.verifiers.block.verify_output_token_indexes(block)
         self.verifiers.block.verify_data(block)
         self.verifiers.vertex.verify_sigops_output(block)
 
