@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import (
@@ -39,8 +41,19 @@ from hathor.verification.vertex_verifier import VertexVerifier
 cpu = get_cpu_profiler()
 
 
-class TransactionVerifier(VertexVerifier):
-    __slots__ = ()
+class TransactionVerifier:
+    __slots__ = ('_settings', '_vertex_verifier', '_daa')
+
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        vertex_verifier: VertexVerifier,
+        daa: DifficultyAdjustmentAlgorithm,
+    ) -> None:
+        self._settings = settings
+        self._vertex_verifier = vertex_verifier
+        self._daa = daa
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -164,13 +177,12 @@ class TransactionVerifier(VertexVerifier):
             if not tx.is_genesis:
                 raise NoInputError('Transaction must have at least one input')
 
-    def verify_outputs(self, tx: BaseTransaction) -> None:
+    def verify_outputs(self, tx: Transaction) -> None:
         """Verify outputs reference an existing token uid in the tokens list
 
         :raises InvalidToken: output references non existent token uid
         """
-        assert isinstance(tx, Transaction)
-        super().verify_outputs(tx)
+        self._vertex_verifier.verify_outputs(tx)
         for output in tx.outputs:
             # check index is valid
             if output.get_token_index() > len(tx.tokens):

@@ -1,8 +1,9 @@
 from hathor.conf import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.verification.verification_service import VerificationService, VertexVerifiers
+from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifier import VertexVerifier
+from hathor.verification.vertex_verifiers import VertexVerifiers
 from tests import unittest
 
 settings = HathorSettings()

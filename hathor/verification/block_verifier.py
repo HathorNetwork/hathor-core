@@ -15,7 +15,7 @@
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
-from hathor.transaction import BaseTransaction, Block
+from hathor.transaction import Block
 from hathor.transaction.exceptions import (
     BlockMustSignalError,
     BlockWithInputs,
@@ -28,17 +28,20 @@ from hathor.transaction.exceptions import (
 from hathor.verification.vertex_verifier import VertexVerifier
 
 
-class BlockVerifier(VertexVerifier):
-    __slots__ = ('_feature_service', )
+class BlockVerifier:
+    __slots__ = ('_settings', '_vertex_verifier', '_daa', '_feature_service')
 
     def __init__(
         self,
         *,
         settings: HathorSettings,
+        vertex_verifier: VertexVerifier,
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService | None = None
     ) -> None:
-        super().__init__(settings=settings, daa=daa)
+        self._settings = settings
+        self._vertex_verifier = vertex_verifier
+        self._daa = daa
         self._feature_service = feature_service
 
     def verify_height(self, block: Block) -> None:
@@ -71,9 +74,8 @@ class BlockVerifier(VertexVerifier):
         if inputs:
             raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
 
-    def verify_outputs(self, block: BaseTransaction) -> None:
-        assert isinstance(block, Block)
-        super().verify_outputs(block)
+    def verify_outputs(self, block: Block) -> None:
+        self._vertex_verifier.verify_outputs(block)
         for output in block.outputs:
             if output.get_token_index() > 0:
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))

@@ -12,50 +12,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import NamedTuple
-
 from typing_extensions import assert_never
 
-from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
-from hathor.verification.block_verifier import BlockVerifier
-from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
-from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
-from hathor.verification.transaction_verifier import TransactionVerifier
+from hathor.verification.vertex_verifiers import VertexVerifiers
 
 cpu = get_cpu_profiler()
-
-
-class VertexVerifiers(NamedTuple):
-    """A group of verifier instances, one for each vertex type."""
-    block: BlockVerifier
-    merge_mined_block: MergeMinedBlockVerifier
-    tx: TransactionVerifier
-    token_creation_tx: TokenCreationTransactionVerifier
-
-    @classmethod
-    def create_defaults(
-        cls,
-        *,
-        settings: HathorSettings,
-        daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None,
-    ) -> 'VertexVerifiers':
-        """
-        Create a VertexVerifiers instance using the default verifier for each vertex type,
-        from all required dependencies.
-        """
-        return VertexVerifiers(
-            block=BlockVerifier(settings=settings, daa=daa, feature_service=feature_service),
-            merge_mined_block=MergeMinedBlockVerifier(),
-            tx=TransactionVerifier(settings=settings, daa=daa),
-            token_creation_tx=TokenCreationTransactionVerifier(settings=settings),
-        )
 
 
 class VerificationService:
@@ -192,7 +157,7 @@ class VerificationService:
         self.verify_without_storage(block)
 
         # (1) and (4)
-        self.verifiers.block.verify_parents(block)
+        self.verifiers.vertex.verify_parents(block)
 
         self.verifiers.block.verify_height(block)
 
@@ -220,7 +185,7 @@ class VerificationService:
         self.verify_without_storage(tx)
         self.verifiers.tx.verify_sigops_input(tx)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
-        self.verifiers.tx.verify_parents(tx)
+        self.verifiers.vertex.verify_parents(tx)
         self.verifiers.tx.verify_sum(tx)
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
@@ -255,11 +220,11 @@ class VerificationService:
     def _verify_without_storage_block(self, block: Block) -> None:
         """ Run all verifications that do not need a storage.
         """
-        self.verifiers.block.verify_pow(block)
+        self.verifiers.vertex.verify_pow(block)
         self.verifiers.block.verify_no_inputs(block)
         self.verifiers.block.verify_outputs(block)
         self.verifiers.block.verify_data(block)
-        self.verifiers.block.verify_sigops_output(block)
+        self.verifiers.vertex.verify_sigops_output(block)
 
     def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
         self.verifiers.merge_mined_block.verify_aux_pow(block)
@@ -268,10 +233,10 @@ class VerificationService:
     def _verify_without_storage_tx(self, tx: Transaction) -> None:
         """ Run all verifications that do not need a storage.
         """
-        self.verifiers.tx.verify_pow(tx)
+        self.verifiers.vertex.verify_pow(tx)
         self.verifiers.tx.verify_number_of_inputs(tx)
         self.verifiers.tx.verify_outputs(tx)
-        self.verifiers.tx.verify_sigops_output(tx)
+        self.verifiers.vertex.verify_sigops_output(tx)
 
     def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_without_storage_tx(tx)

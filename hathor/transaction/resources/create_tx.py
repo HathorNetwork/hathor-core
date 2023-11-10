@@ -18,6 +18,7 @@ from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
+from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
 from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
@@ -49,7 +50,7 @@ class CreateTxResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager) -> None:
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
@@ -107,15 +108,16 @@ class CreateTxResource(Resource):
     def _verify_unsigned_skip_pow(self, tx: Transaction) -> None:
         """ Same as .verify but skipping pow and signature verification."""
         assert type(tx) is Transaction
-        verifier = self.manager.verification_service.verifiers.tx
-        verifier.verify_number_of_inputs(tx)
-        verifier.verify_number_of_outputs(tx)
-        verifier.verify_outputs(tx)
-        verifier.verify_sigops_output(tx)
-        verifier.verify_sigops_input(tx)
-        verifier.verify_inputs(tx, skip_script=True)  # need to run verify_inputs first to check if all inputs exist
-        verifier.verify_parents(tx)
-        verifier.verify_sum(tx)
+        verifiers = self.manager.verification_service.verifiers
+        verifiers.tx.verify_number_of_inputs(tx)
+        verifiers.vertex.verify_number_of_outputs(tx)
+        verifiers.tx.verify_outputs(tx)
+        verifiers.vertex.verify_sigops_output(tx)
+        verifiers.tx.verify_sigops_input(tx)
+        # need to run verify_inputs first to check if all inputs exist
+        verifiers.tx.verify_inputs(tx, skip_script=True)
+        verifiers.vertex.verify_parents(tx)
+        verifiers.tx.verify_sum(tx)
 
 
 CreateTxResource.openapi = {

@@ -147,7 +147,7 @@ def test_verify_must_signal_when_feature_activation_is_disabled(is_signaling_man
     settings.FEATURE_ACTIVATION.enable_usage = False
     feature_service = Mock(spec_set=FeatureService)
     feature_service.is_signaling_mandatory_features = Mock(return_value=is_signaling_mandatory_features)
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock(), vertex_verifier=Mock())
     block = Block()
 
     verifier.verify_mandatory_signaling(block)
@@ -160,7 +160,7 @@ def test_verify_must_signal() -> None:
     feature_service.is_signaling_mandatory_features = Mock(
         return_value=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)
     )
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock(), vertex_verifier=Mock())
     block = Block()
 
     with pytest.raises(BlockMustSignalError) as e:
@@ -174,7 +174,7 @@ def test_verify_must_not_signal() -> None:
     settings.FEATURE_ACTIVATION.enable_usage = True
     feature_service = Mock(spec_set=FeatureService)
     feature_service.is_signaling_mandatory_features = Mock(return_value=BlockIsSignaling())
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock(), vertex_verifier=Mock())
     block = Block()
 
     verifier.verify_mandatory_signaling(block)
