@@ -65,6 +65,9 @@ class CliBuilder:
         from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
+        from hathor.p2p.sync_v1.factory import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
+        from hathor.p2p.sync_version import SyncVersion
         from hathor.storage import RocksDBStorage
         from hathor.transaction.storage import (
             TransactionCacheStorage,
@@ -233,9 +236,13 @@ class CliBuilder:
             ssl=True,
             whitelist_only=False,
             rng=Random(),
-            enable_sync_v1=enable_sync_v1,
-            enable_sync_v2=enable_sync_v2,
         )
+        p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+        p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+        if enable_sync_v1:
+            p2p_manager.enable_sync_version(SyncVersion.V1_1)
+        if enable_sync_v2:
+            p2p_manager.enable_sync_version(SyncVersion.V2)
 
         self.manager = HathorManager(
             reactor,

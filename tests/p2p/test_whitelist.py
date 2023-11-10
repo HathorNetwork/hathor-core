@@ -14,10 +14,10 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         network = 'testnet'
 
         manager1 = self.create_peer(network)
-        self.assertEqual(set(manager1.connections._sync_factories.keys()), {SyncVersion.V1_1})
+        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
 
         manager2 = self.create_peer(network)
-        self.assertEqual(set(manager2.connections._sync_factories.keys()), {SyncVersion.V1_1})
+        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
 
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
@@ -36,10 +36,10 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         network = 'testnet'
 
         manager1 = self.create_peer(network)
-        self.assertEqual(set(manager1.connections._sync_factories.keys()), {SyncVersion.V1_1})
+        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
 
         manager2 = self.create_peer(network)
-        self.assertEqual(set(manager2.connections._sync_factories.keys()), {SyncVersion.V1_1})
+        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
 
         manager1.peers_whitelist.append(manager2.my_peer.id)
 
@@ -60,10 +60,10 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         network = 'testnet'
 
         manager1 = self.create_peer(network)
-        self.assertEqual(set(manager1.connections._sync_factories.keys()), {SyncVersion.V1_1})
+        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
 
         manager2 = self.create_peer(network)
-        self.assertEqual(set(manager2.connections._sync_factories.keys()), {SyncVersion.V1_1})
+        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
 
         manager1.peers_whitelist.append(manager2.my_peer.id)
         manager2.peers_whitelist.append(manager1.my_peer.id)

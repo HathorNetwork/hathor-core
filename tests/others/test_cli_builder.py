@@ -57,8 +57,8 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
-        self.assertIn(SyncVersion.V1_1, manager.connections._sync_factories)
-        self.assertNotIn(SyncVersion.V2, manager.connections._sync_factories)
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V2))
         self.assertFalse(self.resources_builder._built_prometheus)
         self.assertFalse(self.resources_builder._built_status)
         self.assertFalse(manager._enable_event_queue)
@@ -103,13 +103,13 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_sync_bridge(self):
         manager = self._build(['--memory-storage', '--x-sync-bridge'])
-        self.assertIn(SyncVersion.V1_1, manager.connections._sync_factories)
-        self.assertIn(SyncVersion.V2, manager.connections._sync_factories)
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_v2_only(self):
         manager = self._build(['--memory-storage', '--x-sync-v2-only'])
-        self.assertNotIn(SyncVersion.V1_1, manager.connections._sync_factories)
-        self.assertIn(SyncVersion.V2, manager.connections._sync_factories)
+        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_keypair_wallet(self):
         manager = self._build(['--memory-storage', '--wallet', 'keypair'])
