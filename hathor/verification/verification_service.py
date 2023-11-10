@@ -17,7 +17,9 @@ from typing_extensions import assert_never
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.validation_state import ValidationState
+from hathor.types import TokenUid
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
 cpu = get_cpu_profiler()
@@ -167,7 +169,13 @@ class VerificationService:
         self._verify_block(block)
 
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
-    def _verify_tx(self, tx: Transaction, *, reject_locked_reward: bool) -> None:
+    def _verify_tx(
+        self,
+        tx: Transaction,
+        *,
+        reject_locked_reward: bool,
+        token_dict: dict[TokenUid, TokenInfo] | None = None
+    ) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
           (ii) number of outputs is at most 256
@@ -186,7 +194,7 @@ class VerificationService:
         self.verifiers.tx.verify_sigops_input(tx)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.vertex.verify_parents(tx)
-        self.verifiers.tx.verify_sum(tx)
+        self.verifiers.tx.verify_authorities_and_deposit(token_dict or tx.get_complete_token_info())
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 
@@ -195,8 +203,9 @@ class VerificationService:
 
         We also overload verify_sum to make some different checks
         """
-        self._verify_tx(tx, reject_locked_reward=reject_locked_reward)
-        self.verifiers.token_creation_tx.verify_minted_tokens(tx)
+        token_dict = tx.get_complete_token_info()
+        self._verify_tx(tx, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
+        self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
         self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
