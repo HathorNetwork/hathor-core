@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Generator, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
@@ -28,6 +28,7 @@ from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import BaseTransaction
 from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.types import VertexId
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -116,9 +117,9 @@ class TransactionStreamingClient:
 
         assert tx.hash is not None
         self.log.debug('tx received', tx_id=tx.hash.hex())
-
         self._queue.append(tx)
         assert len(self._queue) <= self._tx_max_quantity
+
         if not self._is_processing:
             self.reactor.callLater(0, self.process_queue)
 
@@ -135,6 +136,7 @@ class TransactionStreamingClient:
         self._is_processing = True
         try:
             tx = self._queue.popleft()
+            self.log.debug('processing tx', tx_id=not_none(tx.hash).hex())
             yield self._process_transaction(tx)
         finally:
             self._is_processing = False
@@ -160,18 +162,18 @@ class TransactionStreamingClient:
             if tx.hash in self._db:
                 # This case might happen during a resume, so we just log and keep syncing.
                 self.log.debug('duplicated vertex received', tx_id=tx.hash.hex())
+                self.update_dependencies(tx)
             elif tx.hash in self._existing_deps:
                 # This case might happen if we already have the transaction from another sync.
                 self.log.debug('existing vertex received', tx_id=tx.hash.hex())
+                self.update_dependencies(tx)
             else:
                 self.log.info('unexpected vertex received', tx_id=tx.hash.hex())
                 self.fails(UnexpectedVertex(tx.hash.hex()))
             return
         self._waiting_for.remove(tx.hash)
 
-        for dep in self.get_missing_deps(tx):
-            self.log.debug('adding dependency', tx_id=tx.hash.hex(), dep=dep.hex())
-            self._waiting_for.add(dep)
+        self.update_dependencies(tx)
 
         self._db[tx.hash] = tx
 
@@ -187,15 +189,13 @@ class TransactionStreamingClient:
         if self._tx_received % 100 == 0:
             self.log.debug('tx streaming in progress', txs_received=self._tx_received)
 
-    def get_missing_deps(self, tx: BaseTransaction) -> Iterator[bytes]:
-        """Return missing dependencies."""
+    def update_dependencies(self, tx: BaseTransaction) -> None:
+        """Update _existing_deps and _waiting_for with the dependencies."""
         for dep in tx.get_all_dependencies():
-            if self.tx_storage.transaction_exists(dep):
+            if self.tx_storage.transaction_exists(dep) or dep in self._db:
                 self._existing_deps.add(dep)
-                continue
-            if dep in self._db:
-                continue
-            yield dep
+            else:
+                self._waiting_for.add(dep)
 
     def handle_transactions_end(self, response_code: StreamEnd) -> None:
         """This method is called by the sync agent when a TRANSACTIONS-END message is received."""

@@ -180,22 +180,14 @@ class BlockchainStreamingServer(_StreamingServerBase):
         if cur.hash == self.end_hash:
             # only send the last when not reverse
             if not self.reverse:
-                self.log.debug('send next block', blk_id=cur.hash.hex())
+                self.log.debug('send next block', height=cur.get_height(), blk_id=cur.hash.hex())
                 self.sync_agent.send_blocks(cur)
             self.sync_agent.stop_blk_streaming_server(StreamEnd.END_HASH_REACHED)
             return
 
-        if self.counter >= self.limit:
-            # only send the last when not reverse
-            if not self.reverse:
-                self.log.debug('send next block', blk_id=cur.hash.hex())
-                self.sync_agent.send_blocks(cur)
-            self.sync_agent.stop_blk_streaming_server(StreamEnd.LIMIT_EXCEEDED)
-            return
-
         self.counter += 1
 
-        self.log.debug('send next block', blk_id=cur.hash.hex())
+        self.log.debug('send next block', height=cur.get_height(), blk_id=cur.hash.hex())
         self.sync_agent.send_blocks(cur)
 
         if self.reverse:
@@ -206,6 +198,10 @@ class BlockchainStreamingServer(_StreamingServerBase):
         # XXX: don't send the genesis or the current block
         if self.current_block is None or self.current_block.is_genesis:
             self.sync_agent.stop_blk_streaming_server(StreamEnd.NO_MORE_BLOCKS)
+            return
+
+        if self.counter >= self.limit:
+            self.sync_agent.stop_blk_streaming_server(StreamEnd.LIMIT_EXCEEDED)
             return
 
 
