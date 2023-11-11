@@ -437,8 +437,9 @@ class NodeBlockSync(SyncAgent):
             return
         self.log.debug('handle_get_tips')
         # TODO Use a streaming of tips
-        for txid in self.tx_storage.indexes.mempool_tips.get():
-            self.send_tips(txid)
+        for tx_id in self.tx_storage.indexes.mempool_tips.get():
+            self.send_tips(tx_id)
+        self.log.debug('tips end')
         self.send_message(ProtocolMessages.TIPS_END)
 
     def send_tips(self, tx_id: bytes) -> None:
@@ -610,6 +611,7 @@ class NodeBlockSync(SyncAgent):
         assert self.tx_storage.indexes is not None
         heights = json.loads(payload)
         if len(heights) > 20:
+            self.log.info('too many heights', heights_qty=len(heights))
             self.protocol.send_error_and_close_connection('GET-PEER-BLOCK-HASHES: too many heights')
             return
         data = []
@@ -619,10 +621,7 @@ class NodeBlockSync(SyncAgent):
                 break
             blk = self.tx_storage.get_transaction(blk_hash)
             if blk.get_metadata().voided_by:
-                # The height index might have voided blocks when there is a draw.
-                # Let's try again soon.
-                self.reactor.callLater(3, self.handle_get_peer_block_hashes, payload)
-                return
+                break
             data.append((h, blk_hash.hex()))
         payload = json.dumps(data)
         self.send_message(ProtocolMessages.PEER_BLOCK_HASHES, payload)
