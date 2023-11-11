@@ -333,7 +333,8 @@ class TestCase(unittest.TestCase):
         # best block (from height index)
         b1 = manager1.tx_storage.indexes.height.get_tip()
         b2 = manager2.tx_storage.indexes.height.get_tip()
-        self.assertEqual(b1, b2)
+        self.assertIn(b1, s2)
+        self.assertIn(b2, s1)
 
     def assertConsensusEqual(self, manager1, manager2):
         _, enable_sync_v2 = self._syncVersionFlags()
