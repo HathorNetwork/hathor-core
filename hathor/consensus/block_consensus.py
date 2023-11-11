@@ -216,7 +216,9 @@ class BlockConsensusAlgorithm:
                         if common_block not in heads:
                             self.context.mark_as_reorg(common_block)
                 else:
-                    storage.update_best_block_tips_cache([not_none(blk.hash) for blk in heads])
+                    best_block_tips = [not_none(blk.hash) for blk in heads]
+                    best_block_tips.append(not_none(block.hash))
+                    storage.update_best_block_tips_cache(best_block_tips)
                     if not meta.voided_by:
                         self.context.mark_as_reorg(common_block)
 
