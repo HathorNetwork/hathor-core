@@ -196,11 +196,20 @@ class BlockConsensusAlgorithm:
                 # Either we have a single best chain or all chains have already been voided.
                 assert len(valid_heads) <= 1, 'We must never have more than one valid head'
 
-                # Add voided_by to all heads.
                 common_block = self._find_first_parent_in_best_chain(block)
-                self.add_voided_by_to_multiple_chains(block, heads, common_block)
 
+                winner = False
                 if score >= best_score + self._settings.WEIGHT_TOL:
+                    winner = True
+                else:
+                    min_hash: bytes = min(not_none(blk.hash) for blk in heads)
+                    if block.hash < min_hash:
+                        winner = True
+
+                if winner:
+                    # Add voided_by to all heads.
+                    self.add_voided_by_to_multiple_chains(block, heads, common_block)
+
                     # We have a new winner candidate.
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
                     # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
@@ -217,8 +226,6 @@ class BlockConsensusAlgorithm:
                             self.context.mark_as_reorg(common_block)
                 else:
                     storage.update_best_block_tips_cache([not_none(blk.hash) for blk in heads])
-                    if not meta.voided_by:
-                        self.context.mark_as_reorg(common_block)
 
     def union_voided_by_from_parents(self, block: Block) -> set[bytes]:
         """Return the union of the voided_by of block's parents.
