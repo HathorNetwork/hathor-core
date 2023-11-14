@@ -84,7 +84,6 @@ class TransactionStreamingClient:
         self._existing_deps: set[VertexId] = set()
 
         self._prepare_block(self.partial_blocks[0])
-        assert self._waiting_for
 
     def wait(self) -> Deferred[StreamEnd]:
         """Return the deferred."""
