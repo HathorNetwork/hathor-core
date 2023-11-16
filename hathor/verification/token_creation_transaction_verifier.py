@@ -12,10 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.transaction import Transaction
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import clean_token_string
+from hathor.util import not_none
 from hathor.verification.transaction_verifier import TransactionVerifier
 
 
@@ -39,20 +40,14 @@ class TokenCreationTransactionVerifier(TransactionVerifier):
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
         assert isinstance(tx, TokenCreationTransaction)
-        token_dict = tx.get_token_info_from_inputs()
-
-        # we add the created token's info to token_dict, as the creation tx allows for mint/melt
-        assert tx.hash is not None
-        token_dict[tx.hash] = TokenInfo(0, True, True)
-
-        self.update_token_info_from_outputs(tx, token_dict=token_dict)
+        token_dict = self.get_complete_token_info(tx)
 
         # make sure tokens are being minted
-        token_info = token_dict[tx.hash]
+        token_info = token_dict[not_none(tx.hash)]
         if token_info.amount <= 0:
             raise InvalidToken('Token creation transaction must mint new tokens')
 
-        self.verify_authorities_and_deposit(token_dict)
+        super().verify_sum(tx)
 
     def verify_token_info(self, tx: TokenCreationTransaction) -> None:
         """ Validates token info
