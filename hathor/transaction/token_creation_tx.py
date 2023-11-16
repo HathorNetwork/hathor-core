@@ -217,8 +217,8 @@ class TokenCreationTransaction(Transaction):
         return json
 
     @override
-    def get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
-        token_dict = super().get_token_info_from_inputs()
+    def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
+        token_dict = super()._get_token_info_from_inputs()
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
         assert self.hash is not None
