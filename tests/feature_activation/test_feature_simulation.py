@@ -16,6 +16,7 @@ from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
+from twisted.python.failure import Failure
 
 from hathor.builder import Builder
 from hathor.conf.get_settings import get_settings
@@ -351,11 +352,23 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        settings = get_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_settings()._replace(
+            FEATURE_ACTIVATION=feature_settings,
+            MAX_FUTURE_TIMESTAMP_ALLOWED=30,  # We change this to allow a longer reorg
+        )
+
+        # We create two connected peers
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
         feature_service = artifacts.feature_service
         manager = artifacts.manager
+
+        builder2 = self.get_simulator_builder().set_settings(settings)
+        artifacts2 = self.simulator.create_artifacts(builder2)
+        manager2 = artifacts2.manager
+
+        connection = FakeConnection(manager, manager2)
+        self.simulator.add_connection(connection)
 
         feature_resource = FeatureResource(
             feature_settings=feature_settings,
@@ -365,7 +378,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         web_client = StubSite(feature_resource)
 
         # at the beginning, the feature is DEFINED:
-        self.simulator.run(60)
+        self.simulator.run(10)
         result = self._get_result(web_client)
         assert result == dict(
             block_height=0,
@@ -386,7 +399,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
         # at block 4, the feature becomes STARTED with 0% acceptance
         add_new_blocks(manager, 4)
-        self.simulator.run(60)
+        self.simulator.run(10)
         result = self._get_result(web_client)
         assert result == dict(
             block_height=4,
@@ -405,10 +418,14 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        # We remove the connection between the peers
+        connection.disconnect(Failure(Exception('testing')))
+        self.simulator.remove_connection(connection)
+
         # at block 7, acceptance is 25% (we're signaling 1 block out of 4)
         add_new_blocks(manager, 2)
         add_new_blocks(manager, 1, signal_bits=0b10)
-        self.simulator.run(60)
+        self.simulator.run(10)
         result = self._get_result(web_client)
         assert result == dict(
             block_height=7,
@@ -431,7 +448,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         # so the feature will be locked-in in the next block
         add_new_blocks(manager, 1)
         add_new_blocks(manager, 3, signal_bits=0b10)
-        self.simulator.run(60)
+        self.simulator.run(10)
         result = self._get_result(web_client)
         assert result == dict(
             block_height=11,
@@ -452,7 +469,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
         # at block 12, the feature is locked-in
         add_new_blocks(manager, 1)
-        self.simulator.run(60)
+        self.simulator.run(10)
         result = self._get_result(web_client)
         assert result == dict(
             block_height=12,
@@ -473,7 +490,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
         # at block 16, the feature is activated
         add_new_blocks(manager, 4)
-        self.simulator.run(60)
+        self.simulator.run(10)
         result = self._get_result(web_client)
         assert result == dict(
             block_height=16,
@@ -492,18 +509,15 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
-        # We then create a new manager with one more block (17 vs 16), so its blockchain wins when
-        # both managers are connected. This causes a reorg and the feature goes back to the STARTED state.
-        builder2 = self.get_simulator_builder().set_settings(settings)
-        artifacts2 = self.simulator.create_artifacts(builder2)
-        manager2 = artifacts2.manager
+        # We then create 13 blocks on manager2, one more block than manager1 (13 vs 12, from their common block),
+        # so its blockchain wins when both managers are reconnected.
+        add_new_blocks(manager2, 13)
+        self.simulator.run(10)
 
-        add_new_blocks(manager2, 17)
-        self.simulator.run(60)
-
-        connection = FakeConnection(manager, manager2)
+        # We reconnect the peers. This causes a reorg and the feature goes back to the STARTED state.
+        connection.reconnect()
         self.simulator.add_connection(connection)
-        self.simulator.run(60)
+        self.simulator.run(10)
 
         result = self._get_result(web_client)
         assert result == dict(

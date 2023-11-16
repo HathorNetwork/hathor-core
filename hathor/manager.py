@@ -1084,7 +1084,7 @@ class HathorManager:
 
     def _log_if_feature_is_active(self, block: Block, feature: Feature) -> None:
         """Log if a feature is ACTIVE for a block. Used as part of the Feature Activation Phased Testing."""
-        if self._feature_service.is_feature_active(block=block, feature=feature):
+        if self._feature_service.is_feature_active_for_block(block=block, feature=feature):
             self.log.info('Feature is ACTIVE for block', feature=feature.value, block_height=block.get_height())
 
     def has_sync_version_capability(self) -> bool:

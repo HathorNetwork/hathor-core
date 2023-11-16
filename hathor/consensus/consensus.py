@@ -18,7 +18,9 @@ from hathor.conf.get_settings import get_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
+from hathor.exception import ReorgTooLargeError
 from hathor.execution_manager import ExecutionManager
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
@@ -61,11 +63,13 @@ class ConsensusAlgorithm:
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
         *,
-        execution_manager: ExecutionManager
+        execution_manager: ExecutionManager,
+        feature_service: FeatureService,
     ) -> None:
         self._settings = get_settings()
         self.log = logger.new()
         self._pubsub = pubsub
+        self._feature_service = feature_service
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
@@ -138,6 +142,13 @@ class ConsensusAlgorithm:
             reorg_size = old_best_block.get_height() - context.reorg_common_block.get_height()
             assert old_best_block != new_best_block
             assert reorg_size > 0
+
+            if not self._feature_service.is_reorg_valid(context.reorg_common_block):
+                # Raise an exception forcing the full node to exit if the reorg is too large for Feature Activation.
+                raise ReorgTooLargeError(
+                    'Reorg is invalid. Time difference between common block and now is too large.'
+                )
+
             context.pubsub.publish(HathorEvents.REORG_STARTED, old_best_height=best_height,
                                    old_best_block=old_best_block, new_best_height=new_best_height,
                                    new_best_block=new_best_block, common_block=context.reorg_common_block,

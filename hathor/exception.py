@@ -49,6 +49,10 @@ class InitializationError(HathorError):
     """
 
 
+class ReorgTooLargeError(HathorError):
+    """Raised when a reorg is too large for the full node to recover."""
+
+
 class DoubleSpendingError(InvalidNewTransaction):
     """Raised when a new received tx/block is not valid because of a double spending.
     """

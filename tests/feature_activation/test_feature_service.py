@@ -17,7 +17,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_settings
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import (
     BlockIsMissingSignal,
@@ -29,12 +30,13 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
+from hathor.reactor.reactor_protocol import ReactorProtocol
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
 
 
 def _get_blocks_and_storage() -> tuple[list[Block], TransactionStorage]:
-    settings = HathorSettings()
+    settings = get_settings()
     genesis_hash = settings.GENESIS_BLOCK_HASH
     blocks: list[Block] = []
     feature_activation_bits = [
@@ -104,21 +106,31 @@ def tx_storage() -> TransactionStorage:
 
 
 @pytest.fixture
-def feature_settings() -> FeatureSettings:
-    return FeatureSettings(
+def settings() -> HathorSettings:
+    settings = Mock(spec_set=HathorSettings)
+    settings.FEATURE_ACTIVATION = FeatureSettings(
         evaluation_interval=4,
         default_threshold=3
     )
 
+    return settings
+
 
 @pytest.fixture
-def service(feature_settings: FeatureSettings, tx_storage: TransactionStorage) -> FeatureService:
-    service = FeatureService(
-        feature_settings=feature_settings,
+def service(settings: HathorSettings, tx_storage: TransactionStorage) -> FeatureService:
+    return get_service(settings.FEATURE_ACTIVATION, tx_storage)
+
+
+def get_service(feature_settings: FeatureSettings, tx_storage: TransactionStorage) -> FeatureService:
+    reactor = Mock(spec_set=ReactorProtocol)
+    settings = Mock(spec_set=HathorSettings)
+    settings.FEATURE_ACTIVATION = feature_settings
+
+    return FeatureService(
+        reactor=reactor,
+        settings=settings,
         tx_storage=tx_storage
     )
-
-    return service
 
 
 def test_get_state_genesis(block_mocks: list[Block], service: FeatureService) -> None:
@@ -163,10 +175,7 @@ def test_get_state_from_defined(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -194,10 +203,7 @@ def test_get_state_from_started_to_failed(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -225,10 +231,7 @@ def test_get_state_from_started_to_must_signal_on_timeout(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -257,10 +260,7 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -288,10 +288,7 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -327,10 +324,7 @@ def test_get_state_from_started_to_started(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -356,10 +350,7 @@ def test_get_state_from_must_signal_to_locked_in(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -388,10 +379,7 @@ def test_get_state_from_locked_in_to_active(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -420,10 +408,7 @@ def test_get_state_from_locked_in_to_locked_in(
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -445,10 +430,7 @@ def test_get_state_from_active(block_mocks: list[Block], tx_storage: Transaction
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -470,7 +452,7 @@ def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStor
             )
         }
     )
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
     calculate_new_state_mock = Mock(wraps=service._calculate_new_state)
 
@@ -501,13 +483,10 @@ def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStor
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
-    result = service.is_feature_active(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service.is_feature_active_for_block(block=block, feature=Feature.NOP_FEATURE_1)
 
     assert result is True
 
@@ -525,10 +504,7 @@ def test_get_state_from_failed(block_mocks: list[Block], tx_storage: Transaction
             )
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -553,10 +529,7 @@ def test_get_bits_description(tx_storage: TransactionStorage) -> None:
             Feature.NOP_FEATURE_2: criteria_mock_2
         }
     )
-    service = FeatureService(
-        feature_settings=feature_settings,
-        tx_storage=tx_storage
-    )
+    service = get_service(feature_settings, tx_storage)
 
     def get_state(self: FeatureService, *, block: Block, feature: Feature) -> FeatureState:
         states = {
@@ -579,56 +552,53 @@ def test_get_bits_description(tx_storage: TransactionStorage) -> None:
 @pytest.mark.parametrize(
     ['block_height', 'ancestor_height'],
     [
-        (21, 21),
         (21, 100),
         (10, 15),
         (10, 11),
-        (0, 0),
     ]
 )
 def test_get_ancestor_at_height_invalid(
-    feature_settings: FeatureSettings,
+    service: FeatureService,
     block_mocks: list[Block],
-    tx_storage: TransactionStorage,
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
     block = block_mocks[block_height]
 
     with pytest.raises(AssertionError) as e:
         service._get_ancestor_at_height(block=block, height=ancestor_height)
 
     assert str(e.value) == (
-        f"ancestor height must be lower than the block's height: {ancestor_height} >= {block_height}"
+        f"ancestor height must not be greater than the block's height: {ancestor_height} > {block_height}"
     )
 
 
 @pytest.mark.parametrize(
     ['block_height', 'ancestor_height'],
     [
+        (21, 21),
         (21, 20),
         (21, 10),
         (21, 0),
         (15, 10),
         (15, 0),
         (1, 0),
+        (0, 0)
     ]
 )
 def test_get_ancestor_at_height(
-    feature_settings: FeatureSettings,
+    service: FeatureService,
     block_mocks: list[Block],
     tx_storage: TransactionStorage,
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
     block = block_mocks[block_height]
     result = service._get_ancestor_at_height(block=block, height=ancestor_height)
 
     assert result == block_mocks[ancestor_height]
     assert result.get_height() == ancestor_height
-    assert cast(Mock, tx_storage.get_transaction_by_height).call_count == 1
+    assert cast(Mock, tx_storage.get_transaction_by_height).call_count <= 1
 
 
 @pytest.mark.parametrize(
@@ -643,13 +613,12 @@ def test_get_ancestor_at_height(
     ]
 )
 def test_get_ancestor_at_height_voided(
-    feature_settings: FeatureSettings,
+    service: FeatureService,
     block_mocks: list[Block],
     tx_storage: TransactionStorage,
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
     block = block_mocks[block_height]
     block.get_metadata().voided_by = {b'some'}
     result = service._get_ancestor_at_height(block=block, height=ancestor_height)
@@ -706,7 +675,7 @@ def test_check_must_signal(
             )
         }
     )
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = get_service(feature_settings, tx_storage)
     block = block_mocks[block_height]
 
     result = service.is_signaling_mandatory_features(block)

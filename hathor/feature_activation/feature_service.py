@@ -13,16 +13,22 @@
 #  limitations under the License.
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Optional, TypeAlias
 
+from structlog import get_logger
+
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
+from hathor.util import Reactor
 
 if TYPE_CHECKING:
-    from hathor.transaction import Block
+    from hathor.transaction import Block, Transaction
     from hathor.transaction.storage import TransactionStorage
+
+logger = get_logger()
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,17 +47,68 @@ BlockSignalingState: TypeAlias = BlockIsSignaling | BlockIsMissingSignal
 
 
 class FeatureService:
-    __slots__ = ('_feature_settings', '_tx_storage')
+    __slots__ = ('_log', '_reactor', '_settings', '_tx_storage')
 
-    def __init__(self, *, feature_settings: FeatureSettings, tx_storage: 'TransactionStorage') -> None:
-        self._feature_settings = feature_settings
+    def __init__(self, *, reactor: Reactor, settings: HathorSettings, tx_storage: 'TransactionStorage') -> None:
+        self._log = logger.new()
+        self._reactor = reactor
+        self._settings = settings
         self._tx_storage = tx_storage
 
-    def is_feature_active(self, *, block: 'Block', feature: Feature) -> bool:
-        """Returns whether a Feature is active at a certain block."""
+    @property
+    def _feature_settings(self) -> FeatureSettings:
+        return self._settings.FEATURE_ACTIVATION
+
+    def is_feature_active_for_block(self, *, block: 'Block', feature: Feature) -> bool:
+        """Return whether a Feature is active for a certain block."""
         state = self.get_state(block=block, feature=feature)
 
         return state == FeatureState.ACTIVE
+
+    def is_feature_active_for_transaction(self, *, transaction: 'Transaction', feature: Feature) -> bool:
+        """Return whether a Feature is active for a certain transaction."""
+        current_best_block = self._tx_storage.get_best_block()  # TODO: This could be inside _get_first_active_block
+        first_active_block = self._get_first_active_block(current_best_block, feature)
+
+        if not first_active_block:
+            return False
+
+        # Equivalent to two weeks
+        avg_time_between_boundaries = (
+            self._feature_settings.evaluation_interval * self._settings.AVG_TIME_BETWEEN_BLOCKS
+        )
+        # We also use the MAX_FUTURE_TIMESTAMP_ALLOWED to take into account that we can receive a tx from the future
+        margin = self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED
+        transaction_activation_threshold = first_active_block.timestamp + avg_time_between_boundaries + margin
+
+        assert transaction.timestamp is not None
+        is_active = transaction.timestamp > transaction_activation_threshold
+
+        return is_active
+
+    def _get_first_active_block(self, block: 'Block', feature: Feature) -> Optional['Block']:
+        """
+        Return the first ever block that became ACTIVE for a specific feature (which is always a boundary block),
+        or None if this feature is not ACTIVE.
+
+        It recursively hops boundary blocks until we find a block that is ACTIVE and has a parent that is LOCKED_IN.
+        """
+        if not self.is_feature_active_for_block(block=block, feature=feature):
+            return None
+
+        parent = block.get_block_parent()
+        parent_state = self.get_state(block=parent, feature=feature)
+
+        if parent_state is FeatureState.LOCKED_IN:
+            return block
+
+        height = block.get_height()
+        offset_to_boundary = height % self._feature_settings.evaluation_interval
+        offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
+        previous_boundary_height = height - offset_to_previous_boundary
+        previous_boundary_block = self._get_ancestor_at_height(block=block, height=previous_boundary_height)
+
+        return self._get_first_active_block(previous_boundary_block, feature)
 
     def is_signaling_mandatory_features(self, block: 'Block') -> BlockSignalingState:
         """
@@ -203,9 +260,12 @@ class FeatureService:
         Given a block, returns its ancestor at a specific height.
         Uses the height index if the block is in the best blockchain, or search iteratively otherwise.
         """
-        assert height < block.get_height(), (
-            f"ancestor height must be lower than the block's height: {height} >= {block.get_height()}"
+        assert height <= block.get_height(), (
+            f"ancestor height must not be greater than the block's height: {height} > {block.get_height()}"
         )
+
+        if height == block.get_height():
+            return block
 
         metadata = block.get_metadata()
 
@@ -215,6 +275,33 @@ class FeatureService:
             return ancestor
 
         return _get_ancestor_iteratively(block=block, ancestor_height=height)
+
+    def is_reorg_valid(self, common_block: 'Block') -> bool:
+        """
+        Check whether a reorg is valid, given its common block.
+        A reorg is considered invalid if it may include the activation threshold for transactions,
+        that is, if more than one evaluation interval has passed since the first reorged block.
+        The actual implementation is a bit more restrictive, including a margin.
+        """
+        now = self._reactor.seconds()
+        # equivalent to two weeks
+        avg_time_between_boundaries = (
+            self._feature_settings.evaluation_interval * self._settings.AVG_TIME_BETWEEN_BLOCKS
+        )
+        # We also use the MAX_FUTURE_TIMESTAMP_ALLOWED to take into account that we can receive a tx from the future.
+        # This is redundant considering we also use it in is_feature_active_for_transaction(),
+        # but we do it here too to restrict reorgs even further.
+        margin = self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED
+        is_invalid = now >= common_block.timestamp + avg_time_between_boundaries - margin
+
+        if is_invalid:
+            self._log.critical(
+                'Reorg is invalid. Time difference between common block and now is too large.',
+                current_timestamp=now,
+                common_block_timestamp=common_block.timestamp
+            )
+
+        return not is_invalid
 
 
 def _get_ancestor_iteratively(*, block: 'Block', ancestor_height: int) -> 'Block':
