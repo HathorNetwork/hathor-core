@@ -825,13 +825,13 @@ class BaseTransaction(ABC):
 
         return ret
 
-    def clone(self) -> 'BaseTransaction':
+    def clone(self, *, include_metadata: bool = True) -> 'BaseTransaction':
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
         """
         new_tx = self.create_from_struct(self.get_struct())
-        if hasattr(self, '_metadata'):
+        if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
         new_tx.storage = self.storage

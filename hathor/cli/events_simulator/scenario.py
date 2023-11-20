@@ -25,6 +25,7 @@ class Scenario(Enum):
     SINGLE_CHAIN_ONE_BLOCK = 'SINGLE_CHAIN_ONE_BLOCK'
     SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS = 'SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS'
     REORG = 'REORG'
+    UNVOIDED_TRANSACTION = 'UNVOIDED_TRANSACTION'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
         simulate_fns = {
@@ -32,6 +33,7 @@ class Scenario(Enum):
             Scenario.SINGLE_CHAIN_ONE_BLOCK: simulate_single_chain_one_block,
             Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS: simulate_single_chain_blocks_and_transactions,
             Scenario.REORG: simulate_reorg,
+            Scenario.UNVOIDED_TRANSACTION: simulate_unvoided_transaction,
         }
 
         simulate_fn = simulate_fns[self]
@@ -92,3 +94,49 @@ def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
     connection = FakeConnection(manager, manager2)
     simulator.add_connection(connection)
     simulator.run(60)
+
+
+def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
+    from hathor.conf.get_settings import get_settings
+    from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
+    from hathor.util import not_none
+
+    settings = get_settings()
+    assert manager.wallet is not None
+    address = manager.wallet.get_unused_address(mark_as_used=False)
+
+    add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    simulator.run(60)
+
+    # A tx is created with weight 19.0005
+    tx = gen_new_tx(manager, address, 1000)
+    tx.weight = 19.0005
+    tx.update_hash()
+    assert manager.propagate_tx(tx, fails_silently=False)
+    simulator.run(60)
+
+    # A clone is created with a greater timestamp and a lower weight. It's a voided twin tx.
+    tx2 = tx.clone(include_metadata=False)
+    tx2.timestamp += 60
+    tx2.weight = 19
+    tx2.update_hash()
+    assert manager.propagate_tx(tx2, fails_silently=False)
+    simulator.run(60)
+
+    # Only the second tx is voided
+    assert not tx.get_metadata().voided_by
+    assert tx2.get_metadata().voided_by
+
+    # We add a block confirming the second tx, increasing its acc weight
+    block = add_new_block(manager, propagate=False)
+    block.parents = [
+        block.parents[0],
+        settings.GENESIS_TX1_HASH,
+        not_none(tx2.hash),
+    ]
+    assert manager.propagate_tx(block, fails_silently=False)
+    simulator.run(60)
+
+    # The first tx gets voided and the second gets unvoided
+    assert tx.get_metadata().voided_by
+    assert not tx2.get_metadata().voided_by

@@ -77,9 +77,9 @@ class BaseEventReorgTest(unittest.TestCase):
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[9].hash_hex}),
             (EventType.REORG_STARTED, {'reorg_size': 2, 'previous_best_block': blocks[9].hash_hex,
                                        'new_best_block': b0.hash_hex}),
-            (EventType.VERTEX_METADATA_CHANGED, {'hash': b0.hash_hex}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[9].hash_hex}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[8].hash_hex}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': b0.hash_hex}),
             (EventType.REORG_FINISHED, {}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': b0.hash_hex}),
         ]
