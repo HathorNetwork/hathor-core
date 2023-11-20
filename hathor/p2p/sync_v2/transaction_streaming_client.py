@@ -99,6 +99,9 @@ class TransactionStreamingClient:
 
     def fails(self, reason: 'StreamingError') -> None:
         """Fail the execution by resolving the deferred with an error."""
+        if self._deferred.called:
+            self.log.warn('already failed before', new_reason=repr(reason))
+            return
         self._deferred.errback(reason)
 
     def handle_transaction(self, tx: BaseTransaction) -> None:
@@ -125,6 +128,9 @@ class TransactionStreamingClient:
     @inlineCallbacks
     def process_queue(self) -> Generator[Any, Any, None]:
         """Process next transaction in the queue."""
+        if self._deferred.called:
+            return
+
         if self._is_processing:
             return
 
