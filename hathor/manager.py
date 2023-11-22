@@ -1075,7 +1075,7 @@ class HathorManager:
             features_states=state_by_feature
         )
 
-        features = [Feature.NOP_FEATURE_1, Feature.NOP_FEATURE_2, Feature.NOP_FEATURE_3]
+        features = [Feature.NOP_FEATURE_4, Feature.NOP_FEATURE_5, Feature.NOP_FEATURE_6]
         for feature in features:
             self._log_if_feature_is_active(vertex, feature)
 
