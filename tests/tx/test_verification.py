@@ -137,7 +137,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(BlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.verifiers.block.verify_without_storage(block)
+            self.manager.verification_service.verify_without_storage(block)
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
@@ -270,12 +270,12 @@ class BaseVerificationTest(unittest.TestCase):
     def test_merge_mined_block_verify_basic(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        verify_weight_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_weight)
-        verify_reward_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_reward)
+        verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
+        verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
-            patch.object(MergeMinedBlockVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_reward', verify_reward_wrapped),
+            patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
+            patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
             self.manager.verification_service.verify_basic(block)
 
@@ -286,25 +286,25 @@ class BaseVerificationTest(unittest.TestCase):
     def test_merge_mined_block_verify_without_storage(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        verify_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_pow)
-        verify_no_inputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_number_of_outputs)
-        verify_data_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_sigops_output)
+        verify_pow_wrapped = Mock(wraps=self.verifiers.block.verify_pow)
+        verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_number_of_outputs)
+        verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
+        verify_sigops_output_wrapped = Mock(wraps=self.verifiers.block.verify_sigops_output)
 
         verify_aux_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_aux_pow)
 
         with (
-            patch.object(MergeMinedBlockVerifier, 'verify_pow', verify_pow_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(BlockVerifier, 'verify_pow', verify_pow_wrapped),
+            patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
+            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
+            patch.object(BlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
         ):
-            self.verifiers.merge_mined_block.verify_without_storage(block)
+            self.manager.verification_service.verify_without_storage(block)
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
@@ -320,29 +320,29 @@ class BaseVerificationTest(unittest.TestCase):
     def test_merge_mined_block_verify(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        verify_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_pow)
-        verify_no_inputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_number_of_outputs)
-        verify_data_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_sigops_output)
-        verify_parents_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_parents)
-        verify_height_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_height)
-        verify_mandatory_signaling_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_mandatory_signaling)
+        verify_pow_wrapped = Mock(wraps=self.verifiers.block.verify_pow)
+        verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_number_of_outputs)
+        verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
+        verify_sigops_output_wrapped = Mock(wraps=self.verifiers.block.verify_sigops_output)
+        verify_parents_wrapped = Mock(wraps=self.verifiers.block.verify_parents)
+        verify_height_wrapped = Mock(wraps=self.verifiers.block.verify_height)
+        verify_mandatory_signaling_wrapped = Mock(wraps=self.verifiers.block.verify_mandatory_signaling)
 
         verify_aux_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_aux_pow)
 
         with (
-            patch.object(MergeMinedBlockVerifier, 'verify_pow', verify_pow_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_parents', verify_parents_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_height', verify_height_wrapped),
+            patch.object(BlockVerifier, 'verify_pow', verify_pow_wrapped),
+            patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
+            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
+            patch.object(BlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(BlockVerifier, 'verify_parents', verify_parents_wrapped),
+            patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
+            patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
             self.manager.verification_service.verify(block)
 
@@ -363,12 +363,12 @@ class BaseVerificationTest(unittest.TestCase):
     def test_merge_mined_block_validate_basic(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        verify_weight_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_weight)
-        verify_reward_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_reward)
+        verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
+        verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
-            patch.object(MergeMinedBlockVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_reward', verify_reward_wrapped),
+            patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
+            patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
             self.manager.verification_service.validate_basic(block)
 
@@ -403,33 +403,33 @@ class BaseVerificationTest(unittest.TestCase):
     def test_merge_mined_block_validate_full(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        verify_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_pow)
-        verify_no_inputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_no_inputs)
-        verify_outputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_outputs)
-        verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_number_of_outputs)
-        verify_data_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_data)
-        verify_sigops_output_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_sigops_output)
-        verify_parents_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_parents)
-        verify_height_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_height)
-        verify_weight_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_weight)
-        verify_reward_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_reward)
-        verify_mandatory_signaling_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_mandatory_signaling)
+        verify_pow_wrapped = Mock(wraps=self.verifiers.block.verify_pow)
+        verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
+        verify_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_outputs)
+        verify_number_of_outputs_wrapped = Mock(wraps=self.verifiers.block.verify_number_of_outputs)
+        verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
+        verify_sigops_output_wrapped = Mock(wraps=self.verifiers.block.verify_sigops_output)
+        verify_parents_wrapped = Mock(wraps=self.verifiers.block.verify_parents)
+        verify_height_wrapped = Mock(wraps=self.verifiers.block.verify_height)
+        verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
+        verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
+        verify_mandatory_signaling_wrapped = Mock(wraps=self.verifiers.block.verify_mandatory_signaling)
 
         verify_aux_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_aux_pow)
 
         with (
-            patch.object(MergeMinedBlockVerifier, 'verify_pow', verify_pow_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_outputs', verify_outputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_data', verify_data_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_parents', verify_parents_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_height', verify_height_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_weight', verify_weight_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_reward', verify_reward_wrapped),
+            patch.object(BlockVerifier, 'verify_pow', verify_pow_wrapped),
+            patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
+            patch.object(BlockVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
+            patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
+            patch.object(BlockVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
+            patch.object(BlockVerifier, 'verify_parents', verify_parents_wrapped),
+            patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
+            patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
+            patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
+            patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
             self.manager.verification_service.validate_full(block)
 
