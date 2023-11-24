@@ -1,5 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import DecodeTxResource, PushTxResource
 from hathor.util import json_loadb
@@ -11,7 +12,7 @@ from hathor.wallet.resources.nano_contracts import (
 )
 from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks
+from tests.utils import add_blocks_unlock_reward
 
 
 class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):

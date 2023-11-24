@@ -1,12 +1,13 @@
 import pytest
 from mnemonic import Mnemonic
 
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection
+from hathor.simulator.utils import add_new_block
 from hathor.wallet import HDWallet
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_block, add_new_double_spending, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):
@@ -24,8 +25,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         manager = super().create_peer(network, wallet=wallet)
+        manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         manager.avg_time_between_blocks = 64
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.
@@ -293,7 +294,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # will be bigger than the other one
         b = add_new_block(manager2, advance_clock=1, propagate=False)
         b.weight = 5
-        b.resolve()
+        manager2.cpu_mining_service.resolve(b)
         manager2.propagate_tx(b)
         manager2_blocks += 1
 

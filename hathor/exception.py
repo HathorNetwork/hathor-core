@@ -23,6 +23,16 @@ class BuilderError(Exception):
     pass
 
 
+class BlockTemplateError(Exception):
+    """Base class for exceptions generating block template."""
+    pass
+
+
+class BlockTemplateTimestampError(BlockTemplateError):
+    """Raised when there is no timestamp available to prepare a block template."""
+    pass
+
+
 class InvalidNewTransaction(HathorError):
     """Raised when a new received tx/block is not valid.
     """

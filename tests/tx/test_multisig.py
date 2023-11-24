@@ -2,13 +2,14 @@ import base58
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes, get_public_key_bytes_compressed
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
 from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, parse_address_script, script_eval
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks
+from tests.utils import add_blocks_unlock_reward
 
 settings = HathorSettings()
 
@@ -72,7 +73,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
@@ -104,13 +105,13 @@ class BaseMultisigTestCase(unittest.TestCase):
         input_data = MultiSig.create_input_data(self.redeem_script, signatures)
         tx.inputs[0].data = input_data
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         # Transaction is still locked
         self.assertFalse(self.manager.propagate_tx(tx))
 
         self.clock.advance(6)
         tx.timestamp = int(self.clock.seconds())
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
 
         # First we try to propagate with a P2PKH input
         private_key_obj = get_private_key_from_bytes(bytes.fromhex(self.private_keys[0]), password=b'1234')
@@ -119,7 +120,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         p2pkh_input_data = P2PKH.create_input_data(public_key_compressed, signatures[0])
         tx2 = Transaction.create_from_struct(tx.get_struct())
         tx2.inputs[0].data = p2pkh_input_data
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.assertFalse(self.manager.propagate_tx(tx2))
 
         # Now we propagate the correct

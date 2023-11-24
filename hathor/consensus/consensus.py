@@ -136,8 +136,7 @@ class ConsensusAlgorithm:
                                    reorg_size=reorg_size)
 
         # finally signal an index update for all affected transactions
-        sorted_txs_affected = sorted(context.txs_affected, key=lambda tx: not_none(tx.timestamp), reverse=True)
-        for tx_affected in sorted_txs_affected:
+        for tx_affected in _sorted_affected_txs(context.txs_affected):
             assert tx_affected.storage is not None
             assert tx_affected.storage.indexes is not None
             tx_affected.storage.indexes.update(tx_affected)
@@ -167,3 +166,17 @@ class ConsensusAlgorithm:
             if not (self.soft_voided_tx_ids & tx3_voided_by):
                 ret.add(h)
         return ret
+
+
+def _sorted_affected_txs(affected_txs: set[BaseTransaction]) -> list[BaseTransaction]:
+    """
+    Sort affected txs by voided first, then descending timestamp (reverse topological order).
+    This is useful for generating Reliable Integration events.
+    """
+    def sorter(tx: BaseTransaction) -> tuple[bool, int]:
+        meta = tx.get_metadata()
+        is_voided = bool(meta.voided_by)
+
+        return is_voided, not_none(tx.timestamp)
+
+    return sorted(affected_txs, key=sorter, reverse=True)

@@ -18,6 +18,8 @@ settings = HathorSettings()
 
 class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
+    seed_config = 6
+
     def _send_cmd(self, proto, cmd, payload=None):
         if not payload:
             line = '{}\r\n'.format(cmd)

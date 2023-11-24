@@ -22,7 +22,6 @@ class SyncVersion(Enum):
     #      to no match different values and in turn not select a certain protocol, this can be done intentionally, for
     #      example, peers using `v2-fake` (which just uses sync-v1) will not connect to peers using `v2-alpha`, and so
     #      on.
-    V1 = 'v1'
     V1_1 = 'v1.1'
     V2 = 'v2'
 
@@ -37,10 +36,7 @@ class SyncVersion(Enum):
         # XXX: these values are only used internally and in memory, there is no need to keep them consistency, for
         #      example, if we need more granularity, we can just add a 0 to all values and use the values in between,
         #      although this shouldn't really be necessary
-        if self is SyncVersion.V1:
-            # low priority
-            return 10
-        elif self is SyncVersion.V1_1:
+        if self is SyncVersion.V1_1:
             return 11
         elif self is SyncVersion.V2:
             return 20
@@ -48,7 +44,7 @@ class SyncVersion(Enum):
             raise ValueError('value is either invalid for this enum or not implemented')
 
     def is_v1(self) -> bool:
-        """Return True for V1 and V1_1."""
+        """Return True for V1_1."""
         return self.get_priority() < 20
 
     # XXX: total_ordering decorator will implement the other methods: __le__, __gt__, and __ge__

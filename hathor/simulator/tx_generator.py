@@ -17,12 +17,11 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor import daa
 from hathor.conf.get_settings import get_settings
+from hathor.simulator.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 from hathor.transaction.exceptions import RewardLocked
 from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
-from tests.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -128,7 +127,7 @@ class RandomTransactionGenerator:
                 self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
                 return
 
-        tx.weight = daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa.minimum_tx_weight(tx)
         tx.update_hash()
 
         geometric_p = 2**(-tx.weight)

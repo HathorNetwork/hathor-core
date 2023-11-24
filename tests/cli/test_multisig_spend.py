@@ -6,12 +6,13 @@ from structlog.testing import capture_logs
 from hathor.cli.multisig_spend import create_parser, execute
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks
+from tests.utils import add_blocks_unlock_reward
 
 settings = HathorSettings()
 
@@ -74,7 +75,7 @@ class BaseMultiSigSpendTest(unittest.TestCase):
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 

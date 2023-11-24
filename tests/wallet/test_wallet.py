@@ -6,13 +6,14 @@ from cryptography.hazmat.primitives import serialization
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
+from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction, TxInput
 from hathor.wallet import Wallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
 from hathor.wallet.keypair import KeyPair
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_block, create_tokens, get_genesis_key
+from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
 
 settings = HathorSettings()
 
@@ -207,7 +208,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx2.storage = self.manager.tx_storage
         tx2.timestamp = tx.timestamp + 1
         tx2.parents = self.manager.get_new_tx_parents()
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
 
         self.assertNotEqual(len(tx2.inputs), 0)
@@ -265,7 +266,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx2.parents = self.manager.get_new_tx_parents(tx2.timestamp)
         tx2.weight = 1
         tx2.timestamp = blocks[-1].timestamp + 1
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.assertTrue(self.manager.on_new_tx(tx2, fails_silently=False))
         self.clock.advance(2)
         self.assertEqual(0, len(w.maybe_spent_txs[settings.HATHOR_TOKEN_UID]))

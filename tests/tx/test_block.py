@@ -16,10 +16,14 @@ from unittest.mock import Mock
 
 import pytest
 
-from hathor.conf import HathorSettings
 from hathor.conf.get_settings import get_settings
+from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
 from hathor.transaction import Block, TransactionMetadata
+from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
+from hathor.verification.block_verifier import BlockVerifier
 
 
 def test_calculate_feature_activation_bit_counts_genesis():
@@ -27,13 +31,14 @@ def test_calculate_feature_activation_bit_counts_genesis():
     storage = TransactionMemoryStorage()
     genesis_block = storage.get_transaction(settings.GENESIS_BLOCK_HASH)
     assert isinstance(genesis_block, Block)
-    result = genesis_block.calculate_feature_activation_bit_counts()
+    result = genesis_block.get_feature_activation_bit_counts()
 
     assert result == [0, 0, 0, 0]
 
 
 @pytest.fixture
 def block_mocks() -> list[Block]:
+    settings = get_settings()
     blocks: list[Block] = []
     feature_activation_bits = [
         0b0000,  # 0: boundary block
@@ -51,7 +56,6 @@ def block_mocks() -> list[Block]:
     ]
 
     for i, bits in enumerate(feature_activation_bits):
-        settings = HathorSettings()
         genesis_hash = settings.GENESIS_BLOCK_HASH
         block_hash = genesis_hash if i == 0 else b'some_hash'
 
@@ -88,7 +92,7 @@ def test_calculate_feature_activation_bit_counts(
     expected_counts: list[int]
 ) -> None:
     block = block_mocks[block_height]
-    result = block.calculate_feature_activation_bit_counts()
+    result = block.get_feature_activation_bit_counts()
 
     assert result == expected_counts
 
@@ -132,3 +136,45 @@ def test_get_feature_activation_bit_value() -> None:
     assert block.get_feature_activation_bit_value(1) == 0
     assert block.get_feature_activation_bit_value(2) == 1
     assert block.get_feature_activation_bit_value(3) == 0
+
+
+@pytest.mark.parametrize(
+    'is_signaling_mandatory_features',
+    [BlockIsSignaling(), BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)]
+)
+def test_verify_must_signal_when_feature_activation_is_disabled(is_signaling_mandatory_features: bool) -> None:
+    settings = Mock(spec_set=HathorSettings)
+    settings.FEATURE_ACTIVATION.enable_usage = False
+    feature_service = Mock(spec_set=FeatureService)
+    feature_service.is_signaling_mandatory_features = Mock(return_value=is_signaling_mandatory_features)
+    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    block = Block()
+
+    verifier.verify_mandatory_signaling(block)
+
+
+def test_verify_must_signal() -> None:
+    settings = Mock(spec_set=HathorSettings)
+    settings.FEATURE_ACTIVATION.enable_usage = True
+    feature_service = Mock(spec_set=FeatureService)
+    feature_service.is_signaling_mandatory_features = Mock(
+        return_value=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)
+    )
+    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    block = Block()
+
+    with pytest.raises(BlockMustSignalError) as e:
+        verifier.verify_mandatory_signaling(block)
+
+    assert str(e.value) == "Block must signal support for feature 'NOP_FEATURE_1' during MUST_SIGNAL phase."
+
+
+def test_verify_must_not_signal() -> None:
+    settings = Mock(spec_set=HathorSettings)
+    settings.FEATURE_ACTIVATION.enable_usage = True
+    feature_service = Mock(spec_set=FeatureService)
+    feature_service.is_signaling_mandatory_features = Mock(return_value=BlockIsSignaling())
+    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    block = Block()
+
+    verifier.verify_mandatory_signaling(block)

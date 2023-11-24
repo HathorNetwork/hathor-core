@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Any, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
 
@@ -21,6 +21,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_settings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -29,6 +30,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
@@ -40,7 +42,7 @@ from hathor.transaction.storage import (
     TransactionRocksDBStorage,
     TransactionStorage,
 )
-from hathor.util import Random, Reactor, get_environment_info
+from hathor.util import Random, Reactor, get_environment_info, not_none
 from hathor.verification.verification_service import VerificationService, VertexVerifiers
 from hathor.wallet import BaseWallet, Wallet
 
@@ -63,10 +65,17 @@ class BuildArtifacts(NamedTuple):
     pubsub: PubSubManager
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
+    feature_service: FeatureService
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
     stratum_factory: Optional[StratumFactory]
+
+
+_VertexVerifiersBuilder: TypeAlias = Callable[
+    [HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService],
+    VertexVerifiers
+]
 
 
 class Builder:
@@ -102,7 +111,11 @@ class Builder:
         self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
+        self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
+        self._cpu_mining_service: Optional[CpuMiningService] = None
+
         self._vertex_verifiers: Optional[VertexVerifiers] = None
+        self._vertex_verifiers_builder: _VertexVerifiersBuilder | None = None
         self._verification_service: Optional[VerificationService] = None
 
         self._rocksdb_path: Optional[str] = None
@@ -127,8 +140,7 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._enable_sync_v1: bool = False
-        self._enable_sync_v1_1: bool = True
+        self._enable_sync_v1: bool = True
         self._enable_sync_v2: bool = False
 
         self._enable_stratum_server: Optional[bool] = None
@@ -158,10 +170,12 @@ class Builder:
         wallet = self._get_or_create_wallet()
         event_manager = self._get_or_create_event_manager()
         indexes = self._get_or_create_indexes_manager()
-        tx_storage = self._get_or_create_tx_storage(indexes)
-        feature_service = self._get_or_create_feature_service(tx_storage)
-        bit_signaling_service = self._get_or_create_bit_signaling_service(tx_storage)
+        tx_storage = self._get_or_create_tx_storage()
+        feature_service = self._get_or_create_feature_service()
+        bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
+        daa = self._get_or_create_daa()
+        cpu_mining_service = self._get_or_create_cpu_mining_service()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -186,6 +200,7 @@ class Builder:
             network=self._network,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
+            daa=daa,
             peer_id=peer_id,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
@@ -198,6 +213,7 @@ class Builder:
             feature_service=feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
+            cpu_mining_service=cpu_mining_service,
             **kwargs
         )
 
@@ -221,6 +237,7 @@ class Builder:
             wallet=wallet,
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
+            feature_service=feature_service,
         )
 
         return self.artifacts
@@ -265,6 +282,7 @@ class Builder:
         return self
 
     def _get_or_create_settings(self) -> HathorSettingsType:
+        """Return the HathorSettings instance set on this builder, or a new one if not set."""
         if self._settings is None:
             self._settings = get_settings()
         return self._settings
@@ -316,6 +334,10 @@ class Builder:
         return self._rocksdb_storage
 
     def _get_p2p_manager(self) -> ConnectionsManager:
+        from hathor.p2p.sync_v1.factory import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
+        from hathor.p2p.sync_version import SyncVersion
+
         enable_ssl = True
         reactor = self._get_reactor()
         my_peer = self._get_peer_id()
@@ -330,10 +352,13 @@ class Builder:
             ssl=enable_ssl,
             whitelist_only=False,
             rng=self._rng,
-            enable_sync_v1=self._enable_sync_v1,
-            enable_sync_v1_1=self._enable_sync_v1_1,
-            enable_sync_v2=self._enable_sync_v2,
         )
+        p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+        p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+        if self._enable_sync_v1:
+            p2p_manager.enable_sync_version(SyncVersion.V1_1)
+        if self._enable_sync_v2:
+            p2p_manager.enable_sync_version(SyncVersion.V2)
         return p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
@@ -352,7 +377,9 @@ class Builder:
 
         return self._indexes_manager
 
-    def _get_or_create_tx_storage(self, indexes: IndexesManager) -> TransactionStorage:
+    def _get_or_create_tx_storage(self) -> TransactionStorage:
+        indexes = self._get_or_create_indexes_manager()
+
         if self._tx_storage is not None:
             # If a tx storage is provided, set the indexes manager to it.
             self._tx_storage.indexes = indexes
@@ -396,9 +423,16 @@ class Builder:
 
     def _get_or_create_event_manager(self) -> EventManager:
         if self._event_manager is None:
+            peer_id = self._get_peer_id()
+            settings = self._get_or_create_settings()
             reactor = self._get_reactor()
             storage = self._get_or_create_event_storage()
-            factory = EventWebsocketFactory(reactor, storage)
+            factory = EventWebsocketFactory(
+                peer_id=not_none(peer_id.id),
+                network=settings.NETWORK_NAME,
+                reactor=reactor,
+                event_storage=storage,
+            )
             self._event_manager = EventManager(
                 reactor=reactor,
                 pubsub=self._get_or_create_pubsub(),
@@ -408,9 +442,11 @@ class Builder:
 
         return self._event_manager
 
-    def _get_or_create_feature_service(self, tx_storage: TransactionStorage) -> FeatureService:
+    def _get_or_create_feature_service(self) -> FeatureService:
+        """Return the FeatureService instance set on this builder, or a new one if not set."""
         if self._feature_service is None:
             settings = self._get_or_create_settings()
+            tx_storage = self._get_or_create_tx_storage()
             self._feature_service = FeatureService(
                 feature_settings=settings.FEATURE_ACTIVATION,
                 tx_storage=tx_storage
@@ -418,12 +454,14 @@ class Builder:
 
         return self._feature_service
 
-    def _get_or_create_bit_signaling_service(self, tx_storage: TransactionStorage) -> BitSignalingService:
+    def _get_or_create_bit_signaling_service(self) -> BitSignalingService:
         if self._bit_signaling_service is None:
             settings = self._get_or_create_settings()
+            tx_storage = self._get_or_create_tx_storage()
+            feature_service = self._get_or_create_feature_service()
             self._bit_signaling_service = BitSignalingService(
                 feature_settings=settings.FEATURE_ACTIVATION,
-                feature_service=self._get_or_create_feature_service(tx_storage),
+                feature_service=feature_service,
                 tx_storage=tx_storage,
                 support_features=self._support_features,
                 not_support_features=self._not_support_features,
@@ -441,9 +479,32 @@ class Builder:
     def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
         if self._vertex_verifiers is None:
             settings = self._get_or_create_settings()
-            self._vertex_verifiers = VertexVerifiers.create_defaults(settings=settings)
+            feature_service = self._get_or_create_feature_service()
+            daa = self._get_or_create_daa()
+
+            if self._vertex_verifiers_builder:
+                self._vertex_verifiers = self._vertex_verifiers_builder(settings, daa, feature_service)
+            else:
+                self._vertex_verifiers = VertexVerifiers.create_defaults(
+                    settings=settings,
+                    daa=daa,
+                    feature_service=feature_service,
+                )
 
         return self._vertex_verifiers
+
+    def _get_or_create_daa(self) -> DifficultyAdjustmentAlgorithm:
+        if self._daa is None:
+            settings = self._get_or_create_settings()
+            self._daa = DifficultyAdjustmentAlgorithm(settings=settings)
+
+        return self._daa
+
+    def _get_or_create_cpu_mining_service(self) -> CpuMiningService:
+        if self._cpu_mining_service is None:
+            self._cpu_mining_service = CpuMiningService()
+
+        return self._cpu_mining_service
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
@@ -547,6 +608,21 @@ class Builder:
         self._vertex_verifiers = vertex_verifiers
         return self
 
+    def set_vertex_verifiers_builder(self, builder: _VertexVerifiersBuilder) -> 'Builder':
+        self.check_if_can_modify()
+        self._vertex_verifiers_builder = builder
+        return self
+
+    def set_daa(self, daa: DifficultyAdjustmentAlgorithm) -> 'Builder':
+        self.check_if_can_modify()
+        self._daa = daa
+        return self
+
+    def set_cpu_mining_service(self, cpu_mining_service: CpuMiningService) -> 'Builder':
+        self.check_if_can_modify()
+        self._cpu_mining_service = cpu_mining_service
+        return self
+
     def set_reactor(self, reactor: Reactor) -> 'Builder':
         self.check_if_can_modify()
         self._reactor = reactor
@@ -567,11 +643,6 @@ class Builder:
         self._enable_sync_v1 = enable_sync_v1
         return self
 
-    def set_enable_sync_v1_1(self, enable_sync_v1_1: bool) -> 'Builder':
-        self.check_if_can_modify()
-        self._enable_sync_v1_1 = enable_sync_v1_1
-        return self
-
     def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v2 = enable_sync_v2
@@ -585,16 +656,6 @@ class Builder:
     def disable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v1 = False
-        return self
-
-    def enable_sync_v1_1(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._enable_sync_v1_1 = True
-        return self
-
-    def disable_sync_v1_1(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._enable_sync_v1_1 = False
         return self
 
     def enable_sync_v2(self) -> 'Builder':

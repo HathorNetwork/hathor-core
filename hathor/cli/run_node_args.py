@@ -63,7 +63,6 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     sentry_dsn: Optional[str]
     enable_debug_api: bool
     enable_crash_api: bool
-    x_enable_legacy_sync_v1_0: bool
     x_sync_bridge: bool
     x_sync_v2_only: bool
     x_localhost_only: bool

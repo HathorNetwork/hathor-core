@@ -1,9 +1,10 @@
 from hathor.crypto.util import decode_address
+from hathor.simulator.utils import add_new_blocks, gen_new_tx
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, gen_new_tx
+from tests.utils import add_blocks_unlock_reward
 
 
 class BaseSimulatorIndexesTestCase(unittest.TestCase):
@@ -29,7 +30,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         tx1.weight = 2.0
         tx1.parents = manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        manager.cpu_mining_service.resolve(tx1)
         assert manager.propagate_tx(tx1, False)
 
         tx2 = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
@@ -37,13 +38,13 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         tx2.parents = [tx1.hash] + manager.get_new_tx_parents()[1:]
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
-        tx2.resolve()
+        manager.cpu_mining_service.resolve(tx2)
         assert manager.propagate_tx(tx2, False)
 
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.weight = 3.0
         tx3.parents = tx1.parents
-        tx3.resolve()
+        manager.cpu_mining_service.resolve(tx3)
         assert manager.propagate_tx(tx3, False)
 
         for _ in range(100):

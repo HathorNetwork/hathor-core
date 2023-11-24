@@ -15,6 +15,7 @@
 import os
 
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.sync_version import SyncVersion
 from hathor.sysctl.exception import SysctlException
 from hathor.sysctl.sysctl import Sysctl
 
@@ -30,6 +31,26 @@ def parse_text(text: str) -> list[str]:
             continue
         ret.append(line)
     return ret
+
+
+def parse_sync_version(name: str) -> SyncVersion:
+    match name.strip():
+        case 'v1':
+            return SyncVersion.V1_1
+        case 'v2':
+            return SyncVersion.V2
+        case _:
+            raise ValueError('unknown or not implemented')
+
+
+def pretty_sync_version(sync_version: SyncVersion) -> str:
+    match sync_version:
+        case SyncVersion.V1_1:
+            return 'v1'
+        case SyncVersion.V2:
+            return 'v2'
+        case _:
+            raise ValueError('unknown or not implemented')
 
 
 class ConnectionsManagerSysctl(Sysctl):
@@ -66,6 +87,16 @@ class ConnectionsManagerSysctl(Sysctl):
             'always_enable_sync.readtxt',
             None,
             self.set_always_enable_sync_readtxt,
+        )
+        self.register(
+            'available_sync_versions',
+            self.get_available_sync_verions,
+            None,
+        )
+        self.register(
+            'enabled_sync_versions',
+            self.get_enabled_sync_versions,
+            self.set_enabled_sync_versions,
         )
 
     def set_force_sync_rotate(self) -> None:
@@ -134,3 +165,34 @@ class ConnectionsManagerSysctl(Sysctl):
             return
         self.connections.MAX_ENABLED_SYNC = value
         self.connections._sync_rotate_if_needed(force=True)
+
+    def get_available_sync_verions(self) -> list[str]:
+        """Return the list of AVAILABLE sync versions."""
+        return sorted(map(pretty_sync_version, self.connections.get_available_sync_versions()))
+
+    def get_enabled_sync_versions(self) -> list[str]:
+        """Return the list of ENABLED sync versions."""
+        return sorted(map(pretty_sync_version, self.connections.get_enabled_sync_versions()))
+
+    def set_enabled_sync_versions(self, sync_versions: list[str]) -> None:
+        """Set the list of ENABLED sync versions."""
+        new_sync_versions = set(map(parse_sync_version, sync_versions))
+        old_sync_versions = self.connections.get_enabled_sync_versions()
+        to_enable = new_sync_versions - old_sync_versions
+        to_disable = old_sync_versions - new_sync_versions
+        for sync_version in to_enable:
+            self._enable_sync_version(sync_version)
+        for sync_version in to_disable:
+            self._disable_sync_version(sync_version)
+
+    def _enable_sync_version(self, sync_version: SyncVersion) -> None:
+        """Enable the given sync version, it must be available, otherwise it will fail silently."""
+        if not self.connections.is_sync_version_available(sync_version):
+            self.connections.log.warn('tried to enable a sync version through sysctl, but it is not available',
+                                      sync_version=sync_version)
+            return
+        self.connections.enable_sync_version(sync_version)
+
+    def _disable_sync_version(self, sync_version: SyncVersion) -> None:
+        """Disable the given sync version."""
+        self.connections.disable_sync_version(sync_version)

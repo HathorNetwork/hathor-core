@@ -1,8 +1,9 @@
 from hathor.crypto.util import decode_address
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_double_spending
+from tests.utils import add_blocks_unlock_reward, add_new_double_spending
 
 
 class BaseTwinTransactionTestCase(unittest.TestCase):
@@ -36,12 +37,12 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
-        tx1.resolve()
+        self.manager.cpu_mining_service.resolve(tx1)
 
         # Change of parents only, so it's a twin
         tx2 = Transaction.create_from_struct(tx1.get_struct())
         tx2.parents = [tx1.parents[1], tx1.parents[0]]
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.assertNotEqual(tx1.hash, tx2.hash)
 
         # The same as tx1 but with one input different, so it's not a twin
@@ -50,7 +51,7 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         tx3.weight = tx1.weight
         tx3.parents = tx1.parents
         tx3.timestamp = tx1.timestamp
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
 
         self.manager.propagate_tx(tx1)
         meta1 = tx1.get_metadata()

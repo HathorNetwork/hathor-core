@@ -1,16 +1,10 @@
 from unittest.mock import MagicMock
 
 from hathor.conf import HathorSettings
+from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
-from tests.utils import (
-    add_blocks_unlock_reward,
-    add_new_block,
-    add_new_blocks,
-    add_new_double_spending,
-    add_new_transactions,
-    gen_new_tx,
-)
+from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 settings = HathorSettings()
 
@@ -82,7 +76,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
-        b0.resolve()
+        manager.cpu_mining_service.resolve(b0)
         manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
@@ -144,7 +138,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         # So, it is not enough to revert and this block will be voided as well.
         b0 = manager.generate_mining_block()
         b0.parents = [blocks[-1].hash, conflicting_tx.hash, conflicting_tx.parents[0]]
-        b0.resolve()
+        manager.cpu_mining_service.resolve(b0)
         manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
@@ -200,7 +194,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
-        b0.resolve()
+        manager.cpu_mining_service.resolve(b0)
         manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
@@ -254,7 +248,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         b0 = manager.generate_mining_block()
         b0.parents = [b0.parents[0], conflicting_tx.hash, conflicting_tx.parents[0]]
         b0.weight = 10
-        b0.resolve()
+        manager.cpu_mining_service.resolve(b0)
         manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 

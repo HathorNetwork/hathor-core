@@ -1,12 +1,13 @@
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import TransactionResource
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
 
 class BaseTransactionTest(_BaseResourceTest._ResourceTest):
@@ -52,7 +53,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
 
         tx2 = Transaction.create_from_struct(tx.get_struct())
         tx2.parents = [tx.parents[1], tx.parents[0]]
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
 
         self.manager.propagate_tx(tx2)
 

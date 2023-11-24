@@ -24,6 +24,8 @@ from multiprocessing import Process, Queue
 
 import requests
 
+from hathor.conf.get_settings import get_settings
+
 _SLEEP_ON_ERROR_SECONDS = 5
 _MAX_CONN_RETRIES = math.inf
 
@@ -33,9 +35,10 @@ def signal_handler(sig, frame):
 
 
 def worker(q_in, q_out):
+    from hathor.mining.cpu_mining_service import CpuMiningService
     signal.signal(signal.SIGINT, signal_handler)
     block, start, end, sleep_seconds = q_in.get()
-    block.start_mining(start, end, sleep_seconds=sleep_seconds)
+    CpuMiningService().start_mining(block, start=start, end=end, sleep_seconds=sleep_seconds)
     q_out.put(block)
 
 
@@ -134,7 +137,12 @@ def execute(args: Namespace) -> None:
                                                                       block.nonce, block.weight))
 
         try:
-            block.verify_without_storage()
+            from hathor.daa import DifficultyAdjustmentAlgorithm
+            from hathor.verification.block_verifier import BlockVerifier
+            settings = get_settings()
+            daa = DifficultyAdjustmentAlgorithm(settings=settings)
+            verifier = BlockVerifier(settings=settings, daa=daa)
+            verifier.verify_without_storage(block)
         except HathorError:
             print('[{}] ERROR: Block has not been pushed because it is not valid.'.format(datetime.datetime.now()))
         else:

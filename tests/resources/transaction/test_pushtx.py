@@ -4,14 +4,16 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
+from hathor.util import not_none
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_tx_with_data_script, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_tx_with_data_script, create_tokens
 
 settings = HathorSettings()
 
@@ -48,7 +50,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
         tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         return tx
 
     def push_tx(self, data=None):
@@ -92,7 +94,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # modify tx so it will be a double spending, then rejected
         tx.weight += 0.1
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
 
         tx_hex = tx.get_struct().hex()
         response_success = yield self.push_tx({'hex_tx': tx_hex})
@@ -101,7 +103,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # invalid transaction, without forcing
         tx.timestamp = 5
-        tx.inputs = [TxInput(blocks[1].hash, 0, b'')]
+        tx.inputs = [TxInput(not_none(blocks[1].hash), 0, b'')]
         script_type_out = parse_address_script(blocks[1].outputs[0].script)
         assert script_type_out is not None
         private_key = self.manager.wallet.get_private_key(script_type_out.address)
@@ -183,7 +185,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # Invalid tx (output script is too long)
         tx.outputs[0].script = b'*' * (settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE + 1)
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         tx_hex = tx.get_struct().hex()
         response = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
@@ -199,7 +201,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # Invalid tx (output script is too long)
         tx.outputs[0].script = b'*' * 5
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         tx_hex = tx.get_struct().hex()
         response = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()

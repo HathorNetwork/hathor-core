@@ -23,18 +23,20 @@ from structlog import get_logger
 
 from hathor.cli.run_node import RunNodeArgs
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.exception import BuilderError
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
-from hathor.util import Random, Reactor
+from hathor.util import Random, Reactor, not_none
 from hathor.verification.verification_service import VerificationService, VertexVerifiers
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
@@ -58,11 +60,14 @@ class CliBuilder:
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
         from hathor.conf.get_settings import get_settings, get_settings_source
-        from hathor.daa import TestMode, _set_test_mode
+        from hathor.daa import TestMode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
+        from hathor.p2p.sync_v1.factory import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
+        from hathor.p2p.sync_version import SyncVersion
         from hathor.storage import RocksDBStorage
         from hathor.transaction.storage import (
             TransactionCacheStorage,
@@ -150,14 +155,18 @@ class CliBuilder:
 
         hostname = self.get_hostname()
         network = settings.NETWORK_NAME
-        enable_sync_v1 = self._args.x_enable_legacy_sync_v1_0
-        enable_sync_v1_1 = not self._args.x_sync_v2_only
+        enable_sync_v1 = not self._args.x_sync_v2_only
         enable_sync_v2 = self._args.x_sync_v2_only or self._args.x_sync_bridge
 
         pubsub = PubSubManager(reactor)
 
         if self._args.x_enable_event_queue:
-            self.event_ws_factory = EventWebsocketFactory(reactor, event_storage)
+            self.event_ws_factory = EventWebsocketFactory(
+                peer_id=not_none(peer_id.id),
+                network=network,
+                reactor=reactor,
+                event_storage=event_storage
+            )
 
         event_manager = EventManager(
             event_storage=event_storage,
@@ -202,8 +211,22 @@ class CliBuilder:
             not_support_features=self._args.signal_not_support
         )
 
-        vertex_verifiers = VertexVerifiers.create_defaults(settings=settings)
+        test_mode = TestMode.DISABLED
+        if self._args.test_mode_tx_weight:
+            test_mode = TestMode.TEST_TX_WEIGHT
+            if self.wallet:
+                self.wallet.test_mode = True
+
+        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
+
+        vertex_verifiers = VertexVerifiers.create_defaults(
+            settings=settings,
+            daa=daa,
+            feature_service=self.feature_service
+        )
         verification_service = VerificationService(verifiers=vertex_verifiers)
+
+        cpu_mining_service = CpuMiningService()
 
         p2p_manager = ConnectionsManager(
             reactor,
@@ -213,10 +236,13 @@ class CliBuilder:
             ssl=True,
             whitelist_only=False,
             rng=Random(),
-            enable_sync_v1=enable_sync_v1,
-            enable_sync_v1_1=enable_sync_v1_1,
-            enable_sync_v2=enable_sync_v2,
         )
+        p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+        p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+        if enable_sync_v1:
+            p2p_manager.enable_sync_version(SyncVersion.V1_1)
+        if enable_sync_v2:
+            p2p_manager.enable_sync_version(SyncVersion.V2)
 
         self.manager = HathorManager(
             reactor,
@@ -225,6 +251,7 @@ class CliBuilder:
             hostname=hostname,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
+            daa=daa,
             peer_id=peer_id,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
@@ -237,6 +264,7 @@ class CliBuilder:
             feature_service=self.feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
+            cpu_mining_service=cpu_mining_service
         )
 
         p2p_manager.set_manager(self.manager)
@@ -267,11 +295,6 @@ class CliBuilder:
 
         if self._args.bootstrap:
             p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(self._args.bootstrap))
-
-        if self._args.test_mode_tx_weight:
-            _set_test_mode(TestMode.TEST_TX_WEIGHT)
-            if self.wallet:
-                self.wallet.test_mode = True
 
         if self._args.x_rocksdb_indexes:
             self.log.warn('--x-rocksdb-indexes is now the default, no need to specify it')

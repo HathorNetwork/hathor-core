@@ -87,7 +87,7 @@ def get_settings_hello_dict() -> dict[str, Any]:
     for key in settings.P2P_SETTINGS_HASH_FIELDS:
         value = getattr(settings, key)
         # We are going to json.dumps this dict, so we can't have bytes here
-        if type(value) == bytes:
+        if type(value) is bytes:
             value = value.hex()
         settings_dict[key] = value
     return settings_dict

@@ -157,6 +157,9 @@ def setup_logging(
     else:
         handlers = ['pretty']
 
+    # Flag to enable debug level for both sync-v1 and sync-v2.
+    debug_sync = False and debug
+
     # See: https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema
     logging.config.dictConfig({
             'version': 1,
@@ -207,6 +210,14 @@ def setup_logging(
                     'handlers': handlers,
                     'level': 'DEBUG' if debug else 'INFO',
                 },
+                'hathor.p2p.sync_v1': {
+                    'handlers': handlers,
+                    'level': 'DEBUG' if debug_sync else 'INFO',
+                },
+                'hathor.p2p.sync_v2': {
+                    'handlers': handlers,
+                    'level': 'DEBUG' if debug_sync else 'INFO',
+                }
             }
     })
 

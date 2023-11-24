@@ -17,7 +17,7 @@ class HealthcheckReadinessResource(Resource):
 
             :rtype: string (json)
         """
-        healthy, reason = self.manager.is_healthy()
+        healthy, reason = self.manager.is_sync_healthy()
 
         if not healthy:
             request.setResponseCode(503)

@@ -21,7 +21,6 @@ from structlog import get_logger
 
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.base_index import BaseIndex
-from hathor.indexes.deps_index import DepsIndex
 from hathor.indexes.height_index import HeightIndex
 from hathor.indexes.info_index import InfoIndex
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
@@ -61,7 +60,6 @@ class IndexesManager(ABC):
     sorted_txs: TimestampIndex
 
     height: HeightIndex
-    deps: Optional[DepsIndex]
     mempool_tips: Optional[MempoolTipsIndex]
     addresses: Optional[AddressIndex]
     tokens: Optional[TokensIndex]
@@ -90,7 +88,6 @@ class IndexesManager(ABC):
             self.sorted_blocks,
             self.sorted_txs,
             self.height,
-            self.deps,
             self.mempool_tips,
             self.addresses,
             self.tokens,
@@ -110,11 +107,6 @@ class IndexesManager(ABC):
     @abstractmethod
     def enable_utxo_index(self) -> None:
         """Enable UTXO index. It does nothing if it has already been enabled."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def enable_deps_index(self) -> None:
-        """Enable dependencies index. It does nothing if it has already been enabled."""
         raise NotImplementedError
 
     @abstractmethod
@@ -194,8 +186,6 @@ class IndexesManager(ABC):
         """
         # XXX: this _should_ be here, but it breaks some tests, for now this is done explicitly in hathor.manager
         # self.mempool_tips.update(tx)
-        if self.deps:
-            self.deps.update(tx)
         if self.utxo:
             self.utxo.update(tx)
 
@@ -225,10 +215,6 @@ class IndexesManager(ABC):
             self.addresses.add_tx(tx)
         if self.tokens:
             self.tokens.add_tx(tx)
-
-        # XXX: this method is idempotent and has no result
-        if self.deps:
-            self.deps.add_tx(tx)
 
         # We need to check r1 as well to make sure we don't count twice the transactions/blocks that are
         # just changing from voided to executed or vice-versa
@@ -272,10 +258,6 @@ class IndexesManager(ABC):
         if self.tokens:
             self.tokens.del_tx(tx)
 
-        # XXX: this method is idempotent and has no result
-        if self.deps:
-            self.deps.del_tx(tx)
-
 
 class MemoryIndexesManager(IndexesManager):
     def __init__(self) -> None:
@@ -298,7 +280,6 @@ class MemoryIndexesManager(IndexesManager):
         self.utxo = None
         self.height = MemoryHeightIndex()
         self.mempool_tips = None
-        self.deps = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -322,11 +303,6 @@ class MemoryIndexesManager(IndexesManager):
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         if self.mempool_tips is None:
             self.mempool_tips = MemoryMempoolTipsIndex()
-
-    def enable_deps_index(self) -> None:
-        from hathor.indexes.memory_deps_index import MemoryDepsIndex
-        if self.deps is None:
-            self.deps = MemoryDepsIndex()
 
 
 class RocksDBIndexesManager(IndexesManager):
@@ -352,7 +328,6 @@ class RocksDBIndexesManager(IndexesManager):
         self.tokens = None
         self.utxo = None
         self.mempool_tips = None
-        self.deps = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -377,9 +352,3 @@ class RocksDBIndexesManager(IndexesManager):
         if self.mempool_tips is None:
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
             self.mempool_tips = MemoryMempoolTipsIndex()
-
-    def enable_deps_index(self) -> None:
-        from hathor.indexes.memory_deps_index import MemoryDepsIndex
-        if self.deps is None:
-            # XXX: use of RocksDBDepsIndex is currently suspended until it is fixed
-            self.deps = MemoryDepsIndex()

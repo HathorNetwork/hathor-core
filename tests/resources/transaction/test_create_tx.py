@@ -2,13 +2,14 @@ import base64
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import CreateTxResource
 from hathor.transaction.scripts import P2PKH, create_base_script
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx
+from tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
 class BaseTransactionTest(_BaseResourceTest._ResourceTest):
@@ -195,7 +196,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_tx_propagate(self):
-        _set_test_mode(TestMode.DISABLED)      # disable test_mode so the weight is not 1
+        self.manager.daa.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
         src_tx = self.unspent_tx
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
         resp = (yield self.web.post('create_tx', {
@@ -228,12 +229,12 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         input_data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx.inputs[0].data = input_data
         # XXX: tx.resolve is a bit CPU intensive, but not so much as to make this test disabled by default
-        tx.resolve(False)
+        self.manager.cpu_mining_service.resolve(tx, update_time=False)
         self.assertTrue(self.manager.propagate_tx(tx))
 
     @inlineCallbacks
     def test_tx_propagate_multiple_inputs(self):
-        _set_test_mode(TestMode.DISABLED)      # disable test_mode so the weight is not 1
+        self.manager.daa.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
         resp = (yield self.web.post('create_tx', {
             'inputs': [
@@ -275,7 +276,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         tx.inputs[1].data = input_data
         tx.inputs[2].data = input_data
         # XXX: tx.resolve is a bit CPU intensive, but not so much as to make this test disabled by default
-        tx.resolve(False)
+        self.manager.cpu_mining_service.resolve(tx, update_time=False)
         self.assertTrue(self.manager.propagate_tx(tx))
 
     @inlineCallbacks

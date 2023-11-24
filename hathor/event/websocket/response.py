@@ -29,12 +29,16 @@ class EventResponse(Response):
 
     Args:
         type: The type of the response.
+        peer_id: Full node id, because different full nodes can have different sequences of events.
+        network: The network for which this event was generated.
         event: The event.
         latest_event_id: The ID of the latest event known by the server.
         stream_id: The ID of the current stream.
     """
 
     type: str = Field(default='EVENT', const=True)
+    peer_id: str
+    network: str
     event: BaseEvent
     latest_event_id: NonNegativeInt
     stream_id: str
