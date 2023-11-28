@@ -123,6 +123,31 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             self.assertEqual(connections.always_enable_sync, set(content))
             self.assertEqual(set(sysctl.get('always_enable_sync')), set(content))
 
+
+class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
+    __test__ = True
+
+    def test_available_sync_versions(self):
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        self.assertEqual(sysctl.get('available_sync_versions'), ['v1'])
+
+    def test_enabled_sync_versions(self):
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1'])
+        # XXX: cannot enable v2 because it's not available
+        sysctl.set('enabled_sync_versions', ['v1', 'v2'])
+        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1'])
+
+
+class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
+    __test__ = True
+
     def test_available_sync_versions(self):
         from hathor.p2p.sync_version import SyncVersion
 
@@ -132,18 +157,19 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         self.assertEqual(sysctl.get('available_sync_versions'), ['v1', 'v2'])
 
-        del connections._sync_factories[SyncVersion.V2]
+        factory_v2 = connections._sync_factories.pop(SyncVersion.V2)
         self.assertEqual(sysctl.get('available_sync_versions'), ['v1'])
 
-    def _default_enabled_sync_versions(self) -> list[str]:
-        raise NotImplementedError
+        connections._sync_factories.pop(SyncVersion.V1_1)
+        connections._sync_factories[SyncVersion.V2] = factory_v2
+        self.assertEqual(sysctl.get('available_sync_versions'), ['v2'])
 
     def test_enabled_sync_versions(self):
         manager = self.create_peer()
         connections = manager.connections
         sysctl = ConnectionsManagerSysctl(connections)
 
-        self.assertEqual(sysctl.get('enabled_sync_versions'), self._default_enabled_sync_versions())
+        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v2'])
         sysctl.set('enabled_sync_versions', ['v1', 'v2'])
         self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1', 'v2'])
         sysctl.set('enabled_sync_versions', ['v2'])
@@ -152,23 +178,22 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1'])
 
 
-class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-    def _default_enabled_sync_versions(self) -> list[str]:
-        return ['v1']
-
-
-class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-    def _default_enabled_sync_versions(self) -> list[str]:
-        return ['v2']
-
-
 # sync-bridge should behave like sync-v2
 class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
     __test__ = True
 
     def _default_enabled_sync_versions(self) -> list[str]:
         return ['v1', 'v2']
+
+    def test_enabled_sync_versions(self):
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1', 'v2'])
+        sysctl.set('enabled_sync_versions', ['v1', 'v2'])
+        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1', 'v2'])
+        sysctl.set('enabled_sync_versions', ['v2'])
+        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v2'])
+        sysctl.set('enabled_sync_versions', ['v1'])
+        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1'])

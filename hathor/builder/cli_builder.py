@@ -237,11 +237,15 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
         )
+
+        # XXX: always have sync-v1 factory available
         p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
-        p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
         if enable_sync_v1:
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
+
         if enable_sync_v2:
+            # XXX: only enable sync-v2 factory on demand, prevents enabling sync-v2 indexes when sync-v2 is not enabled
+            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
         self.manager = HathorManager(
