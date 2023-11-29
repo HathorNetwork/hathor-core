@@ -42,39 +42,6 @@ cpu = get_cpu_profiler()
 class TransactionVerifier(VertexVerifier):
     __slots__ = ()
 
-    def verify_basic(self, tx: Transaction) -> None:
-        """Partially run validations, the ones that need parents/inputs are skipped."""
-        if tx.is_genesis:
-            # TODO do genesis validation?
-            return
-        self.verify_parents_basic(tx)
-        self.verify_weight(tx)
-        self.verify_without_storage(tx)
-
-    @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
-    def verify(self, tx: Transaction, *, reject_locked_reward: bool = True) -> None:
-        """ Common verification for all transactions:
-           (i) number of inputs is at most 256
-          (ii) number of outputs is at most 256
-         (iii) confirms at least two pending transactions
-          (iv) solves the pow (we verify weight is correct in HathorManager)
-           (v) validates signature of inputs
-          (vi) validates public key and output (of the inputs) addresses
-         (vii) validate that both parents are valid
-        (viii) validate input's timestamps
-          (ix) validate inputs and outputs sum
-        """
-        if tx.is_genesis:
-            # TODO do genesis validation
-            return
-        self.verify_without_storage(tx)
-        self.verify_sigops_input(tx)
-        self.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
-        self.verify_parents(tx)
-        self.verify_sum(tx)
-        if reject_locked_reward:
-            self.verify_reward_locked(tx)
-
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
         assert tx.storage is not None
@@ -97,14 +64,6 @@ class TransactionVerifier(VertexVerifier):
         elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
-
-    def verify_without_storage(self, tx: Transaction) -> None:
-        """ Run all verifications that do not need a storage.
-        """
-        self.verify_pow(tx)
-        self.verify_number_of_inputs(tx)
-        self.verify_outputs(tx)
-        self.verify_sigops_output(tx)
 
     def verify_sigops_input(self, tx: Transaction) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit

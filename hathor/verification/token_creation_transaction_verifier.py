@@ -12,24 +12,18 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import clean_token_string
 from hathor.util import not_none
-from hathor.verification.transaction_verifier import TransactionVerifier
 
 
-class TokenCreationTransactionVerifier(TransactionVerifier):
-    __slots__ = ()
+class TokenCreationTransactionVerifier:
+    __slots__ = ('_settings',)
 
-    def verify(self, tx: TokenCreationTransaction, *, reject_locked_reward: bool = True) -> None:
-        """ Run all validations as regular transactions plus validation on token info.
-
-        We also overload verify_sum to make some different checks
-        """
-        super().verify(tx, reject_locked_reward=reject_locked_reward)
-        self.verify_minted_tokens(tx)
-        self.verify_token_info(tx)
+    def __init__(self, *, settings: HathorSettings) -> None:
+        self._settings = settings
 
     def verify_minted_tokens(self, tx: TokenCreationTransaction) -> None:
         """ Besides all checks made on regular transactions, a few extra ones are made:
