@@ -14,7 +14,7 @@
 
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generator, Optional, cast
+from typing import TYPE_CHECKING, Any, Coroutine, Generator, Optional, cast
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
@@ -311,7 +311,8 @@ class HathorProtocol:
         fn = self.state.cmd_map.get(cmd)
         if fn is not None:
             try:
-                return fn(payload)
+                result = fn(payload)
+                return Deferred.fromCoroutine(result) if isinstance(result, Coroutine) else result
             except Exception:
                 self.log.warn('recv_message processing error', exc_info=True)
                 raise

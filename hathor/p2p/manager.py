@@ -248,7 +248,8 @@ class ConnectionsManager:
         Do a discovery and connect on all discovery strategies.
         """
         for peer_discovery in self.peer_discoveries:
-            peer_discovery.discover_and_connect(self.connect_to)
+            coro = peer_discovery.discover_and_connect(self.connect_to)
+            Deferred.fromCoroutine(coro)
 
     def disable_rate_limiter(self) -> None:
         """Disable global rate limiter."""
