@@ -32,5 +32,7 @@ COPY --from=stage-0 /app/.venv/lib/python${PYTHON}/site-packages/ /usr/local/lib
 # XXX: copy optional BUILD_VERSION file using ...VERSIO[N] instead of ...VERSION* to ensure only one file will be copied
 # XXX: also copying the README.md because we need at least one existing file
 COPY README.md BUILD_VERSIO[N] /
+RUN python -m pip install memray
+COPY extras/memray_wrapper.sh /
 EXPOSE 40403 8080
-ENTRYPOINT ["python", "-m", "hathor"]
+ENTRYPOINT ["/memray_wrapper.sh"]
