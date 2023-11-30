@@ -11,11 +11,13 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+from twisted.internet.defer import Deferred
 from typing_extensions import assert_never
 
+from hathor.multiprocessor.multiprocessor import Multiprocessor
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
+from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.validation_state import ValidationState
@@ -26,9 +28,10 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('verifiers', )
+    __slots__ = ('verifiers', '_mp')
 
     def __init__(self, *, verifiers: VertexVerifiers) -> None:
+        self._mp = Multiprocessor()
         self.verifiers = verifiers
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
@@ -115,139 +118,156 @@ class VerificationService:
             return
         self.verifiers.tx.verify_parents_basic(tx)
         self.verifiers.tx.verify_weight(tx)
-        self.verify_without_storage(tx)
+        verify_without_storage(self.verifiers, tx)
 
     def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_basic_tx(tx)
 
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
-        """Run all verifications. Raises on error.
+        _verify(self.verifiers, vertex.get_struct(), reject_locked_reward=reject_locked_reward)
 
-        Used by `self.validate_full`. Should not modify the validation state."""
-        # We assert with type() instead of isinstance() because each subclass has a specific branch.
-        match vertex.version:
-            case TxVersion.REGULAR_BLOCK:
-                assert type(vertex) is Block
-                self._verify_block(vertex)
-            case TxVersion.MERGE_MINED_BLOCK:
-                assert type(vertex) is MergeMinedBlock
-                self._verify_merge_mined_block(vertex)
-            case TxVersion.REGULAR_TRANSACTION:
-                assert type(vertex) is Transaction
-                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
-            case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert type(vertex) is TokenCreationTransaction
-                self._verify_token_creation_tx(vertex, reject_locked_reward=reject_locked_reward)
-            case _:
-                assert_never(vertex.version)
+    def verify_async(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> Deferred[None]:
+        return self._mp.run(_verify, self.verifiers, vertex.get_struct(), reject_locked_reward=reject_locked_reward)
 
-    @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
-    def _verify_block(self, block: Block) -> None:
-        """
-            (1) confirms at least two pending transactions and references last block
-            (2) solves the pow with the correct weight (done in HathorManager)
-            (3) creates the correct amount of tokens in the output (done in HathorManager)
-            (4) all parents must exist and have timestamp smaller than ours
-            (5) data field must contain at most BLOCK_DATA_MAX_SIZE bytes
-            (6) whether this block must signal feature support
-        """
-        # TODO Should we validate a limit of outputs?
-        if block.is_genesis:
-            # TODO do genesis validation
-            return
 
-        self.verify_without_storage(block)
+def _verify(verifiers: VertexVerifiers, vertex_bytes: bytes, *, reject_locked_reward: bool = True) -> None:
 
-        # (1) and (4)
-        self.verifiers.vertex.verify_parents(block)
+    """Run all verifications. Raises on error.
 
-        self.verifiers.block.verify_height(block)
+    Used by `self.validate_full`. Should not modify the validation state."""
+    vertex = tx_or_block_from_bytes(vertex_bytes)
+    # We assert with type() instead of isinstance() because each subclass has a specific branch.
+    match vertex.version:
+        case TxVersion.REGULAR_BLOCK:
+            assert type(vertex) is Block
+            _verify_block(verifiers, vertex)
+        case TxVersion.MERGE_MINED_BLOCK:
+            assert type(vertex) is MergeMinedBlock
+            _verify_merge_mined_block(verifiers, vertex)
+        case TxVersion.REGULAR_TRANSACTION:
+            assert type(vertex) is Transaction
+            _verify_tx(verifiers, vertex, reject_locked_reward=reject_locked_reward)
+        case TxVersion.TOKEN_CREATION_TRANSACTION:
+            assert type(vertex) is TokenCreationTransaction
+            _verify_token_creation_tx(verifiers, vertex, reject_locked_reward=reject_locked_reward)
+        case _:
+            assert_never(vertex.version)
 
-        self.verifiers.block.verify_mandatory_signaling(block)
 
-    def _verify_merge_mined_block(self, block: MergeMinedBlock) -> None:
-        self._verify_block(block)
+def _verify_block(verifiers: VertexVerifiers, block: Block) -> None:
+    """
+        (1) confirms at least two pending transactions and references last block
+        (2) solves the pow with the correct weight (done in HathorManager)
+        (3) creates the correct amount of tokens in the output (done in HathorManager)
+        (4) all parents must exist and have timestamp smaller than ours
+        (5) data field must contain at most BLOCK_DATA_MAX_SIZE bytes
+        (6) whether this block must signal feature support
+    """
+    # TODO Should we validate a limit of outputs?
+    if block.is_genesis:
+        # TODO do genesis validation
+        return
 
-    @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
-    def _verify_tx(
-        self,
-        tx: Transaction,
-        *,
-        reject_locked_reward: bool,
-        token_dict: dict[TokenUid, TokenInfo] | None = None
-    ) -> None:
-        """ Common verification for all transactions:
-           (i) number of inputs is at most 256
-          (ii) number of outputs is at most 256
-         (iii) confirms at least two pending transactions
-          (iv) solves the pow (we verify weight is correct in HathorManager)
-           (v) validates signature of inputs
-          (vi) validates public key and output (of the inputs) addresses
-         (vii) validate that both parents are valid
-        (viii) validate input's timestamps
-          (ix) validate inputs and outputs sum
-        """
-        if tx.is_genesis:
-            # TODO do genesis validation
-            return
-        self.verify_without_storage(tx)
-        self.verifiers.tx.verify_sigops_input(tx)
-        self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
-        self.verifiers.vertex.verify_parents(tx)
-        self.verifiers.tx.verify_authorities_and_deposit(token_dict or tx.get_complete_token_info())
-        if reject_locked_reward:
-            self.verifiers.tx.verify_reward_locked(tx)
+    verify_without_storage(verifiers, block)
 
-    def _verify_token_creation_tx(self, tx: TokenCreationTransaction, *, reject_locked_reward: bool) -> None:
-        """ Run all validations as regular transactions plus validation on token info.
+    # (1) and (4)
+    verifiers.vertex.verify_parents(block)
 
-        We also overload verify_sum to make some different checks
-        """
-        token_dict = tx.get_complete_token_info()
-        self._verify_tx(tx, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
-        self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
-        self.verifiers.token_creation_tx.verify_token_info(tx)
+    verifiers.block.verify_height(block)
 
-    def verify_without_storage(self, vertex: BaseTransaction) -> None:
-        # We assert with type() instead of isinstance() because each subclass has a specific branch.
-        match vertex.version:
-            case TxVersion.REGULAR_BLOCK:
-                assert type(vertex) is Block
-                self._verify_without_storage_block(vertex)
-            case TxVersion.MERGE_MINED_BLOCK:
-                assert type(vertex) is MergeMinedBlock
-                self._verify_without_storage_merge_mined_block(vertex)
-            case TxVersion.REGULAR_TRANSACTION:
-                assert type(vertex) is Transaction
-                self._verify_without_storage_tx(vertex)
-            case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert type(vertex) is TokenCreationTransaction
-                self._verify_without_storage_token_creation_tx(vertex)
-            case _:
-                assert_never(vertex.version)
+    verifiers.block.verify_mandatory_signaling(block)
 
-    def _verify_without_storage_block(self, block: Block) -> None:
-        """ Run all verifications that do not need a storage.
-        """
-        self.verifiers.vertex.verify_pow(block)
-        self.verifiers.block.verify_no_inputs(block)
-        self.verifiers.vertex.verify_outputs(block)
-        self.verifiers.block.verify_output_token_indexes(block)
-        self.verifiers.block.verify_data(block)
-        self.verifiers.vertex.verify_sigops_output(block)
 
-    def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
-        self.verifiers.merge_mined_block.verify_aux_pow(block)
-        self._verify_without_storage_block(block)
+def _verify_merge_mined_block(verifiers: VertexVerifiers, block: MergeMinedBlock) -> None:
+    _verify_block(verifiers, block)
 
-    def _verify_without_storage_tx(self, tx: Transaction) -> None:
-        """ Run all verifications that do not need a storage.
-        """
-        self.verifiers.vertex.verify_pow(tx)
-        self.verifiers.tx.verify_number_of_inputs(tx)
-        self.verifiers.vertex.verify_outputs(tx)
-        self.verifiers.tx.verify_output_token_indexes(tx)
-        self.verifiers.vertex.verify_sigops_output(tx)
 
-    def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
-        self._verify_without_storage_tx(tx)
+def _verify_tx(
+    verifiers: VertexVerifiers,
+    tx: Transaction,
+    *,
+    reject_locked_reward: bool,
+    token_dict: dict[TokenUid, TokenInfo] | None = None
+) -> None:
+    """ Common verification for all transactions:
+       (i) number of inputs is at most 256
+      (ii) number of outputs is at most 256
+     (iii) confirms at least two pending transactions
+      (iv) solves the pow (we verify weight is correct in HathorManager)
+       (v) validates signature of inputs
+      (vi) validates public key and output (of the inputs) addresses
+     (vii) validate that both parents are valid
+    (viii) validate input's timestamps
+      (ix) validate inputs and outputs sum
+    """
+    if tx.is_genesis:
+        # TODO do genesis validation
+        return
+    verify_without_storage(verifiers, tx)
+    verifiers.tx.verify_sigops_input(tx)
+    verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
+    verifiers.vertex.verify_parents(tx)
+    token_dict = {'': ''}
+    verifiers.tx.verify_authorities_and_deposit(token_dict or tx.get_complete_token_info())
+    if reject_locked_reward:
+        verifiers.tx.verify_reward_locked(tx)
+
+
+def _verify_token_creation_tx(verifiers: VertexVerifiers, tx: TokenCreationTransaction, *, reject_locked_reward: bool) -> None:
+    """ Run all validations as regular transactions plus validation on token info.
+
+    We also overload verify_sum to make some different checks
+    """
+    token_dict = tx.get_complete_token_info()
+    _verify_tx(verifiers, tx, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
+    verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
+    verifiers.token_creation_tx.verify_token_info(tx)
+
+
+def verify_without_storage(verifiers: VertexVerifiers, vertex: BaseTransaction) -> None:
+    # We assert with type() instead of isinstance() because each subclass has a specific branch.
+    match vertex.version:
+        case TxVersion.REGULAR_BLOCK:
+            assert type(vertex) is Block
+            _verify_without_storage_block(verifiers, vertex)
+        case TxVersion.MERGE_MINED_BLOCK:
+            assert type(vertex) is MergeMinedBlock
+            _verify_without_storage_merge_mined_block(verifiers, vertex)
+        case TxVersion.REGULAR_TRANSACTION:
+            assert type(vertex) is Transaction
+            _verify_without_storage_tx(verifiers, vertex)
+        case TxVersion.TOKEN_CREATION_TRANSACTION:
+            assert type(vertex) is TokenCreationTransaction
+            _verify_without_storage_token_creation_tx(verifiers, vertex)
+        case _:
+            assert_never(vertex.version)
+
+
+def _verify_without_storage_block(verifiers: VertexVerifiers, block: Block) -> None:
+    """ Run all verifications that do not need a storage.
+    """
+    verifiers.vertex.verify_pow(block)
+    verifiers.block.verify_no_inputs(block)
+    verifiers.vertex.verify_outputs(block)
+    verifiers.block.verify_output_token_indexes(block)
+    verifiers.block.verify_data(block)
+    verifiers.vertex.verify_sigops_output(block)
+
+
+def _verify_without_storage_merge_mined_block(verifiers: VertexVerifiers, block: MergeMinedBlock) -> None:
+    verifiers.merge_mined_block.verify_aux_pow(block)
+    _verify_without_storage_block(verifiers, block)
+
+
+def _verify_without_storage_tx(verifiers: VertexVerifiers, tx: Transaction) -> None:
+    """ Run all verifications that do not need a storage.
+    """
+    verifiers.vertex.verify_pow(tx)
+    verifiers.tx.verify_number_of_inputs(tx)
+    verifiers.vertex.verify_outputs(tx)
+    verifiers.tx.verify_output_token_indexes(tx)
+    verifiers.vertex.verify_sigops_output(tx)
+
+
+def _verify_without_storage_token_creation_tx(verifiers: VertexVerifiers, tx: TokenCreationTransaction) -> None:
+    _verify_without_storage_tx(verifiers, tx)
