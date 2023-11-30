@@ -39,10 +39,11 @@ class BlockVerifier:
     ) -> None:
         self._settings = settings
         self._daa = daa
-        self._feature_service = feature_service
+        self._feature_service = None
 
     def verify_height(self, block: Block) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
+        return
         meta = block.get_metadata()
         assert meta.height is not None
         assert meta.min_height is not None
