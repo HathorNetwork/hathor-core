@@ -14,9 +14,10 @@
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from twisted.internet.interfaces import IReactorFromThreads
+from structlog import get_logger
+from twisted.internet.interfaces import IDelayedCall, IReactorFromThreads
 from twisted.python.threadable import isInIOThread
 
 from hathor.util import Reactor
@@ -24,6 +25,8 @@ from hathor.utils.zope import verified_cast
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, Block
+
+logger = get_logger()
 
 
 class HathorEvents(Enum):
@@ -170,6 +173,9 @@ class PubSubManager:
         self._subscribers = defaultdict(list)
         self.queue: deque[tuple[PubSubCallable, HathorEvents, EventArguments]] = deque()
         self.reactor = reactor
+        self.log = logger.new()
+
+        self._call_later_id: Optional[IDelayedCall] = None
 
     def subscribe(self, key: HathorEvents, fn: PubSubCallable) -> None:
         """Subscribe to a specific event.
@@ -193,14 +199,25 @@ class PubSubManager:
         """Execute next call if it exists."""
         if not self.queue:
             return
-        fn, key, args = self.queue.popleft()
-        fn(key, args)
-        if self.queue:
+
+        self.log.debug('running pubsub call_next', len=len(self.queue))
+
+        try:
+            while self.queue:
+                fn, key, args = self.queue.popleft()
+                fn(key, args)
+        except Exception:
+            self.log.error('event processing failed', key=key, args=args)
+            raise
+        finally:
             self._schedule_call_next()
 
     def _schedule_call_next(self) -> None:
         """Schedule next call's execution."""
         assert self.reactor.running
+
+        if not self.queue:
+            return
 
         if not isInIOThread() and (threaded_reactor := verified_cast(IReactorFromThreads, self.reactor)):
             # We're taking a conservative approach, since not all functions might need to run
@@ -208,7 +225,10 @@ class PubSubManager:
             threaded_reactor.callFromThread(self._call_next)
             return
 
-        self.reactor.callLater(0, self._call_next)
+        if self._call_later_id and self._call_later_id.active():
+            return
+
+        self._call_later_id = self.reactor.callLater(0, self._call_next)
 
     def publish(self, key: HathorEvents, **kwargs: Any) -> None:
         """Publish a new event.
@@ -224,7 +244,5 @@ class PubSubManager:
             if not self.reactor.running:
                 fn(key, args)
             else:
-                is_empty = bool(not self.queue)
                 self.queue.append((fn, key, args))
-                if is_empty:
-                    self._schedule_call_next()
+                self._schedule_call_next()
