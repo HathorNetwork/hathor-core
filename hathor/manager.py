@@ -1007,6 +1007,20 @@ class HathorManager:
             self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
         self.tx_fully_validated(tx, quiet=quiet)
 
+        if tx.is_block and (tx.get_height() % 25_000) == 0:
+            #from IPython import start_ipython
+            #start_ipython(argv=[], user_ns={
+            #    'manager': self,
+            #})
+            import gc
+            from hathor.transaction import Block
+            from sys import getrefcount
+
+            gcl = gc.get_objects()
+            gcl_blocks = [x for x in gcl if isinstance(x, Block)]
+            print('blocks in memory', len(gcl_blocks))
+
+
         if propagate_to_peers:
             # Propagate to our peers.
             self.connections.send_tx_to_peers(tx)
