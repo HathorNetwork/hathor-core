@@ -37,7 +37,8 @@ from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
 from hathor.util import Random, Reactor, not_none
-from hathor.verification.verification_service import VerificationService, VertexVerifiers
+from hathor.verification.verification_service import VerificationService
+from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()

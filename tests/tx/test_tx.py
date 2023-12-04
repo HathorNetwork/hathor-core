@@ -143,7 +143,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx = Transaction(outputs=outputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
-            self._verifiers.tx.verify_number_of_outputs(tx)
+            self._verifiers.vertex.verify_number_of_outputs(tx)
 
     def _gen_tx_spending_genesis_block(self):
         parents = [tx.hash for tx in self.genesis_txs]
@@ -677,17 +677,17 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertFalse(tx_equal.is_genesis)
 
         # Pow error
-        self._verifiers.tx.verify_pow(tx2)
+        self._verifiers.vertex.verify_pow(tx2)
         tx2.weight = 100
         with self.assertRaises(PowError):
-            self._verifiers.tx.verify_pow(tx2)
+            self._verifiers.vertex.verify_pow(tx2)
 
         # Verify parent timestamps
-        self._verifiers.tx.verify_parents(tx2)
+        self._verifiers.vertex.verify_parents(tx2)
         tx2_timestamp = tx2.timestamp
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            self._verifiers.tx.verify_parents(tx2)
+            self._verifiers.vertex.verify_parents(tx2)
         tx2.timestamp = tx2_timestamp
 
         # Verify inputs timestamps
@@ -701,10 +701,10 @@ class BaseTransactionTest(unittest.TestCase):
         block = blocks[0]
         block2 = blocks[1]
         block2.timestamp = block.timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS
-        self._verifiers.block.verify_parents(block2)
+        self._verifiers.vertex.verify_parents(block2)
         block2.timestamp += 1
         with self.assertRaises(TimestampError):
-            self._verifiers.block.verify_parents(block2)
+            self._verifiers.vertex.verify_parents(block2)
 
     def test_block_big_nonce(self):
         block = self.genesis_blocks[0]
@@ -1058,7 +1058,7 @@ class BaseTransactionTest(unittest.TestCase):
         output3 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output3], storage=self.tx_storage)
         tx.update_hash()
-        self._verifiers.tx.verify_sigops_output(tx)
+        self._verifiers.vertex.verify_sigops_output(tx)
 
     def test_sigops_output_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1070,7 +1070,7 @@ class BaseTransactionTest(unittest.TestCase):
         output4 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output4]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
-        self._verifiers.tx.verify_sigops_output(tx)
+        self._verifiers.vertex.verify_sigops_output(tx)
 
     def test_sigops_input_single_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
