@@ -176,22 +176,22 @@ class TestScripts(unittest.TestCase):
 
     def test_dup(self):
         with self.assertRaises(MissingStackItems):
-            op_dup(ScriptContext(stack=[], logs=[], extras=Mock()))
+            op_dup(ScriptContext(stack=[], logs=[], extras=Mock(), settings=Mock()))
 
         stack = [1]
-        op_dup(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_dup(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack[-1], stack[-2])
 
     def test_equalverify(self):
         elem = b'a'
         with self.assertRaises(MissingStackItems):
-            op_equalverify(ScriptContext(stack=[elem], logs=[], extras=Mock()))
+            op_equalverify(ScriptContext(stack=[elem], logs=[], extras=Mock(), settings=Mock()))
 
         # no exception should be raised
-        op_equalverify(ScriptContext(stack=[elem, elem], logs=[], extras=Mock()))
+        op_equalverify(ScriptContext(stack=[elem, elem], logs=[], extras=Mock(), settings=Mock()))
 
         with self.assertRaises(EqualVerifyFailed):
-            op_equalverify(ScriptContext(stack=[elem, b'aaaa'], logs=[], extras=Mock()))
+            op_equalverify(ScriptContext(stack=[elem, b'aaaa'], logs=[], extras=Mock(), settings=Mock()))
 
     def test_checksig_raise_on_uncompressed_pubkey(self):
         """ Uncompressed pubkeys shoud not be accepted, even if they solve the signature
@@ -213,11 +213,11 @@ class TestScripts(unittest.TestCase):
         # ScriptError if pubkey is not a valid compressed public key
         # with wrong signature
         with self.assertRaises(ScriptError):
-            op_checksig(ScriptContext(stack=[b'123', pubkey_uncompressed], logs=[], extras=Mock()))
+            op_checksig(ScriptContext(stack=[b'123', pubkey_uncompressed], logs=[], extras=Mock(), settings=Mock()))
         # or with rigth one
         # this will make sure the signature is not made when parameters are wrong
         with self.assertRaises(ScriptError):
-            op_checksig(ScriptContext(stack=[signature, pubkey_uncompressed], logs=[], extras=Mock()))
+            op_checksig(ScriptContext(stack=[signature, pubkey_uncompressed], logs=[], extras=Mock(), settings=Mock()))
 
     def test_checksig_check_for_compressed_pubkey(self):
         """ Compressed pubkeys bytes representation always start with a byte 2 or 3
@@ -226,19 +226,19 @@ class TestScripts(unittest.TestCase):
         """
         # ScriptError if pubkey is not a public key but starts with 2 or 3
         with self.assertRaises(ScriptError):
-            op_checksig(ScriptContext(stack=[b'\x0233', b'\x0233'], logs=[], extras=Mock()))
+            op_checksig(ScriptContext(stack=[b'\x0233', b'\x0233'], logs=[], extras=Mock(), settings=Mock()))
         with self.assertRaises(ScriptError):
-            op_checksig(ScriptContext(stack=[b'\x0321', b'\x0321'], logs=[], extras=Mock()))
+            op_checksig(ScriptContext(stack=[b'\x0321', b'\x0321'], logs=[], extras=Mock(), settings=Mock()))
 
         # ScriptError if pubkey does not start with 2 or 3
         with self.assertRaises(ScriptError):
-            op_checksig(ScriptContext(stack=[b'\x0123', b'\x0123'], logs=[], extras=Mock()))
+            op_checksig(ScriptContext(stack=[b'\x0123', b'\x0123'], logs=[], extras=Mock(), settings=Mock()))
         with self.assertRaises(ScriptError):
-            op_checksig(ScriptContext(stack=[b'\x0423', b'\x0423'], logs=[], extras=Mock()))
+            op_checksig(ScriptContext(stack=[b'\x0423', b'\x0423'], logs=[], extras=Mock(), settings=Mock()))
 
     def test_checksig(self):
         with self.assertRaises(MissingStackItems):
-            op_checksig(ScriptContext(stack=[1], logs=[], extras=Mock()))
+            op_checksig(ScriptContext(stack=[1], logs=[], extras=Mock(), settings=Mock()))
 
         block = self.genesis_blocks[0]
 
@@ -253,15 +253,15 @@ class TestScripts(unittest.TestCase):
         signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), input_index=0)
 
         # wrong signature puts False (0) on stack
         stack = [b'aaaaaaaaa', pubkey_bytes]
-        op_checksig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checksig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(0, stack.pop())
 
         stack = [signature, pubkey_bytes]
-        op_checksig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checksig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(1, stack.pop())
 
     def test_checksig_cache(self):
@@ -278,22 +278,22 @@ class TestScripts(unittest.TestCase):
         signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), input_index=0)
 
         stack = [signature, pubkey_bytes]
         self.assertIsNone(tx._sighash_data_cache)
-        op_checksig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checksig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertIsNotNone(tx._sighash_data_cache)
         self.assertEqual(1, stack.pop())
 
     def test_hash160(self):
         with self.assertRaises(MissingStackItems):
-            op_hash160(ScriptContext(stack=[], logs=[], extras=Mock()))
+            op_hash160(ScriptContext(stack=[], logs=[], extras=Mock(), settings=Mock()))
 
         elem = b'aaaaaaaa'
         hash160 = get_hash160(elem)
         stack = [elem]
-        op_hash160(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_hash160(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(hash160, stack.pop())
 
     def test_checkdatasig_raise_on_uncompressed_pubkey(self):
@@ -316,27 +316,33 @@ class TestScripts(unittest.TestCase):
         # with wrong signature
         stack = [data, b'123', pubkey_uncompressed]
         with self.assertRaises(ScriptError):
-            op_checkdatasig(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_checkdatasig(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         # or with rigth one
         # this will make sure the signature is not made when parameters are wrong
         stack = [data, signature, pubkey_uncompressed]
         with self.assertRaises(ScriptError):
-            op_checkdatasig(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_checkdatasig(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
     def test_checkdatasig_check_for_compressed_pubkey(self):
         # ScriptError if pubkey is not a public key but starts with 2 or 3
         with self.assertRaises(ScriptError):
-            op_checkdatasig(ScriptContext(stack=[b'\x0233', b'\x0233', b'\x0233'], logs=[], extras=Mock()))
+            op_checkdatasig(
+                ScriptContext(stack=[b'\x0233', b'\x0233', b'\x0233'], logs=[], extras=Mock(), settings=Mock())
+            )
         with self.assertRaises(ScriptError):
-            op_checkdatasig(ScriptContext(stack=[b'\x0321', b'\x0321', b'\x0321'], logs=[], extras=Mock()))
+            op_checkdatasig(
+                ScriptContext(stack=[b'\x0321', b'\x0321', b'\x0321'], logs=[], extras=Mock(), settings=Mock())
+            )
 
         # ScriptError if pubkey is not a public key
         with self.assertRaises(ScriptError):
-            op_checkdatasig(ScriptContext(stack=[b'\x0123', b'\x0123', b'\x0123'], logs=[], extras=Mock()))
+            op_checkdatasig(
+                ScriptContext(stack=[b'\x0123', b'\x0123', b'\x0123'], logs=[], extras=Mock(), settings=Mock())
+            )
 
     def test_checkdatasig(self):
         with self.assertRaises(MissingStackItems):
-            op_checkdatasig(ScriptContext(stack=[1, 1], logs=[], extras=Mock()))
+            op_checkdatasig(ScriptContext(stack=[1, 1], logs=[], extras=Mock(), settings=Mock()))
 
         data = b'some_random_data'
         signature = self.genesis_private_key.sign(data, ec.ECDSA(hashes.SHA256()))
@@ -344,12 +350,12 @@ class TestScripts(unittest.TestCase):
 
         stack = [data, signature, pubkey_bytes]
         # no exception should be raised and data is left on stack
-        op_checkdatasig(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_checkdatasig(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(data, stack.pop())
 
         stack = [b'data_not_matching', signature, pubkey_bytes]
         with self.assertRaises(OracleChecksigFailed):
-            op_checkdatasig(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_checkdatasig(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
     def test_get_data_value(self):
         value0 = b'value0'
@@ -370,7 +376,7 @@ class TestScripts(unittest.TestCase):
 
     def test_data_strequal(self):
         with self.assertRaises(MissingStackItems):
-            op_data_strequal(ScriptContext(stack=[1, 1], logs=[], extras=Mock()))
+            op_data_strequal(ScriptContext(stack=[1, 1], logs=[], extras=Mock(), settings=Mock()))
 
         value0 = b'value0'
         value1 = b'vvvalue1'
@@ -379,20 +385,20 @@ class TestScripts(unittest.TestCase):
         data = (bytes([len(value0)]) + value0 + bytes([len(value1)]) + value1 + bytes([len(value2)]) + value2)
 
         stack = [data, 0, value0]
-        op_data_strequal(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_data_strequal(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack.pop(), data)
 
         stack = [data, 1, value0]
         with self.assertRaises(VerifyFailed):
-            op_data_strequal(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_data_strequal(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
         stack = [data, b'\x00', value0]
         with self.assertRaises(VerifyFailed):
-            op_data_strequal(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_data_strequal(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
     def test_data_greaterthan(self):
         with self.assertRaises(MissingStackItems):
-            op_data_greaterthan(ScriptContext(stack=[1, 1], logs=[], extras=Mock()))
+            op_data_greaterthan(ScriptContext(stack=[1, 1], logs=[], extras=Mock(), settings=Mock()))
 
         value0 = struct.pack('!I', 1000)
         value1 = struct.pack('!I', 1)
@@ -400,24 +406,24 @@ class TestScripts(unittest.TestCase):
         data = (bytes([len(value0)]) + value0 + bytes([len(value1)]) + value1)
 
         stack = [data, 0, struct.pack('!I', 999)]
-        op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack.pop(), data)
 
         stack = [data, 1, struct.pack('!I', 0)]
-        op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack.pop(), data)
 
         with self.assertRaises(VerifyFailed):
             stack = [data, 1, struct.pack('!I', 1)]
-            op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
         stack = [data, 1, b'not_an_int']
         with self.assertRaises(VerifyFailed):
-            op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
         stack = [data, b'\x00', struct.pack('!I', 0)]
         with self.assertRaises(VerifyFailed):
-            op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_data_greaterthan(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
     def test_data_match_interval(self):
         with self.assertRaises(MissingStackItems):
@@ -453,40 +459,40 @@ class TestScripts(unittest.TestCase):
 
     def test_data_match_value(self):
         with self.assertRaises(MissingStackItems):
-            op_data_match_value(ScriptContext(stack=[1, b'2'], logs=[], extras=Mock()))
+            op_data_match_value(ScriptContext(stack=[1, b'2'], logs=[], extras=Mock(), settings=Mock()))
 
         value0 = struct.pack('!I', 1000)
         data = (bytes([len(value0)]) + value0)
 
         stack = [data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])]
-        op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack.pop(), 'key2')
         self.assertEqual(len(stack), 0)
 
         stack = [data, 0, 'key1', struct.pack('!I', 999), 'key2', struct.pack('!I', 1000), 'key3', bytes([2])]
-        op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack.pop(), 'key3')
         self.assertEqual(len(stack), 0)
 
         # missing 1 item on stack
         stack = [data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1000), bytes([2])]
         with self.assertRaises(MissingStackItems):
-            op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
         # no value matches
         stack = [data, 0, 'key1', struct.pack('!I', 999), 'key2', struct.pack('!I', 1111), 'key3', bytes([2])]
-        op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack.pop(), 'key1')
         self.assertEqual(len(stack), 0)
 
         # value should be an integer
         stack = [data, 0, 'key1', struct.pack('!I', 100), 'key2', b'not_an_int', 'key3', bytes([2])]
         with self.assertRaises(VerifyFailed):
-            op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock()))
+            op_data_match_value(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
 
     def test_find_p2pkh(self):
         with self.assertRaises(MissingStackItems):
-            op_find_p2pkh(ScriptContext(stack=[], logs=[], extras=Mock()))
+            op_find_p2pkh(ScriptContext(stack=[], logs=[], extras=Mock(), settings=Mock()))
 
         addr1 = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
         addr2 = '1K35zJQeYrVzQAW7X3s7vbPKmngj5JXTBc'
@@ -508,34 +514,34 @@ class TestScripts(unittest.TestCase):
         # try with just 1 output
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out_genesis)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
-        op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
+        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=0)
+        op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs and correct output among them
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out_genesis), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
-        op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
+        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=0)
+        op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs without correct amount output
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(2, out_genesis), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=0)
         with self.assertRaises(VerifyFailed):
-            op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
+            op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
         # several outputs without correct address output
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=0)
         with self.assertRaises(VerifyFailed):
-            op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
+            op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
     def test_greaterthan_timestamp(self):
         with self.assertRaises(MissingStackItems):
-            op_greaterthan_timestamp(ScriptContext(stack=[], logs=[], extras=Mock()))
+            op_greaterthan_timestamp(ScriptContext(stack=[], logs=[], extras=Mock(), settings=Mock()))
 
         timestamp = 1234567
 
@@ -543,23 +549,23 @@ class TestScripts(unittest.TestCase):
         tx = Transaction()
 
         stack = [struct.pack('!I', timestamp)]
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), input_index=0)
 
         with self.assertRaises(TimeLocked):
             tx.timestamp = timestamp - 1
-            op_greaterthan_timestamp(ScriptContext(stack=list(stack), logs=[], extras=extras))
+            op_greaterthan_timestamp(ScriptContext(stack=list(stack), logs=[], extras=extras, settings=Mock()))
 
         with self.assertRaises(TimeLocked):
             tx.timestamp = timestamp
-            op_greaterthan_timestamp(ScriptContext(stack=list(stack), logs=[], extras=extras))
+            op_greaterthan_timestamp(ScriptContext(stack=list(stack), logs=[], extras=extras, settings=Mock()))
 
         tx.timestamp = timestamp + 1
-        op_greaterthan_timestamp(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_greaterthan_timestamp(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(len(stack), 0)
 
     def test_checkmultisig(self):
         with self.assertRaises(MissingStackItems):
-            op_checkmultisig(ScriptContext(stack=[], logs=[], extras=Mock()))
+            op_checkmultisig(ScriptContext(stack=[], logs=[], extras=Mock(), settings=Mock()))
 
         block = self.genesis_blocks[0]
 
@@ -569,7 +575,7 @@ class TestScripts(unittest.TestCase):
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         data_to_sign = tx.get_sighash_all()
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), input_index=0)
 
         wallet = HDWallet()
         wallet._manually_initialize()
@@ -598,92 +604,92 @@ class TestScripts(unittest.TestCase):
         stack = [
             keys[0]['signature'], keys[2]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
-        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(1, stack.pop())
 
         # New set of valid signatures
         stack = [
             keys[0]['signature'], keys[1]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
-        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(1, stack.pop())
 
         # Changing the signatures but they match
         stack = [
             keys[1]['signature'], keys[2]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
-        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(1, stack.pop())
 
         # Signatures are valid but in wrong order
         stack = [
             keys[1]['signature'], keys[0]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
-        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(0, stack.pop())
 
         # Adding wrong signature, so we get error
         stack = [
             keys[0]['signature'], wrong_key['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
-        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(0, stack.pop())
 
         # Adding same signature twice, so we get error
         stack = [
             keys[0]['signature'], keys[0]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
-        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+        op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(0, stack.pop())
 
         # Adding less signatures than required, so we get error
         stack = [keys[0]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3]
         with self.assertRaises(MissingStackItems):
-            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
         # Quantity of signatures is more than it should
         stack = [
             keys[0]['signature'], keys[1]['signature'], 3, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
         with self.assertRaises(MissingStackItems):
-            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
         # Quantity of pubkeys is more than it should
         stack = [
             keys[0]['signature'], keys[1]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 4
         ]
         with self.assertRaises(InvalidStackData):
-            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
         # Exception pubkey_count should be integer
         stack = [
             keys[0]['signature'], keys[1]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], '3'
         ]
         with self.assertRaises(InvalidStackData):
-            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
         # Exception not enough pub keys
         stack = [keys[0]['pubkey'], keys[1]['pubkey'], 3]
         with self.assertRaises(MissingStackItems):
-            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
         # Exception stack empty after pubkeys
         stack = [keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3]
         with self.assertRaises(MissingStackItems):
-            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras))
+            op_checkmultisig(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
     def test_equal(self):
         elem = b'a'
         with self.assertRaises(MissingStackItems):
-            op_equal(ScriptContext(stack=[elem], logs=[], extras=Mock()))
+            op_equal(ScriptContext(stack=[elem], logs=[], extras=Mock(), settings=Mock()))
 
         # no exception should be raised
         stack = [elem, elem]
-        op_equal(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_equal(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack.pop(), 1)
 
         stack = [elem, b'aaaa']
-        op_equal(ScriptContext(stack=stack, logs=[], extras=Mock()))
+        op_equal(ScriptContext(stack=stack, logs=[], extras=Mock(), settings=Mock()))
         self.assertEqual(stack.pop(), 0)
 
     def test_integer_opcode(self):

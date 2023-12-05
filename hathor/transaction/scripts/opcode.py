@@ -28,9 +28,14 @@ from hathor.crypto.util import (
     is_pubkey_compressed,
 )
 from hathor.transaction.exceptions import (
+    CustomSighashModelInvalid,
     EqualVerifyFailed,
+    InputNotSelectedError,
+    InputsOutputsLimitModelInvalid,
     InvalidScriptError,
     InvalidStackData,
+    MaxInputsExceededError,
+    MaxOutputsExceededError,
     MissingStackItems,
     OracleChecksigFailed,
     ScriptError,
@@ -39,6 +44,8 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.scripts.execute import Stack, binary_to_int, decode_opn, get_data_value, get_script_op
 from hathor.transaction.scripts.script_context import ScriptContext
+from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
+from hathor.transaction.util import bytes_to_int
 
 
 class Opcode(IntEnum):
@@ -72,6 +79,9 @@ class Opcode(IntEnum):
     OP_DATA_GREATERTHAN = 0xC1
     OP_FIND_P2PKH = 0xD0
     OP_DATA_MATCH_VALUE = 0xD1
+    OP_SIGHASH_BITMASK = 0xE0
+    OP_SIGHASH_RANGE = 0xE1
+    OP_MAX_INPUTS_OUTPUTS = 0xE2
 
     @classmethod
     def is_pushdata(cls, opcode: int) -> bool:
@@ -249,7 +259,8 @@ def op_checksig(context: ScriptContext) -> None:
         # pubkey is not compressed public key
         raise ScriptError('OP_CHECKSIG: pubkey is not a public key') from e
     try:
-        public_key.verify(signature, context.extras.tx.get_sighash_all_data(), ec.ECDSA(hashes.SHA256()))
+        sighash_data = context.get_tx_sighash_data(context.extras.tx)
+        public_key.verify(signature, sighash_data, ec.ECDSA(hashes.SHA256()))
         # valid, push true to stack
         context.stack.append(1)
     except InvalidSignature:
@@ -583,7 +594,7 @@ def op_checkmultisig(context: ScriptContext) -> None:
         while pubkey_index < len(pubkeys):
             pubkey = pubkeys[pubkey_index]
             new_stack = [signature, pubkey]
-            op_checksig(ScriptContext(stack=new_stack, logs=context.logs, extras=context.extras))
+            op_checksig(ScriptContext(stack=new_stack, logs=context.logs, extras=context.extras, settings=settings))
             result = new_stack.pop()
             pubkey_index += 1
             if result == 1:
@@ -617,6 +628,59 @@ def op_integer(opcode: int, stack: Stack) -> None:
         raise ScriptError(e) from e
 
 
+def op_sighash_bitmask(context: ScriptContext) -> None:
+    """Pop two items from the stack, constructing a sighash bitmask and setting it in the script context."""
+    if len(context.stack) < 2:
+        raise MissingStackItems(f'OP_SIGHASH_BITMASK: expected 2 elements on stack, has {len(context.stack)}')
+
+    outputs = context.stack.pop()
+    inputs = context.stack.pop()
+    assert isinstance(inputs, bytes)
+    assert isinstance(outputs, bytes)
+
+    try:
+        sighash = SighashBitmask(
+            inputs=bytes_to_int(inputs),
+            outputs=bytes_to_int(outputs)
+        )
+    except Exception as e:
+        raise CustomSighashModelInvalid('Could not construct sighash bitmask.') from e
+
+    if context.extras.input_index not in sighash.get_input_indexes():
+        raise InputNotSelectedError(
+            f'Input at index {context.extras.input_index} must select itself when using a custom sighash.'
+        )
+
+    context.set_sighash(sighash)
+
+
+def op_max_inputs_outputs(context: ScriptContext) -> None:
+    """Pop two items from the stack, constructing an inputs and outputs limit and setting it in the script context."""
+    if len(context.stack) < 2:
+        raise MissingStackItems(f'OP_MAX_INPUTS_OUTPUTS: expected 2 elements on stack, has {len(context.stack)}')
+
+    max_outputs = context.stack.pop()
+    max_inputs = context.stack.pop()
+    assert isinstance(max_inputs, bytes)
+    assert isinstance(max_outputs, bytes)
+
+    try:
+        limit = InputsOutputsLimit(
+            max_inputs=bytes_to_int(max_inputs),
+            max_outputs=bytes_to_int(max_outputs)
+        )
+    except Exception as e:
+        raise InputsOutputsLimitModelInvalid("Could not construct inputs and outputs limits.") from e
+
+    tx_inputs_len = len(context.extras.tx.inputs)
+    if tx_inputs_len > limit.max_inputs:
+        raise MaxInputsExceededError(f'Maximum number of inputs exceeded ({tx_inputs_len} > {limit.max_inputs}).')
+
+    tx_outputs_len = len(context.extras.tx.outputs)
+    if tx_outputs_len > limit.max_outputs:
+        raise MaxOutputsExceededError(f'Maximum number of outputs exceeded ({tx_outputs_len} > {limit.max_outputs}).')
+
+
 def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
     """
     Execute a function opcode.
@@ -625,6 +689,8 @@ def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
         opcode: the opcode to be executed.
         context: the script context to be manipulated.
     """
+    if not is_opcode_valid(opcode):
+        raise ScriptError(f'Opcode "{opcode.name}" is invalid.')
     context.logs.append(f'Executing function opcode {opcode.name} ({hex(opcode.value)})')
     match opcode:
         case Opcode.OP_DUP: op_dup(context)
@@ -639,4 +705,26 @@ def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
         case Opcode.OP_DATA_MATCH_VALUE: op_data_match_value(context)
         case Opcode.OP_CHECKDATASIG: op_checkdatasig(context)
         case Opcode.OP_FIND_P2PKH: op_find_p2pkh(context)
+        case Opcode.OP_SIGHASH_BITMASK: op_sighash_bitmask(context)
+        case Opcode.OP_MAX_INPUTS_OUTPUTS: op_max_inputs_outputs(context)
         case _: raise ScriptError(f'unknown opcode: {opcode}')
+
+
+def is_opcode_valid(opcode: Opcode) -> bool:
+    """Return whether an opcode is valid, that is, it's currently enabled."""
+    valid_opcodes = [
+        Opcode.OP_DUP,
+        Opcode.OP_EQUAL,
+        Opcode.OP_EQUALVERIFY,
+        Opcode.OP_CHECKSIG,
+        Opcode.OP_HASH160,
+        Opcode.OP_GREATERTHAN_TIMESTAMP,
+        Opcode.OP_CHECKMULTISIG,
+        Opcode.OP_DATA_STREQUAL,
+        Opcode.OP_DATA_GREATERTHAN,
+        Opcode.OP_DATA_MATCH_VALUE,
+        Opcode.OP_CHECKDATASIG,
+        Opcode.OP_FIND_P2PKH,
+    ]
+
+    return opcode in valid_opcodes
