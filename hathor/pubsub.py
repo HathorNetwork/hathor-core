@@ -14,10 +14,10 @@
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from structlog import get_logger
-from twisted.internet.interfaces import IReactorFromThreads
+from twisted.internet.interfaces import IDelayedCall, IReactorFromThreads
 from twisted.python.threadable import isInIOThread
 
 from hathor.util import Reactor

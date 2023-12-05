@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import datetime
+import gc
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterator, NamedTuple, Optional, Union
+from typing import Any, Iterator, NamedTuple, Optional, Union, cast
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -1007,19 +1008,10 @@ class HathorManager:
             self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
         self.tx_fully_validated(tx, quiet=quiet)
 
-        if tx.is_block and (tx.get_height() % 25_000) == 0:
-            #from IPython import start_ipython
-            #start_ipython(argv=[], user_ns={
-            #    'manager': self,
-            #})
-            import gc
-            from hathor.transaction import Block
-            from sys import getrefcount
-
+        if tx.is_block and (cast(Block, tx).get_height() % 25_000) == 0:
             gcl = gc.get_objects()
             gcl_blocks = [x for x in gcl if isinstance(x, Block)]
-            print('blocks in memory', len(gcl_blocks))
-
+            self.log.debug('blocks in memory', count=len(gcl_blocks))
 
         if propagate_to_peers:
             # Propagate to our peers.

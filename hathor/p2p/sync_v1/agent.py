@@ -218,7 +218,7 @@ class NodeSyncTimestamp(SyncAgent):
         # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
         self.synced_timestamp: int = 0
 
-        self.send_data_queue: Optional[SendDataPush] = None  # = SendDataPush(self)
+        self.send_data_queue: Optional[SendDataPush] = None
 
         # Latest data timestamp of the peer.
         self.previous_timestamp: int = 0
