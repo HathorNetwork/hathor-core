@@ -15,22 +15,20 @@
 import os
 import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from pydantic import ValidationError
 from structlog import get_logger
 
-from hathor.cli.run_node_args import RunNodeArgs
-from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
-from hathor.exception import PreInitializationError
-from hathor.feature_activation.feature import Feature
-
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 
+if TYPE_CHECKING:
+    from hathor.cli.run_node_args import RunNodeArgs
+
 
 class RunNode:
-    UNSAFE_ARGUMENTS: list[tuple[str, Callable[[RunNodeArgs], bool]]] = [
+    UNSAFE_ARGUMENTS: list[tuple[str, Callable[['RunNodeArgs'], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
@@ -45,6 +43,7 @@ class RunNode:
         Arguments must also be added to hathor.cli.run_node_args.RunNodeArgs
         """
         from hathor.cli.util import create_parser
+        from hathor.feature_activation.feature import Feature
         parser = create_parser()
 
         parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
@@ -346,6 +345,9 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
+        from hathor.cli.run_node_args import RunNodeArgs
+        from hathor.conf import TESTNET_SETTINGS_FILEPATH
+        from hathor.conf.get_settings import get_settings
         self.log = logger.new()
 
         if argv is None:
@@ -363,8 +365,9 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
 
         try:
-            HathorSettings()
+            get_settings()
         except (TypeError, ValidationError) as e:
+            from hathor.exception import PreInitializationError
             raise PreInitializationError(
                 'An error was found while trying to initialize HathorSettings. See above for details.'
             ) from e
