@@ -58,6 +58,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
+from hathor.utils.twisted import call_blocking
 from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
@@ -922,9 +923,40 @@ class HathorManager:
         return self.on_new_tx(tx, fails_silently=fails_silently, propagate_to_peers=True)
 
     @cpu.profiler('on_new_tx')
-    def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
-                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
-                  skip_block_weight_verification: bool = False, reject_locked_reward: bool = True) -> bool:
+    def on_new_tx(
+        self,
+        tx: BaseTransaction,
+        *,
+        conn: Optional[HathorProtocol] = None,
+        quiet: bool = False,
+        fails_silently: bool = True,
+        propagate_to_peers: bool = True,
+        skip_block_weight_verification: bool = False,
+        reject_locked_reward: bool = True
+    ) -> bool:
+        return call_blocking(
+            self.reactor,
+            self.on_new_tx_async,
+            tx,
+            conn=conn,
+            quiet=quiet,
+            fails_silently=fails_silently,
+            propagate_to_peers=propagate_to_peers,
+            skip_block_weight_verification=skip_block_weight_verification,
+            reject_locked_reward=reject_locked_reward,
+        )
+
+    async def on_new_tx_async(
+        self,
+        tx: BaseTransaction,
+        *,
+        conn: Optional[HathorProtocol] = None,
+        quiet: bool = False,
+        fails_silently: bool = True,
+        propagate_to_peers: bool = True,
+        skip_block_weight_verification: bool = False,
+        reject_locked_reward: bool = True
+    ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param tx: transaction to be added

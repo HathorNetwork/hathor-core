@@ -213,7 +213,12 @@ def _verify_tx(
         verifiers.tx.verify_reward_locked(tx)
 
 
-def _verify_token_creation_tx(verifiers: VertexVerifiers, tx: TokenCreationTransaction, *, reject_locked_reward: bool) -> None:
+def _verify_token_creation_tx(
+    verifiers: VertexVerifiers,
+    tx: TokenCreationTransaction,
+    *,
+    reject_locked_reward: bool
+) -> None:
     """ Run all validations as regular transactions plus validation on token info.
 
     We also overload verify_sum to make some different checks
