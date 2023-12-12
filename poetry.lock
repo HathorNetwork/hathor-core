@@ -1375,6 +1375,17 @@ setproctitle = ["setproctitle"]
 testing = ["filelock"]
 
 [[package]]
+name = "python-healthchecklib"
+version = "0.1.0"
+description = "Opinionated healthcheck library"
+optional = false
+python-versions = ">=3.8.1,<4.0.0"
+files = [
+    {file = "python_healthchecklib-0.1.0-py3-none-any.whl", hash = "sha256:95d94fcae7f281adf16624014ae789dfa38d1be327cc38b02ee82bad70671f2f"},
+    {file = "python_healthchecklib-0.1.0.tar.gz", hash = "sha256:afa0572d37902c50232d99acf0065836082bb027109c9c98e8d5acfefd381595"},
+]
+
+[[package]]
 name = "pywin32"
 version = "305"
 description = "Python for Window Extensions"
@@ -2135,4 +2146,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4"
-content-hash = "1a2830d269a9d5a6fe449b5e884438b5f17a5dacd89110b7ada5af2026c4ab97"
+content-hash = "2b20a90cf75e75bd32568e722489db53b4a4b490f4e3f084ff5734ea8137c37e"
