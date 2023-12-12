@@ -43,7 +43,7 @@ class HealthcheckResource(Resource):
         sync_component.add_healthcheck(lambda: sync_healthcheck(self.manager))
 
         healthcheck = Healthcheck(name='hathor-core', components=[sync_component])
-        status = asyncio.run(healthcheck.run())
+        status = asyncio.get_event_loop().run_until_complete(healthcheck.run())
 
         if strict_status_code:
             request.setResponseCode(200)
