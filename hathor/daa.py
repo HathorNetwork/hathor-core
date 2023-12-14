@@ -27,10 +27,12 @@ from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
-from hathor.util import iwindows
+from hathor.types import VertexId
+from hathor.util import iwindows, not_none
 
 if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
+    from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -57,17 +59,40 @@ class DifficultyAdjustmentAlgorithm:
         DifficultyAdjustmentAlgorithm.singleton = self
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
-    def calculate_block_difficulty(self, block: 'Block') -> float:
-        """ Calculate block weight according to the ascendents of `block`, using calculate_next_weight."""
+    def calculate_block_difficulty(self, block: 'Block', memory_storage: 'SimpleMemoryStorage') -> float:
+        """ Calculate block weight according to the ascendants of `block`, using calculate_next_weight."""
         if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
             return 1.0
 
         if block.is_genesis:
             return self.MIN_BLOCK_WEIGHT
 
-        return self.calculate_next_weight(block.get_block_parent(), block.timestamp)
+        parent_block = memory_storage.get_parent_block(block)
 
-    def calculate_next_weight(self, parent_block: 'Block', timestamp: int) -> float:
+        return self.calculate_next_weight(parent_block, block.timestamp, memory_storage)
+
+    def _calculate_N(self, parent_block: 'Block') -> int:
+        """Calculate the N value for the `calculate_next_weight` algorithm."""
+        return min(2 * self._settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_height() - 1)
+
+    def get_block_dependencies(self, block: 'Block') -> list[VertexId]:
+        """Return the ids of the required blocks to call `calculate_block_difficulty` for the provided block."""
+        parent_block = block.get_block_parent()
+        N = self._calculate_N(parent_block)
+        ids: list[VertexId] = [not_none(parent_block.hash)]
+
+        while len(ids) <= N + 1:
+            parent_block = parent_block.get_block_parent()
+            ids.append(not_none(parent_block.hash))
+
+        return ids
+
+    def calculate_next_weight(
+        self,
+        parent_block: 'Block',
+        timestamp: int,
+        memory_storage: Optional['SimpleMemoryStorage'] = None,
+    ) -> float:
         """ Calculate the next block weight, aka DAA/difficulty adjustment algorithm.
 
         The algorithm used is described in [RFC 22](https://gitlab.com/HathorNetwork/rfcs/merge_requests/22).
@@ -80,7 +105,7 @@ class DifficultyAdjustmentAlgorithm:
         from hathor.transaction import sum_weights
 
         root = parent_block
-        N = min(2 * self._settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_height() - 1)
+        N = self._calculate_N(parent_block)
         K = N // 2
         T = self.AVG_TIME_BETWEEN_BLOCKS
         S = 5
@@ -90,7 +115,7 @@ class DifficultyAdjustmentAlgorithm:
         blocks: list['Block'] = []
         while len(blocks) < N + 1:
             blocks.append(root)
-            root = root.get_block_parent()
+            root = memory_storage.get_parent_block(root) if memory_storage else root.get_block_parent()
             assert root is not None
 
         # TODO: revise if this assertion can be safely removed
