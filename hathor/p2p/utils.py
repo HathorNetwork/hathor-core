@@ -14,7 +14,7 @@
 
 import datetime
 import re
-from typing import Any, Generator, Optional
+from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -25,7 +25,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509 import Certificate
 from cryptography.x509.oid import NameOID
-from twisted.internet.defer import inlineCallbacks
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf.get_settings import get_settings
@@ -100,15 +99,14 @@ def connection_string_to_host(connection_string: str) -> str:
     return urlparse(connection_string).netloc.split(':')[0]
 
 
-@inlineCallbacks
-def discover_dns(host: str, test_mode: int = 0) -> Generator[Any, Any, list[str]]:
+async def discover_dns(host: str, test_mode: int = 0) -> list[str]:
     """ Start a DNS peer discovery object and execute a search for the host
 
         Returns the DNS string from the requested host
         E.g., localhost -> tcp://127.0.0.1:40403
     """
     discovery = DNSPeerDiscovery([], test_mode=test_mode)
-    result = yield discovery.dns_seed_lookup(host)
+    result = await discovery.dns_seed_lookup(host)
     return result
 
 

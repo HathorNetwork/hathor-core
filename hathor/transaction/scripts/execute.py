@@ -16,7 +16,7 @@ import struct
 from typing import NamedTuple, Optional, Union
 
 from hathor.transaction import BaseTransaction, Transaction, TxInput
-from hathor.transaction.exceptions import DataIndexError, FinalStackInvalid, InvalidScriptError, OutOfData, ScriptError
+from hathor.transaction.exceptions import DataIndexError, FinalStackInvalid, InvalidScriptError, OutOfData
 
 
 class ScriptExtras(NamedTuple):
@@ -54,21 +54,19 @@ def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> None:
         :raises ScriptError: case opcode is not found
         :raises FinalStackInvalid: case the evaluation fails
     """
-    from hathor.transaction.scripts.opcode import MAP_OPCODE_TO_FN, Opcode
+    from hathor.transaction.scripts.opcode import Opcode, execute_op_code
+    from hathor.transaction.scripts.script_context import ScriptContext
     stack: Stack = []
+    context = ScriptContext(stack=stack, logs=log, extras=extras)
     data_len = len(data)
     pos = 0
     while pos < data_len:
         opcode, pos = get_script_op(pos, data, stack)
         if Opcode.is_pushdata(opcode):
             continue
-        # this is an opcode manipulating the stack
-        fn = MAP_OPCODE_TO_FN.get(opcode, None)
-        if fn is None:
-            # throw error
-            raise ScriptError('unknown opcode')
 
-        fn(stack, log, extras)
+        # this is an opcode manipulating the stack
+        execute_op_code(Opcode(opcode), context)
 
     evaluate_final_stack(stack, log)
 

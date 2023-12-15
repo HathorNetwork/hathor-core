@@ -12,14 +12,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.transaction import MergeMinedBlock
+from hathor.transaction.scripts.execute import ScriptExtras, Stack
 
 
-class MergeMinedBlockVerifier:
-    __slots__ = ()
+class ScriptContext:
+    """A context to be manipulated during script execution. A separate instance must be used for each script."""
+    __slots__ = ('stack', 'logs', 'extras')
 
-    def verify_aux_pow(self, block: MergeMinedBlock) -> None:
-        """ Verify auxiliary proof-of-work (for merged mining).
-        """
-        assert block.aux_pow is not None
-        block.aux_pow.verify(block.get_base_hash())
+    def __init__(self, *, stack: Stack, logs: list[str], extras: ScriptExtras) -> None:
+        self.stack = stack
+        self.logs = logs
+        self.extras = extras

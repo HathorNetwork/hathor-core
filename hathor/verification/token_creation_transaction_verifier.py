@@ -12,26 +12,22 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import clean_token_string
+from hathor.types import TokenUid
 from hathor.util import not_none
-from hathor.verification.transaction_verifier import TransactionVerifier
 
 
-class TokenCreationTransactionVerifier(TransactionVerifier):
-    __slots__ = ()
+class TokenCreationTransactionVerifier:
+    __slots__ = ('_settings',)
 
-    def verify(self, tx: TokenCreationTransaction, *, reject_locked_reward: bool = True) -> None:
-        """ Run all validations as regular transactions plus validation on token info.
+    def __init__(self, *, settings: HathorSettings) -> None:
+        self._settings = settings
 
-        We also overload verify_sum to make some different checks
-        """
-        super().verify(tx, reject_locked_reward=reject_locked_reward)
-        self.verify_minted_tokens(tx)
-        self.verify_token_info(tx)
-
-    def verify_minted_tokens(self, tx: TokenCreationTransaction) -> None:
+    def verify_minted_tokens(self, tx: TokenCreationTransaction, token_dict: dict[TokenUid, TokenInfo]) -> None:
         """ Besides all checks made on regular transactions, a few extra ones are made:
         - only HTR tokens on the inputs;
         - new tokens are actually being minted;
@@ -39,8 +35,6 @@ class TokenCreationTransactionVerifier(TransactionVerifier):
         :raises InvalidToken: when there's an error in token operations
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        token_dict = tx.get_complete_token_info()
-
         # make sure tokens are being minted
         token_info = token_dict[not_none(tx.hash)]
         if token_info.amount <= 0:

@@ -14,13 +14,13 @@
 
 import socket
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generator
+from typing import Callable
 
 from structlog import get_logger
 from twisted.internet import defer
-from twisted.internet.defer import inlineCallbacks
 from twisted.names.client import lookupAddress, lookupText
 from twisted.names.dns import Record_A, Record_TXT, RRHeader
+from typing_extensions import override
 
 logger = get_logger()
 
@@ -30,7 +30,7 @@ class PeerDiscovery(ABC):
     """
 
     @abstractmethod
-    def discover_and_connect(self, connect_to: Callable[[str], None]) -> Any:
+    async def discover_and_connect(self, connect_to: Callable[[str], None]) -> None:
         """ This method must discover the peers and call `connect_to` for each of them.
 
         :param connect_to: Function which will be called for each discovered peer.
@@ -51,7 +51,8 @@ class BootstrapPeerDiscovery(PeerDiscovery):
         self.log = logger.new()
         self.descriptions = descriptions
 
-    def discover_and_connect(self, connect_to: Callable[[str], None]) -> Any:
+    @override
+    async def discover_and_connect(self, connect_to: Callable[[str], None]) -> None:
         for description in self.descriptions:
             connect_to(description)
 
@@ -70,18 +71,17 @@ class DNSPeerDiscovery(PeerDiscovery):
         self.default_port = default_port
         self.test_mode = test_mode
 
-    @inlineCallbacks
-    def discover_and_connect(self, connect_to: Callable[[str], None]) -> Generator[Any, Any, None]:
+    @override
+    async def discover_and_connect(self, connect_to: Callable[[str], None]) -> None:
         """ Run DNS lookup for host and connect to it
             This is executed when starting the DNS Peer Discovery and first connecting to the network
         """
         for host in self.hosts:
-            url_list = yield self.dns_seed_lookup(host)
+            url_list = await self.dns_seed_lookup(host)
             for url in url_list:
                 connect_to(url)
 
-    @inlineCallbacks
-    def dns_seed_lookup(self, host: str) -> Generator[Any, Any, list[str]]:
+    async def dns_seed_lookup(self, host: str) -> list[str]:
         """ Run a DNS lookup for TXT, A, and AAAA records and return a list of connection strings.
         """
         if self.test_mode:
@@ -97,7 +97,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         d2.addErrback(self.errback),
 
         d = defer.gatherResults([d1, d2])
-        results = yield d
+        results = await d
         unique_urls: set[str] = set()
         for urls in results:
             unique_urls.update(urls)

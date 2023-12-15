@@ -2,8 +2,6 @@ import os
 import shutil
 import tempfile
 
-from twisted.internet.defer import inlineCallbacks
-
 from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import InvalidPeerIdException, PeerId
 from hathor.p2p.peer_storage import PeerStorage
@@ -212,8 +210,7 @@ class PeerIdTest(unittest.TestCase):
 class BasePeerIdTest(unittest.TestCase):
     __test__ = False
 
-    @inlineCallbacks
-    def test_validate_entrypoint(self):
+    async def test_validate_entrypoint(self):
         manager = self.create_peer('testnet', unlock_wallet=False)
         peer_id = manager.my_peer
         peer_id.entrypoints = ['tcp://127.0.0.1:40403']
@@ -221,15 +218,15 @@ class BasePeerIdTest(unittest.TestCase):
         # we consider that we are starting the connection to the peer
         protocol = manager.connections.client_factory.buildProtocol('127.0.0.1')
         protocol.connection_string = 'tcp://127.0.0.1:40403'
-        result = yield peer_id.validate_entrypoint(protocol)
+        result = await peer_id.validate_entrypoint(protocol)
         self.assertTrue(result)
         # if entrypoint is an URI
         peer_id.entrypoints = ['uri_name']
-        result = yield peer_id.validate_entrypoint(protocol)
+        result = await peer_id.validate_entrypoint(protocol)
         self.assertTrue(result)
         # test invalid. DNS in test mode will resolve to '127.0.0.1:40403'
         protocol.connection_string = 'tcp://45.45.45.45:40403'
-        result = yield peer_id.validate_entrypoint(protocol)
+        result = await peer_id.validate_entrypoint(protocol)
         self.assertFalse(result)
 
         # now test when receiving the connection - i.e. the peer starts it
@@ -242,11 +239,11 @@ class BasePeerIdTest(unittest.TestCase):
                 Peer = namedtuple('Peer', 'host')
                 return Peer(host='127.0.0.1')
         protocol.transport = FakeTransport()
-        result = yield peer_id.validate_entrypoint(protocol)
+        result = await peer_id.validate_entrypoint(protocol)
         self.assertTrue(result)
         # if entrypoint is an URI
         peer_id.entrypoints = ['uri_name']
-        result = yield peer_id.validate_entrypoint(protocol)
+        result = await peer_id.validate_entrypoint(protocol)
         self.assertTrue(result)
 
 

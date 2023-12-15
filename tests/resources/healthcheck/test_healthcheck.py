@@ -31,6 +31,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             'checks': {
                 'sync': [{
                     'componentType': 'internal',
+                    'componentName': 'sync',
                     'status': 'fail',
                     'output': HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY,
                     'time': ANY
@@ -53,6 +54,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             'checks': {
                 'sync': [{
                     'componentType': 'internal',
+                    'componentName': 'sync',
                     'status': 'fail',
                     'output': HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY,
                     'time': ANY
@@ -79,6 +81,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             'checks': {
                 'sync': [{
                     'componentType': 'internal',
+                    'componentName': 'sync',
                     'status': 'fail',
                     'output': HathorManager.UnhealthinessReason.NO_SYNCED_PEER,
                     'time': ANY
@@ -111,6 +114,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             'checks': {
                 'sync': [{
                     'componentType': 'internal',
+                    'componentName': 'sync',
                     'status': 'fail',
                     'output': HathorManager.UnhealthinessReason.NO_SYNCED_PEER,
                     'time': ANY
@@ -143,6 +147,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             'checks': {
                 'sync': [{
                     'componentType': 'internal',
+                    'componentName': 'sync',
                     'status': 'pass',
                     'output': 'Healthy',
                     'time': ANY

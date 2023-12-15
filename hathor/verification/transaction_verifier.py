@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import (
@@ -34,46 +36,16 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
-from hathor.verification.vertex_verifier import VertexVerifier
 
 cpu = get_cpu_profiler()
 
 
-class TransactionVerifier(VertexVerifier):
-    __slots__ = ()
+class TransactionVerifier:
+    __slots__ = ('_settings', '_daa')
 
-    def verify_basic(self, tx: Transaction) -> None:
-        """Partially run validations, the ones that need parents/inputs are skipped."""
-        if tx.is_genesis:
-            # TODO do genesis validation?
-            return
-        self.verify_parents_basic(tx)
-        self.verify_weight(tx)
-        self.verify_without_storage(tx)
-
-    @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
-    def verify(self, tx: Transaction, *, reject_locked_reward: bool = True) -> None:
-        """ Common verification for all transactions:
-           (i) number of inputs is at most 256
-          (ii) number of outputs is at most 256
-         (iii) confirms at least two pending transactions
-          (iv) solves the pow (we verify weight is correct in HathorManager)
-           (v) validates signature of inputs
-          (vi) validates public key and output (of the inputs) addresses
-         (vii) validate that both parents are valid
-        (viii) validate input's timestamps
-          (ix) validate inputs and outputs sum
-        """
-        if tx.is_genesis:
-            # TODO do genesis validation
-            return
-        self.verify_without_storage(tx)
-        self.verify_sigops_input(tx)
-        self.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
-        self.verify_parents(tx)
-        self.verify_sum(tx)
-        if reject_locked_reward:
-            self.verify_reward_locked(tx)
+    def __init__(self, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm) -> None:
+        self._settings = settings
+        self._daa = daa
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -97,14 +69,6 @@ class TransactionVerifier(VertexVerifier):
         elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
-
-    def verify_without_storage(self, tx: Transaction) -> None:
-        """ Run all verifications that do not need a storage.
-        """
-        self.verify_pow(tx)
-        self.verify_number_of_inputs(tx)
-        self.verify_outputs(tx)
-        self.verify_sigops_output(tx)
 
     def verify_sigops_input(self, tx: Transaction) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
@@ -177,18 +141,6 @@ class TransactionVerifier(VertexVerifier):
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def verify_sum(self, tx: Transaction) -> None:
-        """Verify that the sum of outputs is equal of the sum of inputs, for each token.
-
-        If there are authority UTXOs involved, tokens can be minted or melted, so the above rule may
-        not be respected.
-
-        :raises InvalidToken: when there's an error in token operations
-        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
-        """
-        token_dict = tx.get_complete_token_info()
-        self.verify_authorities_and_deposit(token_dict)
-
     def verify_reward_locked(self, tx: Transaction) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
         the block rewards spent by this tx itself, and not the inherited `min_height`."""
@@ -205,19 +157,17 @@ class TransactionVerifier(VertexVerifier):
             if not tx.is_genesis:
                 raise NoInputError('Transaction must have at least one input')
 
-    def verify_outputs(self, tx: BaseTransaction) -> None:
+    def verify_output_token_indexes(self, tx: Transaction) -> None:
         """Verify outputs reference an existing token uid in the tokens list
 
         :raises InvalidToken: output references non existent token uid
         """
-        assert isinstance(tx, Transaction)
-        super().verify_outputs(tx)
         for output in tx.outputs:
             # check index is valid
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def verify_authorities_and_deposit(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verify_sum(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
 

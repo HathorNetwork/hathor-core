@@ -29,16 +29,10 @@ from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
-from hathor.simulator.patches import (
-    SimulatorBlockVerifier,
-    SimulatorCpuMiningService,
-    SimulatorMergeMinedBlockVerifier,
-    SimulatorTokenCreationTransactionVerifier,
-    SimulatorTransactionVerifier,
-)
+from hathor.simulator.patches import SimulatorCpuMiningService, SimulatorVertexVerifier
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.util import Random
-from hathor.verification.verification_service import VertexVerifiers
+from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import HDWallet
 
 if TYPE_CHECKING:
@@ -257,13 +251,9 @@ def _build_vertex_verifiers(
     """
     A custom VertexVerifiers builder to be used by the simulator.
     """
-    return VertexVerifiers(
-        block=SimulatorBlockVerifier(settings=settings, daa=daa, feature_service=feature_service),
-        merge_mined_block=SimulatorMergeMinedBlockVerifier(
-            settings=settings,
-            daa=daa,
-            feature_service=feature_service
-        ),
-        tx=SimulatorTransactionVerifier(settings=settings, daa=daa),
-        token_creation_tx=SimulatorTokenCreationTransactionVerifier(settings=settings, daa=daa),
+    return VertexVerifiers.create(
+        settings=settings,
+        vertex_verifier=SimulatorVertexVerifier(settings=settings, daa=daa),
+        daa=daa,
+        feature_service=feature_service,
     )

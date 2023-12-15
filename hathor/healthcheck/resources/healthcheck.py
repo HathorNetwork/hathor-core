@@ -1,19 +1,18 @@
-import hathor
+import asyncio
+
+from healthcheck import Healthcheck, HealthcheckCallbackResponse, HealthcheckInternalComponent, HealthcheckStatus
+
 from hathor.api_util import Resource, get_arg_default, get_args
 from hathor.cli.openapi_files.register import register_resource
-from hathor.healthcheck.models import ComponentHealthCheck, ComponentType, HealthCheckStatus, ServiceHealthCheck
 from hathor.manager import HathorManager
 from hathor.util import json_dumpb
 
 
-def build_sync_health_status(manager: HathorManager) -> ComponentHealthCheck:
-    """Builds the sync health status object."""
+async def sync_healthcheck(manager: HathorManager) -> HealthcheckCallbackResponse:
     healthy, reason = manager.is_sync_healthy()
 
-    return ComponentHealthCheck(
-        component_name='sync',
-        component_type=ComponentType.INTERNAL,
-        status=HealthCheckStatus.PASS if healthy else HealthCheckStatus.FAIL,
+    return HealthcheckCallbackResponse(
+        status=HealthcheckStatus.PASS if healthy else HealthcheckStatus.FAIL,
         output=reason or 'Healthy',
     )
 
@@ -38,22 +37,21 @@ class HealthcheckResource(Resource):
         raw_args = get_args(request)
         strict_status_code = get_arg_default(raw_args, 'strict_status_code', '0') == '1'
 
-        components_health_checks = [
-            build_sync_health_status(self.manager)
-        ]
-
-        health_check = ServiceHealthCheck(
-            description=f'Hathor-core {hathor.__version__}',
-            checks={c.component_name: [c] for c in components_health_checks},
+        sync_component = HealthcheckInternalComponent(
+            name='sync',
         )
+        sync_component.add_healthcheck(lambda: sync_healthcheck(self.manager))
+
+        healthcheck = Healthcheck(name='hathor-core', components=[sync_component])
+        status = asyncio.get_event_loop().run_until_complete(healthcheck.run())
 
         if strict_status_code:
             request.setResponseCode(200)
         else:
-            status_code = health_check.get_http_status_code()
+            status_code = status.get_http_status_code()
             request.setResponseCode(status_code)
 
-        return json_dumpb(health_check.to_json())
+        return json_dumpb(status.to_json())
 
 
 HealthcheckResource.openapi = {
