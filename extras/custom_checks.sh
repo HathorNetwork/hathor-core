@@ -101,6 +101,18 @@ function check_do_not_import_from_hathor_in_entrypoints() {
     return 0
 }
 
+function check_do_not_import_twisted_reactor_directly() {
+    EXCLUDES="--exclude=reactor.py --exclude=conftest.py"
+    PATTERN='\<.*from .*twisted.internet import .*reactor\>'
+
+    if grep -R $EXCLUDES "$PATTERN" "${SOURCE_DIRS[@]}"; then
+        echo 'do not use `from twisted.internet import reactor` directly.'
+        echo 'instead, use `hathor.reactor.get_global_reactor()`.'
+        return 1
+    fi
+    return 0
+}
+
 # List of functions to be executed
 checks=(
 	check_version_match
@@ -108,6 +120,7 @@ checks=(
 	check_deprecated_typing
 	check_do_not_import_tests_in_hathor
 	check_do_not_import_from_hathor_in_entrypoints
+	check_do_not_import_twisted_reactor_directly
 )
 
 # Initialize a variable to track if any check fails

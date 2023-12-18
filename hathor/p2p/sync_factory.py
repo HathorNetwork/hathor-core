@@ -13,10 +13,10 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from hathor.p2p.sync_agent import SyncAgent
-from hathor.util import Reactor
+from hathor.reactor import ReactorProtocol as Reactor
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -24,5 +24,5 @@ if TYPE_CHECKING:
 
 class SyncAgentFactory(ABC):
     @abstractmethod
-    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncAgent:
+    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Reactor) -> SyncAgent:
         pass

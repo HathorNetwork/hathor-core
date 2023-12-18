@@ -24,7 +24,7 @@ from hathor.api_util import Resource, get_arg_default, get_args
 from hathor.cli.openapi_files.register import register_resource
 from hathor.exception import HathorError
 from hathor.manager import HathorManager
-from hathor.util import reactor
+from hathor.reactor import ReactorProtocol
 from hathor.utils.zope import asserted_cast
 
 logger = get_logger()
@@ -54,6 +54,10 @@ class DebugRaiseResource(Resource):
     }
     default_msg = 'exception raised for debugging purposes'
 
+    def __init__(self, reactor: ReactorProtocol) -> None:
+        super().__init__()
+        self._reactor = reactor
+
     def run(self, exc_cls: type[BaseException], msg: str) -> None:
         raise exc_cls(msg)
 
@@ -63,7 +67,7 @@ class DebugRaiseResource(Resource):
         assert exc_cls_name in self.exc_class_map
         exc_cls = self.exc_class_map[exc_cls_name]
         msg = get_arg_default(raw_args, 'msg', self.default_msg)
-        threaded_reactor = asserted_cast(IReactorFromThreads, reactor)
+        threaded_reactor = asserted_cast(IReactorFromThreads, self._reactor)
         threaded_reactor.callFromThread(self.run, exc_cls, msg)
         return b'OK: no side-effects\n'
 
@@ -188,7 +192,7 @@ class DebugMessAroundResource(Resource):
         mess = get_arg_default(get_args(request), 'with', self.default_mess)
         assert mess in self.mess_map
         mess_func = self.mess_map[mess]
-        threaded_reactor = asserted_cast(IReactorFromThreads, reactor)
+        threaded_reactor = asserted_cast(IReactorFromThreads, self.manager.reactor)
         threaded_reactor.callFromThread(mess_func)
         return b'OK: database yanked, full-node will break\n'
 
@@ -208,6 +212,10 @@ class DebugCrashResource(Resource):
         }
     }
 
+    def __init__(self, reactor: ReactorProtocol) -> None:
+        super().__init__()
+        self._reactor = reactor
+
     def run(self, code: int) -> None:
         # XXX: sys.exit will raise a SystemExit exception that get's trapped by twisted
         #      os._exit will bypass that by exiting directly, note that no cleanup methods will be called
@@ -215,5 +223,5 @@ class DebugCrashResource(Resource):
 
     def render_GET(self, request: Request) -> bytes:
         code = get_arg_default(get_args(request), 'code', -1)
-        reactor.callLater(1.0, self.run, code)
+        self._reactor.callLater(1.0, self.run, code)
         return b'OK: full-node will exit and probably break database\n'

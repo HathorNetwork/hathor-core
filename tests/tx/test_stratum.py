@@ -256,7 +256,7 @@ class BaseStratumClientTest(unittest.TestCase):
         storage = TransactionMemoryStorage()
         self.block = storage.get_transaction(self._settings.GENESIS_BLOCK_HASH)
         self.transport = StringTransportWithDisconnection()
-        self.protocol = StratumClient()
+        self.protocol = StratumClient(reactor=self.clock)
         self.protocol.makeConnection(self.transport)
         self.job_request_params = {
             'data': self.block.get_header_without_nonce().hex(),

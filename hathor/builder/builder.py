@@ -34,6 +34,7 @@ from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
 from hathor.stratum import StratumFactory
 from hathor.transaction.storage import (
@@ -42,7 +43,7 @@ from hathor.transaction.storage import (
     TransactionRocksDBStorage,
     TransactionStorage,
 )
-from hathor.util import Random, Reactor, get_environment_info, not_none
+from hathor.util import Random, get_environment_info, not_none
 from hathor.verification.verification_service import VerificationService, VertexVerifiers
 from hathor.wallet import BaseWallet, Wallet
 
@@ -311,7 +312,7 @@ class Builder:
         return self._pubsub
 
     def _create_stratum_server(self, manager: HathorManager) -> StratumFactory:
-        stratum_factory = StratumFactory(manager=manager)
+        stratum_factory = StratumFactory(manager=manager, reactor=self._get_reactor())
         manager.stratum_factory = stratum_factory
         manager.metrics.stratum_factory = stratum_factory
         return stratum_factory

@@ -14,18 +14,31 @@
 
 from typing import cast
 
-from twisted.internet import reactor as twisted_reactor
 from twisted.internet.interfaces import IReactorCore, IReactorTCP, IReactorTime
 from zope.interface.verify import verifyObject
 
 from hathor.reactor.reactor_protocol import ReactorProtocol
 
-assert verifyObject(IReactorTime, twisted_reactor) is True
-assert verifyObject(IReactorCore, twisted_reactor) is True
-assert verifyObject(IReactorTCP, twisted_reactor) is True
+# Internal variable that should NOT be accessed directly.
+_reactor: ReactorProtocol | None = None
 
-"""
-This variable is the global reactor that should be imported to use the Twisted reactor.
-It's cast to ReactorProtocol, our own type that stubs the necessary Twisted zope interfaces, to aid typing.
-"""
-reactor = cast(ReactorProtocol, twisted_reactor)
+
+def get_global_reactor() -> ReactorProtocol:
+    """
+    Get the global Twisted reactor. It should be the only way to get a reactor, other than using the instance that
+    is passed around (which should be the same instance as the one returned by this function).
+    """
+    global _reactor
+
+    if _reactor is not None:
+        return _reactor
+
+    from twisted.internet import reactor as twisted_reactor
+
+    assert verifyObject(IReactorTime, twisted_reactor) is True
+    assert verifyObject(IReactorCore, twisted_reactor) is True
+    assert verifyObject(IReactorTCP, twisted_reactor) is True
+
+    # We cast to ReactorProtocol, our own type that stubs the necessary Twisted zope interfaces, to aid typing.
+    _reactor = cast(ReactorProtocol, twisted_reactor)
+    return _reactor

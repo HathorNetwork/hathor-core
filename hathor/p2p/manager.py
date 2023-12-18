@@ -34,8 +34,9 @@ from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
-from hathor.util import Random, Reactor
+from hathor.util import Random
 
 if TYPE_CHECKING:
     from twisted.internet.interfaces import IDelayedCall

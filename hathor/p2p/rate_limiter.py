@@ -14,7 +14,7 @@
 
 from typing import NamedTuple, Optional
 
-from hathor.util import Reactor
+from hathor.reactor import ReactorProtocol as Reactor
 
 
 class RateLimiterLimit(NamedTuple):
@@ -32,12 +32,9 @@ class RateLimiter:
     # Stores the last hit for each key
     hits: dict[str, RateLimiterLimit]
 
-    def __init__(self, reactor: Optional[Reactor] = None):
+    def __init__(self, reactor: Reactor):
         self.keys = {}
         self.hits = {}
-        if reactor is None:
-            from hathor.util import reactor as twisted_reactor
-            reactor = twisted_reactor
         self.reactor = reactor
 
     def set_limit(self, key: str, max_hits: int, window_seconds: float) -> None:
