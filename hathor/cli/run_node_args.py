@@ -72,3 +72,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     config_yaml: Optional[str]
     signal_support: set[Feature]
     signal_not_support: set[Feature]
+    x_asyncio_reactor: bool

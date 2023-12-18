@@ -100,6 +100,7 @@ class CliBuilder:
             python=python,
             platform=platform.platform(),
             settings=settings_source,
+            reactor_type=type(reactor).__name__,
         )
 
         tx_storage: TransactionStorage
