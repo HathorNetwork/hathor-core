@@ -24,8 +24,6 @@ from multiprocessing import Process, Queue
 
 import requests
 
-from hathor.conf.get_settings import get_settings
-
 _SLEEP_ON_ERROR_SECONDS = 5
 _MAX_CONN_RETRIES = math.inf
 
@@ -137,6 +135,7 @@ def execute(args: Namespace) -> None:
                                                                       block.nonce, block.weight))
 
         try:
+            from hathor.conf.get_settings import get_settings
             from hathor.daa import DifficultyAdjustmentAlgorithm
             from hathor.verification.verification_service import VerificationService, VertexVerifiers
             settings = get_settings()

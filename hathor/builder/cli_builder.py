@@ -21,7 +21,7 @@ from typing import Any, Optional
 
 from structlog import get_logger
 
-from hathor.cli.run_node import RunNodeArgs
+from hathor.cli.run_node_args import RunNodeArgs
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
