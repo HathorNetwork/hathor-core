@@ -30,19 +30,12 @@ from structlog import get_logger
 
 import hathor
 from hathor.conf.get_settings import get_settings
-from hathor.reactor.reactor import reactor as hathor_reactor
-from hathor.reactor.reactor_protocol import ReactorProtocol
 from hathor.types import TokenUid
 
 if TYPE_CHECKING:
     import structlog
 
     from hathor.transaction.base_transaction import BaseTransaction
-
-# TODO: Those reexports are kept for retro-compatibility, but users could import them directly and then we can remove
-#  them from this file.
-Reactor = ReactorProtocol
-reactor = hathor_reactor
 
 logger = get_logger()
 

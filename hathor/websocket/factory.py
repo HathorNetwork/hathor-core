@@ -25,7 +25,8 @@ from hathor.indexes import AddressIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import EventArguments, HathorEvents
-from hathor.util import json_dumpb, json_loadb, json_loads, reactor
+from hathor.reactor import get_global_reactor
+from hathor.util import json_dumpb, json_loadb, json_loads
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 settings = HathorSettings()
@@ -89,6 +90,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         :param metrics: If not given, a new one is created.
         :type metrics: :py:class:`hathor.metrics.Metrics`
         """
+        self.reactor = get_global_reactor()
         # Opened websocket connections so I can broadcast messages later
         # It contains only connections that have finished handshaking.
         self.connections: set[HathorAdminWebsocketProtocol] = set()
@@ -98,7 +100,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         super().__init__()
 
         # Limit the send message rate for specific type of data
-        self.rate_limiter = RateLimiter(reactor=reactor)
+        self.rate_limiter = RateLimiter(reactor=self.reactor)
         # Stores the buffer of messages that exceeded the rate limit and will be sent
         self.buffer_deques: dict[str, deque[dict[str, Any]]] = {}
 
@@ -111,7 +113,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
         # A timer to periodically broadcast dashboard metrics
         self._lc_send_metrics = LoopingCall(self._send_metrics)
-        self._lc_send_metrics.clock = reactor
+        self._lc_send_metrics.clock = self.reactor
 
     def start(self):
         self.is_running = True
@@ -144,7 +146,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             'hash_rate': self.metrics.hash_rate,
             'peers': self.metrics.connected_peers,
             'type': 'dashboard:metrics',
-            'time': reactor.seconds(),
+            'time': self.reactor.seconds(),
         })
 
     def subscribe(self, pubsub):
@@ -277,8 +279,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         self.buffer_deques[data['type']].append(data)
         if len(self.buffer_deques[data['type']]) == 1:
             # If it's the first time we hit the limit (only one message in deque), we schedule process_deque
-            reactor.callLater(CONTROLLED_TYPES[data['type']]['time_buffering'], self.process_deque,
-                              data_type=data['type'])
+            self.reactor.callLater(CONTROLLED_TYPES[data['type']]['time_buffering'], self.process_deque,
+                                   data_type=data['type'])
 
     def process_deque(self, data_type):
         """ Process the deque and check if I have limit to send the messages now
@@ -294,8 +296,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                     data['throttled'] = False
                 self.send_message(data)
             else:
-                reactor.callLater(CONTROLLED_TYPES[data_type]['time_buffering'], self.process_deque,
-                                  data_type=data_type)
+                self.reactor.callLater(CONTROLLED_TYPES[data_type]['time_buffering'], self.process_deque,
+                                       data_type=data_type)
                 break
 
     def handle_message(self, connection: HathorAdminWebsocketProtocol, data: Union[bytes, str]) -> None:

@@ -224,15 +224,15 @@ class ResourcesBuilder:
             root.putChild(b'_debug', debug_resource)
             resources.extend([
                 (b'log', DebugLogResource(), debug_resource),
-                (b'raise', DebugRaiseResource(), debug_resource),
-                (b'reject', DebugRejectResource(), debug_resource),
+                (b'raise', DebugRaiseResource(self.manager.reactor), debug_resource),
+                (b'reject', DebugRejectResource(self.manager.reactor), debug_resource),
                 (b'print', DebugPrintResource(), debug_resource),
             ])
         if self._args.enable_crash_api:
             crash_resource = Resource()
             root.putChild(b'_crash', crash_resource)
             resources.extend([
-                (b'exit', DebugCrashResource(), crash_resource),
+                (b'exit', DebugCrashResource(self.manager.reactor), crash_resource),
                 (b'mess_around', DebugMessAroundResource(self.manager), crash_resource),
             ])
 

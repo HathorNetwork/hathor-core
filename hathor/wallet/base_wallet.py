@@ -27,13 +27,13 @@ from twisted.internet.interfaces import IDelayedCall
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput
 from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.types import AddressB58, Amount, TokenUid
-from hathor.util import Reactor
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
 settings = HathorSettings()
@@ -129,8 +129,7 @@ class BaseWallet:
         ]
 
         if reactor is None:
-            from hathor.util import reactor as twisted_reactor
-            reactor = twisted_reactor
+            reactor = get_global_reactor()
         self.reactor = reactor
 
     def _manually_initialize(self) -> None:

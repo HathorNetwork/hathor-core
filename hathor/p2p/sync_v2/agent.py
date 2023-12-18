@@ -37,11 +37,12 @@ from hathor.p2p.sync_v2.streamers import (
     TransactionsStreamingServer,
 )
 from hathor.p2p.sync_v2.transaction_streaming_client import TransactionStreamingClient
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
-from hathor.util import Reactor, not_none
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -82,7 +83,7 @@ class NodeBlockSync(SyncAgent):
     """
     name: str = 'node-block-sync'
 
-    def __init__(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> None:
+    def __init__(self, protocol: 'HathorProtocol', reactor: Reactor) -> None:
         """
         :param protocol: Protocol of the connection.
         :type protocol: HathorProtocol
@@ -98,10 +99,6 @@ class NodeBlockSync(SyncAgent):
 
         self.DEFAULT_STREAMING_LIMIT = DEFAULT_STREAMING_LIMIT
 
-        if reactor is None:
-            from hathor.util import reactor as twisted_reactor
-            reactor = twisted_reactor
-        assert reactor is not None
         self.reactor: Reactor = reactor
         self._is_streaming: bool = False
 

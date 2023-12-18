@@ -27,10 +27,11 @@ from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_settings
 from hathor.exception import InvalidNewTransaction
+from hathor.reactor import get_global_reactor
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
-from hathor.util import json_dumpb, json_loadb, reactor
+from hathor.util import json_dumpb, json_loadb
 
 logger = get_logger()
 
@@ -59,6 +60,7 @@ class SendTokensResource(Resource):
         self.manager = manager
         self.sleep_seconds = 0
         self.log = logger.new()
+        self.reactor = get_global_reactor()
 
     def render_POST(self, request: Request) -> Any:
         """ POST request for /thin_wallet/send_tokens/
@@ -177,7 +179,7 @@ class SendTokensResource(Resource):
         # Set parents
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
-        deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool,
+        deferred = threads.deferToThreadPool(self.reactor, self.manager.pow_thread_pool,
                                              self._render_POST_thread, context)
         deferred.addCallback(self._cb_tx_resolve)
         deferred.addErrback(self._err_tx_resolve, context, 'python_resolve')
@@ -204,7 +206,7 @@ class SendTokensResource(Resource):
         # Delete it to avoid memory leak
         del self.manager.stratum_factory.mined_txs[funds_hash]
 
-        deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool,
+        deferred = threads.deferToThreadPool(self.reactor, self.manager.pow_thread_pool,
                                              self._stratum_thread_verify, context)
         deferred.addCallback(self._cb_tx_resolve)
         deferred.addErrback(self._err_tx_resolve, context, 'stratum_resolve')

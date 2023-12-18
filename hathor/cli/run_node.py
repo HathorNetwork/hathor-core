@@ -138,7 +138,8 @@ class RunNode:
         self.check_unsafe_arguments()
         self.check_python_version()
 
-        from hathor.util import reactor
+        from hathor.reactor import get_global_reactor
+        reactor = get_global_reactor()
         self.reactor = reactor
 
         from hathor.builder import CliBuilder, ResourcesBuilder

@@ -22,11 +22,11 @@ from twisted.internet.task import LoopingCall
 from hathor.conf import HathorSettings
 from hathor.p2p.manager import ConnectionsManager, PeerConnectionsMetrics
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
 from hathor.transaction.storage.cache_storage import TransactionCacheStorage
-from hathor.util import Reactor
 
 if TYPE_CHECKING:
     from hathor.stratum import StratumFactory  # noqa: F401
@@ -63,7 +63,7 @@ class Metrics:
     connections: ConnectionsManager
     tx_storage: TransactionStorage
     # Twisted reactor that handles the time and callLater
-    reactor: Optional[Reactor] = None
+    reactor: Reactor
 
     # Transactions count in the network
     transactions: int = 0
@@ -126,10 +126,6 @@ class Metrics:
 
         # Stores caculated block weights saved in tx storage
         self.weight_block_deque: deque[WeightValue] = deque(maxlen=self.weight_block_deque_len)
-
-        if self.reactor is None:
-            from hathor.util import reactor as twisted_reactor
-            self.reactor = twisted_reactor
 
         # A timer to periodically collect data
         self._lc_collect_data = LoopingCall(self._collect_data)

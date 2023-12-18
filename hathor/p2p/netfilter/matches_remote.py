@@ -20,7 +20,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 
 from hathor.p2p.netfilter.matches import NetfilterMatch, NetfilterMatchIPAddress
-from hathor.util import Reactor
+from hathor.reactor import ReactorProtocol as Reactor
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.context import NetfilterContext

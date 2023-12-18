@@ -26,10 +26,11 @@ from hathor.conf.get_settings import get_settings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import Reactor, json_dumps, json_loads
+from hathor.util import json_dumps, json_loads
 
 logger = get_logger()
 
@@ -59,7 +60,7 @@ class NodeSyncTimestamp(SyncAgent):
 
     MAX_HASHES: int = 40
 
-    def __init__(self, protocol: 'HathorProtocol', downloader: Downloader, reactor: Optional[Reactor] = None) -> None:
+    def __init__(self, protocol: 'HathorProtocol', downloader: Downloader, reactor: Reactor) -> None:
         """
         :param protocol: Protocol of the connection.
         :type protocol: HathorProtocol
@@ -72,9 +73,6 @@ class NodeSyncTimestamp(SyncAgent):
         self.manager = protocol.node
         self.downloader = downloader
 
-        if reactor is None:
-            from hathor.util import reactor as twisted_reactor
-            reactor = twisted_reactor
         self.reactor: Reactor = reactor
 
         # Rate limit for this connection.
