@@ -1061,7 +1061,7 @@ class HathorManager:
 
     def _log_feature_states(self, vertex: BaseTransaction) -> None:
         """Log features states for a block. Used as part of the Feature Activation Phased Testing."""
-        if not self._settings.FEATURE_ACTIVATION.enable_usage or not isinstance(vertex, Block):
+        if not self._feature_service.is_usage_enabled() or not isinstance(vertex, Block):
             return
 
         feature_descriptions = self._feature_service.get_bits_description(block=vertex)

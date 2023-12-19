@@ -19,7 +19,11 @@ import pytest
 from hathor.conf.get_settings import get_settings
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
+from hathor.feature_activation.feature_service import (
+    BlockIsMissingSignal,
+    BlockIsSignaling,
+    FeatureActivationIsDisabled,
+)
 from hathor.transaction import Block, TransactionMetadata
 from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
@@ -138,43 +142,25 @@ def test_get_feature_activation_bit_value() -> None:
     assert block.get_feature_activation_bit_value(3) == 0
 
 
-@pytest.mark.parametrize(
-    'is_signaling_mandatory_features',
-    [BlockIsSignaling(), BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)]
-)
-def test_verify_must_signal_when_feature_activation_is_disabled(is_signaling_mandatory_features: bool) -> None:
+def test_verify_must_signal_when_feature_activation_is_disabled() -> None:
     settings = Mock(spec_set=HathorSettings)
-    settings.FEATURE_ACTIVATION.enable_usage = False
-    feature_service = Mock(spec_set=FeatureService)
-    feature_service.is_signaling_mandatory_features = Mock(return_value=is_signaling_mandatory_features)
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
-    block = Block()
+    verifier = BlockVerifier(settings=settings, daa=Mock())
 
-    verifier.verify_mandatory_signaling(block)
+    verifier.verify_mandatory_signaling(FeatureActivationIsDisabled())
 
 
 def test_verify_must_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
-    settings.FEATURE_ACTIVATION.enable_usage = True
-    feature_service = Mock(spec_set=FeatureService)
-    feature_service.is_signaling_mandatory_features = Mock(
-        return_value=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)
-    )
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
-    block = Block()
+    verifier = BlockVerifier(settings=settings, daa=Mock())
 
     with pytest.raises(BlockMustSignalError) as e:
-        verifier.verify_mandatory_signaling(block)
+        verifier.verify_mandatory_signaling(BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1))
 
     assert str(e.value) == "Block must signal support for feature 'NOP_FEATURE_1' during MUST_SIGNAL phase."
 
 
 def test_verify_must_not_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
-    settings.FEATURE_ACTIVATION.enable_usage = True
-    feature_service = Mock(spec_set=FeatureService)
-    feature_service.is_signaling_mandatory_features = Mock(return_value=BlockIsSignaling())
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
-    block = Block()
+    verifier = BlockVerifier(settings=settings, daa=Mock())
 
-    verifier.verify_mandatory_signaling(block)
+    verifier.verify_mandatory_signaling(BlockIsSignaling())
