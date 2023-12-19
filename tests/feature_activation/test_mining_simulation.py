@@ -39,6 +39,7 @@ class BaseMiningSimulationTest(SimulatorTestCase):
         settings_dict = get_settings()._asdict()
         settings_dict.update(
             FEATURE_ACTIVATION=FeatureSettings(
+                enable_usage=True,
                 evaluation_interval=4,
                 default_threshold=3,
                 features={

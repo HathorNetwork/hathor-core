@@ -106,6 +106,7 @@ def tx_storage() -> TransactionStorage:
 @pytest.fixture
 def feature_settings() -> FeatureSettings:
     return FeatureSettings(
+        enable_usage=True,
         evaluation_interval=4,
         default_threshold=3
     )
@@ -153,6 +154,7 @@ def test_get_state_from_defined(
     expected_state: FeatureState
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -183,6 +185,7 @@ def test_get_state_from_started_to_failed(
     timeout_height: int,
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -214,6 +217,7 @@ def test_get_state_from_started_to_must_signal_on_timeout(
     timeout_height: int,
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -245,6 +249,7 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
     default_threshold: int
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         default_threshold=default_threshold,
         features={
@@ -277,6 +282,7 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
     custom_threshold: int
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -316,6 +322,7 @@ def test_get_state_from_started_to_started(
     timeout_height: int,
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -345,6 +352,7 @@ def test_get_state_from_must_signal_to_locked_in(
     block_height: int,
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -376,6 +384,7 @@ def test_get_state_from_locked_in_to_active(
     minimum_activation_height: int,
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -408,6 +417,7 @@ def test_get_state_from_locked_in_to_locked_in(
     minimum_activation_height: int,
 ) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -434,6 +444,7 @@ def test_get_state_from_locked_in_to_locked_in(
 @pytest.mark.parametrize('block_height', [20, 21, 22, 23])
 def test_get_state_from_active(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -459,6 +470,7 @@ def test_get_state_from_active(block_mocks: list[Block], tx_storage: Transaction
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -490,6 +502,7 @@ def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStor
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -515,6 +528,7 @@ def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStor
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
 def test_get_state_from_failed(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -548,6 +562,7 @@ def test_get_bits_description(tx_storage: TransactionStorage) -> None:
     criteria_mock_1 = Criteria.construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
     criteria_mock_2 = Criteria.construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
     feature_settings = FeatureSettings.construct(
+        enable_usage=True,
         features={
             Feature.NOP_FEATURE_1: criteria_mock_1,
             Feature.NOP_FEATURE_2: criteria_mock_2
@@ -694,6 +709,7 @@ def test_check_must_signal(
     signaling_state: BlockSignalingState
 ) -> None:
     feature_settings = FeatureSettings(
+        enable_usage=True,
         evaluation_interval=4,
         default_threshold=threshold,
         features={
