@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional
 from typing_extensions import override
 
 from hathor.checkpoint import Checkpoint
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.exception import InvalidNewTransaction
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
@@ -33,6 +35,7 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
     from hathor.transaction.vertex import Vertex
+    from hathor.verification.verification_model import VertexVerificationModel
 
 cpu = get_cpu_profiler()
 
@@ -428,3 +431,17 @@ class Transaction(BaseTransaction):
     def as_vertex(self) -> 'Vertex':
         from hathor.transaction.vertex import TransactionType
         return TransactionType(self)
+
+    @override
+    def get_verification_model(
+        self,
+        *,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService,
+        with_deps: bool = True
+    ) -> 'VertexVerificationModel':
+        from hathor.verification.verification_model import TransactionDependencies, TxVerification
+        return TxVerification(
+            vertex=self,
+            deps=TransactionDependencies.create(self) if with_deps else None
+        )

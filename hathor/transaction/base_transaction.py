@@ -28,6 +28,8 @@ from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_settings
+from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -40,6 +42,7 @@ if TYPE_CHECKING:
 
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex import Vertex
+    from hathor.verification.verification_model import VertexVerificationModel
 
 logger = get_logger()
 
@@ -857,6 +860,24 @@ class BaseTransaction(ABC):
     @abstractmethod
     def as_vertex(self) -> 'Vertex':
         """Return this BaseTransaction as a Vertex."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_verification_model(
+        self,
+        *,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService,
+        with_deps: bool = True
+    ) -> 'VertexVerificationModel':
+        """
+        Return the verification model for this vertex.
+
+        Args:
+            daa: the DAA used to create the verification dependencies.
+            feature_service: the FeatureService used to create the verification dependencies.
+            with_deps: whether the model should include verification dependencies or not.
+        """
         raise NotImplementedError
 
 

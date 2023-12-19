@@ -226,6 +226,10 @@ class CliBuilder:
         verification_service = VerificationService(
             verifiers=vertex_verifiers,
             daa=daa,
+        )
+        verification_service = VerificationService(
+            verifiers=vertex_verifiers,
+            daa=daa,
             feature_service=self.feature_service
         )
 

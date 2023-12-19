@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from typing_extensions import override
 
+from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
@@ -26,6 +28,7 @@ from hathor.types import TokenUid
 if TYPE_CHECKING:
     from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
     from hathor.transaction.vertex import Vertex
+    from hathor.verification.verification_model import VertexVerificationModel
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
@@ -234,6 +237,20 @@ class TokenCreationTransaction(Transaction):
     def as_vertex(self) -> 'Vertex':
         from hathor.transaction.vertex import TokenCreationTransactionType
         return TokenCreationTransactionType(self)
+
+    @override
+    def get_verification_model(
+        self,
+        *,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService,
+        with_deps: bool = True
+    ) -> 'VertexVerificationModel':
+        from hathor.verification.verification_model import TokenCreationTxVerification, TransactionDependencies
+        return TokenCreationTxVerification(
+            vertex=self,
+            deps=TransactionDependencies.create(self) if with_deps else None
+        )
 
 
 def decode_string_utf8(encoded: bytes, key: str) -> str:

@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from typing_extensions import override
 
+from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
 from hathor.transaction.block import Block
@@ -24,6 +26,7 @@ from hathor.transaction.util import VerboseCallback
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex import Vertex
+    from hathor.verification.verification_model import VertexVerificationModel
 
 
 class MergeMinedBlock(Block):
@@ -82,3 +85,17 @@ class MergeMinedBlock(Block):
     def as_vertex(self) -> 'Vertex':
         from hathor.transaction.vertex import MergeMinedBlockType
         return MergeMinedBlockType(self)
+
+    @override
+    def get_verification_model(
+        self,
+        *,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService,
+        with_deps: bool = True
+    ) -> 'VertexVerificationModel':
+        from hathor.verification.verification_model import BlockDependencies, MergeMinedBlockVerification
+        return MergeMinedBlockVerification(
+            vertex=self,
+            deps=BlockDependencies.create(self, daa, feature_service) if with_deps else None
+        )
