@@ -24,6 +24,7 @@ from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpac
 from hathor.types import TokenUid
 
 if TYPE_CHECKING:
+    from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
     from hathor.transaction.vertex import Vertex
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
@@ -220,8 +221,8 @@ class TokenCreationTransaction(Transaction):
         return json
 
     @override
-    def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
-        token_dict = super()._get_token_info_from_inputs()
+    def _get_token_info_from_inputs(self, storage: Optional['SimpleMemoryStorage']) -> dict[TokenUid, TokenInfo]:
+        token_dict = super()._get_token_info_from_inputs(storage)
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
         assert self.hash is not None

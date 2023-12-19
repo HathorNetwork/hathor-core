@@ -31,6 +31,7 @@ from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
     from hathor.transaction.vertex import Vertex
 
 cpu = get_cpu_profiler()
@@ -282,16 +283,16 @@ class Transaction(BaseTransaction):
         raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '
                                     'none of its children is checkpoint-valid')
 
-    def get_complete_token_info(self) -> dict[TokenUid, TokenInfo]:
+    def get_complete_token_info(self, storage: Optional['SimpleMemoryStorage'] = None) -> dict[TokenUid, TokenInfo]:
         """
         Get a complete token info dict, including data from both inputs and outputs.
         """
-        token_dict = self._get_token_info_from_inputs()
+        token_dict = self._get_token_info_from_inputs(storage)
         self._update_token_info_from_outputs(token_dict=token_dict)
 
         return token_dict
 
-    def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
+    def _get_token_info_from_inputs(self, storage: Optional['SimpleMemoryStorage']) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
         token_dict: dict[TokenUid, TokenInfo] = {}
@@ -304,7 +305,7 @@ class Transaction(BaseTransaction):
         token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo(0, False, False)
 
         for tx_input in self.inputs:
-            spent_tx = self.get_spent_tx(tx_input)
+            spent_tx = storage.get_vertex(tx_input.tx_id) if storage else self.get_spent_tx(tx_input)
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
@@ -349,10 +350,10 @@ class Transaction(BaseTransaction):
                     sum_tokens = token_info.amount + tx_output.value
                     token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
-    def iter_spent_rewards(self) -> Iterator[Block]:
+    def iter_spent_rewards(self, storage: Optional['SimpleMemoryStorage'] = None) -> Iterator[Block]:
         """Iterate over all the rewards being spent, assumes tx has been verified."""
         for input_tx in self.inputs:
-            spent_tx = self.get_spent_tx(input_tx)
+            spent_tx = storage.get_vertex(input_tx.tx_id) if storage else self.get_spent_tx(input_tx)
             if spent_tx.is_block:
                 assert isinstance(spent_tx, Block)
                 yield spent_tx
@@ -362,26 +363,30 @@ class Transaction(BaseTransaction):
         itself, and not the inherited `min_height`"""
         return self.get_spent_reward_locked_info() is not None
 
-    def get_spent_reward_locked_info(self) -> Optional[RewardLockedInfo]:
+    def get_spent_reward_locked_info(
+        self,
+        *,
+        storage: Optional['SimpleMemoryStorage'] = None
+    ) -> Optional[RewardLockedInfo]:
         """Check if any input block reward is locked, returning the locked information if any, or None if they are all
         unlocked."""
-        for blk in self.iter_spent_rewards():
+        for blk in self.iter_spent_rewards(storage):
             assert blk.hash is not None
-            needed_height = self._spent_reward_needed_height(blk)
+            needed_height = self._spent_reward_needed_height(blk, storage)
             if needed_height > 0:
                 return RewardLockedInfo(blk.hash, needed_height)
         return None
 
-    def _spent_reward_needed_height(self, block: Block) -> int:
+    def _spent_reward_needed_height(self, block: Block, storage: Optional['SimpleMemoryStorage']) -> int:
         """ Returns height still needed to unlock this `block` reward: 0 means it's unlocked."""
         import math
-        assert self.storage is not None
+
         # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow
-        tips = self.storage.get_best_block_tips()
+        tips = storage.get_best_block_tips() if storage else not_none(self.storage).get_best_block_tips()
         assert len(tips) > 0
         best_height = math.inf
         for tip in tips:
-            blk = self.storage.get_transaction(tip)
+            blk = storage.get_block(tip) if storage else not_none(self.storage).get_transaction(tip)
             assert isinstance(blk, Block)
             best_height = min(best_height, blk.get_height())
         assert isinstance(best_height, int)

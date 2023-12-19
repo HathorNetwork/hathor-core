@@ -140,10 +140,10 @@ class TransactionVerifier:
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def verify_reward_locked(self, tx: Transaction) -> None:
+    def verify_reward_locked(self, tx: Transaction, storage: SimpleMemoryStorage) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
         the block rewards spent by this tx itself, and not the inherited `min_height`."""
-        info = tx.get_spent_reward_locked_info()
+        info = tx.get_spent_reward_locked_info(storage=storage)
         if info is not None:
             raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
 

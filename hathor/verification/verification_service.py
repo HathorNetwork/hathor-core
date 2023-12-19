@@ -30,6 +30,7 @@ from hathor.transaction.vertex import (
     Vertex,
 )
 from hathor.types import TokenUid
+from hathor.verification.verification_context import verification_context
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
 cpu = get_cpu_profiler()
@@ -101,19 +102,24 @@ class VerificationService:
 
         Used by `self.validate_basic`. Should not modify the validation state."""
         vertex = base_tx.as_vertex()
+
         match vertex:
             case BlockType(block):
                 deps = self.get_verification_dependencies(vertex)
-                self._verify_basic_block(block, deps, skip_weight_verification=skip_block_weight_verification)
+                with verification_context(vertex):
+                    self._verify_basic_block(block, deps, skip_weight_verification=skip_block_weight_verification)
             case MergeMinedBlockType(block):
                 deps = self.get_verification_dependencies(vertex)
-                self._verify_basic_merge_mined_block(
-                    block, deps, skip_weight_verification=skip_block_weight_verification
-                )
+                with verification_context(vertex):
+                    self._verify_basic_merge_mined_block(
+                        block, deps, skip_weight_verification=skip_block_weight_verification
+                    )
             case TransactionType(tx):
-                self._verify_basic_tx(tx)
+                with verification_context(vertex):
+                    self._verify_basic_tx(tx)
             case TokenCreationTransactionType(tx):
-                self._verify_basic_token_creation_tx(tx)
+                with verification_context(vertex):
+                    self._verify_basic_token_creation_tx(tx)
             case _:
                 assert_never(vertex)
 
@@ -166,14 +172,18 @@ class VerificationService:
         match vertex:
             case BlockType(block):
                 signaling_state = self._feature_service.is_signaling_mandatory_features(block)
-                self._verify_block(block, deps, signaling_state)
+                with verification_context(vertex):
+                    self._verify_block(block, deps, signaling_state)
             case MergeMinedBlockType(block):
                 signaling_state = self._feature_service.is_signaling_mandatory_features(block)
-                self._verify_merge_mined_block(block, deps, signaling_state)
+                with verification_context(vertex):
+                    self._verify_merge_mined_block(block, deps, signaling_state)
             case TransactionType(tx):
-                self._verify_tx(tx, deps, reject_locked_reward=reject_locked_reward)
+                with verification_context(vertex):
+                    self._verify_tx(tx, deps, reject_locked_reward=reject_locked_reward)
             case TokenCreationTransactionType(tx):
-                self._verify_token_creation_tx(tx, deps, reject_locked_reward=reject_locked_reward)
+                with verification_context(vertex):
+                    self._verify_token_creation_tx(tx, deps, reject_locked_reward=reject_locked_reward)
             case _:
                 assert_never(vertex)
 
@@ -230,9 +240,9 @@ class VerificationService:
         self.verifiers.tx.verify_sigops_input(tx, storage)
         self.verifiers.tx.verify_inputs(tx, storage)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.vertex.verify_parents(tx, storage)
-        self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
+        self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info(storage))
         if reject_locked_reward:
-            self.verifiers.tx.verify_reward_locked(tx)
+            self.verifiers.tx.verify_reward_locked(tx, storage)
 
     def _verify_token_creation_tx(
         self,
@@ -245,24 +255,25 @@ class VerificationService:
 
         We also overload verify_sum to make some different checks
         """
-        token_dict = tx.get_complete_token_info()
+        token_dict = tx.get_complete_token_info(storage)
         self._verify_tx(tx, storage, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
         self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, base_tx: BaseTransaction) -> None:
         vertex = base_tx.as_vertex()
-        match vertex:
-            case BlockType(block):
-                self._verify_without_storage_block(block)
-            case MergeMinedBlockType(block):
-                self._verify_without_storage_merge_mined_block(block)
-            case TransactionType(tx):
-                self._verify_without_storage_tx(tx)
-            case TokenCreationTransactionType(tx):
-                self._verify_without_storage_token_creation_tx(tx)
-            case _:
-                assert_never(vertex)
+        with verification_context(vertex):
+            match vertex:
+                case BlockType(block):
+                    self._verify_without_storage_block(block)
+                case MergeMinedBlockType(block):
+                    self._verify_without_storage_merge_mined_block(block)
+                case TransactionType(tx):
+                    self._verify_without_storage_tx(tx)
+                case TokenCreationTransactionType(tx):
+                    self._verify_without_storage_token_creation_tx(tx)
+                case _:
+                    assert_never(vertex)
 
     def _verify_without_storage_block(self, block: Block) -> None:
         """ Run all verifications that do not need a storage.
@@ -304,13 +315,11 @@ class VerificationService:
 
         match vertex:
             case BlockType(block) | MergeMinedBlockType(block):
-                # TODO: feature states?
                 daa_deps = self._daa.get_block_dependencies(block)
                 simple_storage.add_vertices_from_storage(tx_storage, daa_deps)
             case TransactionType(tx) | TokenCreationTransactionType(tx):
-                # TODO: get_complete_token_info?
-                # TODO: get_best_block_tips?
                 spent_txs = [tx_input.tx_id for tx_input in tx.inputs]
                 simple_storage.add_vertices_from_storage(tx_storage, spent_txs)
+                simple_storage.set_best_block_tips_from_storage(tx_storage)
 
         return simple_storage
