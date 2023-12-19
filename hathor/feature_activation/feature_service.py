@@ -26,9 +26,13 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
+class FeatureActivationIsDisabled:
+    """Represent that Feature Activation is disabled and therefore the block signaling state cannot be calculated."""
+
+
+@dataclass(frozen=True, slots=True)
 class BlockIsSignaling:
     """Represent that a block is correctly signaling support for all currently mandatory features."""
-    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +41,7 @@ class BlockIsMissingSignal:
     feature: Feature
 
 
-BlockSignalingState: TypeAlias = BlockIsSignaling | BlockIsMissingSignal
+BlockSignalingState: TypeAlias = FeatureActivationIsDisabled | BlockIsSignaling | BlockIsMissingSignal
 
 
 class FeatureService:
@@ -47,8 +51,13 @@ class FeatureService:
         self._feature_settings = feature_settings
         self._tx_storage = tx_storage
 
+    def is_usage_enabled(self) -> bool:
+        """Return whether Feature Activation usage is enabled."""
+        return self._feature_settings.enable_usage
+
     def is_feature_active(self, *, block: 'Block', feature: Feature) -> bool:
         """Returns whether a Feature is active at a certain block."""
+        assert self.is_usage_enabled()
         state = self.get_state(block=block, feature=feature)
 
         return state == FeatureState.ACTIVE
@@ -58,6 +67,9 @@ class FeatureService:
         Return whether a block is signaling features that are mandatory, that is, any feature currently in the
         MUST_SIGNAL phase.
         """
+        if not self.is_usage_enabled():
+            return FeatureActivationIsDisabled()
+
         bit_counts = block.get_feature_activation_bit_counts()
         height = block.get_height()
         offset_to_boundary = height % self._feature_settings.evaluation_interval
@@ -82,6 +94,7 @@ class FeatureService:
 
     def get_state(self, *, block: 'Block', feature: Feature) -> FeatureState:
         """Returns the state of a feature at a certain block. Uses block metadata to cache states."""
+        assert self.is_usage_enabled()
 
         # per definition, the genesis block is in the DEFINED state for all features
         if block.is_genesis:
@@ -190,6 +203,7 @@ class FeatureService:
 
     def get_bits_description(self, *, block: 'Block') -> dict[Feature, FeatureDescription]:
         """Returns the criteria definition and feature state for all features at a certain block."""
+        assert self.is_usage_enabled()
         return {
             feature: FeatureDescription(
                 criteria=criteria,
