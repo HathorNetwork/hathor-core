@@ -109,15 +109,16 @@ class CreateTxResource(Resource):
         """ Same as .verify but skipping pow and signature verification."""
         assert type(tx) is Transaction
         verifiers = self.manager.verification_service.verifiers
+        deps = self.manager.verification_service.get_verification_dependencies(tx.as_vertex())
         verifiers.tx.verify_number_of_inputs(tx)
         verifiers.vertex.verify_number_of_outputs(tx)
         verifiers.vertex.verify_outputs(tx)
         verifiers.tx.verify_output_token_indexes(tx)
         verifiers.vertex.verify_sigops_output(tx)
-        verifiers.tx.verify_sigops_input(tx)
+        verifiers.tx.verify_sigops_input(tx, deps)
         # need to run verify_inputs first to check if all inputs exist
-        verifiers.tx.verify_inputs(tx, skip_script=True)
-        verifiers.vertex.verify_parents(tx)
+        verifiers.tx.verify_inputs(tx, deps, skip_script=True)
+        verifiers.vertex.verify_parents(tx, deps)
         verifiers.tx.verify_sum(tx.get_complete_token_info())
 
 

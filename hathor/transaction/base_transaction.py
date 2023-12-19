@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from _hashlib import HASH
 
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.transaction.vertex import Vertex
 
 logger = get_logger()
 
@@ -825,7 +826,7 @@ class BaseTransaction(ABC):
 
         return ret
 
-    def clone(self, *, include_metadata: bool = True) -> 'BaseTransaction':
+    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> 'BaseTransaction':
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
@@ -834,7 +835,8 @@ class BaseTransaction(ABC):
         if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
-        new_tx.storage = self.storage
+        if include_storage:
+            new_tx.storage = self.storage
         return new_tx
 
     @abstractmethod
@@ -851,6 +853,11 @@ class BaseTransaction(ABC):
             if not dep_meta.validation.is_fully_connected():
                 return False
         return True
+
+    @abstractmethod
+    def as_vertex(self) -> 'Vertex':
+        """Return this BaseTransaction as a Vertex."""
+        raise NotImplementedError
 
 
 class TxInput:

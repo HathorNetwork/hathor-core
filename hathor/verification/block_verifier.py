@@ -33,7 +33,6 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
-from hathor.util import not_none
 
 
 class BlockVerifier:
@@ -56,20 +55,16 @@ class BlockVerifier:
         if meta.height < meta.min_height:
             raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
 
-    def verify_weight(self, block: Block) -> None:
+    def verify_weight(self, block: Block, storage: SimpleMemoryStorage) -> None:
         """Validate minimum block difficulty."""
-        memory_storage = SimpleMemoryStorage()
-        dependencies = self._daa.get_block_dependencies(block)
-        memory_storage.add_vertices_from_storage(not_none(block.storage), dependencies)
-
-        min_block_weight = self._daa.calculate_block_difficulty(block, memory_storage)
+        min_block_weight = self._daa.calculate_block_difficulty(block, storage)
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
 
-    def verify_reward(self, block: Block) -> None:
+    def verify_reward(self, block: Block, storage: SimpleMemoryStorage) -> None:
         """Validate reward amount."""
-        parent_block = block.get_block_parent()
+        parent_block = storage.get_parent_block(block)
         tokens_issued_per_block = self._daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if block.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(

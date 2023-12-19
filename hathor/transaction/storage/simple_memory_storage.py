@@ -41,6 +41,12 @@ class SimpleMemoryStorage:
 
         raise TransactionDoesNotExist(f'Transaction "{tx_id.hex()}" does not exist in this SimpleMemoryStorage.')
 
+    def get_vertex(self, vertex_id: VertexId) -> BaseTransaction:
+        if vertex := self._vertices.get(vertex_id):
+            return vertex
+
+        raise TransactionDoesNotExist(f'Vertex "{vertex_id.hex()}" does not exist in this SimpleMemoryStorage.')
+
     def get_parent_block(self, block: Block) -> Block:
         parent_hash = block.get_block_parent_hash()
 
@@ -54,7 +60,7 @@ class SimpleMemoryStorage:
         if vertex_id in self._vertices:
             return
 
-        vertex = storage.get_transaction(vertex_id)
+        vertex = storage.get_transaction(vertex_id).clone(include_metadata=True, include_storage=False)
 
         match vertex:
             case Block():

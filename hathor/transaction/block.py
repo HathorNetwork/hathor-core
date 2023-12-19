@@ -18,6 +18,8 @@ from operator import add
 from struct import pack
 from typing import TYPE_CHECKING, Any, Optional
 
+from typing_extensions import override
+
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
@@ -30,6 +32,7 @@ from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.transaction.vertex import Vertex
 
 cpu = get_cpu_profiler()
 
@@ -401,3 +404,8 @@ class Block(BaseTransaction):
         bit_list = self._get_feature_activation_bit_list()
 
         return bit_list[bit]
+
+    @override
+    def as_vertex(self) -> 'Vertex':
+        from hathor.transaction.vertex import BlockType
+        return BlockType(self)

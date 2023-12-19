@@ -29,6 +29,7 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
+from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -46,7 +47,7 @@ class VertexVerifier:
         self._settings = settings
         self._daa = daa
 
-    def verify_parents(self, vertex: BaseTransaction) -> None:
+    def verify_parents(self, vertex: BaseTransaction, storage: SimpleMemoryStorage) -> None:
         """All parents must exist and their timestamps must be smaller than ours.
 
         Also, txs should have 2 other txs as parents, while blocks should have 2 txs + 1 block.
@@ -59,8 +60,6 @@ class VertexVerifier:
         """
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
-        assert vertex.storage is not None
-
         # check if parents are duplicated
         parents_set = set(vertex.parents)
         if len(vertex.parents) > len(parents_set):
@@ -72,7 +71,7 @@ class VertexVerifier:
 
         for parent_hash in vertex.parents:
             try:
-                parent = vertex.storage.get_transaction(parent_hash)
+                parent = storage.get_vertex(parent_hash)
                 assert parent.hash is not None
                 if vertex.timestamp <= parent.timestamp:
                     raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
@@ -90,7 +89,7 @@ class VertexVerifier:
                     if my_parents_txs > 0:
                         raise IncorrectParents('Parents which are blocks must come before transactions')
                     for pi_hash in parent.parents:
-                        pi = vertex.storage.get_transaction(parent_hash)
+                        pi = storage.get_vertex(parent_hash)
                         if not pi.is_block:
                             min_timestamp = (
                                 min(min_timestamp, pi.timestamp) if min_timestamp is not None
@@ -160,7 +159,7 @@ class VertexVerifier:
                 ))
 
     def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:
-        """Verify number of outputs does not exceeds the limit"""
+        """Verify number of outputs does not exceed the limit"""
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
