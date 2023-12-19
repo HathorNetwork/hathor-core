@@ -33,7 +33,8 @@ class RunNode:
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
         ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
-        ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue))
+        ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue)),
+        ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor))
     ]
 
     @classmethod
@@ -117,6 +118,8 @@ class RunNode:
                             help=f'Signal support for a feature. One of {possible_features}')
         parser.add_argument('--signal-not-support', default=[], action='append', choices=possible_features,
                             help=f'Signal not support for a feature. One of {possible_features}')
+        parser.add_argument('--x-asyncio-reactor', action='store_true',
+                            help='Use asyncio reactor instead of Twisted\'s default.')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -138,8 +141,8 @@ class RunNode:
         self.check_unsafe_arguments()
         self.check_python_version()
 
-        from hathor.reactor import get_global_reactor
-        reactor = get_global_reactor()
+        from hathor.reactor import initialize_global_reactor
+        reactor = initialize_global_reactor(use_asyncio_reactor=self._args.x_asyncio_reactor)
         self.reactor = reactor
 
         from hathor.builder import CliBuilder, ResourcesBuilder
