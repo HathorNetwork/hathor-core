@@ -17,7 +17,7 @@ from typing_extensions import assert_never
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import BlockSignalingState, FeatureService
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction
+from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TransactionMetadata
 from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
@@ -172,12 +172,14 @@ class VerificationService:
         match vertex:
             case BlockType(block):
                 signaling_state = self._feature_service.is_signaling_mandatory_features(block)
+                metadata = block.get_metadata()
                 with verification_context(vertex):
-                    self._verify_block(block, deps, signaling_state)
+                    self._verify_block(block, deps, signaling_state, metadata)
             case MergeMinedBlockType(block):
                 signaling_state = self._feature_service.is_signaling_mandatory_features(block)
+                metadata = block.get_metadata()
                 with verification_context(vertex):
-                    self._verify_merge_mined_block(block, deps, signaling_state)
+                    self._verify_merge_mined_block(block, deps, signaling_state, metadata)
             case TransactionType(tx):
                 with verification_context(vertex):
                     self._verify_tx(tx, deps, reject_locked_reward=reject_locked_reward)
@@ -188,7 +190,13 @@ class VerificationService:
                 assert_never(vertex)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
-    def _verify_block(self, block: Block, storage: SimpleMemoryStorage, signaling_state: BlockSignalingState) -> None:
+    def _verify_block(
+        self,
+        block: Block,
+        storage: SimpleMemoryStorage,
+        signaling_state: BlockSignalingState,
+        metadata: TransactionMetadata
+    ) -> None:
         """
             (1) confirms at least two pending transactions and references last block
             (2) solves the pow with the correct weight (done in HathorManager)
@@ -204,7 +212,7 @@ class VerificationService:
         # (1) and (4)
         self.verifiers.vertex.verify_parents(block, storage)
 
-        self.verifiers.block.verify_height(block)
+        self.verifiers.block.verify_height(metadata)
 
         self.verifiers.block.verify_mandatory_signaling(signaling_state)
 
@@ -212,9 +220,10 @@ class VerificationService:
         self,
         block: MergeMinedBlock,
         storage: SimpleMemoryStorage,
-        signaling_state: BlockSignalingState
+        signaling_state: BlockSignalingState,
+        metadata: TransactionMetadata,
     ) -> None:
-        self._verify_block(block, storage, signaling_state)
+        self._verify_block(block, storage, signaling_state, metadata)
 
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
     def _verify_tx(

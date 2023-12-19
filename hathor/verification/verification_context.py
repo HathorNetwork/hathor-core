@@ -26,8 +26,6 @@ def verification_context(vertex: Vertex) -> Generator[None, None, None]:
     pre-calculated verification dependencies.
     Eventually, when the storage is removed from BaseTransaction, we can delete this.
     """
-    # We call this here so metadata has a chance to be initialized before we unset the storage
-    vertex.base_tx.get_metadata()
     storage = vertex.base_tx.storage
     vertex.base_tx.storage = None
     try:
