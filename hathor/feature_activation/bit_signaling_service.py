@@ -58,6 +58,9 @@ class BitSignalingService:
         Log information related to bit signaling. Must be called after the storage is ready and migrations have
         been applied.
         """
+        if not self._feature_service.is_usage_enabled():
+            return
+
         best_block = self._tx_storage.get_best_block()
 
         self._warn_non_signaling_features(best_block)
@@ -74,6 +77,9 @@ class BitSignalingService:
 
         Returns: a number that represents the signal bits in binary.
         """
+        if not self._feature_service.is_usage_enabled():
+            return 0
+
         signaling_features = self._get_signaling_features(block)
         signal_bits = 0
 
