@@ -167,18 +167,18 @@ class TransactionStreamingClient:
             if tx.hash in self._db:
                 # This case might happen during a resume, so we just log and keep syncing.
                 self.log.debug('duplicated vertex received', tx_id=tx.hash.hex())
-                self.update_dependencies(tx)
+                self._update_dependencies(tx)
             elif tx.hash in self._existing_deps:
                 # This case might happen if we already have the transaction from another sync.
                 self.log.debug('existing vertex received', tx_id=tx.hash.hex())
-                self.update_dependencies(tx)
+                self._update_dependencies(tx)
             else:
                 self.log.info('unexpected vertex received', tx_id=tx.hash.hex())
                 self.fails(UnexpectedVertex(tx.hash.hex()))
             return
         self._waiting_for.remove(tx.hash)
 
-        self.update_dependencies(tx)
+        self._update_dependencies(tx)
 
         self._db[tx.hash] = tx
 
@@ -194,7 +194,7 @@ class TransactionStreamingClient:
         if self._tx_received % 100 == 0:
             self.log.debug('tx streaming in progress', txs_received=self._tx_received)
 
-    def update_dependencies(self, tx: BaseTransaction) -> None:
+    def _update_dependencies(self, tx: BaseTransaction) -> None:
         """Update _existing_deps and _waiting_for with the dependencies."""
         for dep in tx.get_all_dependencies():
             if self.tx_storage.transaction_exists(dep) or dep in self._db:
@@ -249,7 +249,4 @@ class TransactionStreamingClient:
         self._db.clear()
         self._existing_deps.clear()
 
-        # Add pending dependencies from block.
-        for dep in blk.get_all_dependencies():
-            if not self.tx_storage.transaction_exists(dep):
-                self._waiting_for.add(dep)
+        self._update_dependencies(blk)
