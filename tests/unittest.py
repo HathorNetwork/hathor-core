@@ -15,9 +15,10 @@ from hathor.conf.get_settings import get_settings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
+from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.transaction import BaseTransaction
-from hathor.util import Random, Reactor, reactor
+from hathor.util import Random
 from hathor.wallet import HDWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
@@ -499,6 +500,7 @@ class TestCase(unittest.TestCase):
 
         Copy from: https://github.com/zooko/pyutil/blob/master/pyutil/testutil.py#L68
         """
+        reactor = get_global_reactor()
         pending = reactor.getDelayedCalls()
         active = bool(pending)
         for p in pending:

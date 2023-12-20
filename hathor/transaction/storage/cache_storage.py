@@ -18,11 +18,11 @@ from typing import Any, Iterator, Optional
 from twisted.internet import threads
 
 from hathor.indexes import IndexesManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
-from hathor.util import Reactor
 
 
 class TransactionCacheStorage(BaseTransactionStorage):

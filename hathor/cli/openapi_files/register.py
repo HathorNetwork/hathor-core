@@ -14,7 +14,7 @@
 
 from typing import TypeVar
 
-from hathor.api_util import Resource
+from hathor.api_util import Resource  # skip-cli-import-custom-check
 
 _registered_resources: list[type[Resource]] = []
 

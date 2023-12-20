@@ -12,21 +12,23 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from twisted.internet.interfaces import IAddress
 
-from hathor.cli.events_simulator.event_forwarding_websocket_protocol import EventForwardingWebsocketProtocol
-from hathor.event.websocket import EventWebsocketFactory
-from hathor.simulator import Simulator
+from hathor.event.websocket import EventWebsocketFactory  # skip-cli-import-custom-check
+
+if TYPE_CHECKING:
+    from hathor.cli.events_simulator.event_forwarding_websocket_protocol import EventForwardingWebsocketProtocol
+    from hathor.simulator import Simulator
 
 
 class EventForwardingWebsocketFactory(EventWebsocketFactory):
-    def __init__(self, simulator: Simulator, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, simulator: 'Simulator', *args: Any, **kwargs: Any) -> None:
         self._simulator = simulator
         super().__init__(*args, **kwargs)
 
-    def buildProtocol(self, _: IAddress) -> EventForwardingWebsocketProtocol:
+    def buildProtocol(self, _: IAddress) -> 'EventForwardingWebsocketProtocol':
         protocol = EventForwardingWebsocketProtocol(self._simulator)
         protocol.factory = self
         return protocol

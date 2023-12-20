@@ -20,7 +20,7 @@ from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall, IReactorFromThreads
 from twisted.python.threadable import isInIOThread
 
-from hathor.util import Reactor
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.utils.zope import verified_cast
 
 if TYPE_CHECKING:

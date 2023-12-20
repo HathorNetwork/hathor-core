@@ -21,7 +21,7 @@ from typing import Any, Optional
 
 from structlog import get_logger
 
-from hathor.cli.run_node import RunNodeArgs
+from hathor.cli.run_node_args import RunNodeArgs
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
@@ -35,8 +35,9 @@ from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
-from hathor.util import Random, Reactor, not_none
+from hathor.util import Random, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import BaseWallet, HDWallet, Wallet
@@ -99,6 +100,7 @@ class CliBuilder:
             python=python,
             platform=platform.platform(),
             settings=settings_source,
+            reactor_type=type(reactor).__name__,
         )
 
         tx_storage: TransactionStorage
@@ -271,7 +273,7 @@ class CliBuilder:
         p2p_manager.set_manager(self.manager)
 
         if self._args.stratum:
-            stratum_factory = StratumFactory(self.manager)
+            stratum_factory = StratumFactory(self.manager, reactor=reactor)
             self.manager.stratum_factory = stratum_factory
             self.manager.metrics.stratum_factory = stratum_factory
 

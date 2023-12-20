@@ -38,9 +38,10 @@ from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.p2p.utils import format_address
 from hathor.pubsub import EventArguments, HathorEvents
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction, BitcoinAuxPow, Block, MergeMinedBlock, Transaction, sum_weights
 from hathor.transaction.exceptions import PowError, ScriptError, TxValidationError
-from hathor.util import Reactor, json_dumpb, json_loadb, reactor
+from hathor.util import json_dumpb, json_loadb
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor.wallet.exceptions import InvalidAddress
 
@@ -735,7 +736,7 @@ class StratumFactory(ServerFactory):
     mined_txs: dict[bytes, Transaction]
     deferreds_tx: dict[bytes, Deferred]
 
-    def __init__(self, manager: 'HathorManager', reactor: Reactor = reactor):
+    def __init__(self, manager: 'HathorManager', reactor: Reactor):
         self.log = logger.new()
         self.manager = manager
         self.reactor = reactor
@@ -824,7 +825,7 @@ class StratumClient(JSONRPC):
 
     address: Optional[bytes]
 
-    def __init__(self, proc_count: Optional[int] = None, address: Optional[bytes] = None,
+    def __init__(self, reactor: Reactor, proc_count: Optional[int] = None, address: Optional[bytes] = None,
                  id_generator: Optional[Callable[[], Iterator[Union[str, int]]]] = lambda: count()):
         self.log = logger.new()
         self.job_data = MinerJob()
@@ -836,24 +837,23 @@ class StratumClient(JSONRPC):
         self.loop = None
         self.address = address
         self._iter_id = id_generator and id_generator() or None
+        self.reactor = reactor
 
     def _next_id(self):
         if self._iter_id:
             return str(next(self._iter_id))
 
-    def start(self, clock: Optional[Reactor] = None) -> None:
+    def start(self) -> None:
         """
         Starts the client, instantiating mining processes and scheduling miner supervisor calls.
         """
-        if clock is None:
-            clock = reactor
         args = (self.job_data, self.signal, self.queue)
         proc_count = self.proc_count or cast(int, cpu_count())
         self.signal.value = self.SLEEP
         self.miners = [Process(target=miner_job, args=(i, proc_count, *args)) for i in range(proc_count)]
 
         self.loop = task.LoopingCall(supervisor_job, self)
-        self.loop.clock = clock
+        self.loop.clock = self.reactor
         self.loop.start(self.SUPERVISOR_LOOP_INTERVAL)
 
         for miner in self.miners:

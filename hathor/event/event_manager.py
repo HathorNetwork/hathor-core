@@ -23,8 +23,9 @@ from hathor.event.model.node_state import NodeState
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
-from hathor.util import Reactor, not_none, progress
+from hathor.util import not_none, progress
 from hathor.utils.iter import batch_iterator
 
 logger = get_logger()

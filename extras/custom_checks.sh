@@ -89,12 +89,38 @@ function check_do_not_import_tests_in_hathor() {
 	return 0
 }
 
+function check_do_not_import_from_hathor_in_entrypoints() {
+    PATTERN='^import .*hathor.*\|^from .*hathor.* import'
+
+    if grep -R "$PATTERN" "hathor/cli" | grep -v 'from hathor.cli.run_node import RunNode' | grep -v '# skip-cli-import-custom-check'; then
+        echo 'do not import from `hathor` in the module-level of a CLI entrypoint.'
+        echo 'instead, import locally inside the function that uses the import.'
+        echo 'alternatively, comment `# skip-cli-import-custom-check` to exclude a line.'
+        return 1
+    fi
+    return 0
+}
+
+function check_do_not_import_twisted_reactor_directly() {
+    EXCLUDES="--exclude=reactor.py --exclude=conftest.py"
+    PATTERN='\<.*from .*twisted.internet import .*reactor\>'
+
+    if grep -R $EXCLUDES "$PATTERN" "${SOURCE_DIRS[@]}"; then
+        echo 'do not use `from twisted.internet import reactor` directly.'
+        echo 'instead, use `hathor.reactor.get_global_reactor()`.'
+        return 1
+    fi
+    return 0
+}
+
 # List of functions to be executed
 checks=(
 	check_version_match
 	check_do_not_use_builtin_random_in_tests
 	check_deprecated_typing
 	check_do_not_import_tests_in_hathor
+	check_do_not_import_from_hathor_in_entrypoints
+	check_do_not_import_twisted_reactor_directly
 )
 
 # Initialize a variable to track if any check fails

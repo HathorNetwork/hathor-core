@@ -14,8 +14,6 @@
 
 from argparse import ArgumentParser, Namespace
 
-from hathor.mining.cpu_mining_service import CpuMiningService
-
 
 def create_parser() -> ArgumentParser:
     from hathor.cli.util import create_parser
@@ -29,6 +27,7 @@ def create_parser() -> ArgumentParser:
 
 
 def execute(args: Namespace) -> None:
+    from hathor.mining.cpu_mining_service import CpuMiningService
     from hathor.transaction import Transaction
     from hathor.transaction.scripts import MultiSig
 

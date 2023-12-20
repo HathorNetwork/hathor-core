@@ -21,7 +21,8 @@ from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
-from hathor.util import Reactor, not_none
+from hathor.reactor import ReactorProtocol as Reactor
+from hathor.util import not_none
 
 logger = get_logger()
 
