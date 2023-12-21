@@ -37,6 +37,7 @@ CHECKPOINTS:
   1_600_000: 00000000060adfdfd7d488d4d510b5779cf35a3c50df7bcff941fbb6957be4d2
 
 FEATURE_ACTIVATION:
+  evaluation_interval: 40_320
   enable_usage: true
   default_threshold: 30_240 # 30240 = 75% of evaluation_interval (40320)
   features:

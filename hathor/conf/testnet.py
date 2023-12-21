@@ -55,6 +55,7 @@ SETTINGS = HathorSettings(
         cp(1_600_000, bytes.fromhex('00000000060adfdfd7d488d4d510b5779cf35a3c50df7bcff941fbb6957be4d2')),
     ],
     FEATURE_ACTIVATION=FeatureActivationSettings(
+        evaluation_interval=40_320,
         enable_usage=True,
         default_threshold=30240,
         features={
