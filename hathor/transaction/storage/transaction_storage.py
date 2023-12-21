@@ -40,6 +40,7 @@ from hathor.transaction.storage.migrations import (
     MigrationState,
     add_feature_activation_bit_counts_metadata,
     add_min_height_metadata,
+    remove_first_nop_features,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -87,6 +88,7 @@ class TransactionStorage(ABC):
     _migration_factories: list[type[BaseMigration]] = [
         add_min_height_metadata.Migration,
         add_feature_activation_bit_counts_metadata.Migration,
+        remove_first_nop_features.Migration
     ]
 
     _migrations: list[BaseMigration]
