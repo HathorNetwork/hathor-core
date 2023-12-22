@@ -21,6 +21,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
 from hathor.transaction.vertex import BlockType, MergeMinedBlockType, TokenCreationTransactionType, TransactionType
+from hathor.verification.verification_context import verification_context
 from hathor.verification.verification_model import BlockDependencies, TransactionDependencies
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
@@ -111,12 +112,14 @@ class VerificationService:
             case _:
                 assert_never(vertex)
 
+    @verification_context
     def _verify_basic_block(self, block: Block, deps: BlockDependencies, *, skip_weight_verification: bool) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
         if not skip_weight_verification:
             self.verifiers.block.verify_weight(block, deps)
         self.verifiers.block.verify_reward(block, deps)
 
+    @verification_context
     def _verify_basic_merge_mined_block(
         self,
         block: MergeMinedBlock,
@@ -126,6 +129,7 @@ class VerificationService:
     ) -> None:
         self._verify_basic_block(block, deps, skip_weight_verification=skip_weight_verification)
 
+    @verification_context
     def _verify_basic_tx(self, tx: Transaction) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
         if tx.is_genesis:
@@ -135,6 +139,7 @@ class VerificationService:
         self.verifiers.tx.verify_weight(tx)
         self.verify_without_storage(tx)
 
+    @verification_context
     def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_basic_tx(tx)
 
@@ -166,6 +171,7 @@ class VerificationService:
                 assert_never(vertex)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
+    @verification_context
     def _verify_block(self, block: Block, deps: BlockDependencies) -> None:
         """
             (1) confirms at least two pending transactions and references last block
@@ -186,10 +192,12 @@ class VerificationService:
 
         self.verifiers.block.verify_mandatory_signaling(deps)
 
+    @verification_context
     def _verify_merge_mined_block(self, block: MergeMinedBlock, deps: BlockDependencies) -> None:
         self._verify_block(block, deps)
 
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
+    @verification_context
     def _verify_tx(self, tx: Transaction, deps: TransactionDependencies, *, reject_locked_reward: bool) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
@@ -210,6 +218,7 @@ class VerificationService:
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx, deps)
 
+    @verification_context
     def _verify_token_creation_tx(
         self,
         tx: TokenCreationTransaction,
@@ -239,6 +248,7 @@ class VerificationService:
             case _:
                 assert_never(vertex)
 
+    @verification_context
     def _verify_without_storage_block(self, block: Block) -> None:
         """ Run all verifications that do not need a storage.
         """
@@ -249,10 +259,12 @@ class VerificationService:
         self.verifiers.block.verify_data(block)
         self.verifiers.vertex.verify_sigops_output(block)
 
+    @verification_context
     def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
         self.verifiers.merge_mined_block.verify_aux_pow(block)
         self._verify_without_storage_block(block)
 
+    @verification_context
     def _verify_without_storage_tx(self, tx: Transaction) -> None:
         """ Run all verifications that do not need a storage.
         """
@@ -262,5 +274,6 @@ class VerificationService:
         self.verifiers.tx.verify_output_token_indexes(tx)
         self.verifiers.vertex.verify_sigops_output(tx)
 
+    @verification_context
     def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_without_storage_tx(tx)
