@@ -56,6 +56,10 @@ class SimpleMemoryStorage:
         assert isinstance(tx, Transaction)
         return tx
 
+    def get_vertex(self, vertex_id: VertexId) -> BaseTransaction:
+        """Return a vertex from the storage, throw if it's not found."""
+        return self._get_record(self._vertices, vertex_id)
+
     @staticmethod
     def _get_record(storage: dict[VertexId, _SimpleMemoryRecord], vertex_id: VertexId) -> BaseTransaction:
         """Return a record from a storage, throw if it's not found."""

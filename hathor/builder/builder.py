@@ -473,8 +473,13 @@ class Builder:
     def _get_or_create_verification_service(self) -> VerificationService:
         if self._verification_service is None:
             verifiers = self._get_or_create_vertex_verifiers()
+            daa = self._get_or_create_daa()
             feature_service = self._get_or_create_feature_service()
-            self._verification_service = VerificationService(verifiers=verifiers, feature_service=feature_service)
+            self._verification_service = VerificationService(
+                verifiers=verifiers,
+                daa=daa,
+                feature_service=feature_service
+            )
 
         return self._verification_service
 

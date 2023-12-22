@@ -17,6 +17,8 @@ from itertools import chain
 from struct import pack
 from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional
 
+from typing_extensions import override
+
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
@@ -29,6 +31,7 @@ from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.transaction.vertex import Vertex
 
 cpu = get_cpu_profiler()
 
@@ -415,3 +418,8 @@ class Transaction(BaseTransaction):
             if meta.voided_by:
                 return True
         return False
+
+    @override
+    def as_vertex(self) -> 'Vertex':
+        from hathor.transaction.vertex import TransactionType
+        return TransactionType(self)

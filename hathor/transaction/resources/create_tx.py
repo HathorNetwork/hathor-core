@@ -22,6 +22,7 @@ from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
 from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
+from hathor.verification.verification_model import TransactionDependencies
 
 
 def from_raw_output(raw_output: dict, tokens: list[bytes]) -> TxOutput:
@@ -109,15 +110,16 @@ class CreateTxResource(Resource):
         """ Same as .verify but skipping pow and signature verification."""
         assert type(tx) is Transaction
         verifiers = self.manager.verification_service.verifiers
+        deps = TransactionDependencies.create(tx)
         verifiers.tx.verify_number_of_inputs(tx)
         verifiers.vertex.verify_number_of_outputs(tx)
         verifiers.vertex.verify_outputs(tx)
         verifiers.tx.verify_output_token_indexes(tx)
         verifiers.vertex.verify_sigops_output(tx)
-        verifiers.tx.verify_sigops_input(tx)
+        verifiers.tx.verify_sigops_input(tx, deps)
         # need to run verify_inputs first to check if all inputs exist
-        verifiers.tx.verify_inputs(tx, skip_script=True)
-        verifiers.vertex.verify_parents(tx)
+        verifiers.tx.verify_inputs(tx, deps, skip_script=True)
+        verifiers.vertex.verify_parents(tx, deps)
         verifiers.tx.verify_sum(tx.get_complete_token_info())
 
 

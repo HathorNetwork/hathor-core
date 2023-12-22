@@ -28,6 +28,7 @@ from hathor.transaction import Block, TransactionMetadata
 from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
 from hathor.verification.block_verifier import BlockVerifier
+from hathor.verification.verification_model import BlockDependencies
 
 
 def test_calculate_feature_activation_bit_counts_genesis():
@@ -145,16 +146,18 @@ def test_get_feature_activation_bit_value() -> None:
 def test_verify_must_signal_when_feature_activation_is_disabled() -> None:
     settings = Mock(spec_set=HathorSettings)
     verifier = BlockVerifier(settings=settings, daa=Mock())
+    deps = BlockDependencies(storage=Mock(), signaling_state=FeatureActivationIsDisabled())
 
-    verifier.verify_mandatory_signaling(FeatureActivationIsDisabled())
+    verifier.verify_mandatory_signaling(deps)
 
 
 def test_verify_must_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
     verifier = BlockVerifier(settings=settings, daa=Mock())
+    deps = BlockDependencies(storage=Mock(), signaling_state=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1))
 
     with pytest.raises(BlockMustSignalError) as e:
-        verifier.verify_mandatory_signaling(BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1))
+        verifier.verify_mandatory_signaling(deps)
 
     assert str(e.value) == "Block must signal support for feature 'NOP_FEATURE_1' during MUST_SIGNAL phase."
 
@@ -162,5 +165,6 @@ def test_verify_must_signal() -> None:
 def test_verify_must_not_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
     verifier = BlockVerifier(settings=settings, daa=Mock())
+    deps = BlockDependencies(storage=Mock(), signaling_state=BlockIsSignaling())
 
-    verifier.verify_mandatory_signaling(BlockIsSignaling())
+    verifier.verify_mandatory_signaling(deps)
