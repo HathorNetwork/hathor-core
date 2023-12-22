@@ -19,10 +19,8 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.validation_state import ValidationState
 from hathor.transaction.vertex import BlockType, MergeMinedBlockType, TokenCreationTransactionType, TransactionType
-from hathor.types import TokenUid
 from hathor.verification.verification_model import BlockDependencies, TransactionDependencies
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
@@ -192,14 +190,7 @@ class VerificationService:
         self._verify_block(block, deps)
 
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
-    def _verify_tx(
-        self,
-        tx: Transaction,
-        deps: TransactionDependencies,
-        *,
-        reject_locked_reward: bool,
-        token_dict: dict[TokenUid, TokenInfo] | None = None
-    ) -> None:
+    def _verify_tx(self, tx: Transaction, deps: TransactionDependencies, *, reject_locked_reward: bool) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
           (ii) number of outputs is at most 256
@@ -215,9 +206,9 @@ class VerificationService:
         self.verifiers.tx.verify_sigops_input(tx, deps)
         self.verifiers.tx.verify_inputs(tx, deps)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.vertex.verify_parents(tx, deps)
-        self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
+        self.verifiers.tx.verify_sum(deps)
         if reject_locked_reward:
-            self.verifiers.tx.verify_reward_locked(tx)
+            self.verifiers.tx.verify_reward_locked(tx, deps)
 
     def _verify_token_creation_tx(
         self,
@@ -230,9 +221,8 @@ class VerificationService:
 
         We also overload verify_sum to make some different checks
         """
-        token_dict = tx.get_complete_token_info()
-        self._verify_tx(tx, deps, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
-        self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
+        self._verify_tx(tx, deps, reject_locked_reward=reject_locked_reward)
+        self.verifiers.token_creation_tx.verify_minted_tokens(tx, deps)
         self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, base_tx: BaseTransaction) -> None:

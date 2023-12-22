@@ -33,11 +33,12 @@ class SimpleMemoryStorage:
     Instances of this class simply facilitate storing some data in memory, specifically for pre-fetched verification
     dependencies.
     """
-    __slots__ = ('_blocks', '_transactions',)
+    __slots__ = ('_blocks', '_transactions', '_best_block_tips')
 
     def __init__(self) -> None:
         self._blocks: dict[VertexId, _SimpleMemoryRecord] = {}
         self._transactions: dict[VertexId, _SimpleMemoryRecord] = {}
+        self._best_block_tips: list[VertexId] = []
 
     @property
     def _vertices(self) -> dict[VertexId, _SimpleMemoryRecord]:
@@ -107,3 +108,11 @@ class SimpleMemoryStorage:
             return
 
         raise NotImplementedError
+
+    def set_best_block_tips_from_storage(self, storage: TransactionStorage) -> None:
+        tips = storage.get_best_block_tips()
+        self.add_vertices_from_storage(storage, tips)
+        self._best_block_tips = tips
+
+    def get_best_block_tips(self) -> list[VertexId]:
+        return self._best_block_tips

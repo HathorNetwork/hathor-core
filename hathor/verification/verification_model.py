@@ -20,7 +20,8 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import BlockSignalingState, FeatureService
 from hathor.transaction import Block
 from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
-from hathor.transaction.transaction import Transaction
+from hathor.transaction.transaction import TokenInfo, Transaction
+from hathor.types import TokenUid
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,8 +39,8 @@ class BlockDependencies(VertexDependencies):
     def create(cls, block: Block, daa: DifficultyAdjustmentAlgorithm, feature_service: FeatureService) -> Self:
         """Create a dependencies instance from a block and a DAA instance."""
         assert block.storage is not None
-        simple_storage = SimpleMemoryStorage()
         signaling_state = feature_service.is_signaling_mandatory_features(block)
+        simple_storage = SimpleMemoryStorage()
         daa_deps = daa.get_block_dependencies(block)
         deps = block.parents + daa_deps
 
@@ -51,19 +52,24 @@ class BlockDependencies(VertexDependencies):
         )
 
 
+@dataclass(frozen=True, slots=True)
 class TransactionDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for transaction verification."""
+    token_info: dict[TokenUid, TokenInfo]
 
     @classmethod
     def create(cls, tx: Transaction) -> Self:
         """Create a dependencies instance from a transaction."""
         assert tx.storage is not None
+        token_info = tx.get_complete_token_info()
         simple_storage = SimpleMemoryStorage()
         spent_txs = [tx_input.tx_id for tx_input in tx.inputs]
         deps = tx.parents + spent_txs
-        # TODO: get_complete_token_info?
-        # TODO: get_best_block_tips?
 
         simple_storage.add_vertices_from_storage(tx.storage, deps)
+        simple_storage.set_best_block_tips_from_storage(tx.storage)
 
-        return cls(storage=simple_storage)
+        return cls(
+            storage=simple_storage,
+            token_info=token_info
+        )

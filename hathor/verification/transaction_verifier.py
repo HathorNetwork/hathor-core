@@ -33,9 +33,8 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
-from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
-from hathor.types import TokenUid, VertexId
+from hathor.types import VertexId
 from hathor.verification.verification_model import TransactionDependencies
 
 cpu = get_cpu_profiler()
@@ -140,10 +139,10 @@ class TransactionVerifier:
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def verify_reward_locked(self, tx: Transaction) -> None:
+    def verify_reward_locked(self, tx: Transaction, deps: TransactionDependencies) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
         the block rewards spent by this tx itself, and not the inherited `min_height`."""
-        info = tx.get_spent_reward_locked_info()
+        info = tx.get_spent_reward_locked_info(storage=deps.storage)
         if info is not None:
             raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
 
@@ -166,7 +165,7 @@ class TransactionVerifier:
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def verify_sum(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verify_sum(self, deps: TransactionDependencies) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
 
@@ -179,7 +178,7 @@ class TransactionVerifier:
         """
         withdraw = 0
         deposit = 0
-        for token_uid, token_info in token_dict.items():
+        for token_uid, token_info in deps.token_info.items():
             if token_uid == self._settings.HATHOR_TOKEN_UID:
                 continue
 
@@ -201,7 +200,7 @@ class TransactionVerifier:
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
+        htr_info = deps.token_info[self._settings.HATHOR_TOKEN_UID]
         if htr_info.amount != htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
                 htr_info.amount,
