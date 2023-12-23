@@ -45,6 +45,7 @@ class BlockDependencies(VertexDependencies):
         deps = block.parents + daa_deps
 
         simple_storage.add_vertices_from_storage(block.storage, deps)
+        simple_storage.add_vertex(block)
 
         return cls(
             storage=simple_storage,

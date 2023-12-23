@@ -20,6 +20,7 @@ from hathor.transaction.base_transaction import BaseTransaction, tx_or_block_fro
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
+from hathor.util import not_none
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +62,10 @@ class SimpleMemoryStorage:
         """Return a vertex from the storage, throw if it's not found."""
         return self._get_record(self._vertices, vertex_id)
 
+    def get_metadata(self, vertex_id: VertexId) -> TransactionMetadata:
+        """Return vertex metadata from the storage."""
+        return self.get_vertex(vertex_id).get_metadata()
+
     @staticmethod
     def _get_record(storage: dict[VertexId, _SimpleMemoryRecord], vertex_id: VertexId) -> BaseTransaction:
         """Return a record from a storage, throw if it's not found."""
@@ -88,13 +93,19 @@ class SimpleMemoryStorage:
 
     def add_vertex_from_storage(self, storage: TransactionStorage, vertex_id: VertexId) -> None:
         """
-        Add a vertex to this storage. It automatically fetches data from the provided TransactionStorage and a list
-        of ids.
+        Add a vertex to this storage. It automatically fetches data from the provided TransactionStorage and vertex_id.
         """
+        vertex = storage.get_transaction(vertex_id)
+
+        self.add_vertex(vertex)
+
+    def add_vertex(self, vertex: BaseTransaction) -> None:
+        """Add a vertex to this storage."""
+        vertex_id = not_none(vertex.hash)
+
         if vertex_id in self._vertices:
             return
 
-        vertex = storage.get_transaction(vertex_id)
         vertex_bytes = vertex.get_struct()
         metadata = vertex.get_metadata().to_json()
         record = _SimpleMemoryRecord(vertex_bytes, metadata)

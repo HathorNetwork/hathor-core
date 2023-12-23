@@ -188,7 +188,7 @@ class VerificationService:
         # (1) and (4)
         self.verifiers.vertex.verify_parents(block, deps)
 
-        self.verifiers.block.verify_height(block)
+        self.verifiers.block.verify_height(block, deps)
 
         self.verifiers.block.verify_mandatory_signaling(deps)
 
