@@ -20,7 +20,8 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import BlockSignalingState, FeatureService
 from hathor.transaction import Block
 from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
-from hathor.transaction.transaction import Transaction
+from hathor.transaction.transaction import TokenInfo, Transaction
+from hathor.types import TokenUid
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,17 +53,24 @@ class BlockDependencies(VertexDependencies):
         )
 
 
+@dataclass(frozen=True, slots=True)
 class TransactionDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for transaction verification."""
+    token_info: dict[TokenUid, TokenInfo]
 
     @classmethod
     def create(cls, tx: Transaction) -> Self:
         """Create a transaction dependencies instance."""
         assert tx.storage is not None
+        token_info = tx.get_complete_token_info()
         simple_storage = SimpleMemoryStorage()
         spent_txs = [tx_input.tx_id for tx_input in tx.inputs]
         deps = tx.parents + spent_txs
 
         simple_storage.add_vertices_from_storage(tx.storage, deps)
+        simple_storage.set_best_block_tips_from_storage(tx.storage)
 
-        return cls(storage=simple_storage)
+        return cls(
+            storage=simple_storage,
+            token_info=token_info
+        )

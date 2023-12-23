@@ -24,13 +24,14 @@ from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
-from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.exceptions import InexistentInput, InvalidToken
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
     from hathor.transaction.vertex import Vertex
 
 cpu = get_cpu_profiler()
@@ -305,7 +306,12 @@ class Transaction(BaseTransaction):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
+            try:
+                spent_output = spent_tx.outputs[tx_input.index]
+            except IndexError:
+                raise InexistentInput(
+                    f'Output spent by this input does not exist: {tx_input.tx_id.hex()} index {tx_input.index}'
+                )
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             (amount, can_mint, can_melt) = token_dict.get(token_uid, default_info)
@@ -349,10 +355,10 @@ class Transaction(BaseTransaction):
                     sum_tokens = token_info.amount + tx_output.value
                     token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
-    def iter_spent_rewards(self) -> Iterator[Block]:
+    def iter_spent_rewards(self, storage: Optional['SimpleMemoryStorage'] = None) -> Iterator[Block]:
         """Iterate over all the rewards being spent, assumes tx has been verified."""
         for input_tx in self.inputs:
-            spent_tx = self.get_spent_tx(input_tx)
+            spent_tx = storage.get_vertex(input_tx.tx_id) if storage else self.get_spent_tx(input_tx)
             if spent_tx.is_block:
                 assert isinstance(spent_tx, Block)
                 yield spent_tx
@@ -362,26 +368,30 @@ class Transaction(BaseTransaction):
         itself, and not the inherited `min_height`"""
         return self.get_spent_reward_locked_info() is not None
 
-    def get_spent_reward_locked_info(self) -> Optional[RewardLockedInfo]:
+    def get_spent_reward_locked_info(
+        self,
+        *,
+        storage: Optional['SimpleMemoryStorage'] = None
+    ) -> Optional[RewardLockedInfo]:
         """Check if any input block reward is locked, returning the locked information if any, or None if they are all
         unlocked."""
-        for blk in self.iter_spent_rewards():
+        for blk in self.iter_spent_rewards(storage):
             assert blk.hash is not None
-            needed_height = self._spent_reward_needed_height(blk)
+            needed_height = self._spent_reward_needed_height(blk, storage)
             if needed_height > 0:
                 return RewardLockedInfo(blk.hash, needed_height)
         return None
 
-    def _spent_reward_needed_height(self, block: Block) -> int:
+    def _spent_reward_needed_height(self, block: Block, storage: Optional['SimpleMemoryStorage']) -> int:
         """ Returns height still needed to unlock this `block` reward: 0 means it's unlocked."""
         import math
-        assert self.storage is not None
+
         # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow
-        tips = self.storage.get_best_block_tips()
+        tips = storage.get_best_block_tips() if storage else not_none(self.storage).get_best_block_tips()
         assert len(tips) > 0
         best_height = math.inf
         for tip in tips:
-            blk = self.storage.get_transaction(tip)
+            blk = storage.get_block(tip) if storage else not_none(self.storage).get_transaction(tip)
             assert isinstance(blk, Block)
             best_height = min(best_height, blk.get_height())
         assert isinstance(best_height, int)
