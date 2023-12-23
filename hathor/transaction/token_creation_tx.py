@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from struct import error as StructError, pack
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from typing_extensions import override
 
@@ -22,6 +22,9 @@ from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.types import TokenUid
+
+if TYPE_CHECKING:
+    from hathor.transaction.vertex import Vertex
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
@@ -225,6 +228,11 @@ class TokenCreationTransaction(Transaction):
         token_dict[self.hash] = TokenInfo(0, True, True)
 
         return token_dict
+
+    @override
+    def as_vertex(self) -> 'Vertex':
+        from hathor.transaction.vertex import TokenCreationTransactionType
+        return TokenCreationTransactionType(self)
 
 
 def decode_string_utf8(encoded: bytes, key: str) -> str:
