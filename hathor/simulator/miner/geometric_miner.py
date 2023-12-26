@@ -16,6 +16,7 @@ import math
 from typing import TYPE_CHECKING, Optional
 
 from hathor.conf.get_settings import get_settings
+from hathor.exception import BlockTemplateTimestampError
 from hathor.manager import HathorEvents
 from hathor.simulator.miner.abstract_miner import AbstractMiner
 from hathor.util import Random
@@ -96,13 +97,19 @@ class GeometricMiner(AbstractMiner):
             self._block = None
 
         if self._manager.can_start_mining():
-            block = self._generate_mining_block()
-            geometric_p = 2**(-block.weight)
-            trials = self._rng.geometric(geometric_p)
-            dt = 1.0 * trials / self._hashpower
-            self._block = block
-            self.log.debug('randomized step: start mining new block', dt=dt, parents=[h.hex() for h in block.parents],
-                           block_timestamp=block.timestamp)
+            try:
+                block = self._generate_mining_block()
+            except BlockTemplateTimestampError:
+                dt = 5  # Try again in 5 seconds.
+            else:
+                geometric_p = 2**(-block.weight)
+                trials = self._rng.geometric(geometric_p)
+                dt = 1.0 * trials / self._hashpower
+                self._block = block
+                self.log.debug('randomized step: start mining new block',
+                               dt=dt,
+                               parents=[h.hex() for h in block.parents],
+                               block_timestamp=block.timestamp)
         else:
             dt = 60
 

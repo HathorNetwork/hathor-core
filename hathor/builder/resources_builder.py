@@ -87,6 +87,7 @@ class ResourcesBuilder:
             DebugRejectResource,
         )
         from hathor.feature_activation.resources.feature import FeatureResource
+        from hathor.healthcheck.resources import HealthcheckResource
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import (
             AddPeersResource,
@@ -179,6 +180,7 @@ class ResourcesBuilder:
             (b'profiler', ProfilerResource(self.manager), root),
             (b'top', CPUProfilerResource(self.manager, cpu), root),
             (b'mempool', MempoolResource(self.manager), root),
+            (b'health', HealthcheckResource(self.manager), root),
             # mining
             (b'mining', MiningResource(self.manager), root),
             (b'getmininginfo', MiningInfoResource(self.manager), root),
@@ -222,15 +224,15 @@ class ResourcesBuilder:
             root.putChild(b'_debug', debug_resource)
             resources.extend([
                 (b'log', DebugLogResource(), debug_resource),
-                (b'raise', DebugRaiseResource(), debug_resource),
-                (b'reject', DebugRejectResource(), debug_resource),
+                (b'raise', DebugRaiseResource(self.manager.reactor), debug_resource),
+                (b'reject', DebugRejectResource(self.manager.reactor), debug_resource),
                 (b'print', DebugPrintResource(), debug_resource),
             ])
         if self._args.enable_crash_api:
             crash_resource = Resource()
             root.putChild(b'_crash', crash_resource)
             resources.extend([
-                (b'exit', DebugCrashResource(), crash_resource),
+                (b'exit', DebugCrashResource(self.manager.reactor), crash_resource),
                 (b'mess_around', DebugMessAroundResource(self.manager), crash_resource),
             ])
 

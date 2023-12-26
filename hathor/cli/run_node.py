@@ -15,27 +15,26 @@
 import os
 import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from pydantic import ValidationError
 from structlog import get_logger
 
-from hathor.cli.run_node_args import RunNodeArgs
-from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
-from hathor.exception import PreInitializationError
-from hathor.feature_activation.feature import Feature
-
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 
+if TYPE_CHECKING:
+    from hathor.cli.run_node_args import RunNodeArgs
+
 
 class RunNode:
-    UNSAFE_ARGUMENTS: list[tuple[str, Callable[[RunNodeArgs], bool]]] = [
+    UNSAFE_ARGUMENTS: list[tuple[str, Callable[['RunNodeArgs'], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
         ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
-        ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue))
+        ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue)),
+        ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor))
     ]
 
     @classmethod
@@ -45,6 +44,7 @@ class RunNode:
         Arguments must also be added to hathor.cli.run_node_args.RunNodeArgs
         """
         from hathor.cli.util import create_parser
+        from hathor.feature_activation.feature import Feature
         parser = create_parser()
 
         parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
@@ -102,8 +102,6 @@ class RunNode:
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
-        parser.add_argument('--x-enable-legacy-sync-v1_0', action='store_true', help='Enable sync-v1.0, will not '
-                            'disable sync-v1.1')
         v2args = parser.add_mutually_exclusive_group()
         v2args.add_argument('--x-sync-bridge', action='store_true',
                             help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
@@ -120,6 +118,8 @@ class RunNode:
                             help=f'Signal support for a feature. One of {possible_features}')
         parser.add_argument('--signal-not-support', default=[], action='append', choices=possible_features,
                             help=f'Signal not support for a feature. One of {possible_features}')
+        parser.add_argument('--x-asyncio-reactor', action='store_true',
+                            help='Use asyncio reactor instead of Twisted\'s default.')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -141,7 +141,8 @@ class RunNode:
         self.check_unsafe_arguments()
         self.check_python_version()
 
-        from hathor.util import reactor
+        from hathor.reactor import initialize_global_reactor
+        reactor = initialize_global_reactor(use_asyncio_reactor=self._args.x_asyncio_reactor)
         self.reactor = reactor
 
         from hathor.builder import CliBuilder, ResourcesBuilder
@@ -191,6 +192,7 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
+            feature_service=self.manager._feature_service
         )
 
     def start_sentry_if_possible(self) -> None:
@@ -347,6 +349,9 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
+        from hathor.cli.run_node_args import RunNodeArgs
+        from hathor.conf import TESTNET_SETTINGS_FILEPATH
+        from hathor.conf.get_settings import get_settings
         self.log = logger.new()
 
         if argv is None:
@@ -364,8 +369,9 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
 
         try:
-            HathorSettings()
+            get_settings()
         except (TypeError, ValidationError) as e:
+            from hathor.exception import PreInitializationError
             raise PreInitializationError(
                 'An error was found while trying to initialize HathorSettings. See above for details.'
             ) from e

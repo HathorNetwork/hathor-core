@@ -18,7 +18,6 @@ import sys
 from argparse import ArgumentParser, FileType
 from typing import TYPE_CHECKING, Iterator
 
-from hathor.cli.db_export import MAGIC_HEADER
 from hathor.cli.run_node import RunNode
 
 if TYPE_CHECKING:
@@ -46,6 +45,7 @@ class DbImport(RunNode):
         self.in_file = io.BufferedReader(self._args.import_file)
 
     def run(self) -> None:
+        from hathor.cli.db_export import MAGIC_HEADER
         from hathor.util import tx_progress
 
         header = self.in_file.read(len(MAGIC_HEADER))

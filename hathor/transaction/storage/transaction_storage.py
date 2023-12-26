@@ -35,7 +35,13 @@ from hathor.transaction.storage.exceptions import (
     TransactionIsNotABlock,
     TransactionNotInAllowedScopeError,
 )
-from hathor.transaction.storage.migrations import BaseMigration, MigrationState, add_min_height_metadata
+from hathor.transaction.storage.migrations import (
+    BaseMigration,
+    MigrationState,
+    add_feature_activation_bit_counts_metadata,
+    add_min_height_metadata,
+    remove_first_nop_features,
+)
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -81,6 +87,8 @@ class TransactionStorage(ABC):
     # history of migrations that have to be applied in the order defined here
     _migration_factories: list[type[BaseMigration]] = [
         add_min_height_metadata.Migration,
+        add_feature_activation_bit_counts_metadata.Migration,
+        remove_first_nop_features.Migration
     ]
 
     _migrations: list[BaseMigration]

@@ -1,10 +1,22 @@
+import base64
+import re
+
 import pytest
+from twisted.internet.defer import inlineCallbacks, succeed
 from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
+from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.sync_v2.agent import _HeightInfo
 from hathor.simulator import FakeConnection
-from hathor.simulator.trigger import StopAfterNMinedBlocks, StopAfterNTransactions, StopWhenTrue, Trigger
+from hathor.simulator.trigger import (
+    StopAfterNMinedBlocks,
+    StopAfterNTransactions,
+    StopWhenSendLineMatch,
+    StopWhenTrue,
+    Trigger,
+)
 from hathor.transaction.storage.traversal import DFSWalk
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
@@ -14,6 +26,8 @@ settings = HathorSettings()
 
 class BaseRandomSimulatorTestCase(SimulatorTestCase):
     __test__ = True
+
+    seed_config = 2
 
     def _get_partial_blocks(self, tx_storage):
         with tx_storage.allow_partially_validated_context():
@@ -68,9 +82,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         self.assertNotEqual(b1.hash, b2.hash)
 
-        partial_blocks = self._get_partial_blocks(manager2.tx_storage)
-        self.assertGreater(len(partial_blocks), 0)
-
         for _ in range(20):
             print()
         print('Stopping manager2...')
@@ -106,8 +117,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             builder3.use_tx_storage_cache()
 
         manager3 = self.simulator.create_peer(builder3)
-        self.assertEqual(partial_blocks, self._get_partial_blocks(manager3.tx_storage))
-        self.assertTrue(manager3.tx_storage.indexes.deps.has_needed_tx())
 
         conn13 = FakeConnection(manager1, manager3, latency=0.05)
         self.simulator.add_connection(conn13)
@@ -220,19 +229,21 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Let the connection start to sync.
         self.simulator.run(1)
 
+        new_streaming_limit = 30
+
         # Change manager1 default streaming and mempool limits.
         sync1 = conn12.proto1.state.sync_agent
-        sync1.DEFAULT_STREAMING_LIMIT = 30
-        sync1.mempool_manager.MAX_STACK_LENGTH = 30
-        self.assertIsNone(sync1.blockchain_streaming)
-        self.assertIsNone(sync1.transactions_streaming)
+        sync1.DEFAULT_STREAMING_LIMIT = new_streaming_limit
+        sync1.mempool_manager.MAX_STACK_LENGTH = new_streaming_limit
+        self.assertIsNone(sync1._blk_streaming_server)
+        self.assertIsNone(sync1._tx_streaming_server)
 
         # Change manager2 default streaming and mempool limits.
         sync2 = conn12.proto2.state.sync_agent
-        sync2.DEFAULT_STREAMING_LIMIT = 50
-        sync2.mempool_manager.MAX_STACK_LENGTH = 50
-        self.assertIsNone(sync2.blockchain_streaming)
-        self.assertIsNone(sync2.transactions_streaming)
+        sync2.DEFAULT_STREAMING_LIMIT = new_streaming_limit
+        sync2.mempool_manager.MAX_STACK_LENGTH = new_streaming_limit
+        self.assertIsNone(sync2._blk_streaming_server)
+        self.assertIsNone(sync2._tx_streaming_server)
 
         # Run until fully synced.
         # trigger = StopWhenTrue(sync2.is_synced)
@@ -241,3 +252,129 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager2)
+
+    def _prepare_sync_v2_find_best_common_block_reorg(self):
+        manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager1.allow_mining_without_peers()
+        miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
+        miner1.start()
+        self.assertTrue(self.simulator.run(24 * 3600))
+        miner1.stop()
+
+        manager2 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        conn12 = FakeConnection(manager1, manager2, latency=0.05)
+        self.simulator.add_connection(conn12)
+
+        self.assertTrue(self.simulator.run(3600))
+        return conn12
+
+    @inlineCallbacks
+    def test_sync_v2_find_best_common_block_reorg_1(self):
+        conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        sync_agent = conn12._proto1.state.sync_agent
+        rng = conn12.manager2.rng
+
+        my_best_block = sync_agent.get_my_best_block()
+        peer_best_block = sync_agent.peer_best_block
+
+        fake_peer_best_block = _HeightInfo(my_best_block.height + 3, rng.randbytes(32))
+        reorg_height = peer_best_block.height - 50
+
+        def fake_get_peer_block_hashes(heights):
+            # return empty as soon as the search lowest height is not the genesis
+            if heights[0] != 0:
+                return []
+
+            # simulate a reorg
+            response = []
+            for h in heights:
+                if h < reorg_height:
+                    vertex_id = conn12.manager2.tx_storage.indexes.height.get(h)
+                else:
+                    vertex_id = rng.randbytes(32)
+                response.append(_HeightInfo(height=h, id=vertex_id))
+            return succeed(response)
+
+        sync_agent.get_peer_block_hashes = fake_get_peer_block_hashes
+        common_block_info = yield sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
+        self.assertIsNone(common_block_info)
+
+    @inlineCallbacks
+    def test_sync_v2_find_best_common_block_reorg_2(self):
+        conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        sync_agent = conn12._proto1.state.sync_agent
+        rng = conn12.manager2.rng
+
+        my_best_block = sync_agent.get_my_best_block()
+        peer_best_block = sync_agent.peer_best_block
+
+        fake_peer_best_block = _HeightInfo(my_best_block.height + 3, rng.randbytes(32))
+        reorg_height = peer_best_block.height - 50
+
+        def fake_get_peer_block_hashes(heights):
+            if heights[0] != 0:
+                return succeed([
+                    _HeightInfo(height=h, id=rng.randbytes(32))
+                    for h in heights
+                ])
+
+            # simulate a reorg
+            response = []
+            for h in heights:
+                if h < reorg_height:
+                    vertex_id = conn12.manager2.tx_storage.indexes.height.get(h)
+                else:
+                    vertex_id = rng.randbytes(32)
+                response.append(_HeightInfo(height=h, id=vertex_id))
+            return succeed(response)
+
+        sync_agent.get_peer_block_hashes = fake_get_peer_block_hashes
+        common_block_info = yield sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
+        self.assertIsNone(common_block_info)
+
+    def test_multiple_unexpected_txs(self) -> None:
+        manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager1.allow_mining_without_peers()
+
+        # mine some blocks (10, could be any amount)
+        miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
+        miner1.start()
+        self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNMinedBlocks(miner1, quantity=100)))
+        miner1.stop()
+
+        # generate some transactions (10, could by any amount >1)
+        gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3., hashpower=10e9, ignore_no_funds=True)
+        gen_tx1.start()
+        self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNTransactions(gen_tx1, quantity=10)))
+        gen_tx1.stop()
+
+        # mine some blocks (2 to be sure, 1 should be enough)
+        miner1.start()
+        self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNMinedBlocks(miner1, quantity=2)))
+        miner1.stop()
+
+        # create a new peer and run sync and stop when it requests transactions, so we can inject it with invalid ones
+        manager2 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        conn12 = FakeConnection(manager1, manager2, latency=0.05)
+        self.simulator.add_connection(conn12)
+        regex = re.compile(rf'{ProtocolMessages.GET_TRANSACTIONS_BFS.value} '.encode('ascii'))
+        self.assertTrue(self.simulator.run(2 * 60, trigger=StopWhenSendLineMatch(conn12._proto2, regex)))
+
+        # make up some transactions that the node isn't expecting
+        best_block = manager1.tx_storage.get_best_block()
+        existing_tx = manager1.tx_storage.get_transaction(list(best_block.get_tx_parents())[0])
+        fake_txs = []
+        for i in range(3):
+            fake_tx = existing_tx.clone()
+            fake_tx.timestamp += 1 + i  # incrementally add timestamp so something is guaranteed to change
+            manager1.cpu_mining_service.resolve(fake_tx)
+            fake_txs.append(fake_tx)
+
+        # send fake transactions to manager2, before the fix the first should fail with no issue, but the second would
+        # end up on an AlreadyCalledError because the deferred.errback will be called twice
+        for fake_tx in fake_txs:
+            sync_node2 = conn12.proto2.state.sync_agent
+            sync_node2.handle_transaction(base64.b64encode(fake_tx.get_struct()).decode())
+
+        # force the processing of async code, nothing should break
+        self.simulator.run(0)

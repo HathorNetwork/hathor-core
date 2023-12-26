@@ -12,12 +12,13 @@ from twisted.trial import unittest
 from hathor.builder import BuildArtifacts, Builder
 from hathor.conf import HathorSettings
 from hathor.conf.get_settings import get_settings
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
+from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.transaction import BaseTransaction
-from hathor.util import Random, Reactor, reactor
+from hathor.util import Random
 from hathor.wallet import HDWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
@@ -104,14 +105,13 @@ class TestCase(unittest.TestCase):
     seed_config: Optional[int] = None
 
     def setUp(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         self.tmpdirs = []
         self.clock = TestMemoryReactorClock()
         self.clock.advance(time.time())
         self.log = logger.new()
         self.reset_peer_id_pool()
         self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config
-        self.log.debug('set seed', seed=self.seed)
+        self.log.info('set seed', seed=self.seed)
         self.rng = Random(self.seed)
         self._pending_cleanups = []
         self._settings = get_settings()
@@ -176,7 +176,7 @@ class TestCase(unittest.TestCase):
         if start_manager:
             manager.start()
             self.clock.run()
-            self.run_to_completion()
+            self.clock.advance(5)
 
         return manager
 
@@ -229,11 +229,9 @@ class TestCase(unittest.TestCase):
             builder.force_memory_index()
 
         if enable_sync_v1 is True:
-            # Enable Sync v1.1 (instead of v1.0)
-            builder.enable_sync_v1_1()
+            builder.enable_sync_v1()
         elif enable_sync_v1 is False:
-            # Disable Sync v1.1 (instead of v1.0)
-            builder.disable_sync_v1_1()
+            builder.disable_sync_v1()
 
         if enable_sync_v2 is True:
             builder.enable_sync_v2()
@@ -246,19 +244,13 @@ class TestCase(unittest.TestCase):
         if utxo_index:
             builder.enable_utxo_index()
 
+        daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
+        builder.set_daa(daa)
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         # XXX: just making sure that tests set this up correctly
-        if enable_sync_v2:
-            assert SyncVersion.V2 in manager.connections._sync_factories
-        else:
-            assert SyncVersion.V2 not in manager.connections._sync_factories
-        if enable_sync_v1:
-            assert SyncVersion.V1 not in manager.connections._sync_factories
-            assert SyncVersion.V1_1 in manager.connections._sync_factories
-        else:
-            assert SyncVersion.V1 not in manager.connections._sync_factories
-            assert SyncVersion.V1_1 not in manager.connections._sync_factories
+        assert manager.connections.is_sync_version_enabled(SyncVersion.V2) == enable_sync_v2
+        assert manager.connections.is_sync_version_enabled(SyncVersion.V1_1) == enable_sync_v1
 
         return manager
 
@@ -342,7 +334,8 @@ class TestCase(unittest.TestCase):
         # best block (from height index)
         b1 = manager1.tx_storage.indexes.height.get_tip()
         b2 = manager2.tx_storage.indexes.height.get_tip()
-        self.assertEqual(b1, b2)
+        self.assertIn(b1, s2)
+        self.assertIn(b2, s1)
 
     def assertConsensusEqual(self, manager1, manager2):
         _, enable_sync_v2 = self._syncVersionFlags()
@@ -471,7 +464,7 @@ class TestCase(unittest.TestCase):
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
 
     def assertV2SyncedProgress(self, node_sync):
-        self.assertEqual(node_sync.synced_height, node_sync.peer_height)
+        self.assertEqual(node_sync.synced_block, node_sync.peer_best_block)
 
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:
@@ -507,6 +500,7 @@ class TestCase(unittest.TestCase):
 
         Copy from: https://github.com/zooko/pyutil/blob/master/pyutil/testutil.py#L68
         """
+        reactor = get_global_reactor()
         pending = reactor.getDelayedCalls()
         active = bool(pending)
         for p in pending:

@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_v2.agent import NodeBlockSync
-from hathor.util import Reactor
+from hathor.reactor import ReactorProtocol as Reactor
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -28,5 +28,5 @@ class SyncV2Factory(SyncAgentFactory):
     def __init__(self, connections: ConnectionsManager):
         self.connections = connections
 
-    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncAgent:
+    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Reactor) -> SyncAgent:
         return NodeBlockSync(protocol, reactor=reactor)

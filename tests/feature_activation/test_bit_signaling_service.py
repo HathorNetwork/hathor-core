@@ -15,7 +15,6 @@
 from unittest.mock import Mock
 
 import pytest
-from structlog.testing import capture_logs
 
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
@@ -272,17 +271,15 @@ def test_non_signaling_features_warning(
         support_features=support_features,
         not_support_features=not_support_features,
     )
+    logger_mock = Mock()
+    service._log = logger_mock
 
-    with capture_logs() as logs:
-        service.start()
+    service.start()
 
-    expected_log = dict(
-        log_level='warning',
+    logger_mock.warn.assert_called_with(
+        'Considering the current best block, there are signaled features outside their signaling period. '
+        'Therefore, signaling for them has no effect. Make sure you are signaling for the desired features.',
         best_block_height=123,
         best_block_hash='abc',
         non_signaling_features=non_signaling_features,
-        event='Considering the current best block, there are signaled features outside their signaling period. '
-              'Therefore, signaling for them has no effect. Make sure you are signaling for the desired features.',
     )
-
-    assert expected_log in logs

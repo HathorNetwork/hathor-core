@@ -14,7 +14,7 @@
 
 from typing import TypeVar
 
-from hathor.api_util import Resource
+from hathor.api_util import Resource  # skip-cli-import-custom-check
 
 _registered_resources: list[type[Resource]] = []
 
@@ -36,6 +36,7 @@ def get_registered_resources() -> list[type[Resource]]:
     """
     import hathor.event.resources.event  # noqa: 401
     import hathor.feature_activation.resources.feature  # noqa: 401
+    import hathor.healthcheck.resources.healthcheck  # noqa: 401
     import hathor.p2p.resources  # noqa: 401
     import hathor.profiler.resources  # noqa: 401
     import hathor.stratum.resources  # noqa: 401

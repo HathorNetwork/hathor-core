@@ -1,5 +1,8 @@
-from hathor.simulator import Simulator
-from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
+import re
+
+from hathor.p2p.messages import ProtocolMessages
+from hathor.simulator import FakeConnection, Simulator
+from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks, StopWhenSendLineMatch
 from tests import unittest
 
 
@@ -58,3 +61,13 @@ class TriggerTestCase(unittest.TestCase):
         self.assertLess(wallet.balance[token_uid].available, minimum_balance)
         self.assertTrue(self.simulator.run(3600, trigger=trigger))
         self.assertGreaterEqual(wallet.balance[token_uid].available, minimum_balance)
+
+    def test_stop_after_sendline(self):
+        manager2 = self.simulator.create_peer()
+        conn12 = FakeConnection(self.manager1, manager2, latency=0.05)
+        self.simulator.add_connection(conn12)
+
+        expected_prefix = f'^{ProtocolMessages.PEER_ID.value} '.encode('ascii')
+        regex = re.compile(expected_prefix)
+        trigger = StopWhenSendLineMatch(conn12._proto1, regex)
+        self.assertTrue(self.simulator.run(120, trigger=trigger))

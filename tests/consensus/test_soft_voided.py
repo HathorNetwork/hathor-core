@@ -2,15 +2,16 @@ from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
+from hathor.simulator.utils import gen_new_tx
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import add_custom_tx, gen_new_tx
+from tests.utils import add_custom_tx
 
 settings = HathorSettings()
 
 
 class BaseSoftVoidedTestCase(SimulatorTestCase):
-    seed_config = 5988775361793628169
+    seed_config = 5988775361793628170
 
     def assertNoParentsAreSoftVoided(self, tx):
         for h in tx.parents:

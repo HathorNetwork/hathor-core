@@ -19,7 +19,7 @@ from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 from hathor.p2p.sync_v1.downloader import Downloader
-from hathor.util import Reactor
+from hathor.reactor import ReactorProtocol as Reactor
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -36,5 +36,5 @@ class SyncV11Factory(SyncAgentFactory):
             self._downloader = Downloader(self.connections.manager)
         return self._downloader
 
-    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncAgent:
+    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Reactor) -> SyncAgent:
         return NodeSyncTimestamp(protocol, downloader=self.get_downloader(), reactor=reactor)

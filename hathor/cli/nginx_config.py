@@ -17,8 +17,6 @@ import os
 from enum import Enum
 from typing import Any, NamedTuple, Optional, TextIO
 
-from hathor.cli.openapi_json import get_openapi_dict
-
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'nginx_files')
 
 
@@ -26,6 +24,7 @@ def get_openapi(src_file: Optional[TextIO] = None) -> dict[str, Any]:
     """ Open and parse the json file or generate OpenAPI dict on-the-fly
     """
     if src_file is None:
+        from hathor.cli.openapi_json import get_openapi_dict
         return get_openapi_dict()
     else:
         return json.load(src_file)

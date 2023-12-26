@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING
 
 from structlog import get_logger
-from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
@@ -77,8 +76,7 @@ class PeerIdState(BaseState):
         }
         self.send_message(ProtocolMessages.PEER_ID, json_dumps(hello))
 
-    @inlineCallbacks
-    def handle_peer_id(self, payload: str) -> Generator[Any, Any, None]:
+    async def handle_peer_id(self, payload: str) -> None:
         """ Executed when a PEER-ID is received. It basically checks
         the identity of the peer. Only after this step, the peer connection
         is considered established and ready to communicate.
@@ -117,7 +115,7 @@ class PeerIdState(BaseState):
                 protocol.send_error_and_close_connection('We are already connected.')
                 return
 
-        entrypoint_valid = yield peer.validate_entrypoint(protocol)
+        entrypoint_valid = await peer.validate_entrypoint(protocol)
         if not entrypoint_valid:
             protocol.send_error_and_close_connection('Connection string is not in the entrypoints.')
             return

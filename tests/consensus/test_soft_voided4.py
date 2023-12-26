@@ -2,9 +2,10 @@ from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
+from hathor.simulator.utils import gen_new_double_spending
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import add_custom_tx, gen_new_double_spending
+from tests.utils import add_custom_tx
 
 settings = HathorSettings()
 

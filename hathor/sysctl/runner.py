@@ -76,7 +76,7 @@ class SysctlRunner:
         if len(value_str) == 0:
             return ()
 
-        parts = [x.strip() for x in value_str.split(',')]
+        parts = json.loads(f'[{value_str}]')
         if len(parts) > 1:
-            return tuple(json.loads(x) for x in parts)
+            return tuple(parts)
         return json.loads(value_str)

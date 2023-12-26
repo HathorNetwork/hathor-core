@@ -23,8 +23,6 @@ from hathor.utils.pydantic import BaseModel
 
 
 class BaseEvent(BaseModel, use_enum_values=True):
-    # Full node id, because different full nodes can have different sequences of events
-    peer_id: str
     # Event unique id, determines event order
     id: NonNegativeInt
     # Timestamp in which the event was emitted, this follows the unix_timestamp format, it's only informative, events
@@ -42,7 +40,6 @@ class BaseEvent(BaseModel, use_enum_values=True):
     @classmethod
     def from_event_arguments(
         cls,
-        peer_id: str,
         event_id: NonNegativeInt,
         timestamp: float,
         event_type: EventType,
@@ -53,7 +50,6 @@ class BaseEvent(BaseModel, use_enum_values=True):
         event_data_type = event_type.data_type()
 
         return cls(
-            peer_id=peer_id,
             id=event_id,
             timestamp=timestamp,
             type=event_type,
@@ -66,7 +62,7 @@ class BaseEvent(BaseModel, use_enum_values=True):
         event_type = EventType(values['type'])
         expected_data_type = event_type.data_type()
 
-        if type(v) != expected_data_type:
+        if type(v) is not expected_data_type:
             raise ValueError('event data type does not match event type')
 
         return v

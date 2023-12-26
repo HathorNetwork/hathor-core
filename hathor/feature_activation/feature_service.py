@@ -12,28 +12,75 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypeAlias
+
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.transaction import Block
-from hathor.transaction.storage import TransactionStorage
+
+if TYPE_CHECKING:
+    from hathor.transaction import Block
+    from hathor.transaction.storage import TransactionStorage
+
+
+@dataclass(frozen=True, slots=True)
+class BlockIsSignaling:
+    """Represent that a block is correctly signaling support for all currently mandatory features."""
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class BlockIsMissingSignal:
+    """Represent that a block is not signaling support for at least one currently mandatory feature."""
+    feature: Feature
+
+
+BlockSignalingState: TypeAlias = BlockIsSignaling | BlockIsMissingSignal
 
 
 class FeatureService:
     __slots__ = ('_feature_settings', '_tx_storage')
 
-    def __init__(self, *, feature_settings: FeatureSettings, tx_storage: TransactionStorage) -> None:
+    def __init__(self, *, feature_settings: FeatureSettings, tx_storage: 'TransactionStorage') -> None:
         self._feature_settings = feature_settings
         self._tx_storage = tx_storage
 
-    def is_feature_active(self, *, block: Block, feature: Feature) -> bool:
+    def is_feature_active(self, *, block: 'Block', feature: Feature) -> bool:
         """Returns whether a Feature is active at a certain block."""
         state = self.get_state(block=block, feature=feature)
 
         return state == FeatureState.ACTIVE
 
-    def get_state(self, *, block: Block, feature: Feature) -> FeatureState:
+    def is_signaling_mandatory_features(self, block: 'Block') -> BlockSignalingState:
+        """
+        Return whether a block is signaling features that are mandatory, that is, any feature currently in the
+        MUST_SIGNAL phase.
+        """
+        bit_counts = block.get_feature_activation_bit_counts()
+        height = block.get_height()
+        offset_to_boundary = height % self._feature_settings.evaluation_interval
+        remaining_blocks = self._feature_settings.evaluation_interval - offset_to_boundary - 1
+        descriptions = self.get_bits_description(block=block)
+
+        must_signal_features = (
+            feature for feature, description in descriptions.items()
+            if description.state is FeatureState.MUST_SIGNAL
+        )
+
+        for feature in must_signal_features:
+            criteria = self._feature_settings.features[feature]
+            threshold = criteria.get_threshold(self._feature_settings)
+            count = bit_counts[criteria.bit]
+            missing_signals = threshold - count
+
+            if missing_signals > remaining_blocks:
+                return BlockIsMissingSignal(feature=feature)
+
+        return BlockIsSignaling()
+
+    def get_state(self, *, block: 'Block', feature: Feature) -> FeatureState:
         """Returns the state of a feature at a certain block. Uses block metadata to cache states."""
 
         # per definition, the genesis block is in the DEFINED state for all features
@@ -54,6 +101,9 @@ class FeatureService:
         previous_boundary_block = self._get_ancestor_at_height(block=block, height=previous_boundary_height)
         previous_boundary_state = self.get_state(block=previous_boundary_block, feature=feature)
 
+        # We cache _and save_ the state of the previous boundary block that we just got.
+        previous_boundary_block.set_feature_state(feature=feature, state=previous_boundary_state, save=True)
+
         if offset_to_boundary != 0:
             return previous_boundary_state
 
@@ -63,14 +113,16 @@ class FeatureService:
             previous_state=previous_boundary_state
         )
 
-        block.update_feature_state(feature=feature, state=new_state)
+        # We cache the just calculated state of the current block _without saving it_, as it may still be unverified,
+        # so we cannot persist its metadata. That's why we cache and save the previous boundary block above.
+        block.set_feature_state(feature=feature, state=new_state)
 
         return new_state
 
     def _calculate_new_state(
         self,
         *,
-        boundary_block: Block,
+        boundary_block: 'Block',
         feature: Feature,
         previous_state: FeatureState
     ) -> FeatureState:
@@ -136,7 +188,7 @@ class FeatureService:
 
         raise ValueError(f'Unknown previous state: {previous_state}')
 
-    def get_bits_description(self, *, block: Block) -> dict[Feature, FeatureDescription]:
+    def get_bits_description(self, *, block: 'Block') -> dict[Feature, FeatureDescription]:
         """Returns the criteria definition and feature state for all features at a certain block."""
         return {
             feature: FeatureDescription(
@@ -146,7 +198,7 @@ class FeatureService:
             for feature, criteria in self._feature_settings.features.items()
         }
 
-    def _get_ancestor_at_height(self, *, block: Block, height: int) -> Block:
+    def _get_ancestor_at_height(self, *, block: 'Block', height: int) -> 'Block':
         """
         Given a block, returns its ancestor at a specific height.
         Uses the height index if the block is in the best blockchain, or search iteratively otherwise.
@@ -158,13 +210,14 @@ class FeatureService:
         metadata = block.get_metadata()
 
         if not metadata.voided_by and (ancestor := self._tx_storage.get_transaction_by_height(height)):
+            from hathor.transaction import Block
             assert isinstance(ancestor, Block)
             return ancestor
 
         return _get_ancestor_iteratively(block=block, ancestor_height=height)
 
 
-def _get_ancestor_iteratively(*, block: Block, ancestor_height: int) -> Block:
+def _get_ancestor_iteratively(*, block: 'Block', ancestor_height: int) -> 'Block':
     """Given a block, returns its ancestor at a specific height by iterating over its ancestors. This is slow."""
     # TODO: there are further optimizations to be done here, the latest common block height could be persisted in
     #  metadata, so we could still use the height index if the requested height is before that height.

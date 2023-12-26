@@ -27,6 +27,7 @@ def create_parser() -> ArgumentParser:
 
 
 def execute(args: Namespace) -> None:
+    from hathor.mining.cpu_mining_service import CpuMiningService
     from hathor.transaction import Transaction
     from hathor.transaction.scripts import MultiSig
 
@@ -36,7 +37,7 @@ def execute(args: Namespace) -> None:
     input_data = MultiSig.create_input_data(bytes.fromhex(args.redeem_script), signatures)
     tx.inputs[0].data = input_data
 
-    tx.resolve()
+    CpuMiningService().resolve(tx)
     print('Transaction after POW: ', tx.get_struct().hex())
 
 

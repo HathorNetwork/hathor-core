@@ -34,8 +34,9 @@ from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
-from hathor.util import Random, Reactor
+from hathor.util import Random
 
 if TYPE_CHECKING:
     from twisted.internet.interfaces import IDelayedCall
@@ -86,6 +87,7 @@ class ConnectionsManager:
     handshaking_peers: set[HathorProtocol]
     whitelist_only: bool
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
+    _enabled_sync_versions: set[SyncVersion]
 
     rate_limiter: RateLimiter
 
@@ -96,17 +98,7 @@ class ConnectionsManager:
                  pubsub: PubSubManager,
                  ssl: bool,
                  rng: Random,
-                 whitelist_only: bool,
-                 enable_sync_v1: bool,
-                 enable_sync_v2: bool,
-                 enable_sync_v1_1: bool) -> None:
-        from hathor.p2p.sync_v1.factory_v1_0 import SyncV10Factory
-        from hathor.p2p.sync_v1.factory_v1_1 import SyncV11Factory
-        from hathor.p2p.sync_v2.factory import SyncV2Factory
-
-        if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
-            raise TypeError(f'{type(self).__name__}() at least one sync version is required')
-
+                 whitelist_only: bool) -> None:
         self.log = logger.new()
         self.rng = rng
         self.manager = None
@@ -186,30 +178,62 @@ class ConnectionsManager:
         # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
         self.whitelist_only = whitelist_only
 
-        self.enable_sync_v1 = enable_sync_v1
-        self.enable_sync_v1_1 = enable_sync_v1_1
-        self.enable_sync_v2 = enable_sync_v2
-
         # Timestamp when the last discovery ran
         self._last_discovery: float = 0.
 
         # sync-manager factories
         self._sync_factories = {}
-        if enable_sync_v1:
-            self._sync_factories[SyncVersion.V1] = SyncV10Factory(self)
-        if enable_sync_v1_1:
-            self._sync_factories[SyncVersion.V1_1] = SyncV11Factory(self)
-        if enable_sync_v2:
-            self._sync_factories[SyncVersion.V2] = SyncV2Factory(self)
+        self._enabled_sync_versions = set()
+
+    def add_sync_factory(self, sync_version: SyncVersion, sync_factory: SyncAgentFactory) -> None:
+        """Add factory for the given sync version, must use a sync version that does not already exist."""
+        # XXX: to allow code in `set_manager` to safely use the the available sync versions, we add this restriction:
+        assert self.manager is None, 'Cannot modify sync factories after a manager is set'
+        if sync_version in self._sync_factories:
+            raise ValueError('sync version already exists')
+        self._sync_factories[sync_version] = sync_factory
+
+    def get_available_sync_versions(self) -> set[SyncVersion]:
+        """What sync versions the manager is capable of using, they are not necessarily enabled."""
+        return set(self._sync_factories.keys())
+
+    def is_sync_version_available(self, sync_version: SyncVersion) -> bool:
+        """Whether the given sync version is available for use, is not necessarily enabled."""
+        return sync_version in self._sync_factories
+
+    def get_enabled_sync_versions(self) -> set[SyncVersion]:
+        """What sync versions are enabled for use, it is necessarily a subset of the available versions."""
+        return self._enabled_sync_versions.copy()
+
+    def is_sync_version_enabled(self, sync_version: SyncVersion) -> bool:
+        """Whether the given sync version is enabled for use, being enabled implies being available."""
+        return sync_version in self._enabled_sync_versions
+
+    def enable_sync_version(self, sync_version: SyncVersion) -> None:
+        """Enable using the given sync version on new connections, it must be available before being enabled."""
+        assert sync_version in self._sync_factories
+        if sync_version in self._enabled_sync_versions:
+            self.log.info('tried to enable a sync verison that was already enabled, nothing to do')
+            return
+        self._enabled_sync_versions.add(sync_version)
+
+    def disable_sync_version(self, sync_version: SyncVersion) -> None:
+        """Disable using the given sync version, it WILL NOT close connections using the given version."""
+        if sync_version not in self._enabled_sync_versions:
+            self.log.info('tried to disable a sync verison that was already disabled, nothing to do')
+            return
+        self._enabled_sync_versions.discard(sync_version)
 
     def set_manager(self, manager: 'HathorManager') -> None:
         """Set the manager. This method must be called before start()."""
+        if len(self._enabled_sync_versions) == 0:
+            raise TypeError('Class built incorrectly without any enabled sync version')
+
         self.manager = manager
-        if self.enable_sync_v2:
+        if self.is_sync_version_available(SyncVersion.V2):
             assert self.manager.tx_storage.indexes is not None
             indexes = self.manager.tx_storage.indexes
             self.log.debug('enable sync-v2 indexes')
-            indexes.enable_deps_index()
             indexes.enable_mempool_index()
 
     def add_listen_address(self, addr: str) -> None:
@@ -225,7 +249,8 @@ class ConnectionsManager:
         Do a discovery and connect on all discovery strategies.
         """
         for peer_discovery in self.peer_discoveries:
-            peer_discovery.discover_and_connect(self.connect_to)
+            coro = peer_discovery.discover_and_connect(self.connect_to)
+            Deferred.fromCoroutine(coro)
 
     def disable_rate_limiter(self) -> None:
         """Disable global rate limiter."""
@@ -241,6 +266,10 @@ class ConnectionsManager:
         )
 
     def start(self) -> None:
+        """Listen on the given address descriptions and start accepting and processing connections."""
+        if self.manager is None:
+            raise TypeError('Class was built incorrectly without a HathorManager.')
+
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
 
@@ -284,19 +313,9 @@ class ConnectionsManager:
             len(self.peer_storage)
         )
 
-    def get_sync_versions(self) -> set[SyncVersion]:
-        """Set of versions that were enabled and are supported."""
-        assert self.manager is not None
-        if self.manager.has_sync_version_capability():
-            return set(self._sync_factories.keys())
-        else:
-            assert SyncVersion.V1 in self._sync_factories, 'sync-versions capability disabled, but sync-v1 not enabled'
-            # XXX: this is to make it easy to simulate old behavior if we disable the sync-version capability
-            return {SyncVersion.V1}
-
     def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
-        """Get the sync factory for a given version, support MUST be checked beforehand or it will raise an assert."""
-        assert sync_version in self._sync_factories, 'get_sync_factory must be called for a supported version'
+        """Get the sync factory for a given version, MUST be available or it will raise an assert."""
+        assert sync_version in self._sync_factories, f'sync_version {sync_version} is not available'
         return self._sync_factories[sync_version]
 
     def has_synced_peer(self) -> bool:

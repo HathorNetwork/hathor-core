@@ -16,7 +16,7 @@ import base64
 import hashlib
 from enum import Enum
 from math import inf
-from typing import TYPE_CHECKING, Any, Generator, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -24,13 +24,13 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from OpenSSL.crypto import X509, PKey
-from twisted.internet.defer import inlineCallbacks
 from twisted.internet.interfaces import ISSLTransport
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
 
-from hathor import daa
 from hathor.conf.get_settings import get_settings
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -323,8 +323,7 @@ class PeerId:
         )
         return certificate_options
 
-    @inlineCallbacks
-    def validate_entrypoint(self, protocol: 'HathorProtocol') -> Generator[Any, Any, bool]:
+    async def validate_entrypoint(self, protocol: 'HathorProtocol') -> bool:
         """ Validates if connection entrypoint is one of the peer entrypoints
         """
         found_entrypoint = False
@@ -347,7 +346,8 @@ class PeerId:
                     break
                 host = connection_string_to_host(entrypoint)
                 # TODO: don't use `daa.TEST_MODE` for this
-                result = yield discover_dns(host, daa.TEST_MODE)
+                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
+                result = await discover_dns(host, test_mode)
                 if protocol.connection_string in result:
                     # Found the entrypoint
                     found_entrypoint = True
@@ -366,7 +366,8 @@ class PeerId:
                 if connection_host == host:
                     found_entrypoint = True
                     break
-                result = yield discover_dns(host, daa.TEST_MODE)
+                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
+                result = await discover_dns(host, test_mode)
                 if connection_host in [connection_string_to_host(x) for x in result]:
                     # Found the entrypoint
                     found_entrypoint = True

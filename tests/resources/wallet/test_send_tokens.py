@@ -2,12 +2,14 @@ import base64
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.resources import MiningResource
+from hathor.simulator.utils import add_new_blocks
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, resolve_block_bytes
+from tests.utils import add_blocks_unlock_reward, resolve_block_bytes
 
 
 class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
@@ -25,7 +27,10 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # Mining new block
         response_mining = yield self.web_mining.get("mining")
         data_mining = response_mining.json_value()
-        block_bytes = resolve_block_bytes(block_bytes=data_mining['block_bytes'])
+        block_bytes = resolve_block_bytes(
+            block_bytes=data_mining['block_bytes'],
+            cpu_mining_service=CpuMiningService()
+        )
         yield self.web_mining.post("mining", {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
         add_blocks_unlock_reward(self.manager)
         self.reactor.advance(10)
@@ -168,7 +173,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_tx_weight(self):
-        _set_test_mode(TestMode.DISABLED)
+        self.manager.daa.TEST_MODE = TestMode.DISABLED
         add_new_blocks(self.manager, 3, advance_clock=1)
         add_blocks_unlock_reward(self.manager)
         self.reactor.advance(3)

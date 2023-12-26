@@ -16,8 +16,8 @@ from typing import Optional
 
 from pydantic import Extra
 
-from hathor.feature_activation.feature import Feature
-from hathor.utils.pydantic import BaseModel
+from hathor.feature_activation.feature import Feature  # skip-cli-import-custom-check
+from hathor.utils.pydantic import BaseModel  # skip-cli-import-custom-check
 
 
 class RunNodeArgs(BaseModel, extra=Extra.allow):
@@ -63,7 +63,6 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     sentry_dsn: Optional[str]
     enable_debug_api: bool
     enable_crash_api: bool
-    x_enable_legacy_sync_v1_0: bool
     x_sync_bridge: bool
     x_sync_v2_only: bool
     x_localhost_only: bool
@@ -73,3 +72,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     config_yaml: Optional[str]
     signal_support: set[Feature]
     signal_not_support: set[Feature]
+    x_asyncio_reactor: bool

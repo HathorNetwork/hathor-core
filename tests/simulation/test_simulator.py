@@ -2,6 +2,7 @@ import pytest
 
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced
+from hathor.verification.vertex_verifier import VertexVerifier
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
@@ -12,7 +13,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # just get one of the genesis, we don't really need to create any transaction
         tx = next(iter(manager1.tx_storage.get_all_genesis()))
         # optional argument must be valid, it just has to not raise any exception, there's no assert for that
-        tx.verify_pow(0.)
+        VertexVerifier(settings=self._settings, daa=manager1.daa).verify_pow(tx, override_weight=0.)
 
     def test_one_node(self):
         manager1 = self.create_peer()
@@ -87,7 +88,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        self.assertTrue(self.simulator.run(3600, trigger=AllTriggers(stop_triggers)))
+        # TODO Add self.assertTrue(...) when the trigger is fixed.
+        #      For further information, see https://github.com/HathorNetwork/hathor-core/pull/815.
+        self.simulator.run(3600, trigger=AllTriggers(stop_triggers))
 
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)

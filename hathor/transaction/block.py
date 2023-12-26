@@ -18,21 +18,12 @@ from operator import add
 from struct import pack
 from typing import TYPE_CHECKING, Any, Optional
 
-from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
-from hathor.transaction.exceptions import (
-    BlockWithInputs,
-    BlockWithTokensError,
-    CheckpointError,
-    InvalidBlockReward,
-    RewardLocked,
-    TransactionDataError,
-    WeightError,
-)
+from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.util import not_none
 from hathor.utils.int import get_bit_list
@@ -56,7 +47,7 @@ class Block(BaseTransaction):
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
                  signal_bits: int = 0,
-                 version: int = TxVersion.REGULAR_BLOCK,
+                 version: TxVersion = TxVersion.REGULAR_BLOCK,
                  weight: float = 0,
                  outputs: Optional[list[TxOutput]] = None,
                  parents: Optional[list[bytes]] = None,
@@ -119,21 +110,27 @@ class Block(BaseTransaction):
 
         return min_height
 
-    def calculate_feature_activation_bit_counts(self) -> list[int]:
+    def get_feature_activation_bit_counts(self) -> list[int]:
         """
-        Calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation bit
-        counts.
+        Lazily calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation
+        bit counts. After it's calculated for the first time, it's persisted in block metadata and must not be changed.
 
         Each list index corresponds to a bit position, and its respective value is the rolling count of active bits
         from the previous boundary block up to this block, including it. LSB is on the left.
         """
+        metadata = self.get_metadata()
+
+        if metadata.feature_activation_bit_counts is not None:
+            return metadata.feature_activation_bit_counts
+
         previous_counts = self._get_previous_feature_activation_bit_counts()
         bit_list = self._get_feature_activation_bit_list()
 
         count_and_bit_pairs = zip_longest(previous_counts, bit_list, fillvalue=0)
         updated_counts = starmap(add, count_and_bit_pairs)
+        metadata.feature_activation_bit_counts = list(updated_counts)
 
-        return list(updated_counts)
+        return metadata.feature_activation_bit_counts
 
     def _get_previous_feature_activation_bit_counts(self) -> list[int]:
         """
@@ -337,55 +334,6 @@ class Block(BaseTransaction):
             # TODO: check whether self is a parent of any checkpoint-valid block, this is left for a future PR
             pass
 
-    def verify_weight(self) -> None:
-        """Validate minimum block difficulty."""
-        block_weight = daa.calculate_block_difficulty(self)
-        if self.weight < block_weight - self._settings.WEIGHT_TOL:
-            raise WeightError(f'Invalid new block {self.hash_hex}: weight ({self.weight}) is '
-                              f'smaller than the minimum weight ({block_weight})')
-
-    def verify_height(self) -> None:
-        """Validate that the block height is enough to confirm all transactions being confirmed."""
-        meta = self.get_metadata()
-        assert meta.height is not None
-        assert meta.min_height is not None
-        if meta.height < meta.min_height:
-            raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
-
-    def verify_reward(self) -> None:
-        """Validate reward amount."""
-        parent_block = self.get_block_parent()
-        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
-        if self.sum_outputs != tokens_issued_per_block:
-            raise InvalidBlockReward(
-                f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={self.hash_hex} '
-                f'issued={self.sum_outputs} allowed={tokens_issued_per_block}'
-            )
-
-    def verify_no_inputs(self) -> None:
-        inputs = getattr(self, 'inputs', None)
-        if inputs:
-            raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
-
-    def verify_outputs(self) -> None:
-        super().verify_outputs()
-        for output in self.outputs:
-            if output.get_token_index() > 0:
-                raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
-
-    def verify_data(self) -> None:
-        if len(self.data) > self._settings.BLOCK_DATA_MAX_SIZE:
-            raise TransactionDataError('block data has {} bytes'.format(len(self.data)))
-
-    def verify_without_storage(self) -> None:
-        """ Run all verifications that do not need a storage.
-        """
-        self.verify_pow()
-        self.verify_no_inputs()
-        self.verify_outputs()
-        self.verify_data()
-        self.verify_sigops_output()
-
     def get_base_hash(self) -> bytes:
         from hathor.merged_mining.bitcoin import sha256d_hash
         return sha256d_hash(self.get_header_without_nonce())
@@ -395,13 +343,6 @@ class Block(BaseTransaction):
         meta = self.get_metadata()
         assert meta.height is not None
         return meta.height
-
-    def get_feature_activation_bit_counts(self) -> list[int]:
-        """Returns the block's feature_activation_bit_counts metadata attribute."""
-        metadata = self.get_metadata()
-        assert metadata.feature_activation_bit_counts is not None, 'Blocks must always have this attribute set.'
-
-        return metadata.feature_activation_bit_counts
 
     def _get_feature_activation_bit_list(self) -> list[int]:
         """
@@ -430,15 +371,30 @@ class Block(BaseTransaction):
 
         return feature_states.get(feature)
 
-    def update_feature_state(self, *, feature: Feature, state: FeatureState) -> None:
-        """Updates the state of a feature in metadata and persists it."""
+    def set_feature_state(self, *, feature: Feature, state: FeatureState, save: bool = False) -> None:
+        """
+        Set the state of a feature in metadata, if it's not set. Fails if it's set and the value is different.
+
+        Args:
+            feature: the feature to set the state of.
+            state: the state to set.
+            save: whether to save this block's metadata in storage.
+        """
+        previous_state = self.get_feature_state(feature=feature)
+
+        if state == previous_state:
+            return
+
+        assert previous_state is None
         assert self.storage is not None
+
         metadata = self.get_metadata()
         feature_states = metadata.feature_states or {}
         feature_states[feature] = state
         metadata.feature_states = feature_states
 
-        self.storage.save_transaction(self, only_metadata=True)
+        if save:
+            self.storage.save_transaction(self, only_metadata=True)
 
     def get_feature_activation_bit_value(self, bit: int) -> int:
         """Get the feature activation bit value for a specific bit position."""

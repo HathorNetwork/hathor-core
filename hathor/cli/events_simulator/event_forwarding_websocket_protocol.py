@@ -16,17 +16,17 @@ from typing import TYPE_CHECKING
 
 from autobahn.websocket import ConnectionRequest
 
-from hathor.event.websocket import EventWebsocketProtocol
-from hathor.simulator import Simulator
+from hathor.event.websocket import EventWebsocketProtocol  # skip-cli-import-custom-check
 
 if TYPE_CHECKING:
     from hathor.cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
+    from hathor.simulator import Simulator
 
 
 class EventForwardingWebsocketProtocol(EventWebsocketProtocol):
     factory: 'EventForwardingWebsocketFactory'
 
-    def __init__(self, simulator: Simulator) -> None:
+    def __init__(self, simulator: 'Simulator') -> None:
         self._simulator = simulator
         super().__init__()
 

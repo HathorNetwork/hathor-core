@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 from unittest.mock import Mock
 
 import pytest
@@ -44,17 +45,14 @@ def data():
 def test_get_events(web, data):
     response = web.get('event').result
     result = response.json_value()
-    expected = {
-        'events': [
-            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
-             'group_id': None},
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
-             'group_id': None},
-            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
-             'group_id': None}
+    expected = dict(
+        latest_event_id=2,
+        events=[
+            dict(id=0, timestamp=123456.0, type='VERTEX_METADATA_CHANGED', data=data, group_id=None),
+            dict(id=1, timestamp=123456.0, type='VERTEX_METADATA_CHANGED', data=data, group_id=None),
+            dict(id=2, timestamp=123456.0, type='VERTEX_METADATA_CHANGED', data=data, group_id=None),
         ],
-        'latest_event_id': 2
-    }
+    )
 
     assert result == expected
 
@@ -62,13 +60,12 @@ def test_get_events(web, data):
 def test_get_events_with_size(web, data):
     response = web.get('event', {b'size': b'1'})
     result = response.result.json_value()
-    expected = {
-        'events': [
-            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
-             'group_id': None}
+    expected = dict(
+        latest_event_id=2,
+        events=[
+            dict(id=0, timestamp=123456.0, type='VERTEX_METADATA_CHANGED', data=data, group_id=None),
         ],
-        'latest_event_id': 2
-    }
+    )
 
     assert result == expected
 
@@ -76,15 +73,13 @@ def test_get_events_with_size(web, data):
 def test_get_events_with_last_ack_event_id(web, data):
     response = web.get('event', {b'last_ack_event_id': b'0'})
     result = response.result.json_value()
-    expected = {
-        'events': [
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
-             'group_id': None},
-            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
-             'group_id': None}
+    expected = dict(
+        latest_event_id=2,
+        events=[
+            dict(id=1, timestamp=123456.0, type='VERTEX_METADATA_CHANGED', data=data, group_id=None),
+            dict(id=2, timestamp=123456.0, type='VERTEX_METADATA_CHANGED', data=data, group_id=None),
         ],
-        'latest_event_id': 2
-    }
+    )
 
     assert result == expected
 
@@ -92,12 +87,11 @@ def test_get_events_with_last_ack_event_id(web, data):
 def test_get_events_with_size_and_last_ack_event_id(web, data):
     response = web.get('event', {b'last_ack_event_id': b'0', b'size': b'1'})
     result = response.result.json_value()
-    expected = {
-        'events': [
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
-             'group_id': None},
+    expected = dict(
+        latest_event_id=2,
+        events=[
+            dict(id=1, timestamp=123456.0, type='VERTEX_METADATA_CHANGED', data=data, group_id=None),
         ],
-        'latest_event_id': 2
-    }
+    )
 
     assert result == expected

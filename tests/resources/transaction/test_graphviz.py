@@ -1,10 +1,11 @@
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import GraphvizFullResource, GraphvizNeighboursResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
 
 class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
@@ -26,7 +27,7 @@ class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
 
         self.tx2 = Transaction.create_from_struct(tx.get_struct())
         self.tx2.parents = [tx.parents[1], tx.parents[0]]
-        self.tx2.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx2)
 
         self.manager.propagate_tx(self.tx2)
 

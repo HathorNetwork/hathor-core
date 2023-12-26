@@ -34,6 +34,7 @@ def create_parser() -> ArgumentParser:
 
 
 def execute(args: Namespace) -> None:
+    from hathor.mining.cpu_mining_service import CpuMiningService
     from hathor.transaction import Transaction
 
     # Get tx you want to create a twin
@@ -89,7 +90,7 @@ def execute(args: Namespace) -> None:
         if args.weight:
             twin.weight = args.weight
 
-        twin.resolve()
+        CpuMiningService().resolve(twin)
         if args.human:
             print(twin.to_json())
         else:

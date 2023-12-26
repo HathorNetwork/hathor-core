@@ -22,13 +22,17 @@ from structlog import get_logger
 
 from hathor.builder import BuildArtifacts, Builder
 from hathor.conf.get_settings import get_settings
-from hathor.daa import TestMode, _set_test_mode
+from hathor.conf.settings import HathorSettings
+from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
+from hathor.simulator.patches import SimulatorCpuMiningService, SimulatorVertexVerifier
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.util import Random
+from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import HDWallet
 
 if TYPE_CHECKING:
@@ -40,82 +44,17 @@ logger = get_logger()
 
 DEFAULT_STEP_INTERVAL: float = 0.25
 DEFAULT_STATUS_INTERVAL: float = 60.0
+SIMULATOR_AVG_TIME_BETWEEN_BLOCKS: int = 64
 
 
 class Simulator:
-    # used to concilite monkeypatching and multiple instances
-    _patches_rc: int = 0
-
-    @classmethod
-    def _apply_patches(cls):
-        """ Applies global patches on modules that aren't easy/possible to configure otherwise.
-
-        Patches:
-
-        - disable pow verification
-        - disable Transaction.resolve method
-        - set DAA test-mode to DISABLED (will actually run the pow function, that won't actually verify the pow)
-        - override AVG_TIME_BETWEEN_BLOCKS to 64
-        """
-        from hathor.transaction import BaseTransaction
-
-        def verify_pow(self: BaseTransaction, *args: Any, **kwargs: Any) -> None:
-            assert self.hash is not None
-            logger.new().debug('Skipping BaseTransaction.verify_pow() for simulator')
-
-        def resolve(self: BaseTransaction, update_time: bool = True) -> bool:
-            self.update_hash()
-            logger.new().debug('Skipping BaseTransaction.resolve() for simulator')
-            return True
-
-        cls._original_verify_pow = BaseTransaction.verify_pow
-        BaseTransaction.verify_pow = verify_pow
-
-        cls._original_resolve = BaseTransaction.resolve
-        BaseTransaction.resolve = resolve
-
-        _set_test_mode(TestMode.DISABLED)
-
-        from hathor import daa
-        cls._original_avg_time_between_blocks = daa.AVG_TIME_BETWEEN_BLOCKS
-        daa.AVG_TIME_BETWEEN_BLOCKS = 64
-
-    @classmethod
-    def _remove_patches(cls):
-        """ Remove the patches previously applied.
-        """
-        from hathor.transaction import BaseTransaction
-        BaseTransaction.verify_pow = cls._original_verify_pow
-        BaseTransaction.resolve = cls._original_resolve
-
-        from hathor import daa
-        daa.AVG_TIME_BETWEEN_BLOCKS = cls._original_avg_time_between_blocks
-
-    @classmethod
-    def _patches_rc_increment(cls):
-        """ This is used by when starting instances of Simulator to determine when to run _apply_patches"""
-        assert cls._patches_rc >= 0
-        cls._patches_rc += 1
-        if cls._patches_rc == 1:
-            # patches not yet applied
-            cls._apply_patches()
-
-    @classmethod
-    def _patches_rc_decrement(cls):
-        """ This is used by when stopping instances of Simulator to determine when to run _remove_patches"""
-        assert cls._patches_rc > 0
-        cls._patches_rc -= 1
-        if cls._patches_rc == 0:
-            # patches not needed anymore
-            cls._remove_patches()
-
     def __init__(self, seed: Optional[int] = None):
         self.log = logger.new()
         if seed is None:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
-        self.settings = get_settings()
+        self.settings = get_settings()._replace(AVG_TIME_BETWEEN_BLOCKS=SIMULATOR_AVG_TIME_BETWEEN_BLOCKS)
         self._network = 'testnet'
         self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
@@ -126,7 +65,6 @@ class Simulator:
         """Has to be called before any other method can be called."""
         assert not self._started
         self._started = True
-        self._patches_rc_increment()
         first_timestamp = self.settings.GENESIS_BLOCK_TIMESTAMP
         dt = self.rng.randint(3600, 120 * 24 * 3600)
         self._clock.advance(first_timestamp + dt)
@@ -136,7 +74,6 @@ class Simulator:
         """Can only stop after calling start, but it doesn't matter if it's paused or not"""
         assert self._started
         self._started = False
-        self._patches_rc_decrement()
 
     def get_default_builder(self) -> Builder:
         """
@@ -149,7 +86,8 @@ class Simulator:
             .enable_full_verification() \
             .enable_sync_v1() \
             .enable_sync_v2() \
-            .use_memory()
+            .use_memory() \
+            .set_settings(self.settings)
 
     def create_peer(self, builder: Optional[Builder] = None) -> HathorManager:
         """
@@ -170,10 +108,16 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
+        cpu_mining_service = SimulatorCpuMiningService()
+        daa = DifficultyAdjustmentAlgorithm(settings=self.settings)
+
         artifacts = builder \
             .set_reactor(self._clock) \
             .set_rng(Random(self.rng.getrandbits(64))) \
             .set_wallet(wallet) \
+            .set_vertex_verifiers_builder(_build_vertex_verifiers) \
+            .set_daa(daa) \
+            .set_cpu_mining_service(cpu_mining_service) \
             .build()
 
         artifacts.manager.start()
@@ -297,3 +241,19 @@ class Simulator:
         if trigger is not None:
             return False
         return True
+
+
+def _build_vertex_verifiers(
+    settings: HathorSettings,
+    daa: DifficultyAdjustmentAlgorithm,
+    feature_service: FeatureService
+) -> VertexVerifiers:
+    """
+    A custom VertexVerifiers builder to be used by the simulator.
+    """
+    return VertexVerifiers.create(
+        settings=settings,
+        vertex_verifier=SimulatorVertexVerifier(settings=settings, daa=daa),
+        daa=daa,
+        feature_service=feature_service,
+    )

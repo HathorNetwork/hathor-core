@@ -54,6 +54,10 @@ class BitSignalingService:
         self._validate_support_intersection()
 
     def start(self) -> None:
+        """
+        Log information related to bit signaling. Must be called after the storage is ready and migrations have
+        been applied.
+        """
         best_block = self._tx_storage.get_best_block()
 
         self._warn_non_signaling_features(best_block)

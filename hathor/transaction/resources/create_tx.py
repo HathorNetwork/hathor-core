@@ -17,8 +17,8 @@ import base64
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
-from hathor.daa import minimum_tx_weight
 from hathor.exception import InvalidNewTransaction
+from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
 from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
@@ -50,7 +50,7 @@ class CreateTxResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager) -> None:
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
@@ -88,8 +88,8 @@ class CreateTxResource(Resource):
         for tx_input in fake_signed_tx.inputs:
             # conservative estimate of the input data size to estimate a valid weight
             tx_input.data = b'\0' * 107
-        tx.weight = minimum_tx_weight(fake_signed_tx)
-        tx.verify_unsigned_skip_pow()
+        tx.weight = self.manager.daa.minimum_tx_weight(fake_signed_tx)
+        self._verify_unsigned_skip_pow(tx)
 
         if tx.is_double_spending():
             raise InvalidNewTransaction('At least one of your inputs has already been spent.')
@@ -104,6 +104,21 @@ class CreateTxResource(Resource):
             'hex_data': hex_data,
             'data': data,
         })
+
+    def _verify_unsigned_skip_pow(self, tx: Transaction) -> None:
+        """ Same as .verify but skipping pow and signature verification."""
+        assert type(tx) is Transaction
+        verifiers = self.manager.verification_service.verifiers
+        verifiers.tx.verify_number_of_inputs(tx)
+        verifiers.vertex.verify_number_of_outputs(tx)
+        verifiers.vertex.verify_outputs(tx)
+        verifiers.tx.verify_output_token_indexes(tx)
+        verifiers.vertex.verify_sigops_output(tx)
+        verifiers.tx.verify_sigops_input(tx)
+        # need to run verify_inputs first to check if all inputs exist
+        verifiers.tx.verify_inputs(tx, skip_script=True)
+        verifiers.vertex.verify_parents(tx)
+        verifiers.tx.verify_sum(tx.get_complete_token_info())
 
 
 CreateTxResource.openapi = {

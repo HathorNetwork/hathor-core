@@ -39,6 +39,8 @@ class SyncMempoolManager:
         self.tx_storage = self.manager.tx_storage
         self.reactor = self.sync_agent.reactor
 
+        self._deferred: Optional[Deferred[None]] = None
+
         # Set of tips we know but couldn't add to the DAG yet.
         self.missing_tips: set[bytes] = set()
 
@@ -52,13 +54,20 @@ class SyncMempoolManager:
         """Whether the sync-mempool is currently running."""
         return self._is_running
 
-    def run(self) -> None:
+    def run(self) -> Deferred[None]:
         """Starts _run in, won't start again if already running."""
         if self.is_running():
             self.log.warn('already started')
-            return
+            assert self._deferred is not None
+            return self._deferred
         self._is_running = True
         self.reactor.callLater(0, self._run)
+
+        # TODO Implement a stop() and call it after N minutes.
+
+        assert self._deferred is None
+        self._deferred = Deferred()
+        return self._deferred
 
     @inlineCallbacks
     def _run(self) -> Generator[Deferred, Any, None]:
@@ -67,6 +76,9 @@ class SyncMempoolManager:
         finally:
             # sync_agent.run_sync will start it again when needed
             self._is_running = False
+            assert self._deferred is not None
+            self._deferred.callback(None)
+            self._deferred = None
 
     @inlineCallbacks
     def _unsafe_run(self) -> Generator[Deferred, Any, None]:

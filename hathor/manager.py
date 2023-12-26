@@ -16,7 +16,7 @@ import datetime
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterable, Iterator, NamedTuple, Optional, Union
+from typing import Any, Iterator, NamedTuple, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -25,12 +25,13 @@ from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 from twisted.python.threadpool import ThreadPool
 
-from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
+    BlockTemplateTimestampError,
     DoubleSpendingError,
     HathorError,
     InitializationError,
@@ -43,11 +44,13 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.mining import BlockTemplate, BlockTemplates
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
@@ -55,7 +58,7 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.types import Address, VertexId
-from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
+from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
@@ -89,6 +92,7 @@ class HathorManager:
                  settings: HathorSettings,
                  pubsub: PubSubManager,
                  consensus_algorithm: ConsensusAlgorithm,
+                 daa: DifficultyAdjustmentAlgorithm,
                  peer_id: PeerId,
                  tx_storage: TransactionStorage,
                  p2p_manager: ConnectionsManager,
@@ -96,6 +100,7 @@ class HathorManager:
                  feature_service: FeatureService,
                  bit_signaling_service: BitSignalingService,
                  verification_service: VerificationService,
+                 cpu_mining_service: CpuMiningService,
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
@@ -123,6 +128,7 @@ class HathorManager:
             )
 
         self._settings = settings
+        self.daa = daa
         self._cmd_path: Optional[str] = None
 
         self.log = logger.new()
@@ -173,6 +179,7 @@ class HathorManager:
         self._feature_service = feature_service
         self._bit_signaling_service = bit_signaling_service
         self.verification_service = verification_service
+        self.cpu_mining_service = cpu_mining_service
 
         self.consensus_algorithm = consensus_algorithm
 
@@ -267,8 +274,6 @@ class HathorManager:
 
         if self._enable_event_queue:
             self._event_manager.start(not_none(self.my_peer.id))
-
-        self._bit_signaling_service.start()
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
@@ -451,8 +456,6 @@ class HathorManager:
                     self.tx_storage.indexes.update(tx)
                     if self.tx_storage.indexes.mempool_tips is not None:
                         self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
-                    if self.tx_storage.indexes.deps is not None:
-                        self.sync_v2_step_validations([tx], quiet=True)
                     self.tx_storage.save_transaction(tx, only_metadata=True)
                 else:
                     assert self.verification_service.validate_basic(
@@ -509,10 +512,6 @@ class HathorManager:
                 self.log.error('Error initializing the node. Checkpoint validation error.')
                 sys.exit()
 
-        # restart all validations possible
-        if self.tx_storage.indexes.deps:
-            self._sync_v2_resume_validations()
-
         best_height = self.tx_storage.get_height_best_block()
         if best_height != h:
             self.log.warn('best height doesn\'t match', best_height=best_height, max_height=h)
@@ -545,6 +544,8 @@ class HathorManager:
         self.tx_storage.pre_init()
         assert self.tx_storage.indexes is not None
 
+        self._bit_signaling_service.start()
+
         started_at = int(time.time())
         last_started_at = self.tx_storage.get_last_started_at()
         if last_started_at >= started_at:
@@ -566,10 +567,6 @@ class HathorManager:
         except InitializationError:
             self.log.exception('Initialization error when checking checkpoints, cannot continue.')
             sys.exit()
-
-        # restart all validations possible
-        if self.tx_storage.indexes.deps is not None:
-            self._sync_v2_resume_validations()
 
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
@@ -662,24 +659,6 @@ class HathorManager:
                     f'hash {tx_hash.hex()} was found'
                 )
 
-    def _sync_v2_resume_validations(self) -> None:
-        """ This method will resume running validations that did not run because the node exited.
-        """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.deps is not None
-        if self.tx_storage.indexes.deps.has_needed_tx():
-            self.log.debug('run pending validations')
-            depended_final_txs: list[BaseTransaction] = []
-            for tx_hash in self.tx_storage.indexes.deps.iter():
-                if not self.tx_storage.transaction_exists(tx_hash):
-                    continue
-                with self.tx_storage.allow_partially_validated_context():
-                    tx = self.tx_storage.get_transaction(tx_hash)
-                if tx.get_metadata().validation.is_final():
-                    depended_final_txs.append(tx)
-            self.sync_v2_step_validations(depended_final_txs, quiet=True)
-            self.log.debug('pending validations finished')
-
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
         """Select which transactions will be confirmed by a new transaction.
 
@@ -755,7 +734,7 @@ class HathorManager:
         assert isinstance(parent_block, Block)
         parent_txs = self.generate_parent_txs(parent_block.timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS)
         if timestamp is None:
-            current_timestamp = int(max(self.tx_storage.latest_timestamp, self.reactor.seconds()))
+            current_timestamp = int(self.reactor.seconds())
         else:
             current_timestamp = timestamp
         return self._make_block_template(parent_block, parent_txs, current_timestamp)
@@ -807,6 +786,13 @@ class HathorManager:
             timestamp_max = min(timestamp_abs_max, timestamp_max_decay)
         else:
             timestamp_max = timestamp_abs_max
+        timestamp_max = min(timestamp_max, int(current_timestamp + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED))
+        if timestamp_max < timestamp_min:
+            raise BlockTemplateTimestampError(
+                f'Unable to create a block template because there is no timestamp available. '
+                f'(min={timestamp_min}, max={timestamp_max}) '
+                f'(current_timestamp={current_timestamp})'
+            )
         timestamp = min(max(current_timestamp, timestamp_min), timestamp_max)
         parent_block_metadata = parent_block.get_metadata()
         # this is the min weight to cause an increase of twice the WEIGHT_TOL, we make sure to generate a template with
@@ -816,7 +802,7 @@ class HathorManager:
             parent_block_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
-        weight = max(daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
+        weight = max(self.daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
         height = parent_block.get_height() + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include
@@ -830,7 +816,7 @@ class HathorManager:
             assert len(parents_any) == 0, 'Extra parents to choose from that cannot be chosen'
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
-            reward=daa.get_tokens_issued_per_block(height),
+            reward=self.daa.get_tokens_issued_per_block(height),
             weight=weight,
             timestamp_now=current_timestamp,
             timestamp_min=timestamp_min,
@@ -867,7 +853,7 @@ class HathorManager:
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""
-        return daa.get_tokens_issued_per_block(height)
+        return self.daa.get_tokens_issued_per_block(height)
 
     def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
         """Used by submit block from all mining APIs.
@@ -916,9 +902,10 @@ class HathorManager:
             raise NonStandardTxError('Transaction is non standard.')
 
         # Validate tx.
-        success, message = self.verification_service.validate_vertex_error(tx)
-        if not success:
-            raise InvalidNewTransaction(message)
+        try:
+            self.verification_service.verify(tx)
+        except TxValidationError as e:
+            raise InvalidNewTransaction(str(e))
 
         self.propagate_tx(tx, fails_silently=False)
 
@@ -1050,37 +1037,6 @@ class HathorManager:
             log_func = self.log.debug
         log_func(message, **kwargs)
 
-    def sync_v2_step_validations(self, txs: Iterable[BaseTransaction], *, quiet: bool) -> None:
-        """ Step all validations until none can be stepped anymore.
-        """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.deps is not None
-        # cur_txs will be empty when there are no more new txs that reached full
-        # validation because of an initial trigger
-        for ready_tx in txs:
-            assert ready_tx.hash is not None
-            self.tx_storage.indexes.deps.remove_ready_for_validation(ready_tx.hash)
-        with self.tx_storage.allow_partially_validated_context():
-            for tx in map(self.tx_storage.get_transaction,
-                          self.tx_storage.indexes.deps.next_ready_for_validation(self.tx_storage)):
-                assert tx.hash is not None
-                tx.update_initial_metadata()
-                with self.tx_storage.allow_only_valid_context():
-                    try:
-                        # XXX: `reject_locked_reward` might not apply, partial validation is only used on sync-v2
-                        # TODO: deal with `reject_locked_reward` on sync-v2
-                        assert self.verification_service.validate_full(tx, reject_locked_reward=False)
-                    except (AssertionError, HathorError):
-                        # TODO
-                        raise
-                    else:
-                        self.tx_storage.add_to_indexes(tx)
-                        self.consensus_algorithm.update(tx)
-                        self.tx_storage.indexes.update(tx)
-                        if self.tx_storage.indexes.mempool_tips:
-                            self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
-                        self.tx_fully_validated(tx, quiet=quiet)
-
     def tx_fully_validated(self, tx: BaseTransaction, *, quiet: bool) -> None:
         """ Handle operations that need to happen once the tx becomes fully validated.
 
@@ -1120,7 +1076,7 @@ class HathorManager:
             features_states=state_by_feature
         )
 
-        features = [Feature.NOP_FEATURE_1, Feature.NOP_FEATURE_2, Feature.NOP_FEATURE_3]
+        features = [Feature.NOP_FEATURE_4, Feature.NOP_FEATURE_5, Feature.NOP_FEATURE_6]
         for feature in features:
             self._log_if_feature_is_active(vertex, feature)
 
@@ -1165,7 +1121,8 @@ class HathorManager:
 
         return True
 
-    def is_healthy(self) -> tuple[bool, Optional[str]]:
+    def is_sync_healthy(self) -> tuple[bool, Optional[str]]:
+        # This checks whether the last txs (blocks or transactions) we received are recent enough.
         if not self.has_recent_activity():
             return False, HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY
 

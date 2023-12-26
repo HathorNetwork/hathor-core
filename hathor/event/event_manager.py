@@ -23,8 +23,9 @@ from hathor.event.model.node_state import NodeState
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
-from hathor.util import Reactor, not_none, progress
+from hathor.util import not_none, progress
 from hathor.utils.iter import batch_iterator
 
 logger = get_logger()
@@ -70,7 +71,7 @@ class EventManager:
         pubsub: PubSubManager,
         reactor: Reactor,
         event_ws_factory: Optional[EventWebsocketFactory] = None,
-    ):
+    ) -> None:
         self.log = logger.new()
 
         self._reactor = reactor
@@ -233,7 +234,6 @@ class EventManager:
         """Actually creates a BaseEvent."""
         return BaseEvent.from_event_arguments(
             event_id=0 if self._last_event is None else self._last_event.id + 1,
-            peer_id=self._peer_id,
             timestamp=self._reactor.seconds(),
             event_type=event_type,
             event_args=event_args,

@@ -9,7 +9,8 @@ from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -19,7 +20,6 @@ from tests.utils import (
     BURN_ADDRESS,
     HAS_ROCKSDB,
     add_blocks_unlock_reward,
-    add_new_blocks,
     add_new_transactions,
     add_new_tx,
     create_tokens,
@@ -63,7 +63,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         previous_timestamp = artifacts.settings.GENESIS_TX2_TIMESTAMP
         self.block = Block(timestamp=previous_timestamp + 1, weight=12, outputs=[output], parents=block_parents,
                            nonce=100781, storage=self.tx_storage)
-        self.block.resolve()
+        self.manager.cpu_mining_service.resolve(self.block)
         self.manager.verification_service.verify(self.block)
         self.block.get_metadata().validation = ValidationState.FULL
 
@@ -80,7 +80,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             timestamp=previous_timestamp + 2, weight=10, nonce=932049, inputs=[tx_input], outputs=[output],
             tokens=[bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')],
             parents=tx_parents, storage=self.tx_storage)
-        self.tx.resolve()
+        self.manager.cpu_mining_service.resolve(self.tx)
         self.tx.get_metadata().validation = ValidationState.FULL
 
         # Disable weakref to test the internal methods. Otherwise, most methods return objects from weakref.
@@ -145,7 +145,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
     def test_vertices_count(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         blocks_count = 1
         txs_count = 2
@@ -500,12 +500,12 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.validate_save(tx)
         # 2 token uids
         tx.tokens.append(bytes.fromhex('00001c5c0b69d13b05534c94a69b2c8272294e6b0c536660a3ac264820677024'))
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         tx._metadata.hash = tx.hash
         self.validate_save(tx)
         # no tokens
         tx.tokens = []
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         tx._metadata.hash = tx.hash
         self.validate_save(tx)
 
@@ -515,14 +515,14 @@ class BaseTransactionStorageTest(unittest.TestCase):
         if parents is not None:
             block.parents = parents
         block.weight = 10
-        self.assertTrue(block.resolve())
+        self.assertTrue(self.manager.cpu_mining_service.resolve(block))
         self.manager.verification_service.verify(block)
         self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)
         return block
 
     def test_best_block_tips_cache(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         self.manager.wallet.unlock(b'MYPASS')
         spent_blocks = add_new_blocks(self.manager, 10)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [spent_blocks[-1].hash])
@@ -534,7 +534,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(self.tx_storage._best_block_tips_cache, [latest_blocks[-1].hash])
 
     def test_topological_sort(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         _total = 0
         blocks = add_new_blocks(self.manager, 1, advance_clock=1)
         _total += len(blocks)

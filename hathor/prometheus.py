@@ -19,7 +19,7 @@ from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
 from twisted.internet.task import LoopingCall
 
 from hathor.conf.get_settings import get_settings
-from hathor.util import reactor
+from hathor.reactor import get_global_reactor
 
 if TYPE_CHECKING:
     from hathor.metrics import Metrics
@@ -102,7 +102,7 @@ class PrometheusMetricsExporter:
 
         # A timer to periodically write data to prometheus
         self._lc_write_data = LoopingCall(self._write_data)
-        self._lc_write_data.clock = reactor
+        self._lc_write_data.clock = get_global_reactor()
 
     def _initial_setup(self) -> None:
         """ Start a collector registry to send data to node exporter

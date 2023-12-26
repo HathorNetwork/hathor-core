@@ -74,7 +74,13 @@ def test_broadcast_event(can_receive_event: bool) -> None:
     if not can_receive_event:
         return connection.send_event_response.assert_not_called()
 
-    response = EventResponse(event=event, latest_event_id=n_starting_events - 1, stream_id=stream_id)
+    response = EventResponse(
+        peer_id='my_peer_id',
+        network='my_network',
+        event=event,
+        latest_event_id=n_starting_events - 1,
+        stream_id=stream_id
+    )
     connection.send_event_response.assert_called_once_with(response)
 
 
@@ -133,7 +139,13 @@ def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_
     calls = []
     for _id in range(next_expected_event_id, n_starting_events):
         event = EventMocker.create_event(_id)
-        response = EventResponse(event=event, latest_event_id=n_starting_events - 1, stream_id=stream_id)
+        response = EventResponse(
+            peer_id='my_peer_id',
+            network='my_network',
+            event=event,
+            latest_event_id=n_starting_events - 1,
+            stream_id=stream_id
+        )
         calls.append(call(response))
 
     assert connection.send_event_response.call_count == n_starting_events - next_expected_event_id
@@ -150,4 +162,9 @@ def _get_factory(
         event = EventMocker.create_event(event_id)
         event_storage.save_event(event)
 
-    return EventWebsocketFactory(clock, event_storage)
+    return EventWebsocketFactory(
+        peer_id='my_peer_id',
+        network='my_network',
+        reactor=clock,
+        event_storage=event_storage
+    )

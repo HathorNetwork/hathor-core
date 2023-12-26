@@ -33,9 +33,10 @@ def signal_handler(sig, frame):
 
 
 def worker(q_in, q_out):
+    from hathor.mining.cpu_mining_service import CpuMiningService
     signal.signal(signal.SIGINT, signal_handler)
     block, start, end, sleep_seconds = q_in.get()
-    block.start_mining(start, end, sleep_seconds=sleep_seconds)
+    CpuMiningService().start_mining(block, start=start, end=end, sleep_seconds=sleep_seconds)
     q_out.put(block)
 
 
@@ -134,7 +135,14 @@ def execute(args: Namespace) -> None:
                                                                       block.nonce, block.weight))
 
         try:
-            block.verify_without_storage()
+            from hathor.conf.get_settings import get_settings
+            from hathor.daa import DifficultyAdjustmentAlgorithm
+            from hathor.verification.verification_service import VerificationService, VertexVerifiers
+            settings = get_settings()
+            daa = DifficultyAdjustmentAlgorithm(settings=settings)
+            verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
+            verification_service = VerificationService(verifiers=verifiers)
+            verification_service.verify_without_storage(block)
         except HathorError:
             print('[{}] ERROR: Block has not been pushed because it is not valid.'.format(datetime.datetime.now()))
         else:

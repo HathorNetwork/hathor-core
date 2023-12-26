@@ -17,7 +17,6 @@ import struct
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction
 from hathor.util import json_dumpb
 
@@ -67,8 +66,8 @@ class SignTxResource(Resource):
                 if prepare_to_send:
                     tx.parents = self.manager.get_new_tx_parents()
                     tx.update_timestamp(int(self.manager.reactor.seconds()))
-                    tx.weight = minimum_tx_weight(tx)
-                    tx.resolve()
+                    tx.weight = self.manager.daa.minimum_tx_weight(tx)
+                    self.manager.cpu_mining_service.resolve(tx)
 
                 data = {'hex_tx': tx.get_struct().hex(), 'success': True}
             except struct.error:

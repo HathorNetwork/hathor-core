@@ -12,8 +12,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.verification.block_verifier import BlockVerifier
+from hathor.transaction import MergeMinedBlock
 
 
-class MergeMinedBlockVerifier(BlockVerifier):
+class MergeMinedBlockVerifier:
     __slots__ = ()
+
+    def verify_aux_pow(self, block: MergeMinedBlock) -> None:
+        """ Verify auxiliary proof-of-work (for merged mining).
+        """
+        assert block.aux_pow is not None
+        block.aux_pow.verify(block.get_base_hash())

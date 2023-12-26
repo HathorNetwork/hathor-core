@@ -1,8 +1,9 @@
 from math import inf
 
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage.traversal import BFSOrderWalk, BFSTimestampWalk, DFSWalk
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions, add_new_tx
+from tests.utils import add_blocks_unlock_reward, add_new_transactions, add_new_tx
 
 
 class _TraversalTestCase(unittest.TestCase):

@@ -9,9 +9,10 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from structlog.testing import capture_logs
 
 from hathor.cli.multisig_signature import create_parser, execute
+from hathor.simulator.utils import add_new_blocks
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
 
 class BaseSignatureTest(unittest.TestCase):

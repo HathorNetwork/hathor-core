@@ -2,9 +2,9 @@ import base64
 import hashlib
 from math import isinf, isnan
 
-from hathor import daa
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     BlockWithInputs,
@@ -32,13 +32,7 @@ from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import (
-    add_blocks_unlock_reward,
-    add_new_blocks,
-    add_new_transactions,
-    create_script_with_sigops,
-    get_genesis_key,
-)
+from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
 
 
 class BaseTransactionTest(unittest.TestCase):
@@ -50,6 +44,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # this makes sure we can spend the genesis outputs
         self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True, use_memory_storage=True)
+        self._verifiers = self.manager.verification_service.verifiers
         self.tx_storage = self.manager.tx_storage
 
         # read genesis keys
@@ -80,7 +75,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         with self.assertRaises(InputOutputMismatch):
-            tx.verify_sum()
+            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -120,7 +115,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input.data = data_wrong
 
         with self.assertRaises(InvalidInputData):
-            tx.verify_inputs()
+            self._verifiers.tx.verify_inputs(tx)
 
     def test_too_many_inputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -131,13 +126,13 @@ class BaseTransactionTest(unittest.TestCase):
         tx = Transaction(inputs=inputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyInputs):
-            tx.verify_number_of_inputs()
+            self._verifiers.tx.verify_number_of_inputs(tx)
 
     def test_no_inputs(self):
         tx = Transaction(inputs=[], storage=self.tx_storage)
 
         with self.assertRaises(NoInputError):
-            tx.verify_number_of_inputs()
+            self._verifiers.tx.verify_number_of_inputs(tx)
 
     def test_too_many_outputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -148,7 +143,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx = Transaction(outputs=outputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
-            tx.verify_number_of_outputs()
+            self._verifiers.vertex.verify_number_of_outputs(tx)
 
     def _gen_tx_spending_genesis_block(self):
         parents = [tx.hash for tx in self.genesis_txs]
@@ -216,7 +211,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         block.inputs = tx_inputs
 
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
 
         with self.assertRaises(BlockWithInputs):
             self.manager.verification_service.verify(block)
@@ -246,11 +241,11 @@ class BaseTransactionTest(unittest.TestCase):
         )
 
         with self.assertRaises(AuxPowNoMagicError):
-            b.verify_aux_pow()
+            self._verifiers.merge_mined_block.verify_aux_pow(b)
 
         # adding the MAGIC_NUMBER makes it work:
         b.aux_pow = b.aux_pow._replace(coinbase_head=b.aux_pow.coinbase_head + MAGIC_NUMBER)
-        b.verify_aux_pow()
+        self._verifiers.merge_mined_block.verify_aux_pow(b)
 
     def test_merge_mined_multiple_magic(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -312,9 +307,9 @@ class BaseTransactionTest(unittest.TestCase):
         assert bytes(b1) != bytes(b2)
         assert b1.calculate_hash() == b2.calculate_hash()
 
-        b1.verify_aux_pow()  # OK
+        self._verifiers.merge_mined_block.verify_aux_pow(b1)  # OK
         with self.assertRaises(AuxPowUnexpectedMagicError):
-            b2.verify_aux_pow()
+            self._verifiers.merge_mined_block.verify_aux_pow(b2)
 
     def test_merge_mined_long_merkle_path(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -341,11 +336,11 @@ class BaseTransactionTest(unittest.TestCase):
         )
 
         with self.assertRaises(AuxPowLongMerklePathError):
-            b.verify_aux_pow()
+            self._verifiers.merge_mined_block.verify_aux_pow(b)
 
         # removing one path makes it work
         b.aux_pow.merkle_path.pop()
-        b.verify_aux_pow()
+        self._verifiers.merge_mined_block.verify_aux_pow(b)
 
     def test_block_outputs(self):
         from hathor.transaction.exceptions import TooManyOutputs
@@ -365,7 +360,7 @@ class BaseTransactionTest(unittest.TestCase):
             storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
-            block.verify_outputs()
+            self._verifiers.vertex.verify_outputs(block)
 
     def test_tx_number_parents(self):
         genesis_block = self.genesis_blocks[0]
@@ -386,21 +381,21 @@ class BaseTransactionTest(unittest.TestCase):
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
 
         # in first test, only with 1 parent
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(tx)
 
         # test with 3 parents
         parents = [tx.hash for tx in self.genesis]
         tx.parents = parents
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(tx)
 
         # 2 parents, 1 tx and 1 block
         parents = [self.genesis_txs[0].hash, self.genesis_blocks[0].hash]
         tx.parents = parents
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(tx)
 
@@ -419,7 +414,7 @@ class BaseTransactionTest(unittest.TestCase):
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.tx_storage)
 
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(ParentDoesNotExist):
             self.manager.verification_service.verify(block)
 
@@ -437,7 +432,7 @@ class BaseTransactionTest(unittest.TestCase):
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.tx_storage)
 
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(block)
 
@@ -460,7 +455,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx.inputs[0].data = data
 
         # test with an inexistent index
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
             self.manager.verification_service.verify(tx)
 
@@ -468,7 +463,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input = [TxInput(genesis_block.hash, len(genesis_block.outputs), data)]
         tx.inputs = _input
         # test with an inexistent index
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
             self.manager.verification_service.verify(tx)
 
@@ -476,7 +471,7 @@ class BaseTransactionTest(unittest.TestCase):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
         _input = [TxInput(random_bytes, 3, data)]
         tx.inputs = _input
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
             self.manager.verification_service.verify(tx)
 
@@ -499,7 +494,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(ConflictingInputs):
             self.manager.verification_service.verify(tx)
 
@@ -521,7 +516,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         self.manager.verification_service.verify(tx)
 
     def test_tx_weight_too_high(self):
@@ -530,11 +525,11 @@ class BaseTransactionTest(unittest.TestCase):
         inputs = [TxInput(b'', 0, b'')]
         tx = Transaction(weight=1, inputs=inputs, outputs=outputs, parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
-        tx.weight = daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa.minimum_tx_weight(tx)
         tx.weight += self._settings.MAX_TX_WEIGHT_DIFF + 0.1
         tx.update_hash()
         with self.assertRaises(WeightError):
-            tx.verify_weight()
+            self._verifiers.tx.verify_weight(tx)
 
     def test_weight_nan(self):
         # this should succeed
@@ -600,7 +595,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(DuplicatedParents):
             self.manager.verification_service.verify(tx)
 
@@ -629,8 +624,8 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertEquals(tx.timestamp, ts)
 
     def test_propagation_error(self):
-        _set_test_mode(TestMode.DISABLED)
         manager = self.create_peer('testnet', unlock_wallet=True)
+        manager.daa.TEST_MODE = TestMode.DISABLED
 
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]
@@ -640,20 +635,20 @@ class BaseTransactionTest(unittest.TestCase):
         # 2. propagate block with weight 1
         block = manager.generate_mining_block()
         block.weight = 1
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         self.assertFalse(manager.propagate_tx(block))
 
         # 3. propagate block with wrong amount of tokens
         block = manager.generate_mining_block()
         output = TxOutput(1, block.outputs[0].script)
         block.outputs = [output]
-        block.resolve()
+        self.manager.cpu_mining_service.resolve(block)
         self.assertFalse(manager.propagate_tx(block))
 
         # 4. propagate block from the future
         block = manager.generate_mining_block()
         block.timestamp = int(self.clock.seconds()) + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED + 100
-        block.resolve(update_time=False)
+        manager.cpu_mining_service.resolve(block, update_time=False)
         self.assertFalse(manager.propagate_tx(block))
 
     def test_tx_methods(self):
@@ -682,34 +677,34 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertFalse(tx_equal.is_genesis)
 
         # Pow error
-        tx2.verify_pow()
+        self._verifiers.vertex.verify_pow(tx2)
         tx2.weight = 100
         with self.assertRaises(PowError):
-            tx2.verify_pow()
+            self._verifiers.vertex.verify_pow(tx2)
 
         # Verify parent timestamps
-        tx2.verify_parents()
+        self._verifiers.vertex.verify_parents(tx2)
         tx2_timestamp = tx2.timestamp
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            tx2.verify_parents()
+            self._verifiers.vertex.verify_parents(tx2)
         tx2.timestamp = tx2_timestamp
 
         # Verify inputs timestamps
-        tx2.verify_inputs()
+        self._verifiers.tx.verify_inputs(tx2)
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            tx2.verify_inputs()
+            self._verifiers.tx.verify_inputs(tx2)
         tx2.timestamp = tx2_timestamp
 
         # Validate maximum distance between blocks
         block = blocks[0]
         block2 = blocks[1]
         block2.timestamp = block.timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS
-        block2.verify_parents()
+        self._verifiers.vertex.verify_parents(block2)
         block2.timestamp += 1
         with self.assertRaises(TimestampError):
-            block2.verify_parents()
+            self._verifiers.vertex.verify_parents(block2)
 
     def test_block_big_nonce(self):
         block = self.genesis_blocks[0]
@@ -718,7 +713,7 @@ class BaseTransactionTest(unittest.TestCase):
         start = 1 << (8 * 12)
         end = start + 1 << (8*4)
 
-        hash = block.start_mining(start, end)
+        hash = self.manager.cpu_mining_service.start_mining(block, start=start, end=end)
         assert hash is not None
 
         block.hash = hash
@@ -802,7 +797,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input = TxInput(random_bytes, 0, random_bytes)
         tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
         with self.assertRaises(InvalidOutputValue):
-            tx.resolve()
+            self.manager.cpu_mining_service.resolve(tx)
 
         # 'Manually resolving', to validate verify method
         tx.hash = bytes.fromhex('012cba011be3c29f1c406f9015e42698b97169dbc6652d1f5e4d5c5e83138858')
@@ -886,7 +881,8 @@ class BaseTransactionTest(unittest.TestCase):
         _output = TxOutput(value, script)
 
         tx = Transaction(inputs=[_input], outputs=[_output], storage=self.tx_storage)
-        tx.verify_outputs()
+        self._verifiers.vertex.verify_outputs(tx)
+        self._verifiers.tx.verify_output_token_indexes(tx)
 
     def test_txout_script_limit_exceeded(self):
         with self.assertRaises(InvalidOutputScriptSize):
@@ -910,7 +906,7 @@ class BaseTransactionTest(unittest.TestCase):
             outputs=[_output],
             storage=self.tx_storage
         )
-        tx.verify_inputs(skip_script=True)
+        self._verifiers.tx.verify_inputs(tx, skip_script=True)
 
     def test_txin_data_limit_exceeded(self):
         with self.assertRaises(InvalidInputDataSize):
@@ -943,7 +939,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx.resolve()
+        self.manager.cpu_mining_service.resolve(tx)
         self.manager.propagate_tx(tx)
 
         # This transaction has an output to address_b58, so we need one more element on the index
@@ -967,7 +963,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         input1.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx2.resolve()
+        self.manager.cpu_mining_service.resolve(tx2)
         self.manager.propagate_tx(tx2)
 
         # tx2 has two outputs, for address_b58 and new_address_b58
@@ -990,7 +986,7 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         input2.data = P2PKH.create_input_data(public_bytes, signature)
 
-        tx3.resolve()
+        self.manager.cpu_mining_service.resolve(tx3)
         self.manager.propagate_tx(tx3)
 
         # tx3 has one output, for another new address (output3_address_b58) and it's spending an output of address_b58
@@ -1063,7 +1059,7 @@ class BaseTransactionTest(unittest.TestCase):
         output3 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output3], storage=self.tx_storage)
         tx.update_hash()
-        tx.verify_sigops_output()
+        self._verifiers.vertex.verify_sigops_output(tx)
 
     def test_sigops_output_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1075,7 +1071,7 @@ class BaseTransactionTest(unittest.TestCase):
         output4 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output4]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
-        tx.verify_sigops_output()
+        self._verifiers.vertex.verify_sigops_output(tx)
 
     def test_sigops_input_single_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1117,7 +1113,7 @@ class BaseTransactionTest(unittest.TestCase):
         input3 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input3], outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
-        tx.verify_sigops_input()
+        self._verifiers.tx.verify_sigops_input(tx)
 
     def test_sigops_input_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1131,7 +1127,7 @@ class BaseTransactionTest(unittest.TestCase):
         input4 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input4]*num_inputs, outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
-        tx.verify_sigops_input()
+        self._verifiers.tx.verify_sigops_input(tx)
 
     def test_compare_bytes_equal(self) -> None:
         # create some block

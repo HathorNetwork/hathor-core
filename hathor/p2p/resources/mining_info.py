@@ -17,7 +17,6 @@ from math import log
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_settings
-from hathor.daa import get_mined_tokens
 from hathor.difficulty import Weight
 from hathor.util import json_dumpb
 
@@ -57,7 +56,7 @@ class MiningInfoResource(Resource):
         parent = block.get_block_parent()
         hashrate = 2**(parent.weight - log(30, 2))
 
-        mined_tokens = get_mined_tokens(height)
+        mined_tokens = self.manager.daa.get_mined_tokens(height)
 
         data = {
             'hashrate': hashrate,

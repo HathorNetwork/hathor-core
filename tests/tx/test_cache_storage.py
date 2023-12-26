@@ -1,8 +1,9 @@
-from hathor.daa import TestMode, _set_test_mode
+from hathor.daa import TestMode
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.transaction.storage import TransactionCacheStorage
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_new_transactions
 
 CACHE_SIZE = 5
 
@@ -144,7 +145,7 @@ class BaseCacheStorageTest(unittest.TestCase):
         self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
 
     def test_topological_sort_dfs(self):
-        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         add_new_blocks(self.manager, 11, advance_clock=1)
         tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
 
