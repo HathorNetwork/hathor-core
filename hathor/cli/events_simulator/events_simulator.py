@@ -44,7 +44,7 @@ def execute(args: Namespace) -> None:
     os.environ['HATHOR_CONFIG_YAML'] = UNITTESTS_SETTINGS_FILEPATH
     from hathor.cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
     from hathor.cli.events_simulator.scenario import Scenario
-    from hathor.reactor import get_global_reactor
+    from hathor.reactor import initialize_global_reactor
     from hathor.simulator import Simulator
 
     try:
@@ -53,7 +53,7 @@ def execute(args: Namespace) -> None:
         possible_scenarios = [scenario.name for scenario in Scenario]
         raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
 
-    reactor = get_global_reactor()
+    reactor = initialize_global_reactor()
     log = logger.new()
     simulator = Simulator(args.seed)
     simulator.start()
