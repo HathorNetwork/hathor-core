@@ -1072,6 +1072,7 @@ class HathorManager:
 
         self.log.info(
             'New block accepted with feature activation states',
+            block_hash=vertex.hash_hex,
             block_height=vertex.get_height(),
             features_states=state_by_feature
         )
@@ -1083,7 +1084,12 @@ class HathorManager:
     def _log_if_feature_is_active(self, block: Block, feature: Feature) -> None:
         """Log if a feature is ACTIVE for a block. Used as part of the Feature Activation Phased Testing."""
         if self._feature_service.is_feature_active(block=block, feature=feature):
-            self.log.info('Feature is ACTIVE for block', feature=feature.value, block_height=block.get_height())
+            self.log.info(
+                'Feature is ACTIVE for block',
+                feature=feature.value,
+                block_hash=block.hash_hex,
+                block_height=block.get_height()
+            )
 
     def has_sync_version_capability(self) -> bool:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
