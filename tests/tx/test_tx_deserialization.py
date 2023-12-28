@@ -1,4 +1,5 @@
 from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.multiprocessor.multiprocessor import Multiprocessor
 from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.verification.verification_service import VerificationService
@@ -12,7 +13,9 @@ class _BaseTest:
             super().setUp()
             daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
             verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=daa)
-            self._verification_service = VerificationService(verifiers=verifiers, daa=daa)
+            self._verification_service = VerificationService(
+                verifiers=verifiers, daa=daa, multiprocessor=Multiprocessor()
+            )
 
         def test_deserialize(self):
             cls = self.get_tx_class()

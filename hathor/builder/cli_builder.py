@@ -31,6 +31,7 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
@@ -226,7 +227,8 @@ class CliBuilder:
         verification_service = VerificationService(
             verifiers=vertex_verifiers,
             daa=daa,
-            feature_service=self.feature_service
+            multiprocessor=Multiprocessor(),
+            feature_service=self.feature_service,
         )
 
         cpu_mining_service = CpuMiningService()

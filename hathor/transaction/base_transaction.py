@@ -22,7 +22,7 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional, TypeVar
 
 from structlog import get_logger
 
@@ -1115,3 +1115,12 @@ def tx_or_block_from_bytes(data: bytes,
         return cls.create_from_struct(data, storage=storage)
     except ValueError:
         raise StructError('Invalid bytes to create transaction subclass.')
+
+
+VertexT = TypeVar('VertexT', bound=BaseTransaction)
+
+
+def vertex_from_bytes(vertex_bytes: bytes, vertex_type: type[VertexT]) -> VertexT:
+    vertex = tx_or_block_from_bytes(vertex_bytes)
+    assert isinstance(vertex, vertex_type)
+    return vertex

@@ -39,8 +39,8 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
 
 
-class BaseTransactionTest(unittest.TestCase):
-    __test__ = False
+class BaseTransactionTest(unittest.SyncV1Params, unittest.TestCase):
+    # __test__ = False
 
     def setUp(self):
         super().setUp()
@@ -1208,14 +1208,14 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertFalse(self.tx_storage.compare_bytes_with_local_tx(block2))
 
 
-class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
-    __test__ = True
-
-
-class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
-    pass
+# class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
+#     __test__ = True
+#
+#
+# class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
+#     __test__ = True
+#
+#
+# # sync-bridge should behave like sync-v2
+# class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
+#     pass

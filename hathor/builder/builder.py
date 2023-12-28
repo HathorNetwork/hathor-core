@@ -31,6 +31,7 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
@@ -478,6 +479,7 @@ class Builder:
             self._verification_service = VerificationService(
                 verifiers=verifiers,
                 daa=daa,
+                multiprocessor=Multiprocessor(),  # TODO: get or create
                 feature_service=feature_service
             )
 

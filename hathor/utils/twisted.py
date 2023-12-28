@@ -30,11 +30,11 @@ def call_blocking(reactor: ReactorProtocol, f: Callable[P, T], *a: P.args, **kw:
     https://github.com/twisted/twisted/blob/twisted-22.10.0/src/twisted/internet/base.py#L1320
     """
     d: Deferred[T] = defer.maybeDeferred(f, *a, **kw)
-
-    if isinstance(reactor, AsyncioSelectorReactor):
-        loop = asyncio.get_event_loop()
-        future = d.asFuture(loop)
-        return loop.run_until_complete(future)
+    #
+    # if isinstance(reactor, AsyncioSelectorReactor):
+    #     loop = asyncio.get_running_loop()
+    #     future = d.asFuture(loop)
+    #     return loop.run_until_complete(future)
 
     if isinstance(reactor, ReactorBase):
         while not d.called:
