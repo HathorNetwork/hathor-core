@@ -11,11 +11,10 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-import asyncio
+
 from typing import Callable, ParamSpec, TypeVar, cast
 
 from twisted.internet import defer
-from twisted.internet.asyncioreactor import AsyncioSelectorReactor
 from twisted.internet.base import ReactorBase
 from twisted.internet.defer import Deferred
 
