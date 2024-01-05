@@ -200,7 +200,6 @@ SETTINGS = HathorSettings(
         '000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e',
     ])),
     FEATURE_ACTIVATION=FeatureActivationSettings(
-        enable_usage=True,
         features={
             Feature.NOP_FEATURE_1: Criteria(
                 bit=0,
