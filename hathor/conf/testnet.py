@@ -14,6 +14,8 @@
 
 from hathor.checkpoint import Checkpoint as cp
 from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 
 SETTINGS = HathorSettings(
@@ -54,5 +56,19 @@ SETTINGS = HathorSettings(
     ],
     FEATURE_ACTIVATION=FeatureActivationSettings(
         default_threshold=15_120,  # 15120 = 75% of evaluation_interval (20160)
+        features={
+            Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: Criteria(
+                bit=3,
+                # N = 3_548_160
+                # Expected to be reached around Sunday, 2024-02-04.
+                # Right now the best block is 3_521_000 on testnet (2024-01-26).
+                start_height=3_548_160,
+                timeout_height=3_588_480,  # N + 2 * 20160 (2 weeks after the start)
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.59.0',
+                signal_support_by_default=True,
+            )
+        }
     )
 )
