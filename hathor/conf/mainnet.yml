@@ -181,7 +181,6 @@ SOFT_VOIDED_TX_IDS:
   - 000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e
 
 FEATURE_ACTIVATION:
-  enable_usage: true
   features:
     #### First Phased Testing features on mainnet ####
 

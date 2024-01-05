@@ -135,12 +135,14 @@ def execute(args: Namespace) -> None:
                                                                       block.nonce, block.weight))
 
         try:
+            from unittest.mock import Mock
+
             from hathor.conf.get_settings import get_global_settings
             from hathor.daa import DifficultyAdjustmentAlgorithm
             from hathor.verification.verification_service import VerificationService, VertexVerifiers
             settings = get_global_settings()
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
-            verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
+            verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa, feature_service=Mock())
             verification_service = VerificationService(verifiers=verifiers)
             verification_service.verify_without_storage(block)
         except HathorError:
