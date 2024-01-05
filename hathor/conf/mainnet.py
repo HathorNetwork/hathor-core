@@ -14,6 +14,9 @@
 
 from hathor.checkpoint import Checkpoint as cp
 from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.criteria import Criteria
+from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 
 SETTINGS = HathorSettings(
     P2PKH_VERSION_BYTE=b'\x28',
@@ -196,4 +199,27 @@ SETTINGS = HathorSettings(
         '00004305882eb3eef6b45f025ff58eb7baa5ca35f7d6f42c8b085482b00474e6',
         '000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e',
     ])),
+    FEATURE_ACTIVATION=FeatureActivationSettings(
+        enable_usage=True,
+        features={
+            Feature.NOP_FEATURE_1: Criteria(
+                bit=0,
+                start_height=4_173_120,  # N (right now the best block is 4_133_220 on mainnet)
+                timeout_height=4_213_440,  # N + 2 * 20160 (2 weeks after the start)
+                minimum_activation_height=4_233_600,  # N + 3 * 20160 (3 weeks after the start)
+                lock_in_on_timeout=False,
+                version='0.59.0',
+                signal_support_by_default=True,
+            ),
+            Feature.NOP_FEATURE_2: Criteria(
+                bit=1,
+                start_height=4_173_120,  # N (right now the best block is 4_133_220 on mainnet)
+                timeout_height=4_213_440,  # N + 2 * 20160 (2 weeks after the start)
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.59.0',
+                signal_support_by_default=False,
+            )
+        }
+    )
 )
