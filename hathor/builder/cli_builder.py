@@ -270,6 +270,11 @@ class CliBuilder:
             cpu_mining_service=cpu_mining_service
         )
 
+        if self._args.x_ipython_kernel:
+            self.check_or_raise(self._args.x_asyncio_reactor,
+                                '--x-ipython-kernel must be used with --x-asyncio-reactor')
+            self._start_ipykernel()
+
         p2p_manager.set_manager(self.manager)
 
         if self._args.stratum:
@@ -376,3 +381,14 @@ class CliBuilder:
             return wallet
         else:
             raise BuilderError('Invalid type of wallet')
+
+    def _start_ipykernel(self) -> None:
+        # breakpoints are not expected to be used with the embeded ipykernel, to prevent this warning from being
+        # unnecessarily annoying, PYDEVD_DISABLE_FILE_VALIDATION should be set to 1 before debugpy is imported, or in
+        # practice, before importing hathor.ipykernel, if for any reason support for breakpoints is needed, the flag
+        # -Xfrozen_modules=off has to be passed to the python interpreter
+        # see:
+        # https://github.com/microsoft/debugpy/blob/main/src/debugpy/_vendored/pydevd/pydevd_file_utils.py#L587-L592
+        os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
+        from hathor.ipykernel import embed_kernel
+        embed_kernel(self.manager, runtime_dir=self._args.data, extra_ns=dict(run_node=self))
