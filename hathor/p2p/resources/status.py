@@ -15,7 +15,7 @@
 import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.utils import to_serializable_best_blockchain
 from hathor.util import json_dumpb
 
@@ -30,7 +30,7 @@ class StatusResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
         self.reactor = manager.reactor
 

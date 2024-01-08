@@ -23,7 +23,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
@@ -94,7 +94,7 @@ class TransactionStorage(ABC):
     _migrations: list[BaseMigration]
 
     def __init__(self) -> None:
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False

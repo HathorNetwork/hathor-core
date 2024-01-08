@@ -33,7 +33,7 @@ from twisted.internet.protocol import ServerFactory, connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.p2p.utils import format_address
@@ -365,7 +365,7 @@ class StratumProtocol(JSONRPC):
 
     def __init__(self, factory: 'StratumFactory', manager: 'HathorManager', address: IAddress,
                  id_generator: Optional[Callable[[], Iterator[Union[str, int]]]] = lambda: count()):
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.log = logger.new(address=address)
         self.factory = factory
         self.manager = manager

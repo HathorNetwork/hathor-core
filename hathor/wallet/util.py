@@ -19,7 +19,7 @@ import base58
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import get_hash160, get_private_key_from_bytes
 from hathor.transaction.scripts import HathorScript, Opcode
 from hathor.transaction.transaction import Transaction
@@ -39,7 +39,7 @@ def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: 
         :return: The redeem script for the multisig wallet
         :rtype: bytes
     """
-    settings = get_settings()
+    settings = get_global_settings()
     if signatures_required > settings.MAX_MULTISIG_SIGNATURES:
         raise ValueError('Signatures required {} is over the limit'.format(signatures_required))
     if len(public_key_bytes) > settings.MAX_MULTISIG_PUBKEYS:
@@ -71,7 +71,7 @@ def generate_multisig_address(redeem_script: bytes, version_byte: Optional[bytes
         :return: The multisig address
         :rtype: str(base58)
     """
-    settings = get_settings()
+    settings = get_global_settings()
     actual_version_byte: bytes = version_byte if version_byte is not None else settings.MULTISIG_VERSION_BYTE
     address = bytearray()
 

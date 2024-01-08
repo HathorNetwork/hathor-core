@@ -27,7 +27,7 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_private_key,
 )
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.util import not_none
 
 _BACKEND = default_backend()
@@ -129,7 +129,7 @@ def get_address_from_public_key_hash(public_key_hash: bytes, version_byte: Optio
         :return: address in bytes
         :rtype: bytes
     """
-    settings = get_settings()
+    settings = get_global_settings()
     address = b''
     actual_version_byte: bytes = version_byte if version_byte is not None else settings.P2PKH_VERSION_BYTE
     # Version byte
@@ -208,7 +208,7 @@ def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes, version_b
         :return: address in base 58
         :rtype: string
     """
-    settings = get_settings()
+    settings = get_global_settings()
     actual_version_byte: bytes = version_byte if version_byte is not None else settings.MULTISIG_VERSION_BYTE
     address = get_address_from_redeem_script_hash(redeem_script_hash, actual_version_byte)
     return base58.b58encode(address).decode('utf-8')
@@ -226,7 +226,7 @@ def get_address_from_redeem_script_hash(redeem_script_hash: bytes, version_byte:
         :return: address in bytes
         :rtype: bytes
     """
-    settings = get_settings()
+    settings = get_global_settings()
     actual_version_byte: bytes = version_byte if version_byte is not None else settings.MULTISIG_VERSION_BYTE
     address = b''
     # Version byte

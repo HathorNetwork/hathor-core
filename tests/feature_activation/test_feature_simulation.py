@@ -18,7 +18,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from hathor.builder import Builder
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation import feature_service as feature_service_module
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
@@ -75,7 +75,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        settings = get_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
         feature_service = artifacts.feature_service
@@ -351,7 +351,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        settings = get_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
         feature_service = artifacts.feature_service
@@ -566,7 +566,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             }
         )
 
-        settings = get_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
         rocksdb_dir = self.get_rocksdb_directory()
         builder1 = self.get_simulator_builder_from_dir(rocksdb_dir).set_settings(settings)
         artifacts1 = self.simulator.create_artifacts(builder1)

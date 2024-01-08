@@ -15,7 +15,7 @@
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Optional
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.validation_state import ValidationState
@@ -129,7 +129,7 @@ class TransactionMetadata:
 
         self.feature_activation_bit_counts = feature_activation_bit_counts
 
-        settings = get_settings()
+        settings = get_global_settings()
 
         # Genesis specific:
         if hash is not None and is_genesis(hash, settings=settings):

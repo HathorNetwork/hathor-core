@@ -16,7 +16,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
@@ -27,7 +27,7 @@ from hathor.verification.block_verifier import BlockVerifier
 
 
 def test_calculate_feature_activation_bit_counts_genesis():
-    settings = get_settings()
+    settings = get_global_settings()
     storage = TransactionMemoryStorage()
     genesis_block = storage.get_transaction(settings.GENESIS_BLOCK_HASH)
     assert isinstance(genesis_block, Block)
@@ -38,7 +38,7 @@ def test_calculate_feature_activation_bit_counts_genesis():
 
 @pytest.fixture
 def block_mocks() -> list[Block]:
-    settings = get_settings()
+    settings = get_global_settings()
     blocks: list[Block] = []
     feature_activation_bits = [
         0b0000,  # 0: boundary block
