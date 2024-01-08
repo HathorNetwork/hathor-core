@@ -1,12 +1,13 @@
 from json import JSONDecodeError
 from typing import Optional
+from unittest.mock import Mock, patch
 
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.protocol import HathorProtocol
+from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
 from hathor.simulator import FakeConnection
 from hathor.util import json_dumps
 from tests import unittest
@@ -103,12 +104,26 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
 
     def test_invalid_size(self):
         self.conn.tr1.clear()
-        # Creating big payload
-        big_payload = '['
-        for x in range(65536):
-            big_payload = '{}{}'.format(big_payload, x)
-        big_payload = '{}]'.format(big_payload)
-        self._send_cmd(self.conn.proto1, 'HELLO', big_payload)
+        cmd = b'HELLO '
+        max_payload_bytes = HathorLineReceiver.MAX_LENGTH - len(cmd)
+        line_length_exceeded_wrapped = Mock(wraps=self.conn.proto1.lineLengthExceeded)
+
+        biggest_valid_payload = bytes([1] * max_payload_bytes)
+        line = cmd + biggest_valid_payload + b'\r\n'
+
+        with patch.object(self.conn.proto1, 'lineLengthExceeded', line_length_exceeded_wrapped):
+            self.conn.proto1.dataReceived(line)
+
+        line_length_exceeded_wrapped.assert_not_called()
+        line_length_exceeded_wrapped.reset_mock()
+
+        smallest_invalid_payload = bytes([1] * (max_payload_bytes + 1))
+        line = cmd + smallest_invalid_payload + b'\r\n'
+
+        with patch.object(self.conn.proto1, 'lineLengthExceeded', line_length_exceeded_wrapped):
+            self.conn.proto1.dataReceived(line)
+
+        line_length_exceeded_wrapped.assert_called_once()
         self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_invalid_payload(self):
