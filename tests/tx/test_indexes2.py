@@ -3,14 +3,11 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
 
-from hathor.conf import HathorSettings
 from tests import unittest
 from tests.utils import HAS_ROCKSDB
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
-
-settings = HathorSettings()
 
 
 class FakeTransaction(NamedTuple):
@@ -25,7 +22,7 @@ class SimpleIndexesTestCase(unittest.TestCase):
         # how many transactions will be generated on the same timestamp before increasing it by 1
         self.transactions = []
         repetitions = [1, 1, 10, 10, 10, 2, 1, 0, 0, 5, 5, 5, 0, 1, 1, 10, 10, 10, 1, 2, 3, 1, 100, 100, 1, 100, 0, 1]
-        ts = settings.GENESIS_BLOCK_TIMESTAMP
+        ts = self._settings.GENESIS_BLOCK_TIMESTAMP
         for rep in repetitions:
             for _ in range(rep):
                 tx = FakeTransaction(self.rng.randbytes(32), ts)

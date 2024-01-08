@@ -2,7 +2,6 @@ import math
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
@@ -16,8 +15,6 @@ from hathor.wallet.resources.thin_wallet import (
 from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_tx, create_tokens
-
-settings = HathorSettings()
 
 
 class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
@@ -44,7 +41,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         add_blocks_unlock_reward(self.manager)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens))
+        self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens))
 
         # Options
         yield self.web.options('thin_wallet/send_tokens')
@@ -116,7 +113,10 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.clock.advance(5)
 
         # Check if tokens were really sent
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens[:-1]))
+        self.assertEqual(
+            self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID].available,
+            sum(blocks_tokens[:-1])
+        )
 
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {
@@ -151,7 +151,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 #
 #        # Making pow threads full
 #        deferreds = []
-#        for x in range(settings.MAX_POW_THREADS):
+#        for x in range(self._settings.MAX_POW_THREADS):
 #            d = self.web.post('thin_wallet/send_tokens', {'tx_hex': get_new_tx_struct(50)})
 #            d.addErrback(lambda err: None)
 #            deferreds.append(d)
@@ -208,7 +208,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
         new_blocks = add_new_blocks(
             self.manager,
-            settings.MAX_TX_ADDRESSES_HISTORY,
+            self._settings.MAX_TX_ADDRESSES_HISTORY,
             advance_clock=1,
             address=address_bytes
         )
@@ -222,16 +222,16 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         )
 
         response_data = response_history.json_value()
-        self.assertEqual(len(response_data['history']), settings.MAX_TX_ADDRESSES_HISTORY)
+        self.assertEqual(len(response_data['history']), self._settings.MAX_TX_ADDRESSES_HISTORY)
         self.assertTrue(response_data['has_more'])
         self.assertEqual(response_data['first_address'], address)
 
         # Test paginate with big txs
-        tx_count = math.ceil(settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY / settings.MAX_NUM_INPUTS)
+        tx_count = math.ceil(self._settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY / self._settings.MAX_NUM_INPUTS)
         blocks.extend(new_blocks)
         new_blocks = add_new_blocks(
             self.manager,
-            tx_count*settings.MAX_NUM_INPUTS - len(blocks),
+            tx_count*self._settings.MAX_NUM_INPUTS - len(blocks),
             advance_clock=1,
             address=address_bytes
         )
@@ -240,8 +240,8 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         add_blocks_unlock_reward(self.manager)
 
         for i in range(tx_count):
-            start_index = i*settings.MAX_NUM_INPUTS
-            end_index = start_index + settings.MAX_NUM_INPUTS
+            start_index = i*self._settings.MAX_NUM_INPUTS
+            end_index = start_index + self._settings.MAX_NUM_INPUTS
             amount = sum([b.outputs[0].value for b in blocks[start_index:end_index]])
             add_new_tx(self.manager, random_address, amount, advance_clock=1)
 

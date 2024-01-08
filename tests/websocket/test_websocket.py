@@ -4,7 +4,6 @@ from unittest.mock import Mock
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.testing import StringTransport
 
-from hathor.conf import HathorSettings
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.util import json_dumpb, json_dumps, json_loadb
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
@@ -12,8 +11,6 @@ from hathor.websocket import WebsocketStatsResource
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-
-settings = HathorSettings()
 
 
 class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
@@ -82,7 +79,7 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         self.manager.pubsub.publish(HathorEvents.WALLET_BALANCE_UPDATED,
-                                    balance={settings.HATHOR_TOKEN_UID: WalletBalance(10, 20)})
+                                    balance={self._settings.HATHOR_TOKEN_UID: WalletBalance(10, 20)})
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['balance']['locked'], 10)
