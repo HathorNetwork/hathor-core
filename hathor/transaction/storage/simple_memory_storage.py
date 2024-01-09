@@ -12,20 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from dataclasses import dataclass
-from typing import Any
-
-from hathor.transaction import Block, Transaction, TransactionMetadata
-from hathor.transaction.base_transaction import BaseTransaction, tx_or_block_from_bytes
+from hathor.transaction import Block, Transaction
+from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
-
-
-@dataclass(frozen=True, slots=True)
-class _SimpleMemoryRecord:
-    vertex_bytes: bytes
-    vertex_metadata: dict[str, Any]
 
 
 class SimpleMemoryStorage:
@@ -36,33 +27,30 @@ class SimpleMemoryStorage:
     __slots__ = ('_blocks', '_transactions',)
 
     def __init__(self) -> None:
-        self._blocks: dict[VertexId, _SimpleMemoryRecord] = {}
-        self._transactions: dict[VertexId, _SimpleMemoryRecord] = {}
+        self._blocks: dict[VertexId, BaseTransaction] = {}
+        self._transactions: dict[VertexId, BaseTransaction] = {}
 
     @property
-    def _vertices(self) -> dict[VertexId, _SimpleMemoryRecord]:
+    def _vertices(self) -> dict[VertexId, BaseTransaction]:
         """Blocks and Transactions together."""
         return {**self._blocks, **self._transactions}
 
     def get_block(self, block_id: VertexId) -> Block:
         """Return a block from the storage, throw if it's not found."""
-        block = self._get_record(self._blocks, block_id)
+        block = self._get_vertex(self._blocks, block_id)
         assert isinstance(block, Block)
         return block
 
     def get_transaction(self, tx_id: VertexId) -> Transaction:
         """Return a transaction from the storage, throw if it's not found."""
-        tx = self._get_record(self._transactions, tx_id)
+        tx = self._get_vertex(self._transactions, tx_id)
         assert isinstance(tx, Transaction)
         return tx
 
     @staticmethod
-    def _get_record(storage: dict[VertexId, _SimpleMemoryRecord], vertex_id: VertexId) -> BaseTransaction:
-        """Return a record from a storage, throw if it's not found."""
-        if record := storage.get(vertex_id):
-            vertex = tx_or_block_from_bytes(record.vertex_bytes)
-            metadata = TransactionMetadata.create_from_json(record.vertex_metadata)
-            vertex._metadata = metadata
+    def _get_vertex(storage: dict[VertexId, BaseTransaction], vertex_id: VertexId) -> BaseTransaction:
+        """Return a vertex from a storage, throw if it's not found."""
+        if vertex := storage.get(vertex_id):
             return vertex
 
         raise TransactionDoesNotExist(f'Vertex "{vertex_id.hex()}" does not exist in this SimpleMemoryStorage.')
@@ -90,16 +78,14 @@ class SimpleMemoryStorage:
             return
 
         vertex = storage.get_transaction(vertex_id)
-        vertex_bytes = vertex.get_struct()
-        metadata = vertex.get_metadata().to_json()
-        record = _SimpleMemoryRecord(vertex_bytes, metadata)
+        clone = vertex.clone(include_metadata=True, include_storage=False)
 
         if isinstance(vertex, Block):
-            self._blocks[vertex_id] = record
+            self._blocks[vertex_id] = clone
             return
 
         if isinstance(vertex, Transaction):
-            self._transactions[vertex_id] = record
+            self._transactions[vertex_id] = clone
             return
 
         raise NotImplementedError
