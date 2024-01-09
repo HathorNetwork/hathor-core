@@ -16,7 +16,7 @@ from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, BlockSignalingState
+from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling
 from hathor.transaction import Block
 from hathor.transaction.exceptions import (
     BlockMustSignalError,
@@ -27,8 +27,7 @@ from hathor.transaction.exceptions import (
     TransactionDataError,
     WeightError,
 )
-from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
-from hathor.util import not_none
+from hathor.verification.verification_dependencies import BlockDependencies
 
 
 class BlockVerifier:
@@ -51,20 +50,16 @@ class BlockVerifier:
         if meta.height < meta.min_height:
             raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
 
-    def verify_weight(self, block: Block) -> None:
+    def verify_weight(self, block: Block, deps: BlockDependencies) -> None:
         """Validate minimum block difficulty."""
-        memory_storage = SimpleMemoryStorage()
-        dependencies = self._daa.get_block_dependencies(block)
-        memory_storage.add_vertices_from_storage(not_none(block.storage), dependencies)
-
-        min_block_weight = self._daa.calculate_block_difficulty(block, memory_storage)
+        min_block_weight = self._daa.calculate_block_difficulty(block, deps.storage)
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
 
-    def verify_reward(self, block: Block) -> None:
+    def verify_reward(self, block: Block, deps: BlockDependencies) -> None:
         """Validate reward amount."""
-        parent_block = block.get_block_parent()
+        parent_block = deps.storage.get_parent_block(block)
         tokens_issued_per_block = self._daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if block.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(
@@ -86,9 +81,9 @@ class BlockVerifier:
         if len(block.data) > self._settings.BLOCK_DATA_MAX_SIZE:
             raise TransactionDataError('block data has {} bytes'.format(len(block.data)))
 
-    def verify_mandatory_signaling(self, signaling_state: BlockSignalingState) -> None:
+    def verify_mandatory_signaling(self, deps: BlockDependencies) -> None:
         """Verify whether this block is missing mandatory signaling for any feature."""
-        match signaling_state:
+        match deps.signaling_state:
             case BlockIsSignaling():
                 return
             case BlockIsMissingSignal(feature):
@@ -96,4 +91,4 @@ class BlockVerifier:
                     f"Block must signal support for feature '{feature.value}' during MUST_SIGNAL phase."
                 )
             case _:
-                assert_never(signaling_state)
+                assert_never(deps.signaling_state)

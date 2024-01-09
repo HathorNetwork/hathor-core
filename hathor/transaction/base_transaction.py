@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from _hashlib import HASH
 
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.transaction.vertex import Vertex
 
 logger = get_logger()
 
@@ -852,6 +853,11 @@ class BaseTransaction(ABC):
             if not dep_meta.validation.is_fully_connected():
                 return False
         return True
+
+    @abstractmethod
+    def as_vertex(self) -> 'Vertex':
+        """Return this BaseTransaction as a Vertex."""
+        raise NotImplementedError
 
 
 class TxInput:
