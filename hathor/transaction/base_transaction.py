@@ -586,6 +586,8 @@ class BaseTransaction(ABC):
         """ Update the hash of the transaction.
         """
         self.hash = self.calculate_hash()
+        if metadata := getattr(self, '_metadata', None):
+            metadata.hash = self.hash
 
     def get_metadata(self, *, force_reload: bool = False, use_storage: bool = True) -> TransactionMetadata:
         """Return this tx's metadata.
