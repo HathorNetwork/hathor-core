@@ -134,6 +134,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
         settings.GENESIS_TX1_HASH,
         not_none(tx2.hash),
     ]
+    block.update_hash()
     assert manager.propagate_tx(block, fails_silently=False)
     simulator.run(60)
 
