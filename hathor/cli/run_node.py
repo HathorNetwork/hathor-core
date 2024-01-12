@@ -231,12 +231,28 @@ class RunNode:
         if sigusr1 is not None:
             # USR1 is available in this OS.
             signal.signal(sigusr1, self.signal_usr1_handler)
+        sigquit = getattr(signal, 'SIGQUIT', None)
+        if sigquit is not None:
+            # SIGQUIT is available in this OS.
+            signal.signal(sigquit, self.signal_quit_handler)
 
     def signal_usr1_handler(self, sig: int, frame: Any) -> None:
         """Called when USR1 signal is received."""
         self.log.warn('USR1 received. Killing all connections...')
         if self.manager and self.manager.connections:
             self.manager.connections.disconnect_all_peers(force=True)
+
+    def signal_quit_handler(self, sig: int, frame: Any) -> None:
+        self.log.warn('QUIT received. Exiting...')
+        if self.manager.is_started:
+            self.log.info('stop manager')
+            self.manager.stop()
+        if self.reactor.running:
+            self.log.info('stop reactor')
+            self.reactor.stop()
+        else:
+            self.log.warn('reactor already stopped, crashing it')
+            self.reactor.crash()
 
     def check_unsafe_arguments(self) -> None:
         unsafe_args_found = []
