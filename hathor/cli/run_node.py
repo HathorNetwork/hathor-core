@@ -227,16 +227,27 @@ class RunNode:
     def register_signal_handlers(self) -> None:
         """Register signal handlers."""
         import signal
+        self.log.debug('register signal handlers')
         sigusr1 = getattr(signal, 'SIGUSR1', None)
         if sigusr1 is not None:
             # USR1 is available in this OS.
+            self.log.debug('register SIGUSR1 handler')
             signal.signal(sigusr1, self.signal_usr1_handler)
+        sigquit = getattr(signal, 'SIGQUIT', None)
+        if sigquit is not None:
+            # SIGQUIT is available in this OS.
+            self.log.debug('register SIGQUIT handler')
+            signal.signal(sigquit, self.signal_quit_handler)
 
     def signal_usr1_handler(self, sig: int, frame: Any) -> None:
         """Called when USR1 signal is received."""
         self.log.warn('USR1 received. Killing all connections...')
         if self.manager and self.manager.connections:
             self.manager.connections.disconnect_all_peers(force=True)
+
+    def signal_quit_handler(self, sig: int, frame: Any) -> None:
+        self.log.warn('QUIT received. Stop reactor...')
+        self.reactor.stop()
 
     def check_unsafe_arguments(self) -> None:
         unsafe_args_found = []

@@ -141,7 +141,7 @@ class HathorManager:
         self.reactor = reactor
         add_system_event_trigger = getattr(self.reactor, 'addSystemEventTrigger', None)
         if add_system_event_trigger is not None:
-            add_system_event_trigger('after', 'shutdown', self.stop)
+            add_system_event_trigger('after', 'shutdown', self.try_stop)
 
         self.state: Optional[HathorManager.NodeState] = None
         self.profiler: Optional[Any] = None
@@ -315,6 +315,10 @@ class HathorManager:
 
         # Start running
         self.tx_storage.start_running_manager()
+
+    def try_stop(self) -> None:
+        if self.is_started:
+            self.stop()
 
     def stop(self) -> Deferred:
         if not self.is_started:
