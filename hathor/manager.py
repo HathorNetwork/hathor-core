@@ -51,6 +51,7 @@ from hathor.p2p.protocol import HathorProtocol
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
+from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
@@ -802,7 +803,7 @@ class HathorManager:
             parent_block_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
-        weight = max(self.daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
+        weight = max(self.daa.calculate_next_weight(parent_block, timestamp, self.tx_storage), min_significant_weight)
         height = parent_block.get_height() + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include
@@ -889,8 +890,7 @@ class HathorManager:
         if is_spending_voided_tx:
             raise SpendingVoidedError('Invalid transaction. At least one input is voided.')
 
-        is_spent_reward_locked = tx.is_spent_reward_locked()
-        if is_spent_reward_locked:
+        if is_spent_reward_locked(tx):
             raise RewardLockedError('Spent reward is locked.')
 
         # We are using here the method from lib because the property

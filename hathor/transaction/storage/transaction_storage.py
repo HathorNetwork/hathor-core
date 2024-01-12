@@ -45,6 +45,7 @@ from hathor.transaction.storage.migrations import (
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.types import VertexId
 from hathor.util import not_none
 
 cpu = get_cpu_profiler()
@@ -1136,6 +1137,17 @@ class TransactionStorage(ABC):
 
         assert tx2.hash == self._settings.GENESIS_TX2_HASH
         return tx2
+
+    def get_parent_block(self, block: Block) -> Block:
+        return block.get_block_parent()
+
+    def get_vertex(self, vertex_id: VertexId) -> BaseTransaction:
+        return self.get_transaction(vertex_id)
+
+    def get_block(self, block_id: VertexId) -> Block:
+        block = self.get_vertex(block_id)
+        assert isinstance(block, Block)
+        return block
 
 
 class BaseTransactionStorage(TransactionStorage):

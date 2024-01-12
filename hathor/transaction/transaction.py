@@ -15,12 +15,13 @@
 import hashlib
 from itertools import chain
 from struct import pack
-from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
+from hathor.reward_lock import iter_spent_rewards
+from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
@@ -135,7 +136,7 @@ class Transaction(BaseTransaction):
     def _calculate_my_min_height(self) -> int:
         """ Calculates min height derived from own spent block rewards"""
         min_height = 0
-        for blk in self.iter_spent_rewards():
+        for blk in iter_spent_rewards(self, not_none(self.storage)):
             min_height = max(min_height, blk.get_height() + self._settings.REWARD_SPEND_MIN_BLOCKS + 1)
         return min_height
 
@@ -345,47 +346,6 @@ class Transaction(BaseTransaction):
                     # for regular outputs, just subtract from the total amount
                     sum_tokens = token_info.amount + tx_output.value
                     token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
-
-    def iter_spent_rewards(self) -> Iterator[Block]:
-        """Iterate over all the rewards being spent, assumes tx has been verified."""
-        for input_tx in self.inputs:
-            spent_tx = self.get_spent_tx(input_tx)
-            if spent_tx.is_block:
-                assert isinstance(spent_tx, Block)
-                yield spent_tx
-
-    def is_spent_reward_locked(self) -> bool:
-        """ Check whether any spent reward is currently locked, considering only the block rewards spent by this tx
-        itself, and not the inherited `min_height`"""
-        return self.get_spent_reward_locked_info() is not None
-
-    def get_spent_reward_locked_info(self) -> Optional[RewardLockedInfo]:
-        """Check if any input block reward is locked, returning the locked information if any, or None if they are all
-        unlocked."""
-        for blk in self.iter_spent_rewards():
-            assert blk.hash is not None
-            needed_height = self._spent_reward_needed_height(blk)
-            if needed_height > 0:
-                return RewardLockedInfo(blk.hash, needed_height)
-        return None
-
-    def _spent_reward_needed_height(self, block: Block) -> int:
-        """ Returns height still needed to unlock this `block` reward: 0 means it's unlocked."""
-        import math
-        assert self.storage is not None
-        # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow
-        tips = self.storage.get_best_block_tips()
-        assert len(tips) > 0
-        best_height = math.inf
-        for tip in tips:
-            blk = self.storage.get_transaction(tip)
-            assert isinstance(blk, Block)
-            best_height = min(best_height, blk.get_height())
-        assert isinstance(best_height, int)
-        spent_height = block.get_height()
-        spend_blocks = best_height - spent_height
-        needed_height = self._settings.REWARD_SPEND_MIN_BLOCKS - spend_blocks
-        return max(needed_height, 0)
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent
