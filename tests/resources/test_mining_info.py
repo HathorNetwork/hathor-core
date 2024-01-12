@@ -1,12 +1,9 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
 from hathor.p2p.resources import MiningInfoResource
 from hathor.simulator.utils import add_new_blocks
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-
-settings = HathorSettings()
 
 
 class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):
@@ -54,15 +51,15 @@ class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("mined_tokens")
         data = response.json_value()
         self.assertEqual(data['blocks'], 5)
-        self.assertEqual(data['mined_tokens'], 5*settings.INITIAL_TOKENS_PER_BLOCK)
+        self.assertEqual(data['mined_tokens'], 5*self._settings.INITIAL_TOKENS_PER_BLOCK)
 
-        add_new_blocks(self.manager, settings.BLOCKS_PER_HALVING + 15, advance_clock=1)
-        mined_tokens = (settings.BLOCKS_PER_HALVING * settings.INITIAL_TOKENS_PER_BLOCK +
-                        20 * settings.INITIAL_TOKENS_PER_BLOCK // 2)
+        add_new_blocks(self.manager, self._settings.BLOCKS_PER_HALVING + 15, advance_clock=1)
+        mined_tokens = (self._settings.BLOCKS_PER_HALVING * self._settings.INITIAL_TOKENS_PER_BLOCK +
+                        20 * self._settings.INITIAL_TOKENS_PER_BLOCK // 2)
 
         response = yield self.web.get("mined_tokens")
         data = response.json_value()
-        self.assertEqual(data['blocks'], settings.BLOCKS_PER_HALVING + 20)
+        self.assertEqual(data['blocks'], self._settings.BLOCKS_PER_HALVING + 20)
         self.assertEqual(data['mined_tokens'], mined_tokens)
 
 

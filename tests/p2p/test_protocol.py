@@ -5,14 +5,11 @@ from unittest.mock import Mock, patch
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
 from hathor.simulator import FakeConnection
 from hathor.util import json_dumps
 from tests import unittest
-
-settings = HathorSettings()
 
 
 class BaseHathorProtocolTestCase(unittest.TestCase):
@@ -165,7 +162,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         # hello with clocks too far apart
         self.conn.tr1.clear()
         data = self.conn.proto2.state._get_hello_data()
-        data['timestamp'] = data['timestamp'] + settings.MAX_FUTURE_TIMESTAMP_ALLOWED/2 + 1
+        data['timestamp'] = data['timestamp'] + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED/2 + 1
         self._send_cmd(
             self.conn.proto1,
             'HELLO',
@@ -295,7 +292,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
 
     def test_idle_connection(self):
-        self.clock.advance(settings.PEER_IDLE_TIMEOUT - 10)
+        self.clock.advance(self._settings.PEER_IDLE_TIMEOUT - 10)
         self.assertIsConnected(self.conn)
         self.clock.advance(15)
         self.assertIsNotConnected(self.conn)
@@ -443,7 +440,7 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         payload = {
             'first_block_hash': missing_tx,
             'last_block_hash': missing_tx,
-            'start_from': [settings.GENESIS_BLOCK_HASH.hex()]
+            'start_from': [self._settings.GENESIS_BLOCK_HASH.hex()]
         }
         yield self._send_cmd(self.conn.proto1, 'GET-TRANSACTIONS-BFS', json_dumps(payload))
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')

@@ -1,12 +1,9 @@
 from unittest.mock import MagicMock
 
-from hathor.conf import HathorSettings
 from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
-
-settings = HathorSettings()
 
 
 class BaseConsensusTestCase(unittest.TestCase):
@@ -40,7 +37,7 @@ class BaseConsensusTestCase(unittest.TestCase):
 
         tx2 = manager.tx_storage.get_transaction(tx.hash)
         meta2 = tx2.get_metadata()
-        self.assertEqual({settings.CONSENSUS_FAIL_ID}, meta2.voided_by)
+        self.assertEqual({self._settings.CONSENSUS_FAIL_ID}, meta2.voided_by)
 
     def test_revert_block_high_weight(self):
         """ A conflict transaction will be propagated. At first, it will be voided.

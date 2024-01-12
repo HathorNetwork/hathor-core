@@ -1,6 +1,5 @@
 from typing import Iterator
 
-from hathor.conf import HathorSettings
 from hathor.pubsub import PubSubManager
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.transaction import BaseTransaction
@@ -8,8 +7,6 @@ from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.unittest import TestBuilder
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
-
-settings = HathorSettings()
 
 
 class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):

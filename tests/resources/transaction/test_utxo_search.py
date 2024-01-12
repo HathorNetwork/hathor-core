@@ -1,14 +1,11 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import UtxoSearchResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward
-
-settings = HathorSettings()
 
 
 class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
@@ -62,7 +59,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'index': 0,
             'amount': 6400,
             'timelock': None,
-            'heightlock': b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+            'heightlock': b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[:1]])
 
         # Success non-empty address with medium amount, will require more than one output
@@ -75,7 +72,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'index': 0,
             'amount': 6400,
             'timelock': None,
-            'heightlock': b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+            'heightlock': b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[4:1:-1]])
 
         # Success non-empty address with exact amount, will require all UTXOs
@@ -88,7 +85,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'index': 0,
             'amount': 6400,
             'timelock': None,
-            'heightlock': b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+            'heightlock': b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])
 
         # Success non-empty address with excessive amount, will require all UTXOs, even if it's not enough
@@ -101,7 +98,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'index': 0,
             'amount': 6400,
             'timelock': None,
-            'heightlock': b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+            'heightlock': b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])
 
 
