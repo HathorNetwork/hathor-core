@@ -54,6 +54,10 @@ class EventRocksDBStorage(EventStorage):
         for event_bytes in it:
             yield BaseEvent.parse_raw(event_bytes)
 
+        # XXX: on Python 3.12, not deleting it here can cause EXC_BAD_ACCESS if the db is released before the iterator
+        #      in the garbage collector. This race condition might happen between tests.
+        del it
+
     def _db_get_last_event(self) -> Optional[BaseEvent]:
         last_element: Optional[bytes] = None
         it = self._db.itervalues(self._cf_event)
