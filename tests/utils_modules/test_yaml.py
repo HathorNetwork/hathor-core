@@ -12,11 +12,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import sys
+import unittest
 from pathlib import Path
 
 import pytest
+from structlog import get_logger
 
 from hathor.utils.yaml import dict_from_extended_yaml, dict_from_yaml
+
+logger = get_logger()
 
 
 def _get_absolute_filepath(filepath: str) -> Path:
@@ -101,13 +106,26 @@ def test_dict_from_extended_yaml_invalid_extends():
     assert "unknown_file.yml' is not a file" in str(e.value)
 
 
-def test_dict_from_extended_yaml_recursive_extends():
-    filepath = _get_absolute_filepath('fixtures/self_extends.yml')
+class TestWithChangesToSys(unittest.TestCase):
+    recursion_limit = 100
 
-    with pytest.raises(ValueError) as e:
-        dict_from_extended_yaml(filepath=filepath)
+    def setUp(self):
+        self.log = logger.new()
+        self._old_recursion_limit = sys.getrecursionlimit()
+        self.log.debug('temporarily reduce recursion limit', old=self._old_recursion_limit, new=self.recursion_limit)
+        sys.setrecursionlimit(self.recursion_limit)
 
-    assert str(e.value) == 'Cannot parse yaml with recursive extensions.'
+    def tearDown(self):
+        self.log.debug('revert recursion limit', to=self._old_recursion_limit)
+        sys.setrecursionlimit(self._old_recursion_limit)
+
+    def test_dict_from_extended_yaml_recursive_extends(self):
+        filepath = _get_absolute_filepath('fixtures/self_extends.yml')
+
+        with pytest.raises(ValueError) as e:
+            dict_from_extended_yaml(filepath=filepath)
+
+        assert str(e.value) == 'Cannot parse yaml with recursive extensions.'
 
 
 def test_dict_from_extended_yaml_valid_extends():
