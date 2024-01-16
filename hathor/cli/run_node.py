@@ -166,8 +166,8 @@ class RunNode:
             assert self.manager.stratum_factory is not None
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
-        from hathor.conf.get_settings import get_settings
-        settings = get_settings()
+        from hathor.conf.get_settings import get_global_settings
+        settings = get_global_settings()
 
         if register_resources:
             resources_builder = ResourcesBuilder(
@@ -212,8 +212,8 @@ class RunNode:
             sys.exit(-3)
 
         import hathor
-        from hathor.conf.get_settings import get_settings
-        settings = get_settings()
+        from hathor.conf.get_settings import get_global_settings
+        settings = get_global_settings()
         sentry_sdk.init(
             dsn=self._args.sentry_dsn,
             release=hathor.__version__,
@@ -274,8 +274,8 @@ class RunNode:
                 '',
             ]
 
-            from hathor.conf.get_settings import get_settings
-            settings = get_settings()
+            from hathor.conf.get_settings import get_global_settings
+            settings = get_global_settings()
 
             if self._args.unsafe_mode != settings.NETWORK_NAME:
                 message.extend([
@@ -355,7 +355,7 @@ class RunNode:
     def __init__(self, *, argv=None):
         from hathor.cli.run_node_args import RunNodeArgs
         from hathor.conf import TESTNET_SETTINGS_FILEPATH
-        from hathor.conf.get_settings import get_settings
+        from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
 
         if argv is None:
@@ -373,7 +373,7 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
 
         try:
-            get_settings()
+            get_global_settings()
         except (TypeError, ValidationError) as e:
             from hathor.exception import PreInitializationError
             raise PreInitializationError(

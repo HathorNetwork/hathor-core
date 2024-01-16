@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.storage.migrations import BaseMigration
 from hathor.util import progress
 
@@ -37,7 +37,7 @@ class Migration(BaseMigration):
         """
         This migration clears the Feature Activation metadata related to the first Phased Testing on testnet.
         """
-        settings = get_settings()
+        settings = get_global_settings()
         log = logger.new()
 
         if settings.NETWORK_NAME != 'testnet-golf':

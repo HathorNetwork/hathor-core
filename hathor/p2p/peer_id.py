@@ -27,7 +27,7 @@ from OpenSSL.crypto import X509, PKey
 from twisted.internet.interfaces import ISSLTransport
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
 from hathor.util import not_none
@@ -66,7 +66,7 @@ class PeerId:
     flags: set[str]
 
     def __init__(self, auto_generate_keys: bool = True) -> None:
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.id = None
         self.private_key = None
         self.public_key = None

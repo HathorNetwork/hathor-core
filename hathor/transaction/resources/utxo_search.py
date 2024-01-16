@@ -24,7 +24,7 @@ from hathor.api_util import (
     set_cors,
 )
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
@@ -45,7 +45,7 @@ class UtxoSearchResource(Resource):
 
     def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
     def render_GET(self, request: 'Request') -> bytes:

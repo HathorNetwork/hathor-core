@@ -15,7 +15,7 @@
 import re
 from typing import TYPE_CHECKING, Any, Generator, NamedTuple, Optional, Pattern, Union
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction.exceptions import ScriptError
 from hathor.transaction.scripts.base_script import BaseScript
@@ -84,7 +84,7 @@ def create_base_script(address: str, timelock: Optional[Any] = None) -> BaseScri
     """ Verifies if address is P2PKH or Multisig and return the corresponding BaseScript implementation.
     """
     from hathor.transaction.scripts.execute import binary_to_int
-    settings = get_settings()
+    settings = get_global_settings()
     baddress = decode_address(address)
     if baddress[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
         from hathor.transaction.scripts import P2PKH
@@ -110,7 +110,7 @@ def create_output_script(address: bytes, timelock: Optional[Any] = None) -> byte
         :rtype: bytes
     """
     from hathor.transaction.scripts.execute import binary_to_int
-    settings = get_settings()
+    settings = get_global_settings()
     # XXX: if the address class can somehow be simplified create_base_script could be used here
     if address[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
         from hathor.transaction.scripts import P2PKH
@@ -193,7 +193,7 @@ def count_sigops(data: bytes) -> int:
     """
     from hathor.transaction.scripts import Opcode
     from hathor.transaction.scripts.execute import decode_opn, get_script_op
-    settings = get_settings()
+    settings = get_global_settings()
     n_ops: int = 0
     data_len: int = len(data)
     pos: int = 0

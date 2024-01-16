@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Iterator
 
 from hathor.api_util import Resource, get_args, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import Transaction
 from hathor.util import json_dumpb
 
@@ -44,7 +44,7 @@ class MempoolResource(Resource):
 
     def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
     def render_GET(self, request: 'Request') -> bytes:

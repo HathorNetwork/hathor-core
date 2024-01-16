@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -158,7 +158,7 @@ class BaseTransaction(ABC):
         assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
         self.signal_bits = signal_bits
