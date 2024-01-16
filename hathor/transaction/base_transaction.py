@@ -707,6 +707,7 @@ class BaseTransaction(ABC):
         self._update_height_metadata()
         self._update_parents_children_metadata()
         self._update_reward_lock_metadata()
+        self._update_feature_activation_bit_counts()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
@@ -731,6 +732,15 @@ class BaseTransaction(ABC):
             if self.hash not in metadata.children:
                 metadata.children.append(self.hash)
                 self.storage.save_transaction(parent, only_metadata=True)
+
+    def _update_feature_activation_bit_counts(self) -> None:
+        """Update the block's feature_activation_bit_counts."""
+        if not self.is_block:
+            return
+        from hathor.transaction import Block
+        assert isinstance(self, Block)
+        # This method lazily calculates and stores the value in metadata
+        self.get_feature_activation_bit_counts()
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
