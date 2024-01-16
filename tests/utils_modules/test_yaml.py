@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import platform
+import sys
 from pathlib import Path
 
 import pytest
@@ -101,6 +103,10 @@ def test_dict_from_extended_yaml_invalid_extends():
     assert "unknown_file.yml' is not a file" in str(e.value)
 
 
+@pytest.mark.skipif(
+    sys.platform == 'win32' and platform.python_version().startswith('3.10.'),
+    reason='The recursion fails before RecursionError is raised in Windows with Python 3.10'
+)
 def test_dict_from_extended_yaml_recursive_extends():
     filepath = _get_absolute_filepath('fixtures/self_extends.yml')
 
