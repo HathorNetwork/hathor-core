@@ -16,7 +16,7 @@ from typing import Optional
 
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -58,55 +58,71 @@ class VertexVerifier:
         :raises IncorrectParents: when tx does not confirm the correct number/type of parent txs
         """
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
         assert vertex.storage is not None
 
-        # check if parents are duplicated
+        self._verify_duplicate_parents(vertex)
+
+        try:
+            parents = [vertex.storage.get_transaction(parent_hash) for parent_hash in vertex.parents]
+        except TransactionDoesNotExist as e:
+            raise ParentDoesNotExist(f'tx={vertex.hash_hex} parent={e.args[0]}')
+
+        self._verify_parent_timestamps(vertex, parents)
+
+        parent_blocks = [parent for parent in parents if isinstance(parent, Block)]
+        parent_txs = [parent for parent in parents if isinstance(parent, Transaction)]
+
+        self._verify_parent_ordering(parents, parent_blocks, parent_txs)
+        self._verify_number_of_parents(vertex, parent_blocks, parent_txs)
+
+    def _verify_duplicate_parents(self, vertex: BaseTransaction) -> None:
+        """Check if parents are duplicate."""
         parents_set = set(vertex.parents)
         if len(vertex.parents) > len(parents_set):
             raise DuplicatedParents('Tx has duplicated parents: {}', [tx_hash.hex() for tx_hash in vertex.parents])
 
-        my_parents_txs = 0      # number of tx parents
-        my_parents_blocks = 0   # number of block parents
+    def _verify_parent_timestamps(self, vertex: BaseTransaction, parents: list[BaseTransaction]) -> None:
+        """Check for timestamp rules."""
+        for parent in parents:
+            if vertex.timestamp <= parent.timestamp:
+                raise TimestampError(
+                    f'tx={vertex.hash_hex} timestamp={vertex.timestamp}, '
+                    f'parent={parent.hash_hex} timestamp={parent.timestamp}'
+                )
 
-        for parent_hash in vertex.parents:
-            try:
-                parent = vertex.storage.get_transaction(parent_hash)
-                assert parent.hash is not None
-                if vertex.timestamp <= parent.timestamp:
-                    raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
-                        vertex.hash_hex,
-                        vertex.timestamp,
-                        parent.hash_hex,
-                        parent.timestamp,
-                    ))
+            if vertex.is_block and parent.is_block and not parent.is_genesis:
+                if vertex.timestamp - parent.timestamp > self._settings.MAX_DISTANCE_BETWEEN_BLOCKS:
+                    raise TimestampError(
+                        f'Distance between blocks is too big ({vertex.timestamp - parent.timestamp} seconds)'
+                    )
 
-                if parent.is_block:
-                    if vertex.is_block and not parent.is_genesis:
-                        if vertex.timestamp - parent.timestamp > self._settings.MAX_DISTANCE_BETWEEN_BLOCKS:
-                            raise TimestampError('Distance between blocks is too big'
-                                                 ' ({} seconds)'.format(vertex.timestamp - parent.timestamp))
-                    if my_parents_txs > 0:
-                        raise IncorrectParents('Parents which are blocks must come before transactions')
-                    my_parents_blocks += 1
-                else:
-                    my_parents_txs += 1
-            except TransactionDoesNotExist:
-                raise ParentDoesNotExist('tx={} parent={}'.format(vertex.hash_hex, parent_hash.hex()))
+    def _verify_parent_ordering(
+        self,
+        parents: list[BaseTransaction],
+        parent_blocks: list[Block],
+        parent_txs: list[Transaction],
+    ) -> None:
+        """Check for parent ordering."""
+        if parent_blocks + parent_txs != parents:
+            raise IncorrectParents('Parents which are blocks must come before transactions')
 
-        # check for correct number of parents
-        if vertex.is_block:
-            parents_txs = _BLOCK_PARENTS_TXS
-            parents_blocks = _BLOCK_PARENTS_BLOCKS
-        else:
-            parents_txs = _TX_PARENTS_TXS
-            parents_blocks = _TX_PARENTS_BLOCKS
-        if my_parents_blocks != parents_blocks:
-            raise IncorrectParents('wrong number of parents (block type): {}, expecting {}'.format(
-                my_parents_blocks, parents_blocks))
-        if my_parents_txs != parents_txs:
-            raise IncorrectParents('wrong number of parents (tx type): {}, expecting {}'.format(
-                my_parents_txs, parents_txs))
+    def _verify_number_of_parents(
+        self,
+        vertex: BaseTransaction,
+        parent_blocks: list[Block],
+        parent_txs: list[Transaction]
+    ) -> None:
+        """Check for correct number of parents."""
+        parent_txs_num = _BLOCK_PARENTS_TXS if vertex.is_block else _TX_PARENTS_TXS
+        parent_blocks_num = _BLOCK_PARENTS_BLOCKS if vertex.is_block else _TX_PARENTS_BLOCKS
+
+        if len(parent_blocks) != parent_blocks_num:
+            raise IncorrectParents(
+                f'wrong number of parents (block type): {len(parent_blocks)}, expecting {parent_blocks_num}'
+            )
+
+        if len(parent_txs) != parent_txs_num:
+            raise IncorrectParents(f'wrong number of parents (tx type): {len(parent_txs)}, expecting {parent_txs_num}')
 
     def verify_pow(self, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
         """Verify proof-of-work
