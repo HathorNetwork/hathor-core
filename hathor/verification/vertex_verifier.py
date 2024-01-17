@@ -16,6 +16,8 @@ from typing import Optional
 
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import (
     DuplicatedParents,
@@ -30,21 +32,20 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
 )
 
-# tx should have 2 parents, both other transactions
-_TX_PARENTS_TXS = 2
-_TX_PARENTS_BLOCKS = 0
-
-# blocks have 3 parents, 2 txs and 1 block
-_BLOCK_PARENTS_TXS = 2
-_BLOCK_PARENTS_BLOCKS = 1
-
 
 class VertexVerifier:
-    __slots__ = ('_settings', '_daa')
+    __slots__ = ('_settings', '_daa', '_feature_service')
 
-    def __init__(self, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm):
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService | None,
+    ) -> None:
         self._settings = settings
         self._daa = daa
+        self._feature_service = feature_service
 
     def verify_parents(self, vertex: BaseTransaction) -> None:
         """All parents must exist and their timestamps must be smaller than ours.
@@ -113,16 +114,28 @@ class VertexVerifier:
         parent_txs: list[Transaction]
     ) -> None:
         """Check for correct number of parents."""
-        parent_txs_num = _BLOCK_PARENTS_TXS if vertex.is_block else _TX_PARENTS_TXS
-        parent_blocks_num = _BLOCK_PARENTS_BLOCKS if vertex.is_block else _TX_PARENTS_BLOCKS
+        num_parent_txs = self._settings.PARENT_TXS_FOR_BLOCK if vertex.is_block else self._settings.PARENT_TXS_FOR_TX
+        if len(parent_txs) != num_parent_txs:
+            raise IncorrectParents(f'wrong number of parents (tx type): {len(parent_txs)}, expecting {num_parent_txs}')
 
-        if len(parent_blocks) != parent_blocks_num:
-            raise IncorrectParents(
-                f'wrong number of parents (block type): {len(parent_blocks)}, expecting {parent_blocks_num}'
+        num_parent_blocks = (
+            self._settings.PARENT_BLOCKS_FOR_BLOCK if vertex.is_block else self._settings.OLD_PARENT_BLOCKS_FOR_TX
+        )
+
+        if vertex.is_transaction and len(parent_blocks) == self._settings.NEW_PARENT_BLOCKS_FOR_TX:
+            assert self._feature_service is not None
+            is_feature_active = self._feature_service.is_feature_active(
+                block=parent_blocks[0],
+                feature=Feature.PARENT_BLOCK_FOR_TRANSACTIONS
             )
 
-        if len(parent_txs) != parent_txs_num:
-            raise IncorrectParents(f'wrong number of parents (tx type): {len(parent_txs)}, expecting {parent_txs_num}')
+            if is_feature_active:
+                num_parent_blocks = self._settings.NEW_PARENT_BLOCKS_FOR_TX
+
+        if len(parent_blocks) != num_parent_blocks:
+            raise IncorrectParents(
+                f'wrong number of parents (block type): {len(parent_blocks)}, expecting {num_parent_blocks}'
+            )
 
     def verify_pow(self, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
         """Verify proof-of-work

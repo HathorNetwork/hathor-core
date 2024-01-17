@@ -56,8 +56,11 @@ class TransactionVerifier:
         if len(tx.parents) > len(parents_set):
             raise DuplicatedParents('Tx has duplicated parents: {}', [tx_hash.hex() for tx_hash in tx.parents])
 
-        if len(tx.parents) != 2:
-            raise IncorrectParents(f'wrong number of parents (tx type): {len(tx.parents)}, expecting 2')
+        old_total_parents = self._settings.OLD_PARENT_BLOCKS_FOR_TX + self._settings.PARENT_TXS_FOR_TX
+        new_total_parents = self._settings.NEW_PARENT_BLOCKS_FOR_TX + self._settings.PARENT_TXS_FOR_TX
+
+        if len(tx.parents) not in (old_total_parents, new_total_parents):
+            raise IncorrectParents(f'wrong number of parents (tx type): {len(tx.parents)}, expecting 2 or 3')
 
     def verify_weight(self, tx: Transaction) -> None:
         """Validate minimum tx difficulty."""

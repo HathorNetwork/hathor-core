@@ -419,6 +419,14 @@ class HathorSettings(NamedTuple):
     # Time in seconds to request the best blockchain from peers.
     BEST_BLOCKCHAIN_INTERVAL: int = 5  # seconds
 
+    # Number of parents for vertices
+    PARENT_TXS_FOR_TX: int = 2
+    OLD_PARENT_BLOCKS_FOR_TX: int = 0
+    NEW_PARENT_BLOCKS_FOR_TX: int = 1
+
+    PARENT_TXS_FOR_BLOCK: int = 2
+    PARENT_BLOCKS_FOR_BLOCK: int = 1
+
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""

@@ -527,7 +527,7 @@ class StratumProtocol(JSONRPC):
 
         self.log.debug('share received', block=tx, block_base=block_base.hex(), block_base_hash=block_base_hash.hex())
 
-        verifier = VertexVerifier(settings=self._settings, daa=self.manager.daa)
+        verifier = VertexVerifier(settings=self._settings, daa=self.manager.daa, feature_service=None)
 
         try:
             verifier.verify_pow(tx, override_weight=job.weight)
