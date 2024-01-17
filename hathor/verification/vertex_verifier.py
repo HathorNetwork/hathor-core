@@ -124,7 +124,7 @@ class VertexVerifier:
 
         if vertex.is_transaction and len(parent_blocks) == self._settings.NEW_PARENT_BLOCKS_FOR_TX:
             assert self._feature_service is not None
-            is_feature_active = self._feature_service.is_feature_active(
+            is_feature_active = self._feature_service.is_feature_active_for_block(
                 block=parent_blocks[0],
                 feature=Feature.PARENT_BLOCK_FOR_TRANSACTIONS
             )

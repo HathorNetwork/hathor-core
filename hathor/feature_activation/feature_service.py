@@ -21,7 +21,7 @@ from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 
 if TYPE_CHECKING:
-    from hathor.transaction import Block
+    from hathor.transaction import Block, Transaction
     from hathor.transaction.storage import TransactionStorage
 
 
@@ -47,7 +47,18 @@ class FeatureService:
         self._feature_settings = feature_settings
         self._tx_storage = tx_storage
 
-    def is_feature_active(self, *, block: 'Block', feature: Feature) -> bool:
+    def is_feature_active_for_transaction(self, *, tx: 'Transaction', feature: Feature) -> bool:
+        from hathor.transaction import Block
+        parents = [self._tx_storage.get_transaction(parent) for parent in tx.parents]
+        parent_blocks = [parent for parent in parents if isinstance(parent, Block)]
+
+        if not parent_blocks:
+            return False
+
+        assert len(parent_blocks) == 1
+        return self.is_feature_active_for_block(block=parent_blocks[0], feature=feature)
+
+    def is_feature_active_for_block(self, *, block: 'Block', feature: Feature) -> bool:
         """Returns whether a Feature is active at a certain block."""
         state = self.get_state(block=block, feature=feature)
 

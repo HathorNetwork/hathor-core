@@ -13,7 +13,8 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # just get one of the genesis, we don't really need to create any transaction
         tx = next(iter(manager1.tx_storage.get_all_genesis()))
         # optional argument must be valid, it just has to not raise any exception, there's no assert for that
-        VertexVerifier(settings=self._settings, daa=manager1.daa).verify_pow(tx, override_weight=0.)
+        verifier = VertexVerifier(settings=self._settings, daa=manager1.daa, feature_service=None)
+        verifier.verify_pow(tx, override_weight=0.)
 
     def test_one_node(self):
         manager1 = self.create_peer()
