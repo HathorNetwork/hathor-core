@@ -8,7 +8,6 @@ from twisted.internet.defer import gatherResults, inlineCallbacks
 from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
 
-from hathor.conf import HathorSettings
 from hathor.daa import TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
@@ -24,8 +23,6 @@ from tests.utils import (
     add_new_tx,
     create_tokens,
 )
-
-settings = HathorSettings()
 
 
 class BaseTransactionStorageTest(unittest.TestCase):
@@ -46,6 +43,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.pubsub = artifacts.pubsub
         self.manager = artifacts.manager
         self.tx_storage = artifacts.tx_storage
+        self._settings = artifacts.settings
 
         assert artifacts.wallet is not None
 
@@ -216,7 +214,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             self.tx_storage.save_transaction(self.tx)
 
     def test_pre_save_validation_invalid_tx_2(self):
-        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.tx.get_metadata().add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
         with self.assertRaises(AssertionError):
             with self.tx_storage.allow_partially_validated_context():
                 # XXX: avoid using validate_save because an exception could be raised for other reasons
@@ -224,14 +222,14 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
     def test_pre_save_validation_success(self):
         self.tx.get_metadata().validation = ValidationState.BASIC
-        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.tx.get_metadata().add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
         with self.tx_storage.allow_partially_validated_context():
             # XXX: it's good to use validate_save now since we don't expect any exceptions to be raised
             self.validate_save(self.tx)
 
     def test_allow_scope_get_all_transactions(self):
         self.tx.get_metadata().validation = ValidationState.BASIC
-        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.tx.get_metadata().add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
         with self.tx_storage.allow_partially_validated_context():
             self.tx_storage.save_transaction(self.tx)
         only_valid_txs = list(self.tx_storage.get_all_transactions())
@@ -242,7 +240,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
     def test_allow_scope_topological_sort_dfs(self):
         self.tx.get_metadata().validation = ValidationState.BASIC
-        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.tx.get_metadata().add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
         with self.tx_storage.allow_partially_validated_context():
             self.tx_storage.save_transaction(self.tx)
         only_valid_txs = list(self.tx_storage._topological_sort_dfs())
@@ -254,7 +252,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
     def test_allow_partially_validated_context(self):
         from hathor.transaction.storage.exceptions import TransactionNotInAllowedScopeError
         self.tx.get_metadata().validation = ValidationState.BASIC
-        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.tx.get_metadata().add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
         self.assertTrue(self.tx_storage.is_only_valid_allowed())
         self.assertFalse(self.tx_storage.is_partially_validated_allowed())
         self.assertFalse(self.tx_storage.is_invalid_allowed())
@@ -290,7 +288,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.tx.get_metadata().validation = ValidationState.INVALID
         # XXX: should this apply to invalid too? note that we never save invalid transactions so using the
         #      PARTIALLY_VALIDATED_ID marker is artificial just for testing
-        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.tx.get_metadata().add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
         self.assertTrue(self.tx_storage.is_only_valid_allowed())
         self.assertFalse(self.tx_storage.is_partially_validated_allowed())
         self.assertFalse(self.tx_storage.is_invalid_allowed())

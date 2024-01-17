@@ -1,6 +1,5 @@
 import pytest
 
-from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
@@ -10,8 +9,6 @@ from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
-
-settings = HathorSettings()
 
 
 class BaseTransactionTest(unittest.TestCase):
@@ -41,7 +38,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(reward_block)
         self.assertTrue(self.manager.propagate_tx(reward_block))
         # XXX: calculate unlock height AFTER adding the block so the height is correctly calculated
-        unlock_height = reward_block.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1
+        unlock_height = reward_block.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS + 1
         return reward_block, unlock_height
 
     def _spend_reward_tx(self, manager, reward_block):
@@ -70,7 +67,7 @@ class BaseTransactionTest(unittest.TestCase):
         reward_block, unlock_height = self._add_reward_block()
 
         # reward cannot be spent while not enough blocks are added
-        for _ in range(settings.REWARD_SPEND_MIN_BLOCKS):
+        for _ in range(self._settings.REWARD_SPEND_MIN_BLOCKS):
             tx = self._spend_reward_tx(self.manager, reward_block)
             self.assertEqual(tx.get_metadata().min_height, unlock_height)
             with self.assertRaises(RewardLocked):
@@ -87,7 +84,7 @@ class BaseTransactionTest(unittest.TestCase):
         reward_block, unlock_height = self._add_reward_block()
 
         # add one less block than needed
-        add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
+        add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
 
         # add tx bypassing reward-lock verification
         # XXX: this situation is impossible in practice, but we force it to test that when a block tries to confirms a
@@ -105,7 +102,7 @@ class BaseTransactionTest(unittest.TestCase):
         reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
-        add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
+        add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward
         tx = self._spend_reward_tx(self.manager, reward_block)
@@ -122,7 +119,7 @@ class BaseTransactionTest(unittest.TestCase):
         reward_block, unlock_height = self._add_reward_block()
 
         # add one less block than needed
-        add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
+        add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
 
         # add tx to mempool, must fail reward-lock verification
         tx = self._spend_reward_tx(self.manager, reward_block)
@@ -137,7 +134,7 @@ class BaseTransactionTest(unittest.TestCase):
         reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
-        add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
+        add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward, must not fail
         tx = self._spend_reward_tx(self.manager, reward_block)
@@ -149,7 +146,7 @@ class BaseTransactionTest(unittest.TestCase):
         reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
-        blocks = add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
+        blocks = add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward, must not fail
         tx = self._spend_reward_tx(self.manager, reward_block)

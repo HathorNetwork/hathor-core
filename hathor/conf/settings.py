@@ -395,10 +395,6 @@ class HathorSettings(NamedTuple):
     # Identifier used in metadata's voided_by to mark a tx as partially validated.
     PARTIALLY_VALIDATED_ID: bytes = b'pending-validation'
 
-    EVENT_API_DEFAULT_BATCH_SIZE: int = 100
-
-    EVENT_API_MAX_BATCH_SIZE: int = 1000
-
     # Maximum number of sync running simultaneously.
     MAX_ENABLED_SYNC: int = 16
 

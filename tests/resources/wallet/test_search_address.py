@@ -1,6 +1,5 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.scripts import parse_address_script
@@ -8,8 +7,6 @@ from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressS
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, create_tokens
-
-settings = HathorSettings()
 
 
 class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
@@ -108,12 +105,12 @@ class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertTrue(data['success'])
         # Genesis - token deposit + blocks mined
-        HTR_value = settings.GENESIS_TOKENS - 1 + (settings.INITIAL_TOKENS_PER_BLOCK * 5)
+        HTR_value = self._settings.GENESIS_TOKENS - 1 + (self._settings.INITIAL_TOKENS_PER_BLOCK * 5)
         self.assertEqual(data['total_transactions'], 6)  # 5 blocks mined + token creation tx
-        self.assertIn(settings.HATHOR_TOKEN_UID.hex(), data['tokens_data'])
+        self.assertIn(self._settings.HATHOR_TOKEN_UID.hex(), data['tokens_data'])
         self.assertIn(self.token_uid.hex(), data['tokens_data'])
-        self.assertEqual(HTR_value, data['tokens_data'][settings.HATHOR_TOKEN_UID.hex()]['received'])
-        self.assertEqual(0, data['tokens_data'][settings.HATHOR_TOKEN_UID.hex()]['spent'])
+        self.assertEqual(HTR_value, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['received'])
+        self.assertEqual(0, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['spent'])
         self.assertEqual(100, data['tokens_data'][self.token_uid.hex()]['received'])
         self.assertEqual(0, data['tokens_data'][self.token_uid.hex()]['spent'])
 

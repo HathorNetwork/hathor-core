@@ -1,6 +1,5 @@
 import pytest
 
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator.utils import add_new_block, add_new_blocks
@@ -10,8 +9,6 @@ from hathor.util import iwindows
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
-
-settings = HathorSettings()
 
 
 class BaseIndexesTest(unittest.TestCase):
@@ -140,7 +137,7 @@ class BaseIndexesTest(unittest.TestCase):
         from hathor.indexes.utxo_index import UtxoIndexItem
         from tests.utils import GENESIS_ADDRESS_B58
 
-        HTR_UID = settings.HATHOR_TOKEN_UID
+        HTR_UID = self._settings.HATHOR_TOKEN_UID
 
         assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
@@ -149,35 +146,35 @@ class BaseIndexesTest(unittest.TestCase):
         expected_genesis_utxos = [
             UtxoIndexItem(
                 token_uid=HTR_UID,
-                tx_id=settings.GENESIS_BLOCK_HASH,
+                tx_id=self._settings.GENESIS_BLOCK_HASH,
                 index=0,
                 address=GENESIS_ADDRESS_B58,
-                amount=settings.GENESIS_TOKENS,
+                amount=self._settings.GENESIS_TOKENS,
                 timelock=None,
-                heightlock=settings.REWARD_SPEND_MIN_BLOCKS,
+                heightlock=self._settings.REWARD_SPEND_MIN_BLOCKS,
             ),
         ]
 
         # height just not enough should be empty
         self.assertEqual(
-            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
-                                       target_amount=settings.GENESIS_TOKEN_UNITS,
-                                       target_height=settings.REWARD_SPEND_MIN_BLOCKS - 1)),
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=self._settings.HATHOR_TOKEN_UID,
+                                       target_amount=self._settings.GENESIS_TOKEN_UNITS,
+                                       target_height=self._settings.REWARD_SPEND_MIN_BLOCKS - 1)),
             [],
         )
 
         # height is now enough
         self.assertEqual(
-            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
-                                       target_amount=settings.GENESIS_TOKEN_UNITS,
-                                       target_height=settings.REWARD_SPEND_MIN_BLOCKS)),
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=self._settings.HATHOR_TOKEN_UID,
+                                       target_amount=self._settings.GENESIS_TOKEN_UNITS,
+                                       target_height=self._settings.REWARD_SPEND_MIN_BLOCKS)),
             expected_genesis_utxos,
         )
 
         # otherwise we can leave out the height and it should give the utxos
         self.assertEqual(
-            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
-                                       target_amount=settings.GENESIS_TOKEN_UNITS)),
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=self._settings.HATHOR_TOKEN_UID,
+                                       target_amount=self._settings.GENESIS_TOKEN_UNITS)),
             expected_genesis_utxos,
         )
 
@@ -200,7 +197,7 @@ class BaseIndexesTest(unittest.TestCase):
             actual = list(utxo_index.iter_utxos(address=address, target_amount=9999999))
             expected = [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=tx_id,
                     index=index,
                     address=address,
@@ -304,13 +301,13 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[:1]
             ]
         )
@@ -319,13 +316,13 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=6500)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[4:1:-1]
             ]
         )
@@ -334,13 +331,13 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=25600)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[::-1]
             ]
         )
@@ -349,13 +346,13 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=30000)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[::-1]
             ]
         )
@@ -394,7 +391,7 @@ class BaseIndexesTest(unittest.TestCase):
             print('check target_amount =', target_amount)
             expected = [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=tx.hash,
                     index=1,
                     address=address,
@@ -416,11 +413,11 @@ class BaseIndexesTest(unittest.TestCase):
             self.assertEqual(actual, expected)
 
         # now check that at most 255 utxos will be returned when we check for a large enough amount
-        max_outputs = settings.MAX_NUM_OUTPUTS
+        max_outputs = self._settings.MAX_NUM_OUTPUTS
         actual = list(utxo_index.iter_utxos(address=address, target_amount=sum(range(301))))
         expected = [
             UtxoIndexItem(
-                token_uid=settings.HATHOR_TOKEN_UID,
+                token_uid=self._settings.HATHOR_TOKEN_UID,
                 tx_id=tx.hash,
                 index=1,
                 address=address,
@@ -461,13 +458,13 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                     ) for b in blocks
             ]
         )
@@ -499,7 +496,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address1, target_amount=6400)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=0,
                     address=address1,
@@ -533,13 +530,13 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                     ) for b in blocks
             ]
         )
@@ -571,7 +568,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address1, target_amount=transfer_value)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=1,
                     address=address1,
@@ -586,7 +583,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=change_value)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=0,
                     address=address,
@@ -603,7 +600,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address1, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=1,
                     address=address1,
@@ -618,7 +615,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=self._settings.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=0,
                     address=address,
@@ -659,7 +656,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
 
         # XXX: since we didn't add any multisig address, this is guaranteed to be reach the tail end of the index
-        assert settings.P2PKH_VERSION_BYTE[0] < settings.MULTISIG_VERSION_BYTE[0]
+        assert self._settings.P2PKH_VERSION_BYTE[0] < self._settings.MULTISIG_VERSION_BYTE[0]
 
         # generating a multisig address:
         address = generate_multisig_address(generate_multisig_redeem_script(2, [
@@ -676,7 +673,7 @@ class BaseIndexesTest(unittest.TestCase):
 
         # make height 100
         H = 100
-        blocks = add_new_blocks(self.manager, H - settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=15)
+        blocks = add_new_blocks(self.manager, H - self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=15)
         height_index = self.manager.tx_storage.indexes.height
         self.assertEqual(height_index.get_height_tip(), HeightInfo(100, blocks[-1].hash))
         self.assertEqual(height_index.get_n_height_tips(1), [HeightInfo(100, blocks[-1].hash)])
