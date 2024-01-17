@@ -394,6 +394,13 @@ class BlockConsensusAlgorithm:
             tx = storage.get_transaction(tx_hash)
             assert isinstance(tx, Transaction)
             self.context.transaction_algorithm.add_voided_by(tx, voided_hash)
+
+        children = [storage.get_transaction(child) for child in meta.children]
+        tx_children = [child for child in children if isinstance(child, Transaction)]
+
+        for tx in tx_children:
+            self.context.transaction_algorithm.add_voided_by(tx, voided_hash)
+
         return True
 
     def remove_voided_by(self, block: Block, voided_hash: Optional[bytes] = None) -> bool:
@@ -476,7 +483,8 @@ class BlockConsensusAlgorithm:
                 bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_left_to_right=False)
                 for tx in bfs.run(parent, skip_root=False):
                     assert tx.hash is not None
-                    assert not tx.is_block
+                    if tx.is_block:
+                        continue
 
                     if tx.hash in used:
                         bfs.skip_neighbors(tx)
