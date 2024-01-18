@@ -112,6 +112,7 @@ class Builder:
         self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
+        self._consensus: Optional[ConsensusAlgorithm] = None
         self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
         self._cpu_mining_service: Optional[CpuMiningService] = None
 
@@ -163,8 +164,7 @@ class Builder:
 
         peer_id = self._get_peer_id()
 
-        soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
+        consensus_algorithm = self._get_or_create_consensus()
 
         p2p_manager = self._get_p2p_manager()
 
@@ -446,10 +446,12 @@ class Builder:
     def _get_or_create_feature_service(self) -> FeatureService:
         """Return the FeatureService instance set on this builder, or a new one if not set."""
         if self._feature_service is None:
+            reactor = self._get_reactor()
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
             self._feature_service = FeatureService(
-                feature_settings=settings.FEATURE_ACTIVATION,
+                reactor=reactor,
+                settings=settings,
                 tx_storage=tx_storage
             )
 
@@ -469,6 +471,19 @@ class Builder:
             )
 
         return self._bit_signaling_service
+
+    def _get_or_create_consensus(self) -> ConsensusAlgorithm:
+        if self._consensus is None:
+            soft_voided_tx_ids = self._get_soft_voided_tx_ids()
+            pubsub = self._get_or_create_pubsub()
+            feature_service = self._get_or_create_feature_service()
+            self._consensus = ConsensusAlgorithm(
+                soft_voided_tx_ids=soft_voided_tx_ids,
+                pubsub=pubsub,
+                feature_service=feature_service,
+            )
+
+        return self._consensus
 
     def _get_or_create_verification_service(self) -> VerificationService:
         if self._verification_service is None:

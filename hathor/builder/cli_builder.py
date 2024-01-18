@@ -195,15 +195,21 @@ class CliBuilder:
             full_verification = True
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
 
         if self._args.x_enable_event_queue:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
         self.feature_service = FeatureService(
-            feature_settings=settings.FEATURE_ACTIVATION,
+            reactor=reactor,
+            settings=settings,
             tx_storage=tx_storage
+        )
+
+        consensus_algorithm = ConsensusAlgorithm(
+            soft_voided_tx_ids,
+            pubsub=pubsub,
+            feature_service=self.feature_service,
         )
 
         bit_signaling_service = BitSignalingService(

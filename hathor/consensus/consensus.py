@@ -18,6 +18,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
@@ -55,10 +56,17 @@ class ConsensusAlgorithm:
     b0 will not be propagated to the voided_by of b1, b2, and b3.
     """
 
-    def __init__(self, soft_voided_tx_ids: set[bytes], pubsub: PubSubManager) -> None:
+    def __init__(
+        self,
+        soft_voided_tx_ids: set[bytes],
+        pubsub: PubSubManager,
+        *,
+        feature_service: FeatureService,
+    ) -> None:
         self._settings = get_global_settings()
         self.log = logger.new()
         self._pubsub = pubsub
+        self._feature_service = feature_service
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
