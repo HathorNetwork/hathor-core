@@ -473,7 +473,7 @@ class TransactionStorage(ABC):
         if self.indexes is not None:
             self.del_from_indexes(tx, remove_all=True, relax_assert=True)
 
-    def remove_transactions(self, txs: list[BaseTransaction]) -> None:
+    def remove_transactions(self, txs: list[Transaction]) -> None:
         """Will remove all the transactions on the list from the database.
 
         Special notes:
@@ -1079,13 +1079,13 @@ class TransactionStorage(ABC):
         else:
             yield from self.iter_mempool_from_tx_tips()
 
-    def compute_transactions_that_became_invalid(self, new_best_height: int) -> list[BaseTransaction]:
+    def compute_invalid_txs_for_reward_lock(self, new_best_height: int) -> list[Transaction]:
         """ This method will look for transactions in the mempool that have become invalid due to the reward lock.
         It compares each tx's `min_height` to the `new_best_height`, accounting for the fact that the tx can be
         confirmed by the next block.
         """
         from hathor.transaction.validation_state import ValidationState
-        to_remove: list[BaseTransaction] = []
+        to_remove: list[Transaction] = []
         for tx in self.iter_mempool_from_best_index():
             tx_min_height = tx.get_metadata().min_height
             assert tx_min_height is not None

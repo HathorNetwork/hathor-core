@@ -22,7 +22,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.util import Reactor
+from hathor.reactor import ReactorProtocol
 
 if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
@@ -49,7 +49,13 @@ BlockSignalingState: TypeAlias = BlockIsSignaling | BlockIsMissingSignal
 class FeatureService:
     __slots__ = ('_log', '_reactor', '_settings', '_tx_storage')
 
-    def __init__(self, *, reactor: Reactor, settings: HathorSettings, tx_storage: 'TransactionStorage') -> None:
+    def __init__(
+        self,
+        *,
+        reactor: ReactorProtocol,
+        settings: HathorSettings,
+        tx_storage: 'TransactionStorage'
+    ) -> None:
         self._log = logger.new()
         self._reactor = reactor
         self._settings = settings
@@ -276,7 +282,7 @@ class FeatureService:
 
         return _get_ancestor_iteratively(block=block, ancestor_height=height)
 
-    def is_reorg_valid(self, common_block: 'Block') -> bool:
+    def is_reorg_too_large(self, common_block: 'Block') -> tuple[bool, int]:
         """
         Check whether a reorg is valid, given its common block.
         A reorg is considered invalid if it may include the activation threshold for transactions,
@@ -292,16 +298,18 @@ class FeatureService:
         # This is redundant considering we also use it in is_feature_active_for_transaction(),
         # but we do it here too to restrict reorgs even further.
         margin = self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED
-        is_invalid = now >= common_block.timestamp + avg_time_between_boundaries - margin
+        tipping_threshold = common_block.timestamp + avg_time_between_boundaries - margin
+        is_too_large = now >= tipping_threshold
 
-        if is_invalid:
-            self._log.critical(
-                'Reorg is invalid. Time difference between common block and now is too large.',
+        if is_too_large:
+            self._log.warn(
+                'Reorg is too large. Time difference between common block and now is greater than one evaluation '
+                'interval.',
                 current_timestamp=now,
                 common_block_timestamp=common_block.timestamp
             )
 
-        return not is_invalid
+        return is_too_large, tipping_threshold
 
 
 def _get_ancestor_iteratively(*, block: 'Block', ancestor_height: int) -> 'Block':

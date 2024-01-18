@@ -476,11 +476,15 @@ class Builder:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             pubsub = self._get_or_create_pubsub()
+            tx_storage = self._get_or_create_tx_storage()
+            verification_service = self._get_or_create_verification_service()
             feature_service = self._get_or_create_feature_service()
             self._consensus = ConsensusAlgorithm(
                 soft_voided_tx_ids=soft_voided_tx_ids,
                 pubsub=pubsub,
+                tx_storage=tx_storage,
                 feature_service=feature_service,
+                verification_service=verification_service,
             )
 
         return self._consensus

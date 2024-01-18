@@ -17,7 +17,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import (
@@ -36,7 +36,7 @@ from hathor.transaction.storage import TransactionStorage
 
 
 def _get_blocks_and_storage() -> tuple[list[Block], TransactionStorage]:
-    settings = get_settings()
+    settings = get_global_settings()
     genesis_hash = settings.GENESIS_BLOCK_HASH
     blocks: list[Block] = []
     feature_activation_bits = [

@@ -18,11 +18,16 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
+from hathor.exception import HathorError
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
+from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage.traversal import BFSTimestampWalk
+from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
+from hathor.verification.verification_service import VerificationService
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -61,12 +66,16 @@ class ConsensusAlgorithm:
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
         *,
+        tx_storage: TransactionStorage,
         feature_service: FeatureService,
+        verification_service: VerificationService,
     ) -> None:
         self._settings = get_global_settings()
         self.log = logger.new()
         self._pubsub = pubsub
+        self._tx_storage = tx_storage
         self._feature_service = feature_service
+        self._verification_service = verification_service
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
@@ -119,7 +128,7 @@ class ConsensusAlgorithm:
                           prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
             # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
             #      reward lock
-            to_remove = storage.compute_transactions_that_became_invalid(new_best_height)
+            to_remove = storage.compute_invalid_txs_for_reward_lock(new_best_height)
             if to_remove:
                 self.log.warn('some transactions on the mempool became invalid and will be removed',
                               count=len(to_remove))
@@ -138,6 +147,11 @@ class ConsensusAlgorithm:
             reorg_size = old_best_block.get_height() - context.reorg_common_block.get_height()
             assert old_best_block != new_best_block
             assert reorg_size > 0
+
+            is_too_large, tipping_threshold = self._feature_service.is_reorg_too_large(context.reorg_common_block)
+            if is_too_large:
+                self._handle_reorg_too_large_for_feature_activation(context, tipping_threshold)
+
             context.pubsub.publish(HathorEvents.REORG_STARTED, old_best_height=best_height,
                                    old_best_block=old_best_block, new_best_height=new_best_height,
                                    new_best_block=new_best_block, common_block=context.reorg_common_block,
@@ -153,6 +167,72 @@ class ConsensusAlgorithm:
         # and also emit the reorg finished event if needed
         if context.reorg_common_block is not None:
             context.pubsub.publish(HathorEvents.REORG_FINISHED)
+
+    def _handle_reorg_too_large_for_feature_activation(
+        self,
+        context: ConsensusAlgorithmContext,
+        tipping_threshold: int,
+    ) -> None:
+        # self.log.warn('height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
+        #               prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
+        # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
+        #      reward lock
+        to_remove = self._compute_invalid_txs_for_feature_activation(tipping_threshold)
+        if to_remove:
+            # self.log.warn('some transactions on the mempool became invalid and will be removed',
+            #               count=len(to_remove))
+            # XXX: because transactions in `to_remove` are marked as invalid, we need this context to be able to
+            #      remove them
+            with self._tx_storage.allow_invalid_context():
+                self._tx_storage.remove_transactions(to_remove)
+            for tx_removed in to_remove:
+                context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx_hash=tx_removed.hash)
+
+    def _compute_invalid_txs_for_feature_activation(self, tipping_threshold: int) -> list[Transaction]:
+        """
+        for tx in all_txs:
+            if tx.timestamp >= tipping_threshold:
+                mark as invalid and add to to_remove
+        """
+        all_txs_after_tipping: list[Transaction] = self._get_all_txs_after(tipping_threshold)
+        to_remove: set[Transaction] = set()
+
+        for tx in all_txs_after_tipping:
+            for parent in tx.parents:
+                if parent in to_remove:
+                    tx.set_validation(ValidationState.INVALID)
+                    to_remove.add(tx)
+                    continue
+
+            for tx_input in tx.inputs:
+                if tx_input.tx_id in to_remove:
+                    tx.set_validation(ValidationState.INVALID)
+                    to_remove.add(tx)
+                    continue
+
+            try:
+                self._verification_service.verify(tx)
+            except HathorError:
+                tx.set_validation(ValidationState.INVALID)
+                to_remove.add(tx)
+                continue
+
+        return list(to_remove)
+
+    def _get_all_txs_after(self, timestamp: int) -> list[Transaction]:
+        tx_tips = self._tx_storage.iter_mempool_tips_from_best_index()
+        bfs = BFSTimestampWalk(self._tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
+        txs: list[Transaction] = []
+
+        for tx in bfs.run(tx_tips, skip_root=False):
+            # se as parent txs de um bloco tem o timestamp menor, skip esse bloco
+            if isinstance(tx, Transaction):
+                if tx.timestamp >= timestamp:
+                    txs.append(tx)
+                else:
+                    bfs.skip_neighbors(tx)
+
+        return txs
 
     def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
         if not (self.soft_voided_tx_ids & voided_by):

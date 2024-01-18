@@ -206,12 +206,6 @@ class CliBuilder:
             tx_storage=tx_storage
         )
 
-        consensus_algorithm = ConsensusAlgorithm(
-            soft_voided_tx_ids,
-            pubsub=pubsub,
-            feature_service=self.feature_service,
-        )
-
         bit_signaling_service = BitSignalingService(
             feature_settings=settings.FEATURE_ACTIVATION,
             feature_service=self.feature_service,
@@ -234,6 +228,14 @@ class CliBuilder:
             feature_service=self.feature_service
         )
         verification_service = VerificationService(verifiers=vertex_verifiers)
+
+        consensus_algorithm = ConsensusAlgorithm(
+            soft_voided_tx_ids,
+            pubsub=pubsub,
+            tx_storage=tx_storage,
+            feature_service=self.feature_service,
+            verification_service=verification_service,
+        )
 
         cpu_mining_service = CpuMiningService()
 
