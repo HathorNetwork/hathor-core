@@ -21,8 +21,9 @@ from twisted.internet.interfaces import IProtocolFactory, IStreamClientEndpoint,
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
+from twisted.web.client import Agent
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -39,12 +40,10 @@ from hathor.transaction import BaseTransaction
 from hathor.util import Random
 
 if TYPE_CHECKING:
-    from twisted.internet.interfaces import IDelayedCall
-
     from hathor.manager import HathorManager
 
 logger = get_logger()
-settings = HathorSettings()
+settings = get_global_settings()
 
 # The timeout in seconds for the whitelist GET request
 WHITELIST_REQUEST_TIMEOUT = 45
@@ -102,6 +101,7 @@ class ConnectionsManager:
         self.log = logger.new()
         self.rng = rng
         self.manager = None
+        self._settings = get_global_settings()
 
         self.reactor = reactor
         self.my_peer = my_peer
@@ -124,7 +124,7 @@ class ConnectionsManager:
         self.client_factory = HathorClientFactory(self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl)
 
         # Global maximum number of connections.
-        self.max_connections: int = settings.PEER_MAX_CONNECTIONS
+        self.max_connections: int = self._settings.PEER_MAX_CONNECTIONS
 
         # Global rate limiter for all connections.
         self.rate_limiter = RateLimiter(self.reactor)
@@ -168,7 +168,7 @@ class ConnectionsManager:
         self._last_sync_rotate: float = 0.
 
         # A timer to try to reconnect to the disconnect known peers.
-        if settings.ENABLE_PEER_WHITELIST:
+        if self._settings.ENABLE_PEER_WHITELIST:
             self.wl_reconnect = LoopingCall(self.update_whitelist)
             self.wl_reconnect.clock = self.reactor
 
@@ -184,6 +184,9 @@ class ConnectionsManager:
         # sync-manager factories
         self._sync_factories = {}
         self._enabled_sync_versions = set()
+
+        # agent to perform HTTP requests
+        self._http_agent = Agent(self.reactor)
 
     def add_sync_factory(self, sync_version: SyncVersion, sync_factory: SyncAgentFactory) -> None:
         """Add factory for the given sync version, must use a sync version that does not already exist."""
@@ -273,7 +276,7 @@ class ConnectionsManager:
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
 
-        if settings.ENABLE_PEER_WHITELIST:
+        if self._settings.ENABLE_PEER_WHITELIST:
             self._start_whitelist_reconnect()
 
         for description in self.listen_addresses:
@@ -519,51 +522,28 @@ class ConnectionsManager:
             self.connect_to_if_not_connected(peer, int(now))
 
     def update_whitelist(self) -> Deferred[None]:
-        from twisted.web.client import Agent, readBody
+        from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
-        assert settings.WHITELIST_URL is not None
+        assert self._settings.WHITELIST_URL is not None
         self.log.info('update whitelist')
-        agent = Agent(self.reactor)
-        d = agent.request(
+        d = self._http_agent.request(
             b'GET',
-            settings.WHITELIST_URL.encode(),
+            self._settings.WHITELIST_URL.encode(),
             Headers({'User-Agent': ['hathor-core']}),
             None)
-        # Twisted Agent does not have a direct way to configure the HTTP client timeout
-        # only a TCP connection timeout.
-        # In this request we need a timeout that encompasses the connection and download time.
-        # The callLater below is a manual client timeout that includes it and
-        # will cancel the deferred in case it's called
-        timeout_call = self.reactor.callLater(WHITELIST_REQUEST_TIMEOUT, d.cancel)
-        d.addBoth(self._update_whitelist_timeout, timeout_call)
         d.addCallback(readBody)
-        d.addErrback(self._update_whitelist_err)
+        d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self.reactor)
         d.addCallback(self._update_whitelist_cb)
+        d.addErrback(self._update_whitelist_err)
+
         return d
-
-    def _update_whitelist_timeout(self, param: Union[Failure, Optional[bytes]],
-                                  timeout_call: 'IDelayedCall') -> Union[Failure, Optional[bytes]]:
-        """ This method is always called for both cb and errback in the update whitelist get request deferred.
-            Because of that, the first parameter type will depend, will be a failure in case of errback
-            or optional bytes in case of cb (see _update_whitelist_cb).
-
-            We just need to cancel the timeout call later and return the first parameter,
-            to continue the cb/errback sequence.
-        """
-        if timeout_call.active():
-            timeout_call.cancel()
-        return param
 
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
 
-    def _update_whitelist_cb(self, body: Optional[bytes]) -> None:
+    def _update_whitelist_cb(self, body: bytes) -> None:
         assert self.manager is not None
-        if body is None:
-            self.log.warn('update whitelist got no response')
-            return
-        else:
-            self.log.info('update whitelist got response')
+        self.log.info('update whitelist got response')
         try:
             text = body.decode()
             new_whitelist = parse_whitelist(text)
