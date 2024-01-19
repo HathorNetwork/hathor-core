@@ -187,7 +187,7 @@ FEATURE_ACTIVATION:
 
     NOP_FEATURE_1:
       bit: 0
-      start_height: 4_213_440 # N (right now the best block is 4_161_800 on mainnet)
+      start_height: 4_213_440 # N (right now the best block is 4_169_000 on mainnet)
       timeout_height: 4_253_760 # N + 2 * 20160 (2 weeks after the start)
       minimum_activation_height: 4_273_920 # N + 3 * 20160 (3 weeks after the start)
       lock_in_on_timeout: false
@@ -196,7 +196,7 @@ FEATURE_ACTIVATION:
 
     NOP_FEATURE_2:
       bit: 1
-      start_height: 4_193_280 # N (right now the best block is 4_133_220 on mainnet)
+      start_height: 4_213_440 # N (right now the best block is 4_169_000 on mainnet)
       timeout_height: 4_253_760 # N + 2 * 20160 (2 weeks after the start)
       minimum_activation_height: 0
       lock_in_on_timeout: false
