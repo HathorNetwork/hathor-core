@@ -60,6 +60,7 @@ from hathor.transaction.scripts.opcode import (
     op_hash160,
     op_integer,
     op_max_inputs_outputs,
+    op_max_sighash_subsets,
     op_pushdata,
     op_pushdata1,
     op_sighash_bitmask,
@@ -1101,6 +1102,24 @@ class TestScripts(unittest.TestCase):
         op_max_inputs_outputs(context)
 
         self.assertEqual(context.stack, [])
+
+    def test_op_max_sighash_subsets(self) -> None:
+        with self.assertRaises(MissingStackItems):
+            op_max_sighash_subsets(ScriptContext(stack=[], extras=Mock(), logs=[], settings=Mock()))
+
+        with self.assertRaises(AssertionError):
+            op_max_sighash_subsets(ScriptContext(stack=[7], extras=Mock(), logs=[], settings=Mock()))
+
+        stack: list[bytes | int | str] = [bytes([7])]
+        context = Mock(spec_set=ScriptContext)
+        extras = Mock(spec_set=ScriptExtras)
+        context.stack = stack
+        context.extras = extras
+
+        op_max_sighash_subsets(context)
+
+        self.assertEqual(stack, [])
+        context.set_max_sighash_subsets.assert_called_once_with(7)
 
     def test_execute_op_code(self) -> None:
         with (

@@ -32,10 +32,12 @@ from hathor.transaction.exceptions import (
     ScriptError,
     TimestampError,
     TooManyInputs,
+    TooManySighashSubsets,
     TooManySigOps,
     WeightError,
 )
 from hathor.transaction.scripts.script_context import ScriptContext
+from hathor.transaction.scripts.sighash import SighashType, get_unique_sighash_subsets
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -101,6 +103,8 @@ class TransactionVerifier:
 
         spent_outputs: set[tuple[VertexId, int]] = set()
         all_selected_outputs: set[int] = set()
+        all_sighashes: list[SighashType] = []
+        max_sighash_subsets: float = float('inf')
 
         for input_index, input_tx in enumerate(tx.inputs):
             if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
@@ -129,6 +133,10 @@ class TransactionVerifier:
                 script_context = self.verify_script(tx=tx, spent_tx=spent_tx, input_index=input_index)
                 selected_outputs = script_context.get_selected_outputs()
                 all_selected_outputs = all_selected_outputs.union(selected_outputs)
+                all_sighashes.append(script_context.get_sighash())
+                this_max_sighash_subsets = script_context.get_max_sighash_subsets()
+                if this_max_sighash_subsets is not None:
+                    max_sighash_subsets = min(max_sighash_subsets, this_max_sighash_subsets)
 
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
@@ -138,6 +146,14 @@ class TransactionVerifier:
             spent_outputs.add(key)
 
         if not skip_script:
+            sighash_subsets = get_unique_sighash_subsets(all_sighashes)
+
+            if len(sighash_subsets) > max_sighash_subsets:
+                raise TooManySighashSubsets(
+                    f'There are more custom sighash subsets than the configured maximum '
+                    f'({len(sighash_subsets)} > {max_sighash_subsets}).'
+                )
+
             for index, _ in enumerate(tx.outputs):
                 if index not in all_selected_outputs:
                     raise OutputNotSelected(f'Output at index {index} is not signed by any input.')

@@ -82,6 +82,10 @@ class TooManyOutputs(TxValidationError):
     """More than 256 outputs"""
 
 
+class TooManySighashSubsets(TxValidationError):
+    """More sighash subsets than the configured maximum."""
+
+
 class InvalidOutputValue(TxValidationError):
     """Value of output is invalid"""
 

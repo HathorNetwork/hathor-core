@@ -81,7 +81,8 @@ class Opcode(IntEnum):
     OP_DATA_MATCH_VALUE = 0xD1
     OP_SIGHASH_BITMASK = 0xE0
     OP_SIGHASH_RANGE = 0xE1
-    OP_MAX_INPUTS_OUTPUTS = 0xE2
+    OP_MAX_SIGHASH_SUBSETS = 0xE2
+    OP_MAX_INPUTS_OUTPUTS = 0xE3
 
     @classmethod
     def is_pushdata(cls, opcode: int) -> bool:
@@ -690,6 +691,18 @@ def op_sighash_range(context: ScriptContext) -> None:
     context.set_sighash(sighash)
 
 
+def op_max_sighash_subsets(context: ScriptContext) -> None:
+    """Pop one item from the stack, setting it in the script context."""
+    if len(context.stack) < 1:
+        raise MissingStackItems(f'OP_MAX_SIGHASH_SUBSETS: expected 1 element on stack, has {len(context.stack)}')
+
+    max_subsets = context.stack.pop()
+    assert isinstance(max_subsets, bytes)
+    max_subsets = bytes_to_int(max_subsets)
+
+    context.set_max_sighash_subsets(max_subsets)
+
+
 def op_max_inputs_outputs(context: ScriptContext) -> None:
     """Pop two items from the stack, constructing an inputs and outputs limit and setting it in the script context."""
     if len(context.stack) < 2:
@@ -743,6 +756,7 @@ def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
         case Opcode.OP_FIND_P2PKH: op_find_p2pkh(context)
         case Opcode.OP_SIGHASH_BITMASK: op_sighash_bitmask(context)
         case Opcode.OP_SIGHASH_RANGE: op_sighash_range(context)
+        case Opcode.OP_MAX_SIGHASH_SUBSETS: op_max_sighash_subsets(context)
         case Opcode.OP_MAX_INPUTS_OUTPUTS: op_max_inputs_outputs(context)
         case _: raise ScriptError(f'unknown opcode: {opcode}')
 

@@ -21,7 +21,12 @@ from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.exceptions import InputOutputMismatch, InvalidInputData, InvalidScriptError
+from hathor.transaction.exceptions import (
+    InputOutputMismatch,
+    InvalidInputData,
+    InvalidScriptError,
+    TooManySighashSubsets,
+)
 from hathor.transaction.scripts import MultiSig
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashRange
@@ -403,6 +408,99 @@ class BaseSighashRangeTest(unittest.TestCase):
 
         with pytest.raises(InvalidScriptError):
             self.manager1.verification_service.verify(atomic_swap_tx)
+
+    @patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True)
+    def test_sighash_range_with_max_subsets(self) -> None:
+        # Create a new test token
+        token_creation_tx = create_tokens(self.manager1, self.address1_b58)
+        token_uid = token_creation_tx.tokens[0]
+        token_creation_utxo = token_creation_tx.outputs[0]
+        genesis_utxo = self.genesis_block.outputs[0]
+        parents = self.manager1.get_new_tx_parents()
+
+        # Alice creates an input spending all created test tokens
+        tokens_input = TxInput(not_none(token_creation_tx.hash), 0, b'')
+
+        # Alice creates an output sending half genesis HTR to herself
+        alice_output_script = P2PKH.create_output_script(self.address1)
+        htr_output = TxOutput(int(genesis_utxo.value / 2), alice_output_script)
+
+        # Alice creates an atomic swap tx that's missing Bob's input, with half genesis HTR, and his output
+        atomic_swap_tx = Transaction(
+            weight=1,
+            inputs=[tokens_input],
+            outputs=[htr_output],
+            parents=parents,
+            tokens=[token_uid],
+            storage=self.manager1.tx_storage,
+            timestamp=token_creation_tx.timestamp + 1
+        )
+        self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
+
+        # Alice signs her input using sighash range, instead of sighash_all.
+        # She also sets a max sighash subsets limit.
+        sighash_range = SighashRange(input_start=0, input_end=1, output_start=0, output_end=1)
+        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_range)
+        assert self.manager1.wallet
+        public_bytes1, signature1 = self.manager1.wallet.get_input_aux_data(data_to_sign1, self.private_key1)
+        tokens_input.data = P2PKH.create_input_data(
+            public_key_bytes=public_bytes1,
+            signature=signature1,
+            sighash=sighash_range,
+            max_sighash_subsets=1,
+        )
+
+        # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs
+        self.manager1.verification_service.verifiers.tx.verify_inputs(atomic_swap_tx)
+        with pytest.raises(InputOutputMismatch):
+            self.manager1.verification_service.verify(atomic_swap_tx)
+
+        # Alice sends the tx bytes to Bob, represented here by cloning the tx
+        atomic_swap_tx_clone = cast(Transaction, atomic_swap_tx.clone())
+        self.manager1.cpu_mining_service.resolve(atomic_swap_tx_clone)
+
+        # Bob creates an input spending all genesis HTR and adds it to the atomic swap tx
+        htr_input = TxInput(not_none(self.genesis_block.hash), 0, b'')
+        atomic_swap_tx_clone.inputs.append(htr_input)
+
+        # Bob adds an output to receive all test tokens
+        bob_output_script = P2PKH.create_output_script(self.address2)
+        tokens_output = TxOutput(token_creation_utxo.value, bob_output_script, 1)
+        atomic_swap_tx_clone.outputs.append(tokens_output)
+
+        #  Bob adds a change output for his HTR
+        htr_output = TxOutput(int(genesis_utxo.value / 2), bob_output_script)
+        atomic_swap_tx_clone.outputs.append(htr_output)
+
+        # Bob signs his input with a different sighash subset, which violates the maximum subsets set by Alice
+        sighash_range2 = SighashRange(input_start=1, input_end=2, output_start=1, output_end=2)
+        data_to_sign2 = atomic_swap_tx_clone.get_custom_sighash_data(sighash_range2)
+        assert self.manager2.wallet
+        public_bytes2, signature2 = self.manager2.wallet.get_input_aux_data(data_to_sign2, self.genesis_private_key)
+        htr_input.data = P2PKH.create_input_data(
+            public_key_bytes=public_bytes2,
+            signature=signature2,
+            sighash=sighash_range2,
+        )
+
+        # The atomic swap tx is not valid and cannot be propagated
+        with pytest.raises(TooManySighashSubsets) as e:
+            self.manager1.verification_service.verify(atomic_swap_tx_clone)
+
+        self.assertEqual(str(e.value), "There are more custom sighash subsets than the configured maximum (2 > 1).")
+
+        with pytest.raises(InvalidNewTransaction):
+            self.manager1.propagate_tx(atomic_swap_tx_clone, fails_silently=False)
+
+        # Bob signs his input using sighash_all to complete the tx
+        data_to_sign3 = atomic_swap_tx_clone.get_sighash_all()
+        assert self.manager2.wallet
+        public_bytes3, signature3 = self.manager2.wallet.get_input_aux_data(data_to_sign3, self.genesis_private_key)
+        htr_input.data = P2PKH.create_input_data(public_bytes3, signature3)
+
+        # The atomic swap tx is now completed and valid, and can be propagated
+        self.manager1.verification_service.verify(atomic_swap_tx_clone)
+        self.manager1.propagate_tx(atomic_swap_tx_clone, fails_silently=False)
 
 
 class SyncV1SighashTest(unittest.SyncV1Params, BaseSighashRangeTest):
