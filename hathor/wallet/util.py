@@ -88,7 +88,7 @@ def generate_multisig_address(redeem_script: bytes, version_byte: Optional[bytes
 
 
 def generate_signature(tx: Transaction, private_key_bytes: bytes, password: Optional[bytes] = None) -> bytes:
-    """ Create a signature for the tx
+    """ Create a signature for the tx using the default sighash_all
 
         :param tx: transaction with the data to be signed
         :type tx: :py:class:`hathor.transaction.transaction.Transaction`
@@ -102,8 +102,16 @@ def generate_signature(tx: Transaction, private_key_bytes: bytes, password: Opti
         :return: signature of the tx
         :rtype: bytes
     """
+    return generate_signature_for_data(tx.get_sighash_all(), private_key_bytes, password)
+
+
+def generate_signature_for_data(
+    data_to_sign: bytes,
+    private_key_bytes: bytes,
+    password: Optional[bytes] = None
+) -> bytes:
+    """Create a signature for some custom data."""
     private_key = get_private_key_from_bytes(private_key_bytes, password=password)
-    data_to_sign = tx.get_sighash_all()
     hashed_data = hashlib.sha256(data_to_sign).digest()
     signature = private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
     return signature

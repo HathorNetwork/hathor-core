@@ -590,21 +590,25 @@ def op_checkmultisig(context: ScriptContext) -> None:
     # For each signature we check if it's valid with one of the public keys
     # Signatures must be in order (same as the public keys in the multi sig wallet)
     pubkey_index = 0
+    old_stack = context.stack
     for signature in signatures:
         while pubkey_index < len(pubkeys):
             pubkey = pubkeys[pubkey_index]
             new_stack = [signature, pubkey]
-            op_checksig(ScriptContext(stack=new_stack, logs=context.logs, extras=context.extras, settings=settings))
+            context.stack = new_stack
+            op_checksig(context)
             result = new_stack.pop()
             pubkey_index += 1
             if result == 1:
                 break
         else:
             # finished all pubkeys and did not verify all signatures
+            context.stack = old_stack
             context.stack.append(0)
             return
 
     # If all signatures are valids we push 1
+    context.stack = old_stack
     context.stack.append(1)
 
 
