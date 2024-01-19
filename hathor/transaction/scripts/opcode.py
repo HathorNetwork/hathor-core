@@ -44,7 +44,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.scripts.execute import Stack, binary_to_int, decode_opn, get_data_value, get_script_op
 from hathor.transaction.scripts.script_context import ScriptContext
-from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
+from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask, SighashRange
 from hathor.transaction.util import bytes_to_int
 
 
@@ -654,6 +654,38 @@ def op_sighash_bitmask(context: ScriptContext) -> None:
     context.set_sighash(sighash)
 
 
+def op_sighash_range(context: ScriptContext) -> None:
+    """Pop four items from the stack, constructing a sighash range and setting it in the script context."""
+    if len(context.stack) < 4:
+        raise MissingStackItems(f'OP_SIGHASH_RANGE: expected 4 elements on stack, has {len(context.stack)}')
+
+    output_end = context.stack.pop()
+    output_start = context.stack.pop()
+    input_end = context.stack.pop()
+    input_start = context.stack.pop()
+    assert isinstance(output_end, bytes)
+    assert isinstance(output_start, bytes)
+    assert isinstance(input_end, bytes)
+    assert isinstance(input_start, bytes)
+
+    try:
+        sighash = SighashRange(
+            input_start=bytes_to_int(input_start),
+            input_end=bytes_to_int(input_end),
+            output_start=bytes_to_int(output_start),
+            output_end=bytes_to_int(output_end),
+        )
+    except Exception as e:
+        raise CustomSighashModelInvalid('Could not construct sighash range.') from e
+
+    if context.extras.input_index not in sighash.get_input_indexes():
+        raise InputNotSelectedError(
+            f'Input at index {context.extras.input_index} must select itself when using a custom sighash.'
+        )
+
+    context.set_sighash(sighash)
+
+
 def op_max_inputs_outputs(context: ScriptContext) -> None:
     """Pop two items from the stack, constructing an inputs and outputs limit and setting it in the script context."""
     if len(context.stack) < 2:
@@ -706,6 +738,7 @@ def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
         case Opcode.OP_CHECKDATASIG: op_checkdatasig(context)
         case Opcode.OP_FIND_P2PKH: op_find_p2pkh(context)
         case Opcode.OP_SIGHASH_BITMASK: op_sighash_bitmask(context)
+        case Opcode.OP_SIGHASH_RANGE: op_sighash_range(context)
         case Opcode.OP_MAX_INPUTS_OUTPUTS: op_max_inputs_outputs(context)
         case _: raise ScriptError(f'unknown opcode: {opcode}')
 

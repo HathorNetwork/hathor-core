@@ -20,7 +20,7 @@ import pytest
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
 from hathor.transaction.scripts.script_context import ScriptContext
-from hathor.transaction.scripts.sighash import SighashAll, SighashBitmask
+from hathor.transaction.scripts.sighash import SighashAll, SighashBitmask, SighashRange
 
 
 def test_defaults() -> None:
@@ -86,6 +86,45 @@ def test_sighash_bitmask(outputs_bitmask: int, selected_outputs: set[int]) -> No
     context.set_sighash(sighash_bitmask)
 
     data = tx.get_custom_sighash_data(sighash_bitmask)
+    assert context.get_tx_sighash_data(tx) == hashlib.sha256(data).digest()
+
+    with pytest.raises(ScriptError) as e:
+        context.set_sighash(Mock())
+
+    assert str(e.value) == 'Cannot modify sighash after it is already set.'
+    assert context.get_selected_outputs() == selected_outputs
+
+
+@pytest.mark.parametrize(
+    ['output_start', 'output_end', 'selected_outputs'],
+    [
+        (100, 100, set()),
+        (0, 1, {0}),
+        (1, 2, {1}),
+        (0, 2, {0, 1}),
+    ]
+)
+def test_sighash_range(output_start: int, output_end: int, selected_outputs: set[int]) -> None:
+    settings = Mock()
+    settings.MAX_NUM_INPUTS = 88
+    settings.MAX_NUM_OUTPUTS = 99
+
+    context = ScriptContext(settings=settings, stack=Mock(), logs=[], extras=Mock())
+    tx = Transaction(
+        inputs=[
+            TxInput(tx_id=b'tx1', index=0, data=b''),
+            TxInput(tx_id=b'tx2', index=1, data=b''),
+        ],
+        outputs=[
+            TxOutput(value=11, script=b''),
+            TxOutput(value=22, script=b''),
+        ]
+    )
+
+    sighash_range = SighashRange(input_start=0, input_end=2, output_start=output_start, output_end=output_end)
+    context.set_sighash(sighash_range)
+
+    data = tx.get_custom_sighash_data(sighash_range)
     assert context.get_tx_sighash_data(tx) == hashlib.sha256(data).digest()
 
     with pytest.raises(ScriptError) as e:

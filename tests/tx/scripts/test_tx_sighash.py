@@ -15,7 +15,7 @@
 from unittest.mock import patch
 
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts.sighash import SighashBitmask
+from hathor.transaction.scripts.sighash import SighashBitmask, SighashRange
 
 
 def test_get_sighash_bitmask() -> None:
@@ -60,18 +60,52 @@ def test_get_sighash_bitmask() -> None:
 
         tx.get_custom_sighash_data(SighashBitmask(inputs=0b1101_1010, outputs=0b1110_0010))
         mock.assert_called_once_with(
-            inputs=[
-                inputs[1],
-                inputs[3],
-                inputs[4],
-                inputs[6],
-                inputs[7],
-            ],
-            outputs=[
-                outputs[1],
-                outputs[5],
-                outputs[6],
-                outputs[7],
-            ]
+            inputs=[inputs[1], inputs[3], inputs[4], inputs[6], inputs[7]],
+            outputs=[outputs[1], outputs[5], outputs[6], outputs[7]]
         )
+        mock.reset_mock()
+
+        tx.get_custom_sighash_data(SighashBitmask(inputs=0b1111_1111, outputs=0b1111_1111))
+        mock.assert_called_once_with(inputs=inputs, outputs=outputs)
+        mock.reset_mock()
+
+
+def test_get_sighash_range() -> None:
+    inputs = [
+        TxInput(tx_id=b'tx1', index=0, data=b''),
+        TxInput(tx_id=b'tx2', index=1, data=b''),
+        TxInput(tx_id=b'tx3', index=1, data=b''),
+        TxInput(tx_id=b'tx4', index=1, data=b''),
+        TxInput(tx_id=b'tx5', index=1, data=b''),
+        TxInput(tx_id=b'tx6', index=1, data=b''),
+        TxInput(tx_id=b'tx7', index=1, data=b''),
+        TxInput(tx_id=b'tx8', index=1, data=b''),
+    ]
+    outputs = [
+        TxOutput(value=11, script=b''),
+        TxOutput(value=22, script=b''),
+        TxOutput(value=33, script=b''),
+        TxOutput(value=44, script=b''),
+        TxOutput(value=55, script=b''),
+        TxOutput(value=66, script=b''),
+        TxOutput(value=77, script=b''),
+        TxOutput(value=88, script=b''),
+    ]
+    tx = Transaction(inputs=inputs, outputs=outputs)
+
+    with patch.object(tx, '_get_sighash') as mock:
+        tx.get_custom_sighash_data(SighashRange(input_start=34, input_end=34, output_start=123, output_end=123))
+        mock.assert_called_once_with(inputs=[], outputs=[])
+        mock.reset_mock()
+
+        tx.get_custom_sighash_data(SighashRange(input_start=0, input_end=1, output_start=0, output_end=0))
+        mock.assert_called_once_with(inputs=inputs[0:1], outputs=[])
+        mock.reset_mock()
+
+        tx.get_custom_sighash_data(SighashRange(input_start=2, input_end=7, output_start=4, output_end=8))
+        mock.assert_called_once_with(inputs=inputs[2:7], outputs=outputs[4:8])
+        mock.reset_mock()
+
+        tx.get_custom_sighash_data(SighashRange(input_start=0, input_end=8, output_start=0, output_end=8))
+        mock.assert_called_once_with(inputs=inputs, outputs=outputs)
         mock.reset_mock()

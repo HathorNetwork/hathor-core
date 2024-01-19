@@ -63,9 +63,10 @@ from hathor.transaction.scripts.opcode import (
     op_pushdata,
     op_pushdata1,
     op_sighash_bitmask,
+    op_sighash_range,
 )
 from hathor.transaction.scripts.script_context import ScriptContext
-from hathor.transaction.scripts.sighash import SighashBitmask
+from hathor.transaction.scripts.sighash import SighashBitmask, SighashRange
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import HDWallet
 from tests import unittest
@@ -1017,6 +1018,46 @@ class TestScripts(unittest.TestCase):
             SighashBitmask(
                 inputs=0b111,
                 outputs=0b101
+            )
+        )
+
+    def test_op_sighash_range(self) -> None:
+        context = Mock(spec_set=ScriptContext)
+        with self.assertRaises(MissingStackItems):
+            context.stack = []
+            op_sighash_range(context)
+
+        with self.assertRaises(MissingStackItems):
+            context.stack = [b'', b'', b'']
+            op_sighash_range(context)
+
+        with self.assertRaises(AssertionError):
+            context.stack = [10, 20, 30, 40]
+            op_sighash_range(context)
+
+        context.stack = [bytes([1, 2]), bytes([3, 5]), bytes([5, 6]), bytes([7, 8])]
+        context.extras = Mock(spec_set=ScriptExtras)
+
+        with self.assertRaises(CustomSighashModelInvalid):
+            op_sighash_range(context)
+
+        context.stack = [bytes([10]), bytes([20]), bytes([30]), bytes([40])]
+        context.extras.input_index = 3
+
+        with self.assertRaises(InputNotSelectedError):
+            op_sighash_range(context)
+
+        context.stack = [bytes([10]), bytes([20]), bytes([30]), bytes([40])]
+        context.extras.input_index = 15
+        op_sighash_range(context)
+
+        self.assertEqual(context.stack, [])
+        context.set_sighash.assert_called_once_with(
+            SighashRange(
+                input_start=10,
+                input_end=20,
+                output_start=30,
+                output_end=40,
             )
         )
 

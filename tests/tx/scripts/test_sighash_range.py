@@ -23,13 +23,13 @@ from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InputOutputMismatch, InvalidInputData, InvalidScriptError
 from hathor.transaction.scripts.p2pkh import P2PKH
-from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
+from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashRange
 from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
 
 
-class BaseSighashTest(unittest.TestCase):
+class BaseSighashRangeTest(unittest.TestCase):
     __test__ = False
 
     def setUp(self) -> None:
@@ -55,7 +55,7 @@ class BaseSighashTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager1)
 
     @patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True)
-    def test_sighash_bitmask(self) -> None:
+    def test_sighash_range(self) -> None:
         # Create a new test token
         token_creation_tx = create_tokens(self.manager1, self.address1_b58)
         token_uid = token_creation_tx.tokens[0]
@@ -82,15 +82,15 @@ class BaseSighashTest(unittest.TestCase):
         )
         self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
 
-        # Alice signs her input using sighash bitmasks, instead of sighash_all.
-        sighash_bitmask = SighashBitmask(inputs=0b1, outputs=0b1)
-        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_bitmask)
+        # Alice signs her input using sighash range, instead of sighash_all.
+        sighash_range = SighashRange(input_start=0, input_end=1, output_start=0, output_end=1)
+        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_range)
         assert self.manager1.wallet
         public_bytes1, signature1 = self.manager1.wallet.get_input_aux_data(data_to_sign1, self.private_key1)
         tokens_input.data = P2PKH.create_input_data(
             public_key_bytes=public_bytes1,
             signature=signature1,
-            sighash=sighash_bitmask,
+            sighash=sighash_range,
         )
 
         # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs
@@ -126,7 +126,7 @@ class BaseSighashTest(unittest.TestCase):
         self.manager1.propagate_tx(atomic_swap_tx_clone, fails_silently=False)
 
     @patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True)
-    def test_sighash_bitmask_with_limit(self) -> None:
+    def test_sighash_range_with_limit(self) -> None:
         # Create a new test token
         token_creation_tx = create_tokens(self.manager1, self.address1_b58)
         token_uid = token_creation_tx.tokens[0]
@@ -153,16 +153,16 @@ class BaseSighashTest(unittest.TestCase):
         )
         self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
 
-        # Alice signs her input using sighash bitmasks, instead of sighash_all.
+        # Alice signs her input using sighash range, instead of sighash_all.
         # She also sets max inputs and max outputs limits, including one output for change.
-        sighash_bitmask = SighashBitmask(inputs=0b1, outputs=0b1)
-        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_bitmask)
+        sighash_range = SighashRange(input_start=0, input_end=1, output_start=0, output_end=1)
+        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_range)
         assert self.manager1.wallet
         public_bytes1, signature1 = self.manager1.wallet.get_input_aux_data(data_to_sign1, self.private_key1)
         tokens_input.data = P2PKH.create_input_data(
             public_key_bytes=public_bytes1,
             signature=signature1,
-            sighash=sighash_bitmask,
+            sighash=sighash_range,
             inputs_outputs_limit=InputsOutputsLimit(max_inputs=2, max_outputs=3)
         )
 
@@ -206,7 +206,7 @@ class BaseSighashTest(unittest.TestCase):
             self.manager1.propagate_tx(atomic_swap_tx_clone, fails_silently=False)
 
     @patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True)
-    def test_sighash_bitmask_input_not_selected(self) -> None:
+    def test_sighash_range_input_not_selected(self) -> None:
         # Create a new test token
         token_creation_tx = create_tokens(self.manager1, self.address1_b58)
         token_uid = token_creation_tx.tokens[0]
@@ -230,23 +230,23 @@ class BaseSighashTest(unittest.TestCase):
         )
         self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
 
-        # Alice signs her token input using sighash bitmasks, instead of sighash_all.
-        sighash_bitmask = SighashBitmask(inputs=0b01, outputs=0b00)
-        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_bitmask)
+        # Alice signs her token input using sighash range, instead of sighash_all.
+        sighash_range = SighashRange(input_start=0, input_end=1, output_start=0, output_end=0)
+        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_range)
         assert self.manager1.wallet
         public_bytes1, signature1 = self.manager1.wallet.get_input_aux_data(data_to_sign1, self.private_key1)
         tokens_input.data = P2PKH.create_input_data(
             public_key_bytes=public_bytes1,
             signature=signature1,
-            sighash=sighash_bitmask,
+            sighash=sighash_range,
         )
 
-        # Alice signs her genesis input using the same sighash, so the genesis input is not selected in the bitmask.
+        # Alice signs her genesis input using the same sighash, so the genesis input is not selected in the range.
         public_bytes1, signature1 = self.manager1.wallet.get_input_aux_data(data_to_sign1, self.genesis_private_key)
         genesis_input.data = P2PKH.create_input_data(
             public_key_bytes=public_bytes1,
             signature=signature1,
-            sighash=sighash_bitmask,
+            sighash=sighash_range,
         )
 
         # The inputs are invalid, since one of them doesn't select itself.
@@ -261,7 +261,7 @@ class BaseSighashTest(unittest.TestCase):
         self.assertEqual(str(e.value), 'Input at index 1 must select itself when using a custom sighash.')
 
     @patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True)
-    def test_sighash_bitmask_nonexistent_input(self) -> None:
+    def test_sighash_range_nonexistent_input(self) -> None:
         # Create a new test token
         token_creation_tx = create_tokens(self.manager1, self.address1_b58)
         token_uid = token_creation_tx.tokens[0]
@@ -287,15 +287,15 @@ class BaseSighashTest(unittest.TestCase):
         )
         self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
 
-        # Alice signs her input using sighash bitmasks, instead of sighash_all.
-        sighash_bitmask = SighashBitmask(inputs=0b1, outputs=0b1)
-        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_bitmask)
+        # Alice signs her input using sighash range, instead of sighash_all.
+        sighash_range = SighashRange(input_start=0, input_end=1, output_start=0, output_end=1)
+        data_to_sign1 = atomic_swap_tx.get_custom_sighash_data(sighash_range)
         assert self.manager1.wallet
         public_bytes1, signature1 = self.manager1.wallet.get_input_aux_data(data_to_sign1, self.private_key1)
         tokens_input.data = P2PKH.create_input_data(
             public_key_bytes=public_bytes1,
             signature=signature1,
-            sighash=SighashBitmask(inputs=0b11, outputs=0b1),
+            sighash=SighashRange(input_start=0, input_end=2, output_start=0, output_end=1),
         )
 
         # The input is invalid, since it selects a nonexistent input
@@ -308,11 +308,11 @@ class BaseSighashTest(unittest.TestCase):
             self.manager1.verification_service.verify(atomic_swap_tx)
 
 
-class SyncV1SighashTest(unittest.SyncV1Params, BaseSighashTest):
+class SyncV1SighashTest(unittest.SyncV1Params, BaseSighashRangeTest):
     __test__ = True
 
 
-class SyncV2SighashTest(unittest.SyncV2Params, BaseSighashTest):
+class SyncV2SighashTest(unittest.SyncV2Params, BaseSighashRangeTest):
     __test__ = True
 
 
