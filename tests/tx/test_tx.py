@@ -20,6 +20,7 @@ from hathor.transaction.exceptions import (
     InvalidInputDataSize,
     InvalidOutputScriptSize,
     InvalidOutputValue,
+    MissingSighashAll,
     NoInputError,
     OutputNotSelected,
     ParentDoesNotExist,
@@ -212,6 +213,37 @@ class BaseTransactionTest(unittest.TestCase):
             self.manager.verification_service.verify(tx)
 
         self.assertEqual(str(e.value), "There are more custom sighash subsets than the configured maximum (1 > 0).")
+
+    @patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True)
+    def test_missing_sighash_all(self) -> None:
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        tx_input = TxInput(genesis_block.hash, 0, b'')
+        tx = Transaction(
+            weight=1,
+            inputs=[tx_input],
+            outputs=[output],
+            parents=parents,
+            storage=self.tx_storage,
+            timestamp=self.last_block.timestamp + 1
+        )
+
+        sighash = SighashBitmask(inputs=0b1, outputs=0b1)
+        data_to_sign = tx.get_custom_sighash_data(sighash)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        tx_input.data = P2PKH.create_input_data(public_bytes, signature, sighash=sighash)
+
+        self.manager.cpu_mining_service.resolve(tx)
+        with pytest.raises(MissingSighashAll) as e:
+            self.manager.verification_service.verify(tx)
+
+        self.assertEqual(str(e.value), 'At least one input is required to be signed using SighashAll.')
 
     def _gen_tx_spending_genesis_block(self):
         parents = [tx.hash for tx in self.genesis_txs]

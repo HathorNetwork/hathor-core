@@ -26,6 +26,7 @@ from hathor.transaction.exceptions import (
     InvalidInputData,
     InvalidInputDataSize,
     InvalidToken,
+    MissingSighashAll,
     NoInputError,
     OutputNotSelected,
     RewardLocked,
@@ -38,7 +39,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.scripts import script_eval
 from hathor.transaction.scripts.script_context import ScriptContext
-from hathor.transaction.scripts.sighash import get_unique_sighash_subsets
+from hathor.transaction.scripts.sighash import SighashAll, get_unique_sighash_subsets
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -145,7 +146,6 @@ class TransactionVerifier:
         script contexts.
         """
         all_contexts: list[ScriptContext] = []
-
         for input_index, input_tx in enumerate(tx.inputs):
             try:
                 script_context = script_eval(tx, input_tx, spent_txs[input_tx.tx_id], input_index=input_index)
@@ -156,7 +156,6 @@ class TransactionVerifier:
 
         all_sighashes = [context.get_sighash() for context in all_contexts]
         sighash_subsets = get_unique_sighash_subsets(all_sighashes)
-
         all_max_sighash_subsets = [context.get_max_sighash_subsets() for context in all_contexts]
         valid_max_sighash_subsets: list[int] = [
             max_subsets for max_subsets in all_max_sighash_subsets if max_subsets is not None
@@ -175,6 +174,9 @@ class TransactionVerifier:
         for index, _ in enumerate(tx.outputs):
             if index not in all_selected_outputs:
                 raise OutputNotSelected(f'Output at index {index} is not signed by any input.')
+
+        if not any(isinstance(sighash, SighashAll) for sighash in all_sighashes):
+            raise MissingSighashAll('At least one input is required to be signed using SighashAll.')
 
     def verify_reward_locked(self, tx: Transaction) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
