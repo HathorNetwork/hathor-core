@@ -41,7 +41,7 @@ class BaseWalletHDTest(unittest.TestCase):
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, [out], self.tx_storage)
         tx1.update_hash()
         verifier = self.manager.verification_service.verifiers.tx
-        verifier.verify_script(tx=tx1, spent_tx=block, input_index=0)
+        verifier.verify_scripts(tx1, spent_txs={block.hash: block})
         tx1.storage = self.tx_storage
         tx1.get_metadata().validation = ValidationState.FULL
         self.wallet.on_new_tx(tx1)
@@ -61,7 +61,7 @@ class BaseWalletHDTest(unittest.TestCase):
         tx2.storage = self.tx_storage
         tx2.update_hash()
         tx2.storage = self.tx_storage
-        verifier.verify_script(tx=tx2, spent_tx=tx1, input_index=0)
+        verifier.verify_scripts(tx2, spent_txs={tx1.hash: tx1})
         tx2.get_metadata().validation = ValidationState.FULL
         self.tx_storage.save_transaction(tx2)
         self.wallet.on_new_tx(tx2)
