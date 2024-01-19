@@ -38,7 +38,6 @@ CHECKPOINTS:
 
 FEATURE_ACTIVATION:
   evaluation_interval: 40_320
-  enable_usage: true
   default_threshold: 30_240 # 30240 = 75% of evaluation_interval (40320)
   features:
     #### Second Phased Testing features ####

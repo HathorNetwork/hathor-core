@@ -56,7 +56,6 @@ SETTINGS = HathorSettings(
     ],
     FEATURE_ACTIVATION=FeatureActivationSettings(
         evaluation_interval=40_320,
-        enable_usage=True,
         default_threshold=30240,
         features={
             Feature.NOP_FEATURE_4: Criteria(

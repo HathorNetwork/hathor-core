@@ -59,7 +59,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         method calls to make sure we're executing it in the intended, most performatic way.
         """
         feature_settings = FeatureSettings(
-            enable_usage=True,
             evaluation_interval=4,
             max_signal_bits=4,
             default_threshold=3,
@@ -336,7 +335,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
     def test_reorg(self) -> None:
         feature_settings = FeatureSettings(
-            enable_usage=True,
             evaluation_interval=4,
             max_signal_bits=4,
             default_threshold=3,
@@ -551,7 +549,6 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         Tests that feature states are correctly retrieved from an existing storage, so no recalculation is required.
         """
         feature_settings = FeatureSettings(
-            enable_usage=True,
             evaluation_interval=4,
             max_signal_bits=4,
             default_threshold=3,

@@ -38,7 +38,7 @@ class VertexVerifiers(NamedTuple):
         *,
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None,
+        feature_service: FeatureService,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using the default verifier for each vertex type,
@@ -60,7 +60,7 @@ class VertexVerifiers(NamedTuple):
         settings: HathorSettings,
         vertex_verifier: VertexVerifier,
         daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None,
+        feature_service: FeatureService,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using a custom vertex_verifier.
