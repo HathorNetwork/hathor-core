@@ -28,9 +28,14 @@ from hathor.crypto.util import (
     is_pubkey_compressed,
 )
 from hathor.transaction.exceptions import (
+    CustomSighashModelInvalid,
     EqualVerifyFailed,
+    InputNotSelectedError,
+    InputsOutputsLimitModelInvalid,
     InvalidScriptError,
     InvalidStackData,
+    MaxInputsExceededError,
+    MaxOutputsExceededError,
     MissingStackItems,
     OracleChecksigFailed,
     ScriptError,
@@ -39,6 +44,8 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.scripts.execute import Stack, binary_to_int, decode_opn, get_data_value, get_script_op
 from hathor.transaction.scripts.script_context import ScriptContext
+from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask, SighashRange
+from hathor.transaction.util import bytes_to_int
 
 
 class Opcode(IntEnum):
@@ -72,6 +79,10 @@ class Opcode(IntEnum):
     OP_DATA_GREATERTHAN = 0xC1
     OP_FIND_P2PKH = 0xD0
     OP_DATA_MATCH_VALUE = 0xD1
+    OP_SIGHASH_BITMASK = 0xE0
+    OP_SIGHASH_RANGE = 0xE1
+    OP_MAX_SIGHASH_SUBSETS = 0xE2
+    OP_MAX_INPUTS_OUTPUTS = 0xE3
 
     @classmethod
     def is_pushdata(cls, opcode: int) -> bool:
@@ -249,7 +260,8 @@ def op_checksig(context: ScriptContext) -> None:
         # pubkey is not compressed public key
         raise ScriptError('OP_CHECKSIG: pubkey is not a public key') from e
     try:
-        public_key.verify(signature, context.extras.tx.get_sighash_all_data(), ec.ECDSA(hashes.SHA256()))
+        sighash_data = context.get_tx_sighash_data(context.extras.tx)
+        public_key.verify(signature, sighash_data, ec.ECDSA(hashes.SHA256()))
         # valid, push true to stack
         context.stack.append(1)
     except InvalidSignature:
@@ -579,21 +591,25 @@ def op_checkmultisig(context: ScriptContext) -> None:
     # For each signature we check if it's valid with one of the public keys
     # Signatures must be in order (same as the public keys in the multi sig wallet)
     pubkey_index = 0
+    old_stack = context.stack
     for signature in signatures:
         while pubkey_index < len(pubkeys):
             pubkey = pubkeys[pubkey_index]
             new_stack = [signature, pubkey]
-            op_checksig(ScriptContext(stack=new_stack, logs=context.logs, extras=context.extras))
+            context.stack = new_stack
+            op_checksig(context)
             result = new_stack.pop()
             pubkey_index += 1
             if result == 1:
                 break
         else:
             # finished all pubkeys and did not verify all signatures
+            context.stack = old_stack
             context.stack.append(0)
             return
 
     # If all signatures are valids we push 1
+    context.stack = old_stack
     context.stack.append(1)
 
 
@@ -617,6 +633,103 @@ def op_integer(opcode: int, stack: Stack) -> None:
         raise ScriptError(e) from e
 
 
+def op_sighash_bitmask(context: ScriptContext) -> None:
+    """Pop two items from the stack, constructing a sighash bitmask and setting it in the script context."""
+    if len(context.stack) < 2:
+        raise MissingStackItems(f'OP_SIGHASH_BITMASK: expected 2 elements on stack, has {len(context.stack)}')
+
+    outputs = context.stack.pop()
+    inputs = context.stack.pop()
+    assert isinstance(inputs, bytes)
+    assert isinstance(outputs, bytes)
+
+    try:
+        sighash = SighashBitmask(
+            inputs=bytes_to_int(inputs),
+            outputs=bytes_to_int(outputs)
+        )
+    except Exception as e:
+        raise CustomSighashModelInvalid('Could not construct sighash bitmask.') from e
+
+    if context.extras.input_index not in sighash.get_input_indexes():
+        raise InputNotSelectedError(
+            f'Input at index {context.extras.input_index} must select itself when using a custom sighash.'
+        )
+
+    context.set_sighash(sighash)
+
+
+def op_sighash_range(context: ScriptContext) -> None:
+    """Pop four items from the stack, constructing a sighash range and setting it in the script context."""
+    if len(context.stack) < 4:
+        raise MissingStackItems(f'OP_SIGHASH_RANGE: expected 4 elements on stack, has {len(context.stack)}')
+
+    output_end = context.stack.pop()
+    output_start = context.stack.pop()
+    input_end = context.stack.pop()
+    input_start = context.stack.pop()
+    assert isinstance(output_end, bytes)
+    assert isinstance(output_start, bytes)
+    assert isinstance(input_end, bytes)
+    assert isinstance(input_start, bytes)
+
+    try:
+        sighash = SighashRange(
+            input_start=bytes_to_int(input_start),
+            input_end=bytes_to_int(input_end),
+            output_start=bytes_to_int(output_start),
+            output_end=bytes_to_int(output_end),
+        )
+    except Exception as e:
+        raise CustomSighashModelInvalid('Could not construct sighash range.') from e
+
+    if context.extras.input_index not in sighash.get_input_indexes():
+        raise InputNotSelectedError(
+            f'Input at index {context.extras.input_index} must select itself when using a custom sighash.'
+        )
+
+    context.set_sighash(sighash)
+
+
+def op_max_sighash_subsets(context: ScriptContext) -> None:
+    """Pop one item from the stack, setting it in the script context."""
+    if len(context.stack) < 1:
+        raise MissingStackItems(f'OP_MAX_SIGHASH_SUBSETS: expected 1 element on stack, has {len(context.stack)}')
+
+    max_subsets = context.stack.pop()
+    assert isinstance(max_subsets, bytes)
+    max_subsets = bytes_to_int(max_subsets)
+
+    context.set_max_sighash_subsets(max_subsets)
+
+
+def op_max_inputs_outputs(context: ScriptContext) -> None:
+    """Pop two items from the stack, constructing an inputs and outputs limit and setting it in the script context."""
+    if len(context.stack) < 2:
+        raise MissingStackItems(f'OP_MAX_INPUTS_OUTPUTS: expected 2 elements on stack, has {len(context.stack)}')
+
+    max_outputs = context.stack.pop()
+    max_inputs = context.stack.pop()
+    assert isinstance(max_inputs, bytes)
+    assert isinstance(max_outputs, bytes)
+
+    try:
+        limit = InputsOutputsLimit(
+            max_inputs=bytes_to_int(max_inputs),
+            max_outputs=bytes_to_int(max_outputs)
+        )
+    except Exception as e:
+        raise InputsOutputsLimitModelInvalid("Could not construct inputs and outputs limits.") from e
+
+    tx_inputs_len = len(context.extras.tx.inputs)
+    if tx_inputs_len > limit.max_inputs:
+        raise MaxInputsExceededError(f'Maximum number of inputs exceeded ({tx_inputs_len} > {limit.max_inputs}).')
+
+    tx_outputs_len = len(context.extras.tx.outputs)
+    if tx_outputs_len > limit.max_outputs:
+        raise MaxOutputsExceededError(f'Maximum number of outputs exceeded ({tx_outputs_len} > {limit.max_outputs}).')
+
+
 def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
     """
     Execute a function opcode.
@@ -625,6 +738,8 @@ def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
         opcode: the opcode to be executed.
         context: the script context to be manipulated.
     """
+    if not is_opcode_valid(opcode):
+        raise ScriptError(f'Opcode "{opcode.name}" is invalid.')
     context.logs.append(f'Executing function opcode {opcode.name} ({hex(opcode.value)})')
     match opcode:
         case Opcode.OP_DUP: op_dup(context)
@@ -639,4 +754,28 @@ def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
         case Opcode.OP_DATA_MATCH_VALUE: op_data_match_value(context)
         case Opcode.OP_CHECKDATASIG: op_checkdatasig(context)
         case Opcode.OP_FIND_P2PKH: op_find_p2pkh(context)
+        case Opcode.OP_SIGHASH_BITMASK: op_sighash_bitmask(context)
+        case Opcode.OP_SIGHASH_RANGE: op_sighash_range(context)
+        case Opcode.OP_MAX_SIGHASH_SUBSETS: op_max_sighash_subsets(context)
+        case Opcode.OP_MAX_INPUTS_OUTPUTS: op_max_inputs_outputs(context)
         case _: raise ScriptError(f'unknown opcode: {opcode}')
+
+
+def is_opcode_valid(opcode: Opcode) -> bool:
+    """Return whether an opcode is valid, that is, it's currently enabled."""
+    valid_opcodes = [
+        Opcode.OP_DUP,
+        Opcode.OP_EQUAL,
+        Opcode.OP_EQUALVERIFY,
+        Opcode.OP_CHECKSIG,
+        Opcode.OP_HASH160,
+        Opcode.OP_GREATERTHAN_TIMESTAMP,
+        Opcode.OP_CHECKMULTISIG,
+        Opcode.OP_DATA_STREQUAL,
+        Opcode.OP_DATA_GREATERTHAN,
+        Opcode.OP_DATA_MATCH_VALUE,
+        Opcode.OP_CHECKDATASIG,
+        Opcode.OP_FIND_P2PKH,
+    ]
+
+    return opcode in valid_opcodes

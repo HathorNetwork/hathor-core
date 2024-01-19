@@ -23,12 +23,13 @@ from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import iter_spent_rewards
 from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
-from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.exceptions import InvalidScriptError, InvalidToken
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
 
 if TYPE_CHECKING:
+    from hathor.transaction.scripts.sighash import CustomSighash
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 cpu = get_cpu_profiler()
@@ -217,29 +218,34 @@ class Transaction(BaseTransaction):
         if self._sighash_cache:
             return self._sighash_cache
 
+        sighash = self._get_sighash(inputs=self.inputs, outputs=self.outputs)
+        self._sighash_cache = sighash
+
+        return sighash
+
+    def _get_sighash(self, *, inputs: list[TxInput], outputs: list[TxOutput]) -> bytes:
+        """Return the sighash data for this tx using a custom list of inputs and outputs."""
         struct_bytes = bytearray(
             pack(
                 _SIGHASH_ALL_FORMAT_STRING,
                 self.signal_bits,
                 self.version,
                 len(self.tokens),
-                len(self.inputs),
-                len(self.outputs)
+                len(inputs),
+                len(outputs)
             )
         )
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
 
-        for tx_input in self.inputs:
+        for tx_input in inputs:
             struct_bytes += tx_input.get_sighash_bytes()
 
-        for tx_output in self.outputs:
+        for tx_output in outputs:
             struct_bytes += bytes(tx_output)
 
-        ret = bytes(struct_bytes)
-        self._sighash_cache = ret
-        return ret
+        return bytes(struct_bytes)
 
     def get_sighash_all_data(self) -> bytes:
         """Return the sha256 hash of sighash_all"""
@@ -247,6 +253,19 @@ class Transaction(BaseTransaction):
             self._sighash_data_cache = hashlib.sha256(self.get_sighash_all()).digest()
 
         return self._sighash_data_cache
+
+    def get_custom_sighash_data(self, sighash: 'CustomSighash') -> bytes:
+        """
+        Return the sighash data for this tx using a custom sighash type.
+        Inputs and outputs are selected according to indexes selected by the sighash.
+        """
+        try:
+            inputs = [self.inputs[index] for index in sighash.get_input_indexes()]
+            outputs = [self.outputs[index] for index in sighash.get_output_indexes()]
+        except IndexError:
+            raise InvalidScriptError('Custom sighash selected nonexistent input/output.')
+
+        return self._get_sighash(inputs=inputs, outputs=outputs)
 
     def get_token_uid(self, index: int) -> TokenUid:
         """Returns the token uid with corresponding index from the tx token uid list.

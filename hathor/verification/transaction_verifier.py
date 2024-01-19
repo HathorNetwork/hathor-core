@@ -16,7 +16,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
-from hathor.transaction import BaseTransaction, Transaction, TxInput
+from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     DuplicatedParents,
@@ -26,14 +26,20 @@ from hathor.transaction.exceptions import (
     InvalidInputData,
     InvalidInputDataSize,
     InvalidToken,
+    MissingSighashAll,
     NoInputError,
+    OutputNotSelected,
     RewardLocked,
     ScriptError,
     TimestampError,
     TooManyInputs,
+    TooManySighashSubsets,
     TooManySigOps,
     WeightError,
 )
+from hathor.transaction.scripts import script_eval
+from hathor.transaction.scripts.script_context import ScriptContext
+from hathor.transaction.scripts.sighash import SighashAll, get_unique_sighash_subsets
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -97,8 +103,10 @@ class TransactionVerifier:
         """Verify inputs signatures and ownership and all inputs actually exist"""
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
+        spent_txs: dict[VertexId, BaseTransaction] = {}
         spent_outputs: set[tuple[VertexId, int]] = set()
-        for input_tx in tx.inputs:
+
+        for input_index, input_tx in enumerate(tx.inputs):
             if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
                 raise InvalidInputDataSize('size: {} and max-size: {}'.format(
                     len(input_tx.data), self._settings.MAX_INPUT_DATA_SIZE
@@ -107,6 +115,7 @@ class TransactionVerifier:
             try:
                 spent_tx = tx.get_spent_tx(input_tx)
                 assert spent_tx.hash is not None
+                spent_txs[spent_tx.hash] = spent_tx
                 if input_tx.index >= len(spent_tx.outputs):
                     raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                         input_tx.tx_id.hex(), input_tx.index))
@@ -121,9 +130,6 @@ class TransactionVerifier:
                     spent_tx.timestamp,
                 ))
 
-            if not skip_script:
-                self.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx)
-
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
             if key in spent_outputs:
@@ -131,17 +137,46 @@ class TransactionVerifier:
                     tx.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
 
-    def verify_script(self, *, tx: Transaction, input_tx: TxInput, spent_tx: BaseTransaction) -> None:
+        if not skip_script:
+            self.verify_scripts(tx, spent_txs=spent_txs)
+
+    def verify_scripts(self, tx: Transaction, *, spent_txs: dict[VertexId, BaseTransaction]) -> None:
         """
-        :type tx: Transaction
-        :type input_tx: TxInput
-        :type spent_tx: Transaction
+        Verify the tx's input scripts by running them, checking their signatures, and evaluating the resulting
+        script contexts.
         """
-        from hathor.transaction.scripts import script_eval
-        try:
-            script_eval(tx, input_tx, spent_tx)
-        except ScriptError as e:
-            raise InvalidInputData(e) from e
+        all_contexts: list[ScriptContext] = []
+        for input_index, input_tx in enumerate(tx.inputs):
+            try:
+                script_context = script_eval(tx, input_tx, spent_txs[input_tx.tx_id], input_index=input_index)
+            except ScriptError as e:
+                raise InvalidInputData(e) from e
+
+            all_contexts.append(script_context)
+
+        all_sighashes = [context.get_sighash() for context in all_contexts]
+        sighash_subsets = get_unique_sighash_subsets(all_sighashes)
+        all_max_sighash_subsets = [context.get_max_sighash_subsets() for context in all_contexts]
+        valid_max_sighash_subsets: list[int] = [
+            max_subsets for max_subsets in all_max_sighash_subsets if max_subsets is not None
+        ]
+
+        if len(valid_max_sighash_subsets) > 0:
+            max_sighash_subsets = min(valid_max_sighash_subsets)
+            if len(sighash_subsets) > max_sighash_subsets:
+                raise TooManySighashSubsets(
+                    f'There are more custom sighash subsets than the configured maximum '
+                    f'({len(sighash_subsets)} > {max_sighash_subsets}).'
+                )
+
+        all_selected_outputs_subsets = [context.get_selected_outputs() for context in all_contexts]
+        all_selected_outputs = set().union(*all_selected_outputs_subsets)
+        for index, _ in enumerate(tx.outputs):
+            if index not in all_selected_outputs:
+                raise OutputNotSelected(f'Output at index {index} is not signed by any input.')
+
+        if not any(isinstance(sighash, SighashAll) for sighash in all_sighashes):
+            raise MissingSighashAll('At least one input is required to be signed using SighashAll.')
 
     def verify_reward_locked(self, tx: Transaction) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only

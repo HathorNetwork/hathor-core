@@ -134,7 +134,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}
         self.assertEqual(cls_script.to_human_readable(), expected_dict)
 
-        script_eval(tx, tx_input, tx1)
+        script_eval(tx, tx_input, tx1, input_index=0)
 
         # Script error
         with self.assertRaises(ScriptError):

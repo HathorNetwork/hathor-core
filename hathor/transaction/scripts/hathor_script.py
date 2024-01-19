@@ -15,7 +15,16 @@
 import struct
 from typing import Union
 
+from typing_extensions import assert_never
+
 from hathor.transaction.scripts.opcode import Opcode
+from hathor.transaction.scripts.sighash import (
+    InputsOutputsLimit,
+    SighashAll,
+    SighashBitmask,
+    SighashRange,
+    SighashType,
+)
 
 
 class HathorScript:
@@ -49,3 +58,38 @@ class HathorScript:
             self.data += (bytes([len(data)]) + data)
         else:
             self.data += (bytes([Opcode.OP_PUSHDATA1]) + bytes([len(data)]) + data)
+
+    def push_sighash(self, sighash: SighashType) -> None:
+        """Push a custom sighash to the script."""
+        match sighash:
+            case SighashAll():
+                pass
+            case SighashBitmask():
+                self.pushData(sighash.inputs)
+                self.pushData(sighash.outputs)
+                self.addOpcode(Opcode.OP_SIGHASH_BITMASK)
+            case SighashRange():
+                self.pushData(sighash.input_start)
+                self.pushData(sighash.input_end)
+                self.pushData(sighash.output_start)
+                self.pushData(sighash.output_end)
+                self.addOpcode(Opcode.OP_SIGHASH_RANGE)
+            case _:
+                assert_never(sighash)
+
+    def push_max_sighash_subsets(self, max_subsets: int | None) -> None:
+        """Push a maximum limit for custom sighash subsets."""
+        if max_subsets is None:
+            return
+
+        self.pushData(max_subsets)
+        self.addOpcode(Opcode.OP_MAX_SIGHASH_SUBSETS)
+
+    def push_inputs_outputs_limit(self, limit: InputsOutputsLimit | None) -> None:
+        """Push a custom inputs and outputs limit to the script."""
+        if not limit:
+            return
+
+        self.pushData(limit.max_inputs)
+        self.pushData(limit.max_outputs)
+        self.addOpcode(Opcode.OP_MAX_INPUTS_OUTPUTS)

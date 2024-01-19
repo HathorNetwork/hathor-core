@@ -74,8 +74,20 @@ class ConflictingInputs(TxValidationError):
     """Inputs in the tx are spending the same output"""
 
 
+class OutputNotSelected(TxValidationError):
+    """At least one output is not selected for signing by some input."""
+
+
 class TooManyOutputs(TxValidationError):
     """More than 256 outputs"""
+
+
+class TooManySighashSubsets(TxValidationError):
+    """More sighash subsets than the configured maximum."""
+
+
+class MissingSighashAll(TxValidationError):
+    """At least one input is required to be signed using SighashAll."""
 
 
 class InvalidOutputValue(TxValidationError):
@@ -194,3 +206,25 @@ class VerifyFailed(ScriptError):
 
 class TimeLocked(ScriptError):
     """Transaction is invalid because it is time locked"""
+
+
+class InputNotSelectedError(ScriptError):
+    """Raised when an input does not select itself for signing in its script."""
+
+
+class MaxInputsExceededError(ScriptError):
+    """The transaction has more inputs than the maximum configured in the script."""
+
+
+class MaxOutputsExceededError(ScriptError):
+    """The transaction has more outputs than the maximum configured in the script."""
+
+
+class InputsOutputsLimitModelInvalid(ScriptError):
+    """
+    Raised when the inputs outputs limit model could not be constructed from the arguments provided in the script.
+    """
+
+
+class CustomSighashModelInvalid(ScriptError):
+    """Raised when the sighash model could not be constructed from the arguments provided in the script."""
