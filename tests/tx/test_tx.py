@@ -214,7 +214,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(block)
 
         with self.assertRaises(BlockWithInputs):
-            self.manager.verification_service.verify(block)
+            self._verifiers.block.verify_no_inputs(block)
 
     def test_merge_mined_no_magic(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -416,7 +416,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(ParentDoesNotExist):
-            self.manager.verification_service.verify(block)
+            self._verifiers.vertex.verify_parents(block)
 
     def test_block_number_parents(self):
         address = get_address_from_public_key(self.genesis_public_key)
@@ -434,7 +434,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(IncorrectParents):
-            self.manager.verification_service.verify(block)
+            self._verifiers.vertex.verify_parents(block)
 
     def test_tx_inputs_out_of_range(self):
         # we'll try to spend output 3 from genesis transaction, which does not exist
