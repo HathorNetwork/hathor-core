@@ -163,7 +163,7 @@ class BitSignalingService:
 
     def _get_signaling_features(self, block: Block) -> dict[Feature, Criteria]:
         """Given a specific block, return all features that are in a signaling state for that block."""
-        feature_descriptions = self._feature_service.get_bits_description(block=block)
+        feature_descriptions = self._feature_service.get_feature_info(block=block)
         signaling_features = {
             feature: description.criteria
             for feature, description in feature_descriptions.items()
