@@ -26,7 +26,7 @@ from hathor.feature_activation.feature_service import (
     FeatureService,
 )
 from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.model.feature_description import FeatureDescription
+from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block, TransactionMetadata
@@ -561,7 +561,7 @@ def test_get_state_undefined_feature(block_mocks: list[Block], service: FeatureS
     assert result == FeatureState.DEFINED
 
 
-def test_get_bits_description(tx_storage: TransactionStorage) -> None:
+def test_get_feature_info(tx_storage: TransactionStorage) -> None:
     criteria_mock_1 = Criteria.construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
     criteria_mock_2 = Criteria.construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
     feature_settings = FeatureSettings.construct(
@@ -584,11 +584,11 @@ def test_get_bits_description(tx_storage: TransactionStorage) -> None:
         return states[feature]
 
     with patch('hathor.feature_activation.feature_service.FeatureService.get_state', get_state):
-        result = service.get_bits_description(block=Mock())
+        result = service.get_feature_info(block=Mock())
 
     expected = {
-        Feature.NOP_FEATURE_1: FeatureDescription(criteria_mock_1, FeatureState.STARTED),
-        Feature.NOP_FEATURE_2: FeatureDescription(criteria_mock_2, FeatureState.FAILED),
+        Feature.NOP_FEATURE_1: FeatureInfo(criteria_mock_1, FeatureState.STARTED),
+        Feature.NOP_FEATURE_2: FeatureInfo(criteria_mock_2, FeatureState.FAILED),
     }
 
     assert result == expected
