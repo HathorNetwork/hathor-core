@@ -71,7 +71,7 @@ class BaseTokenTest(unittest.TestCase):
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verifiers.tx.verify_output_token_indexes(tx)
 
         # with 1 token uid in list
         tx.tokens = [bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')]
@@ -81,7 +81,7 @@ class BaseTokenTest(unittest.TestCase):
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verifiers.tx.verify_output_token_indexes(tx)
 
         # try hathor authority UTXO
         output = TxOutput(value, script, 0b10000000)
