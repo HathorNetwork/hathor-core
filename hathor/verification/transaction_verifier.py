@@ -38,6 +38,7 @@ from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
+from hathor.verification.verification_dependencies import TransactionDependencies
 
 cpu = get_cpu_profiler()
 
@@ -51,8 +52,6 @@ class TransactionVerifier:
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
-        assert tx.storage is not None
-
         # check if parents are duplicated
         parents_set = set(tx.parents)
         if len(tx.parents) > len(parents_set):
@@ -72,7 +71,7 @@ class TransactionVerifier:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
 
-    def verify_sigops_input(self, tx: Transaction) -> None:
+    def verify_sigops_input(self, tx: Transaction, tx_deps: TransactionDependencies) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
         """
         from hathor.transaction.scripts import get_sigops_count
@@ -80,7 +79,7 @@ class TransactionVerifier:
         n_txops = 0
         for tx_input in tx.inputs:
             try:
-                spent_tx = tx.get_spent_tx(tx_input)
+                spent_tx = tx_deps.storage.get_vertex(tx_input.tx_id)
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
             assert spent_tx.hash is not None
@@ -93,7 +92,7 @@ class TransactionVerifier:
             raise TooManySigOps(
                 'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(tx.hash_hex, n_txops))
 
-    def verify_inputs(self, tx: Transaction, *, skip_script: bool = False) -> None:
+    def verify_inputs(self, tx: Transaction, tx_deps: TransactionDependencies, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
@@ -105,7 +104,7 @@ class TransactionVerifier:
                 ))
 
             try:
-                spent_tx = tx.get_spent_tx(input_tx)
+                spent_tx = tx_deps.storage.get_vertex(input_tx.tx_id)
                 assert spent_tx.hash is not None
                 if input_tx.index >= len(spent_tx.outputs):
                     raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
