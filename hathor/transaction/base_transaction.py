@@ -33,7 +33,7 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid, TxOutputScript, VertexId
-from hathor.util import classproperty
+from hathor.util import classproperty, not_none
 
 if TYPE_CHECKING:
     from _hashlib import HASH
@@ -708,6 +708,7 @@ class BaseTransaction(ABC):
         self._update_parents_children_metadata()
         self._update_reward_lock_metadata()
         self._update_feature_activation_bit_counts()
+        self._update_closest_block_metadata()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
@@ -741,6 +742,51 @@ class BaseTransaction(ABC):
         assert isinstance(self, Block)
         # This method lazily calculates and stores the value in metadata
         self.get_feature_activation_bit_counts()
+
+    def _update_closest_block_metadata(self) -> None:
+        """
+        Set the tx's closest_block metadata.
+        For blocks, it's always None. For Transactions, it's the Block with the greatest height that is a direct
+        or indirect dependency (ancestor) of the transaction, including both funds and confirmation DAGs.
+        It's calculated by propagating the metadata forward in the DAG,
+        and it's used by Feature Activation for Transactions.
+        """
+        from hathor.transaction import Block, Transaction
+        if isinstance(self, Block):
+            return
+        assert isinstance(self, Transaction)
+        assert self.storage is not None
+        metadata = self.get_metadata()
+
+        if self.is_genesis:
+            metadata.closest_block = self._settings.GENESIS_BLOCK_HASH
+            return
+
+        closest_block: Block | None = None
+        dependency_ids = self.parents + [tx_input.tx_id for tx_input in self.inputs]
+
+        for vertex_id in dependency_ids:
+            vertex = self.storage.get_transaction(vertex_id)
+            vertex_meta = vertex.get_metadata()
+            this_closest_block: Block
+
+            if isinstance(vertex, Block):
+                assert vertex_meta.closest_block is None
+                this_closest_block = vertex
+            elif isinstance(vertex, Transaction):
+                this_closest_block_id = (
+                    self._settings.GENESIS_BLOCK_HASH if vertex.is_genesis else not_none(vertex_meta.closest_block)
+                )
+                this_closest_block = self.storage.get_block(this_closest_block_id)
+            else:
+                raise NotImplementedError
+
+            if not closest_block or (this_closest_block.get_height() > closest_block.get_height()):
+                closest_block = this_closest_block
+
+        assert closest_block is not None
+        assert closest_block.hash is not None
+        metadata.closest_block = closest_block.hash
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
