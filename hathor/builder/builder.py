@@ -108,7 +108,7 @@ class BuildArtifacts(NamedTuple):
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
-    [HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService],
+    [HathorSettingsType, DifficultyAdjustmentAlgorithm],
     VertexVerifiers
 ]
 
@@ -531,7 +531,8 @@ class Builder:
     def _get_or_create_verification_service(self) -> VerificationService:
         if self._verification_service is None:
             verifiers = self._get_or_create_vertex_verifiers()
-            self._verification_service = VerificationService(verifiers=verifiers)
+            feature_service = self._get_or_create_feature_service()
+            self._verification_service = VerificationService(verifiers=verifiers, feature_service=feature_service)
 
         return self._verification_service
 
@@ -547,17 +548,12 @@ class Builder:
     def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
         if self._vertex_verifiers is None:
             settings = self._get_or_create_settings()
-            feature_service = self._get_or_create_feature_service()
             daa = self._get_or_create_daa()
 
             if self._vertex_verifiers_builder:
-                self._vertex_verifiers = self._vertex_verifiers_builder(settings, daa, feature_service)
+                self._vertex_verifiers = self._vertex_verifiers_builder(settings, daa)
             else:
-                self._vertex_verifiers = VertexVerifiers.create_defaults(
-                    settings=settings,
-                    daa=daa,
-                    feature_service=feature_service,
-                )
+                self._vertex_verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
 
         return self._vertex_verifiers
 

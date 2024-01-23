@@ -279,12 +279,8 @@ class CliBuilder:
 
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
 
-        vertex_verifiers = VertexVerifiers.create_defaults(
-            settings=settings,
-            daa=daa,
-            feature_service=self.feature_service
-        )
-        verification_service = VerificationService(verifiers=vertex_verifiers)
+        vertex_verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
+        verification_service = VerificationService(verifiers=vertex_verifiers, feature_service=self.feature_service)
 
         cpu_mining_service = CpuMiningService()
 
