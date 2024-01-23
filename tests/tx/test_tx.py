@@ -1,6 +1,7 @@
 import base64
 import hashlib
 from math import isinf, isnan
+from unittest.mock import Mock
 
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode
@@ -77,8 +78,9 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
+        deps = TransactionDependencies.create(tx)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
+            self._verifiers.tx.verify_sum(deps)
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -488,7 +490,7 @@ class BaseTransactionTest(unittest.TestCase):
             self.manager.verification_service.verify(tx)
 
         with self.assertRaises(InexistentInput):
-            self._verifiers.tx.verify_inputs(tx, TransactionDependencies(SimpleMemoryStorage()))
+            self._verifiers.tx.verify_inputs(tx, TransactionDependencies(SimpleMemoryStorage(), Mock()))
 
     def test_tx_inputs_conflict(self):
         # the new tx inputs will try to spend the same output

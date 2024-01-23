@@ -23,7 +23,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import iter_spent_rewards
 from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
-from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.exceptions import InexistentInput, InvalidToken
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
@@ -303,7 +303,12 @@ class Transaction(BaseTransaction):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
+            try:
+                spent_output = spent_tx.outputs[tx_input.index]
+            except IndexError:
+                raise InexistentInput(
+                    f'Output spent by this input does not exist: {tx_input.tx_id.hex()} index {tx_input.index}'
+                )
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             (amount, can_mint, can_melt) = token_dict.get(token_uid, default_info)
