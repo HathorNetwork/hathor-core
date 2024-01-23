@@ -19,6 +19,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.validation_state import ValidationState
+from hathor.types import VertexId
 from hathor.util import practically_equal
 
 if TYPE_CHECKING:
@@ -56,6 +57,12 @@ class TransactionMetadata:
     # is None otherwise. This is only used for caching, so it can be safely cleared up, as it would be recalculated
     # when necessary.
     feature_states: Optional[dict[Feature, FeatureState]] = None
+
+    # For Blocks, this is None. For Transactions, this is the Block with the greatest height that is a direct or
+    # indirect dependency (ancestor) of the transaction, including both funds and confirmation DAGs.
+    # It's used by Feature Activation for Transactions.
+    closest_block: VertexId | None
+
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']
 
@@ -71,7 +78,8 @@ class TransactionMetadata:
         score: float = 0,
         height: Optional[int] = None,
         min_height: Optional[int] = None,
-        feature_activation_bit_counts: Optional[list[int]] = None
+        feature_activation_bit_counts: Optional[list[int]] = None,
+        closest_block: VertexId | None = None,
     ) -> None:
         from hathor.transaction.genesis import is_genesis
 
@@ -128,6 +136,8 @@ class TransactionMetadata:
         self.validation = ValidationState.INITIAL
 
         self.feature_activation_bit_counts = feature_activation_bit_counts
+
+        self.closest_block = closest_block
 
         settings = get_global_settings()
 
@@ -192,7 +202,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by', 'children',
                       'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
-                      'min_height', 'feature_activation_bit_counts', 'feature_states']:
+                      'min_height', 'feature_activation_bit_counts', 'feature_states', 'closest_block']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -228,6 +238,7 @@ class TransactionMetadata:
         data['height'] = self.height
         data['min_height'] = self.min_height
         data['feature_activation_bit_counts'] = self.feature_activation_bit_counts
+        data['closest_block'] = self.closest_block.hex() if self.closest_block is not None else None
 
         if self.feature_states is not None:
             data['feature_states'] = {feature.value: state.value for feature, state in self.feature_states.items()}
@@ -291,6 +302,9 @@ class TransactionMetadata:
         first_block_raw = data.get('first_block', None)
         if first_block_raw:
             meta.first_block = bytes.fromhex(first_block_raw)
+
+        closest_block_raw = data.get('closest_block')
+        meta.closest_block = bytes.fromhex(closest_block_raw) if closest_block_raw is not None else None
 
         _val_name = data.get('validation', None)
         meta.validation = ValidationState.from_name(_val_name) if _val_name is not None else ValidationState.INITIAL

@@ -507,7 +507,7 @@ def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStor
     )
     block = block_mocks[block_height]
 
-    result = service.is_feature_active(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service.is_feature_active_for_block(block=block, feature=Feature.NOP_FEATURE_1)
 
     assert result is True
 
