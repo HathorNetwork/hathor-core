@@ -47,7 +47,6 @@ from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.protocol import HathorProtocol
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -922,22 +921,14 @@ class HathorManager:
 
         return self.on_new_tx(tx, fails_silently=fails_silently, propagate_to_peers=True)
 
-    @cpu.profiler('on_new_tx')
-    def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
-                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
-                  skip_block_weight_verification: bool = False, reject_locked_reward: bool = True) -> bool:
-        """ New method for adding transactions or blocks that steps the validation state machine.
-
-        :param tx: transaction to be added
-        :param conn: optionally specify the protocol instance where this tx was received from
-        :param quiet: if True will not log when a new tx is accepted
-        :param fails_silently: if False will raise an exception when tx cannot be added
-        :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
-        :param skip_block_weight_verification: if True will not check the tx PoW
-        """
-        assert self.tx_storage.is_only_valid_allowed()
+    def _validate_tx(
+        self,
+        tx: BaseTransaction,
+        *,
+        fails_silently: bool = True,
+        reject_locked_reward: bool = True
+    ) -> bool:
         assert tx.hash is not None
-
         already_exists = False
         if self.tx_storage.transaction_exists(tx.hash):
             self.tx_storage.compare_bytes_with_local_tx(tx)
@@ -951,7 +942,6 @@ class HathorManager:
                           future_timestamp=tx.timestamp)
             return False
 
-        assert self.tx_storage.indexes is not None
         tx.storage = self.tx_storage
 
         try:
@@ -983,6 +973,31 @@ class HathorManager:
                 self.log.warn('on_new_tx(): full validation failed', tx=tx.hash_hex, exc_info=True)
                 return False
 
+        return True
+
+    @cpu.profiler('on_new_tx')
+    def on_new_tx(
+        self,
+        tx: BaseTransaction,
+        *,
+        quiet: bool = False,
+        fails_silently: bool = True,
+        propagate_to_peers: bool = True,
+        reject_locked_reward: bool = True,
+    ) -> bool:
+        """ New method for adding transactions or blocks that steps the validation state machine.
+
+        :param tx: transaction to be added
+        :param quiet: if True will not log when a new tx is accepted
+        :param fails_silently: if False will raise an exception when tx cannot be added
+        :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
+        """
+        assert self.tx_storage.is_only_valid_allowed()
+        is_valid = self._validate_tx(tx, fails_silently=fails_silently, reject_locked_reward=reject_locked_reward)
+
+        if not is_valid:
+            return False
+
         # The method below adds the tx as a child of the parents
         # This needs to be called right before the save because we were adding the children
         # in the tx parents even if the tx was invalid (failing the verifications above)
@@ -998,21 +1013,39 @@ class HathorManager:
             self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex, exc_info=True)
             return False
 
-        assert self.verification_service.validate_full(
-            tx,
-            skip_block_weight_verification=True,
-            reject_locked_reward=reject_locked_reward
-        )
+        self.tx_fully_validated(tx, quiet=quiet, propagate_to_peers=propagate_to_peers)
+
+        return True
+
+    def tx_fully_validated(self, tx: BaseTransaction, *, quiet: bool, propagate_to_peers: bool = True) -> None:
+        """ Handle operations that need to happen once the tx becomes fully validated.
+
+        This might happen immediately after we receive the tx, if we have all dependencies
+        already. Or it might happen later.
+        """
+        assert self.tx_storage.indexes is not None
+        assert tx.get_metadata().validation.is_fully_connected()
+
         self.tx_storage.indexes.update(tx)
         if self.tx_storage.indexes.mempool_tips:
             self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
-        self.tx_fully_validated(tx, quiet=quiet)
+
+        # Publish to pubsub manager the new tx accepted, now that it's full validated
+        self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
+
+        if self.tx_storage.indexes.mempool_tips:
+            self.tx_storage.indexes.mempool_tips.update(tx)
+
+        if self.wallet:
+            # TODO Remove it and use pubsub instead.
+            self.wallet.on_new_tx(tx)
+
+        self.log_new_object(tx, 'new {}', quiet=quiet)
+        self._log_feature_states(tx)
 
         if propagate_to_peers:
             # Propagate to our peers.
             self.connections.send_tx_to_peers(tx)
-
-        return True
 
     def log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
         """ A shortcut for logging additional information for block/txs.
@@ -1036,28 +1069,6 @@ class HathorManager:
         else:
             log_func = self.log.debug
         log_func(message, **kwargs)
-
-    def tx_fully_validated(self, tx: BaseTransaction, *, quiet: bool) -> None:
-        """ Handle operations that need to happen once the tx becomes fully validated.
-
-        This might happen immediately after we receive the tx, if we have all dependencies
-        already. Or it might happen later.
-        """
-        assert tx.hash is not None
-        assert self.tx_storage.indexes is not None
-
-        # Publish to pubsub manager the new tx accepted, now that it's full validated
-        self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
-
-        if self.tx_storage.indexes.mempool_tips:
-            self.tx_storage.indexes.mempool_tips.update(tx)
-
-        if self.wallet:
-            # TODO Remove it and use pubsub instead.
-            self.wallet.on_new_tx(tx)
-
-        self.log_new_object(tx, 'new {}', quiet=quiet)
-        self._log_feature_states(tx)
 
     def _log_feature_states(self, vertex: BaseTransaction) -> None:
         """Log features states for a block. Used as part of the Feature Activation Phased Testing."""
