@@ -29,8 +29,9 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.transaction import Block
+from hathor.transaction import Block, TransactionMetadata
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.validation_state import ValidationState
 
 
 def _get_blocks_and_storage() -> tuple[list[Block], TransactionStorage]:
@@ -72,19 +73,20 @@ def _get_blocks_and_storage() -> tuple[list[Block], TransactionStorage]:
         0b0000,
     ]
     storage = Mock()
-    storage.get_metadata = Mock(return_value=None)
 
-    for i, bits in enumerate(feature_activation_bits):
-        block_hash = genesis_hash if i == 0 else int.to_bytes(i, length=1, byteorder='big')
+    for height, bits in enumerate(feature_activation_bits):
+        block_hash = genesis_hash if height == 0 else int.to_bytes(height, length=1, byteorder='big')
         block = Block(hash=block_hash, storage=storage, signal_bits=bits)
         blocks.append(block)
-        parent_hash = blocks[i - 1].hash
+        parent_hash = blocks[height - 1].hash
         assert parent_hash is not None
         block.parents = [parent_hash]
+        block._metadata = TransactionMetadata(height=height)
+        block._metadata.validation = ValidationState.FULL
 
     block_by_hash = {block.hash: block for block in blocks}
     storage.get_transaction = Mock(side_effect=lambda hash_bytes: block_by_hash[hash_bytes])
-    storage.get_transaction_by_height = Mock(side_effect=lambda height: blocks[height])
+    storage.get_transaction_by_height = Mock(side_effect=lambda h: blocks[h])
 
     return blocks, storage
 
@@ -597,7 +599,7 @@ def test_get_ancestor_at_height_invalid(
     block = block_mocks[block_height]
 
     with pytest.raises(AssertionError) as e:
-        service._get_ancestor_at_height(block=block, height=ancestor_height)
+        service._get_ancestor_at_height(block=block, ancestor_height=ancestor_height)
 
     assert str(e.value) == (
         f"ancestor height must be lower than the block's height: {ancestor_height} >= {block_height}"
@@ -624,21 +626,22 @@ def test_get_ancestor_at_height(
 ) -> None:
     service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
     block = block_mocks[block_height]
-    result = service._get_ancestor_at_height(block=block, height=ancestor_height)
+    result = service._get_ancestor_at_height(block=block, ancestor_height=ancestor_height)
 
     assert result == block_mocks[ancestor_height]
     assert result.get_height() == ancestor_height
-    assert cast(Mock, tx_storage.get_transaction_by_height).call_count == 1
+    assert cast(Mock, tx_storage.get_transaction_by_height).call_count == (
+        0 if block_height - ancestor_height <= 1 else 1
+    ), 'this should only be called if the ancestor is deeper than one parent away'
 
 
 @pytest.mark.parametrize(
     ['block_height', 'ancestor_height'],
     [
         (21, 20),
-        (21, 10),
-        (21, 0),
+        (21, 18),
+        (15, 12),
         (15, 10),
-        (15, 0),
         (1, 0),
     ]
 )
@@ -651,8 +654,9 @@ def test_get_ancestor_at_height_voided(
 ) -> None:
     service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
     block = block_mocks[block_height]
-    block.get_metadata().voided_by = {b'some'}
-    result = service._get_ancestor_at_height(block=block, height=ancestor_height)
+    parent_block = block_mocks[block_height - 1]
+    parent_block.get_metadata().voided_by = {b'some'}
+    result = service._get_ancestor_at_height(block=block, ancestor_height=ancestor_height)
 
     assert result == block_mocks[ancestor_height]
     assert result.get_height() == ancestor_height
