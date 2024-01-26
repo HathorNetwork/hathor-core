@@ -13,9 +13,12 @@
 # limitations under the License.
 
 import datetime
+import queue
 import sys
 import time
+from dataclasses import dataclass
 from enum import Enum
+from queue import Queue
 from typing import Any, Iterator, NamedTuple, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
@@ -64,6 +67,14 @@ from hathor.wallet import BaseWallet
 
 logger = get_logger()
 cpu = get_cpu_profiler()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NewTx:
+    tx: BaseTransaction
+    quiet: bool
+    propagate_to_peers: bool
+    reject_locked_reward: bool
 
 
 class HathorManager:
@@ -228,6 +239,9 @@ class HathorManager:
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
 
+        self._lc_process_post_validation_queue = LoopingCall(self._process_post_validation_queue)
+        self._lc_process_post_validation_queue.clock = self.reactor
+
     def get_default_capabilities(self) -> list[str]:
         """Return the default capabilities for this manager."""
         return [
@@ -305,6 +319,7 @@ class HathorManager:
         self.start_time = time.time()
 
         self.lc_check_sync_state.start(self.lc_check_sync_state_interval, now=False)
+        self._lc_process_post_validation_queue.start(0.1, now=False)
 
         if self.wallet:
             self.wallet.start()
@@ -334,6 +349,9 @@ class HathorManager:
 
         if self.lc_check_sync_state.running:
             self.lc_check_sync_state.stop()
+
+        if self._lc_process_post_validation_queue.running:
+            self._lc_process_post_validation_queue.stop()
 
         if self.wallet:
             self.wallet.stop()
@@ -975,6 +993,30 @@ class HathorManager:
 
         return True
 
+    _post_validation_queue: Queue[NewTx] = Queue()
+    _is_processing: bool = False
+
+    def _process_post_validation_queue(self) -> None:
+        if self._is_processing:
+            return
+        self._is_processing = True
+        try:
+            new_tx = self._post_validation_queue.get(block=False)
+            self._save_and_run_consensus(
+                new_tx.tx,
+                quiet=new_tx.quiet,
+                propagate_to_peers=new_tx.propagate_to_peers,
+                reject_locked_reward=new_tx.reject_locked_reward,
+            )
+            self._post_validation_queue.task_done()
+        except queue.Empty:
+            pass
+        except Exception as e:
+            self.log.error(repr(e), exc_info=True)
+            raise e
+        finally:
+            self._is_processing = False
+
     @cpu.profiler('on_new_tx')
     def on_new_tx(
         self,
@@ -998,6 +1040,34 @@ class HathorManager:
         if not is_valid:
             return False
 
+        self._post_validation_queue.put(
+            NewTx(
+                tx=tx,
+                quiet=quiet,
+                propagate_to_peers=propagate_to_peers,
+                reject_locked_reward=reject_locked_reward,
+            )
+        )
+
+        # self._process_post_validation_queue()
+
+        # self._save_and_run_consensus(
+        #     tx,
+        #     quiet=quiet,
+        #     propagate_to_peers=propagate_to_peers,
+        #     reject_locked_reward=reject_locked_reward,
+        # )
+
+        return True
+
+    def _save_and_run_consensus(
+        self,
+        tx: BaseTransaction,
+        *,
+        quiet: bool = False,
+        propagate_to_peers: bool = True,
+        reject_locked_reward: bool = True,
+    ) -> None:
         # The method below adds the tx as a child of the parents
         # This needs to be called right before the save because we were adding the children
         # in the tx parents even if the tx was invalid (failing the verifications above)
@@ -1005,26 +1075,33 @@ class HathorManager:
         tx.update_initial_metadata(save=False)
         self.tx_storage.save_transaction(tx)
         self.tx_storage.add_to_indexes(tx)
-        try:
-            self.consensus_algorithm.update(tx)
-        except HathorError as e:
-            if not fails_silently:
-                raise InvalidNewTransaction('consensus update failed') from e
-            self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex, exc_info=True)
-            return False
+        self.consensus_algorithm.update(tx)
+        self._post_consensus(
+            tx,
+            quiet=quiet,
+            propagate_to_peers=propagate_to_peers,
+            reject_locked_reward=reject_locked_reward
+        )
 
-        self.tx_fully_validated(tx, quiet=quiet, propagate_to_peers=propagate_to_peers)
-
-        return True
-
-    def tx_fully_validated(self, tx: BaseTransaction, *, quiet: bool, propagate_to_peers: bool = True) -> None:
+    def _post_consensus(
+        self,
+        tx: BaseTransaction,
+        *,
+        quiet: bool,
+        propagate_to_peers: bool = True,
+        reject_locked_reward: bool = True,
+    ) -> None:
         """ Handle operations that need to happen once the tx becomes fully validated.
 
         This might happen immediately after we receive the tx, if we have all dependencies
         already. Or it might happen later.
         """
         assert self.tx_storage.indexes is not None
-        assert tx.get_metadata().validation.is_fully_connected()
+        assert self.verification_service.validate_full(
+            tx,
+            skip_block_weight_verification=True,
+            reject_locked_reward=reject_locked_reward
+        )
 
         self.tx_storage.indexes.update(tx)
         if self.tx_storage.indexes.mempool_tips:
