@@ -65,6 +65,8 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     enable_crash_api: bool
     x_sync_bridge: bool
     x_sync_v2_only: bool
+    sync_bridge: bool
+    sync_v2_only: bool
     x_localhost_only: bool
     x_rocksdb_indexes: bool
     x_enable_event_queue: bool

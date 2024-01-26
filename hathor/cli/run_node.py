@@ -108,6 +108,11 @@ class RunNode:
                             help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
         v2args.add_argument('--x-sync-v2-only', action='store_true',
                             help='Disable support for running sync-v1. DO NOT ENABLE, IT WILL BREAK.')
+        # XXX: new safe arguments along side the unsafe --x- arguments so transition is easier
+        v2args.add_argument('--sync-bridge', action='store_true',
+                            help='Enable support for running both sync protocols.')
+        v2args.add_argument('--sync-v2-only', action='store_true',
+                            help='Disable support for running sync-v1.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')

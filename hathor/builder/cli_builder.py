@@ -158,8 +158,17 @@ class CliBuilder:
 
         hostname = self.get_hostname()
         network = settings.NETWORK_NAME
-        enable_sync_v1 = not self._args.x_sync_v2_only
-        enable_sync_v2 = self._args.x_sync_v2_only or self._args.x_sync_bridge
+
+        arg_sync_v2_only = self._args.x_sync_v2_only or self._args.sync_v2_only
+        if self._args.x_sync_v2_only:
+            self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
+
+        arg_sync_bridge = self._args.x_sync_bridge or self._args.sync_bridge
+        if self._args.x_sync_bridge:
+            self.log.warn('--x-sync-bridge is deprecated and will be removed, use --sync-bridge instead')
+
+        enable_sync_v1 = not arg_sync_v2_only
+        enable_sync_v2 = arg_sync_v2_only or arg_sync_bridge
 
         pubsub = PubSubManager(reactor)
 
