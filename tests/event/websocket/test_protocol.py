@@ -102,7 +102,7 @@ def test_send_event_response():
                         b'"timestamp":456,"version":1,"weight":10.0,"inputs":[],"outputs":[],"parents":[],'
                         b'"tokens":[],"token_name":null,"token_symbol":null,"metadata":{"hash":"abc",'
                         b'"spent_outputs":[],"conflict_with":[],"voided_by":[],"received_by":[],"children":[],'
-                        b'"twins":[],"accumulated_weight":10.0,"score":20.0,"first_block":null,"height":100,'
+                        b'"twins":[],"accumulated_weight":"1024","score":"1048576","first_block":null,"height":100,'
                         b'"validation":"validation"},"aux_pow":null},"group_id":null},"latest_event_id":10,'
                         b'"stream_id":"stream_id"}')
 

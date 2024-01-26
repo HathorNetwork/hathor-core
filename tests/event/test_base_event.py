@@ -58,8 +58,8 @@ def test_create_base_event(event_id, group_id):
                 received_by=[],
                 children=[],
                 twins=[],
-                accumulated_weight=10.0,
-                score=20.0,
+                accumulated_weight=1024,
+                score=1048576,
                 height=100,
                 validation='validation'
             )

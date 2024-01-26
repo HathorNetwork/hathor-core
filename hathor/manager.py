@@ -53,13 +53,14 @@ from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
-from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
+from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none
+from hathor.utils.weight import weight_to_work
 from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
@@ -815,6 +816,7 @@ class HathorManager:
         assert 1 <= len(parents) <= 3, 'Impossible number of parents'
         if __debug__ and len(parents) == 3:
             assert len(parents_any) == 0, 'Extra parents to choose from that cannot be chosen'
+        score = parent_block_metadata.score + weight_to_work(weight)
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
             reward=self.daa.get_tokens_issued_per_block(height),
@@ -825,7 +827,7 @@ class HathorManager:
             parents=parents,
             parents_any=parents_any,
             height=height,
-            score=sum_weights(parent_block_metadata.score, weight),
+            score=score,
             signal_bits=self._bit_signaling_service.generate_signal_bits(block=parent_block)
         )
 

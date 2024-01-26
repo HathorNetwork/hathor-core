@@ -485,6 +485,10 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
         # Block3 has the same parents as block2.
         block3 = self._add_new_block(parents=block2.parents)
+        self.assertEqual(block3.weight, block2.weight)
+        meta2 = block2.get_metadata()
+        meta3 = block3.get_metadata()
+        self.assertEqual(meta2.score, meta3.score)
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 

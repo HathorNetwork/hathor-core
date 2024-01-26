@@ -553,8 +553,8 @@ class EventMocker:
             received_by=[],
             children=[],
             twins=[],
-            accumulated_weight=10,
-            score=20,
+            accumulated_weight=1024,
+            score=1048576,
             height=100,
             validation='validation'
         )

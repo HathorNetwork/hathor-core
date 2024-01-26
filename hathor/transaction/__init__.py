@@ -13,14 +13,7 @@
 # limitations under the License.
 
 from hathor.transaction.aux_pow import BitcoinAuxPow
-from hathor.transaction.base_transaction import (
-    MAX_OUTPUT_VALUE,
-    BaseTransaction,
-    TxInput,
-    TxOutput,
-    TxVersion,
-    sum_weights,
-)
+from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE, BaseTransaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.block import Block
 from hathor.transaction.merge_mined_block import MergeMinedBlock
 from hathor.transaction.transaction import Transaction
@@ -37,5 +30,4 @@ __all__ = [
     'TxOutput',
     'TxVersion',
     'MAX_OUTPUT_VALUE',
-    'sum_weights',
 ]

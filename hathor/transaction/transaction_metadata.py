@@ -37,8 +37,8 @@ class TransactionMetadata:
     received_by: list[int]
     children: list[bytes]
     twins: list[bytes]
-    accumulated_weight: float
-    score: float
+    accumulated_weight: int
+    score: int
     first_block: Optional[bytes]
     height: Optional[int]
     validation: ValidationState
@@ -67,8 +67,8 @@ class TransactionMetadata:
         self,
         spent_outputs: Optional[dict[int, list[bytes]]] = None,
         hash: Optional[bytes] = None,
-        accumulated_weight: float = 0,
-        score: float = 0,
+        accumulated_weight: int = 0,
+        score: int = 0,
         height: Optional[int] = None,
         min_height: Optional[int] = None,
         feature_activation_bit_counts: Optional[list[int]] = None
@@ -223,8 +223,8 @@ class TransactionMetadata:
         data['conflict_with'] = [x.hex() for x in set(self.conflict_with)] if self.conflict_with else []
         data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else []
         data['twins'] = [x.hex() for x in self.twins]
-        data['accumulated_weight'] = self.accumulated_weight
-        data['score'] = self.score
+        data['accumulated_weight'] = str(self.accumulated_weight)
+        data['score'] = str(self.score)
         data['height'] = self.height
         data['min_height'] = self.min_height
         data['feature_activation_bit_counts'] = self.feature_activation_bit_counts
@@ -275,8 +275,8 @@ class TransactionMetadata:
         else:
             meta.twins = []
 
-        meta.accumulated_weight = data['accumulated_weight']
-        meta.score = data.get('score', 0)
+        meta.accumulated_weight = int(data['accumulated_weight'])
+        meta.score = int(data.get('score', 0))
         meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
         meta.min_height = data.get('min_height')
         meta.feature_activation_bit_counts = data.get('feature_activation_bit_counts', [])
