@@ -5,7 +5,6 @@ import pytest
 from twisted.internet.defer import inlineCallbacks, succeed
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_v2.agent import _HeightInfo
@@ -20,8 +19,6 @@ from hathor.simulator.trigger import (
 from hathor.transaction.storage.traversal import DFSWalk
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
-
-settings = HathorSettings()
 
 
 class BaseRandomSimulatorTestCase(SimulatorTestCase):

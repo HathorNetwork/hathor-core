@@ -1,4 +1,3 @@
-from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
@@ -6,8 +5,6 @@ from hathor.simulator.utils import gen_new_tx
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx
-
-settings = HathorSettings()
 
 
 class BaseSoftVoidedTestCase(SimulatorTestCase):
@@ -18,7 +15,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
             tx2_voided_by = tx2_meta.voided_by or set()
-            self.assertNotIn(settings.SOFT_VOIDED_ID, tx2_voided_by)
+            self.assertNotIn(self._settings.SOFT_VOIDED_ID, tx2_voided_by)
 
     def _run_test(self, simulator, soft_voided_tx_ids):
         manager1 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
@@ -57,7 +54,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         txA = manager2.tx_storage.get_transaction(txA_hash)
         metaA = txA.get_metadata()
-        self.assertEqual({settings.SOFT_VOIDED_ID, txA.hash}, metaA.voided_by)
+        self.assertEqual({self._settings.SOFT_VOIDED_ID, txA.hash}, metaA.voided_by)
         graphviz.labels[txA.hash] = 'txA'
 
         txB = add_custom_tx(manager2, [(txA, 0)])
@@ -123,8 +120,8 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         for tx in manager1.tx_storage.get_all_transactions():
             meta = tx.get_metadata()
             voided_by = meta.voided_by or set()
-            if settings.SOFT_VOIDED_ID in voided_by:
-                self.assertTrue({settings.SOFT_VOIDED_ID, tx.hash}.issubset(voided_by))
+            if self._settings.SOFT_VOIDED_ID in voided_by:
+                self.assertTrue({self._settings.SOFT_VOIDED_ID, tx.hash}.issubset(voided_by))
 
         # Uncomment lines below to visualize the DAG and the blockchain.
         # dot = graphviz.dot()

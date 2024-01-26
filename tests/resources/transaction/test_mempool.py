@@ -1,13 +1,10 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import MempoolResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions
-
-settings = HathorSettings()
 
 
 class BaseMempoolTest(_BaseResourceTest._ResourceTest):
@@ -57,12 +54,12 @@ class BaseMempoolTest(_BaseResourceTest._ResourceTest):
         add_new_blocks(self.manager, 1, advance_clock=1)
 
         # Add more than api limit and check truncated return
-        add_new_transactions(self.manager, settings.MEMPOOL_API_TX_LIMIT + 1, advance_clock=1)
+        add_new_transactions(self.manager, self._settings.MEMPOOL_API_TX_LIMIT + 1, advance_clock=1)
         response5 = yield self.web.get("mempool")
         data5 = response5.json_value()
         self.assertTrue(data5['success'])
         # default limit is 100
-        self.assertEqual(len(data5['transactions']), settings.MEMPOOL_API_TX_LIMIT)
+        self.assertEqual(len(data5['transactions']), self._settings.MEMPOOL_API_TX_LIMIT)
 
 
 class SyncV1MempoolTest(unittest.SyncV1Params, BaseMempoolTest):
