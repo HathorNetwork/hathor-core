@@ -24,18 +24,17 @@ from typing_extensions import override
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.reward_lock import iter_spent_rewards
-from hathor.transaction.exceptions import InvalidScriptError
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
-from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.exceptions import InvalidScriptError, InvalidToken
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
 
 if TYPE_CHECKING:
-    from hathor.transaction.scripts.sighash import CustomSighash
     from hathor.conf.settings import HathorSettings
+    from hathor.transaction.scripts.sighash import CustomSighash
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
@@ -93,7 +92,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             settings=settings
         )
         self.tokens = tokens or []
-        self._sighash_cache: Optional[bytes] = None
+        self._sighash_all_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
 
     @property
@@ -233,11 +232,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         # This method does not depend on the input itself, however we call it for each one to sign it.
         # For transactions that have many inputs there is a significant decrease on the verify time
         # when using this cache, so we call this method only once.
-        if self._sighash_cache:
-            return self._sighash_cache
+        if self._sighash_all_cache:
+            return self._sighash_all_cache
 
         sighash = self._get_sighash(inputs=self.inputs, outputs=self.outputs)
-        self._sighash_cache = sighash
+        self._sighash_all_cache = sighash
 
         return sighash
 

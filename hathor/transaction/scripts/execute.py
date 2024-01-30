@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import struct
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 
 from hathor.conf.get_settings import get_global_settings
@@ -23,11 +24,21 @@ if TYPE_CHECKING:
     from hathor.transaction.scripts.script_context import ScriptContext
 
 
-class ScriptExtras(NamedTuple):
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ScriptExtras:
+    """
+    A simple container for auxiliary data that may be used during execution of scripts.
+    """
     tx: Transaction
-    txin: TxInput
-    spent_tx: BaseTransaction
     input_index: int
+    spent_tx: BaseTransaction
+
+    @property
+    def txin(self) -> TxInput:
+        return self.tx.inputs[self.input_index]
+
+    def __post_init__(self) -> None:
+        assert self.txin.tx_id == self.spent_tx.hash
 
 
 # XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some
@@ -96,7 +107,7 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
         raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, *, input_index: int) -> 'ScriptContext':
+def script_eval(tx: Transaction, spent_tx: BaseTransaction, *, input_index: int) -> 'ScriptContext':
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 
@@ -111,10 +122,10 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, *, in
 
     :raises ScriptError: if script verification fails
     """
-    input_data = txin.data
-    output_script = spent_tx.outputs[txin.index].script
+    extras = ScriptExtras(tx=tx, input_index=input_index, spent_tx=spent_tx)
+    input_data = extras.txin.data
+    output_script = spent_tx.outputs[extras.txin.index].script
     log: list[str] = []
-    extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=input_index)
 
     from hathor.transaction.scripts import MultiSig
     if MultiSig.re_match.search(output_script):
@@ -123,7 +134,7 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, *, in
         # we can't use input_data + output_script because it will end with an invalid stack
         # i.e. the signatures will still be on the stack after ouput_script is executed
         redeem_script_pos = MultiSig.get_multisig_redeem_script_pos(input_data)
-        full_data = txin.data[redeem_script_pos:] + output_script
+        full_data = extras.txin.data[redeem_script_pos:] + output_script
         execute_eval(full_data, log, extras)
 
         # Second, we need to validate that the signatures on the input_data solves the redeem_script

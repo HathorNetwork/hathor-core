@@ -253,7 +253,7 @@ class TestScripts(unittest.TestCase):
         signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), input_index=0)
+        extras = ScriptExtras(tx=tx, spent_tx=block, input_index=0)
 
         # wrong signature puts False (0) on stack
         stack = [b'aaaaaaaaa', pubkey_bytes]
@@ -278,7 +278,7 @@ class TestScripts(unittest.TestCase):
         signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), input_index=0)
+        extras = ScriptExtras(tx=tx, spent_tx=block, input_index=0)
 
         stack = [signature, pubkey_bytes]
         self.assertIsNone(tx._sighash_data_cache)
@@ -508,34 +508,40 @@ class TestScripts(unittest.TestCase):
         out_genesis = P2PKH.create_output_script(genesis_address)
 
         from hathor.transaction import Transaction, TxInput, TxOutput
-        spent_tx = Transaction(outputs=[TxOutput(1, b'nano_contract_code')])
-        txin = TxInput(b'dont_care', 0, b'data')
+        spent_tx = Transaction(hash=b'some_hash', outputs=[TxOutput(1, b'nano_contract_code')])
+        txin = TxInput(b'some_hash', 0, b'data')
 
         # try with just 1 output
         stack = [genesis_address]
-        tx = Transaction(outputs=[TxOutput(1, out_genesis)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=0)
+        tx = Transaction(inputs=[txin], outputs=[TxOutput(1, out_genesis)])
+        extras = ScriptExtras(tx=tx, spent_tx=spent_tx, input_index=0)
         op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs and correct output among them
         stack = [genesis_address]
-        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out_genesis), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=0)
+        tx = Transaction(
+            inputs=[txin],
+            outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out_genesis), TxOutput(1, out3)]
+        )
+        extras = ScriptExtras(tx=tx, spent_tx=spent_tx, input_index=0)
         op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs without correct amount output
         stack = [genesis_address]
-        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(2, out_genesis), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=0)
+        tx = Transaction(
+            inputs=[txin],
+            outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(2, out_genesis), TxOutput(1, out3)]
+        )
+        extras = ScriptExtras(tx=tx, spent_tx=spent_tx, input_index=0)
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
         # several outputs without correct address output
         stack = [genesis_address]
-        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, input_index=0)
+        tx = Transaction(inputs=[txin], outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out3)])
+        extras = ScriptExtras(tx=tx, spent_tx=spent_tx, input_index=0)
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras, settings=Mock()))
 
@@ -545,11 +551,13 @@ class TestScripts(unittest.TestCase):
 
         timestamp = 1234567
 
-        from hathor.transaction import Transaction
-        tx = Transaction()
+        from hathor.transaction import Transaction, TxInput
+        spent_tx = Transaction(hash=b'some_hash')
+        tx_input = TxInput(tx_id=b'some_hash', index=0, data=b'')
+        tx = Transaction(inputs=[tx_input])
 
         stack = [struct.pack('!I', timestamp)]
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), input_index=0)
+        extras = ScriptExtras(tx=tx, spent_tx=spent_tx, input_index=0)
 
         with self.assertRaises(TimeLocked):
             tx.timestamp = timestamp - 1
@@ -575,7 +583,7 @@ class TestScripts(unittest.TestCase):
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         data_to_sign = tx.get_sighash_all()
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), input_index=0)
+        extras = ScriptExtras(tx=tx, spent_tx=block, input_index=0)
 
         wallet = HDWallet()
         wallet._manually_initialize()

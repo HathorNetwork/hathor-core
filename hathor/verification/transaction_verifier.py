@@ -16,7 +16,8 @@ from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
-from hathor.transaction import BaseTransaction, Transaction, TxInput
+from hathor.reward_lock.reward_lock import get_minimum_best_height
+from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     DuplicatedParents,
@@ -154,8 +155,7 @@ class TransactionVerifier:
         """
         from hathor.transaction.scripts import script_eval
         try:
-            input_tx = tx.inputs[input_index]
-            return script_eval(tx, input_tx, spent_tx, input_index=input_index)
+            return script_eval(tx, spent_tx, input_index=input_index)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
