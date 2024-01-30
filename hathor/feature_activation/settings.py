@@ -26,23 +26,20 @@ class Settings(BaseModel, validate_all=True):
     """Feature Activation settings."""
 
     # The number of blocks in the feature activation evaluation interval.
-    # Equivalent to 14 days (40320 * 30 seconds = 14 days)
-    evaluation_interval: PositiveInt = 40320
+    # Equivalent to 1 week (20160 * 30 seconds = 1 week)
+    evaluation_interval: PositiveInt = 20_160
 
     # The number of bits used in the first byte of a block's version field. The 4 left-most bits are not used.
     max_signal_bits: int = Field(ge=1, le=8, default=4)
 
     # Specifies the default minimum number of blocks per evaluation interval required to activate a feature.
     # Usually calculated from a percentage of evaluation_interval.
-    default_threshold: NonNegativeInt = 36288  # 36288 = 90% of evaluation_interval (40320)
+    default_threshold: NonNegativeInt = 18_144  # 18144 = 90% of evaluation_interval (20160)
 
     # Dictionary of Feature enum to Criteria definition for all features that participate in the feature activation
     # process for a network, past or future, activated or not. Features should NOT be removed from this list, and
     # neither their values changed, to preserve history.
     features: dict[Feature, Criteria] = {}
-
-    # Boolean indicating whether feature activation can be used.
-    enable_usage: bool = False
 
     @validator('default_threshold')
     def _validate_default_threshold(cls, default_threshold: int, values: dict[str, Any]) -> int:

@@ -154,11 +154,8 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         sync1.send_tips()
         self.assertEqual(len(sync1._send_tips_call_later), 0)
 
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
-
-        # add delayed calls to the the maximum
-        max_delayed_calls = settings.MAX_GET_TIPS_DELAYED_CALLS
+        # add delayed calls to the maximum
+        max_delayed_calls = self._settings.MAX_GET_TIPS_DELAYED_CALLS
         for count in range(max_delayed_calls):
             sync1.send_tips()
 

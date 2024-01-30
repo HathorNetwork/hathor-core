@@ -23,7 +23,7 @@ jobs:
           import os
           import json
           full_matrix = {
-            'python': ['3.10', '3.11'],
+            'python': ['3.10', '3.11', '3.12'],
             # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
             'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
             'include': [
@@ -33,7 +33,7 @@ jobs:
           }
           # this is the fastest one:
           reduced_matrix = {
-            'python': ['3.11'],
+            'python': ['3.12'],
             'os': ['ubuntu-22.04'],
           }
           github_repository = os.environ['GITHUB_REPOSITORY']

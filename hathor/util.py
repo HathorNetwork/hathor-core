@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, S
 from structlog import get_logger
 
 import hathor
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.types import TokenUid
 
 if TYPE_CHECKING:
@@ -176,14 +176,14 @@ class MaxSizeOrderedDict(OrderedDict):
     >>> foo[3] = 'c'
     >>> foo[4] = 'd'
     >>> foo[5] = 'e'
-    >>> foo
-    MaxSizeOrderedDict([(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')])
+    >>> list(foo.items())
+    [(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')]
     >>> foo[6] = 'f'
-    >>> foo
-    MaxSizeOrderedDict([(2, 'b'), (3, 'c'), (4, 'd'), (5, 'e'), (6, 'f')])
+    >>> list(foo.items())
+    [(2, 'b'), (3, 'c'), (4, 'd'), (5, 'e'), (6, 'f')]
     >>> foo[7] = 'g'
-    >>> foo
-    MaxSizeOrderedDict([(3, 'c'), (4, 'd'), (5, 'e'), (6, 'f'), (7, 'g')])
+    >>> list(foo.items())
+    [(3, 'c'), (4, 'd'), (5, 'e'), (6, 'f'), (7, 'g')]
     """
     # Kindly stolen from: https://stackoverflow.com/a/49274421/947511
     def __init__(self, *args, max=0, **kwargs):
@@ -760,7 +760,7 @@ def is_token_uid_valid(token_uid: TokenUid) -> bool:
     >>> is_token_uid_valid(bytes.fromhex('000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb82400'))
     False
     """
-    settings = get_settings()
+    settings = get_global_settings()
     if token_uid == settings.HATHOR_TOKEN_UID:
         return True
     elif len(token_uid) == 32:
@@ -784,7 +784,7 @@ class EnvironmentInfo:
 
 
 def get_environment_info(args: str, peer_id: Optional[str]) -> EnvironmentInfo:
-    settings = get_settings()
+    settings = get_global_settings()
     environment_info = EnvironmentInfo(
         python_implementation=str(sys.implementation),
         hathor_core_args=args,

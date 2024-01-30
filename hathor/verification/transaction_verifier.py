@@ -15,6 +15,7 @@
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
+from hathor.reward_lock import get_spent_reward_locked_info
 from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import (
     ConflictingInputs,
@@ -36,6 +37,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
+from hathor.util import not_none
 
 cpu = get_cpu_profiler()
 
@@ -144,7 +146,7 @@ class TransactionVerifier:
     def verify_reward_locked(self, tx: Transaction) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
         the block rewards spent by this tx itself, and not the inherited `min_height`."""
-        info = tx.get_spent_reward_locked_info()
+        info = get_spent_reward_locked_info(tx, not_none(tx.storage))
         if info is not None:
             raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
 

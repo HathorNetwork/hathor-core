@@ -395,10 +395,6 @@ class HathorSettings(NamedTuple):
     # Identifier used in metadata's voided_by to mark a tx as partially validated.
     PARTIALLY_VALIDATED_ID: bytes = b'pending-validation'
 
-    EVENT_API_DEFAULT_BATCH_SIZE: int = 100
-
-    EVENT_API_MAX_BATCH_SIZE: int = 1000
-
     # Maximum number of sync running simultaneously.
     MAX_ENABLED_SYNC: int = 16
 
@@ -422,6 +418,10 @@ class HathorSettings(NamedTuple):
 
     # Time in seconds to request the best blockchain from peers.
     BEST_BLOCKCHAIN_INTERVAL: int = 5  # seconds
+
+    # Merged mining settings. The old value is going to be replaced by the new value through Feature Activation.
+    OLD_MAX_MERKLE_PATH_LENGTH: int = 12
+    NEW_MAX_MERKLE_PATH_LENGTH: int = 20
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':

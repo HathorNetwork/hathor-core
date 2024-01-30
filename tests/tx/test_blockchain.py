@@ -1,14 +1,11 @@
 from itertools import chain
 
-from hathor.conf import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import add_new_transactions
-
-settings = HathorSettings()
 
 
 class BaseBlockchainTestCase(unittest.TestCase):
@@ -31,7 +28,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
-        self.daa = DifficultyAdjustmentAlgorithm(settings=settings)
+        self.daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
 
     def test_single_chain(self):
         """ All new blocks belong to case (i).
@@ -358,20 +355,20 @@ class BaseBlockchainTestCase(unittest.TestCase):
     def test_tokens_issued_per_block(self):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
         # this test is pretty dumb in that it test every possible height until halving has long stopped
-        initial_reward = settings.INITIAL_TOKENS_PER_BLOCK
-        final_reward = settings.MINIMUM_TOKENS_PER_BLOCK
+        initial_reward = self._settings.INITIAL_TOKENS_PER_BLOCK
+        final_reward = self._settings.MINIMUM_TOKENS_PER_BLOCK
         expected_reward = initial_reward
         height = 1
         # check that there are BLOCKS_PER_HALVING with each reward, starting at the first rewardable block (height=1)
-        for _i_halving in range(0, settings.MAXIMUM_NUMBER_OF_HALVINGS):
-            for _i_block in range(0, settings.BLOCKS_PER_HALVING):
+        for _i_halving in range(0, self._settings.MAXIMUM_NUMBER_OF_HALVINGS):
+            for _i_block in range(0, self._settings.BLOCKS_PER_HALVING):
                 reward = manager.get_tokens_issued_per_block(height)
                 self.assertEqual(reward, expected_reward, f'reward at height {height}')
                 height += 1
             expected_reward /= 2
         self.assertEqual(expected_reward, final_reward)
         # check that halving stops, for at least two "halving rounds"
-        for _i_block in range(0, 2 * settings.BLOCKS_PER_HALVING):
+        for _i_block in range(0, 2 * self._settings.BLOCKS_PER_HALVING):
             reward = manager.get_tokens_issued_per_block(height)
             self.assertEqual(reward, expected_reward, f'reward at height {height}')
             height += 1
@@ -380,7 +377,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # even dumber test that only check if manager.get_tokens_issued_per_block was used correctly for a really large
         # number of blocks, probably not worth running all the time
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
-        block_count = (settings.MAXIMUM_NUMBER_OF_HALVINGS + 1) * settings.BLOCKS_PER_HALVING
+        block_count = (self._settings.MAXIMUM_NUMBER_OF_HALVINGS + 1) * self._settings.BLOCKS_PER_HALVING
         blocks = add_new_blocks(manager, block_count, advance_clock=block_count * 30)
         for block in blocks:
             outputs = block.outputs
@@ -393,8 +390,8 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # sanity test the DAA
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
         manager.daa.TEST_MODE = TestMode.DISABLED
-        N = settings.BLOCK_DIFFICULTY_N_BLOCKS
-        T = settings.AVG_TIME_BETWEEN_BLOCKS
+        N = self._settings.BLOCK_DIFFICULTY_N_BLOCKS
+        T = self._settings.AVG_TIME_BETWEEN_BLOCKS
         manager.avg_time_between_blocks = T
         # stabilize weight on 2 and lower the minimum to 1, so it can vary around 2
         manager.min_block_weight = 2
@@ -419,17 +416,17 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
     def test_daa_weight_decay_amount(self):
         self.daa.TEST_MODE = TestMode.DISABLED
-        amount = settings.WEIGHT_DECAY_AMOUNT
+        amount = self._settings.WEIGHT_DECAY_AMOUNT
 
-        for distance in range(0, settings.WEIGHT_DECAY_ACTIVATE_DISTANCE, 10):
+        for distance in range(0, self._settings.WEIGHT_DECAY_ACTIVATE_DISTANCE, 10):
             self.assertEqual(self.daa.get_weight_decay_amount(distance), 0)
 
-        distance = settings.WEIGHT_DECAY_ACTIVATE_DISTANCE - 1
+        distance = self._settings.WEIGHT_DECAY_ACTIVATE_DISTANCE - 1
         self.assertAlmostEqual(self.daa.get_weight_decay_amount(distance), 0)
 
-        distance = settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
+        distance = self._settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
         for k in range(1, 11):
-            for _ in range(settings.WEIGHT_DECAY_WINDOW_SIZE):
+            for _ in range(self._settings.WEIGHT_DECAY_WINDOW_SIZE):
                 self.assertAlmostEqual(self.daa.get_weight_decay_amount(distance), k * amount)
                 distance += 1
         self.assertAlmostEqual(self.daa.get_weight_decay_amount(distance), 11 * amount)
@@ -437,34 +434,38 @@ class BaseBlockchainTestCase(unittest.TestCase):
     def test_daa_weight_decay_blocks(self):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
         manager.daa.TEST_MODE = TestMode.DISABLED
-        amount = settings.WEIGHT_DECAY_AMOUNT
+        amount = self._settings.WEIGHT_DECAY_AMOUNT
 
-        manager.daa.AVG_TIME_BETWEEN_BLOCKS = settings.AVG_TIME_BETWEEN_BLOCKS
-        manager.daa.MIN_BLOCK_WEIGHT = 2 + 2 * settings.WEIGHT_DECAY_AMOUNT
-        add_new_blocks(manager, 2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, advance_clock=settings.AVG_TIME_BETWEEN_BLOCKS)
+        manager.daa.AVG_TIME_BETWEEN_BLOCKS = self._settings.AVG_TIME_BETWEEN_BLOCKS
+        manager.daa.MIN_BLOCK_WEIGHT = 2 + 2 * self._settings.WEIGHT_DECAY_AMOUNT
+        add_new_blocks(
+            manager,
+            2 * self._settings.BLOCK_DIFFICULTY_N_BLOCKS,
+            advance_clock=self._settings.AVG_TIME_BETWEEN_BLOCKS
+        )
 
         manager.daa.MIN_BLOCK_WEIGHT = 1
         base_weight = manager.generate_mining_block().weight
         self.assertGreater(base_weight, manager.daa.MIN_BLOCK_WEIGHT)
 
-        add_new_blocks(manager, 20, advance_clock=settings.AVG_TIME_BETWEEN_BLOCKS)
+        add_new_blocks(manager, 20, advance_clock=self._settings.AVG_TIME_BETWEEN_BLOCKS)
 
-        dt = settings.AVG_TIME_BETWEEN_BLOCKS  # the latest call to add_new_blocks will advance the clock
-        while dt < settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
+        dt = self._settings.AVG_TIME_BETWEEN_BLOCKS  # the latest call to add_new_blocks will advance the clock
+        while dt < self._settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
             weight = manager.generate_mining_block().weight
             self.assertAlmostEqual(weight, base_weight)
             manager.reactor.advance(1)
             dt += 1
 
         dt = 0
-        while dt < settings.WEIGHT_DECAY_WINDOW_SIZE:
+        while dt < self._settings.WEIGHT_DECAY_WINDOW_SIZE:
             weight = manager.generate_mining_block().weight
             self.assertAlmostEqual(weight, base_weight - amount)
             manager.reactor.advance(1)
             dt += 1
 
         dt = 0
-        while dt < settings.WEIGHT_DECAY_WINDOW_SIZE:
+        while dt < self._settings.WEIGHT_DECAY_WINDOW_SIZE:
             weight = manager.generate_mining_block().weight
             self.assertAlmostEqual(weight, base_weight - 2*amount)
             manager.reactor.advance(1)

@@ -23,7 +23,7 @@ from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
@@ -93,7 +93,7 @@ class HathorProtocol:
 
     def __init__(self, network: str, my_peer: PeerId, p2p_manager: 'ConnectionsManager',
                  *, use_ssl: bool, inbound: bool) -> None:
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.network = network
         self.my_peer = my_peer
         self.connections = p2p_manager

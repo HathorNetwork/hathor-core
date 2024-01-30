@@ -3,7 +3,6 @@ import unittest
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf import HathorSettings
 from hathor.crypto.util import (
     decode_address,
     get_address_b58_from_public_key,
@@ -11,8 +10,6 @@ from hathor.crypto.util import (
     get_private_key_bytes,
     get_private_key_from_bytes,
 )
-
-settings = HathorSettings()
 
 
 class CryptoUtilTestCase(unittest.TestCase):

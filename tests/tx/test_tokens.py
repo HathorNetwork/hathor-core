@@ -2,7 +2,6 @@ from struct import error as StructError
 
 import pytest
 
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.indexes.tokens_index import TokenUtxoInfo
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
@@ -12,8 +11,6 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, int_to_bytes
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
-
-settings = HathorSettings()
 
 
 class BaseTokenTest(unittest.TestCase):
@@ -453,30 +450,30 @@ class BaseTokenTest(unittest.TestCase):
         tx = create_tokens(self.manager, self.address_b58)
 
         # max token name length
-        tx.token_name = 'a' * settings.MAX_LENGTH_TOKEN_NAME
+        tx.token_name = 'a' * self._settings.MAX_LENGTH_TOKEN_NAME
         update_tx(tx)
         self.manager.verification_service.verify(tx)
 
         # max token symbol length
-        tx.token_symbol = 'a' * settings.MAX_LENGTH_TOKEN_SYMBOL
+        tx.token_symbol = 'a' * self._settings.MAX_LENGTH_TOKEN_SYMBOL
         update_tx(tx)
         self.manager.verification_service.verify(tx)
 
         # long token name
-        tx.token_name = 'a' * (settings.MAX_LENGTH_TOKEN_NAME + 1)
+        tx.token_name = 'a' * (self._settings.MAX_LENGTH_TOKEN_NAME + 1)
         update_tx(tx)
         with self.assertRaises(TransactionDataError):
             self.manager.verification_service.verify(tx)
 
         # long token symbol
         tx.token_name = 'ValidName'
-        tx.token_symbol = 'a' * (settings.MAX_LENGTH_TOKEN_SYMBOL + 1)
+        tx.token_symbol = 'a' * (self._settings.MAX_LENGTH_TOKEN_SYMBOL + 1)
         update_tx(tx)
         with self.assertRaises(TransactionDataError):
             self.manager.verification_service.verify(tx)
 
         # Hathor token name
-        tx.token_name = settings.HATHOR_TOKEN_NAME
+        tx.token_name = self._settings.HATHOR_TOKEN_NAME
         tx.token_symbol = 'TST'
         update_tx(tx)
         with self.assertRaises(TransactionDataError):
@@ -484,7 +481,7 @@ class BaseTokenTest(unittest.TestCase):
 
         # Hathor token symbol
         tx.token_name = 'Test'
-        tx.token_symbol = settings.HATHOR_TOKEN_SYMBOL
+        tx.token_symbol = self._settings.HATHOR_TOKEN_SYMBOL
         update_tx(tx)
         with self.assertRaises(TransactionDataError):
             self.manager.verification_service.verify(tx)

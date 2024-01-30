@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.58.0"
+version = "0.59.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -25,6 +25,7 @@ repository = "https://github.com/HathorNetwork/hathor-core/"
 classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
     "License :: OSI Approved :: Apache Software License",
     "Private :: Do Not Upload",
@@ -58,19 +59,19 @@ colorama = "~0.4.6"
 configargparse = "~1.5.3"
 cryptography = "~38.0.3"
 graphviz = "~0.20.1"
-ipython = "~8.7.0"
+ipython = {version = "~8.7.0", extras = ["kernel"]}
 mnemonic = "~0.20"
 prometheus_client = "~0.15.0"
 pyopenssl = "=22.1.0"
-pycoin = "~0.92"
-pywin32 = {version = "305", markers = "sys_platform == 'win32'"}
+pycoin = "~0.92.20230326"
+pywin32 = {version = "306", markers = "sys_platform == 'win32'"}
 requests = "=2.28.1"
 service_identity = "~21.1.0"
 pexpect = "~4.8.0"
 intervaltree = "~3.1.0"
 structlog = "~22.3.0"
 rocksdb = {git = "https://github.com/hathornetwork/python-rocksdb.git", markers = "sys_platform != 'win32'"}
-aiohttp = "~3.8.3"
+aiohttp = "~3.9.0"
 idna = "~3.4"
 setproctitle = "^1.2.2"
 sentry-sdk = {version = "^1.5.11", optional = true}

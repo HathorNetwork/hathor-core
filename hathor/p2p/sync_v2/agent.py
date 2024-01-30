@@ -24,7 +24,7 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall, deferLater
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
@@ -91,7 +91,7 @@ class NodeBlockSync(SyncAgent):
         :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
         :type reactor: Reactor
         """
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.protocol = protocol
         self.manager = protocol.node
         self.tx_storage: 'TransactionStorage' = protocol.node.tx_storage

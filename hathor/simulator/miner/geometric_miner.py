@@ -15,7 +15,7 @@
 import math
 from typing import TYPE_CHECKING, Optional
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.exception import BlockTemplateTimestampError
 from hathor.manager import HathorEvents
 from hathor.simulator.miner.abstract_miner import AbstractMiner
@@ -45,7 +45,7 @@ class GeometricMiner(AbstractMiner):
             blocks than values provided, 0 is used.
         """
         super().__init__(manager, rng)
-        self._settings = get_settings()
+        self._settings = get_global_settings()
 
         self._hashpower = hashpower
         self._signal_bits = signal_bits or []

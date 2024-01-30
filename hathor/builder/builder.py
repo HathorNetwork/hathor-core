@@ -18,7 +18,7 @@ from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
@@ -285,7 +285,7 @@ class Builder:
     def _get_or_create_settings(self) -> HathorSettingsType:
         """Return the HathorSettings instance set on this builder, or a new one if not set."""
         if self._settings is None:
-            self._settings = get_settings()
+            self._settings = get_global_settings()
         return self._settings
 
     def _get_reactor(self) -> Reactor:

@@ -77,7 +77,7 @@ class ResourcesBuilder:
         return prometheus
 
     def create_resources(self) -> server.Site:
-        from hathor.conf.get_settings import get_settings
+        from hathor.conf.get_settings import get_global_settings
         from hathor.debug_resources import (
             DebugCrashResource,
             DebugLogResource,
@@ -142,7 +142,7 @@ class ResourcesBuilder:
         )
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
 
-        settings = get_settings()
+        settings = get_global_settings()
         cpu = get_cpu_profiler()
 
         # TODO get this from a file. How should we do with the factory?

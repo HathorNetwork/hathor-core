@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from hathor.conf import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -30,7 +32,7 @@ class GenesisTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self._daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
-        verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa)
+        verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa, feature_service=Mock())
         self._verification_service = VerificationService(verifiers=verifiers)
         self.storage = TransactionMemoryStorage()
 

@@ -34,7 +34,8 @@ class RunNode:
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
         ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
         ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue)),
-        ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor))
+        ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor)),
+        ('--x-ipython-kernel', lambda args: bool(args.x_ipython_kernel)),
     ]
 
     @classmethod
@@ -107,6 +108,11 @@ class RunNode:
                             help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
         v2args.add_argument('--x-sync-v2-only', action='store_true',
                             help='Disable support for running sync-v1. DO NOT ENABLE, IT WILL BREAK.')
+        # XXX: new safe arguments along side the unsafe --x- arguments so transition is easier
+        v2args.add_argument('--sync-bridge', action='store_true',
+                            help='Enable support for running both sync protocols.')
+        v2args.add_argument('--sync-v2-only', action='store_true',
+                            help='Disable support for running sync-v1.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
@@ -120,6 +126,9 @@ class RunNode:
                             help=f'Signal not support for a feature. One of {possible_features}')
         parser.add_argument('--x-asyncio-reactor', action='store_true',
                             help='Use asyncio reactor instead of Twisted\'s default.')
+        # XXX: this is temporary, should be added as a sysctl instead before merging
+        parser.add_argument('--x-ipython-kernel', action='store_true',
+                            help='Launch embedded IPython kernel for remote debugging')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -162,8 +171,8 @@ class RunNode:
             assert self.manager.stratum_factory is not None
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
-        from hathor.conf.get_settings import get_settings
-        settings = get_settings()
+        from hathor.conf.get_settings import get_global_settings
+        settings = get_global_settings()
 
         if register_resources:
             resources_builder = ResourcesBuilder(
@@ -208,8 +217,8 @@ class RunNode:
             sys.exit(-3)
 
         import hathor
-        from hathor.conf.get_settings import get_settings
-        settings = get_settings()
+        from hathor.conf.get_settings import get_global_settings
+        settings = get_global_settings()
         sentry_sdk.init(
             dsn=self._args.sentry_dsn,
             release=hathor.__version__,
@@ -270,8 +279,8 @@ class RunNode:
                 '',
             ]
 
-            from hathor.conf.get_settings import get_settings
-            settings = get_settings()
+            from hathor.conf.get_settings import get_global_settings
+            settings = get_global_settings()
 
             if self._args.unsafe_mode != settings.NETWORK_NAME:
                 message.extend([
@@ -351,7 +360,7 @@ class RunNode:
     def __init__(self, *, argv=None):
         from hathor.cli.run_node_args import RunNodeArgs
         from hathor.conf import TESTNET_SETTINGS_FILEPATH
-        from hathor.conf.get_settings import get_settings
+        from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
 
         if argv is None:
@@ -369,7 +378,7 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
 
         try:
-            get_settings()
+            get_global_settings()
         except (TypeError, ValidationError) as e:
             from hathor.exception import PreInitializationError
             raise PreInitializationError(

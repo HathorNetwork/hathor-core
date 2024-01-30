@@ -4,7 +4,6 @@ from io import StringIO
 from structlog.testing import capture_logs
 
 from hathor.cli.multisig_spend import create_parser, execute
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
@@ -13,8 +12,6 @@ from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
-
-settings = HathorSettings()
 
 
 class BaseMultiSigSpendTest(unittest.TestCase):
@@ -65,7 +62,10 @@ class BaseMultiSigSpendTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
         available_tokens = sum(blocks_tokens)
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, available_tokens))
+        self.assertEqual(
+            self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
+            WalletBalance(0, available_tokens)
+        )
 
         # First we send tokens to a multisig address
         block_reward = blocks_tokens[0]
@@ -80,7 +80,7 @@ class BaseMultiSigSpendTest(unittest.TestCase):
         self.clock.advance(10)
 
         wallet_balance = WalletBalance(0, available_tokens - block_reward)
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], wallet_balance)
+        self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID], wallet_balance)
 
         # Then we create a new tx that spends this tokens from multisig wallet
         tx = Transaction.create_from_struct(tx1.get_struct())

@@ -1,13 +1,10 @@
 from typing import Any
 
-from hathor.conf import HathorSettings
 from hathor.mining import BlockTemplate
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
-
-settings = HathorSettings()
 
 
 class BaseMiningTest(unittest.TestCase):
@@ -45,10 +42,10 @@ class BaseMiningTest(unittest.TestCase):
 
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
-            reward=settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
+            reward=self._settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
-            timestamp_min=settings.GENESIS_BLOCK_TIMESTAMP + 3,
+            timestamp_min=self._settings.GENESIS_BLOCK_TIMESTAMP + 3,
             timestamp_max=timestamp_max,  # no limit for next block after genesis
             # parents=[tx.hash for tx in self.genesis_blocks + self.genesis_txs],
             parents=block_templates[0].parents,
@@ -68,13 +65,13 @@ class BaseMiningTest(unittest.TestCase):
         self.assertEqual(len(block_templates), 1)
 
         timestamp_max = min(
-            blocks[-1].timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS - 1,
+            blocks[-1].timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS - 1,
             int(manager.reactor.seconds()) + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED
         )
 
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
-            reward=settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
+            reward=self._settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=blocks[-1].timestamp + 1,

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
 from twisted.internet.task import LoopingCall
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.reactor import get_global_reactor
 
 if TYPE_CHECKING:
@@ -77,7 +77,7 @@ class PrometheusMetricsExporter:
         :param filename: Name of the prometheus file (must end in .prom)
         :type filename: str
         """
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.metrics = metrics
         self.metrics_prefix = metrics_prefix
 

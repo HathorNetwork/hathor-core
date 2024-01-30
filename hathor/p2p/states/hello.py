@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from structlog import get_logger
 
 import hathor
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states.base import BaseState
@@ -34,7 +34,7 @@ logger = get_logger()
 class HelloState(BaseState):
     def __init__(self, protocol: 'HathorProtocol') -> None:
         super().__init__(protocol)
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.log = logger.new(**protocol.get_logger_context())
         self.cmd_map.update({
             ProtocolMessages.HELLO: self.handle_hello,
@@ -172,7 +172,7 @@ class HelloState(BaseState):
 
 def _parse_sync_versions(hello_data: dict[str, Any]) -> set[SyncVersion]:
     """Versions that are not recognized will not be included."""
-    settings = get_settings()
+    settings = get_global_settings()
     if settings.CAPABILITY_SYNC_VERSION in hello_data['capabilities']:
         if 'sync_versions' not in hello_data:
             raise HathorError('protocol error, expected sync_versions field')

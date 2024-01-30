@@ -61,7 +61,7 @@ class CliBuilder:
 
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
-        from hathor.conf.get_settings import get_settings, get_settings_source
+        from hathor.conf.get_settings import get_global_settings, get_settings_source
         from hathor.daa import TestMode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
@@ -79,7 +79,7 @@ class CliBuilder:
         )
         from hathor.util import get_environment_info
 
-        settings = get_settings()
+        settings = get_global_settings()
 
         # only used for logging its location
         settings_source = get_settings_source()
@@ -158,8 +158,17 @@ class CliBuilder:
 
         hostname = self.get_hostname()
         network = settings.NETWORK_NAME
-        enable_sync_v1 = not self._args.x_sync_v2_only
-        enable_sync_v2 = self._args.x_sync_v2_only or self._args.x_sync_bridge
+
+        arg_sync_v2_only = self._args.x_sync_v2_only or self._args.sync_v2_only
+        if self._args.x_sync_v2_only:
+            self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
+
+        arg_sync_bridge = self._args.x_sync_bridge or self._args.sync_bridge
+        if self._args.x_sync_bridge:
+            self.log.warn('--x-sync-bridge is deprecated and will be removed, use --sync-bridge instead')
+
+        enable_sync_v1 = not arg_sync_v2_only
+        enable_sync_v2 = arg_sync_v2_only or arg_sync_bridge
 
         pubsub = PubSubManager(reactor)
 
@@ -270,6 +279,11 @@ class CliBuilder:
             cpu_mining_service=cpu_mining_service
         )
 
+        if self._args.x_ipython_kernel:
+            self.check_or_raise(self._args.x_asyncio_reactor,
+                                '--x-ipython-kernel must be used with --x-asyncio-reactor')
+            self._start_ipykernel()
+
         p2p_manager.set_manager(self.manager)
 
         if self._args.stratum:
@@ -376,3 +390,14 @@ class CliBuilder:
             return wallet
         else:
             raise BuilderError('Invalid type of wallet')
+
+    def _start_ipykernel(self) -> None:
+        # breakpoints are not expected to be used with the embeded ipykernel, to prevent this warning from being
+        # unnecessarily annoying, PYDEVD_DISABLE_FILE_VALIDATION should be set to 1 before debugpy is imported, or in
+        # practice, before importing hathor.ipykernel, if for any reason support for breakpoints is needed, the flag
+        # -Xfrozen_modules=off has to be passed to the python interpreter
+        # see:
+        # https://github.com/microsoft/debugpy/blob/main/src/debugpy/_vendored/pydevd/pydevd_file_utils.py#L587-L592
+        os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
+        from hathor.ipykernel import embed_kernel
+        embed_kernel(self.manager, runtime_dir=self._args.data, extra_ns=dict(run_node=self))

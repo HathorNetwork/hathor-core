@@ -27,10 +27,11 @@ from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
-from hathor.util import iwindows
+from hathor.util import iwindows, not_none
 
 if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
+    from hathor.transaction.storage.vertex_storage_protocol import VertexStorageProtocol
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -65,9 +66,9 @@ class DifficultyAdjustmentAlgorithm:
         if block.is_genesis:
             return self.MIN_BLOCK_WEIGHT
 
-        return self.calculate_next_weight(block.get_block_parent(), block.timestamp)
+        return self.calculate_next_weight(block.get_block_parent(), block.timestamp, not_none(block.storage))
 
-    def calculate_next_weight(self, parent_block: 'Block', timestamp: int) -> float:
+    def calculate_next_weight(self, parent_block: 'Block', timestamp: int, storage: 'VertexStorageProtocol') -> float:
         """ Calculate the next block weight, aka DAA/difficulty adjustment algorithm.
 
         The algorithm used is described in [RFC 22](https://gitlab.com/HathorNetwork/rfcs/merge_requests/22).
@@ -90,7 +91,7 @@ class DifficultyAdjustmentAlgorithm:
         blocks: list['Block'] = []
         while len(blocks) < N + 1:
             blocks.append(root)
-            root = root.get_block_parent()
+            root = storage.get_parent_block(root)
             assert root is not None
 
         # TODO: revise if this assertion can be safely removed

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Iterable, Optional, cast
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
 from hathor.util import classproperty, not_none
@@ -35,7 +35,7 @@ class BlockConsensusAlgorithm:
     """Implement the consensus algorithm for blocks."""
 
     def __init__(self, context: 'ConsensusAlgorithmContext') -> None:
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.context = context
 
     @classproperty

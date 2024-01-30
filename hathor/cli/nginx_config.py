@@ -114,9 +114,9 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
     """
     from datetime import datetime
 
-    from hathor.conf.get_settings import get_settings
+    from hathor.conf.get_settings import get_global_settings
 
-    settings = get_settings()
+    settings = get_global_settings()
     api_prefix = settings.API_VERSION_PREFIX
 
     locations: dict[str, dict[str, Any]] = {}

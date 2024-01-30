@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -11,7 +13,7 @@ class _BaseTest:
         def setUp(self) -> None:
             super().setUp()
             daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
-            verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=daa)
+            verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=daa, feature_service=Mock())
             self._verification_service = VerificationService(verifiers=verifiers)
 
         def test_deserialize(self):

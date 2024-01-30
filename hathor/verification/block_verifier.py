@@ -35,7 +35,7 @@ class BlockVerifier:
         *,
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None
+        feature_service: FeatureService,
     ) -> None:
         self._settings = settings
         self._daa = daa
@@ -82,11 +82,6 @@ class BlockVerifier:
 
     def verify_mandatory_signaling(self, block: Block) -> None:
         """Verify whether this block is missing mandatory signaling for any feature."""
-        if not self._settings.FEATURE_ACTIVATION.enable_usage:
-            return
-
-        assert self._feature_service is not None
-
         signaling_state = self._feature_service.is_signaling_mandatory_features(block)
 
         match signaling_state:

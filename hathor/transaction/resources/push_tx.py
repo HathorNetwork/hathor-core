@@ -21,7 +21,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, parse_args, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
@@ -46,7 +46,7 @@ class PushTxResource(Resource):
 
     def __init__(self, manager: 'HathorManager', max_output_script_size: Optional[int] = None,
                  allow_non_standard_script: bool = False) -> None:
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.log = logger.new()
         # Important to have the manager so we can know the tx_storage
         self.manager = manager

@@ -15,7 +15,7 @@
 from collections.abc import Collection
 from typing import TYPE_CHECKING, Iterable, Iterator, NewType
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -30,7 +30,7 @@ _INTERNAL_HATHOR_TOKEN_UID = InternalUid(b'\x00' * 32)
 
 def to_internal_token_uid(token_uid: bytes) -> InternalUid:
     """Normalizes a token_uid so that the native token (\x00) will have the same length as custom tokens."""
-    settings = get_settings()
+    settings = get_global_settings()
     if token_uid == settings.HATHOR_TOKEN_UID:
         return _INTERNAL_HATHOR_TOKEN_UID
     assert len(token_uid) == 32
@@ -40,7 +40,7 @@ def to_internal_token_uid(token_uid: bytes) -> InternalUid:
 def from_internal_token_uid(token_uid: InternalUid) -> bytes:
     """De-normalizes the token_uid so that the native token is b'\x00' as expected"""
     assert len(token_uid) == 32
-    settings = get_settings()
+    settings = get_global_settings()
     if token_uid == _INTERNAL_HATHOR_TOKEN_UID:
         return settings.HATHOR_TOKEN_UID
     return token_uid

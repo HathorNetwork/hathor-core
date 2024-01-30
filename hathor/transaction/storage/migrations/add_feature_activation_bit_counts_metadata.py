@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING
 from structlog import get_logger
 
 from hathor.transaction.storage.migrations import BaseMigration
-from hathor.util import progress
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage
@@ -33,9 +32,6 @@ class Migration(BaseMigration):
         return 'add_feature_activation_bit_counts_metadata'
 
     def run(self, storage: 'TransactionStorage') -> None:
+        # We can skip this migration as it will run again in `add_feature_activation_bit_counts_metadata2`.
         log = logger.new()
-        topological_iterator = storage.topological_iterator()
-
-        for vertex in progress(topological_iterator, log=log, total=None):
-            if vertex.is_block:
-                vertex.update_initial_metadata()
+        log.info('Skipping unnecessary migration.')

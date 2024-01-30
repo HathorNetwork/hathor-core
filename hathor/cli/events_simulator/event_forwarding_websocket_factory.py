@@ -29,6 +29,7 @@ class EventForwardingWebsocketFactory(EventWebsocketFactory):
         super().__init__(*args, **kwargs)
 
     def buildProtocol(self, _: IAddress) -> 'EventForwardingWebsocketProtocol':
+        from hathor.cli.events_simulator.event_forwarding_websocket_protocol import EventForwardingWebsocketProtocol
         protocol = EventForwardingWebsocketProtocol(self._simulator)
         protocol.factory = self
         return protocol

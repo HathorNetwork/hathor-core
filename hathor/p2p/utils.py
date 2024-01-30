@@ -27,7 +27,7 @@ from cryptography.x509 import Certificate
 from cryptography.x509.oid import NameOID
 from twisted.internet.interfaces import IAddress
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import get_representation_for_all_genesis
@@ -74,14 +74,14 @@ def description_to_connection_string(description: str) -> tuple[str, Optional[st
 def get_genesis_short_hash() -> str:
     """ Return the first 7 chars of the GENESIS_HASH used for validation that the genesis are the same
     """
-    settings = get_settings()
+    settings = get_global_settings()
     return get_representation_for_all_genesis(settings).hex()[:7]
 
 
 def get_settings_hello_dict() -> dict[str, Any]:
     """ Return a dict of settings values that must be validated in the hello state
     """
-    settings = get_settings()
+    settings = get_global_settings()
     settings_dict = {}
     for key in settings.P2P_SETTINGS_HASH_FIELDS:
         value = getattr(settings, key)
