@@ -419,6 +419,10 @@ class HathorSettings(NamedTuple):
     # Time in seconds to request the best blockchain from peers.
     BEST_BLOCKCHAIN_INTERVAL: int = 5  # seconds
 
+    # Merged mining settings. The old value is going to be replaced by the new value through Feature Activation.
+    OLD_MAX_MERKLE_PATH_LENGTH: int = 12
+    NEW_MAX_MERKLE_PATH_LENGTH: int = 20
+
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""

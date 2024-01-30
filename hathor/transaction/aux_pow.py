@@ -19,9 +19,6 @@ from structlog import get_logger
 logger = get_logger()
 
 
-MAX_MERKLE_PATH_LENGTH: int = 12
-
-
 class BitcoinAuxPow(NamedTuple):
     header_head: bytes  # 36 bytes
     coinbase_head: bytes  # variable length (at least 47 bytes)
@@ -44,23 +41,28 @@ class BitcoinAuxPow(NamedTuple):
         merkle_root = bytes(reversed(build_merkle_root_from_path([coinbase_tx_hash] + self.merkle_path)))
         return sha256d_hash(self.header_head + merkle_root + self.header_tail)
 
-    def verify(self, _base_block_hash: bytes) -> None:
+    def verify(self, _base_block_hash: bytes, max_merkle_path_length: int) -> None:
         """ Check for inconsistencies, raises instance of TxValidationError on error.
         """
+        self.verify_magic_number(_base_block_hash)
+        self.verify_merkle_path(_base_block_hash, max_merkle_path_length)
+
+    def verify_magic_number(self, _base_block_hash: bytes) -> None:
+        """Check that the `MAGIC_NUMBER` is present and in the correct index."""
         from hathor.merged_mining import MAGIC_NUMBER
-        from hathor.transaction.exceptions import (
-            AuxPowLongMerklePathError,
-            AuxPowNoMagicError,
-            AuxPowUnexpectedMagicError,
-        )
+        from hathor.transaction.exceptions import AuxPowNoMagicError, AuxPowUnexpectedMagicError
         magic_index = self.coinbase_head.find(MAGIC_NUMBER)
         if magic_index == -1:
             raise AuxPowNoMagicError('cannot find MAGIC_NUMBER')
         if magic_index < len(self.coinbase_head) - len(MAGIC_NUMBER):
             raise AuxPowUnexpectedMagicError('unexpected MAGIC_NUMBER')
+
+    def verify_merkle_path(self, _base_block_hash: bytes, max_merkle_path_length: int) -> None:
+        """Check that the merkle path length is smaller than the maximum limit."""
+        from hathor.transaction.exceptions import AuxPowLongMerklePathError
         merkle_path_length = len(self.merkle_path)
-        if merkle_path_length > MAX_MERKLE_PATH_LENGTH:
-            raise AuxPowLongMerklePathError(f'merkle_path too long: {merkle_path_length} > {MAX_MERKLE_PATH_LENGTH}')
+        if merkle_path_length > max_merkle_path_length:
+            raise AuxPowLongMerklePathError(f'merkle_path too long: {merkle_path_length} > {max_merkle_path_length}')
 
     def __bytes__(self) -> bytes:
         """ Convert to byte representation.

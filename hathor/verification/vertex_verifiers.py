@@ -66,7 +66,7 @@ class VertexVerifiers(NamedTuple):
         Create a VertexVerifiers instance using a custom vertex_verifier.
         """
         block_verifier = BlockVerifier(settings=settings, daa=daa, feature_service=feature_service)
-        merge_mined_block_verifier = MergeMinedBlockVerifier()
+        merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
         tx_verifier = TransactionVerifier(settings=settings, daa=daa)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
 
