@@ -16,6 +16,7 @@ import datetime
 import struct
 from enum import IntEnum
 
+import pydantic
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -643,7 +644,7 @@ def op_sighash_bitmask(context: ScriptContext) -> None:
             inputs=bytes_to_int(inputs),
             outputs=bytes_to_int(outputs)
         )
-    except Exception as e:
+    except pydantic.ValidationError as e:
         raise CustomSighashModelInvalid('Could not construct sighash bitmask.') from e
 
     if context.extras.input_index not in sighash.get_input_indexes():
@@ -669,7 +670,7 @@ def op_max_inputs_outputs(context: ScriptContext) -> None:
             max_inputs=bytes_to_int(max_inputs),
             max_outputs=bytes_to_int(max_outputs)
         )
-    except Exception as e:
+    except pydantic.ValidationError as e:
         raise InputsOutputsLimitModelInvalid("Could not construct inputs and outputs limits.") from e
 
     tx_inputs_len = len(context.extras.tx.inputs)

@@ -75,7 +75,7 @@ class Transaction(BaseTransaction):
         super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
                          inputs=inputs or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
-        self._sighash_cache: Optional[bytes] = None
+        self._sighash_all_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
 
     @property
@@ -215,11 +215,11 @@ class Transaction(BaseTransaction):
         # This method does not depend on the input itself, however we call it for each one to sign it.
         # For transactions that have many inputs there is a significant decrease on the verify time
         # when using this cache, so we call this method only once.
-        if self._sighash_cache:
-            return self._sighash_cache
+        if self._sighash_all_cache:
+            return self._sighash_all_cache
 
         sighash = self._get_sighash(inputs=self.inputs, outputs=self.outputs)
-        self._sighash_cache = sighash
+        self._sighash_all_cache = sighash
 
         return sighash
 

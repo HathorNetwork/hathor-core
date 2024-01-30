@@ -36,6 +36,6 @@ class NanoContracts(unittest.TestCase):
         input_data = NanoContractMatchValues.create_input_data(
             base64.b64decode(oracle_data), base64.b64decode(oracle_signature), base64.b64decode(pubkey))
         txin = TxInput(b'aa', 0, input_data)
-        spent_tx = Transaction(outputs=[TxOutput(20, script)])
-        tx = Transaction(outputs=[TxOutput(20, P2PKH.create_output_script(address))])
-        script_eval(tx, txin, spent_tx, input_index=0)
+        spent_tx = Transaction(hash=b'aa', outputs=[TxOutput(20, script)])
+        tx = Transaction(inputs=[txin], outputs=[TxOutput(20, P2PKH.create_output_script(address))])
+        script_eval(tx, spent_tx, input_index=0)

@@ -156,8 +156,7 @@ class TransactionVerifier:
         """
         from hathor.transaction.scripts import script_eval
         try:
-            input_tx = tx.inputs[input_index]
-            return script_eval(tx, input_tx, spent_tx, input_index=input_index)
+            return script_eval(tx, spent_tx, input_index=input_index)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
