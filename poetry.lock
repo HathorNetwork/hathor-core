@@ -706,22 +706,22 @@ test = ["coverage", "mock (>=4)", "pytest (>=7)", "pytest-cov", "pytest-mock (>=
 
 [[package]]
 name = "hathorlib"
-version = "0.3.0"
+version = "0.5.2"
 description = "Hathor Network base objects library"
 optional = false
-python-versions = ">=3.6,<4.0"
+python-versions = ">=3.9,<4"
 files = [
-    {file = "hathorlib-0.3.0-py3-none-any.whl", hash = "sha256:079c2adbe0a28052e1db224324ca0cb8edbe6c3ced6ee5de09bb289cbed4c4e2"},
-    {file = "hathorlib-0.3.0.tar.gz", hash = "sha256:0d268666504c9bd92369de889ebc292c077ab37b12b18b3383dfddb3d8b14741"},
+    {file = "hathorlib-0.5.2-py3-none-any.whl", hash = "sha256:bf50853efff592a90fd10d9ef3988c62029bd728418ec88600cd00e21c075240"},
+    {file = "hathorlib-0.5.2.tar.gz", hash = "sha256:565958f66cfbebdb159450855b7218ab0b3a6fdcb4f6f5ca4e8294e0c018e913"},
 ]
 
 [package.dependencies]
-base58 = ">=2.1.0"
-cryptography = ">=38.0.3"
-pycoin = ">=0.92.20220529,<0.93.0"
+base58 = ">=2.1.1,<2.2.0"
+cryptography = ">=38.0.3,<38.1.0"
+pycoin = ">=0.92,<0.93"
 
 [package.extras]
-client = ["aiohttp (>=3.7.0)", "structlog (>=20.0.0)"]
+client = ["aiohttp (>=3.8.3,<3.9.0)", "structlog (>=22.3.0,<22.4.0)"]
 
 [[package]]
 name = "hyperlink"
@@ -2490,4 +2490,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4"
-content-hash = "5763f80ceef15f118b402852436bf43cdf70f1a7f95d2a5b59e40b8c3c1e24db"
+content-hash = "cce7b9832ae2d13cc56fb572af82face7a824307ddd6953387737a27d6e7088a"
