@@ -74,6 +74,7 @@ class HealthcheckResource(Resource):
         healthcheck = Healthcheck(name='hathor-core', components=[sync_component])
 
         # The asyncio loop will be running in case the option --x-asyncio-reactor is used
+        # XXX: We should remove this if when the asyncio reactor becomes the default and the only option
         if asyncio.get_event_loop().is_running():
             future = asyncio.ensure_future(healthcheck.run())
             deferred = Deferred.fromFuture(future)
