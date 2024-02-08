@@ -721,7 +721,7 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.connections is not None
 
         if self.state is not PeerState.SYNCING_BLOCKS:
-            self.log.error('unexpected BLOCKS-END', state=self.state)
+            self.log.error('unexpected BLOCKS-END', state=self.state, response_code=response_code.name)
             self.protocol.send_error_and_close_connection('Not expecting to receive BLOCKS-END message')
             return
 
@@ -978,7 +978,7 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.connections is not None
 
         if self.state is not PeerState.SYNCING_TRANSACTIONS:
-            self.log.error('unexpected TRANSACTIONS-END', state=self.state)
+            self.log.error('unexpected TRANSACTIONS-END', state=self.state, response_code=response_code.name)
             self.protocol.send_error_and_close_connection('Not expecting to receive TRANSACTIONS-END message')
             return
 
