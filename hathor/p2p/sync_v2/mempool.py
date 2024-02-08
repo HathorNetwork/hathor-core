@@ -39,7 +39,7 @@ class SyncMempoolManager:
         self.tx_storage = self.manager.tx_storage
         self.reactor = self.sync_agent.reactor
 
-        self._deferred: Optional[Deferred[None]] = None
+        self._deferred: Optional[Deferred[bool]] = None
 
         # Set of tips we know but couldn't add to the DAG yet.
         self.missing_tips: set[bytes] = set()
@@ -54,7 +54,7 @@ class SyncMempoolManager:
         """Whether the sync-mempool is currently running."""
         return self._is_running
 
-    def run(self) -> Deferred[None]:
+    def run(self) -> Deferred[bool]:
         """Starts _run in, won't start again if already running."""
         if self.is_running():
             self.log.warn('already started')
@@ -71,17 +71,18 @@ class SyncMempoolManager:
 
     @inlineCallbacks
     def _run(self) -> Generator[Deferred, Any, None]:
+        is_synced = False
         try:
-            yield self._unsafe_run()
+            is_synced = yield self._unsafe_run()
         finally:
             # sync_agent.run_sync will start it again when needed
             self._is_running = False
             assert self._deferred is not None
-            self._deferred.callback(None)
+            self._deferred.callback(is_synced)
             self._deferred = None
 
     @inlineCallbacks
-    def _unsafe_run(self) -> Generator[Deferred, Any, None]:
+    def _unsafe_run(self) -> Generator[Deferred, Any, bool]:
         """Run a single loop of the sync-v2 mempool."""
         if not self.missing_tips:
             # No missing tips? Let's get them!
@@ -96,6 +97,10 @@ class SyncMempoolManager:
             # We use a deque for performance reasons.
             self.log.debug('start mempool DSF', tx=tx.hash_hex)
             yield self._dfs(deque([tx]))
+
+        if not self.missing_tips:
+            return True
+        return False
 
     @inlineCallbacks
     def _dfs(self, stack: deque[BaseTransaction]) -> Generator[Deferred, Any, None]:

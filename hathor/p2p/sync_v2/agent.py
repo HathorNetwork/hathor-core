@@ -42,7 +42,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
-from hathor.util import not_none
+from hathor.util import collect_n, not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -51,6 +51,7 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 MAX_GET_TRANSACTIONS_BFS_LEN: int = 8
+MAX_MEMPOOL_STATUS_TIPS: int = 20
 
 
 class _HeightInfo(NamedTuple):
@@ -132,6 +133,9 @@ class NodeBlockSync(SyncAgent):
         # Notice that this flag ignores the mempool.
         self._synced = False
 
+        # Whether the mempool is synced or not.
+        self._synced_mempool = False
+
         # Indicate whether the sync manager has been started.
         self._started: bool = False
 
@@ -162,12 +166,22 @@ class NodeBlockSync(SyncAgent):
     def get_status(self) -> dict[str, Any]:
         """ Return the status of the sync.
         """
+        assert self.tx_storage.indexes is not None
+        assert self.tx_storage.indexes.mempool_tips is not None
+        tips = self.tx_storage.indexes.mempool_tips.get()
+        tips_limited, tips_has_more = collect_n(iter(tips), MAX_MEMPOOL_STATUS_TIPS)
         res = {
             'is_enabled': self.is_sync_enabled(),
             'peer_best_block': self.peer_best_block.to_json() if self.peer_best_block else None,
             'synced_block': self.synced_block.to_json() if self.synced_block else None,
             'synced': self._synced,
             'state': self.state.value,
+            'mempool': {
+                'tips_count': len(tips),
+                'tips': [x.hex() for x in tips_limited],
+                'has_more': tips_has_more,
+                'is_synced': self._synced_mempool,
+            }
         }
         return res
 
@@ -263,6 +277,9 @@ class NodeBlockSync(SyncAgent):
     def update_synced(self, synced: bool) -> None:
         self._synced = synced
 
+    def update_synced_mempool(self, value: bool) -> None:
+        self._synced_mempool = value
+
     def watchdog(self) -> None:
         """Close connection if sync is stale."""
         if not self._is_running:
@@ -308,8 +325,13 @@ class NodeBlockSync(SyncAgent):
         is_block_synced = yield self.run_sync_blocks()
         if is_block_synced:
             # our blocks are synced, so sync the mempool
-            self.state = PeerState.SYNCING_MEMPOOL
-            yield self.mempool_manager.run()
+            yield self.run_sync_mempool()
+
+    @inlineCallbacks
+    def run_sync_mempool(self) -> Generator[Any, Any, None]:
+        self.state = PeerState.SYNCING_MEMPOOL
+        is_mempool_synced = yield self.mempool_manager.run()
+        self.update_synced_mempool(is_mempool_synced)
 
     def get_my_best_block(self) -> _HeightInfo:
         """Return my best block info."""
