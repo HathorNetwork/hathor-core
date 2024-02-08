@@ -33,3 +33,5 @@ To contribute to the development of Hathor core, we encourage you to fork the `m
 - To know more about Hathor from a general or from a business perspective, see [https://hathor.network](https://hathor.network).
 
 - To know more about Hathor from a technical perspective, see [https://docs.hathor.network](https://docs.hathor.network).
+
+- Subdirectory [docs](docs): supplementary documentation of Hathor core.
