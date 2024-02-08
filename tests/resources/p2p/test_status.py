@@ -2,7 +2,6 @@ from twisted.internet import endpoints
 from twisted.internet.defer import inlineCallbacks
 
 import hathor
-from hathor.conf.unittests import SETTINGS
 from hathor.p2p.resources import StatusResource
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -39,14 +38,14 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
         self.assertIn('height', dag_data['best_block_tips'][0])
         self.assertIsInstance(dag_data['best_block_tips'][0]['hash'], str)
         self.assertIsInstance(dag_data['best_block_tips'][0]['height'], int)
-        self.assertEqual(dag_data['best_block_tips'][0]['hash'], SETTINGS.GENESIS_BLOCK_HASH.hex())
+        self.assertEqual(dag_data['best_block_tips'][0]['hash'], self._settings.GENESIS_BLOCK_HASH.hex())
         self.assertEqual(dag_data['best_block_tips'][0]['height'], 0)
         self.assertIsNotNone(dag_data['best_block'])
         self.assertIn('hash', dag_data['best_block'])
         self.assertIn('height', dag_data['best_block'])
         self.assertIsInstance(dag_data['best_block']['hash'], str)
         self.assertIsInstance(dag_data['best_block']['height'], int)
-        self.assertEqual(dag_data['best_block']['hash'], SETTINGS.GENESIS_BLOCK_HASH.hex())
+        self.assertEqual(dag_data['best_block']['hash'], self._settings.GENESIS_BLOCK_HASH.hex())
         self.assertEqual(dag_data['best_block']['height'], 0)
 
     @inlineCallbacks
