@@ -18,11 +18,7 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf import MAINNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH, UNITTESTS_SETTINGS_FILEPATH
-from hathor.conf.mainnet import SETTINGS as MAINNET_SETTINGS
 from hathor.conf.settings import HathorSettings
-from hathor.conf.testnet import SETTINGS as TESTNET_SETTINGS
-from hathor.conf.unittests import SETTINGS as UNITTESTS_SETTINGS
 
 
 @pytest.mark.parametrize('filepath', ['fixtures/valid_hathor_settings_fixture.yml'])
@@ -99,19 +95,3 @@ def test_missing_hathor_settings_from_yaml(filepath):
         HathorSettings.from_yaml(filepath=settings_filepath)
 
     assert "missing 1 required positional argument: 'NETWORK_NAME'" in str(e.value)
-
-
-# TODO: Tests below are temporary while settings via python coexist with settings via yaml, just to make sure
-#  the conversion was made correctly. After python settings are removed, this file can be removed too.
-
-
-def test_mainnet_settings_migration():
-    assert MAINNET_SETTINGS == HathorSettings.from_yaml(filepath=MAINNET_SETTINGS_FILEPATH)
-
-
-def test_testnet_settings_migration():
-    assert TESTNET_SETTINGS == HathorSettings.from_yaml(filepath=TESTNET_SETTINGS_FILEPATH)
-
-
-def test_unittests_settings_migration():
-    assert UNITTESTS_SETTINGS == HathorSettings.from_yaml(filepath=UNITTESTS_SETTINGS_FILEPATH)
