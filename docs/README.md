@@ -20,3 +20,4 @@ Documents in this directory:
 - [Documentation of the feature "RocksDB index"](rocksdb-index-feature.md)
 - [Legacy documentation of Hathor Network](legacy)
 - [Metadocs: Open API and Redoc usage guide](metadocs-openapi-redoc-usage-guide.md)
+- [Developing Hathor core](developing.md)
