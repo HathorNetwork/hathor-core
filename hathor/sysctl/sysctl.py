@@ -15,11 +15,14 @@
 from typing import Any, Callable, Iterator, NamedTuple, Optional
 
 from pydantic import validate_arguments
+from structlog import get_logger
 
 from hathor.sysctl.exception import SysctlEntryNotFound, SysctlReadOnlyEntry, SysctlWriteOnlyEntry
 
 Getter = Callable[[], Any]
 Setter = Callable[..., None]
+
+logger = get_logger()
 
 
 class SysctlCommand(NamedTuple):
@@ -33,6 +36,7 @@ class Sysctl:
     def __init__(self) -> None:
         self._children: dict[str, 'Sysctl'] = {}
         self._commands: dict[str, SysctlCommand] = {}
+        self.log = logger.new()
 
     def put_child(self, path: str, sysctl: 'Sysctl') -> None:
         """Add a child to the tree."""

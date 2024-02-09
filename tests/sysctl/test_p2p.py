@@ -151,6 +151,36 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         sysctl.set('enabled_sync_versions', ['v1'])
         self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1'])
 
+    def test_kill_all_connections(self):
+        manager = self.create_peer()
+        p2p_manager = manager.connections
+        sysctl = ConnectionsManagerSysctl(p2p_manager)
+
+        p2p_manager.disconnect_all_peers = MagicMock()
+        self.assertEqual(p2p_manager.disconnect_all_peers.call_count, 0)
+        sysctl.set('kill_connection', '*')
+        self.assertEqual(p2p_manager.disconnect_all_peers.call_count, 1)
+
+    def test_kill_one_connection(self):
+        manager = self.create_peer()
+        p2p_manager = manager.connections
+        sysctl = ConnectionsManagerSysctl(p2p_manager)
+
+        peer_id = 'my-peer-id'
+        conn = MagicMock()
+        p2p_manager.connected_peers[peer_id] = conn
+        self.assertEqual(conn.disconnect.call_count, 0)
+        sysctl.set('kill_connection', peer_id)
+        self.assertEqual(conn.disconnect.call_count, 1)
+
+    def test_kill_connection_unknown_peer_id(self):
+        manager = self.create_peer()
+        p2p_manager = manager.connections
+        sysctl = ConnectionsManagerSysctl(p2p_manager)
+
+        with self.assertRaises(SysctlException):
+            sysctl.set('kill_connection', 'unknown-peer-id')
+
 
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
     __test__ = True

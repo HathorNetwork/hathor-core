@@ -98,6 +98,11 @@ class ConnectionsManagerSysctl(Sysctl):
             self.get_enabled_sync_versions,
             self.set_enabled_sync_versions,
         )
+        self.register(
+            'kill_connection',
+            None,
+            self.set_kill_connection,
+        )
 
     def set_force_sync_rotate(self) -> None:
         """Force a sync rotate."""
@@ -196,3 +201,16 @@ class ConnectionsManagerSysctl(Sysctl):
     def _disable_sync_version(self, sync_version: SyncVersion) -> None:
         """Disable the given sync version."""
         self.connections.disable_sync_version(sync_version)
+
+    def set_kill_connection(self, peer_id: str, force: bool = False) -> None:
+        """Kill connection with peer_id or kill all connections if peer_id == '*'."""
+        if peer_id == '*':
+            self.log.warn('Killing all connections')
+            self.connections.disconnect_all_peers(force=force)
+            return
+
+        conn = self.connections.connected_peers.get(peer_id, None)
+        if conn is None:
+            self.log.warn('Killing connection', peer_id=peer_id)
+            raise SysctlException('peer-id is not connected')
+        conn.disconnect(force=force)
