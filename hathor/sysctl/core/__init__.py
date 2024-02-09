@@ -1,4 +1,4 @@
-# Copyright 2023 Hathor Labs
+# Copyright 2024 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,15 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from hathor.sysctl.core.manager import HathorManagerSysctl
-from hathor.sysctl.p2p.manager import ConnectionsManagerSysctl
-from hathor.sysctl.sysctl import Sysctl
-from hathor.sysctl.websocket.manager import WebsocketManagerSysctl
-
-__all__ = [
-    'Sysctl',
-    'ConnectionsManagerSysctl',
-    'HathorManagerSysctl',
-    'WebsocketManagerSysctl',
-]
