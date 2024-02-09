@@ -232,12 +232,34 @@ class RunNode:
         if sigusr1 is not None:
             # USR1 is available in this OS.
             signal.signal(sigusr1, self.signal_usr1_handler)
+        sigusr2 = getattr(signal, 'SIGUSR2', None)
+        if sigusr2 is not None:
+            # USR2 is available in this OS.
+            signal.signal(sigusr1, self.signal_usr2_handler)
 
     def signal_usr1_handler(self, sig: int, frame: Any) -> None:
         """Called when USR1 signal is received."""
         self.log.warn('USR1 received. Killing all connections...')
         if self.manager and self.manager.connections:
             self.manager.connections.disconnect_all_peers(force=True)
+
+    def signal_usr2_handler(self, sig: int, frame: Any) -> None:
+        self.log.warn('USR2 received.')
+        if not self.manager:
+            self.log.warn('USR2: Fail because manager does not exists')
+            return
+
+        if not self._args.data:
+            self.log.warn('USR2: Fail because it requires --data')
+
+        if self.manager.profiler is None:
+            self.log.warn('USR2: Starting profiler...')
+            self.manager.start_profiler()
+        else:
+            filename = os.path.join(self._args.data, 'SIGUSR2.dump')
+            self.log.warn('USR2: Stopping profiler...', save_to=filename)
+            self.manager.stop_profiler(save_to=filename)
+            self.manager.profiler = None
 
     def check_unsafe_arguments(self) -> None:
         unsafe_args_found = []
