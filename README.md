@@ -14,11 +14,11 @@ To know how to operate and use Hathor core, see [Hathor full node at Hathor docs
 
 ## Support
 
-If after consulting the documentation, you still need **help to operate and use Hathor core**, [send a message to the appropriate channel at Hathor Discord server for assistance from Hathor team and community members](https://discord.com/channels/566500848570466316/663785995082268713).
+If after consulting the documentation, you still need **help to operate and use Hathor core**, [send a message to the `#development` channel on Hathor Discord server for assistance from Hathor team and community members](https://discord.com/channels/566500848570466316/663785995082268713).
 
-If you observed an incorrect behavior while using Hathor core, we encourage you to [open an issue to report this failure](https://github.com/HathorNetwork/hathor-core/issues/new).
+If you observe an incorrect behavior while using Hathor core, we encourage you to [open an issue to report this failure](https://github.com/HathorNetwork/hathor-core/issues/new).
 
-You can also [open an issue to request a new feature you wish to see in Hathor core](https://github.com/HathorNetwork/hathor-core/issues/new).
+You can also [open an issue to request a new feature you wish to see](https://github.com/HathorNetwork/hathor-core/issues/new).
 
 Please do not open an issue to report a security breach or vulnerability. Instead, follow the guidelines described at [SECURITY](SECURITY.md) for safely reporting, fixing and disclosing security issues.
 
@@ -31,6 +31,6 @@ Please do not open a pull request to fix a security breach or vulnerability. Ins
 ## Miscellaneous
 
 A miscellany with additional documentation and resources:
-- [Subdirectory docs](docs): supplementary documentation of Hathor core.
+- [Subdirectory docs](docs/README.md): supplementary documentation of Hathor core.
 - To know more about Hathor from a general or from a business perspective, see [https://hathor.network](https://hathor.network).
 - To know more about Hathor from a technical perspective, see [https://docs.hathor.network](https://docs.hathor.network).
