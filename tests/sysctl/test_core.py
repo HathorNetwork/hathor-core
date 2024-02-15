@@ -18,7 +18,7 @@ class HathorManagerSysctlTestCase(SimulatorTestCase):
 
         manager.start_profiler = Mock(wraps=manager.start_profiler)
         self.assertEqual(manager.start_profiler.call_count, 0)
-        sysctl.set('profiler.start', False)
+        sysctl.unsafe_set('profiler.start', False)
         self.assertEqual(manager.start_profiler.call_count, 1)
 
         manager.reactor.advance(100)
@@ -28,7 +28,7 @@ class HathorManagerSysctlTestCase(SimulatorTestCase):
         manager.stop_profiler = Mock(wraps=manager.stop_profiler)
         manager.profiler = MagicMock()  # prevents a call to profiler.dump_stats()
         self.assertEqual(manager.stop_profiler.call_count, 0)
-        sysctl.set('profiler.stop', '/path/to/dump')
+        sysctl.unsafe_set('profiler.stop', '/path/to/dump')
         self.assertEqual(manager.stop_profiler.call_count, 1)
         self.assertEqual(manager.stop_profiler.call_args, call(save_to='/path/to/dump',))
 
