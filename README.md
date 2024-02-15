@@ -4,9 +4,7 @@
 
 ## Description
 
-**Hathor core** is the main software component of a Hathor full node. Once a computer system runs Hathor core and connects to Hathor Network it becomes a Hathor full node.
-
-**Hathor full node** is the computer system unit that is a peer in Hathor Network. Hathor full node is the primary building block that comprises Hathor Network.
+**Hathor core** is the official client for operating a full node in Hathor Network.
 
 ## Operation and usage
 
