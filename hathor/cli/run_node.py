@@ -17,7 +17,7 @@ import sys
 import tempfile
 from argparse import SUPPRESS, ArgumentParser, Namespace
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, TextIO
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional
 
 from pydantic import ValidationError
 from structlog import get_logger
@@ -31,18 +31,16 @@ if TYPE_CHECKING:
 
 
 @contextmanager
-def temp_fifo(filename: str, tempdir: str | None) -> Iterator[TextIO]:
+def temp_fifo(filename: str, tempdir: str | None) -> Iterator[None]:
     """Context Manager for creating named pipes."""
     mkfifo = getattr(os, 'mkfifo', None)
     if mkfifo is None:
         raise AttributeError('mkfifo is not available')
 
     mkfifo(filename, mode=0o666)
-    fp = open(filename, 'r')
     try:
-        yield fp
+        yield None
     finally:
-        fp.close()
         os.unlink(filename)
         if tempdir is not None:
             os.rmdir(tempdir)
@@ -305,9 +303,15 @@ class RunNode:
             self.log.warn('[USR2] Pipe already exists.', pipe=filename)
             return
 
-        with temp_fifo(filename, tempdir) as fp:
+        with temp_fifo(filename, tempdir):
             self.log.warn('[USR2] Main loop paused, awaiting command to proceed.', pipe=filename)
-            lines = fp.readlines()
+
+            fp = open(filename, 'r')
+            try:
+                lines = fp.readlines()
+            finally:
+                fp.close()
+
             for cmd in lines:
                 cmd = cmd.strip()
                 self.log.warn('[USR2] Command received ', cmd=cmd)
