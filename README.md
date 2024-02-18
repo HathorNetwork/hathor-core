@@ -30,5 +30,6 @@ Please do not open a pull request to fix a security breach or vulnerability. Ins
 
 A miscellany with additional documentation and resources:
 - [Subdirectory docs](docs/README.md): supplementary documentation of Hathor core.
+- [Docker images at Docker Hub](https://hub.docker.com/r/hathornetwork/hathor-core)
 - To know more about Hathor from a general or from a business perspective, see [https://hathor.network](https://hathor.network).
 - To know more about Hathor from a technical perspective, see [https://docs.hathor.network](https://docs.hathor.network).
