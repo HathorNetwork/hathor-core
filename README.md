@@ -22,7 +22,7 @@ Please do not open an issue to report a security breach or vulnerability. Instea
 
 ## Contributing
 
-To contribute to the development of Hathor core, we encourage you to fork the `master` branch, implement your code, and then [open a pull request to merge it into `master`, selecting the "feature branch template"](https://github.com/HathorNetwork/hathor-core/pulls).
+To contribute to the development of Hathor core, we encourage you to fork the `master` branch, implement your code, and then [open a pull request to merge it into `master`, selecting the "feature branch template"](https://github.com/HathorNetwork/hathor-core/compare).
 
 Please do not open a pull request to fix a security breach or vulnerability. Instead, follow the guidelines described at [SECURITY](SECURITY.md) for safely reporting, fixing and disclosing security issues.
 
