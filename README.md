@@ -1,4 +1,4 @@
-# Hathor core
+# Hathor core (full node)
 
 [![Codecov](https://img.shields.io/codecov/c/github/HathorNetwork/hathor-core?logo=codecov)](https://codecov.io/gh/hathornetwork/hathor-core)
 
