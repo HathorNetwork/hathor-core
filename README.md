@@ -14,17 +14,23 @@ To know how to operate and use Hathor core, see [Hathor full node at Hathor docs
 
 If after consulting the documentation, you still need **help to operate and use Hathor core**, [send a message to the `#development` channel on Hathor Discord server for assistance from Hathor team and community members](https://discord.com/channels/566500848570466316/663785995082268713).
 
+If you observe an incorrect behavior while using Hathor core, see [the "Issues" subsection in "Contributing"](#issues).
+
+## Contributing
+
+### Issues
+
 If you observe an incorrect behavior while using Hathor core, we encourage you to [open an issue to report this failure](https://github.com/HathorNetwork/hathor-core/issues/new).
 
 You can also [open an issue to request a new feature you wish to see](https://github.com/HathorNetwork/hathor-core/issues/new).
 
-Please do not open an issue to report a security breach or vulnerability. Instead, follow the guidelines described at [SECURITY](SECURITY.md) for safely reporting, fixing and disclosing security issues.
+### Pull requests
 
-## Contributing
+To contribute to the development of Hathor core, we encourage you to fork the `master` branch, implement your code, and then [submit a pull request to merge it into `master`, selecting the "feature branch template"](https://github.com/HathorNetwork/hathor-core/compare).
 
-To contribute to the development of Hathor core, we encourage you to fork the `master` branch, implement your code, and then [open a pull request to merge it into `master`, selecting the "feature branch template"](https://github.com/HathorNetwork/hathor-core/compare).
+### Security
 
-Please do not open a pull request to fix a security breach or vulnerability. Instead, follow the guidelines described at [SECURITY](SECURITY.md) for safely reporting, fixing and disclosing security issues.
+Please do not open an issue to report a security breach nor submit a pull request to fix it. Instead, follow the guidelines described in [SECURITY](SECURITY.md) for safely reporting, fixing, and disclosing security issues.
 
 ## Miscellaneous
 
