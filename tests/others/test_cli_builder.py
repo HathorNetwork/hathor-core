@@ -101,13 +101,28 @@ class BuilderTestCase(unittest.TestCase):
     def test_memory_storage_with_rocksdb_indexes(self):
         self._build_with_error(['--memory-storage', '--x-rocksdb-indexes'], 'RocksDB indexes require RocksDB data')
 
+    def test_sync_default(self):
+        manager = self._build(['--memory-storage'])
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+
     def test_sync_bridge(self):
         manager = self._build(['--memory-storage', '--x-sync-bridge'])
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
+    def test_sync_bridge2(self):
+        manager = self._build(['--memory-storage', '--sync-bridge'])
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+
     def test_sync_v2_only(self):
         manager = self._build(['--memory-storage', '--x-sync-v2-only'])
+        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+
+    def test_sync_v2_only2(self):
+        manager = self._build(['--memory-storage', '--sync-v2-only'])
         self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 

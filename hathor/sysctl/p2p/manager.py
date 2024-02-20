@@ -17,7 +17,7 @@ import os
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.sync_version import SyncVersion
 from hathor.sysctl.exception import SysctlException
-from hathor.sysctl.sysctl import Sysctl
+from hathor.sysctl.sysctl import Sysctl, signal_handler_safe
 
 
 def parse_text(text: str) -> list[str]:
@@ -98,6 +98,11 @@ class ConnectionsManagerSysctl(Sysctl):
             self.get_enabled_sync_versions,
             self.set_enabled_sync_versions,
         )
+        self.register(
+            'kill_connection',
+            None,
+            self.set_kill_connection,
+        )
 
     def set_force_sync_rotate(self) -> None:
         """Force a sync rotate."""
@@ -157,6 +162,7 @@ class ConnectionsManagerSysctl(Sysctl):
         """Return the maximum number of peers running sync simultaneously."""
         return self.connections.MAX_ENABLED_SYNC
 
+    @signal_handler_safe
     def set_max_enabled_sync(self, value: int) -> None:
         """Change the maximum number of peers running sync simultaneously."""
         if value < 0:
@@ -174,6 +180,7 @@ class ConnectionsManagerSysctl(Sysctl):
         """Return the list of ENABLED sync versions."""
         return sorted(map(pretty_sync_version, self.connections.get_enabled_sync_versions()))
 
+    @signal_handler_safe
     def set_enabled_sync_versions(self, sync_versions: list[str]) -> None:
         """Set the list of ENABLED sync versions."""
         new_sync_versions = set(map(parse_sync_version, sync_versions))
@@ -196,3 +203,17 @@ class ConnectionsManagerSysctl(Sysctl):
     def _disable_sync_version(self, sync_version: SyncVersion) -> None:
         """Disable the given sync version."""
         self.connections.disable_sync_version(sync_version)
+
+    @signal_handler_safe
+    def set_kill_connection(self, peer_id: str, force: bool = False) -> None:
+        """Kill connection with peer_id or kill all connections if peer_id == '*'."""
+        if peer_id == '*':
+            self.log.warn('Killing all connections')
+            self.connections.disconnect_all_peers(force=force)
+            return
+
+        conn = self.connections.connected_peers.get(peer_id, None)
+        if conn is None:
+            self.log.warn('Killing connection', peer_id=peer_id)
+            raise SysctlException('peer-id is not connected')
+        conn.disconnect(force=force)

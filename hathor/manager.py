@@ -15,8 +15,9 @@
 import datetime
 import sys
 import time
+from cProfile import Profile
 from enum import Enum
-from typing import Any, Iterator, NamedTuple, Optional, Union
+from typing import Iterator, NamedTuple, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -144,7 +145,11 @@ class HathorManager:
             add_system_event_trigger('after', 'shutdown', self.stop)
 
         self.state: Optional[HathorManager.NodeState] = None
-        self.profiler: Optional[Any] = None
+
+        # Profiler info
+        self.profiler: Optional[Profile] = None
+        self.is_profiler_running: bool = False
+        self.profiler_last_start_time: float = 0
 
         # Hostname, used to be accessed by other peers.
         self.hostname = hostname
@@ -356,9 +361,10 @@ class HathorManager:
         Start profiler. It can be activated from a web resource, as well.
         """
         if reset or not self.profiler:
-            import cProfile
-            self.profiler = cProfile.Profile()
+            self.profiler = Profile()
         self.profiler.enable()
+        self.is_profiler_running = True
+        self.profiler_last_start_time = self.reactor.seconds()
 
     def stop_profiler(self, save_to: Optional[str] = None) -> None:
         """
@@ -369,6 +375,7 @@ class HathorManager:
         """
         assert self.profiler is not None
         self.profiler.disable()
+        self.is_profiler_running = False
         if save_to:
             self.profiler.dump_stats(save_to)
 

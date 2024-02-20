@@ -76,3 +76,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     signal_not_support: set[Feature]
     x_asyncio_reactor: bool
     x_ipython_kernel: bool
+    nano_testnet: bool

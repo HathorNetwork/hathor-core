@@ -17,6 +17,7 @@ import json
 import os
 import platform
 import sys
+from enum import Enum, auto
 from typing import Any, Optional
 
 from structlog import get_logger
@@ -43,6 +44,12 @@ from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
+
+
+class SyncChoice(Enum):
+    V1_ONLY = auto()
+    V2_ONLY = auto()
+    BRIDGE = auto()
 
 
 class CliBuilder:
@@ -103,6 +110,12 @@ class CliBuilder:
             reactor_type=type(reactor).__name__,
         )
 
+        # XXX Remove this protection after Nano Contracts are launched.
+        if settings.NETWORK_NAME not in {'nano-testnet-alpha', 'unittests'}:
+            # Add protection to prevent enabling Nano Contracts due to misconfigurations.
+            self.check_or_raise(not settings.ENABLE_NANO_CONTRACTS,
+                                'configuration error: NanoContracts can only be enabled on localnets for now')
+
         tx_storage: TransactionStorage
         event_storage: EventStorage
         indexes: IndexesManager
@@ -159,16 +172,32 @@ class CliBuilder:
         hostname = self.get_hostname()
         network = settings.NETWORK_NAME
 
-        arg_sync_v2_only = self._args.x_sync_v2_only or self._args.sync_v2_only
-        if self._args.x_sync_v2_only:
-            self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
-
-        arg_sync_bridge = self._args.x_sync_bridge or self._args.sync_bridge
-        if self._args.x_sync_bridge:
+        sync_choice: SyncChoice
+        if self._args.sync_bridge:
+            sync_choice = SyncChoice.BRIDGE
+        elif self._args.sync_v2_only:
+            sync_choice = SyncChoice.V2_ONLY
+        elif self._args.x_sync_bridge:
             self.log.warn('--x-sync-bridge is deprecated and will be removed, use --sync-bridge instead')
+            sync_choice = SyncChoice.BRIDGE
+        elif self._args.x_sync_v2_only:
+            self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
+            sync_choice = SyncChoice.V2_ONLY
+        else:  # default
+            sync_choice = SyncChoice.V1_ONLY
 
-        enable_sync_v1 = not arg_sync_v2_only
-        enable_sync_v2 = arg_sync_v2_only or arg_sync_bridge
+        enable_sync_v1: bool
+        enable_sync_v2: bool
+        match sync_choice:
+            case SyncChoice.V1_ONLY:
+                enable_sync_v1 = True
+                enable_sync_v2 = False
+            case SyncChoice.V2_ONLY:
+                enable_sync_v1 = False
+                enable_sync_v2 = True
+            case SyncChoice.BRIDGE:
+                enable_sync_v1 = True
+                enable_sync_v2 = True
 
         pubsub = PubSubManager(reactor)
 
