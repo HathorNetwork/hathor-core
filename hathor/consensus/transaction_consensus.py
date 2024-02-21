@@ -235,7 +235,12 @@ class TransactionConsensusAlgorithm:
             conflict_tx = cast(Transaction, tx.storage.get_transaction(h))
             conflict_tx_meta = conflict_tx.get_metadata()
             if conflict_tx_meta.voided_by:
-                self.mark_as_voided(conflict_tx)
+                if conflict_tx_meta.first_block is not None:
+                    # do nothing
+                    assert bool(self.context.consensus.soft_voided_tx_ids & conflict_tx_meta.voided_by)
+                    self.log.info('skipping soft voided conflict', conflict_tx=conflict_tx.hash_hex)
+                else:
+                    self.mark_as_voided(conflict_tx)
 
         # Finally, check our conflicts.
         meta = tx.get_metadata()
