@@ -129,6 +129,7 @@ class RunNode:
         sync_args = parser.add_mutually_exclusive_group()
         sync_args.add_argument('--sync-bridge', action='store_true',
                                help='Enable running both sync protocols.')
+        sync_args.add_argument('--sync-v1-only', action='store_true', help='Disable support for running sync-v2.')
         sync_args.add_argument('--sync-v2-only', action='store_true', help='Disable support for running sync-v1.')
         sync_args.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # old argument
         sync_args.add_argument('--x-sync-bridge', action='store_true', help=SUPPRESS)  # old argument
