@@ -203,7 +203,7 @@ SETTINGS = HathorSettings(
         features={
             Feature.NOP_FEATURE_1: Criteria(
                 bit=0,
-                start_height=4_213_440,  # N (right now the best block is 4_169_000 on mainnet)
+                start_height=4_213_440,  # N
                 timeout_height=4_253_760,  # N + 2 * 20160 (2 weeks after the start)
                 minimum_activation_height=4_273_920,  # N + 3 * 20160 (3 weeks after the start)
                 lock_in_on_timeout=False,
@@ -212,13 +212,31 @@ SETTINGS = HathorSettings(
             ),
             Feature.NOP_FEATURE_2: Criteria(
                 bit=1,
-                start_height=4_213_440,  # N (right now the best block is 4_169_000 on mainnet)
+                start_height=4_213_440,  # N
                 timeout_height=4_253_760,  # N + 2 * 20160 (2 weeks after the start)
                 minimum_activation_height=0,
                 lock_in_on_timeout=False,
                 version='0.59.0',
                 signal_support_by_default=False,
-            )
+            ),
+            Feature.NOP_FEATURE_3: Criteria(
+                bit=2,
+                start_height=4_273_920,  # N (on 2024/02/22, the best block is 4_251_000 on mainnet)
+                timeout_height=4_475_520,  # N + 10 * 20160 (10 weeks after the start)
+                minimum_activation_height=4_495_680,  # N + 11 * 20160 (11 weeks after the start)
+                lock_in_on_timeout=False,
+                version='0.59.0',
+                signal_support_by_default=True,
+            ),
+            Feature.NOP_FEATURE_4: Criteria(
+                bit=3,
+                start_height=4_273_920,  # N (on 2024/02/22, the best block is 4_251_000 on mainnet)
+                timeout_height=4_475_520,  # N + 10 * 20160 (10 weeks after the start)
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.59.0',
+                signal_support_by_default=False,
+            ),
         }
     )
 )
