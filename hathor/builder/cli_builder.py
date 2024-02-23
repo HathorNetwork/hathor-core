@@ -174,7 +174,10 @@ class CliBuilder:
 
         sync_choice: SyncChoice
         if self._args.sync_bridge:
+            self.log.warn('--sync-bridge is the default, this parameter has no effect')
             sync_choice = SyncChoice.BRIDGE
+        elif self._args.sync_v1_only:
+            sync_choice = SyncChoice.V1_ONLY
         elif self._args.sync_v2_only:
             sync_choice = SyncChoice.V2_ONLY
         elif self._args.x_sync_bridge:
@@ -183,8 +186,8 @@ class CliBuilder:
         elif self._args.x_sync_v2_only:
             self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
             sync_choice = SyncChoice.V2_ONLY
-        else:  # default
-            sync_choice = SyncChoice.V1_ONLY
+        else:
+            sync_choice = SyncChoice.BRIDGE
 
         enable_sync_v1: bool
         enable_sync_v2: bool
