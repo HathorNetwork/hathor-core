@@ -66,6 +66,7 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_sync_bridge: bool
     x_sync_v2_only: bool
     sync_bridge: bool
+    sync_v1_only: bool
     sync_v2_only: bool
     x_localhost_only: bool
     x_rocksdb_indexes: bool
