@@ -97,6 +97,24 @@ class BitSignalingService:
 
         return signal_bits
 
+    def get_support_features(self) -> list[Feature]:
+        """Get a list of features with explicitly enabled support."""
+        return list(self._support_features)
+
+    def get_not_support_features(self) -> list[Feature]:
+        """Get a list of features with explicitly disabled support."""
+        return list(self._not_support_features)
+
+    def add_feature_support(self, feature: Feature) -> None:
+        """Add explicit support for a feature by enabling its signaling bit."""
+        self._not_support_features.discard(feature)
+        self._support_features.add(feature)
+
+    def remove_feature_support(self, feature: Feature) -> None:
+        """Remove explicit support for a feature by disabling its signaling bit."""
+        self._support_features.discard(feature)
+        self._not_support_features.add(feature)
+
     def _log_signal_bits(self, feature: Feature, enable_bit: bool, support: bool, not_support: bool) -> None:
         """Generate info log for a feature's signal."""
         signal = 'enabled' if enable_bit else 'disabled'
@@ -129,6 +147,11 @@ class BitSignalingService:
         )
 
         return signaling_features
+
+    def get_best_block_signaling_features(self) -> dict[Feature, Criteria]:
+        """Given the current best block, return all features that are in a signaling state."""
+        best_block = self._tx_storage.get_best_block()
+        return self._get_signaling_features(best_block)
 
     def _validate_support_intersection(self) -> None:
         """Validate that the provided support and not-support arguments do not conflict."""

@@ -13,7 +13,13 @@
 # limitations under the License.
 
 from hathor.builder import BuildArtifacts
-from hathor.sysctl import ConnectionsManagerSysctl, HathorManagerSysctl, Sysctl, WebsocketManagerSysctl
+from hathor.sysctl import (
+    ConnectionsManagerSysctl,
+    FeatureActivationSysctl,
+    HathorManagerSysctl,
+    Sysctl,
+    WebsocketManagerSysctl,
+)
 
 
 class SysctlBuilder:
@@ -27,6 +33,7 @@ class SysctlBuilder:
         root = Sysctl()
         root.put_child('core', HathorManagerSysctl(self.artifacts.manager))
         root.put_child('p2p', ConnectionsManagerSysctl(self.artifacts.p2p_manager))
+        root.put_child('fa', FeatureActivationSysctl(self.artifacts.bit_signaling_service))
 
         ws_factory = self.artifacts.manager.metrics.websocket_factory
         if ws_factory is not None:
