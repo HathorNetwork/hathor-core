@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Optional, TypeAlias
 
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_description import FeatureDescription
@@ -21,6 +21,7 @@ from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 
 if TYPE_CHECKING:
+    from hathor.feature_activation.bit_signaling_service import BitSignalingService
     from hathor.transaction import Block
     from hathor.transaction.storage import TransactionStorage
 
@@ -41,11 +42,12 @@ BlockSignalingState: TypeAlias = BlockIsSignaling | BlockIsMissingSignal
 
 
 class FeatureService:
-    __slots__ = ('_feature_settings', '_tx_storage')
+    __slots__ = ('_feature_settings', '_tx_storage', 'bit_signaling_service')
 
     def __init__(self, *, feature_settings: FeatureSettings, tx_storage: 'TransactionStorage') -> None:
         self._feature_settings = feature_settings
         self._tx_storage = tx_storage
+        self.bit_signaling_service: Optional['BitSignalingService'] = None
 
     def is_feature_active(self, *, block: 'Block', feature: Feature) -> bool:
         """Returns whether a Feature is active at a certain block."""
@@ -112,6 +114,10 @@ class FeatureService:
             feature=feature,
             previous_state=previous_boundary_state
         )
+
+        if new_state == FeatureState.MUST_SIGNAL:
+            assert self.bit_signaling_service is not None
+            self.bit_signaling_service.on_must_signal(feature)
 
         # We cache the just calculated state of the current block _without saving it_, as it may still be unverified,
         # so we cannot persist its metadata. That's why we cache and save the previous boundary block above.

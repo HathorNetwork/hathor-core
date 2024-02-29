@@ -286,3 +286,33 @@ def test_non_signaling_features_warning(
         best_block_hash='abc',
         non_signaling_features=non_signaling_features,
     )
+
+
+def test_on_must_signal_not_supported() -> None:
+    service = BitSignalingService(
+        feature_settings=Mock(),
+        feature_service=Mock(),
+        tx_storage=Mock(),
+        support_features=set(),
+        not_support_features={Feature.NOP_FEATURE_1},
+    )
+
+    service.on_must_signal(feature=Feature.NOP_FEATURE_1)
+
+    assert service._support_features == set()
+    assert service._not_support_features == {Feature.NOP_FEATURE_1}
+
+
+def test_on_must_signal_supported() -> None:
+    service = BitSignalingService(
+        feature_settings=Mock(),
+        feature_service=Mock(),
+        tx_storage=Mock(),
+        support_features=set(),
+        not_support_features=set(),
+    )
+
+    service.on_must_signal(feature=Feature.NOP_FEATURE_1)
+
+    assert service._support_features == {Feature.NOP_FEATURE_1}
+    assert service._not_support_features == set()
