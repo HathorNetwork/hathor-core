@@ -1,6 +1,5 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.resources import StatusResource
@@ -12,8 +11,6 @@ from hathor.util import json_dumps
 from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
-
-settings = HathorSettings()
 
 
 class BaseGetBestBlockchainTestCase(SimulatorTestCase):
@@ -51,8 +48,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertIsNotNone(protocol2.capabilities)
 
         # assert the protocol has the GET_BEST_BLOCKCHAIN capability
-        self.assertIn(settings.CAPABILITY_GET_BEST_BLOCKCHAIN, protocol1.capabilities)
-        self.assertIn(settings.CAPABILITY_GET_BEST_BLOCKCHAIN, protocol2.capabilities)
+        self.assertIn(self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN, protocol1.capabilities)
+        self.assertIn(self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN, protocol2.capabilities)
 
         # assert the protocol is in ReadyState
         state1 = protocol1.state
@@ -81,8 +78,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         state1.send_get_best_blockchain()
         state2.send_get_best_blockchain()
         self.simulator.run(60)
-        self.assertEqual(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state1.peer_best_blockchain))
-        self.assertEqual(settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state2.peer_best_blockchain))
+        self.assertEqual(self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state1.peer_best_blockchain))
+        self.assertEqual(self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state2.peer_best_blockchain))
 
         self.assertIsInstance(state1.peer_best_blockchain[0], HeightInfo)
         self.assertIsInstance(state2.peer_best_blockchain[0], HeightInfo)
@@ -211,8 +208,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         manager2 = self.create_peer()
 
         cababilities_without_get_best_blockchain = [
-            settings.CAPABILITY_WHITELIST,
-            settings.CAPABILITY_SYNC_VERSION,
+            self._settings.CAPABILITY_WHITELIST,
+            self._settings.CAPABILITY_SYNC_VERSION,
         ]
         manager2.capabilities = cababilities_without_get_best_blockchain
 
@@ -397,7 +394,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         # connected_peers
         # assert default peer_best_blockchain length
         peer_best_blockchain = connections['connected_peers'][0]['peer_best_blockchain']
-        self.assertEqual(len(peer_best_blockchain), settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
+        self.assertEqual(len(peer_best_blockchain), self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
 
         # assert a raw_height_info can be converted to HeightInfo
         try:
@@ -418,7 +415,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         # dag
         # assert default peer_best_blockchain length
         peer_best_blockchain = dag['best_blockchain']
-        self.assertEqual(len(peer_best_blockchain), settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
+        self.assertEqual(len(peer_best_blockchain), self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
 
         # assert a raw_height_info can be converted to HeightInfo
         try:

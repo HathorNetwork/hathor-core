@@ -14,8 +14,10 @@
 
 import os
 import sys
+import tempfile
 from argparse import SUPPRESS, ArgumentParser, Namespace
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional
 
 from pydantic import ValidationError
 from structlog import get_logger
@@ -25,6 +27,23 @@ logger = get_logger()
 
 if TYPE_CHECKING:
     from hathor.cli.run_node_args import RunNodeArgs
+    from hathor.sysctl.runner import SysctlRunner
+
+
+@contextmanager
+def temp_fifo(filename: str, tempdir: str | None) -> Iterator[None]:
+    """Context Manager for creating named pipes."""
+    mkfifo = getattr(os, 'mkfifo', None)
+    if mkfifo is None:
+        raise AttributeError('mkfifo is not available')
+
+    mkfifo(filename, mode=0o666)
+    try:
+        yield None
+    finally:
+        os.unlink(filename)
+        if tempdir is not None:
+            os.rmdir(tempdir)
 
 
 class RunNode:
@@ -34,7 +53,8 @@ class RunNode:
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
         ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
         ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue)),
-        ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor))
+        ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor)),
+        ('--x-ipython-kernel', lambda args: bool(args.x_ipython_kernel)),
     ]
 
     @classmethod
@@ -51,7 +71,11 @@ class RunNode:
         parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
         parser.add_argument('--unsafe-mode',
                             help='Enable unsafe parameters. **NEVER USE IT IN PRODUCTION ENVIRONMENT**')
-        parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
+
+        netargs = parser.add_mutually_exclusive_group()
+        netargs.add_argument('--nano-testnet', action='store_true', help='Connect to Hathor nano-testnet')
+        netargs.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
+
         parser.add_argument('--test-mode-tx-weight', action='store_true',
                             help='Reduces tx weight to 1 for testing purposes')
         parser.add_argument('--dns', action='append', help='Seed DNS')
@@ -102,11 +126,13 @@ class RunNode:
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
-        v2args = parser.add_mutually_exclusive_group()
-        v2args.add_argument('--x-sync-bridge', action='store_true',
-                            help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
-        v2args.add_argument('--x-sync-v2-only', action='store_true',
-                            help='Disable support for running sync-v1. DO NOT ENABLE, IT WILL BREAK.')
+        sync_args = parser.add_mutually_exclusive_group()
+        sync_args.add_argument('--sync-bridge', action='store_true',
+                               help='Enable running both sync protocols.')
+        sync_args.add_argument('--sync-v1-only', action='store_true', help='Disable support for running sync-v2.')
+        sync_args.add_argument('--sync-v2-only', action='store_true', help='Disable support for running sync-v1.')
+        sync_args.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # old argument
+        sync_args.add_argument('--x-sync-bridge', action='store_true', help=SUPPRESS)  # old argument
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
@@ -120,6 +146,9 @@ class RunNode:
                             help=f'Signal not support for a feature. One of {possible_features}')
         parser.add_argument('--x-asyncio-reactor', action='store_true',
                             help='Use asyncio reactor instead of Twisted\'s default.')
+        # XXX: this is temporary, should be added as a sysctl instead before merging
+        parser.add_argument('--x-ipython-kernel', action='store_true',
+                            help='Launch embedded IPython kernel for remote debugging')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -162,8 +191,8 @@ class RunNode:
             assert self.manager.stratum_factory is not None
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
-        from hathor.conf.get_settings import get_settings
-        settings = get_settings()
+        from hathor.conf.get_settings import get_global_settings
+        settings = get_global_settings()
 
         if register_resources:
             resources_builder = ResourcesBuilder(
@@ -208,8 +237,8 @@ class RunNode:
             sys.exit(-3)
 
         import hathor
-        from hathor.conf.get_settings import get_settings
-        settings = get_settings()
+        from hathor.conf.get_settings import get_global_settings
+        settings = get_global_settings()
         sentry_sdk.init(
             dsn=self._args.sentry_dsn,
             release=hathor.__version__,
@@ -227,12 +256,85 @@ class RunNode:
         if sigusr1 is not None:
             # USR1 is available in this OS.
             signal.signal(sigusr1, self.signal_usr1_handler)
+        sigusr2 = getattr(signal, 'SIGUSR2', None)
+        if sigusr2 is not None:
+            # USR1 is available in this OS.
+            signal.signal(sigusr2, self.signal_usr2_handler)
 
     def signal_usr1_handler(self, sig: int, frame: Any) -> None:
         """Called when USR1 signal is received."""
-        self.log.warn('USR1 received. Killing all connections...')
-        if self.manager and self.manager.connections:
-            self.manager.connections.disconnect_all_peers(force=True)
+        try:
+            self.log.warn('USR1 received. Killing all connections...')
+            if self.manager and self.manager.connections:
+                self.manager.connections.disconnect_all_peers(force=True)
+        except Exception:
+            # see: https://docs.python.org/3/library/signal.html#note-on-signal-handlers-and-exceptions
+            self.log.error('prevented exception from escaping the signal handler', exc_info=True)
+
+    def signal_usr2_handler(self, sig: int, frame: Any) -> None:
+        """Called when USR2 signal is received."""
+        try:
+            self.log.warn('USR2 received.')
+            self.run_sysctl_from_signal()
+        except Exception:
+            # see: https://docs.python.org/3/library/signal.html#note-on-signal-handlers-and-exceptions
+            self.log.error('prevented exception from escaping the signal handler', exc_info=True)
+
+    def run_sysctl_from_signal(self) -> None:
+        """Block the main loop, get commands from a named pipe and execute then using sysctl."""
+        from hathor.sysctl.exception import (
+            SysctlEntryNotFound,
+            SysctlException,
+            SysctlReadOnlyEntry,
+            SysctlRunnerException,
+            SysctlWriteOnlyEntry,
+        )
+
+        runner = self.get_sysctl_runner()
+
+        if self._args.data is not None:
+            basedir = self._args.data
+            tempdir = None
+        else:
+            basedir = tempfile.mkdtemp()
+            tempdir = basedir
+
+        filename = os.path.join(basedir, f'SIGUSR2-{os.getpid()}.pipe')
+        if os.path.exists(filename):
+            self.log.warn('[USR2] Pipe already exists.', pipe=filename)
+            return
+
+        with temp_fifo(filename, tempdir):
+            self.log.warn('[USR2] Main loop paused, awaiting command to proceed.', pipe=filename)
+
+            fp = open(filename, 'r')
+            try:
+                lines = fp.readlines()
+            finally:
+                fp.close()
+
+            for cmd in lines:
+                cmd = cmd.strip()
+                self.log.warn('[USR2] Command received ', cmd=cmd)
+
+                try:
+                    output = runner.run(cmd, require_signal_handler_safe=True)
+                    self.log.warn('[USR2] Output', output=output)
+                except SysctlEntryNotFound:
+                    path, _, _ = runner.get_line_parts(cmd)
+                    self.log.warn('[USR2] Error', errmsg=f'{path} not found')
+                except SysctlReadOnlyEntry:
+                    path, _, _ = runner.get_line_parts(cmd)
+                    self.log.warn('[USR2] Error', errmsg=f'cannot write to {path}')
+                except SysctlWriteOnlyEntry:
+                    path, _, _ = runner.get_line_parts(cmd)
+                    self.log.warn('[USR2] Error', errmsg=f'cannot read from {path}')
+                except SysctlException as e:
+                    self.log.warn('[USR2] Error', errmsg=str(e))
+                except ValidationError as e:
+                    self.log.warn('[USR2] Error', errmsg=str(e))
+                except SysctlRunnerException as e:
+                    self.log.warn('[USR2] Error', errmsg=str(e))
 
     def check_unsafe_arguments(self) -> None:
         unsafe_args_found = []
@@ -270,8 +372,8 @@ class RunNode:
                 '',
             ]
 
-            from hathor.conf.get_settings import get_settings
-            settings = get_settings()
+            from hathor.conf.get_settings import get_global_settings
+            settings = get_global_settings()
 
             if self._args.unsafe_mode != settings.NETWORK_NAME:
                 message.extend([
@@ -350,8 +452,8 @@ class RunNode:
 
     def __init__(self, *, argv=None):
         from hathor.cli.run_node_args import RunNodeArgs
-        from hathor.conf import TESTNET_SETTINGS_FILEPATH
-        from hathor.conf.get_settings import get_settings
+        from hathor.conf import NANO_TESTNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH
+        from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
 
         if argv is None:
@@ -367,9 +469,11 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = self._args.config_yaml
         elif self._args.testnet:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
+        elif self._args.nano_testnet:
+            os.environ['HATHOR_CONFIG_YAML'] = NANO_TESTNET_SETTINGS_FILEPATH
 
         try:
-            get_settings()
+            get_global_settings()
         except (TypeError, ValidationError) as e:
             from hathor.exception import PreInitializationError
             raise PreInitializationError(
@@ -380,6 +484,16 @@ class RunNode:
         self.register_signal_handlers()
         if self._args.sysctl:
             self.init_sysctl(self._args.sysctl, self._args.sysctl_init_file)
+
+    def get_sysctl_runner(self) -> 'SysctlRunner':
+        """Create and return a SysctlRunner."""
+        from hathor.builder.sysctl_builder import SysctlBuilder
+        from hathor.sysctl.runner import SysctlRunner
+
+        builder = SysctlBuilder(self.artifacts)
+        root = builder.build()
+        runner = SysctlRunner(root)
+        return runner
 
     def init_sysctl(self, description: str, sysctl_init_file: Optional[str] = None) -> None:
         """Initialize sysctl, listen for connections and apply settings from config file if required.
@@ -395,14 +509,10 @@ class RunNode:
         """
         from twisted.internet.endpoints import serverFromString
 
-        from hathor.builder.sysctl_builder import SysctlBuilder
         from hathor.sysctl.factory import SysctlFactory
         from hathor.sysctl.init_file_loader import SysctlInitFileLoader
-        from hathor.sysctl.runner import SysctlRunner
 
-        builder = SysctlBuilder(self.artifacts)
-        root = builder.build()
-        runner = SysctlRunner(root)
+        runner = self.get_sysctl_runner()
 
         if sysctl_init_file:
             init_file_loader = SysctlInitFileLoader(runner, sysctl_init_file)

@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -158,7 +158,7 @@ class BaseTransaction(ABC):
         assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
         self.signal_bits = signal_bits
@@ -586,6 +586,8 @@ class BaseTransaction(ABC):
         """ Update the hash of the transaction.
         """
         self.hash = self.calculate_hash()
+        if metadata := getattr(self, '_metadata', None):
+            metadata.hash = self.hash
 
     def get_metadata(self, *, force_reload: bool = False, use_storage: bool = True) -> TransactionMetadata:
         """Return this tx's metadata.
@@ -705,6 +707,7 @@ class BaseTransaction(ABC):
         self._update_height_metadata()
         self._update_parents_children_metadata()
         self._update_reward_lock_metadata()
+        self._update_feature_activation_bit_counts()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
@@ -729,6 +732,15 @@ class BaseTransaction(ABC):
             if self.hash not in metadata.children:
                 metadata.children.append(self.hash)
                 self.storage.save_transaction(parent, only_metadata=True)
+
+    def _update_feature_activation_bit_counts(self) -> None:
+        """Update the block's feature_activation_bit_counts."""
+        if not self.is_block:
+            return
+        from hathor.transaction import Block
+        assert isinstance(self, Block)
+        # This method lazily calculates and stores the value in metadata
+        self.get_feature_activation_bit_counts()
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp

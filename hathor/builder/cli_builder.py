@@ -17,6 +17,7 @@ import json
 import os
 import platform
 import sys
+from enum import Enum, auto
 from typing import Any, Optional
 
 from structlog import get_logger
@@ -45,6 +46,12 @@ from hathor.wallet import BaseWallet, HDWallet, Wallet
 logger = get_logger()
 
 
+class SyncChoice(Enum):
+    V1_ONLY = auto()
+    V2_ONLY = auto()
+    BRIDGE = auto()
+
+
 class CliBuilder:
     """CliBuilder builds the core objects from args.
 
@@ -61,7 +68,7 @@ class CliBuilder:
 
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
-        from hathor.conf.get_settings import get_settings, get_settings_source
+        from hathor.conf.get_settings import get_global_settings, get_settings_source
         from hathor.daa import TestMode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
@@ -79,7 +86,7 @@ class CliBuilder:
         )
         from hathor.util import get_environment_info
 
-        settings = get_settings()
+        settings = get_global_settings()
 
         # only used for logging its location
         settings_source = get_settings_source()
@@ -102,6 +109,12 @@ class CliBuilder:
             settings=settings_source,
             reactor_type=type(reactor).__name__,
         )
+
+        # XXX Remove this protection after Nano Contracts are launched.
+        if settings.NETWORK_NAME not in {'nano-testnet-alpha', 'unittests'}:
+            # Add protection to prevent enabling Nano Contracts due to misconfigurations.
+            self.check_or_raise(not settings.ENABLE_NANO_CONTRACTS,
+                                'configuration error: NanoContracts can only be enabled on localnets for now')
 
         tx_storage: TransactionStorage
         event_storage: EventStorage
@@ -158,8 +171,36 @@ class CliBuilder:
 
         hostname = self.get_hostname()
         network = settings.NETWORK_NAME
-        enable_sync_v1 = not self._args.x_sync_v2_only
-        enable_sync_v2 = self._args.x_sync_v2_only or self._args.x_sync_bridge
+
+        sync_choice: SyncChoice
+        if self._args.sync_bridge:
+            self.log.warn('--sync-bridge is the default, this parameter has no effect')
+            sync_choice = SyncChoice.BRIDGE
+        elif self._args.sync_v1_only:
+            sync_choice = SyncChoice.V1_ONLY
+        elif self._args.sync_v2_only:
+            sync_choice = SyncChoice.V2_ONLY
+        elif self._args.x_sync_bridge:
+            self.log.warn('--x-sync-bridge is deprecated and will be removed, use --sync-bridge instead')
+            sync_choice = SyncChoice.BRIDGE
+        elif self._args.x_sync_v2_only:
+            self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
+            sync_choice = SyncChoice.V2_ONLY
+        else:
+            sync_choice = SyncChoice.BRIDGE
+
+        enable_sync_v1: bool
+        enable_sync_v2: bool
+        match sync_choice:
+            case SyncChoice.V1_ONLY:
+                enable_sync_v1 = True
+                enable_sync_v2 = False
+            case SyncChoice.V2_ONLY:
+                enable_sync_v1 = False
+                enable_sync_v2 = True
+            case SyncChoice.BRIDGE:
+                enable_sync_v1 = True
+                enable_sync_v2 = True
 
         pubsub = PubSubManager(reactor)
 
@@ -270,6 +311,11 @@ class CliBuilder:
             cpu_mining_service=cpu_mining_service
         )
 
+        if self._args.x_ipython_kernel:
+            self.check_or_raise(self._args.x_asyncio_reactor,
+                                '--x-ipython-kernel must be used with --x-asyncio-reactor')
+            self._start_ipykernel()
+
         p2p_manager.set_manager(self.manager)
 
         if self._args.stratum:
@@ -376,3 +422,14 @@ class CliBuilder:
             return wallet
         else:
             raise BuilderError('Invalid type of wallet')
+
+    def _start_ipykernel(self) -> None:
+        # breakpoints are not expected to be used with the embeded ipykernel, to prevent this warning from being
+        # unnecessarily annoying, PYDEVD_DISABLE_FILE_VALIDATION should be set to 1 before debugpy is imported, or in
+        # practice, before importing hathor.ipykernel, if for any reason support for breakpoints is needed, the flag
+        # -Xfrozen_modules=off has to be passed to the python interpreter
+        # see:
+        # https://github.com/microsoft/debugpy/blob/main/src/debugpy/_vendored/pydevd/pydevd_file_utils.py#L587-L592
+        os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
+        from hathor.ipykernel import embed_kernel
+        embed_kernel(self.manager, runtime_dir=self._args.data, extra_ns=dict(run_node=self))

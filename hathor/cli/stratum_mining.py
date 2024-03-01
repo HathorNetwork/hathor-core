@@ -30,7 +30,7 @@ def create_parser() -> ArgumentParser:
 
 def execute(args: Namespace) -> None:
     from hathor.crypto.util import decode_address
-    from hathor.reactor import get_global_reactor
+    from hathor.reactor import initialize_global_reactor
     from hathor.stratum import StratumClient
     from hathor.wallet.exceptions import InvalidAddress
 
@@ -43,7 +43,7 @@ def execute(args: Namespace) -> None:
             print('The given address is invalid')
             sys.exit(-1)
 
-    reactor = get_global_reactor()
+    reactor = initialize_global_reactor()
     miner = StratumClient(proc_count=args.nproc, address=address, reactor=reactor)
     miner.start()
     point = TCP4ClientEndpoint(reactor, args.host, args.port)

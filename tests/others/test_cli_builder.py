@@ -58,7 +58,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
         self.assertFalse(self.resources_builder._built_prometheus)
         self.assertFalse(self.resources_builder._built_status)
         self.assertFalse(manager._enable_event_queue)
@@ -101,8 +101,18 @@ class BuilderTestCase(unittest.TestCase):
     def test_memory_storage_with_rocksdb_indexes(self):
         self._build_with_error(['--memory-storage', '--x-rocksdb-indexes'], 'RocksDB indexes require RocksDB data')
 
+    def test_sync_default(self):
+        manager = self._build(['--memory-storage'])
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+
     def test_sync_bridge(self):
         manager = self._build(['--memory-storage', '--x-sync-bridge'])
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+
+    def test_sync_bridge2(self):
+        manager = self._build(['--memory-storage', '--sync-bridge'])
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
@@ -110,6 +120,16 @@ class BuilderTestCase(unittest.TestCase):
         manager = self._build(['--memory-storage', '--x-sync-v2-only'])
         self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+
+    def test_sync_v2_only2(self):
+        manager = self._build(['--memory-storage', '--sync-v2-only'])
+        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+
+    def test_sync_v1_only(self):
+        manager = self._build(['--memory-storage', '--sync-v1-only'])
+        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_keypair_wallet(self):
         manager = self._build(['--memory-storage', '--wallet', 'keypair'])

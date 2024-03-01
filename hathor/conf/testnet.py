@@ -55,35 +55,19 @@ SETTINGS = HathorSettings(
         cp(1_600_000, bytes.fromhex('00000000060adfdfd7d488d4d510b5779cf35a3c50df7bcff941fbb6957be4d2')),
     ],
     FEATURE_ACTIVATION=FeatureActivationSettings(
-        enable_usage=True,
-        default_threshold=30240,
+        default_threshold=15_120,  # 15120 = 75% of evaluation_interval (20160)
         features={
-            Feature.NOP_FEATURE_4: Criteria(
-              bit=0,
-              start_height=3_386_880,  # N (right now the best block is 3_346_600 on testnet)
-              timeout_height=3_467_520,  # N + 2 * 40320 (4 weeks after the start)
-              minimum_activation_height=3_507_840,  # N + 3 * 40320 (6 weeks after the start)
-              lock_in_on_timeout=False,
-              version='0.57.0',
-              signal_support_by_default=True
-            ),
-            Feature.NOP_FEATURE_5: Criteria(
-              bit=1,
-              start_height=3_386_880,  # N (right now the best block is 3_346_600 on testnet)
-              timeout_height=3_467_520,  # N + 2 * 40320 (4 weeks after the start)
-              minimum_activation_height=0,
-              lock_in_on_timeout=True,
-              version='0.57.0',
-              signal_support_by_default=False
-            ),
-            Feature.NOP_FEATURE_6: Criteria(
-              bit=2,
-              start_height=3_386_880,  # N (right now the best block is 3_346_600 on testnet)
-              timeout_height=3_467_520,  # N + 2 * 40320 (4 weeks after the start)
-              minimum_activation_height=0,
-              lock_in_on_timeout=False,
-              version='0.57.0',
-              signal_support_by_default=False
+            Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: Criteria(
+                bit=3,
+                # N = 3_548_160
+                # Expected to be reached around Sunday, 2024-02-04.
+                # Right now the best block is 3_521_000 on testnet (2024-01-26).
+                start_height=3_548_160,
+                timeout_height=3_588_480,  # N + 2 * 20160 (2 weeks after the start)
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.59.0',
+                signal_support_by_default=True,
             )
         }
     )

@@ -14,7 +14,7 @@
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.util import json_dumpb
 
 ARGS = ['block', 'tx']
@@ -31,7 +31,7 @@ class DashboardTransactionResource(Resource):
 
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
     def render_GET(self, request):

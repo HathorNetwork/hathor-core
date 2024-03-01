@@ -19,12 +19,12 @@ from pydantic import Field, NonNegativeInt
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
 from hathor.event import EventManager
 from hathor.event.model.base_event import BaseEvent
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
-settings = HathorSettings()
+EVENT_API_DEFAULT_BATCH_SIZE: int = 100
+EVENT_API_MAX_BATCH_SIZE: int = 1000
 
 
 @register_resource
@@ -66,7 +66,7 @@ class EventResource(Resource):
 
 class GetEventsParams(QueryParams):
     last_ack_event_id: Optional[NonNegativeInt]
-    size: int = Field(default=settings.EVENT_API_DEFAULT_BATCH_SIZE, ge=0, le=settings.EVENT_API_MAX_BATCH_SIZE)
+    size: int = Field(default=EVENT_API_DEFAULT_BATCH_SIZE, ge=0, le=EVENT_API_MAX_BATCH_SIZE)
 
 
 class GetEventsResponse(Response):

@@ -22,7 +22,7 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.interfaces import IDelayedCall
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
@@ -68,7 +68,7 @@ class NodeSyncTimestamp(SyncAgent):
         :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
         :type reactor: Reactor
         """
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.protocol = protocol
         self.manager = protocol.node
         self.downloader = downloader

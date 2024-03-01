@@ -15,8 +15,9 @@
 import datetime
 import sys
 import time
+from cProfile import Profile
 from enum import Enum
-from typing import Any, Iterator, NamedTuple, Optional, Union
+from typing import Iterator, NamedTuple, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -51,6 +52,7 @@ from hathor.p2p.protocol import HathorProtocol
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
+from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
@@ -143,7 +145,11 @@ class HathorManager:
             add_system_event_trigger('after', 'shutdown', self.stop)
 
         self.state: Optional[HathorManager.NodeState] = None
-        self.profiler: Optional[Any] = None
+
+        # Profiler info
+        self.profiler: Optional[Profile] = None
+        self.is_profiler_running: bool = False
+        self.profiler_last_start_time: float = 0
 
         # Hostname, used to be accessed by other peers.
         self.hostname = hostname
@@ -355,9 +361,10 @@ class HathorManager:
         Start profiler. It can be activated from a web resource, as well.
         """
         if reset or not self.profiler:
-            import cProfile
-            self.profiler = cProfile.Profile()
+            self.profiler = Profile()
         self.profiler.enable()
+        self.is_profiler_running = True
+        self.profiler_last_start_time = self.reactor.seconds()
 
     def stop_profiler(self, save_to: Optional[str] = None) -> None:
         """
@@ -368,6 +375,7 @@ class HathorManager:
         """
         assert self.profiler is not None
         self.profiler.disable()
+        self.is_profiler_running = False
         if save_to:
             self.profiler.dump_stats(save_to)
 
@@ -802,7 +810,7 @@ class HathorManager:
             parent_block_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
-        weight = max(self.daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
+        weight = max(self.daa.calculate_next_weight(parent_block, timestamp, self.tx_storage), min_significant_weight)
         height = parent_block.get_height() + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include
@@ -889,8 +897,7 @@ class HathorManager:
         if is_spending_voided_tx:
             raise SpendingVoidedError('Invalid transaction. At least one input is voided.')
 
-        is_spent_reward_locked = tx.is_spent_reward_locked()
-        if is_spent_reward_locked:
+        if is_spent_reward_locked(tx):
             raise RewardLockedError('Spent reward is locked.')
 
         # We are using here the method from lib because the property
@@ -1061,7 +1068,7 @@ class HathorManager:
 
     def _log_feature_states(self, vertex: BaseTransaction) -> None:
         """Log features states for a block. Used as part of the Feature Activation Phased Testing."""
-        if not self._settings.FEATURE_ACTIVATION.enable_usage or not isinstance(vertex, Block):
+        if not isinstance(vertex, Block):
             return
 
         feature_descriptions = self._feature_service.get_bits_description(block=vertex)
@@ -1072,18 +1079,24 @@ class HathorManager:
 
         self.log.info(
             'New block accepted with feature activation states',
+            block_hash=vertex.hash_hex,
             block_height=vertex.get_height(),
             features_states=state_by_feature
         )
 
-        features = [Feature.NOP_FEATURE_4, Feature.NOP_FEATURE_5, Feature.NOP_FEATURE_6]
+        features = [Feature.NOP_FEATURE_1, Feature.NOP_FEATURE_2]
         for feature in features:
             self._log_if_feature_is_active(vertex, feature)
 
     def _log_if_feature_is_active(self, block: Block, feature: Feature) -> None:
         """Log if a feature is ACTIVE for a block. Used as part of the Feature Activation Phased Testing."""
         if self._feature_service.is_feature_active(block=block, feature=feature):
-            self.log.info('Feature is ACTIVE for block', feature=feature.value, block_height=block.get_height())
+            self.log.info(
+                'Feature is ACTIVE for block',
+                feature=feature.value,
+                block_hash=block.hash_hex,
+                block_height=block.get_height()
+            )
 
     def has_sync_version_capability(self) -> bool:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities

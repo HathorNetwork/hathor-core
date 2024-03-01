@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Iterable, cast
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, sum_weights
 from hathor.util import classproperty
@@ -34,7 +34,7 @@ class TransactionConsensusAlgorithm:
     """Implement the consensus algorithm for transactions."""
 
     def __init__(self, context: 'ConsensusAlgorithmContext') -> None:
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.context = context
 
     @classproperty
@@ -235,7 +235,12 @@ class TransactionConsensusAlgorithm:
             conflict_tx = cast(Transaction, tx.storage.get_transaction(h))
             conflict_tx_meta = conflict_tx.get_metadata()
             if conflict_tx_meta.voided_by:
-                self.mark_as_voided(conflict_tx)
+                if conflict_tx_meta.first_block is not None:
+                    # do nothing
+                    assert bool(self.context.consensus.soft_voided_tx_ids & conflict_tx_meta.voided_by)
+                    self.log.info('skipping soft voided conflict', conflict_tx=conflict_tx.hash_hex)
+                else:
+                    self.mark_as_voided(conflict_tx)
 
         # Finally, check our conflicts.
         meta = tx.get_metadata()

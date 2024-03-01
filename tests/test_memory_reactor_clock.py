@@ -16,6 +16,8 @@ from twisted.internet.testing import MemoryReactorClock
 
 
 class TestMemoryReactorClock(MemoryReactorClock):
+    __test__ = False
+
     def run(self):
         """
         We have to override MemoryReactor.run() because the original Twisted implementation weirdly calls stop() inside

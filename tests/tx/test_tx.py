@@ -1,9 +1,12 @@
 import base64
 import hashlib
 from math import isinf, isnan
+from unittest.mock import patch
 
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
@@ -222,15 +225,19 @@ class BaseTransactionTest(unittest.TestCase):
         from hathor.transaction.exceptions import AuxPowNoMagicError
         from hathor.transaction.merge_mined_block import MergeMinedBlock
 
-        parents = [tx.hash for tx in self.genesis]
+        parent_block = self.genesis_blocks[0].hash
+        parent_txs = [tx.hash for tx in self.genesis_txs]
+        parents = [parent_block, *parent_txs]
         address = decode_address(self.get_address(1))
         outputs = [TxOutput(100, P2PKH.create_output_script(address))]
 
         b = MergeMinedBlock(
+            hash=b'some_hash',
             timestamp=self.genesis_blocks[0].timestamp + 1,
             weight=1,
             outputs=outputs,
             parents=parents,
+            storage=self.tx_storage,
             aux_pow=BitcoinAuxPow(
                 b'\x00' * 32,
                 b'\x00' * 42,  # no MAGIC_NUMBER
@@ -253,7 +260,9 @@ class BaseTransactionTest(unittest.TestCase):
         from hathor.transaction.exceptions import AuxPowUnexpectedMagicError
         from hathor.transaction.merge_mined_block import MergeMinedBlock
 
-        parents = [tx.hash for tx in self.genesis]
+        parent_block = self.genesis_blocks[0].hash
+        parent_txs = [tx.hash for tx in self.genesis_txs]
+        parents = [parent_block, *parent_txs]
         address1 = decode_address(self.get_address(1))
         address2 = decode_address(self.get_address(2))
         assert address1 != address2
@@ -261,17 +270,21 @@ class BaseTransactionTest(unittest.TestCase):
         outputs2 = [TxOutput(100, P2PKH.create_output_script(address2))]
 
         b1 = MergeMinedBlock(
+            hash=b'some_hash1',
             timestamp=self.genesis_blocks[0].timestamp + 1,
             weight=1,
             outputs=outputs1,
             parents=parents,
+            storage=self.tx_storage,
         )
 
         b2 = MergeMinedBlock(
+            hash=b'some_hash2',
             timestamp=self.genesis_blocks[0].timestamp + 1,
             weight=1,
             outputs=outputs2,
             parents=parents,
+            storage=self.tx_storage,
         )
 
         assert b1.get_base_hash() != b2.get_base_hash()
@@ -321,6 +334,16 @@ class BaseTransactionTest(unittest.TestCase):
         address = decode_address(self.get_address(1))
         outputs = [TxOutput(100, P2PKH.create_output_script(address))]
 
+        patch_path = 'hathor.feature_activation.feature_service.FeatureService.is_feature_active'
+
+        def is_feature_active_false(self: FeatureService, *, block: Block, feature: Feature) -> bool:
+            assert feature == Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
+            return False
+
+        def is_feature_active_true(self: FeatureService, *, block: Block, feature: Feature) -> bool:
+            assert feature == Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
+            return True
+
         b = MergeMinedBlock(
             timestamp=self.genesis_blocks[0].timestamp + 1,
             weight=1,
@@ -330,17 +353,42 @@ class BaseTransactionTest(unittest.TestCase):
                 b'\x00' * 32,
                 b'\x00' * 42 + MAGIC_NUMBER,
                 b'\x00' * 18,
-                [b'\x00' * 32] * 13,  # 1 too long
+                [b'\x00' * 32] * (self._settings.OLD_MAX_MERKLE_PATH_LENGTH + 1),  # 1 too long
                 b'\x00' * 12,
             )
         )
 
-        with self.assertRaises(AuxPowLongMerklePathError):
+        # Test with the INCREASE_MAX_MERKLE_PATH_LENGTH feature disabled
+        with patch(patch_path, is_feature_active_false):
+            with self.assertRaises(AuxPowLongMerklePathError):
+                self._verifiers.merge_mined_block.verify_aux_pow(b)
+
+            # removing one path makes it work
+            b.aux_pow.merkle_path.pop()
             self._verifiers.merge_mined_block.verify_aux_pow(b)
 
-        # removing one path makes it work
-        b.aux_pow.merkle_path.pop()
-        self._verifiers.merge_mined_block.verify_aux_pow(b)
+        b2 = MergeMinedBlock(
+            timestamp=self.genesis_blocks[0].timestamp + 1,
+            weight=1,
+            outputs=outputs,
+            parents=parents,
+            aux_pow=BitcoinAuxPow(
+                b'\x00' * 32,
+                b'\x00' * 42 + MAGIC_NUMBER,
+                b'\x00' * 18,
+                [b'\x00' * 32] * (self._settings.NEW_MAX_MERKLE_PATH_LENGTH + 1),  # 1 too long
+                b'\x00' * 12,
+            )
+        )
+
+        # Test with the INCREASE_MAX_MERKLE_PATH_LENGTH feature enabled
+        with patch(patch_path, is_feature_active_true):
+            with self.assertRaises(AuxPowLongMerklePathError):
+                self._verifiers.merge_mined_block.verify_aux_pow(b2)
+
+            # removing one path makes it work
+            b2.aux_pow.merkle_path.pop()
+            self._verifiers.merge_mined_block.verify_aux_pow(b2)
 
     def test_block_outputs(self):
         from hathor.transaction.exceptions import TooManyOutputs

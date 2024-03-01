@@ -15,7 +15,7 @@
 import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.util import json_dumpb
 
 
@@ -29,7 +29,7 @@ class VersionResource(Resource):
 
     def __init__(self, manager):
         # Important to have the manager so we can have access to min_tx_weight_coefficient
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
     def render_GET(self, request):

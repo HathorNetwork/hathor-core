@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
@@ -37,7 +37,7 @@ logger = get_logger()
 class ReadyState(BaseState):
     def __init__(self, protocol: 'HathorProtocol') -> None:
         super().__init__(protocol)
-        self._settings = get_settings()
+        self._settings = get_global_settings()
 
         self.log = logger.new(**self.protocol.get_logger_context())
 

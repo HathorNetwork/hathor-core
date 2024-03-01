@@ -17,7 +17,7 @@ import struct
 from math import ceil, floor
 from typing import Any, Callable, Optional
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 
 VerboseCallback = Optional[Callable[[str, Any], None]]
 
@@ -49,12 +49,12 @@ def unpack_len(n: int, buf: bytes) -> tuple[bytes, bytes]:
 
 
 def get_deposit_amount(mint_amount: int) -> int:
-    settings = get_settings()
+    settings = get_global_settings()
     return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
 
 
 def get_withdraw_amount(melt_amount: int) -> int:
-    settings = get_settings()
+    settings = get_global_settings()
     return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
 
 

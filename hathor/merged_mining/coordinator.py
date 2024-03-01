@@ -624,7 +624,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
 
         try:
             aux_pow = job.build_aux_pow(work)
-            aux_pow.verify(block_base_hash)
+            aux_pow.verify_magic_number(block_base_hash)
         except TxValidationError as e:
             self.log.warn('invalid work', job_id=work.job_id, error=e)
             self.send_error(INVALID_SOLUTION, data={'message': 'Job has invalid work.'})

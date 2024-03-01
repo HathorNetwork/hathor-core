@@ -16,7 +16,7 @@ from math import log
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.difficulty import Weight
 from hathor.util import json_dumpb
 
@@ -30,7 +30,7 @@ class MiningInfoResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
     def render_GET(self, request):

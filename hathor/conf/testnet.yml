@@ -37,34 +37,16 @@ CHECKPOINTS:
   1_600_000: 00000000060adfdfd7d488d4d510b5779cf35a3c50df7bcff941fbb6957be4d2
 
 FEATURE_ACTIVATION:
-  enable_usage: true
-  default_threshold: 30_240 # 30240 = 75% of evaluation_interval (40320)
+  default_threshold: 15_120 # 15120 = 75% of evaluation_interval (20160)
   features:
-    #### Second Phased Testing features ####
-
-    NOP_FEATURE_4:
-      bit: 0
-      start_height: 3_386_880 # N (right now the best block is 3_346_600 on testnet)
-      timeout_height: 3_467_520 # N + 2 * 40320 (4 weeks after the start)
-      minimum_activation_height: 3_507_840 # N + 3 * 40320 (6 weeks after the start)
+    INCREASE_MAX_MERKLE_PATH_LENGTH:
+      bit: 3
+      # N = 3_548_160
+      # Expected to be reached around Sunday, 2024-02-04.
+      # Right now the best block is 3_521_000 on testnet (2024-01-26).
+      start_height: 3_548_160
+      timeout_height: 3_588_480
+      minimum_activation_height: 0
       lock_in_on_timeout: false
-      version: 0.57.0
+      version: 0.59.0
       signal_support_by_default: true
-
-    NOP_FEATURE_5:
-      bit: 1
-      start_height: 3_386_880 # N (right now the best block is 3_346_600 on testnet)
-      timeout_height: 3_467_520 # N + 2 * 40320 (4 weeks after the start)
-      minimum_activation_height: 0
-      lock_in_on_timeout: true
-      version: 0.57.0
-      signal_support_by_default: false
-
-    NOP_FEATURE_6:
-      bit: 2
-      start_height: 3_386_880 # N (right now the best block is 3_346_600 on testnet)
-      timeout_height: 3_467_520 # N + 2 * 40320 (4 weeks after the start)
-      minimum_activation_height: 0
-      lock_in_on_timeout: false
-      version: 0.57.0
-      signal_support_by_default: false

@@ -18,7 +18,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
@@ -37,7 +37,7 @@ class AddressSearchResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
     def has_token_and_address(self, tx: 'BaseTransaction', address: str, token: bytes) -> bool:

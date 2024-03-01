@@ -20,7 +20,7 @@ from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ class TxDetails:
     requested_index: int
 
     def __init__(self, tx_id: bytes, deferred: Deferred, connections: list['NodeSyncTimestamp']):
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.log = logger.new()
         self.tx_id = tx_id
         self.deferred = deferred
@@ -145,7 +145,7 @@ class Downloader:
     window_size: int
 
     def __init__(self, manager: 'HathorManager', window_size: int = 100):
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.log = logger.new()
         self.manager = manager
 

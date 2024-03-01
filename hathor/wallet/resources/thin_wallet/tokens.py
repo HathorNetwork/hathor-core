@@ -18,7 +18,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.util import is_token_uid_valid, json_dumpb
 
 
@@ -31,7 +31,7 @@ class TokenResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
     def get_one_token_data(self, token_uid: bytes) -> dict[str, Any]:

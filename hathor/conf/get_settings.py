@@ -33,7 +33,7 @@ class _SettingsMetadata(NamedTuple):
 _settings_singleton: Optional[_SettingsMetadata] = None
 
 
-def get_settings() -> Settings:
+def get_global_settings() -> Settings:
     return HathorSettings()
 
 

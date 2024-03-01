@@ -14,7 +14,7 @@
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
@@ -56,7 +56,7 @@ class ConsensusAlgorithm:
     """
 
     def __init__(self, soft_voided_tx_ids: set[bytes], pubsub: PubSubManager) -> None:
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.log = logger.new()
         self._pubsub = pubsub
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)

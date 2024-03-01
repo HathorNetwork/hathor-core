@@ -23,7 +23,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
@@ -39,12 +39,15 @@ from hathor.transaction.storage.migrations import (
     BaseMigration,
     MigrationState,
     add_feature_activation_bit_counts_metadata,
+    add_feature_activation_bit_counts_metadata2,
     add_min_height_metadata,
     remove_first_nop_features,
+    remove_second_nop_features,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.types import VertexId
 from hathor.util import not_none
 
 cpu = get_cpu_profiler()
@@ -88,13 +91,15 @@ class TransactionStorage(ABC):
     _migration_factories: list[type[BaseMigration]] = [
         add_min_height_metadata.Migration,
         add_feature_activation_bit_counts_metadata.Migration,
-        remove_first_nop_features.Migration
+        remove_first_nop_features.Migration,
+        add_feature_activation_bit_counts_metadata2.Migration,
+        remove_second_nop_features.Migration,
     ]
 
     _migrations: list[BaseMigration]
 
     def __init__(self) -> None:
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -1136,6 +1141,17 @@ class TransactionStorage(ABC):
 
         assert tx2.hash == self._settings.GENESIS_TX2_HASH
         return tx2
+
+    def get_parent_block(self, block: Block) -> Block:
+        return block.get_block_parent()
+
+    def get_vertex(self, vertex_id: VertexId) -> BaseTransaction:
+        return self.get_transaction(vertex_id)
+
+    def get_block(self, block_id: VertexId) -> Block:
+        block = self.get_vertex(block_id)
+        assert isinstance(block, Block)
+        return block
 
 
 class BaseTransactionStorage(TransactionStorage):

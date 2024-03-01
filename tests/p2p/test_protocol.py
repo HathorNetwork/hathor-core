@@ -1,17 +1,15 @@
 from json import JSONDecodeError
 from typing import Optional
+from unittest.mock import Mock, patch
 
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.protocol import HathorProtocol
+from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
 from hathor.simulator import FakeConnection
 from hathor.util import json_dumps
 from tests import unittest
-
-settings = HathorSettings()
 
 
 class BaseHathorProtocolTestCase(unittest.TestCase):
@@ -103,12 +101,26 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
 
     def test_invalid_size(self):
         self.conn.tr1.clear()
-        # Creating big payload
-        big_payload = '['
-        for x in range(65536):
-            big_payload = '{}{}'.format(big_payload, x)
-        big_payload = '{}]'.format(big_payload)
-        self._send_cmd(self.conn.proto1, 'HELLO', big_payload)
+        cmd = b'HELLO '
+        max_payload_bytes = HathorLineReceiver.MAX_LENGTH - len(cmd)
+        line_length_exceeded_wrapped = Mock(wraps=self.conn.proto1.lineLengthExceeded)
+
+        biggest_valid_payload = bytes([1] * max_payload_bytes)
+        line = cmd + biggest_valid_payload + b'\r\n'
+
+        with patch.object(self.conn.proto1, 'lineLengthExceeded', line_length_exceeded_wrapped):
+            self.conn.proto1.dataReceived(line)
+
+        line_length_exceeded_wrapped.assert_not_called()
+        line_length_exceeded_wrapped.reset_mock()
+
+        smallest_invalid_payload = bytes([1] * (max_payload_bytes + 1))
+        line = cmd + smallest_invalid_payload + b'\r\n'
+
+        with patch.object(self.conn.proto1, 'lineLengthExceeded', line_length_exceeded_wrapped):
+            self.conn.proto1.dataReceived(line)
+
+        line_length_exceeded_wrapped.assert_called_once()
         self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_invalid_payload(self):
@@ -150,7 +162,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         # hello with clocks too far apart
         self.conn.tr1.clear()
         data = self.conn.proto2.state._get_hello_data()
-        data['timestamp'] = data['timestamp'] + settings.MAX_FUTURE_TIMESTAMP_ALLOWED/2 + 1
+        data['timestamp'] = data['timestamp'] + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED/2 + 1
         self._send_cmd(
             self.conn.proto1,
             'HELLO',
@@ -280,7 +292,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
 
     def test_idle_connection(self):
-        self.clock.advance(settings.PEER_IDLE_TIMEOUT - 10)
+        self.clock.advance(self._settings.PEER_IDLE_TIMEOUT - 10)
         self.assertIsConnected(self.conn)
         self.clock.advance(15)
         self.assertIsNotConnected(self.conn)
@@ -428,7 +440,7 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         payload = {
             'first_block_hash': missing_tx,
             'last_block_hash': missing_tx,
-            'start_from': [settings.GENESIS_BLOCK_HASH.hex()]
+            'start_from': [self._settings.GENESIS_BLOCK_HASH.hex()]
         }
         yield self._send_cmd(self.conn.proto1, 'GET-TRANSACTIONS-BFS', json_dumps(payload))
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')

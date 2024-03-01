@@ -1,6 +1,16 @@
 import asyncio
 
-from healthcheck import Healthcheck, HealthcheckCallbackResponse, HealthcheckInternalComponent, HealthcheckStatus
+from healthcheck import (
+    Healthcheck,
+    HealthcheckCallbackResponse,
+    HealthcheckInternalComponent,
+    HealthcheckResponse,
+    HealthcheckStatus,
+)
+from twisted.internet.defer import Deferred, succeed
+from twisted.python.failure import Failure
+from twisted.web.http import Request
+from twisted.web.server import NOT_DONE_YET
 
 from hathor.api_util import Resource, get_arg_default, get_args
 from hathor.cli.openapi_files.register import register_resource
@@ -24,6 +34,28 @@ class HealthcheckResource(Resource):
     def __init__(self, manager: HathorManager):
         self.manager = manager
 
+    def _render_error(self, failure: Failure, request: Request) -> None:
+        request.setResponseCode(500)
+        request.write(json_dumpb({
+            'status': 'fail',
+            'reason': f'Internal Error: {failure.getErrorMessage()}',
+            'traceback': failure.getTraceback()
+        }))
+        request.finish()
+
+    def _render_success(self, result: HealthcheckResponse, request: Request) -> None:
+        raw_args = get_args(request)
+        strict_status_code = get_arg_default(raw_args, 'strict_status_code', '0') == '1'
+
+        if strict_status_code:
+            request.setResponseCode(200)
+        else:
+            status_code = result.get_http_status_code()
+            request.setResponseCode(status_code)
+
+        request.write(json_dumpb(result.to_json()))
+        request.finish()
+
     def render_GET(self, request):
         """ GET request /health/
             Returns the health status of the fullnode
@@ -34,24 +66,26 @@ class HealthcheckResource(Resource):
 
             :rtype: string (json)
         """
-        raw_args = get_args(request)
-        strict_status_code = get_arg_default(raw_args, 'strict_status_code', '0') == '1'
-
         sync_component = HealthcheckInternalComponent(
             name='sync',
         )
         sync_component.add_healthcheck(lambda: sync_healthcheck(self.manager))
 
         healthcheck = Healthcheck(name='hathor-core', components=[sync_component])
-        status = asyncio.get_event_loop().run_until_complete(healthcheck.run())
 
-        if strict_status_code:
-            request.setResponseCode(200)
+        # The asyncio loop will be running in case the option --x-asyncio-reactor is used
+        # XXX: We should remove this if when the asyncio reactor becomes the default and the only option
+        if asyncio.get_event_loop().is_running():
+            future = asyncio.ensure_future(healthcheck.run())
+            deferred = Deferred.fromFuture(future)
         else:
-            status_code = status.get_http_status_code()
-            request.setResponseCode(status_code)
+            status = asyncio.get_event_loop().run_until_complete(healthcheck.run())
+            deferred = succeed(status)
 
-        return json_dumpb(status.to_json())
+        deferred.addCallback(self._render_success, request)
+        deferred.addErrback(self._render_error, request)
+
+        return NOT_DONE_YET
 
 
 HealthcheckResource.openapi = {

@@ -1,11 +1,8 @@
-from hathor.conf import HathorSettings
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from hathor.simulator.utils import add_new_blocks
 from tests import unittest
 from tests.utils import BURN_ADDRESS, get_genesis_key
-
-settings = HathorSettings()
 
 
 class BaseEventReorgTest(unittest.TestCase):
@@ -27,10 +24,10 @@ class BaseEventReorgTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
     def test_reorg_events(self):
-        assert settings.REWARD_SPEND_MIN_BLOCKS == 10, 'this test was made with this hardcoded value in mind'
+        assert self._settings.REWARD_SPEND_MIN_BLOCKS == 10, 'this test was made with this hardcoded value in mind'
 
         # add some blocks
-        blocks = add_new_blocks(self.manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
+        blocks = add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # make a re-org
         self.log.debug('make reorg block')
@@ -49,13 +46,13 @@ class BaseEventReorgTest(unittest.TestCase):
 
         expected_events = [
             (EventType.LOAD_STARTED, {}),
-            (EventType.NEW_VERTEX_ACCEPTED, {'hash': settings.GENESIS_BLOCK_HASH.hex()}),
-            (EventType.NEW_VERTEX_ACCEPTED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
-            (EventType.NEW_VERTEX_ACCEPTED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
+            (EventType.NEW_VERTEX_ACCEPTED, {'hash': self._settings.GENESIS_BLOCK_HASH.hex()}),
+            (EventType.NEW_VERTEX_ACCEPTED, {'hash': self._settings.GENESIS_TX1_HASH.hex()}),
+            (EventType.NEW_VERTEX_ACCEPTED, {'hash': self._settings.GENESIS_TX2_HASH.hex()}),
             (EventType.LOAD_FINISHED, {}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[0].hash_hex}),
-            (EventType.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
-            (EventType.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': self._settings.GENESIS_TX2_HASH.hex()}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': self._settings.GENESIS_TX1_HASH.hex()}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[0].hash_hex}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[1].hash_hex}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[1].hash_hex}),

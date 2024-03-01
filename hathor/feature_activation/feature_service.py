@@ -98,7 +98,7 @@ class FeatureService:
         offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
         previous_boundary_height = height - offset_to_previous_boundary
         assert previous_boundary_height >= 0
-        previous_boundary_block = self._get_ancestor_at_height(block=block, height=previous_boundary_height)
+        previous_boundary_block = self._get_ancestor_at_height(block=block, ancestor_height=previous_boundary_height)
         previous_boundary_state = self.get_state(block=previous_boundary_block, feature=feature)
 
         # We cache _and save_ the state of the previous boundary block that we just got.
@@ -198,32 +198,44 @@ class FeatureService:
             for feature, criteria in self._feature_settings.features.items()
         }
 
-    def _get_ancestor_at_height(self, *, block: 'Block', height: int) -> 'Block':
+    def _get_ancestor_at_height(self, *, block: 'Block', ancestor_height: int) -> 'Block':
         """
-        Given a block, returns its ancestor at a specific height.
+        Given a block, return its ancestor at a specific height.
         Uses the height index if the block is in the best blockchain, or search iteratively otherwise.
         """
-        assert height < block.get_height(), (
-            f"ancestor height must be lower than the block's height: {height} >= {block.get_height()}"
+        assert ancestor_height < block.get_height(), (
+            f"ancestor height must be lower than the block's height: {ancestor_height} >= {block.get_height()}"
         )
 
-        metadata = block.get_metadata()
+        # It's possible that this method is called before the consensus runs for this block, therefore we do not know
+        # if it's in the best blockchain. For this reason, we have to get the ancestor starting from our parent block.
+        parent_block = block.get_block_parent()
+        parent_metadata = parent_block.get_metadata()
+        assert parent_metadata.validation.is_fully_connected(), 'The parent should always be fully validated.'
 
-        if not metadata.voided_by and (ancestor := self._tx_storage.get_transaction_by_height(height)):
+        if parent_block.get_height() == ancestor_height:
+            return parent_block
+
+        if not parent_metadata.voided_by and (ancestor := self._tx_storage.get_transaction_by_height(ancestor_height)):
             from hathor.transaction import Block
             assert isinstance(ancestor, Block)
             return ancestor
 
-        return _get_ancestor_iteratively(block=block, ancestor_height=height)
+        return self._get_ancestor_iteratively(block=parent_block, ancestor_height=ancestor_height)
 
+    def _get_ancestor_iteratively(self, *, block: 'Block', ancestor_height: int) -> 'Block':
+        """
+        Given a block, return its ancestor at a specific height by iterating over its ancestors.
+        This is slower than using the height index.
+        """
+        # TODO: there are further optimizations to be done here, the latest common block height could be persisted in
+        #  metadata, so we could still use the height index if the requested height is before that height.
+        assert ancestor_height >= 0
+        assert block.get_height() - ancestor_height <= self._feature_settings.evaluation_interval, (
+            'requested ancestor is deeper than the maximum allowed'
+        )
+        ancestor = block
+        while ancestor.get_height() > ancestor_height:
+            ancestor = ancestor.get_block_parent()
 
-def _get_ancestor_iteratively(*, block: 'Block', ancestor_height: int) -> 'Block':
-    """Given a block, returns its ancestor at a specific height by iterating over its ancestors. This is slow."""
-    # TODO: there are further optimizations to be done here, the latest common block height could be persisted in
-    #  metadata, so we could still use the height index if the requested height is before that height.
-    assert ancestor_height >= 0
-    ancestor = block
-    while ancestor.get_height() > ancestor_height:
-        ancestor = ancestor.get_block_parent()
-
-    return ancestor
+        return ancestor

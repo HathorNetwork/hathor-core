@@ -18,8 +18,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from hathor.builder import Builder
-from hathor.conf.get_settings import get_settings
-from hathor.feature_activation import feature_service as feature_service_module
+from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
@@ -59,7 +58,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         method calls to make sure we're executing it in the intended, most performatic way.
         """
         feature_settings = FeatureSettings(
-            enable_usage=True,
             evaluation_interval=4,
             max_signal_bits=4,
             default_threshold=3,
@@ -75,7 +73,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        settings = get_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
         feature_service = artifacts.feature_service
@@ -89,11 +87,11 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         web_client = StubSite(feature_resource)
 
         calculate_new_state_mock = Mock(wraps=feature_service._calculate_new_state)
-        get_ancestor_iteratively_mock = Mock(wraps=feature_service_module._get_ancestor_iteratively)
+        get_ancestor_iteratively_mock = Mock(wraps=feature_service._get_ancestor_iteratively)
 
         with (
             patch.object(FeatureService, '_calculate_new_state', calculate_new_state_mock),
-            patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
+            patch.object(FeatureService, '_get_ancestor_iteratively', get_ancestor_iteratively_mock),
         ):
             # at the beginning, the feature is DEFINED:
             add_new_blocks(manager, 10)
@@ -336,7 +334,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
     def test_reorg(self) -> None:
         feature_settings = FeatureSettings(
-            enable_usage=True,
             evaluation_interval=4,
             max_signal_bits=4,
             default_threshold=3,
@@ -351,7 +348,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        settings = get_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
         feature_service = artifacts.feature_service
@@ -551,7 +548,6 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         Tests that feature states are correctly retrieved from an existing storage, so no recalculation is required.
         """
         feature_settings = FeatureSettings(
-            enable_usage=True,
             evaluation_interval=4,
             max_signal_bits=4,
             default_threshold=3,
@@ -566,7 +562,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             }
         )
 
-        settings = get_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
         rocksdb_dir = self.get_rocksdb_directory()
         builder1 = self.get_simulator_builder_from_dir(rocksdb_dir).set_settings(settings)
         artifacts1 = self.simulator.create_artifacts(builder1)
@@ -581,11 +577,11 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         web_client = StubSite(feature_resource)
 
         calculate_new_state_mock = Mock(wraps=feature_service1._calculate_new_state)
-        get_ancestor_iteratively_mock = Mock(wraps=feature_service_module._get_ancestor_iteratively)
+        get_ancestor_iteratively_mock = Mock(wraps=feature_service1._get_ancestor_iteratively)
 
         with (
             patch.object(FeatureService, '_calculate_new_state', calculate_new_state_mock),
-            patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
+            patch.object(FeatureService, '_get_ancestor_iteratively', get_ancestor_iteratively_mock),
         ):
             assert artifacts1.tx_storage.get_vertices_count() == 3  # genesis vertices in the storage
 
@@ -634,11 +630,11 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         web_client = StubSite(feature_resource)
 
         calculate_new_state_mock = Mock(wraps=feature_service._calculate_new_state)
-        get_ancestor_iteratively_mock = Mock(wraps=feature_service_module._get_ancestor_iteratively)
+        get_ancestor_iteratively_mock = Mock(wraps=feature_service._get_ancestor_iteratively)
 
         with (
             patch.object(FeatureService, '_calculate_new_state', calculate_new_state_mock),
-            patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
+            patch.object(FeatureService, '_get_ancestor_iteratively', get_ancestor_iteratively_mock),
         ):
             # the new storage starts populated
             assert artifacts2.tx_storage.get_vertices_count() == 67

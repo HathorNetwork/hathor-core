@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.simulator.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 from hathor.transaction.exceptions import RewardLocked
 from hathor.util import Random
@@ -43,7 +43,7 @@ class RandomTransactionGenerator:
         :param: rate: Number of transactions per second
         :param: hashpower: Number of hashes per second
         """
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
         # List of addresses to send tokens. If this list is empty, tokens will be sent to an address

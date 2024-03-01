@@ -19,7 +19,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
@@ -34,7 +34,7 @@ class AddressHistoryResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
-        self._settings = get_settings()
+        self._settings = get_global_settings()
         self.manager = manager
 
     # TODO add openapi docs for this API

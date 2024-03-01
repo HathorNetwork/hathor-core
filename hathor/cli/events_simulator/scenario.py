@@ -52,10 +52,10 @@ def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorMana
 
 
 def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
-    from hathor.conf.get_settings import get_settings
+    from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
 
-    settings = get_settings()
+    settings = get_global_settings()
     assert manager.wallet is not None
     address = manager.wallet.get_unused_address(mark_as_used=False)
 
@@ -97,11 +97,11 @@ def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
 
 
 def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
-    from hathor.conf.get_settings import get_settings
+    from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
     from hathor.util import not_none
 
-    settings = get_settings()
+    settings = get_global_settings()
     assert manager.wallet is not None
     address = manager.wallet.get_unused_address(mark_as_used=False)
 
@@ -134,6 +134,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
         settings.GENESIS_TX1_HASH,
         not_none(tx2.hash),
     ]
+    block.update_hash()
     assert manager.propagate_tx(block, fails_silently=False)
     simulator.run(60)
 

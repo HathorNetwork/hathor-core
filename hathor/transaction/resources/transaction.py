@@ -24,7 +24,7 @@ from hathor.api_util import (
     validate_tx_hash,
 )
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf.get_settings import get_settings
+from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import json_dumpb
@@ -49,7 +49,7 @@ def get_tx_extra_data(tx: BaseTransaction, *, detail_tokens: bool = True) -> dic
     assert tx.storage is not None
     assert tx.storage.indexes is not None
 
-    settings = get_settings()
+    settings = get_global_settings()
     serialized = tx.to_json(decode_script=True)
     serialized['raw'] = tx.get_struct().hex()
     serialized['nonce'] = str(tx.nonce)
@@ -205,7 +205,7 @@ class TransactionResource(Resource):
             'timestamp': int, the timestamp reference we are in the pagination
             'page': 'previous' or 'next', to indicate if the user wants after or before the hash reference
         """
-        settings = get_settings()
+        settings = get_global_settings()
         raw_args = get_args(request)
         parsed = parse_args(raw_args, GET_LIST_ARGS)
         if not parsed['success']:

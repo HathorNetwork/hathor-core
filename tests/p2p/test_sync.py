@@ -1,7 +1,6 @@
 from twisted.python.failure import Failure
 
 from hathor.checkpoint import Checkpoint as cp
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.p2p.protocol import PeerIdState
 from hathor.p2p.sync_version import SyncVersion
@@ -9,8 +8,6 @@ from hathor.simulator import FakeConnection
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
-
-settings = HathorSettings()
 
 
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):
@@ -425,7 +422,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         # disconnect and wait for the download of tx_A to timeout but not yet the download of tx_B
         self.conn1.disconnect(Failure(Exception('testing')))
         self.conn2.disconnect(Failure(Exception('testing')))
-        self.clock.advance(settings.GET_DATA_TIMEOUT - 10.0)
+        self.clock.advance(self._settings.GET_DATA_TIMEOUT - 10.0)
 
         # reconnect peer_X and peer_Y
         self.conn1 = FakeConnection(self.manager_bug, self.manager1)
