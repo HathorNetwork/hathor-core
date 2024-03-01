@@ -23,12 +23,12 @@ class FeatureActivationSysctl(Sysctl):
         self._bit_signaling_service = bit_signaling_service
 
         self.register(
-            path='support_features',
+            path='supported_features',
             getter=self.get_support_features,
             setter=None,
         )
         self.register(
-            path='not_support_features',
+            path='not_supported_features',
             getter=self.get_not_support_features,
             setter=None,
         )

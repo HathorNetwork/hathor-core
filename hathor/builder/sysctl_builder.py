@@ -31,9 +31,12 @@ class SysctlBuilder:
     def build(self) -> Sysctl:
         """Build the sysctl tree."""
         root = Sysctl()
-        root.put_child('core', HathorManagerSysctl(self.artifacts.manager))
+
+        core = HathorManagerSysctl(self.artifacts.manager)
+        core.put_child('features', FeatureActivationSysctl(self.artifacts.bit_signaling_service))
+
+        root.put_child('core', core)
         root.put_child('p2p', ConnectionsManagerSysctl(self.artifacts.p2p_manager))
-        root.put_child('fa', FeatureActivationSysctl(self.artifacts.bit_signaling_service))
 
         ws_factory = self.artifacts.manager.metrics.websocket_factory
         if ws_factory is not None:
