@@ -71,6 +71,9 @@ JOB_NOT_FOUND = {'code': 32, 'message': 'Job not found'}
 # PROPAGATION_FAILED = {'code': 33, 'message': 'Solution propagation failed'}
 DUPLICATE_SOLUTION = {'code': 34, 'message': 'Solution already submitted'}
 
+ZEROED_4: bytes = b'\0' * 4
+ZEROED_32: bytes = b'\0' * 32
+
 
 class HathorCoordJob(NamedTuple):
     """ Data class used to send a job's work to Hathor Stratum.
@@ -688,6 +691,8 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         """ Submit work to Bitcoin RPC.
         """
         bitcoin_rpc = self.coordinator.bitcoin_rpc
+        if bitcoin_rpc is None:
+            return
         # bitcoin_block = job.build_bitcoin_block(work)  # XXX: too expensive for now
         bitcoin_block_header = job.build_bitcoin_block_header(work)
         block_hash = Hash(bitcoin_block_header.hash)
@@ -796,6 +801,29 @@ class BitcoinCoordJob(NamedTuple):
     merkle_path: tuple[bytes, ...]
     witness_commitment: Optional[bytes] = None
     append_to_input: bool = True
+
+    @classmethod
+    def create_dummy(cls, merkle_path_len: int = 0) -> 'BitcoinCoordJob':
+        """ Creates a dummy instance with zeroed values and optionally a merkle path with the given length.
+        """
+        if merkle_path_len > 0:
+            transactions = [BitcoinRawTransaction(ZEROED_32, ZEROED_32, b'')] * (2 ** merkle_path_len - 1)
+            merkle_path = tuple(build_merkle_path_for_coinbase([t.txid for t in transactions]))
+        else:
+            transactions = []
+            merkle_path = tuple()
+        return cls(
+            version=0,
+            previous_block_hash=ZEROED_32,
+            coinbase_value=0,
+            target=ZEROED_32,
+            min_time=0,
+            size_limit=0,
+            bits=ZEROED_4,
+            height=0,
+            transactions=transactions,
+            merkle_path=merkle_path,
+        )
 
     @classmethod
     def from_dict(cls, params: dict) -> 'BitcoinCoordJob':
@@ -968,7 +996,7 @@ class BitcoinCoordJob(NamedTuple):
         if self.witness_commitment is not None:
             segwit_output = BitcoinTransactionOutput(0, self.witness_commitment)
             outputs.append(segwit_output)
-            coinbase_input.script_witness.append(b'\0' * 32)
+            coinbase_input.script_witness.append(ZEROED_32)
 
         # append now because segwit presence may change this
         inputs.append(coinbase_input)
@@ -1110,10 +1138,17 @@ class MergedMiningCoordinator:
     MAX_XNONCE1 = 2**XNONCE1_SIZE - 1
     MAX_RECONNECT_BACKOFF = 30
 
-    def __init__(self,  bitcoin_rpc: IBitcoinRPC, hathor_client: IHathorClient,
-                 payback_address_bitcoin: Optional[str], payback_address_hathor: Optional[str],
-                 address_from_login: bool = True, min_difficulty: Optional[int] = None,
-                 sequential_xnonce1: bool = False, rng: Optional[Random] = None):
+    def __init__(self,
+                 bitcoin_rpc: IBitcoinRPC | None,
+                 hathor_client: IHathorClient,
+                 payback_address_bitcoin: str | None,
+                 payback_address_hathor: str | None,
+                 address_from_login: bool = True,
+                 min_difficulty: int | None = None,
+                 sequential_xnonce1: bool = False,
+                 rng: Random | None = None,
+                 dummy_merkle_path_len: int | None = None,
+                 ):
         self.log = logger.new()
         if rng is None:
             rng = Random()
@@ -1144,6 +1179,7 @@ class MergedMiningCoordinator:
         self.started_at = 0.0
         self.strip_all_transactions = False
         self.strip_segwit_transactions = False
+        self.dummy_merkle_path_len = dummy_merkle_path_len or 0
 
     @property
     def uptime(self) -> float:
@@ -1185,21 +1221,24 @@ class MergedMiningCoordinator:
         """
         loop = asyncio.get_event_loop()
         self.started_at = time.time()
-        self.update_bitcoin_block_task = loop.create_task(self.update_bitcoin_block())
+        if self.bitcoin_rpc is not None:
+            self.update_bitcoin_block_task = loop.create_task(self.update_bitcoin_block())
+        else:
+            self.bitcoin_coord_job = BitcoinCoordJob.create_dummy(self.dummy_merkle_path_len)
         self.update_hathor_block_task = loop.create_task(self.update_hathor_block())
 
     async def stop(self) -> None:
         """ Stops the client, interrupting mining processes, stoping supervisor loop, and sending finished jobs.
         """
-        assert self.update_bitcoin_block_task is not None
-        self.update_bitcoin_block_task.cancel()
+        finals = []
+        if self.update_bitcoin_block_task is not None:
+            self.update_bitcoin_block_task.cancel()
+            finals.append(self.update_bitcoin_block_task)
         assert self.update_hathor_block_task is not None
         self.update_hathor_block_task.cancel()
+        finals.append(self.update_hathor_block_task)
         try:
-            await asyncio.gather(
-                self.update_bitcoin_block_task,
-                self.update_hathor_block_task,
-            )
+            await asyncio.gather(*finals)
         except asyncio.CancelledError:
             pass
         except Exception:
@@ -1210,6 +1249,7 @@ class MergedMiningCoordinator:
     async def update_bitcoin_block(self) -> None:
         """ Task that continuously polls block templates from bitcoin.get_block_template
         """
+        assert self.bitcoin_rpc is not None
         backoff = 1
         longpoll_id = None
         while True:
@@ -1348,13 +1388,14 @@ class MergedMiningCoordinator:
         merkle_root = build_merkle_root(list(tx.txid for tx in block_proposal.transactions))
         if merkle_root != block_proposal.header.merkle_root:
             self.log.warn('bad merkle root', expected=merkle_root.hex(), got=block_proposal.header.merkle_root.hex())
-        error = await self.bitcoin_rpc.verify_block_proposal(block=bytes(block_proposal))
-        if error is not None:
-            self.log.warn('proposed block is invalid, skipping update', error=error)
-        else:
-            self.next_merged_job = merged_job
-            self.update_jobs()
-            self.log.debug('merged job updated')
+        if self.bitcoin_rpc is not None:
+            error = await self.bitcoin_rpc.verify_block_proposal(block=bytes(block_proposal))
+            if error is not None:
+                self.log.warn('proposed block is invalid, skipping update', error=error)
+                return
+        self.next_merged_job = merged_job
+        self.update_jobs()
+        self.log.debug('merged job updated')
 
     def status(self) -> dict[Any, Any]:
         """ Build status dict with useful metrics for use in MM Status API.
