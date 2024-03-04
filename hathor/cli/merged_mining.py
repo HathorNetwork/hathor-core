@@ -30,8 +30,13 @@ def create_parser() -> ArgumentParser:
     parser.add_argument('--debug-listen', help='Port to listen for Debug API', type=int, required=False)
     parser.add_argument('--hathor-api', help='Endpoint of the Hathor API (without version)', type=str, required=True)
     parser.add_argument('--hathor-address', help='Hathor address to send funds to', type=str, required=False)
-    parser.add_argument('--bitcoin-rpc', help='Endpoint of the Bitcoin RPC', type=str, required=True)
+    rpc = parser.add_mutually_exclusive_group(required=True)
+    rpc.add_argument('--bitcoin-rpc', help='Endpoint of the Bitcoin RPC', type=str)
     parser.add_argument('--bitcoin-address', help='Bitcoin address to send funds to', type=str, required=False)
+    rpc.add_argument('--dummy-merged-mining', help='Use zeroed bits to simulate a dummy merged mining',
+                     action='store_true')
+    parser.add_argument('--dummy-merkle-len', help='Merkle path length to simulate when doing dummy merged mining',
+                        type=int, required=False)
     parser.add_argument('--min-diff', help='Minimum difficulty to set for jobs', type=int, required=False)
     return parser
 
@@ -45,7 +50,14 @@ def execute(args: Namespace) -> None:
 
     loop = asyncio.get_event_loop()
 
-    bitcoin_rpc = BitcoinRPC(args.bitcoin_rpc)
+    bitcoin_rpc: BitcoinRPC | None
+    if args.bitcoin_rpc is not None:
+        # XXX: plain assert because argparse should already ensure it's correct
+        assert not args.dummy_merged_mining
+        bitcoin_rpc = BitcoinRPC(args.bitcoin_rpc)
+    else:
+        assert args.dummy_merged_mining
+        bitcoin_rpc = None
     hathor_client = HathorClient(args.hathor_api)
     # TODO: validate addresses?
     merged_mining = MergedMiningCoordinator(
@@ -55,9 +67,11 @@ def execute(args: Namespace) -> None:
         payback_address_bitcoin=args.bitcoin_address,
         address_from_login=not (args.hathor_address and args.bitcoin_address),
         min_difficulty=args.min_diff,
+        dummy_merkle_path_len=args.dummy_merkle_len,
     )
-    logger.info('start Bitcoin RPC', url=args.bitcoin_rpc)
-    loop.run_until_complete(bitcoin_rpc.start())
+    if bitcoin_rpc is not None:
+        logger.info('start Bitcoin RPC', url=args.bitcoin_rpc)
+        loop.run_until_complete(bitcoin_rpc.start())
     logger.info('start Hathor Client', url=args.hathor_api)
     loop.run_until_complete(hathor_client.start())
     logger.info('start Merged Mining Server', listen=f'0.0.0.0:{args.port}')
@@ -89,7 +103,8 @@ def execute(args: Namespace) -> None:
     loop.run_until_complete(mm_server.wait_closed())
     loop.run_until_complete(merged_mining.stop())
     loop.run_until_complete(hathor_client.stop())
-    loop.run_until_complete(bitcoin_rpc.stop())
+    if bitcoin_rpc is not None:
+        loop.run_until_complete(bitcoin_rpc.stop())
     loop.close()
     logger.info('bye')
 
