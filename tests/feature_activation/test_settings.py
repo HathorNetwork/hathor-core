@@ -121,7 +121,7 @@ def test_conflicting_bits(features):
 
     errors = e.value.errors()
     assert errors[0]['msg'] == 'At least one pair of Features have the same bit configured for an overlapping ' \
-                               'interval: Feature.NOP_FEATURE_1 and Feature.NOP_FEATURE_2'
+                               'interval: NOP_FEATURE_1 and NOP_FEATURE_2'
 
 
 @pytest.mark.parametrize(

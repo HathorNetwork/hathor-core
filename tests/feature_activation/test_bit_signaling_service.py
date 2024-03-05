@@ -173,7 +173,8 @@ def _test_generate_signal_bits(
         feature_service=feature_service,
         tx_storage=Mock(),
         support_features=support_features,
-        not_support_features=not_support_features
+        not_support_features=not_support_features,
+        feature_storage=Mock(),
     )
 
     return service.generate_signal_bits(block=Mock())
@@ -216,6 +217,7 @@ def test_support_intersection_validation(
             tx_storage=Mock(),
             support_features=support_features,
             not_support_features=not_support_features,
+            feature_storage=Mock(),
         )
 
     message = str(e.value)
@@ -270,6 +272,7 @@ def test_non_signaling_features_warning(
         tx_storage=tx_storage,
         support_features=support_features,
         not_support_features=not_support_features,
+        feature_storage=Mock(),
     )
     logger_mock = Mock()
     service._log = logger_mock

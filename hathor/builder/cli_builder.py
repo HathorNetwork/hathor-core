@@ -30,6 +30,7 @@ from hathor.exception import BuilderError
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
@@ -120,6 +121,7 @@ class CliBuilder:
         tx_storage: TransactionStorage
         event_storage: EventStorage
         indexes: IndexesManager
+        feature_storage: FeatureActivationStorage | None = None
         self.rocksdb_storage: Optional[RocksDBStorage] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
@@ -152,6 +154,7 @@ class CliBuilder:
                 kwargs['indexes'] = indexes
             tx_storage = TransactionRocksDBStorage(self.rocksdb_storage, **kwargs)
             event_storage = EventRocksDBStorage(self.rocksdb_storage)
+            feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
         if self._args.cache:
@@ -260,7 +263,8 @@ class CliBuilder:
             feature_service=self.feature_service,
             tx_storage=tx_storage,
             support_features=self._args.signal_support,
-            not_support_features=self._args.signal_not_support
+            not_support_features=self._args.signal_not_support,
+            feature_storage=feature_storage,
         )
 
         test_mode = TestMode.DISABLED
