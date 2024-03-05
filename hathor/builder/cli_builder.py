@@ -27,6 +27,7 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.exception import BuilderError
+from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
@@ -212,11 +213,14 @@ class CliBuilder:
                 event_storage=event_storage
             )
 
+        execution_manager = ExecutionManager(reactor)
+
         event_manager = EventManager(
             event_storage=event_storage,
             event_ws_factory=self.event_ws_factory,
             pubsub=pubsub,
-            reactor=reactor
+            reactor=reactor,
+            execution_manager=execution_manager,
         )
 
         if self._args.wallet_index and tx_storage.indexes is not None:
@@ -236,7 +240,11 @@ class CliBuilder:
             full_verification = True
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
+        consensus_algorithm = ConsensusAlgorithm(
+            soft_voided_tx_ids,
+            pubsub=pubsub,
+            execution_manager=execution_manager
+        )
 
         if self._args.x_enable_event_queue:
             self.log.info('--x-enable-event-queue flag provided. '
@@ -308,7 +316,8 @@ class CliBuilder:
             feature_service=self.feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
-            cpu_mining_service=cpu_mining_service
+            cpu_mining_service=cpu_mining_service,
+            execution_manager=execution_manager,
         )
 
         if self._args.x_ipython_kernel:
