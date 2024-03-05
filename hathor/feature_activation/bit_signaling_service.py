@@ -19,6 +19,7 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
+from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
 
@@ -32,7 +33,8 @@ class BitSignalingService:
         '_feature_service',
         '_tx_storage',
         '_support_features',
-        '_not_support_features'
+        '_not_support_features',
+        '_feature_storage',
     )
 
     def __init__(
@@ -42,7 +44,8 @@ class BitSignalingService:
         feature_service: FeatureService,
         tx_storage: TransactionStorage,
         support_features: set[Feature],
-        not_support_features: set[Feature]
+        not_support_features: set[Feature],
+        feature_storage: FeatureActivationStorage | None,
     ) -> None:
         self._log = logger.new()
         self._feature_settings = feature_settings
@@ -50,6 +53,7 @@ class BitSignalingService:
         self._tx_storage = tx_storage
         self._support_features = support_features
         self._not_support_features = not_support_features
+        self._feature_storage = feature_storage
 
         self._validate_support_intersection()
 
@@ -58,6 +62,9 @@ class BitSignalingService:
         Log information related to bit signaling. Must be called after the storage is ready and migrations have
         been applied.
         """
+        if self._feature_storage:
+            self._feature_storage.validate_settings()
+
         best_block = self._tx_storage.get_best_block()
 
         self._warn_non_signaling_features(best_block)
