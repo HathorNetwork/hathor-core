@@ -102,7 +102,7 @@ class CPUProfilerResource(Resource):
 
 
 CPUProfilerResource.openapi = {
-    '/profiler': {
+    '/top': {
         'x-visibility': 'private',
         'get': {
             'operationId': 'cpu-profiler',
