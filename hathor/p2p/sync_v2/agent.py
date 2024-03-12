@@ -21,11 +21,13 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
 
 from structlog import get_logger
+from twisted.internet import defer
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall, deferLater
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.states.base import CmdCallable
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
@@ -229,7 +231,7 @@ class NodeBlockSync(SyncAgent):
         if self._lc_run.running:
             self._lc_run.stop()
 
-    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, CmdCallable]:
         """ Return a dict of messages of the plugin.
 
         For further information about each message, see the RFC.
@@ -597,17 +599,16 @@ class NodeBlockSync(SyncAgent):
         self.log.debug('find_best_common_block n-ary search finished', lo=lo, hi=hi)
         return lo
 
-    @inlineCallbacks
-    def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> Generator[Any, Any, None]:
+    async def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> None:
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         for tx in vertex_list:
             if not self.tx_storage.transaction_exists(not_none(tx.hash)):
-                self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
-            yield deferLater(self.reactor, 0, lambda: None)
+                await self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
+            await defer.succeed(None)
 
         if not self.tx_storage.transaction_exists(not_none(blk.hash)):
-            self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+            await self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
@@ -751,7 +752,7 @@ class NodeBlockSync(SyncAgent):
         self._blk_streaming_client.handle_blocks_end(response_code)
         self.log.debug('block streaming ended', reason=str(response_code))
 
-    def handle_blocks(self, payload: str) -> None:
+    async def handle_blocks(self, payload: str) -> None:
         """ Handle a BLOCKS message.
         """
         if self.state is not PeerState.SYNCING_BLOCKS:
@@ -770,7 +771,7 @@ class NodeBlockSync(SyncAgent):
         assert blk.hash is not None
 
         assert self._blk_streaming_client is not None
-        self._blk_streaming_client.handle_blocks(blk)
+        await self._blk_streaming_client.handle_blocks(blk)
 
     def send_stop_block_streaming(self) -> None:
         """ Send a STOP-BLOCK-STREAMING message.
@@ -1112,7 +1113,7 @@ class NodeBlockSync(SyncAgent):
             # In case the tx does not exist we send a NOT-FOUND message
             self.send_message(ProtocolMessages.NOT_FOUND, txid_hex)
 
-    def handle_data(self, payload: str) -> None:
+    async def handle_data(self, payload: str) -> None:
         """ Handle a DATA message.
         """
         if not payload:
@@ -1160,7 +1161,7 @@ class NodeBlockSync(SyncAgent):
             # in the network, thus, we propagate it as well.
             if tx.can_validate_full():
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                self.manager.on_new_tx(tx, propagate_to_peers=True)
+                await self.manager.on_new_tx(tx, propagate_to_peers=True)
             else:
                 self.log.debug('skipping tx received in real time from peer',
                                tx=tx.hash_hex, peer=self.protocol.get_peer_id())

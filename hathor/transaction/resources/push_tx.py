@@ -67,7 +67,7 @@ class PushTxResource(Resource):
         addr = request.getClientAddress()
         return getattr(addr, 'host', 'unknown')
 
-    def handle_push_tx(self, params: dict[str, Any], client_addr: str) -> dict[str, Any]:
+    async def handle_push_tx(self, params: dict[str, Any], client_addr: str) -> dict[str, Any]:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
@@ -98,7 +98,7 @@ class PushTxResource(Resource):
         message = ''
         success = True
         try:
-            self.manager.push_tx(tx, allow_non_standard_script=self.allow_non_standard_script,
+            await self.manager.push_tx(tx, allow_non_standard_script=self.allow_non_standard_script,
                                  max_output_script_size=self.max_output_script_size)
         except (InvalidNewTransaction, TxValidationError) as e:
             success = False

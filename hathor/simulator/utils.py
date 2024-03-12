@@ -53,7 +53,7 @@ def gen_new_tx(manager: HathorManager, address: str, value: int, verify: bool = 
     return tx
 
 
-def add_new_blocks(
+async def add_new_blocks(
     manager: HathorManager,
     num_blocks: int,
     advance_clock: Optional[int] = None,
@@ -78,15 +78,15 @@ def add_new_blocks(
     blocks = []
     for _ in range(num_blocks):
         blocks.append(
-            add_new_block(manager, advance_clock, parent_block_hash=parent_block_hash,
-                          data=block_data, weight=weight, address=address, signal_bits=signal_bits)
+            await add_new_block(manager, advance_clock, parent_block_hash=parent_block_hash,
+                                data=block_data, weight=weight, address=address, signal_bits=signal_bits)
         )
         if parent_block_hash:
             parent_block_hash = blocks[-1].hash
     return blocks
 
 
-def add_new_block(
+async def add_new_block(
     manager: HathorManager,
     advance_clock: Optional[int] = None,
     *,
@@ -113,7 +113,7 @@ def add_new_block(
     manager.cpu_mining_service.resolve(block)
     manager.verification_service.validate_full(block)
     if propagate:
-        manager.propagate_tx(block, fails_silently=False)
+        await manager.propagate_tx(block, fails_silently=False)
     if advance_clock:
         assert hasattr(manager.reactor, 'advance')
         manager.reactor.advance(advance_clock)

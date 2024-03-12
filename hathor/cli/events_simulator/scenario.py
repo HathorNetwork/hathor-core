@@ -45,13 +45,13 @@ def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> Non
     simulator.run(60)
 
 
-def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorManager') -> None:
+async def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor.simulator.utils import add_new_blocks
-    add_new_blocks(manager, 1)
+    await add_new_blocks(manager, 1)
     simulator.run(60)
 
 
-def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
+async def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
 
@@ -59,7 +59,7 @@ def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manage
     assert manager.wallet is not None
     address = manager.wallet.get_unused_address(mark_as_used=False)
 
-    add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    await add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
     simulator.run(60)
 
     tx = gen_new_tx(manager, address, 1000)
@@ -74,21 +74,21 @@ def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manage
     assert manager.propagate_tx(tx, fails_silently=False)
     simulator.run(60)
 
-    add_new_blocks(manager, 1)
+    await add_new_blocks(manager, 1)
     simulator.run(60)
 
 
-def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
+async def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor.simulator import FakeConnection
     from hathor.simulator.utils import add_new_blocks
 
     builder = simulator.get_default_builder()
     manager2 = simulator.create_peer(builder)
 
-    add_new_blocks(manager, 1)
+    await add_new_blocks(manager, 1)
     simulator.run(60)
 
-    add_new_blocks(manager2, 2)
+    await add_new_blocks(manager2, 2)
     simulator.run(60)
 
     connection = FakeConnection(manager, manager2)
@@ -96,7 +96,7 @@ def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
     simulator.run(60)
 
 
-def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
+async def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
     from hathor.util import not_none
@@ -105,7 +105,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     assert manager.wallet is not None
     address = manager.wallet.get_unused_address(mark_as_used=False)
 
-    add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    await add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
     simulator.run(60)
 
     # A tx is created with weight 19.0005
@@ -128,14 +128,14 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     assert tx2.get_metadata().voided_by
 
     # We add a block confirming the second tx, increasing its acc weight
-    block = add_new_block(manager, propagate=False)
+    block = await add_new_block(manager, propagate=False)
     block.parents = [
         block.parents[0],
         settings.GENESIS_TX1_HASH,
         not_none(tx2.hash),
     ]
     block.update_hash()
-    assert manager.propagate_tx(block, fails_silently=False)
+    assert await manager.propagate_tx(block, fails_silently=False)
     simulator.run(60)
 
     # The first tx gets voided and the second gets unvoided

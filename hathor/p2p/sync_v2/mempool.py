@@ -69,11 +69,10 @@ class SyncMempoolManager:
         self._deferred = Deferred()
         return self._deferred
 
-    @inlineCallbacks
-    def _run(self) -> Generator[Deferred, Any, None]:
+    async def _run(self) -> None:
         is_synced = False
         try:
-            is_synced = yield self._unsafe_run()
+            is_synced = await self._unsafe_run()
         finally:
             # sync_agent.run_sync will start it again when needed
             self._is_running = False
@@ -81,29 +80,27 @@ class SyncMempoolManager:
             self._deferred.callback(is_synced)
             self._deferred = None
 
-    @inlineCallbacks
-    def _unsafe_run(self) -> Generator[Deferred, Any, bool]:
+    async def _unsafe_run(self) -> bool:
         """Run a single loop of the sync-v2 mempool."""
         if not self.missing_tips:
             # No missing tips? Let's get them!
-            tx_hashes: list[bytes] = yield self.sync_agent.get_tips()
+            tx_hashes: list[bytes] = await self.sync_agent.get_tips()
             self.missing_tips.update(h for h in tx_hashes if not self.tx_storage.transaction_exists(h))
 
         while self.missing_tips:
             self.log.debug('We have missing tips! Let\'s start!', missing_tips=[x.hex() for x in self.missing_tips])
             tx_id = next(iter(self.missing_tips))
-            tx: BaseTransaction = yield self.sync_agent.get_tx(tx_id)
+            tx: BaseTransaction = await self.sync_agent.get_tx(tx_id)
             # Stack used by the DFS in the dependencies.
             # We use a deque for performance reasons.
             self.log.debug('start mempool DSF', tx=tx.hash_hex)
-            yield self._dfs(deque([tx]))
+            await self._dfs(deque([tx]))
 
         if not self.missing_tips:
             return True
         return False
 
-    @inlineCallbacks
-    def _dfs(self, stack: deque[BaseTransaction]) -> Generator[Deferred, Any, None]:
+    async def _dfs(self, stack: deque[BaseTransaction]) -> None:
         """DFS method."""
         while stack:
             tx = stack[-1]
@@ -111,11 +108,11 @@ class SyncMempoolManager:
             missing_dep = self._next_missing_dep(tx)
             if missing_dep is None:
                 self.log.debug(r'No dependencies missing! \o/')
-                self._add_tx(tx)
+                await self._add_tx(tx)
                 assert tx == stack.pop()
             else:
                 self.log.debug('Iterate in the DFS.', missing_dep=missing_dep.hex())
-                tx_dep = yield self.sync_agent.get_tx(missing_dep)
+                tx_dep = await self.sync_agent.get_tx(missing_dep)
                 stack.append(tx_dep)
                 if len(stack) > self.MAX_STACK_LENGTH:
                     stack.popleft()
@@ -131,8 +128,8 @@ class SyncMempoolManager:
                 return parent
         return None
 
-    def _add_tx(self, tx: BaseTransaction) -> None:
+    async def _add_tx(self, tx: BaseTransaction) -> None:
         """Add tx to the DAG."""
         assert tx.hash is not None
         self.missing_tips.discard(tx.hash)
-        self.manager.on_new_tx(tx)
+        await self.manager.on_new_tx(tx)

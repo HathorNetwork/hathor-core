@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.states.base import CmdCallable
 from hathor.transaction import BaseTransaction
 
 
@@ -36,7 +37,7 @@ class SyncAgent(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, CmdCallable]:
         """Command dict to add to the protocol handler"""
         raise NotImplementedError
 
