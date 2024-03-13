@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Callable, Iterator, NamedTuple, Optional
+from typing import Any, Callable, Iterator, NamedTuple, Optional, ParamSpec, TypeVar
 
 from pydantic import validate_arguments
 from structlog import get_logger
@@ -21,16 +21,18 @@ from hathor.sysctl.exception import SysctlEntryNotFound, SysctlReadOnlyEntry, Sy
 
 Getter = Callable[[], Any]
 Setter = Callable[..., None]
+P = ParamSpec('P')
+T = TypeVar('T')
 
 logger = get_logger()
 
 
-def signal_handler_safe(f):
+def signal_handler_safe(f: Callable[P, T]) -> Callable[P, T]:
     """Decorator to mark methods as signal handler safe.
 
     It should only be used if that method can be executed during a signal handling.
     Notice that a signal handling can pause the code execution at any point and the execution will resume after."""
-    f._signal_handler_safe = True
+    f._signal_handler_safe = True  # type: ignore[attr-defined]
     return f
 
 

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Optional, assert_never
 
 from autobahn.exception import Disconnected
 from autobahn.twisted.websocket import WebSocketServerProtocol
@@ -50,7 +50,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     # Whether the stream is enabled or not.
     _stream_is_active: bool = False
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.log = logger.new()
 
@@ -102,18 +102,11 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
 
     def _handle_request(self, request: Request) -> None:
         """Handles a request message according to its type."""
-        # This could be a pattern match in Python 3.10
-        request_type = type(request)
-        handlers: dict[type, Callable] = {
-            StartStreamRequest: self._handle_start_stream_request,
-            AckRequest: self._handle_ack_request,
-            StopStreamRequest: lambda _: self._handle_stop_stream_request()
-        }
-        handle_fn = handlers.get(request_type)
-
-        assert handle_fn is not None, f'cannot handle request of unknown type "{request_type}"'
-
-        handle_fn(request)
+        match request:
+            case StartStreamRequest(): self._handle_start_stream_request(request)
+            case AckRequest(): self._handle_ack_request(request)
+            case StopStreamRequest(): self._handle_stop_stream_request()
+            case _: assert_never(request)
 
     def _handle_start_stream_request(self, request: StartStreamRequest) -> None:
         """

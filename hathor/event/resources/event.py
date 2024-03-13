@@ -16,6 +16,7 @@ from itertools import islice
 from typing import Optional
 
 from pydantic import Field, NonNegativeInt
+from twisted.web.http import Request
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -35,7 +36,7 @@ class EventResource(Resource):
         super().__init__()
         self.event_manager = event_manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
