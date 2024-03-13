@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from itertools import chain
-from typing import TYPE_CHECKING, Iterable, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from structlog import get_logger
 
@@ -39,7 +39,7 @@ class BlockConsensusAlgorithm:
         self.context = context
 
     @classproperty
-    def log(cls):
+    def log(cls) -> Any:
         """ This is a workaround because of a bug on structlog (or abc).
 
         See: https://github.com/hynek/structlog/issues/229
