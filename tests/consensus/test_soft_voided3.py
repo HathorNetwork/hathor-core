@@ -1,7 +1,11 @@
+from typing import Iterator
+
 from hathor.graphviz import GraphvizVisualizer
-from hathor.simulator import FakeConnection, Simulator
+from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_tx
+from hathor.transaction import Transaction
+from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx, gen_custom_tx
@@ -10,14 +14,19 @@ from tests.utils import add_custom_tx, gen_custom_tx
 class BaseSoftVoidedTestCase(SimulatorTestCase):
     seed_config = 5988775361793628169
 
-    def assertNoParentsAreSoftVoided(self, tx):
+    def assertNoParentsAreSoftVoided(self, tx: Transaction) -> None:
+        assert tx.storage is not None
         for h in tx.parents:
             tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
             tx2_voided_by = tx2_meta.voided_by or set()
             self.assertNotIn(self._settings.SOFT_VOIDED_ID, tx2_voided_by)
 
-    def _run_test(self, simulator, soft_voided_tx_ids):
+    def _run_test(
+        self,
+        simulator: Simulator,
+        soft_voided_tx_ids: set[VertexId]
+    ) -> Iterator[RandomTransactionGenerator]:
         manager1 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
         manager1.allow_mining_without_peers()
 
@@ -109,7 +118,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         # dot = graphviz.dot()
         # dot.render('test_soft_voided3')
 
-    def _get_txA_hash(self):
+    def _get_txA_hash(self) -> VertexId:
         simulator = Simulator(seed=self.simulator.seed)
         simulator.start()
 
@@ -122,7 +131,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         return txA_hash
 
-    def test_soft_voided(self):
+    def test_soft_voided(self) -> None:
         txA_hash = self._get_txA_hash()
         soft_voided_tx_ids = set([
             txA_hash,
