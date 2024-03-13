@@ -22,7 +22,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             tx2_voided_by = tx2_meta.voided_by or set()
             self.assertNotIn(self._settings.SOFT_VOIDED_ID, tx2_voided_by)
 
-    def _run_test(
+    async def _run_test(
         self,
         simulator: Simulator,
         soft_voided_tx_ids: set[VertexId]
@@ -90,7 +90,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         txC.timestamp = max(txC.timestamp, txA.timestamp + 1)
         txC.weight = 25
         txC.update_hash()
-        self.assertTrue(manager2.propagate_tx(txC, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(txC, fails_silently=False))
         metaC = txC.get_metadata()
         self.assertIsNone(metaC.voided_by)
         graphviz.labels[txC.hash] = 'txC'
@@ -100,7 +100,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         blk1.parents[1] = txA.hash
         blk1.nonce = self.rng.getrandbits(32)
         blk1.update_hash()
-        self.assertTrue(manager2.propagate_tx(blk1, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(blk1, fails_silently=False))
         blk1meta = blk1.get_metadata()
         self.assertIsNone(blk1meta.voided_by)
         graphviz.labels[blk1.hash] = 'b1'
@@ -111,7 +111,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             blk2.parents[1] = txD1.hash
         blk2.nonce = self.rng.getrandbits(32)
         blk2.update_hash()
-        self.assertTrue(manager2.propagate_tx(blk2, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(blk2, fails_silently=False))
         blk2meta = blk2.get_metadata()
         self.assertIsNone(blk2meta.voided_by)
         graphviz.labels[blk2.hash] = 'b2'
@@ -121,7 +121,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         blk3.parents[1] = txD2.hash
         blk3.nonce = self.rng.getrandbits(32)
         blk3.update_hash()
-        self.assertTrue(manager2.propagate_tx(blk3, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(blk3, fails_silently=False))
         blk3meta = blk3.get_metadata()
         self.assertIsNone(blk3meta.voided_by)
         graphviz.labels[blk3.hash] = 'b3'
@@ -149,12 +149,12 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         return txA_hash
 
-    def test_soft_voided(self) -> None:
+    async def test_soft_voided(self) -> None:
         txA_hash = self._get_txA_hash()
         soft_voided_tx_ids = set([
             txA_hash,
         ])
-        for _ in self._run_test(self.simulator, soft_voided_tx_ids):
+        for _ in await self._run_test(self.simulator, soft_voided_tx_ids):
             pass
 
 

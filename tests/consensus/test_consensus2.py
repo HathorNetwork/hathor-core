@@ -55,7 +55,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         return txH
 
-    def test_two_conflicts_intertwined_once(self) -> None:
+    async def test_two_conflicts_intertwined_once(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -81,7 +81,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()
-        manager1.propagate_tx(initial, fails_silently=False)
+        await manager1.propagate_tx(initial, fails_silently=False)
         self.graphviz.labels[initial.hash] = 'initial'
 
         x = initial
@@ -91,7 +91,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         # dot = self.graphviz.dot()
         # dot.render('dot0')
 
-    def test_two_conflicts_intertwined_multiple_times(self) -> None:
+    async def test_two_conflicts_intertwined_multiple_times(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -100,7 +100,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(60)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.simulator.run(300)
         gen_tx1.stop()
 
@@ -117,7 +117,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()
-        manager1.propagate_tx(initial, fails_silently=False)
+        await manager1.propagate_tx(initial, fails_silently=False)
         self.graphviz.labels[not_none(initial.hash)] = 'initial'
 
         x = initial

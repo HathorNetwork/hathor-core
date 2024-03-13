@@ -66,26 +66,26 @@ class RandomTransactionGenerator:
 
         self.double_spending_only = False
 
-    def start(self):
+    async def start(self):
         """ Start generating random transactions.
         """
-        self.schedule_next_transaction()
+        await self.schedule_next_transaction()
 
     def stop(self):
         """ Stop generating random transactions.
         """
-        if self.delayedcall:
+        if self.delayedcall and self.delayedcall.active():
             self.delayedcall.cancel()
             self.delayedcall = None
 
     def enable_double_spending(self):
         self.double_spending_only = True
 
-    def schedule_next_transaction(self):
+    async def schedule_next_transaction(self):
         """ Schedule the generation of a new transaction.
         """
         if self.tx:
-            ret = self.manager.propagate_tx(self.tx, fails_silently=False)
+            ret = await self.manager.propagate_tx(self.tx, fails_silently=False)
             assert ret is True
             self.transactions_found += 1
             self.latest_transactions.appendleft(self.tx.hash)

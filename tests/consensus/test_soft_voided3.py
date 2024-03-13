@@ -131,7 +131,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         return txA_hash
 
-    def test_soft_voided(self) -> None:
+    async def test_soft_voided(self) -> None:
         txA_hash = self._get_txA_hash()
         soft_voided_tx_ids = set([
             txA_hash,
