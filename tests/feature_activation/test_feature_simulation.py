@@ -26,6 +26,7 @@ from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.simulator import FakeConnection
 from hathor.transaction.exceptions import BlockMustSignalError
+from hathor.util import not_none
 from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
@@ -615,7 +616,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             calculate_new_state_mock.reset_mock()
 
         manager1.stop()
-        artifacts1.rocksdb_storage.close()
+        not_none(artifacts1.rocksdb_storage).close()
 
         # new builder is created with the same storage from the previous manager
         builder2 = self.get_simulator_builder_from_dir(rocksdb_dir).set_settings(settings)
