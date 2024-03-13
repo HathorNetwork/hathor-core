@@ -360,7 +360,7 @@ class Transaction(BaseTransaction):
             tx = self.storage.get_transaction(tx_in.tx_id)
             meta = tx.get_metadata()
             spent_by = meta.get_output_spent_by(tx_in.index)
-            if spent_by and spent_by != self.hash:
+            if spent_by and spent_by != self._hash:
                 return True
         return False
 

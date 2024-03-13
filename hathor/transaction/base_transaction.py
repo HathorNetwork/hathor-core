@@ -168,7 +168,7 @@ class BaseTransaction(ABC):
         self.outputs = outputs or []
         self.parents = parents or []
         self.storage = storage
-        self.hash = hash  # Stored as bytes.
+        self._hash: VertexId | None = hash  # Stored as bytes.
 
     @classproperty
     def log(cls):
@@ -253,7 +253,7 @@ class BaseTransaction(ABC):
         """
         if not isinstance(other, BaseTransaction):
             return NotImplemented
-        if self.hash and other.hash:
+        if self._hash and other._hash:
             return self.hash == other.hash
         return False
 
@@ -265,7 +265,6 @@ class BaseTransaction(ABC):
         return self.get_struct()
 
     def __hash__(self) -> int:
-        assert self.hash is not None
         return hash(self.hash)
 
     @abstractmethod
@@ -277,9 +276,18 @@ class BaseTransaction(ABC):
         raise NotImplementedError
 
     @property
+    def hash(self) -> VertexId:
+        assert self._hash is not None, 'Vertex hash must be initialized.'
+        return self._hash
+
+    @hash.setter
+    def hash(self, value: VertexId) -> None:
+        self._hash = value
+
+    @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
-        if self.hash is not None:
+        if self._hash is not None:
             return self.hash.hex()
         else:
             return ''
@@ -332,7 +340,7 @@ class BaseTransaction(ABC):
 
         :rtype: bool
         """
-        if self.hash is None:
+        if self._hash is None:
             return False
         from hathor.transaction.genesis import is_genesis
         return is_genesis(self.hash, settings=self._settings)
@@ -451,7 +459,7 @@ class BaseTransaction(ABC):
         """ Check if this transaction is ready to be fully validated, either all deps are full-valid or one is invalid.
         """
         assert self.storage is not None
-        assert self.hash is not None
+        assert self._hash is not None
         if self.is_genesis:
             return True
         deps = self.get_all_dependencies()
@@ -608,7 +616,6 @@ class BaseTransaction(ABC):
         else:
             metadata = getattr(self, '_metadata', None)
         if not metadata and use_storage and self.storage:
-            assert self.hash is not None
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
@@ -619,7 +626,7 @@ class BaseTransaction(ABC):
             score = self.weight if self.is_genesis else 0
 
             metadata = TransactionMetadata(
-                hash=self.hash,
+                hash=self._hash,
                 accumulated_weight=self.weight,
                 height=height,
                 score=score,
@@ -627,7 +634,7 @@ class BaseTransaction(ABC):
             )
             self._metadata = metadata
         if not metadata.hash:
-            metadata.hash = self.hash
+            metadata.hash = self._hash
         metadata._tx_ref = weakref.ref(self)
         return metadata
 
@@ -638,7 +645,7 @@ class BaseTransaction(ABC):
         from hathor.transaction.transaction_metadata import ValidationState
         assert self.storage is not None
         score = self.weight if self.is_genesis else 0
-        self._metadata = TransactionMetadata(hash=self.hash,
+        self._metadata = TransactionMetadata(hash=self._hash,
                                              score=score,
                                              accumulated_weight=self.weight)
         if self.is_genesis:
@@ -724,7 +731,7 @@ class BaseTransaction(ABC):
 
     def _update_parents_children_metadata(self) -> None:
         """Update the txs/block parent's children metadata."""
-        assert self.hash is not None
+        assert self._hash is not None
         assert self.storage is not None
 
         for parent in self.get_parents(existing_only=True):
@@ -792,7 +799,6 @@ class BaseTransaction(ABC):
         return data
 
     def to_json_extended(self) -> dict[str, Any]:
-        assert self.hash is not None
         assert self.storage is not None
 
         def serialize_output(tx: BaseTransaction, tx_out: TxOutput) -> dict[str, Any]:
@@ -824,7 +830,6 @@ class BaseTransaction(ABC):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
             tx2_out = tx2.outputs[tx_in.index]
             output = serialize_output(tx2, tx2_out)
-            assert tx2.hash is not None
             output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index
             ret['inputs'].append(output)
