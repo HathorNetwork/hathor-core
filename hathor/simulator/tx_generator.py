@@ -20,12 +20,12 @@ from structlog import get_logger
 from hathor.conf.get_settings import get_global_settings
 from hathor.simulator.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 from hathor.transaction.exceptions import RewardLocked
+from hathor.types import VertexId
 from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
-    from hathor.transaction import Transaction
 
 logger = get_logger()
 
@@ -62,7 +62,7 @@ class RandomTransactionGenerator:
         # Most recent transactions generated here.
         # The lowest index has the most recent transaction.
         self.transactions_found: int = 0
-        self.latest_transactions: deque[Transaction] = deque()
+        self.latest_transactions: deque[VertexId] = deque()
 
         self.double_spending_only = False
 

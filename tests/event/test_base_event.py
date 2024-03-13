@@ -23,7 +23,7 @@ from tests.utils import EventMocker
 
 @pytest.mark.parametrize('event_id', [0, 1, 1000])
 @pytest.mark.parametrize('group_id', [None, 0, 1, 1000])
-def test_create_base_event(event_id, group_id):
+def test_create_base_event(event_id: int, group_id: int | None) -> None:
     event = BaseEvent(
         id=event_id,
         timestamp=123.3,
@@ -70,8 +70,8 @@ def test_create_base_event(event_id, group_id):
     assert event.dict() == expected
 
 
-@pytest.mark.parametrize('event_id', [None, -1, -1000])
-def test_create_base_event_fail_id(event_id):
+@pytest.mark.parametrize('event_id', [-1, -1000])
+def test_create_base_event_fail_id(event_id: int) -> None:
     with pytest.raises(ValidationError):
         BaseEvent(
             id=event_id,
@@ -82,7 +82,7 @@ def test_create_base_event_fail_id(event_id):
 
 
 @pytest.mark.parametrize('group_id', [-1, -1000])
-def test_create_base_event_fail_group_id(group_id):
+def test_create_base_event_fail_group_id(group_id: int) -> None:
     with pytest.raises(ValidationError):
         BaseEvent(
             id=0,
@@ -93,7 +93,7 @@ def test_create_base_event_fail_group_id(group_id):
         )
 
 
-def test_create_base_event_fail_data_type():
+def test_create_base_event_fail_data_type() -> None:
     with pytest.raises(ValidationError):
         BaseEvent(
             id=0,

@@ -1,13 +1,14 @@
 from hathor.event.model.event_type import EventType
 from hathor.event.storage.memory_storage import EventMemoryStorage
 from hathor.pubsub import HathorEvents
+from hathor.util import not_none
 from tests import unittest
 
 
 class BaseEventManagerTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
         self.event_storage = EventMemoryStorage()
@@ -18,37 +19,37 @@ class BaseEventManagerTest(unittest.TestCase):
             event_storage=self.event_storage
         )
 
-    def test_if_event_is_persisted(self):
+    def test_if_event_is_persisted(self) -> None:
         block = self.manager.tx_storage.get_best_block()
         self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=block)
         self.run_to_completion()
         self.assertIsNotNone(self.event_storage.get_event(0))
 
-    def _fake_reorg_started(self):
+    def _fake_reorg_started(self) -> None:
         block = self.manager.tx_storage.get_best_block()
         # XXX: since we're faking these events, they don't neet to be consistent
         self.manager.pubsub.publish(HathorEvents.REORG_STARTED, old_best_height=1, old_best_block=block,
                                     new_best_height=1, new_best_block=block, reorg_size=1, common_block=block)
 
-    def _fake_reorg_finished(self):
+    def _fake_reorg_finished(self) -> None:
         self.manager.pubsub.publish(HathorEvents.REORG_FINISHED)
 
-    def test_event_group(self):
+    def test_event_group(self) -> None:
         self._fake_reorg_started()
         self._fake_reorg_finished()
         self._fake_reorg_started()
         self._fake_reorg_finished()
         self.run_to_completion()
 
-        event0 = self.event_storage.get_event(0)
-        event1 = self.event_storage.get_event(1)
-        event2 = self.event_storage.get_event(2)
-        event3 = self.event_storage.get_event(3)
-        event4 = self.event_storage.get_event(4)
-        event5 = self.event_storage.get_event(5)
-        event6 = self.event_storage.get_event(6)
-        event7 = self.event_storage.get_event(7)
-        event8 = self.event_storage.get_event(8)
+        event0 = not_none(self.event_storage.get_event(0))
+        event1 = not_none(self.event_storage.get_event(1))
+        event2 = not_none(self.event_storage.get_event(2))
+        event3 = not_none(self.event_storage.get_event(3))
+        event4 = not_none(self.event_storage.get_event(4))
+        event5 = not_none(self.event_storage.get_event(5))
+        event6 = not_none(self.event_storage.get_event(6))
+        event7 = not_none(self.event_storage.get_event(7))
+        event8 = not_none(self.event_storage.get_event(8))
 
         self.assertEqual(EventType(event0.type), EventType.LOAD_STARTED)
         self.assertEqual(EventType(event1.type), EventType.NEW_VERTEX_ACCEPTED)
@@ -66,19 +67,19 @@ class BaseEventManagerTest(unittest.TestCase):
         self.assertIsNotNone(event7.group_id)
         self.assertEqual(event7.group_id, event8.group_id)
 
-    def test_cannot_start_group_twice(self):
+    def test_cannot_start_group_twice(self) -> None:
         self._fake_reorg_started()
         self.run_to_completion()
         with self.assertRaises(AssertionError):
             self._fake_reorg_started()
             self.run_to_completion()
 
-    def test_cannot_finish_group_that_was_not_started(self):
+    def test_cannot_finish_group_that_was_not_started(self) -> None:
         with self.assertRaises(AssertionError):
             self._fake_reorg_finished()
             self.run_to_completion()
 
-    def test_cannot_finish_group_twice(self):
+    def test_cannot_finish_group_twice(self) -> None:
         self._fake_reorg_started()
         self._fake_reorg_finished()
         self.run_to_completion()

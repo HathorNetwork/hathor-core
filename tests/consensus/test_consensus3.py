@@ -6,14 +6,14 @@ from tests.utils import add_blocks_unlock_reward
 
 
 class DoubleSpendingTestCase(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         self.network = 'testnet'
         self.manager1 = self.create_peer(self.network, unlock_wallet=True, enable_sync_v1=True, enable_sync_v2=False)
 
     @pytest.mark.xfail(strict=True)
-    def test_double_spending_attempt_1(self):
+    def test_double_spending_attempt_1(self) -> None:
         manager = self.manager1
 
         add_new_blocks(manager, 5, advance_clock=15)
@@ -38,7 +38,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         manager.cpu_mining_service.resolve(tx_fund0)
         self.assertTrue(manager.propagate_tx(tx_fund0))
 
-        def do_step(tx_fund):
+        def do_step(tx_fund: Transaction) -> Transaction:
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
             outputs = [WalletOutputInfo(decode_address(addr), 1, None)]
             tx1 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)
@@ -105,7 +105,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         self.assertConsensusValid(manager)
 
     @pytest.mark.xfail(strict=True)
-    def test_double_spending_attempt_2(self):
+    def test_double_spending_attempt_2(self) -> None:
         manager = self.manager1
 
         add_new_blocks(manager, 5, advance_clock=15)
@@ -128,7 +128,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         manager.cpu_mining_service.resolve(tx_fund0)
         self.assertTrue(manager.propagate_tx(tx_fund0))
 
-        def do_step(tx_fund):
+        def do_step(tx_fund: Transaction) -> Transaction:
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
             outputs = [WalletOutputInfo(decode_address(addr), 1, None)]
             tx1 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)

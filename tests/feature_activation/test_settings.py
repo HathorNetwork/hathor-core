@@ -56,9 +56,9 @@ from hathor.feature_activation.settings import FeatureInterval, Settings as Feat
         )
     ]
 )
-def test_valid_settings(features):
+def test_valid_settings(features: dict) -> None:
     data = dict(features=features)
-    FeatureSettings(**data)
+    FeatureSettings(**data)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -114,10 +114,10 @@ def test_valid_settings(features):
         )
     ]
 )
-def test_conflicting_bits(features):
+def test_conflicting_bits(features: list[dict]) -> None:
     with pytest.raises(ValidationError) as e:
         data = dict(features=features)
-        FeatureSettings(**data)
+        FeatureSettings(**data)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == 'At least one pair of Features have the same bit configured for an overlapping ' \
@@ -131,10 +131,10 @@ def test_conflicting_bits(features):
         (100, 101, 'default_threshold must not be greater than evaluation_interval: 101 > 100')
     ]
 )
-def test_default_threshold(evaluation_interval, default_threshold, error):
+def test_default_threshold(evaluation_interval: int, default_threshold: int, error: str) -> None:
     with pytest.raises(ValidationError) as e:
         data = dict(evaluation_interval=evaluation_interval, default_threshold=default_threshold)
-        FeatureSettings(**data)
+        FeatureSettings(**data)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
@@ -160,5 +160,5 @@ def test_default_threshold(evaluation_interval, default_threshold, error):
         )
     ]
 )
-def test_find_overlap(intervals, expected):
+def test_find_overlap(intervals: list[FeatureInterval], expected: tuple[FeatureInterval, FeatureInterval]) -> None:
     assert expected == _find_overlap(intervals)
