@@ -20,7 +20,6 @@ from structlog import get_logger
 
 from hathor.indexes.tx_group_index import TxGroupIndex
 from hathor.transaction import BaseTransaction
-from hathor.util import not_none
 
 logger = get_logger()
 
@@ -40,7 +39,7 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
         self.index = defaultdict(set)
 
     def _add_tx(self, key: KT, tx: BaseTransaction) -> None:
-        self.index[key].add((tx.timestamp, not_none(tx.hash)))
+        self.index[key].add((tx.timestamp, tx.hash))
 
     @abstractmethod
     def _extract_keys(self, tx: BaseTransaction) -> Iterable[KT]:
@@ -48,13 +47,11 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
         raise NotImplementedError
 
     def add_tx(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
 
         for key in self._extract_keys(tx):
             self._add_tx(key, tx)
 
     def remove_tx(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
 
         for key in self._extract_keys(tx):
             self.index[key].discard((tx.timestamp, tx.hash))

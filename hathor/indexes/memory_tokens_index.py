@@ -80,7 +80,6 @@ class MemoryTokensIndex(TokensIndex):
     def _add_to_index(self, tx: BaseTransaction, index: int) -> None:
         """ Add tx to mint/melt indexes and total amount
         """
-        assert tx.hash is not None
 
         tx_output = tx.outputs[index]
         token_uid = tx.get_token_uid(tx_output.get_token_index())
@@ -98,7 +97,6 @@ class MemoryTokensIndex(TokensIndex):
     def _remove_from_index(self, tx: BaseTransaction, index: int) -> None:
         """ Remove tx from mint/melt indexes and total amount
         """
-        assert tx.hash is not None
 
         tx_output = tx.outputs[index]
         token_uid = tx.get_token_uid(tx_output.get_token_index())
@@ -125,7 +123,6 @@ class MemoryTokensIndex(TokensIndex):
         if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
             from hathor.transaction.token_creation_tx import TokenCreationTransaction
             tx = cast(TokenCreationTransaction, tx)
-            assert tx.hash is not None
             status = self._tokens[tx.hash]
             status._name = tx.token_name
             status._symbol = tx.token_symbol
@@ -137,7 +134,6 @@ class MemoryTokensIndex(TokensIndex):
                 transactions = self._tokens[token_uid]._transactions
                 # It is safe to use the in operator because it is O(log(n)).
                 # http://www.grantjenks.com/docs/sortedcontainers/sortedlist.html#sortedcontainers.SortedList.__contains__
-                assert tx.hash is not None
                 element = TransactionIndexElement(tx.timestamp, tx.hash)
                 if element in transactions:
                     return
@@ -162,7 +158,6 @@ class MemoryTokensIndex(TokensIndex):
 
         # if it's a TokenCreationTransaction, remove it from index
         if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
-            assert tx.hash is not None
             del self._tokens[tx.hash]
 
     def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:

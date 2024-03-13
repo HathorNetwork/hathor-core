@@ -85,7 +85,6 @@ class DbExport(RunNode):
         soft_voided_ids = set(settings.SOFT_VOIDED_TX_IDS)
 
         for tx in self._iter_tx:
-            assert tx.hash is not None
             # XXX: if we're skipping voided transactions, we have to be careful not to skip soft-voided ones
             if self.skip_voided:
                 voided_by = tx.get_metadata().voided_by or set()
@@ -110,7 +109,6 @@ class DbExport(RunNode):
         # nothing, and it's probably better to finish sooner than expected, rather than later than expected
         total = self.tx_storage.get_vertices_count()
         for tx in tx_progress(self.iter_tx(), log=self.log, total=total):
-            assert tx.hash is not None
             tx_meta = tx.get_metadata()
             if tx.is_block:
                 assert isinstance(tx, Block)

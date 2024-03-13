@@ -477,7 +477,6 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
         if dt_next > _DT_ITER_NEXT_WARN:
             log.warn('iterator was slow to yield', took_sec=dt_next)
 
-        assert tx.hash is not None
         # XXX: this is only informative and made to work with either partially/fully validated blocks/transactions
         meta = tx.get_metadata()
         if meta.height:
