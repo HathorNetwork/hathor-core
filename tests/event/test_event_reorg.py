@@ -1,6 +1,3 @@
-from typing import Iterator
-
-from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from hathor.simulator.utils import add_new_blocks

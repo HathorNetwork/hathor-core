@@ -4,6 +4,7 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_double_spending
+from hathor.transaction import Transaction
 from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -31,7 +32,6 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         gen_tx1.stop()
 
         manager2 = self.create_peer(soft_voided_tx_ids=set(soft_voided_tx_ids), simulator=simulator)
-        manager2.soft_voided_tx_ids = set(soft_voided_tx_ids)
 
         self.graphviz = GraphvizVisualizer(manager2.tx_storage, include_verifications=True, include_funds=True)
 
@@ -69,9 +69,11 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         self.graphviz.labels[txB_hash] = 'txB'
 
         txB = manager2.tx_storage.get_transaction(txB_hash)
+        assert isinstance(txB, Transaction)
 
         # Get the tx confirmed by the soft voided that will be voided
         tx_base = manager2.tx_storage.get_transaction(txB.parents[0])
+        assert isinstance(tx_base, Transaction)
         txC = gen_new_double_spending(manager2, use_same_parents=False, tx=tx_base)
         self.graphviz.labels[tx_base.hash] = 'tx_base'
         txC.weight = 30

@@ -44,6 +44,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
     def test_only_load(self) -> None:
         stream_id = self.manager._event_manager._stream_id
+        assert stream_id is not None
         Scenario.ONLY_LOAD.simulate(self.simulator, self.manager)
         self._start_stream()
 
@@ -66,6 +67,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
     def test_single_chain_one_block(self) -> None:
         stream_id = self.manager._event_manager._stream_id
+        assert stream_id is not None
         Scenario.SINGLE_CHAIN_ONE_BLOCK.simulate(self.simulator, self.manager)
         self._start_stream()
 
@@ -94,6 +96,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
     def test_single_chain_blocks_and_transactions(self) -> None:
         stream_id = self.manager._event_manager._stream_id
+        assert stream_id is not None
         Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS.simulate(self.simulator, self.manager)
         self._start_stream()
 
@@ -159,6 +162,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
     def test_reorg(self) -> None:
         stream_id = self.manager._event_manager._stream_id
+        assert stream_id is not None
         Scenario.REORG.simulate(self.simulator, self.manager)
         self._start_stream()
 
@@ -207,6 +211,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
     def test_unvoided_transaction(self) -> None:
         stream_id = self.manager._event_manager._stream_id
+        assert stream_id is not None
         Scenario.UNVOIDED_TRANSACTION.simulate(self.simulator, self.manager)
         self._start_stream()
 

@@ -1,4 +1,4 @@
-from hathor.pubsub import HathorEvents, PubSubManager, EventArguments
+from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from tests.unittest import TestCase
 
 

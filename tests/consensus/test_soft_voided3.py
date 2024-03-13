@@ -4,7 +4,7 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_tx
-from hathor.transaction import Transaction
+from hathor.transaction import BaseTransaction
 from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -14,7 +14,7 @@ from tests.utils import add_custom_tx, gen_custom_tx
 class BaseSoftVoidedTestCase(SimulatorTestCase):
     seed_config = 5988775361793628169
 
-    def assertNoParentsAreSoftVoided(self, tx: Transaction) -> None:
+    def assertNoParentsAreSoftVoided(self, tx: BaseTransaction) -> None:
         assert tx.storage is not None
         for h in tx.parents:
             tx2 = tx.storage.get_transaction(h)
@@ -39,7 +39,6 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         simulator.run(300)
 
         manager2 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
-        manager2.soft_voided_tx_ids = soft_voided_tx_ids
 
         graphviz = GraphvizVisualizer(manager2.tx_storage, include_verifications=True, include_funds=True)
 
@@ -92,6 +91,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         graphviz.labels[blk1.hash] = 'blk1'
 
         simulator.run(10)
+        assert manager2.wallet is not None
         address = manager2.wallet.get_unused_address(mark_as_used=True)
         txC = gen_new_tx(manager2, address, 6400)
         if txD1.hash not in txC.parents:

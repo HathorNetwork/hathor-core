@@ -47,6 +47,7 @@ class BaseEventSimulationTester(SimulatorTestCase):
         self.settings = artifacts.settings
 
         event_ws_factory = self.manager._event_manager._event_ws_factory
+        assert event_ws_factory is not None
         event_ws_factory.openHandshakeTimeout = 0
 
         self.protocol = event_ws_factory.buildProtocol(addr=Mock())
