@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -43,7 +45,7 @@ VALID_CRITERIA = dict(
         )
     ]
 )
-def test_valid_criteria(criteria):
+def test_valid_criteria(criteria: dict[str, Any]) -> None:
     Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)
 
 
@@ -56,10 +58,10 @@ def test_valid_criteria(criteria):
         (10, 'bit must be lower than max_signal_bits: 10 >= 2')
     ]
 )
-def test_bit(bit, error):
+def test_bit(bit: int, error: str) -> None:
     criteria = VALID_CRITERIA | dict(bit=bit)
     with pytest.raises(ValidationError) as e:
-        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)
+        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
@@ -75,10 +77,10 @@ def test_bit(bit, error):
         (100, 'Should be a multiple of evaluation_interval: 100 % 1000 != 0')
     ]
 )
-def test_start_height(start_height, error):
+def test_start_height(start_height: int, error: str) -> None:
     criteria = VALID_CRITERIA | dict(start_height=start_height)
     with pytest.raises(ValidationError) as e:
-        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)
+        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
@@ -95,10 +97,10 @@ def test_start_height(start_height, error):
         (3111, 'Should be a multiple of evaluation_interval: 3111 % 1000 != 0')
     ]
 )
-def test_timeout_height(timeout_height, error):
+def test_timeout_height(timeout_height: int, error: str) -> None:
     criteria = VALID_CRITERIA | dict(timeout_height=timeout_height)
     with pytest.raises(ValidationError) as e:
-        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)
+        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
@@ -113,10 +115,10 @@ def test_timeout_height(timeout_height, error):
         (100000, 'threshold must not be greater than evaluation_interval: 100000 > 1000')
     ]
 )
-def test_threshold(threshold, error):
+def test_threshold(threshold: int, error: str) -> None:
     criteria = VALID_CRITERIA | dict(threshold=threshold)
     with pytest.raises(ValidationError) as e:
-        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)
+        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
@@ -132,10 +134,10 @@ def test_threshold(threshold, error):
         (100, 'Should be a multiple of evaluation_interval: 100 % 1000 != 0'),
     ]
 )
-def test_minimum_activation_height(minimum_activation_height, error):
+def test_minimum_activation_height(minimum_activation_height: int, error: str) -> None:
     criteria = VALID_CRITERIA | dict(minimum_activation_height=minimum_activation_height)
     with pytest.raises(ValidationError) as e:
-        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)
+        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
@@ -149,10 +151,10 @@ def test_minimum_activation_height(minimum_activation_height, error):
         ('0.0', 'string does not match regex "^(\\d+\\.\\d+\\.\\d+(-rc\\.\\d+)?|nightly-[a-f0-9]{7,8})$"')
     ]
 )
-def test_version(version, error):
+def test_version(version: str, error: str) -> None:
     criteria = VALID_CRITERIA | dict(version=version)
     with pytest.raises(ValidationError) as e:
-        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)
+        Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error

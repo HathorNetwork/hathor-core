@@ -13,22 +13,25 @@ from hathor.crypto.util import (
 
 
 class CryptoUtilTestCase(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.private_key = ec.generate_private_key(ec.SECP256K1(), default_backend())
         self.public_key = self.private_key.public_key()
 
-    def test_privkey_serialization(self):
+    def test_privkey_serialization(self) -> None:
+        assert False
         private_key_bytes = get_private_key_bytes(self.private_key)
         self.assertEqual(self.private_key.private_numbers(),
                          get_private_key_from_bytes(private_key_bytes).private_numbers())
 
-    def test_address(self):
+    def test_address(self) -> None:
+        assert False
         address = get_address_from_public_key(self.public_key)
         address_b58 = get_address_b58_from_public_key(self.public_key)
         self.assertEqual(address, decode_address(address_b58))
 
-    def test_invalid_address(self):
+    def test_invalid_address(self) -> None:
+        assert False
         from hathor.wallet.exceptions import InvalidAddress
         address_b58 = get_address_b58_from_public_key(self.public_key)
         address_b58 += '0'      # 0 is invalid in base58

@@ -1,7 +1,10 @@
+from typing import Iterator
+
 from hathor.graphviz import GraphvizVisualizer
-from hathor.simulator import FakeConnection, Simulator
+from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_double_spending
+from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx
@@ -10,7 +13,11 @@ from tests.utils import add_custom_tx
 class BaseSoftVoidedTestCase(SimulatorTestCase):
     seed_config = 5988775361793628169
 
-    def _run_test(self, simulator, soft_voided_tx_ids):
+    def _run_test(
+        self,
+        simulator: Simulator,
+        soft_voided_tx_ids: set[VertexId] | list[VertexId]
+    ) -> Iterator[RandomTransactionGenerator]:
         manager1 = self.create_peer(soft_voided_tx_ids=set(soft_voided_tx_ids), simulator=simulator)
         manager1.allow_mining_without_peers()
 
@@ -54,6 +61,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         gen_tx2.stop()
 
+        assert isinstance(soft_voided_tx_ids, list)
         self.assertEqual(2, len(soft_voided_tx_ids))
         txA_hash = soft_voided_tx_ids[0]
         txB_hash = soft_voided_tx_ids[1]
@@ -125,7 +133,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         metaD = txD.get_metadata()
         self.assertEqual(metaD.voided_by, {tx_base.hash})
 
-    def _get_txA_hash(self):
+    def _get_txA_hash(self) -> VertexId:
         simulator = Simulator(seed=self.simulator.seed)
         simulator.start()
 
@@ -138,7 +146,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         return txA_hash
 
-    def _get_txB_hash(self, txA_hash):
+    def _get_txB_hash(self, txA_hash: VertexId) -> VertexId:
         simulator = Simulator(seed=self.simulator.seed)
         simulator.start()
 
@@ -153,7 +161,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         return txB_hash
 
-    def test_soft_voided(self):
+    def test_soft_voided(self) -> None:
         txA_hash = self._get_txA_hash()
         txB_hash = self._get_txB_hash(txA_hash)
         self.assertNotEqual(txA_hash, txB_hash)

@@ -258,7 +258,7 @@ def test_non_signaling_features_warning(
     tx_storage = Mock(spec_set=TransactionStorage)
     tx_storage.get_best_block = lambda: best_block
 
-    def get_bits_description_mock(block):
+    def get_bits_description_mock(block: Block) -> dict[Feature, FeatureDescription]:
         if block == best_block:
             return {}
         raise NotImplementedError
