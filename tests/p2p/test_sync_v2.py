@@ -16,6 +16,7 @@ from hathor.simulator.trigger import (
     StopWhenTrue,
     Trigger,
 )
+from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.transaction.storage.traversal import DFSWalk
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
@@ -89,6 +90,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         conn12.disconnect(Failure(Exception('testing')))
         self.simulator.remove_connection(conn12)
         manager2.stop()
+        assert isinstance(manager2.tx_storage, TransactionRocksDBStorage)
         manager2.tx_storage._rocksdb_storage.close()
         del manager2
 
