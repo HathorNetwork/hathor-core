@@ -13,10 +13,10 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Any, Generator, Optional
+from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred, inlineCallbacks
+from twisted.internet.defer import Deferred
 
 from hathor.transaction import BaseTransaction
 

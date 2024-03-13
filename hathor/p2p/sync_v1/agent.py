@@ -15,7 +15,7 @@
 import base64
 import struct
 from math import inf
-from typing import TYPE_CHECKING, Any, Callable, Generator, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional
 from weakref import WeakSet
 
 from structlog import get_logger

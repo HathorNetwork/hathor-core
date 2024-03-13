@@ -32,10 +32,11 @@ class BaseSignatureTest(unittest.TestCase):
         super().tearDown()
         shutil.rmtree(self.tmpdir)
 
-    def test_generate_signature(self):
-        add_new_blocks(self.manager, 1, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
+    async def test_generate_signature(self) -> None:
+        await add_new_blocks(self.manager, 1, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        txs = await add_new_transactions(self.manager, 1, advance_clock=1)
+        tx = txs[0]
 
         address = self.wallet.get_unused_address()
         keypair = self.wallet.keys[address]

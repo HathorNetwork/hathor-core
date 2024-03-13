@@ -22,19 +22,20 @@ from tests.utils import (
 class BaseTwinTxTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
 
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
-        add_new_blocks(self.manager, 1, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        self.tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
+        await add_new_blocks(self.manager, 1, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        txs = await add_new_transactions(self.manager, 1, advance_clock=1)
+        self.tx = txs[0]
 
         self.parser = create_parser()
 
-    def test_twin(self):
+    async def test_twin(self):
         # Normal twin
         params = ['--raw_tx', self.tx.get_struct().hex()]
         args = self.parser.parse_args(params)
@@ -61,7 +62,7 @@ class BaseTwinTxTest(unittest.TestCase):
         new_meta = TransactionMetadata.create_from_json(meta_before_conflict_json)
         self.assertEqual(meta_before_conflict, new_meta)
 
-        self.manager.propagate_tx(twin_tx)
+        await self.manager.propagate_tx(twin_tx)
 
         # Validate they are twins
         meta = self.tx.get_metadata(force_reload=True)

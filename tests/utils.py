@@ -51,13 +51,13 @@ def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningServ
     return block.get_struct()
 
 
-def add_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+async def add_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
+                        base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
+                        resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
     """Add a custom tx based on the gen_custom_tx(...) method."""
     tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight,
                        resolve=resolve, address=address, inc_timestamp=inc_timestamp)
-    manager.propagate_tx(tx, fails_silently=False)
+    await manager.propagate_tx(tx, fails_silently=False)
     return tx
 
 
@@ -128,14 +128,14 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     return tx2
 
 
-def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
-                            tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
+async def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
+                                  tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
     tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
-    manager.propagate_tx(tx, fails_silently=False)
+    await manager.propagate_tx(tx, fails_silently=False)
     return tx
 
 
-def add_new_tx(
+async def add_new_tx(
     manager: HathorManager,
     address: str,
     value: int,
@@ -158,13 +158,13 @@ def add_new_tx(
     """
     tx = gen_new_tx(manager, address, value)
     if propagate:
-        manager.propagate_tx(tx, fails_silently=False)
+        await manager.propagate_tx(tx, fails_silently=False)
     if advance_clock:
         manager.reactor.advance(advance_clock)  # type: ignore[attr-defined]
     return tx
 
 
-def add_new_transactions(
+async def add_new_transactions(
     manager: HathorManager,
     num_txs: int,
     advance_clock: int | None = None,
@@ -185,17 +185,17 @@ def add_new_transactions(
     for _ in range(num_txs):
         address = 'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro'
         value = manager.rng.choice([5, 10, 15, 20])
-        tx = add_new_tx(manager, address, value, advance_clock, propagate)
+        tx = await add_new_tx(manager, address, value, advance_clock, propagate)
         txs.append(tx)
     return txs
 
 
-def add_blocks_unlock_reward(manager: HathorManager) -> list[Block]:
+async def add_blocks_unlock_reward(manager: HathorManager) -> list[Block]:
     """This method adds new blocks to a 'burn address' to make sure the existing
     block rewards can be spent. It uses a 'burn address' so the manager's wallet
     is not impacted.
     """
-    return add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1, address=BURN_ADDRESS)
+    return await add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1, address=BURN_ADDRESS)
 
 
 def run_server(
@@ -365,9 +365,9 @@ GENESIS_PUBLIC_KEY = GENESIS_PRIVATE_KEY.public_key()
 GENESIS_ADDRESS_B58 = get_address_b58_from_public_key(GENESIS_PUBLIC_KEY)
 
 
-def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
-                  token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True,
-                  use_genesis: bool = True, nft_data: Optional[str] = None) -> TokenCreationTransaction:
+async def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
+                        token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True,
+                        use_genesis: bool = True, nft_data: Optional[str] = None) -> TokenCreationTransaction:
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
     1. mint authority;
@@ -425,7 +425,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         total_reward = 0
         deposit_input = []
         while total_reward < deposit_amount:
-            block = add_new_block(manager, advance_clock=1, address=address)
+            block = await add_new_block(manager, advance_clock=1, address=address)
             deposit_input.append(TxInput(not_none(block.hash), 0, b''))
             total_reward += block.outputs[0].value
 
@@ -476,7 +476,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     manager.cpu_mining_service.resolve(tx)
     if propagate:
         manager.verification_service.verify(tx)
-        manager.propagate_tx(tx, fails_silently=False)
+        await manager.propagate_tx(tx, fails_silently=False)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
     return tx
@@ -497,7 +497,7 @@ def create_script_with_sigops(nops: int) -> bytes:
     return hscript.data
 
 
-def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate: bool = True) -> Transaction:
+async def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate: bool = True) -> Transaction:
     """ This method will create and propagate a transaction with only data script outputs
     """
     wallet = manager.wallet
@@ -515,7 +515,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     total_reward = 0
     burn_input = []
     while total_reward < burn_amount:
-        block = add_new_block(manager, advance_clock=1, address=address)
+        block = await add_new_block(manager, advance_clock=1, address=address)
         burn_input.append(TxInput(not_none(block.hash), 0, b''))
         total_reward += block.outputs[0].value
 
@@ -565,7 +565,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
 
     if propagate:
         manager.verification_service.verify(tx)
-        manager.propagate_tx(tx, fails_silently=False)
+        await manager.propagate_tx(tx, fails_silently=False)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
 

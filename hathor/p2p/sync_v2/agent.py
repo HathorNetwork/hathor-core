@@ -18,12 +18,12 @@ import math
 import struct
 from collections import OrderedDict
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, Generator, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred, inlineCallbacks
-from twisted.internet.task import LoopingCall, deferLater
+from twisted.internet.task import LoopingCall
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import ProtocolMessages

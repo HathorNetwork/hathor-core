@@ -99,7 +99,7 @@ class PushTxResource(Resource):
         success = True
         try:
             await self.manager.push_tx(tx, allow_non_standard_script=self.allow_non_standard_script,
-                                 max_output_script_size=self.max_output_script_size)
+                                       max_output_script_size=self.max_output_script_size)
         except (InvalidNewTransaction, TxValidationError) as e:
             success = False
             message = str(e)

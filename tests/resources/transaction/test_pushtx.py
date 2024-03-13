@@ -50,7 +50,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.manager.cpu_mining_service.resolve(tx)
         return tx
 
-    def push_tx(self, data=None):
+    async def push_tx(self, data=None):
         if self.is_post is None:
             raise Exception('You must set self.is_push before calling this method.')
 
@@ -73,28 +73,27 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
                 args[nk] = nv
         return self.web.get('push_tx', args)
 
-    @inlineCallbacks
-    def test_push_tx(self) -> Generator:
+    async def test_push_tx(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
-        blocks = add_new_blocks(self.manager, 5, advance_clock=15)
+        blocks = await add_new_blocks(self.manager, 5, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
         tx = self.get_tx()
 
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response = await self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
         # Sending token to random address without input
         data_json = {'outputs': [{'address': self.get_address(0), 'value': 5}], 'inputs': []}
-        yield self.web_tokens.post('wallet/send_tokens', {'data': data_json})
+        await self.web_tokens.post('wallet/send_tokens', {'data': data_json})
 
         # modify tx so it will be a double spending, then rejected
         tx.weight += 0.1
         self.manager.cpu_mining_service.resolve(tx)
 
         tx_hex = tx.get_struct().hex()
-        response_success = yield self.push_tx({'hex_tx': tx_hex})
+        response_success = await self.push_tx({'hex_tx': tx_hex})
         data_success = response_success.json_value()
         self.assertFalse(data_success['success'])
 
@@ -109,20 +108,20 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx.inputs[0].data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
 
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response = await self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # force
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex, 'force': True})
+        response = await self.push_tx({'hex_tx': tx_hex, 'force': True})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # Invalid tx (don't have inputs)
         genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_transaction)
         genesis_hex = genesis_tx.get_struct().hex()
-        response_genesis = yield self.push_tx({'tx_hex': genesis_hex})
+        response_genesis = await self.push_tx({'tx_hex': genesis_hex})
         data_genesis = response_genesis.json_value()
         self.assertFalse(data_genesis['success'])
 
@@ -130,24 +129,23 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         script_type_out = parse_address_script(blocks[0].outputs[0].script)
         assert script_type_out is not None
         address = script_type_out.address
-        tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
+        tx2 = await create_tokens(self.manager, address, mint_amount=100, propagate=False)
         tx2_hex = tx2.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx2_hex})
+        response = await self.push_tx({'hex_tx': tx2_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
-    @inlineCallbacks
-    def test_push_nft(self) -> Generator:
+    async def test_push_nft(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
-        blocks = add_new_blocks(self.manager, 5, advance_clock=15)
+        blocks = await add_new_blocks(self.manager, 5, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
         # NFT creation tx
         script_type_out = parse_address_script(blocks[0].outputs[0].script)
         assert script_type_out is not None
         address = script_type_out.address
-        tx3 = create_tokens(self.manager, address, mint_amount=100, propagate=False, nft_data='test')
+        tx3 = await create_tokens(self.manager, address, mint_amount=100, propagate=False, nft_data='test')
         tx3_hex = tx3.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx3_hex})
+        response = await self.push_tx({'hex_tx': tx3_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -173,10 +171,9 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
-    @inlineCallbacks
-    def test_script_too_big(self) -> Generator:
+    async def test_script_too_big(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
-        add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_new_blocks(self.manager, 5, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
         tx = self.get_tx()
 
@@ -184,15 +181,14 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx.outputs[0].script = b'*' * (self._settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE + 1)
         self.manager.cpu_mining_service.resolve(tx)
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response = await self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
         self.assertEqual('Transaction is non standard.', data['message'])
 
-    @inlineCallbacks
-    def test_non_standard_script(self) -> Generator:
+    async def test_non_standard_script(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
-        add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_new_blocks(self.manager, 5, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
         tx = self.get_tx()
 
@@ -200,22 +196,21 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx.outputs[0].script = b'*' * 5
         self.manager.cpu_mining_service.resolve(tx)
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response = await self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
         expected = 'Transaction is non standard.'
         self.assertEqual(expected, data['message'])
 
-    @inlineCallbacks
-    def test_spending_voided(self) -> Generator:
+    async def test_spending_voided(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
-        add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_new_blocks(self.manager, 5, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
 
         # Push a first tx
         tx = self.get_tx()
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response = await self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -231,7 +226,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         outputs = [WalletOutputInfo(address=decode_address(p2pkh.address), value=txout.value, timelock=None), ]
         tx2 = self.get_tx(inputs, outputs)
         tx2_hex = tx2.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx2_hex})
+        response = await self.push_tx({'hex_tx': tx2_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -245,7 +240,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         outputs = [WalletOutputInfo(address=decode_address(p2pkh.address), value=txout.value, timelock=None), ]
         tx3 = self.get_tx(inputs, outputs)
         tx3_hex = tx3.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx3_hex})
+        response = await self.push_tx({'hex_tx': tx3_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
 
@@ -255,7 +250,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.manager.tx_storage.save_transaction(tx2, only_metadata=True)
 
         # Try to push again with soft voided id as voided by
-        response = yield self.push_tx({'hex_tx': tx3_hex})
+        response = await self.push_tx({'hex_tx': tx3_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
 
@@ -264,21 +259,20 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx_meta.voided_by = None
         self.manager.tx_storage.save_transaction(tx2, only_metadata=True)
 
-        response = yield self.push_tx({'hex_tx': tx3_hex})
+        response = await self.push_tx({'hex_tx': tx3_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
-    @inlineCallbacks
-    def test_push_standard_script_data(self) -> Generator:
+    async def test_push_standard_script_data(self) -> None:
         # We accept transaction with at most 25 script data outputs
         # as standard
         self.manager.wallet.unlock(b'MYPASS')
 
         # First a tx with one data script output
-        tx1 = add_tx_with_data_script(self.manager, ['test'], propagate=False)
+        tx1 = await add_tx_with_data_script(self.manager, ['test'], propagate=False)
         tx1_hex = tx1.get_struct().hex()
 
-        response = yield self.push_tx({'hex_tx': tx1_hex})
+        response = await self.push_tx({'hex_tx': tx1_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -286,10 +280,10 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # Now a tx with 25 data script outputs
         data25 = ['test{}'.format(i) for i in range(25)]
-        tx25 = add_tx_with_data_script(self.manager, data25, propagate=False)
+        tx25 = await add_tx_with_data_script(self.manager, data25, propagate=False)
         tx25_hex = tx25.get_struct().hex()
 
-        response = yield self.push_tx({'hex_tx': tx25_hex})
+        response = await self.push_tx({'hex_tx': tx25_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -297,10 +291,10 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # Now a tx with 26 data script outputs and it must fail
         data26 = ['test{}'.format(i) for i in range(26)]
-        tx26 = add_tx_with_data_script(self.manager, data26, propagate=False)
+        tx26 = await add_tx_with_data_script(self.manager, data26, propagate=False)
         tx26_hex = tx26.get_struct().hex()
 
-        response = yield self.push_tx({'hex_tx': tx26_hex})
+        response = await self.push_tx({'hex_tx': tx26_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
         expected = 'Transaction is non standard.'

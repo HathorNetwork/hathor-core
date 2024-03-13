@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Callable
 
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states.base import CmdCallable
