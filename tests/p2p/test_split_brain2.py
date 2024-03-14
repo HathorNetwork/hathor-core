@@ -10,7 +10,7 @@ class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
     __test__ = False
 
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_split_brain(self) -> None:
+    async def test_split_brain(self) -> None:
         debug_pdf = False
 
         manager1 = self.create_peer()
@@ -22,18 +22,18 @@ class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
         miner11 = self.simulator.create_miner(manager1, hashpower=10e6)
         miner11.start()
         gen_tx11 = self.simulator.create_tx_generator(manager1, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx11.start()
+        await gen_tx11.start()
         gen_tx12 = self.simulator.create_tx_generator(manager1, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx12.enable_double_spending()
-        gen_tx12.start()
+        await gen_tx12.start()
 
         miner21 = self.simulator.create_miner(manager2, hashpower=10e6)
         miner21.start()
         gen_tx21 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx21.start()
+        await gen_tx21.start()
         gen_tx22 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx22.enable_double_spending()
-        gen_tx22.start()
+        await gen_tx22.start()
 
         self.simulator.run(400)
 

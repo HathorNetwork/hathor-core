@@ -1,4 +1,4 @@
-from typing import Generator, Optional
+from typing import Generator, Optional, Any
 
 from twisted.internet.defer import inlineCallbacks
 
@@ -50,7 +50,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.manager.cpu_mining_service.resolve(tx)
         return tx
 
-    async def push_tx(self, data=None) -> None:
+    def push_tx(self, data=None):
         if self.is_post is None:
             raise Exception('You must set self.is_push before calling this method.')
 
@@ -76,7 +76,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
     async def test_push_tx(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
         blocks = await add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         tx = self.get_tx()
 
         tx_hex = tx.get_struct().hex()
@@ -138,7 +138,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
     async def test_push_nft(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
         blocks = await add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         # NFT creation tx
         script_type_out = parse_address_script(blocks[0].outputs[0].script)
         assert script_type_out is not None
@@ -174,7 +174,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
     async def test_script_too_big(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
         await add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         tx = self.get_tx()
 
         # Invalid tx (output script is too long)
@@ -189,7 +189,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
     async def test_non_standard_script(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
         await add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         tx = self.get_tx()
 
         # Invalid tx (output script is too long)
@@ -205,7 +205,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
     async def test_spending_voided(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
         await add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
         # Push a first tx
         tx = self.get_tx()

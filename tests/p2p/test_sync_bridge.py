@@ -5,7 +5,7 @@ from tests.simulation.base import SimulatorTestCase
 class MixedSyncRandomSimulatorTestCase(SimulatorTestCase):
     __test__ = True
 
-    def test_the_three_transacting_miners(self) -> None:
+    async def test_the_three_transacting_miners(self) -> None:
         manager1 = self.create_peer(enable_sync_v1=True,  enable_sync_v2=False)
         manager2 = self.create_peer(enable_sync_v1=True,  enable_sync_v2=True)
         manager3 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
@@ -20,7 +20,7 @@ class MixedSyncRandomSimulatorTestCase(SimulatorTestCase):
             miner.start()
             miners.append(miner)
             tx_gen = self.simulator.create_tx_generator(manager, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
-            tx_gen.start()
+            await tx_gen.start()
             tx_gens.append(tx_gen)
 
         self.simulator.run(2000)
@@ -44,7 +44,7 @@ class MixedSyncRandomSimulatorTestCase(SimulatorTestCase):
             # sync-v2 consensus test is more lenient (if sync-v1 assert passes sync-v2 assert will pass too)
             self.assertConsensusEqualSyncV2(manager_a, manager_b, strict_sync_v2_indexes=False)
 
-    def test_bridge_with_late_v2(self) -> None:
+    async def test_bridge_with_late_v2(self) -> None:
         manager1 = self.create_peer(enable_sync_v1=True,  enable_sync_v2=False)
         manager2 = self.create_peer(enable_sync_v1=True,  enable_sync_v2=True)
         manager3 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
@@ -59,7 +59,7 @@ class MixedSyncRandomSimulatorTestCase(SimulatorTestCase):
             miner.start()
             miners.append(miner)
             tx_gen = self.simulator.create_tx_generator(manager, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
-            tx_gen.start()
+            await tx_gen.start()
             tx_gens.append(tx_gen)
 
         self.simulator.add_connection(FakeConnection(manager1, manager2, latency=0.300))

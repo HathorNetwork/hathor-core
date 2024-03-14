@@ -5,7 +5,8 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
+from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script, MultiSig
+from hathor.util import not_none
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -32,27 +33,27 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(sendtokens_resource)
         self.web_address_history = StubSite(AddressHistoryResource(self.manager))
 
-    @inlineCallbacks
-    def test_post(self):
+    async def test_post(self) -> None:
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
         blocks = await add_new_blocks(self.manager, 3, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens))
 
         # Options
-        yield self.web.options('thin_wallet/send_tokens')
+        await self.web.options('thin_wallet/send_tokens')
 
         tx_id = blocks[0].hash
         output = blocks[0].outputs[0]
         script_type_out = parse_address_script(output.script)
+        assert isinstance(script_type_out, P2PKH)
         address = script_type_out.address
         private_key = self.manager.wallet.get_private_key(address)
 
-        output_address = decode_address(self.get_address(0))
+        output_address = decode_address(not_none(self.get_address(0)))
         value = blocks_tokens[0]
         o = TxOutput(value, create_output_script(output_address, None))
         o_invalid_amount = TxOutput(value-1, create_output_script(output_address, None))
@@ -69,7 +70,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         tx.timestamp = int(self.clock.seconds())
         tx.weight = 0
 
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx.get_struct().hex()})
+        response = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx.get_struct().hex()})
         data = response.json_value()
         self.assertFalse(data['success'])
 
@@ -84,7 +85,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         tx2.timestamp = int(self.clock.seconds())
         tx2.weight = self.manager.daa.minimum_tx_weight(tx2)
 
-        response_wrong_amount = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2.get_struct().hex()})
+        response_wrong_amount = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2.get_struct().hex()})
         data_wrong_amount = response_wrong_amount.json_value()
         self.assertFalse(data_wrong_amount['success'])
 
@@ -100,14 +101,14 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         tx3.weight = self.manager.daa.minimum_tx_weight(tx3)
 
         # Then send tokens
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
+        response = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
         data = response.json_value()
         self.assertTrue(data['success'])
 
         # Trying to send a double spending will not have success
         self.clock.advance(5)
         tx3.timestamp = int(self.clock.seconds())
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
+        response = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
         data_error = response.json_value()
         self.assertFalse(data_error['success'])
         self.clock.advance(5)
@@ -118,7 +119,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
             sum(blocks_tokens[:-1])
         )
 
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': address.encode(),
             }
@@ -128,10 +129,10 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertIn(data['tx']['hash'], [x['tx_id'] for x in response_data])
 
         # Create token tx
-        tx4 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
+        tx4 = await create_tokens(self.manager, address, mint_amount=100, propagate=False)
         tx4.nonce = 0
         tx4.timestamp = int(self.clock.seconds())
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx4.get_struct().hex()})
+        response = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx4.get_struct().hex()})
         data = response.json_value()
         self.assertTrue(data['success'])
 #
@@ -181,8 +182,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 #        for d in deferreds:
 #            yield d.request.thread_deferred
 
-    @inlineCallbacks
-    def test_history_paginate(self):
+    async def test_history_paginate(self) -> None:
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
@@ -190,11 +190,12 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
         output = blocks[0].outputs[0]
         script_type_out = parse_address_script(output.script)
+        assert isinstance(script_type_out, P2PKH)
         address = script_type_out.address
         address_bytes = decode_address(address)
 
         # Test paginate
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': address.encode(),
                 b'paginate': b'true'
@@ -214,7 +215,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         )
 
         # Test paginate with two pages
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': address.encode(),
                 b'paginate': b'true'
@@ -236,16 +237,16 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
             address=address_bytes
         )
         blocks.extend(new_blocks)
-        random_address = self.get_address(0)
-        add_blocks_unlock_reward(self.manager)
+        random_address = not_none(self.get_address(0))
+        await add_blocks_unlock_reward(self.manager)
 
         for i in range(tx_count):
             start_index = i*self._settings.MAX_NUM_INPUTS
             end_index = start_index + self._settings.MAX_NUM_INPUTS
             amount = sum([b.outputs[0].value for b in blocks[start_index:end_index]])
-            add_new_tx(self.manager, random_address, amount, advance_clock=1)
+            await add_new_tx(self.manager, random_address, amount, advance_clock=1)
 
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': random_address.encode(),
                 b'paginate': b'true'
@@ -257,7 +258,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # 1 block + 3 big txs
         self.assertEqual(len(response_data['history']), tx_count - 1)
 
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': random_address.encode(),
                 b'hash': response_data['first_hash'].encode(),

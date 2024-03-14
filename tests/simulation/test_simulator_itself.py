@@ -62,7 +62,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
         return simulator.create_peer(builder)
 
-    def _simulate_run(self, run_i: int, simulator: Simulator) -> list[HathorManager]:
+    async def _simulate_run(self, run_i: int, simulator: Simulator) -> list[HathorManager]:
         # XXX: the following was adapted from test_new_syncing_peer, it doesn't matter too much, but has good coverage
         #      of different behaviors that can be affected by non-determinism on the fullnode implementation
 
@@ -93,7 +93,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
         for i, rate in enumerate([5, 4, 3]):
             tx_gen = simulator.create_tx_generator(nodes[i], rate=rate * 1 / 60., hashpower=1e6, ignore_no_funds=True)
-            tx_gen.start()
+            await tx_gen.start()
             tx_generators.append(tx_gen)
 
         simulator.run(10)
@@ -118,14 +118,14 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
     # XXX: marked as flaky because of a known random issue
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_determinism_full_runs(self) -> None:
+    async def test_determinism_full_runs(self) -> None:
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)
         self.assertEqual(self.simulator1.seed, self.simulator3.seed)
 
-        nodes1 = self._simulate_run(1, self.simulator1)
-        nodes2 = self._simulate_run(2, self.simulator2)
-        nodes3 = self._simulate_run(2, self.simulator3)
+        nodes1 = await self._simulate_run(1, self.simulator1)
+        nodes2 = await self._simulate_run(2, self.simulator2)
+        nodes3 = await self._simulate_run(2, self.simulator3)
 
         # now we check they reached the same state
 
@@ -136,7 +136,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
     # XXX: marked as flaky because of a known random issue
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_determinism_interleaved(self) -> None:
+    async def test_determinism_interleaved(self) -> None:
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)
 
@@ -199,13 +199,13 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
             self.log.debug(f'part3.{i} simulator1')
             tx_gen1 = self.simulator1.create_tx_generator(nodes1[i], rate=rate * 1 / 60., hashpower=1e6,
                                                           ignore_no_funds=True)
-            tx_gen1.start()
+            await tx_gen1.start()
             tx_generators1.append(tx_gen1)
 
             self.log.debug(f'part3.{i} simulator2')
             tx_gen2 = self.simulator2.create_tx_generator(nodes2[i], rate=rate * 1 / 60., hashpower=1e6,
                                                           ignore_no_funds=True)
-            tx_gen2.start()
+            await tx_gen2.start()
             tx_generators2.append(tx_gen2)
 
         for _ in range(3):

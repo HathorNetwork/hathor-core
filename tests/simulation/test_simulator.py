@@ -16,7 +16,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # optional argument must be valid, it just has to not raise any exception, there's no assert for that
         VertexVerifier(settings=self._settings, daa=manager1.daa).verify_pow(tx, override_weight=0.)
 
-    def test_one_node(self) -> None:
+    async def test_one_node(self) -> None:
         manager1 = self.create_peer()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=100e6)
@@ -24,13 +24,13 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(10)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.simulator.run(60 * 60)
 
         # FIXME: the setup above produces 0 new blocks and transactions
         # self.assertGreater(manager1.tx_storage.get_vertices_count(), 3)
 
-    def test_two_nodes(self) -> None:
+    async def test_two_nodes(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
 
@@ -39,7 +39,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(10)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.simulator.run(60)
 
         conn12 = FakeConnection(manager1, manager2, latency=0.150)
@@ -51,7 +51,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(120)
 
         gen_tx2 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx2.start()
+        await gen_tx2.start()
         self.simulator.run(10 * 60)
 
         miner1.stop()
@@ -97,7 +97,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             self.assertTipsEqual(nodes[0], node)
 
     @pytest.mark.flaky(max_runs=5, min_passes=1)
-    def test_new_syncing_peer(self) -> None:
+    async def test_new_syncing_peer(self) -> None:
         nodes = []
         miners = []
         tx_generators = []
@@ -124,7 +124,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for i, rate in enumerate([5, 4, 3]):
             tx_gen = self.simulator.create_tx_generator(nodes[i], rate=rate * 1 / 60., hashpower=1e6,
                                                         ignore_no_funds=True)
-            tx_gen.start()
+            await tx_gen.start()
             tx_generators.append(tx_gen)
 
         self.simulator.run(600)
@@ -163,7 +163,7 @@ class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTe
 class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
     __test__ = True
 
-    def test_compare_mempool_implementations(self) -> None:
+    async def test_compare_mempool_implementations(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
 
@@ -179,7 +179,7 @@ class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomS
         self.simulator.run(10)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.simulator.run(10)
 
         conn12 = FakeConnection(manager1, manager2, latency=0.150)
@@ -191,7 +191,7 @@ class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomS
         self.simulator.run(10)
 
         gen_tx2 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx2.start()
+        await gen_tx2.start()
 
         for _ in range(200):
             # mempool tips
