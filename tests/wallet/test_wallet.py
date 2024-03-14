@@ -171,7 +171,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         with self.assertRaises(InvalidAddress):
             WalletOutputInfo(decode_address(invalid_address2), 100, None)
 
-    def test_separate_inputs(self):
+    async def test_separate_inputs(self) -> None:
         block = await add_new_block(self.manager, advance_clock=5)
         my_input = TxInput(block.hash, 0, b'')
         genesis_blocks = [tx for tx in self.storage.get_all_genesis() if tx.is_block]
@@ -228,7 +228,7 @@ class BaseBasicWalletTest(unittest.TestCase):
 
         self.assertEqual(did_enter, 2)
 
-    def test_prepare_transaction(self):
+    async def test_prepare_transaction(self) -> None:
         block = await add_new_block(self.manager, advance_clock=5)
         w = self.manager.wallet
         new_address = w.get_unused_address()
@@ -237,7 +237,7 @@ class BaseBasicWalletTest(unittest.TestCase):
             w.prepare_transaction_compute_inputs(Transaction, [out], self.storage, timestamp=block.timestamp)
 
         # now it should work
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
 
     def test_maybe_spent_txs(self):

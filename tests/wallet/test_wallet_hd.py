@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction
@@ -22,7 +24,7 @@ class BaseWalletHDTest(unittest.TestCase):
         self.BLOCK_TOKENS = self.manager.get_tokens_issued_per_block(1)
         self.TOKENS = self.BLOCK_TOKENS
 
-    def test_transaction_and_balance(self):
+    async def test_transaction_and_balance(self) -> None:
         from hathor.transaction.validation_state import ValidationState
 
         # generate a new block and check if we increase balance
@@ -35,7 +37,7 @@ class BaseWalletHDTest(unittest.TestCase):
         self.assertEqual(self.wallet.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, self.BLOCK_TOKENS))
 
         # create transaction spending this value, but sending to same wallet
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         new_address2 = self.wallet.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address2), self.TOKENS, timelock=None)
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, [out], self.tx_storage)
@@ -53,7 +55,7 @@ class BaseWalletHDTest(unittest.TestCase):
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
-        input_info = WalletInputInfo(tx1.hash, 0, None)
+        input_info = WalletInputInfo(tx1.hash, 0, Mock())
         new_address3 = self.wallet.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address3), self.TOKENS, timelock=None)
         tx2 = self.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info],

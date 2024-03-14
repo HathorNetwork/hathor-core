@@ -85,7 +85,7 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
 class BaseManagerInitializationTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
         self.tx_storage = ModifiedTransactionMemoryStorage()
         self.network = 'testnet'

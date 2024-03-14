@@ -233,7 +233,9 @@ class BaseIndexesTest(unittest.TestCase):
         check_utxos((tx_base.hash, 1, value, None))
 
         # this tx is fine, nothing unusual, it should be added with no problem
-        txA1 = await add_custom_tx(self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        txA1 = await add_custom_tx(
+            self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address
+        )
         self.graphviz.labels[txA1.hash] = 'txA1'
         self.assertFalse(bool(txA1.get_metadata().voided_by))
         check_utxos((txA1.hash, 0, value, None))
@@ -251,7 +253,9 @@ class BaseIndexesTest(unittest.TestCase):
         check_utxos((block1.hash, 0, 6400, 36), (txB1.hash, 0, value, None))
 
         # this is now in conflict with A1, it should be voided right out of the box
-        txA2 = await add_custom_tx(self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        txA2 = await add_custom_tx(
+            self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address
+        )
         self.graphviz.labels[txA2.hash] = 'txA2'
         self.assertTrue(bool(txA2.get_metadata().voided_by))
         check_utxos((block1.hash, 0, 6400, 36), (txB1.hash, 0, value, None))

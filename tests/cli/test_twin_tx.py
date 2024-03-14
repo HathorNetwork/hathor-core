@@ -22,7 +22,7 @@ from tests.utils import (
 class BaseTwinTxTest(unittest.TestCase):
     __test__ = False
 
-    async def setUp(self) -> None:
+    async def setUp(self):
         super().setUp()
 
         self.network = 'testnet'

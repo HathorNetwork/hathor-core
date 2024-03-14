@@ -5,7 +5,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script, MultiSig
+from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.util import not_none
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,

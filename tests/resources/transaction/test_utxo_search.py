@@ -1,5 +1,3 @@
-from twisted.internet.defer import inlineCallbacks
-
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import UtxoSearchResource

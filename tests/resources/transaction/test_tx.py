@@ -1,5 +1,3 @@
-from typing import Any
-
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.simulator.utils import add_new_blocks

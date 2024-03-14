@@ -11,7 +11,7 @@ from tests.utils import add_blocks_unlock_reward, create_tokens
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
 
         self.network = 'testnet'
@@ -29,7 +29,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
         ]
 
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
         self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs,
                                                                           self.manager.tx_storage)
