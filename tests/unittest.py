@@ -3,7 +3,7 @@ import secrets
 import shutil
 import tempfile
 import time
-from typing import Iterator, Optional
+from typing import Callable, Collection, Iterable, Iterator, Optional
 from unittest import main as ut_main
 
 from structlog import get_logger
@@ -16,13 +16,17 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
+from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
+from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.p2p.sync_version import SyncVersion
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.simulator.clock import MemoryReactorHeapClock
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.types import VertexId
 from hathor.util import Random, not_none
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
@@ -33,9 +37,8 @@ settings = HathorSettings()
 USE_MEMORY_STORAGE = os.environ.get('HATHOR_TEST_MEMORY_STORAGE', 'false').lower() == 'true'
 
 
-def shorten_hash(container):
-    container_type = type(container)
-    return container_type(h[-2:].hex() for h in container)
+def shorten_hash(container: Collection[bytes]) -> Iterable[str]:
+    return map(lambda hash_bytes: hash_bytes[-2:].hex(), container)
 
 
 def _load_peer_id_pool(file_path: Optional[str] = None) -> Iterator[PeerId]:
@@ -50,7 +53,7 @@ def _load_peer_id_pool(file_path: Optional[str] = None) -> Iterator[PeerId]:
             yield PeerId.create_from_json(peer_id_dict)
 
 
-def _get_default_peer_id_pool_filepath():
+def _get_default_peer_id_pool_filepath() -> str:
     this_file_path = os.path.dirname(__file__)
     file_name = 'peer_id_pool.json'
     file_path = os.path.join(this_file_path, file_name)
@@ -109,8 +112,8 @@ class TestCase(unittest.TestCase):
     use_memory_storage: bool = USE_MEMORY_STORAGE
     seed_config: Optional[int] = None
 
-    def setUp(self):
-        self.tmpdirs = []
+    def setUp(self) -> None:
+        self.tmpdirs: list[str] = []
         self.clock = TestMemoryReactorClock()
         self.clock.advance(time.time())
         self.log = logger.new()
@@ -118,10 +121,10 @@ class TestCase(unittest.TestCase):
         self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config
         self.log.info('set seed', seed=self.seed)
         self.rng = Random(self.seed)
-        self._pending_cleanups = []
+        self._pending_cleanups: list[Callable] = []
         self._settings = get_global_settings()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.clean_tmpdirs()
         for fn in self._pending_cleanups:
             fn()
@@ -144,12 +147,12 @@ class TestCase(unittest.TestCase):
         pool.remove(peer_id)
         return peer_id
 
-    def mkdtemp(self):
+    def mkdtemp(self) -> str:
         tmpdir = tempfile.mkdtemp()
         self.tmpdirs.append(tmpdir)
         return tmpdir
 
-    def _create_test_wallet(self, unlocked=False):
+    def _create_test_wallet(self, unlocked: bool = False) -> Wallet:
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
         """
@@ -169,14 +172,12 @@ class TestCase(unittest.TestCase):
             .set_network(network)
         return builder
 
-    def create_peer_from_builder(self, builder, start_manager=True):
+    def create_peer_from_builder(self, builder: Builder, start_manager: bool = True) -> HathorManager:
         artifacts = builder.build()
         manager = artifacts.manager
 
         if artifacts.rocksdb_storage:
             self._pending_cleanups.append(artifacts.rocksdb_storage.close)
-
-        manager.avg_time_between_blocks = 0.0001
 
         if start_manager:
             manager.start()
@@ -277,7 +278,7 @@ class TestCase(unittest.TestCase):
 
         return manager
 
-    def run_to_completion(self):
+    def run_to_completion(self) -> None:
         """ This will advance the test's clock until all calls scheduled are done.
         """
         for call in self.clock.getDelayedCalls():
@@ -300,7 +301,11 @@ class TestCase(unittest.TestCase):
                 self.assertIn(dep, valid_deps, message)
             valid_deps.add(tx.hash)
 
-    def _syncVersionFlags(self, enable_sync_v1=None, enable_sync_v2=None):
+    def _syncVersionFlags(
+        self,
+        enable_sync_v1: bool | None = None,
+        enable_sync_v2: bool | None = None
+    ) -> tuple[bool, bool]:
         """Internal: use this to check and get the flags and optionally provide override values."""
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
@@ -313,19 +318,19 @@ class TestCase(unittest.TestCase):
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
         return enable_sync_v1, enable_sync_v2
 
-    def assertTipsEqual(self, manager1, manager2):
+    def assertTipsEqual(self, manager1: HathorManager, manager2: HathorManager) -> None:
         _, enable_sync_v2 = self._syncVersionFlags()
         if enable_sync_v2:
             self.assertTipsEqualSyncV2(manager1, manager2)
         else:
             self.assertTipsEqualSyncV1(manager1, manager2)
 
-    def assertTipsNotEqual(self, manager1, manager2):
+    def assertTipsNotEqual(self, manager1: HathorManager, manager2: HathorManager) -> None:
         s1 = set(manager1.tx_storage.get_all_tips())
         s2 = set(manager2.tx_storage.get_all_tips())
         self.assertNotEqual(s1, s2)
 
-    def assertTipsEqualSyncV1(self, manager1, manager2):
+    def assertTipsEqualSyncV1(self, manager1: HathorManager, manager2: HathorManager) -> None:
         # XXX: this is the original implementation of assertTipsEqual
         s1 = set(manager1.tx_storage.get_all_tips())
         s2 = set(manager2.tx_storage.get_all_tips())
@@ -335,11 +340,17 @@ class TestCase(unittest.TestCase):
         s2 = set(manager2.tx_storage.get_tx_tips())
         self.assertEqual(s1, s2)
 
-    def assertTipsEqualSyncV2(self, manager1, manager2, *, strict_sync_v2_indexes=True):
+    def assertTipsEqualSyncV2(
+        self,
+        manager1: HathorManager,
+        manager2: HathorManager,
+        *,
+        strict_sync_v2_indexes: bool = True
+    ) -> None:
         # tx tips
         if strict_sync_v2_indexes:
-            tips1 = manager1.tx_storage.indexes.mempool_tips.get()
-            tips2 = manager2.tx_storage.indexes.mempool_tips.get()
+            tips1 = not_none(not_none(manager1.tx_storage.indexes).mempool_tips).get()
+            tips2 = not_none(not_none(manager2.tx_storage.indexes).mempool_tips).get()
         else:
             tips1 = {tx.hash for tx in manager1.tx_storage.iter_mempool_tips_from_best_index()}
             tips2 = {tx.hash for tx in manager2.tx_storage.iter_mempool_tips_from_best_index()}
@@ -355,19 +366,19 @@ class TestCase(unittest.TestCase):
         self.assertEqual(s1, s2)
 
         # best block (from height index)
-        b1 = manager1.tx_storage.indexes.height.get_tip()
-        b2 = manager2.tx_storage.indexes.height.get_tip()
+        b1 = not_none(manager1.tx_storage.indexes).height.get_tip()
+        b2 = not_none(manager2.tx_storage.indexes).height.get_tip()
         self.assertIn(b1, s2)
         self.assertIn(b2, s1)
 
-    def assertConsensusEqual(self, manager1, manager2):
+    def assertConsensusEqual(self, manager1: HathorManager, manager2: HathorManager) -> None:
         _, enable_sync_v2 = self._syncVersionFlags()
         if enable_sync_v2:
             self.assertConsensusEqualSyncV2(manager1, manager2)
         else:
             self.assertConsensusEqualSyncV1(manager1, manager2)
 
-    def assertConsensusEqualSyncV1(self, manager1, manager2):
+    def assertConsensusEqualSyncV1(self, manager1: HathorManager, manager2: HathorManager) -> None:
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         for tx1 in manager1.tx_storage.get_all_transactions():
             tx2 = manager2.tx_storage.get_transaction(tx1.hash)
@@ -381,12 +392,20 @@ class TestCase(unittest.TestCase):
                 self.assertIsNone(tx2_meta.voided_by)
             else:
                 # If tx1 is voided, then tx2 must be voided.
+                assert tx1_meta.voided_by is not None
+                assert tx2_meta.voided_by is not None
                 self.assertGreaterEqual(len(tx1_meta.voided_by), 1)
                 self.assertGreaterEqual(len(tx2_meta.voided_by), 1)
             # Hard verification
             # self.assertEqual(tx1_meta.voided_by, tx2_meta.voided_by)
 
-    def assertConsensusEqualSyncV2(self, manager1, manager2, *, strict_sync_v2_indexes=True):
+    def assertConsensusEqualSyncV2(
+        self,
+        manager1: HathorManager,
+        manager2: HathorManager,
+        *,
+        strict_sync_v2_indexes: bool = True
+    ) -> None:
         # The current sync algorithm does not propagate voided blocks/txs
         # so the count might be different even though the consensus is equal
         # One peer might have voided txs that the other does not have
@@ -397,7 +416,9 @@ class TestCase(unittest.TestCase):
         # the following is specific to sync-v2
 
         # helper function:
-        def get_all_executed_or_voided(tx_storage):
+        def get_all_executed_or_voided(
+            tx_storage: BaseTransactionStorage
+        ) -> tuple[set[VertexId], set[VertexId], set[VertexId]]:
             """Get all txs separated into three sets: executed, voided, partial"""
             tx_executed = set()
             tx_voided = set()
@@ -424,14 +445,16 @@ class TestCase(unittest.TestCase):
         self.log.debug('node1 rest', len_voided=len(tx_voided1), len_partial=len(tx_partial1))
         self.log.debug('node2 rest', len_voided=len(tx_voided2), len_partial=len(tx_partial2))
 
-    def assertConsensusValid(self, manager):
+    def assertConsensusValid(self, manager: HathorManager) -> None:
         for tx in manager.tx_storage.get_all_transactions():
             if tx.is_block:
+                assert isinstance(tx, Block)
                 self.assertBlockConsensusValid(tx)
             else:
+                assert isinstance(tx, Transaction)
                 self.assertTransactionConsensusValid(tx)
 
-    def assertBlockConsensusValid(self, block):
+    def assertBlockConsensusValid(self, block: Block) -> None:
         self.assertTrue(block.is_block)
         if not block.parents:
             # Genesis
@@ -442,7 +465,8 @@ class TestCase(unittest.TestCase):
             parent_meta = parent.get_metadata()
             self.assertIsNone(parent_meta.voided_by)
 
-    def assertTransactionConsensusValid(self, tx):
+    def assertTransactionConsensusValid(self, tx: Transaction) -> None:
+        assert tx.storage is not None
         self.assertFalse(tx.is_block)
         meta = tx.get_metadata()
         if meta.voided_by and tx.hash in meta.voided_by:
@@ -462,7 +486,7 @@ class TestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
 
             if spent_meta.voided_by is not None:
-                self.assertIsNotNone(meta.voided_by)
+                assert meta.voided_by is not None
                 self.assertTrue(spent_meta.voided_by)
                 self.assertTrue(meta.voided_by)
                 self.assertTrue(spent_meta.voided_by.issubset(meta.voided_by))
@@ -470,30 +494,32 @@ class TestCase(unittest.TestCase):
         for parent in tx.get_parents():
             parent_meta = parent.get_metadata()
             if parent_meta.voided_by is not None:
-                self.assertIsNotNone(meta.voided_by)
+                assert meta.voided_by is not None
                 self.assertTrue(parent_meta.voided_by)
                 self.assertTrue(meta.voided_by)
                 self.assertTrue(parent_meta.voided_by.issubset(meta.voided_by))
 
-    def assertSyncedProgress(self, node_sync):
+    def assertSyncedProgress(self, node_sync: NodeSyncTimestamp | NodeBlockSync) -> None:
         """Check "synced" status of p2p-manager, uses self._enable_sync_vX to choose which check to run."""
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags()
         if enable_sync_v2:
+            assert isinstance(node_sync, NodeBlockSync)
             self.assertV2SyncedProgress(node_sync)
         elif enable_sync_v1:
+            assert isinstance(node_sync, NodeSyncTimestamp)
             self.assertV1SyncedProgress(node_sync)
 
-    def assertV1SyncedProgress(self, node_sync):
+    def assertV1SyncedProgress(self, node_sync: NodeSyncTimestamp) -> None:
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
 
-    def assertV2SyncedProgress(self, node_sync):
+    def assertV2SyncedProgress(self, node_sync: NodeBlockSync) -> None:
         self.assertEqual(node_sync.synced_block, node_sync.peer_best_block)
 
-    def clean_tmpdirs(self):
+    def clean_tmpdirs(self) -> None:
         for tmpdir in self.tmpdirs:
             shutil.rmtree(tmpdir)
 
-    def clean_pending(self, required_to_quiesce=True):
+    def clean_pending(self, required_to_quiesce: bool = True) -> None:
         """
         This handy method cleans all pending tasks from the reactor.
 

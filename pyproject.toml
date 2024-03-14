@@ -165,6 +165,8 @@ module = [
     "tests.p2p.*",
     "tests.pubsub.*",
     "tests.simulation.*",
+    "tests.unittest",
+    "tests.utils",
 ]
 disallow_untyped_defs = true
 
