@@ -19,7 +19,7 @@ class SimpleTests(unittest.TestCase):
 class BaseMergedMiningTest(unittest.TestCase):
     __test__ = False
 
-    @ensure_deferred
+    @ensure_deferred  # type: ignore[misc]
     async def test_coordinator(self) -> None:
         from cryptography.hazmat.backends import default_backend
         from cryptography.hazmat.primitives.asymmetric import ec

@@ -21,18 +21,18 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
-    def _add_new_transactions(self, manager: HathorManager, num_txs: int) -> list[Transaction]:
+    async def _add_new_transactions(self, manager: HathorManager, num_txs: int) -> list[Transaction]:
         txs = []
         for _ in range(num_txs):
             address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 15, 20])
-            tx = add_new_tx(manager, address, value)
+            tx = await add_new_tx(manager, address, value)
             txs.append(tx)
         return txs
 
-    def test_simple_double_spending(self) -> None:
-        add_new_blocks(self.manager1, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager1)
+    async def test_simple_double_spending(self) -> None:
+        await add_new_blocks(self.manager1, 5, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo
@@ -131,9 +131,9 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.assertConsensusValid(self.manager1)
 
-    def test_double_spending_propagation(self) -> None:
+    async def test_double_spending_propagation(self) -> None:
         blocks = await add_new_blocks(self.manager1, 4, advance_clock=15)
-        add_blocks_unlock_reward(self.manager1)
+        await add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
@@ -309,11 +309,11 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta7.voided_by, None)
 
         blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
-        add_blocks_unlock_reward(self.manager1)
-        self._add_new_transactions(self.manager1, 10)
+        await add_blocks_unlock_reward(self.manager1)
+        await self._add_new_transactions(self.manager1, 10)
         blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
-        add_blocks_unlock_reward(self.manager1)
-        self._add_new_transactions(self.manager1, 10)
+        await add_blocks_unlock_reward(self.manager1)
+        await self._add_new_transactions(self.manager1, 10)
         blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
 
         self.assertConsensusValid(self.manager1)

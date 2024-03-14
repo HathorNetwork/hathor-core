@@ -1,6 +1,9 @@
+from unittest.mock import Mock
+
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.util import not_none
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
@@ -15,13 +18,13 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
-    def test_timelock(self):
+    async def test_timelock(self) -> None:
         blocks = await add_new_blocks(self.manager, 5, advance_clock=15)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
         address = self.manager.wallet.get_unused_address()
-        outside_address = self.get_address(0)
+        outside_address = not_none(self.get_address(0))
 
         outputs = [
             WalletOutputInfo(
@@ -51,7 +54,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(outside_address), value=500, timelock=None)
         ]
 
-        inputs1 = [WalletInputInfo(tx_id=tx1.hash, index=0, private_key=None)]
+        inputs1 = [WalletInputInfo(tx_id=tx1.hash, index=0, private_key=Mock())]
 
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs1,
                                                                         outputs1, self.manager.tx_storage)
@@ -71,7 +74,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(outside_address), value=700, timelock=None)
         ]
 
-        inputs2 = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)]
+        inputs2 = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=Mock())]
 
         tx3 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs2,
                                                                         outputs2, self.manager.tx_storage)
@@ -91,7 +94,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
                 timelock=None)
         ]
 
-        inputs3 = [WalletInputInfo(tx_id=tx1.hash, index=2, private_key=None)]
+        inputs3 = [WalletInputInfo(tx_id=tx1.hash, index=2, private_key=Mock())]
 
         tx4 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs3,
                                                                         outputs3, self.manager.tx_storage)
@@ -112,10 +115,10 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
                          WalletBalance(0, sum(blocks_tokens[:3])))
         self.assertTrue(propagated)
 
-    def test_choose_inputs(self):
+    async def test_choose_inputs(self) -> None:
         blocks = await add_new_blocks(self.manager, 1, advance_clock=15)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
         address = self.manager.wallet.get_unused_address(mark_as_used=False)
 

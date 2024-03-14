@@ -4,6 +4,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_new_transactions
 
@@ -30,7 +31,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
         self.daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
 
-    def test_single_chain(self):
+    async def test_single_chain(self) -> None:
         """ All new blocks belong to case (i).
         """
         self.assertEqual(len(self.genesis_blocks), 1)
@@ -49,7 +50,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 30, advance_clock=15)
+        txs = await add_new_transactions(manager, 30, advance_clock=15)
         for tx in txs:
             score = sum_weights(score, tx.weight)
 
@@ -64,7 +65,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Mine 15 more blocks with 10 transactions between each block
         for _ in range(15):
-            txs = add_new_transactions(manager, 10, advance_clock=15)
+            txs = await add_new_transactions(manager, 10, advance_clock=15)
             for tx in txs:
                 score = sum_weights(score, tx.weight)
 
@@ -78,7 +79,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         self.assertConsensusValid(manager)
 
-    def test_single_fork_not_best(self):
+    async def test_single_fork_not_best(self) -> None:
         """ New blocks belong to cases (i), (ii), (iii), and (iv).
         The best chain never changes. All other chains are side chains.
         """
@@ -98,7 +99,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 5, advance_clock=15)
+        txs = await add_new_transactions(manager, 5, advance_clock=15)
         for tx in txs:
             score = sum_weights(score, tx.weight)
 
@@ -133,7 +134,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         self.assertEqual(fork_meta1.voided_by, {fork_block1.hash})
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 5, advance_clock=15)
+        txs = await add_new_transactions(manager, 5, advance_clock=15)
         for tx in txs:
             score = sum_weights(score, tx.weight)
 
@@ -146,7 +147,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 2, advance_clock=15)
+        txs = await add_new_transactions(manager, 2, advance_clock=15)
         for tx in txs:
             score = sum_weights(score, tx.weight)
 
@@ -158,7 +159,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             self.assertEqual(meta.voided_by, {block.hash})
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 2, advance_clock=15)
+        txs = await add_new_transactions(manager, 2, advance_clock=15)
         for tx in txs:
             score = sum_weights(score, tx.weight)
 
@@ -173,7 +174,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         self.assertConsensusValid(manager)
 
-    def test_multiple_forks(self):
+    async def test_multiple_forks(self) -> None:
         self.assertEqual(len(self.genesis_blocks), 1)
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
@@ -190,7 +191,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
-        txs1 = add_new_transactions(manager, 5, advance_clock=15)
+        txs1 = await add_new_transactions(manager, 5, advance_clock=15)
         for tx in txs1:
             score = sum_weights(score, tx.weight)
 
@@ -207,7 +208,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             self.assertEqual(meta.first_block, blocks[0].hash)
 
         # Add some transactions between blocks
-        txs2 = add_new_transactions(manager, 3, advance_clock=15)
+        txs2 = await add_new_transactions(manager, 3, advance_clock=15)
         for tx in txs2:
             score = sum_weights(score, tx.weight)
 
@@ -339,7 +340,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         self.assertConsensusValid(manager)
 
-    def test_block_height(self):
+    async def test_block_height(self) -> None:
         genesis_block = self.genesis_blocks[0]
         self.assertEqual(genesis_block.get_metadata().height, 0)
 
@@ -373,11 +374,11 @@ class BaseBlockchainTestCase(unittest.TestCase):
             self.assertEqual(reward, expected_reward, f'reward at height {height}')
             height += 1
 
-    def test_block_rewards(self):
+    async def test_block_rewards(self) -> None:
         # even dumber test that only check if manager.get_tokens_issued_per_block was used correctly for a really large
         # number of blocks, probably not worth running all the time
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
-        block_count = (self._settings.MAXIMUM_NUMBER_OF_HALVINGS + 1) * self._settings.BLOCKS_PER_HALVING
+        block_count = (self._settings.MAXIMUM_NUMBER_OF_HALVINGS + 1) * not_none(self._settings.BLOCKS_PER_HALVING)
         blocks = await add_new_blocks(manager, block_count, advance_clock=block_count * 30)
         for block in blocks:
             outputs = block.outputs

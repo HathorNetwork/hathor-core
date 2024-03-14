@@ -9,7 +9,7 @@ from tests.utils import add_blocks_unlock_reward
 class _SerializationTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
 
         self.network = 'testnet'
@@ -18,7 +18,7 @@ class _SerializationTest(unittest.TestCase):
 
         data = b'This is a test block.'
         self.blocks = await add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
         address = self.get_address(0)
         value = 100

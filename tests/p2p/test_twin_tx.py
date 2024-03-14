@@ -15,9 +15,9 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
-    def test_twin_tx(self) -> None:
-        add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+    async def test_twin_tx(self) -> None:
+        await add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager)
 
         address = not_none(self.get_address(0))
         value1 = 100

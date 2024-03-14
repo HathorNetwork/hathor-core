@@ -477,13 +477,13 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
 class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
     __test__ = True
 
-    def test_sync_metadata(self) -> None:
+    async def test_sync_metadata(self) -> None:
         # test if the synced peer will build all tx metadata correctly
 
         height = 0
         # add a mix of blocks and transactions
         height += len(self._add_new_blocks(8))
-        height += len(add_blocks_unlock_reward(self.manager1))
+        height += len(await add_blocks_unlock_reward(self.manager1))
         self._add_new_transactions(2)
         height += len(self._add_new_blocks(1))
         self._add_new_transactions(4)
@@ -608,11 +608,11 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_full_sync(self) -> None:
+    async def test_full_sync(self) -> None:
         # 10 blocks
         blocks = self._add_new_blocks(10)
         # N blocks to unlock the reward
-        unlock_reward_blocks = add_blocks_unlock_reward(self.manager1)
+        unlock_reward_blocks = await add_blocks_unlock_reward(self.manager1)
         len_reward_unlock = len(unlock_reward_blocks)
         # 3 transactions still before the last checkpoint
         self._add_new_transactions(3)

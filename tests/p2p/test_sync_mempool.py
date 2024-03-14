@@ -20,7 +20,7 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
-    def _add_new_tx(self, address: str, value: int) -> Transaction:
+    async def _add_new_tx(self, address: str, value: int) -> Transaction:
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo
 
@@ -37,45 +37,45 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         tx.parents = self.manager1.get_new_tx_parents()
         self.manager1.cpu_mining_service.resolve(tx)
         self.manager1.verification_service.verify(tx)
-        self.manager1.propagate_tx(tx)
+        await self.manager1.propagate_tx(tx)
         self.clock.advance(10)
         return tx
 
-    def _add_new_transactions(self, num_txs: int) -> list[Transaction]:
+    async def _add_new_transactions(self, num_txs: int) -> list[Transaction]:
         txs = []
         for _ in range(num_txs):
             address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 50, 100, 120])
-            tx = self._add_new_tx(address, value)
+            tx = await self._add_new_tx(address, value)
             txs.append(tx)
         return txs
 
-    def _add_new_block(self, propagate: bool = True) -> Block:
+    async def _add_new_block(self, propagate: bool = True) -> Block:
         block: Block = self.manager1.generate_mining_block()
         self.assertTrue(self.manager1.cpu_mining_service.resolve(block))
         self.manager1.verification_service.verify(block)
-        self.manager1.on_new_tx(block, propagate_to_peers=propagate)
+        await self.manager1.on_new_tx(block, propagate_to_peers=propagate)
         self.clock.advance(10)
         return block
 
-    def _add_new_blocks(self, num_blocks: int, propagate: bool = True) -> list[Block]:
+    async def _add_new_blocks(self, num_blocks: int, propagate: bool = True) -> list[Block]:
         blocks = []
         for _ in range(num_blocks):
-            blocks.append(self._add_new_block(propagate=propagate))
+            blocks.append(await self._add_new_block(propagate=propagate))
         return blocks
 
-    def test_mempool_basic(self) -> None:
+    async def test_mempool_basic(self) -> None:
         # 10 blocks
-        self._add_new_blocks(2)
+        await self._add_new_blocks(2)
         # N blocks to unlock the reward
-        add_blocks_unlock_reward(self.manager1)
+        await add_blocks_unlock_reward(self.manager1)
 
         # 5 transactions to be confirmed by the next blocks
-        self._add_new_transactions(5)
+        await self._add_new_transactions(5)
         # 2 more blocks
-        self._add_new_blocks(2)
+        await self._add_new_blocks(2)
         # 30 transactions in the mempool
-        self._add_new_transactions(30)
+        await self._add_new_transactions(30)
 
         debug_pdf = False
         if debug_pdf:
@@ -104,8 +104,8 @@ class SyncV1HathorSyncMempoolTestCase(unittest.SyncV1Params, BaseHathorSyncMempo
 class SyncV2HathorSyncMempoolTestCase(unittest.SyncV2Params, BaseHathorSyncMempoolTestCase):
     __test__ = True
 
-    def test_mempool_basic(self) -> None:
-        super().test_mempool_basic()
+    async def test_mempool_basic(self) -> None:
+        await super().test_mempool_basic()
 
         # 3 genesis
         # 25 blocks

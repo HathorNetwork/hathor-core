@@ -2,10 +2,12 @@ import pytest
 
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
+from hathor.manager import HathorManager
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
-from hathor.util import iwindows
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.util import iwindows, not_none
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
@@ -14,23 +16,29 @@ from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_custom_tx, ad
 class BaseIndexesTest(unittest.TestCase):
     __test__ = False
 
-    def test_tx_tips_with_conflict(self):
+    manager: HathorManager
+    tx_storage: BaseTransactionStorage
+    graphviz: GraphvizVisualizer
+
+    async def test_tx_tips_with_conflict(self) -> None:
         from hathor.wallet.base_wallet import WalletOutputInfo
 
-        add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager)
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
         value = 500
 
         outputs = [WalletOutputInfo(address=decode_address(address), value=value, timelock=None)]
 
+        assert self.manager.wallet is not None
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx1.weight = 2.0
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
         self.assertTrue(self.manager.propagate_tx(tx1, False))
+        assert self.manager.tx_storage.indexes is not None
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
                 {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
@@ -68,26 +76,28 @@ class BaseIndexesTest(unittest.TestCase):
                 {tx1.hash}
             )
 
-    def test_tx_tips_voided(self):
+    async def test_tx_tips_voided(self) -> None:
         from hathor.wallet.base_wallet import WalletOutputInfo
 
-        add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager)
 
-        address1 = self.get_address(0)
-        address2 = self.get_address(1)
-        address3 = self.get_address(2)
+        address1 = not_none(self.get_address(0))
+        address2 = not_none(self.get_address(1))
+        address3 = not_none(self.get_address(2))
         output1 = WalletOutputInfo(address=decode_address(address1), value=123, timelock=None)
         output2 = WalletOutputInfo(address=decode_address(address2), value=234, timelock=None)
         output3 = WalletOutputInfo(address=decode_address(address3), value=345, timelock=None)
         outputs = [output1, output2, output3]
 
+        assert self.manager.wallet is not None
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx1.weight = 2.0
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
         self.assertTrue(self.manager.propagate_tx(tx1, False))
+        assert self.manager.tx_storage.indexes is not None
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
                 {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
@@ -178,15 +188,16 @@ class BaseIndexesTest(unittest.TestCase):
             expected_genesis_utxos,
         )
 
-    def test_utxo_index_reorg(self):
+    async def test_utxo_index_reorg(self) -> None:
         from hathor.indexes.utxo_index import UtxoIndexItem
 
         assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
 
-        add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager)
 
+        assert self.manager.wallet is not None
         address = self.manager.wallet.get_unused_address(mark_as_used=True)
         value = 10
 
@@ -216,19 +227,19 @@ class BaseIndexesTest(unittest.TestCase):
             # print(']')
             self.assertEqual(actual, expected)
 
-        tx_base = add_new_tx(self.manager, address, value)
+        tx_base = await add_new_tx(self.manager, address, value)
         # there will be 2 outputs, the first one is the change, the second one is what we want
         self.assertEqual(len(tx_base.outputs), 2)
         check_utxos((tx_base.hash, 1, value, None))
 
         # this tx is fine, nothing unusual, it should be added with no problem
-        txA1 = add_custom_tx(self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        txA1 = await add_custom_tx(self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address)
         self.graphviz.labels[txA1.hash] = 'txA1'
         self.assertFalse(bool(txA1.get_metadata().voided_by))
         check_utxos((txA1.hash, 0, value, None))
 
         # this is also fine
-        txB1 = add_custom_tx(self.manager, [(txA1, 0)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        txB1 = await add_custom_tx(self.manager, [(txA1, 0)], n_outputs=1, weight=1.0, resolve=True, address=address)
         self.graphviz.labels[txB1.hash] = 'txB1'
         self.assertFalse(bool(txB1.get_metadata().voided_by))
         check_utxos((txB1.hash, 0, value, None))
@@ -240,13 +251,13 @@ class BaseIndexesTest(unittest.TestCase):
         check_utxos((block1.hash, 0, 6400, 36), (txB1.hash, 0, value, None))
 
         # this is now in conflict with A1, it should be voided right out of the box
-        txA2 = add_custom_tx(self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        txA2 = await add_custom_tx(self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address)
         self.graphviz.labels[txA2.hash] = 'txA2'
         self.assertTrue(bool(txA2.get_metadata().voided_by))
         check_utxos((block1.hash, 0, 6400, 36), (txB1.hash, 0, value, None))
 
         # this one too, although it could also be a tie
-        txB2 = add_custom_tx(self.manager, [(txA2, 0)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        txB2 = await add_custom_tx(self.manager, [(txA2, 0)], n_outputs=1, weight=1.0, resolve=True, address=address)
         self.graphviz.labels[txB2.hash] = 'txB2'
         self.assertTrue(bool(txB2.get_metadata().voided_by))
 
@@ -266,7 +277,7 @@ class BaseIndexesTest(unittest.TestCase):
         block2.weight = 1.2
         self.manager.cpu_mining_service.resolve(block2)
         self.manager.verification_service.validate_full(block2)
-        self.manager.propagate_tx(block2, fails_silently=False)
+        await self.manager.propagate_tx(block2, fails_silently=False)
         self.graphviz.labels[block2.hash] = 'block2'
 
         # make sure a reorg did happen as expected
@@ -278,15 +289,15 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertFalse(bool(txA2.get_metadata().voided_by))
         self.assertFalse(bool(txB2.get_metadata().voided_by))
 
-    def test_utxo_index_simple(self):
+    async def test_utxo_index_simple(self) -> None:
         from hathor.indexes.utxo_index import UtxoIndexItem
 
         assert self.tx_storage.indexes is not None
-        utxo_index = self.tx_storage.indexes.utxo
+        utxo_index = not_none(self.tx_storage.indexes.utxo)
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
 
-        add_new_blocks(self.manager, 4, advance_clock=1)
+        await add_new_blocks(self.manager, 4, advance_clock=1)
 
         self.assertEqual(
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
@@ -295,7 +306,7 @@ class BaseIndexesTest(unittest.TestCase):
 
         # Add some blocks with the address that we have, we'll have 4 outputs of 64.00 HTR each, 256.00 HTR in total
         blocks = await add_new_blocks(self.manager, 4, advance_clock=1, address=decode_address(address))
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
         self.assertEqual(
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
@@ -307,7 +318,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=not_none(b.get_metadata().height) + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[:1]
             ]
         )
@@ -322,7 +333,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=not_none(b.get_metadata().height) + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[4:1:-1]
             ]
         )
@@ -337,7 +348,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=not_none(b.get_metadata().height) + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[::-1]
             ]
         )
@@ -352,20 +363,20 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=not_none(b.get_metadata().height) + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[::-1]
             ]
         )
 
-    def test_utxo_index_limits(self):
+    async def test_utxo_index_limits(self) -> None:
         from hathor.indexes.utxo_index import UtxoIndexItem
 
         _debug = False
 
         assert self.tx_storage.indexes is not None
-        utxo_index = self.tx_storage.indexes.utxo
+        utxo_index = not_none(self.tx_storage.indexes.utxo)
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
         self.assertEqual(
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             []
@@ -373,13 +384,13 @@ class BaseIndexesTest(unittest.TestCase):
 
         # generate outputs ranging from 1 to 300, we'll need 1+2+...+300 = 45150, which we can do with 7 blocks, but
         # using 8 just to be safe
-        add_new_blocks(self.manager, 8, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
+        await add_new_blocks(self.manager, 8, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
 
         txs = []
         values = list(range(1, 301))
         for value in values:
-            txs.append(add_new_tx(self.manager, address, value))
+            txs.append(await add_new_tx(self.manager, address, value))
         assert len(txs) == len(values)
         txs_and_values = list(zip(txs, values))
 
@@ -437,22 +448,22 @@ class BaseIndexesTest(unittest.TestCase):
             print(']')
         self.assertEqual(actual, expected)
 
-    def test_utxo_index_after_push_tx(self):
+    async def test_utxo_index_after_push_tx(self) -> None:
         from hathor.indexes.utxo_index import UtxoIndexItem
         from hathor.transaction import TxInput, TxOutput
         from hathor.transaction.scripts import P2PKH
 
         assert self.tx_storage.indexes is not None
-        utxo_index = self.tx_storage.indexes.utxo
+        utxo_index = not_none(self.tx_storage.indexes.utxo)
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
 
-        add_new_blocks(self.manager, 4, advance_clock=1)
+        await add_new_blocks(self.manager, 4, advance_clock=1)
 
         # Add some blocks with the address that we have, we'll have 1 output of 64.00 HTR
         blocks = await add_new_blocks(self.manager, 1, advance_clock=1, address=decode_address(address))
         self.assertEqual(len(blocks), 1)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
         self.assertEqual(
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
@@ -464,13 +475,13 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=not_none(b.get_metadata().height) + self._settings.REWARD_SPEND_MIN_BLOCKS,
                     ) for b in blocks
             ]
         )
 
         # spend that utxo and check that it is gone from the index
-        address1 = self.get_address(1)
+        address1 = not_none(self.get_address(1))
 
         wallet = self.get_wallet()
         tx1 = Transaction(
@@ -507,7 +518,7 @@ class BaseIndexesTest(unittest.TestCase):
             ]
         )
 
-    def test_utxo_index_last(self):
+    async def test_utxo_index_last(self) -> None:
         """
         """
         from hathor.indexes.utxo_index import UtxoIndexItem
@@ -516,15 +527,16 @@ class BaseIndexesTest(unittest.TestCase):
 
         assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
+        assert utxo_index is not None
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
 
-        add_new_blocks(self.manager, 4, advance_clock=1)
+        await add_new_blocks(self.manager, 4, advance_clock=1)
 
         # Add some blocks with the address that we have, we'll have 1 output of 64.00 HTR
         blocks = await add_new_blocks(self.manager, 1, advance_clock=1, address=decode_address(address))
         self.assertEqual(len(blocks), 1)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
         self.assertEqual(
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
@@ -536,13 +548,13 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=not_none(b.get_metadata().height) + self._settings.REWARD_SPEND_MIN_BLOCKS,
                     ) for b in blocks
             ]
         )
 
         # spend that utxo and check that it is gone from the index
-        address1 = self.get_address(1)
+        address1 = not_none(self.get_address(1))
 
         change_value = 26
         transfer_value = 6400 - change_value
@@ -628,7 +640,7 @@ class BaseIndexesTest(unittest.TestCase):
 
     def test_addresses_index_empty(self):
         addresses_indexes = self.manager.tx_storage.indexes.addresses
-        address = self.get_address(10)
+        address = not_none(self.get_address(10))
         assert address is not None
         self.assertTrue(addresses_indexes.is_address_empty(address))
         self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
@@ -668,13 +680,13 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertTrue(addresses_indexes.is_address_empty(address))
         self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
 
-    def test_height_index(self):
+    async def test_height_index(self) -> None:
         from hathor.indexes.height_index import HeightInfo
 
         # make height 100
         H = 100
         blocks = await add_new_blocks(self.manager, H - self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=15)
-        height_index = self.manager.tx_storage.indexes.height
+        height_index = not_none(self.manager.tx_storage.indexes).height
         self.assertEqual(height_index.get_height_tip(), HeightInfo(100, blocks[-1].hash))
         self.assertEqual(height_index.get_n_height_tips(1), [HeightInfo(100, blocks[-1].hash)])
         self.assertEqual(height_index.get_n_height_tips(2),
@@ -690,7 +702,7 @@ class BaseIndexesTest(unittest.TestCase):
 
 
 class BaseMemoryIndexesTest(BaseIndexesTest):
-    def setUp(self):
+    async def setUp(self):
         from hathor.transaction.storage import TransactionMemoryStorage
 
         super().setUp()
@@ -707,7 +719,7 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
         # this makes sure we can spend the genesis outputs
         self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
                                         use_memory_index=True, utxo_index=True)
-        self.blocks = add_blocks_unlock_reward(self.manager)
+        self.blocks = await add_blocks_unlock_reward(self.manager)
         self.last_block = self.blocks[-1]
 
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
@@ -715,7 +727,7 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
 
 @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class BaseRocksDBIndexesTest(BaseIndexesTest):
-    def setUp(self):
+    async def setUp(self):
         import tempfile
 
         from hathor.transaction.storage import TransactionRocksDBStorage
@@ -737,7 +749,7 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         # this makes sure we can spend the genesis outputs
         self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
                                         utxo_index=True)
-        self.blocks = add_blocks_unlock_reward(self.manager)
+        self.blocks = await add_blocks_unlock_reward(self.manager)
         self.last_block = self.blocks[-1]
 
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)

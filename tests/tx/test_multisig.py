@@ -54,7 +54,7 @@ class BaseMultisigTestCase(unittest.TestCase):
     async def test_spend_multisig(self) -> None:
         # Adding funds to the wallet
         blocks = await add_new_blocks(self.manager, 2, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(blk.outputs[0].value for blk in blocks)))
 
@@ -128,7 +128,7 @@ class BaseMultisigTestCase(unittest.TestCase):
 
         # Testing the MultiSig class methods
         cls_script = parse_address_script(multisig_script)
-        self.assertTrue(isinstance(cls_script, MultiSig))
+        assert isinstance(cls_script, MultiSig)
         self.assertEqual(cls_script.address, self.multisig_address_b58)
 
         expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}

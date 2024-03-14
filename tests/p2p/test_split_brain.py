@@ -38,7 +38,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         return manager
 
     @pytest.mark.slow
-    def test_split_brain_plain(self) -> None:
+    async def test_split_brain_plain(self) -> None:
         debug_pdf = False
 
         manager1 = self.create_peer(self.network, unlock_wallet=True)
@@ -46,16 +46,16 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         manager2 = self.create_peer(self.network, unlock_wallet=True)
 
         for _ in range(10):
-            add_new_block(manager1, advance_clock=1)
-            add_blocks_unlock_reward(manager1)
-            add_new_block(manager2, advance_clock=1)
-            add_blocks_unlock_reward(manager2)
+            await add_new_block(manager1, advance_clock=1)
+            await add_blocks_unlock_reward(manager1)
+            await add_new_block(manager2, advance_clock=1)
+            await add_blocks_unlock_reward(manager2)
             self.clock.advance(10)
             for _ in range(self.rng.randint(3, 10)):
-                add_new_transactions(manager1, self.rng.randint(2, 4), advance_clock=1)
-                add_new_transactions(manager2, self.rng.randint(3, 7), advance_clock=1)
-                add_new_double_spending(manager1)
-                add_new_double_spending(manager2)
+                await add_new_transactions(manager1, self.rng.randint(2, 4), advance_clock=1)
+                await add_new_transactions(manager2, self.rng.randint(3, 7), advance_clock=1)
+                await add_new_double_spending(manager1)
+                await add_new_double_spending(manager2)
                 self.clock.advance(10)
         self.clock.advance(20)
 
@@ -99,20 +99,20 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(manager2)
 
     @pytest.mark.slow
-    def test_split_brain_only_blocks_different_height(self) -> None:
+    async def test_split_brain_only_blocks_different_height(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
 
         for _ in range(10):
-            add_new_block(manager1, advance_clock=1)
-            add_blocks_unlock_reward(manager1)
-            add_new_block(manager2, advance_clock=1)
-            add_blocks_unlock_reward(manager2)
+            await add_new_block(manager1, advance_clock=1)
+            await add_blocks_unlock_reward(manager1)
+            await add_new_block(manager2, advance_clock=1)
+            await add_blocks_unlock_reward(manager2)
             self.clock.advance(10)
 
         # Add one more block to manager1, so it's the winner chain
-        add_new_block(manager1, advance_clock=1)
+        await add_new_block(manager1, advance_clock=1)
 
         block_tip1 = not_none(manager1.tx_storage.indexes).height.get_tip()
 
@@ -148,10 +148,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         manager2 = self.create_peer(self.network, unlock_wallet=True)
 
         for _ in range(10):
-            add_new_block(manager1, advance_clock=1)
-            unlock_reward_blocks1 = add_blocks_unlock_reward(manager1)
-            add_new_block(manager2, advance_clock=1)
-            unlock_reward_blocks2 = add_blocks_unlock_reward(manager2)
+            await add_new_block(manager1, advance_clock=1)
+            unlock_reward_blocks1 = await add_blocks_unlock_reward(manager1)
+            await add_new_block(manager2, advance_clock=1)
+            unlock_reward_blocks2 = await add_blocks_unlock_reward(manager2)
             self.clock.advance(10)
 
         block_tips1 = unlock_reward_blocks1[-1].hash
@@ -271,24 +271,24 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # Start with 1 because of the genesis block
         manager2_blocks = 1
         for _ in range(10):
-            add_new_block(manager1, advance_clock=1)
-            add_blocks_unlock_reward(manager1)
-            add_new_block(manager2, advance_clock=1)
+            await add_new_block(manager1, advance_clock=1)
+            await add_blocks_unlock_reward(manager1)
+            await add_new_block(manager2, advance_clock=1)
             manager2_blocks += 1
-            blocks2 = add_blocks_unlock_reward(manager2)
+            blocks2 = await add_blocks_unlock_reward(manager2)
             manager2_blocks += len(blocks2)
             self.clock.advance(10)
 
         # Add two more blocks to manager1, so it's the winner chain
-        add_new_block(manager1, advance_clock=1)
-        add_new_block(manager1, advance_clock=1)
+        await add_new_block(manager1, advance_clock=1)
+        await add_new_block(manager1, advance_clock=1)
 
         # Propagates a block with bigger weight, so the score of the manager2 chain
         # will be bigger than the other one
         b = await add_new_block(manager2, advance_clock=1, propagate=False)
         b.weight = 5
         manager2.cpu_mining_service.resolve(b)
-        manager2.propagate_tx(b)
+        await manager2.propagate_tx(b)
         manager2_blocks += 1
 
         self.assertConsensusValid(manager1)
@@ -321,7 +321,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # Assert that the consensus had the manager2 chain
         self.assertEqual(winners2_blocks, manager2_blocks)
 
-    def test_split_brain_no_double_spending(self) -> None:
+    async def test_split_brain_no_double_spending(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
         manager1.connections.disable_rate_limiter()
 
@@ -332,23 +332,23 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         winner_txs = 2
 
         for _ in range(10):
-            add_new_block(manager1, advance_clock=1)
-            add_blocks_unlock_reward(manager1)
-            add_new_block(manager2, advance_clock=1)
+            await add_new_block(manager1, advance_clock=1)
+            await add_blocks_unlock_reward(manager1)
+            await add_new_block(manager2, advance_clock=1)
             winner_blocks += 1
-            blocks = add_blocks_unlock_reward(manager2)
+            blocks = await add_blocks_unlock_reward(manager2)
             winner_blocks += len(blocks)
             self.clock.advance(10)
             for _ in range(self.rng.randint(3, 10)):
-                add_new_transactions(manager1, self.rng.randint(2, 4), advance_clock=1)
-                txs = add_new_transactions(manager2, self.rng.randint(3, 7), advance_clock=1)
+                await add_new_transactions(manager1, self.rng.randint(2, 4), advance_clock=1)
+                txs = await add_new_transactions(manager2, self.rng.randint(3, 7), advance_clock=1)
                 winner_txs += len(txs)
                 self.clock.advance(10)
 
         self.clock.advance(20)
 
         # Manager2 will be the winner because it has the biggest chain
-        add_new_block(manager2, advance_clock=1)
+        await add_new_block(manager2, advance_clock=1)
         winner_blocks += 1
         self.clock.advance(20)
 

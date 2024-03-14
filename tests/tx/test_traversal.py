@@ -9,7 +9,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_transactions, add_new_
 class _TraversalTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
 
         self.manager = self.create_peer(network='testnet')

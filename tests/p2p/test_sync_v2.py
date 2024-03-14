@@ -43,7 +43,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
                     partial_blocks.add(tx.hash)
         return partial_blocks
 
-    def _run_restart_test(self, *, full_verification: bool, use_tx_storage_cache: bool) -> None:
+    async def _run_restart_test(self, *, full_verification: bool, use_tx_storage_cache: bool) -> None:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
 
@@ -53,7 +53,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(self.simulator.run(3 * 3600, trigger=trigger))
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=2., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         trigger = StopAfterNTransactions(gen_tx1, quantity=500)
         self.assertTrue(self.simulator.run(3600, trigger=trigger))
 
@@ -141,7 +141,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         # Start generators again to test real time sync.
         miner1.start()
-        gen_tx1.start()
+        await gen_tx1.start()
         self.simulator.run(600)
         miner1.stop()
         gen_tx1.stop()
@@ -153,22 +153,22 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_full_verification(self) -> None:
-        self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
+    async def test_restart_fullnode_full_verification(self) -> None:
+        await self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_quick(self) -> None:
-        self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
+    async def test_restart_fullnode_quick(self) -> None:
+        await self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_quick_with_cache(self) -> None:
-        self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
+    async def test_restart_fullnode_quick_with_cache(self) -> None:
+        await self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_full_verification_with_cache(self) -> None:
-        self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
+    async def test_restart_fullnode_full_verification_with_cache(self) -> None:
+        await self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
 
-    def test_exceeds_streaming_and_mempool_limits(self) -> None:
+    async def test_exceeds_streaming_and_mempool_limits(self) -> None:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
 
@@ -181,7 +181,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         # Generate 500 txs.
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3., hashpower=10e9, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         trigger = StopAfterNTransactions(gen_tx1, quantity=500)
         self.simulator.run(3600, trigger=trigger)
         self.assertGreater(manager1.tx_storage.get_vertices_count(), 500)
@@ -207,7 +207,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertGreater(cnt, 400)
 
         # Generate 500 txs in mempool.
-        gen_tx1.start()
+        await gen_tx1.start()
         trigger = StopAfterNTransactions(gen_tx1, quantity=500)
         self.simulator.run(3600, trigger=trigger)
         self.assertGreater(manager1.tx_storage.get_vertices_count(), 1000)
@@ -340,7 +340,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             common_block_info = await sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
             self.assertIsNone(common_block_info)
 
-    def test_multiple_unexpected_txs(self) -> None:
+    async def test_multiple_unexpected_txs(self) -> None:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
 
@@ -352,7 +352,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         # generate some transactions (10, could by any amount >1)
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3., hashpower=10e9, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNTransactions(gen_tx1, quantity=10)))
         gen_tx1.stop()
 

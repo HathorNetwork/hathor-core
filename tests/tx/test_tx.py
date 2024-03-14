@@ -33,6 +33,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.util import not_none
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
@@ -41,7 +42,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_s
 class BaseTransactionTest(unittest.TestCase):
     __test__ = False
 
-    async def setUp(self) -> None:
+    async def setUp(self):
         super().setUp()
         self.wallet = Wallet()
 
@@ -87,7 +88,7 @@ class BaseTransactionTest(unittest.TestCase):
         block_from_chain = self.last_block
         for _ in range(100):
             block_from_list = next(iblocks)
-            block_from_chain = block_from_chain.get_next_block_best_chain()
+            block_from_chain = not_none(block_from_chain.get_next_block_best_chain())
             self.assertEqual(block_from_chain, block_from_list)
             self.assertTrue(block_from_chain.has_basic_block_parent())
         self.assertEqual(block_from_chain.get_next_block_best_chain(), None)
@@ -716,7 +717,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertFalse(tx == tx2)
 
         tx2_hash = tx2.hash
-        tx2.hash = None
+        tx2._hash = None
         self.assertFalse(tx == tx2)
         tx2.hash = tx2_hash
 
@@ -975,7 +976,9 @@ class BaseTransactionTest(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
 
-        address_b58 = parse_address_script(script).address
+        p2pkh_script = parse_address_script(script)
+        assert isinstance(p2pkh_script, P2PKH)
+        address_b58 = p2pkh_script.address
         # Get how many transactions wallet index already has for this address
         wallet_index_count = len(self.tx_storage.indexes.addresses.get_from_address(address_b58))
 
@@ -996,7 +999,7 @@ class BaseTransactionTest(unittest.TestCase):
         # Second transaction: spend tokens from output with address=address_b58 and
         # send tokens to 2 outputs, one with address=address_b58 and another one
         # with address=new_address_b58, which is an address of a random wallet
-        new_address_b58 = self.get_address(0)
+        new_address_b58 = not_none(self.get_address(0))
         new_address = decode_address(new_address_b58)
 
         output1 = TxOutput(value - 100, script)
@@ -1021,7 +1024,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # Third transaction: spend tokens from output with address=address_b58 and send
         # tokens to a new address = output3_address_b58, which is from a random wallet
-        output3_address_b58 = self.get_address(1)
+        output3_address_b58 = not_none(self.get_address(1))
         output3_address = decode_address(output3_address_b58)
         script3 = P2PKH.create_output_script(output3_address)
         output3 = TxOutput(value-100, script3)

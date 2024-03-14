@@ -15,7 +15,7 @@ class BaseAccumulatedWeightTestCase(unittest.TestCase):
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-    def test_accumulated_weight_indirect_block(self):
+    async def test_accumulated_weight_indirect_block(self) -> None:
         """ All new blocks belong to case (i).
         """
         self.assertEqual(len(self.genesis_blocks), 1)
@@ -23,10 +23,10 @@ class BaseAccumulatedWeightTestCase(unittest.TestCase):
 
         # Mine 3 blocks in a row with no transaction but the genesis
         blocks = await add_new_blocks(manager, 3, advance_clock=15)
-        add_blocks_unlock_reward(manager)
+        await add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
-        tx_list = add_new_transactions(manager, 20, advance_clock=15)
+        tx_list = await add_new_transactions(manager, 20, advance_clock=15)
 
         # Mine more 2 blocks in a row with no transactions between them
         blocks = await add_new_blocks(manager, 2, weight=8)
@@ -37,7 +37,7 @@ class BaseAccumulatedWeightTestCase(unittest.TestCase):
 
         # All transactions and blocks should be verifying tx_list[0] directly or
         # indirectly.
-        expected = 0
+        expected: float = 0
         for tx in tx_list:
             expected = sum_weights(expected, tx.weight)
         for block in blocks:

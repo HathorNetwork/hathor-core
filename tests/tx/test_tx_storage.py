@@ -14,6 +14,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
+from hathor.types import VertexId
 from tests.unittest import TestBuilder
 from tests.utils import (
     BURN_ADDRESS,
@@ -142,7 +143,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(2, len(tx_parents_hash))
         self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
-    def test_vertices_count(self):
+    async def test_vertices_count(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         blocks_count = 1
@@ -150,13 +151,13 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
         blocks = await add_new_blocks(self.manager, 10, advance_clock=10)
         blocks_count += len(blocks)
-        blocks = add_blocks_unlock_reward(self.manager)
+        blocks = await add_blocks_unlock_reward(self.manager)
         blocks_count += len(blocks)
-        txs = add_new_transactions(self.manager, 5, advance_clock=5)
+        txs = await add_new_transactions(self.manager, 5, advance_clock=5)
         txs_count += len(txs)
         blocks = await add_new_blocks(self.manager, 10, advance_clock=10)
         blocks_count += len(blocks)
-        txs = add_new_transactions(self.manager, 5, advance_clock=5)
+        txs = await add_new_transactions(self.manager, 5, advance_clock=5)
         txs_count += len(txs)
 
         vertices_count = blocks_count + txs_count
@@ -507,7 +508,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         tx._metadata.hash = tx.hash
         self.validate_save(tx)
 
-    def _add_new_block(self, parents=None):
+    async def _add_new_block(self, parents: list[VertexId] | None= None) -> None:
         block = self.manager.generate_mining_block()
         block.data = b'Testing, testing, 1, 2, 3... testing, testing...'
         if parents is not None:
@@ -515,30 +516,30 @@ class BaseTransactionStorageTest(unittest.TestCase):
         block.weight = 10
         self.assertTrue(self.manager.cpu_mining_service.resolve(block))
         self.manager.verification_service.verify(block)
-        self.manager.propagate_tx(block, fails_silently=False)
+        await self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)
         return block
 
-    def test_best_block_tips_cache(self):
+    async def test_best_block_tips_cache(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         self.manager.wallet.unlock(b'MYPASS')
         spent_blocks = await add_new_blocks(self.manager, 10)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [spent_blocks[-1].hash])
-        unspent_blocks = add_blocks_unlock_reward(self.manager)
+        unspent_blocks = await add_blocks_unlock_reward(self.manager)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [unspent_blocks[-1].hash])
-        latest_blocks = add_blocks_unlock_reward(self.manager)
+        latest_blocks = await add_blocks_unlock_reward(self.manager)
         unspent_address = self.manager.wallet.get_unused_address()
-        add_new_tx(self.manager, unspent_address, 100)
+        await add_new_tx(self.manager, unspent_address, 100)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [latest_blocks[-1].hash])
 
-    def test_topological_sort(self):
+    async def test_topological_sort(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         _total = 0
         blocks = await add_new_blocks(self.manager, 1, advance_clock=1)
         _total += len(blocks)
-        blocks = add_blocks_unlock_reward(self.manager)
+        blocks = await add_blocks_unlock_reward(self.manager)
         _total += len(blocks)
-        add_new_transactions(self.manager, 1, advance_clock=1)
+        await add_new_transactions(self.manager, 1, advance_clock=1)
 
         total = 0
         for tx in self.tx_storage._topological_sort_dfs():
