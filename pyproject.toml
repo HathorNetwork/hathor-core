@@ -161,7 +161,7 @@ module = [
     "tests.event.*",
     "tests.execution_manager.*",
     "tests.feature_activation.*",
-#    "tests.p2p.*",
+    "tests.p2p.*",
     "tests.pubsub.*",
     "tests.simulation.*",
 ]

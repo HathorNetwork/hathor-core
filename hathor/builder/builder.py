@@ -46,6 +46,7 @@ from hathor.transaction.storage import (
     TransactionRocksDBStorage,
     TransactionStorage,
 )
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import Random, get_environment_info, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -131,7 +132,7 @@ class Builder:
         self._tx_storage_cache_capacity: Optional[int] = None
 
         self._indexes_manager: Optional[IndexesManager] = None
-        self._tx_storage: Optional[TransactionStorage] = None
+        self._tx_storage: Optional[BaseTransactionStorage] = None
         self._event_storage: Optional[EventStorage] = None
 
         self._reactor: Optional[Reactor] = None
@@ -393,7 +394,7 @@ class Builder:
 
         return self._indexes_manager
 
-    def _get_or_create_tx_storage(self) -> TransactionStorage:
+    def _get_or_create_tx_storage(self) -> BaseTransactionStorage:
         indexes = self._get_or_create_indexes_manager()
 
         if self._tx_storage is not None:
@@ -616,7 +617,7 @@ class Builder:
         self._enable_event_queue = True
         return self
 
-    def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':
+    def set_tx_storage(self, tx_storage: BaseTransactionStorage) -> 'Builder':
         self.check_if_can_modify()
         self._tx_storage = tx_storage
         return self

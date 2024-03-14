@@ -1,6 +1,8 @@
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection
+from hathor.transaction import Block, Transaction
+from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
@@ -8,7 +10,7 @@ from tests.utils import add_blocks_unlock_reward
 class BaseHathorSyncMempoolTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         self.network = 'testnet'
@@ -18,7 +20,7 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
-    def _add_new_tx(self, address, value):
+    def _add_new_tx(self, address: str, value: int) -> Transaction:
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo
 
@@ -37,16 +39,16 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         self.clock.advance(10)
         return tx
 
-    def _add_new_transactions(self, num_txs):
+    def _add_new_transactions(self, num_txs: int) -> list[Transaction]:
         txs = []
         for _ in range(num_txs):
-            address = self.get_address(0)
+            address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 50, 100, 120])
             tx = self._add_new_tx(address, value)
             txs.append(tx)
         return txs
 
-    def _add_new_block(self, propagate=True):
+    def _add_new_block(self, propagate: bool = True) -> Block:
         block = self.manager1.generate_mining_block()
         self.assertTrue(self.manager1.cpu_mining_service.resolve(block))
         self.manager1.verification_service.verify(block)
@@ -54,13 +56,13 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         self.clock.advance(10)
         return block
 
-    def _add_new_blocks(self, num_blocks, propagate=True):
+    def _add_new_blocks(self, num_blocks: int, propagate: bool = True) -> list[Block]:
         blocks = []
         for _ in range(num_blocks):
             blocks.append(self._add_new_block(propagate=propagate))
         return blocks
 
-    def test_mempool_basic(self):
+    def test_mempool_basic(self) -> None:
         # 10 blocks
         self._add_new_blocks(2)
         # N blocks to unlock the reward
@@ -100,7 +102,7 @@ class SyncV1HathorSyncMempoolTestCase(unittest.SyncV1Params, BaseHathorSyncMempo
 class SyncV2HathorSyncMempoolTestCase(unittest.SyncV2Params, BaseHathorSyncMempoolTestCase):
     __test__ = True
 
-    def test_mempool_basic(self):
+    def test_mempool_basic(self) -> None:
         super().test_mempool_basic()
 
         # 3 genesis
