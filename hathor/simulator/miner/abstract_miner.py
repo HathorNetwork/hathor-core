@@ -55,7 +55,7 @@ class AbstractMiner(ABC):
         self._manager.pubsub.unsubscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self._on_new_tx)
 
     @abstractmethod
-    def _on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
+    async def _on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
         """Called when a new tx or block is received."""
         raise NotImplementedError
 

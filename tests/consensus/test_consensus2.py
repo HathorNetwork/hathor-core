@@ -22,32 +22,32 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
             cnt += 1
         self.assertLessEqual(cnt, 1)
 
-    def do_step(self, i: int, manager1: HathorManager, tx_base: Transaction) -> Transaction:
-        txA = add_custom_tx(manager1, [(tx_base, 0)], n_outputs=2)
+    async def do_step(self, i: int, manager1: HathorManager, tx_base: Transaction) -> Transaction:
+        txA = await add_custom_tx(manager1, [(tx_base, 0)], n_outputs=2)
         self.graphviz.labels[txA.hash] = f'txA-{i}'
 
-        txB = add_custom_tx(manager1, [(txA, 0)])
+        txB = await add_custom_tx(manager1, [(txA, 0)])
         self.graphviz.labels[txB.hash] = f'txB-{i}'
-        txC = add_custom_tx(manager1, [(txA, 1)])
+        txC = await add_custom_tx(manager1, [(txA, 1)])
         self.graphviz.labels[txC.hash] = f'txC-{i}'
 
-        txD1 = add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base)
+        txD1 = await add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base)
         self.graphviz.labels[txD1.hash] = f'txD1-{i}'
-        txF2 = add_custom_tx(manager1, [(txB, 0), (txD1, 0)])
+        txF2 = await add_custom_tx(manager1, [(txB, 0), (txD1, 0)])
         self.graphviz.labels[txF2.hash] = f'txF2-{i}'
 
-        txD2 = add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base, inc_timestamp=1)
+        txD2 = await add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base, inc_timestamp=1)
         self.graphviz.labels[txD2.hash] = f'txD2-{i}'
-        txE = add_custom_tx(manager1, [(txD2, 0)], base_parent=tx_base)
+        txE = await add_custom_tx(manager1, [(txD2, 0)], base_parent=tx_base)
         self.graphviz.labels[txE.hash] = f'txE-{i}'
 
-        txF1 = add_custom_tx(manager1, [(txB, 0)], base_parent=tx_base)
+        txF1 = await add_custom_tx(manager1, [(txB, 0)], base_parent=tx_base)
         self.graphviz.labels[txF1.hash] = f'txF1-{i}'
 
-        txG = add_custom_tx(manager1, [(txF2, 0)], base_parent=tx_base)
+        txG = await add_custom_tx(manager1, [(txF2, 0)], base_parent=tx_base)
         self.graphviz.labels[txG.hash] = f'txG-{i}'
 
-        txH = add_custom_tx(manager1, [(txF1, 0), (txG, 0)])
+        txH = await add_custom_tx(manager1, [(txF1, 0), (txG, 0)])
         self.graphviz.labels[txH.hash] = f'txH-{i}'
 
         self.checkConflict(txD1, txD2)
@@ -64,7 +64,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(60)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.simulator.run(300)
         gen_tx1.stop()
 
@@ -85,7 +85,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.graphviz.labels[initial.hash] = 'initial'
 
         x = initial
-        x = self.do_step(0, manager1, x)
+        x = await self.do_step(0, manager1, x)
 
         # Uncomment lines below to visualize the DAG and the blockchain.
         # dot = self.graphviz.dot()
@@ -121,11 +121,11 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.graphviz.labels[not_none(initial.hash)] = 'initial'
 
         x = initial
-        x = self.do_step(0, manager1, x)
-        x = self.do_step(1, manager1, x)
-        x = self.do_step(2, manager1, x)
-        x = self.do_step(3, manager1, x)
-        x = self.do_step(4, manager1, x)
+        x = await self.do_step(0, manager1, x)
+        x = await self.do_step(1, manager1, x)
+        x = await self.do_step(2, manager1, x)
+        x = await self.do_step(3, manager1, x)
+        x = await self.do_step(4, manager1, x)
 
         # Uncomment lines below to visualize the DAG and the blockchain.
         # dot = self.graphviz.dot()

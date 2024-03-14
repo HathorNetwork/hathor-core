@@ -16,6 +16,7 @@ from collections import deque
 from typing import TYPE_CHECKING
 
 from structlog import get_logger
+from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.simulator.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
@@ -55,7 +56,7 @@ class RandomTransactionGenerator:
         self.hashpower = hashpower
         self.ignore_no_funds = ignore_no_funds
         self.tx = None
-        self.delayedcall = None
+        self.delayedcall: IDelayedCall | None = None
         self.log = logger.new()
         self.rng = rng
 
@@ -66,7 +67,7 @@ class RandomTransactionGenerator:
 
         self.double_spending_only = False
 
-    async def start(self):
+    async def start(self) -> None:
         """ Start generating random transactions.
         """
         await self.schedule_next_transaction()
@@ -81,7 +82,7 @@ class RandomTransactionGenerator:
     def enable_double_spending(self):
         self.double_spending_only = True
 
-    async def schedule_next_transaction(self):
+    async def schedule_next_transaction(self) -> None:
         """ Schedule the generation of a new transaction.
         """
         if self.tx:

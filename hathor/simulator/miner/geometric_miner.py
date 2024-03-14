@@ -82,7 +82,7 @@ class GeometricMiner(AbstractMiner):
 
         return block
 
-    async def _schedule_next_block(self):
+    async def _schedule_next_block(self) -> None:
         if self._blocks_before_pause <= 0:
             self._delayed_call = None
             return
@@ -100,7 +100,7 @@ class GeometricMiner(AbstractMiner):
             try:
                 block = self._generate_mining_block()
             except BlockTemplateTimestampError:
-                dt = 5  # Try again in 5 seconds.
+                dt: float = 5  # Try again in 5 seconds.
             else:
                 geometric_p = 2**(-block.weight)
                 trials = self._rng.geometric(geometric_p)

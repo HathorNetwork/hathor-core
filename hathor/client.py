@@ -185,7 +185,7 @@ class MiningChannel(IMiningChannel):
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> BlockTemplates:
         try:
             return await self._queue
         finally:
@@ -317,7 +317,7 @@ class MiningChannelStub(IMiningChannel):
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> BlockTemplates:
         try:
             return await self._queue
         finally:

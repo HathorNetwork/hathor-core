@@ -41,7 +41,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_s
 class BaseTransactionTest(unittest.TestCase):
     __test__ = False
 
-    async def setUp(self):
+    async def setUp(self) -> None:
         super().setUp()
         self.wallet = Wallet()
 
@@ -80,7 +80,7 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(InputOutputMismatch):
             self._verifiers.tx.verify_sum(tx.get_complete_token_info())
 
-    async def test_validation(self):
+    async def test_validation(self) -> None:
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
         blocks = await add_new_blocks(self.manager, 100, advance_clock=1)
         iblocks = iter(blocks)
@@ -671,7 +671,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx.update_timestamp(ts)
         self.assertEquals(tx.timestamp, ts)
 
-    async def test_propagation_error(self):
+    async def test_propagation_error(self) -> None:
         manager = self.create_peer('testnet', unlock_wallet=True)
         manager.daa.TEST_MODE = TestMode.DISABLED
 
@@ -699,7 +699,7 @@ class BaseTransactionTest(unittest.TestCase):
         manager.cpu_mining_service.resolve(block, update_time=False)
         self.assertFalse(await manager.propagate_tx(block))
 
-    async def test_tx_methods(self):
+    async def test_tx_methods(self) -> None:
         blocks = await add_new_blocks(self.manager, 2, advance_clock=1)
         await add_blocks_unlock_reward(self.manager)
         txs = await add_new_transactions(self.manager, 2, advance_clock=1)
@@ -769,7 +769,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         assert cloned_block == block
 
-    async def test_block_data(self):
+    async def test_block_data(self) -> None:
         async def add_block_with_data(data: bytes = b'') -> None:
             await add_new_blocks(self.manager, 1, advance_clock=1, block_data=data)
 
@@ -960,12 +960,12 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(InvalidInputDataSize):
             self._test_txin_data_limit(offset=1)
 
-    async def test_txin_data_limit_success(self):
+    async def test_txin_data_limit_success(self) -> None:
         await add_blocks_unlock_reward(self.manager)
         self._test_txin_data_limit(offset=-1)
         self._test_txin_data_limit(offset=0)
 
-    async def test_wallet_index(self):
+    async def test_wallet_index(self) -> None:
         # First transaction: send tokens to output with address=address_b58
         parents = [tx.hash for tx in self.genesis_txs]
         genesis_block = self.genesis_blocks[0]

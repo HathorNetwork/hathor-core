@@ -63,7 +63,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             response = yield self.web.get('/health')
             return response.json_value()
 
-        async def run():
+        async def run() -> None:
             data = get_health()
             # When the request is done, we make sure the response is as expected
             data.addCallback(self.assertEqual, {

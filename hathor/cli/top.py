@@ -677,17 +677,17 @@ if sys.platform != 'win32':
         def start(self):
             self.task = self.loop.create_task(self.run())
 
-        async def send_start_cmd(self):
+        async def send_start_cmd(self) -> dict[str, Any]:
             async with self.session.post(self.url, data='start') as resp:
                 data = await resp.json()
                 return data
 
-        async def send_stop_cmd(self):
+        async def send_stop_cmd(self) -> dict[str, Any]:
             async with self.session.post(self.url, data='stop') as resp:
                 data = await resp.json()
                 return data
 
-        async def send_reset_cmd(self):
+        async def send_reset_cmd(self) -> dict[str, Any]:
             async with self.session.post(self.url, data='reset') as resp:
                 data = await resp.json()
                 return data
@@ -710,7 +710,7 @@ if sys.platform != 'win32':
                         self.on_fetch_error()
                 await asyncio.sleep(self.update_interval)
 
-        async def fetch(self):
+        async def fetch(self) -> dict[str, Any]:
             async with self.session.get(self.url) as resp:
                 data = await resp.json()
                 return data

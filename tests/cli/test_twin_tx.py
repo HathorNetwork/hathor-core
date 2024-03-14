@@ -22,7 +22,7 @@ from tests.utils import (
 class BaseTwinTxTest(unittest.TestCase):
     __test__ = False
 
-    async def setUp(self):
+    async def setUp(self) -> None:
         super().setUp()
 
         self.network = 'testnet'
@@ -35,7 +35,7 @@ class BaseTwinTxTest(unittest.TestCase):
 
         self.parser = create_parser()
 
-    async def test_twin(self):
+    async def test_twin(self) -> None:
         # Normal twin
         params = ['--raw_tx', self.tx.get_struct().hex()]
         args = self.parser.parse_args(params)

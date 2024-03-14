@@ -13,11 +13,11 @@ class DoubleSpendingTestCase(unittest.TestCase):
         self.manager1 = self.create_peer(self.network, unlock_wallet=True, enable_sync_v1=True, enable_sync_v2=False)
 
     @pytest.mark.xfail(strict=True)
-    def test_double_spending_attempt_1(self) -> None:
+    async def test_double_spending_attempt_1(self) -> None:
         manager = self.manager1
 
-        add_new_blocks(manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(manager)
+        await add_new_blocks(manager, 5, advance_clock=15)
+        await add_blocks_unlock_reward(manager)
 
         from hathor.crypto.util import decode_address
         from hathor.graphviz import GraphvizVisualizer
@@ -91,7 +91,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         for _ in range(N):
             tx = do_step(tx)
 
-        block = add_new_block(manager)
+        block = await add_new_block(manager)
         self.assertIn(tx.hash, block.parents)
 
         dot = graphviz.dot()
@@ -105,11 +105,11 @@ class DoubleSpendingTestCase(unittest.TestCase):
         self.assertConsensusValid(manager)
 
     @pytest.mark.xfail(strict=True)
-    def test_double_spending_attempt_2(self) -> None:
+    async def test_double_spending_attempt_2(self) -> None:
         manager = self.manager1
 
-        add_new_blocks(manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(manager)
+        await add_new_blocks(manager, 5, advance_clock=15)
+        await add_blocks_unlock_reward(manager)
 
         from hathor.crypto.util import decode_address
         from hathor.transaction import Transaction
@@ -187,7 +187,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx = do_step(tx)
 
         self.run_to_completion()
-        block = add_new_block(manager)
+        block = await add_new_block(manager)
         self.assertIn(tx.hash, block.parents)
 
         meta = tx.get_metadata()

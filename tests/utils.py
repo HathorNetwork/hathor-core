@@ -434,7 +434,7 @@ async def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = N
         else:
             change_output = None
 
-        add_blocks_unlock_reward(manager)
+        await add_blocks_unlock_reward(manager)
         timestamp = int(manager.reactor.seconds())
         parents = manager.get_new_tx_parents(timestamp)
 
@@ -527,7 +527,7 @@ async def add_tx_with_data_script(manager: 'HathorManager', data: list[str], pro
         change_output = None
 
     # Unlock the rewards to be used
-    add_blocks_unlock_reward(manager)
+    await add_blocks_unlock_reward(manager)
 
     # Calculate tx timestamp and parents
     timestamp = int(manager.reactor.seconds())

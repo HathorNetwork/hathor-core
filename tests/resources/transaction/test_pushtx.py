@@ -50,7 +50,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.manager.cpu_mining_service.resolve(tx)
         return tx
 
-    async def push_tx(self, data=None):
+    async def push_tx(self, data=None) -> None:
         if self.is_post is None:
             raise Exception('You must set self.is_push before calling this method.')
 
