@@ -3,8 +3,10 @@ from mnemonic import Mnemonic
 
 from hathor.daa import TestMode
 from hathor.graphviz import GraphvizVisualizer
+from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
 from hathor.simulator.utils import add_new_block
+from hathor.util import not_none
 from hathor.wallet import HDWallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
@@ -13,7 +15,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_n
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         first_timestamp = self._settings.GENESIS_BLOCK_TIMESTAMP
@@ -21,13 +23,12 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.network = 'testnet'
 
-    def create_peer(self, network, unlock_wallet=True):
+    def create_peer(self, network: str, unlock_wallet: bool = True) -> HathorManager:  # type: ignore[override]
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
         manager = super().create_peer(network, wallet=wallet)
         manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
-        manager.avg_time_between_blocks = 64
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.
         # It should be used only for testing purposes.
@@ -37,14 +38,12 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         return manager
 
     @pytest.mark.slow
-    def test_split_brain_plain(self):
+    def test_split_brain_plain(self) -> None:
         debug_pdf = False
 
         manager1 = self.create_peer(self.network, unlock_wallet=True)
-        manager1.avg_time_between_blocks = 3
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
-        manager2.avg_time_between_blocks = 3
 
         for _ in range(10):
             add_new_block(manager1, advance_clock=1)
@@ -100,12 +99,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(manager2)
 
     @pytest.mark.slow
-    def test_split_brain_only_blocks_different_height(self):
+    def test_split_brain_only_blocks_different_height(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
-        manager1.avg_time_between_blocks = 3
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
-        manager2.avg_time_between_blocks = 3
 
         for _ in range(10):
             add_new_block(manager1, advance_clock=1)
@@ -117,7 +114,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # Add one more block to manager1, so it's the winner chain
         add_new_block(manager1, advance_clock=1)
 
-        block_tip1 = manager1.tx_storage.indexes.height.get_tip()
+        block_tip1 = not_none(manager1.tx_storage.indexes).height.get_tip()
 
         self.assertConsensusValid(manager1)
         self.assertConsensusValid(manager2)
@@ -140,17 +137,15 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(manager2)
         self.assertConsensusEqual(manager1, manager2)
 
-        self.assertEqual(block_tip1, manager1.tx_storage.indexes.height.get_tip())
-        self.assertEqual(block_tip1, manager2.tx_storage.indexes.height.get_tip())
+        self.assertEqual(block_tip1, not_none(manager1.tx_storage.indexes).height.get_tip())
+        self.assertEqual(block_tip1, not_none(manager2.tx_storage.indexes).height.get_tip())
 
     # XXX We must decide what to do when different chains have the same score
     # For now we are voiding everyone until the first common block
-    def test_split_brain_only_blocks_same_height(self):
+    def test_split_brain_only_blocks_same_height(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
-        manager1.avg_time_between_blocks = 3
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
-        manager2.avg_time_between_blocks = 3
 
         for _ in range(10):
             add_new_block(manager1, advance_clock=1)
@@ -268,12 +263,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(len(manager2.tx_storage.get_best_block_tips()), 1)
         self.assertCountEqual(manager2.tx_storage.get_best_block_tips(), {new_block.hash})
 
-    def test_split_brain_only_blocks_bigger_score(self):
+    def test_split_brain_only_blocks_bigger_score(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
-        manager1.avg_time_between_blocks = 3
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
-        manager2.avg_time_between_blocks = 3
 
         # Start with 1 because of the genesis block
         manager2_blocks = 1
@@ -328,13 +321,11 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # Assert that the consensus had the manager2 chain
         self.assertEqual(winners2_blocks, manager2_blocks)
 
-    def test_split_brain_no_double_spending(self):
+    def test_split_brain_no_double_spending(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
-        manager1.avg_time_between_blocks = 3
         manager1.connections.disable_rate_limiter()
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
-        manager2.avg_time_between_blocks = 3
         manager2.connections.disable_rate_limiter()
 
         winner_blocks = 1

@@ -1,7 +1,9 @@
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock, patch
 
 from twisted.python.failure import Failure
 
+from hathor.p2p.states import ReadyState
+from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
 from tests import unittest
@@ -11,7 +13,7 @@ from tests.simulation.base import SimulatorTestCase
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
     __test__ = True
 
-    def test_sync_rate_limiter(self):
+    def test_sync_rate_limiter(self) -> None:
         manager1 = self.create_peer()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
@@ -32,21 +34,23 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         connected_peers2 = list(manager2.connections.connected_peers.values())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1.state, ReadyState)
         sync2 = protocol1.state.sync_agent
-        sync2._send_tips = MagicMock()
+        assert isinstance(sync2, NodeSyncTimestamp)
 
-        for i in range(100):
+        with patch.object(sync2, '_send_tips') as mock:
+            for i in range(100):
+                sync2.send_tips()
+                self.assertEqual(mock.call_count, min(i + 1, 8))
+            self.assertEqual(mock.call_count, 8)
+
             sync2.send_tips()
-            self.assertEqual(sync2._send_tips.call_count, min(i + 1, 8))
-        self.assertEqual(sync2._send_tips.call_count, 8)
+            self.assertEqual(mock.call_count, 8)
 
-        sync2.send_tips()
-        self.assertEqual(sync2._send_tips.call_count, 8)
+            self.simulator._clock.advance(2000)
+            self.assertTrue(mock.call_count, 16)
 
-        self.simulator._clock.advance(2000)
-        self.assertTrue(sync2._send_tips.call_count, 16)
-
-    def test_sync_rate_limiter_disconnect(self):
+    def test_sync_rate_limiter_disconnect(self) -> None:
         # Test send_tips delayed calls cancelation with disconnection
         manager1 = self.create_peer()
         manager2 = self.create_peer()
@@ -64,36 +68,39 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1.state, ReadyState)
         sync1 = protocol1.state.sync_agent
-        sync1._send_tips = Mock(wraps=sync1._send_tips)
+        assert isinstance(sync1, NodeSyncTimestamp)
+        mock = Mock(wraps=sync1._send_tips)
 
-        sync1.send_tips()
-        self.assertEqual(sync1._send_tips.call_count, 1)
-        self.assertEqual(len(sync1._send_tips_call_later), 0)
+        with patch.object(sync1, '_send_tips', new=mock):
+            sync1.send_tips()
+            self.assertEqual(mock.call_count, 1)
+            self.assertEqual(len(sync1._send_tips_call_later), 0)
 
-        sync1.send_tips()
-        self.assertEqual(sync1._send_tips.call_count, 1)
-        self.assertEqual(len(sync1._send_tips_call_later), 1)
+            sync1.send_tips()
+            self.assertEqual(mock.call_count, 1)
+            self.assertEqual(len(sync1._send_tips_call_later), 1)
 
-        sync1.send_tips()
-        self.assertEqual(sync1._send_tips.call_count, 1)
-        self.assertEqual(len(sync1._send_tips_call_later), 2)
+            sync1.send_tips()
+            self.assertEqual(mock.call_count, 1)
+            self.assertEqual(len(sync1._send_tips_call_later), 2)
 
-        # Close the connection.
-        conn12.disconnect(Failure(Exception('testing')))
-        self.simulator.remove_connection(conn12)
+            # Close the connection.
+            conn12.disconnect(Failure(Exception('testing')))
+            self.simulator.remove_connection(conn12)
 
-        self.simulator.run(30)
+            self.simulator.run(30)
 
-        # Send tips should not be called any further since the connection has already been closed.
-        self.assertEqual(sync1._send_tips.call_count, 1)
-        # Residual delayed calls
-        self.assertEqual(len(sync1._send_tips_call_later), 2)
-        # The residual delayed calls should have been canceled
-        for call_later in sync1._send_tips_call_later:
-            self.assertFalse(call_later.active())
+            # Send tips should not be called any further since the connection has already been closed.
+            self.assertEqual(mock.call_count, 1)
+            # Residual delayed calls
+            self.assertEqual(len(sync1._send_tips_call_later), 2)
+            # The residual delayed calls should have been canceled
+            for call_later in sync1._send_tips_call_later:
+                self.assertFalse(call_later.active())
 
-    def test_sync_rate_limiter_delayed_calls_draining(self):
+    def test_sync_rate_limiter_delayed_calls_draining(self) -> None:
         # Test the draining of delayed calls from _send_tips_call_later list
         manager1 = self.create_peer()
         manager2 = self.create_peer()
@@ -111,7 +118,9 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1.state, ReadyState)
         sync1 = protocol1.state.sync_agent
+        assert isinstance(sync1, NodeSyncTimestamp)
 
         sync1.send_tips()
         self.assertEqual(len(sync1._send_tips_call_later), 0)
@@ -131,7 +140,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         # should have been executed
         self.assertEqual(len(sync1._send_tips_call_later), 0)
 
-    def test_sync_rate_limiter_delayed_calls_stop(self):
+    def test_sync_rate_limiter_delayed_calls_stop(self) -> None:
         # Test the draining of delayed calls from _send_tips_call_later list
         manager1 = self.create_peer()
         manager2 = self.create_peer()
@@ -149,7 +158,9 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1.state, ReadyState)
         sync1 = protocol1.state.sync_agent
+        assert isinstance(sync1, NodeSyncTimestamp)
 
         sync1.send_tips()
         self.assertEqual(len(sync1._send_tips_call_later), 0)
