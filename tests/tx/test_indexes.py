@@ -234,7 +234,7 @@ class BaseIndexesTest(unittest.TestCase):
         check_utxos((txB1.hash, 0, value, None))
 
         # add a block to put weight on this branch and force a re-org later with a heavier block
-        block1 = add_new_block(self.manager, weight=1.1, address=decode_address(address))
+        block1 = await add_new_block(self.manager, weight=1.1, address=decode_address(address))
         self.graphviz.labels[block1.hash] = 'block1'
         self.assertFalse(bool(block1.get_metadata().voided_by))
         check_utxos((block1.hash, 0, 6400, 36), (txB1.hash, 0, value, None))
@@ -294,7 +294,7 @@ class BaseIndexesTest(unittest.TestCase):
         )
 
         # Add some blocks with the address that we have, we'll have 4 outputs of 64.00 HTR each, 256.00 HTR in total
-        blocks = add_new_blocks(self.manager, 4, advance_clock=1, address=decode_address(address))
+        blocks = await add_new_blocks(self.manager, 4, advance_clock=1, address=decode_address(address))
         add_blocks_unlock_reward(self.manager)
 
         self.assertEqual(
@@ -450,7 +450,7 @@ class BaseIndexesTest(unittest.TestCase):
         add_new_blocks(self.manager, 4, advance_clock=1)
 
         # Add some blocks with the address that we have, we'll have 1 output of 64.00 HTR
-        blocks = add_new_blocks(self.manager, 1, advance_clock=1, address=decode_address(address))
+        blocks = await add_new_blocks(self.manager, 1, advance_clock=1, address=decode_address(address))
         self.assertEqual(len(blocks), 1)
         add_blocks_unlock_reward(self.manager)
 
@@ -522,7 +522,7 @@ class BaseIndexesTest(unittest.TestCase):
         add_new_blocks(self.manager, 4, advance_clock=1)
 
         # Add some blocks with the address that we have, we'll have 1 output of 64.00 HTR
-        blocks = add_new_blocks(self.manager, 1, advance_clock=1, address=decode_address(address))
+        blocks = await add_new_blocks(self.manager, 1, advance_clock=1, address=decode_address(address))
         self.assertEqual(len(blocks), 1)
         add_blocks_unlock_reward(self.manager)
 
@@ -673,7 +673,7 @@ class BaseIndexesTest(unittest.TestCase):
 
         # make height 100
         H = 100
-        blocks = add_new_blocks(self.manager, H - self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=15)
+        blocks = await add_new_blocks(self.manager, H - self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=15)
         height_index = self.manager.tx_storage.indexes.height
         self.assertEqual(height_index.get_height_tip(), HeightInfo(100, blocks[-1].hash))
         self.assertEqual(height_index.get_n_height_tips(1), [HeightInfo(100, blocks[-1].hash)])

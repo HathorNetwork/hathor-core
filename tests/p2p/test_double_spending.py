@@ -132,7 +132,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager1)
 
     def test_double_spending_propagation(self) -> None:
-        blocks = add_new_blocks(self.manager1, 4, advance_clock=15)
+        blocks = await add_new_blocks(self.manager1, 4, advance_clock=15)
         add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
@@ -308,13 +308,13 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta6.voided_by, None)
         self.assertEqual(meta7.voided_by, None)
 
-        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+        blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
         add_blocks_unlock_reward(self.manager1)
         self._add_new_transactions(self.manager1, 10)
-        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+        blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
         add_blocks_unlock_reward(self.manager1)
         self._add_new_transactions(self.manager1, 10)
-        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+        blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
 
         self.assertConsensusValid(self.manager1)
 

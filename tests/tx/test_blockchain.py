@@ -42,7 +42,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             score = sum_weights(score, tx.weight)
 
         # Mine 100 blocks in a row with no transaction but the genesis
-        blocks = add_new_blocks(manager, 100, advance_clock=15)
+        blocks = await add_new_blocks(manager, 100, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata(force_reload=True)
             score = sum_weights(score, block.weight)
@@ -54,7 +54,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             score = sum_weights(score, tx.weight)
 
         # Mine 50 more blocks in a row with no transactions between them
-        blocks = add_new_blocks(manager, 50)
+        blocks = await add_new_blocks(manager, 50)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
@@ -68,7 +68,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             for tx in txs:
                 score = sum_weights(score, tx.weight)
 
-            blocks = add_new_blocks(manager, 1)
+            blocks = await add_new_blocks(manager, 1)
             for i, block in enumerate(blocks):
                 meta = block.get_metadata()
                 score = sum_weights(score, block.weight)
@@ -91,7 +91,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             score = sum_weights(score, tx.weight)
 
         # Mine 30 blocks in a row with no transactions
-        blocks = add_new_blocks(manager, 30, advance_clock=15)
+        blocks = await add_new_blocks(manager, 30, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
@@ -103,7 +103,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             score = sum_weights(score, tx.weight)
 
         # Mine 1 blocks
-        blocks = add_new_blocks(manager, 1, advance_clock=15)
+        blocks = await add_new_blocks(manager, 1, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
@@ -117,7 +117,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         manager.verification_service.verify(fork_block1)
 
         # Mine 8 blocks in a row
-        blocks = add_new_blocks(manager, 8, advance_clock=15)
+        blocks = await add_new_blocks(manager, 8, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
@@ -139,7 +139,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Mine 5 blocks in a row
         # These blocks belong to case (i).
-        blocks = add_new_blocks(manager, 5, advance_clock=15)
+        blocks = await add_new_blocks(manager, 5, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
@@ -152,7 +152,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Propagate a block connected to the voided chain
         # These blocks belongs to case (iii).
-        sidechain1 = add_new_blocks(manager, 3, parent_block_hash=fork_block1.hash)
+        sidechain1 = await add_new_blocks(manager, 3, parent_block_hash=fork_block1.hash)
         for block in sidechain1:
             meta = block.get_metadata(force_reload=True)
             self.assertEqual(meta.voided_by, {block.hash})
@@ -183,7 +183,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             score = sum_weights(score, tx.weight)
 
         # Mine 30 blocks in a row with no transactions, case (i).
-        blocks = add_new_blocks(manager, 30, advance_clock=15)
+        blocks = await add_new_blocks(manager, 30, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
@@ -195,7 +195,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             score = sum_weights(score, tx.weight)
 
         # Mine 1 blocks, case (i).
-        blocks = add_new_blocks(manager, 1, advance_clock=15)
+        blocks = await add_new_blocks(manager, 1, advance_clock=15)
         block_before_fork = blocks[0]
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
@@ -212,7 +212,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             score = sum_weights(score, tx.weight)
 
         # Mine 5 blocks in a row, case (i).
-        blocks = add_new_blocks(manager, 5, advance_clock=15)
+        blocks = await add_new_blocks(manager, 5, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
@@ -220,7 +220,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Mine 4 blocks, starting a fork.
         # All these blocks belong to case (ii).
-        sidechain = add_new_blocks(manager, 4, advance_clock=15, parent_block_hash=blocks[0].parents[0])
+        sidechain = await add_new_blocks(manager, 4, advance_clock=15, parent_block_hash=blocks[0].parents[0])
 
         # Fork block must have the same parents as blocks[0] as well as the same score
         self.assertEqual(set(blocks[0].parents), set(sidechain[0].parents))
@@ -259,7 +259,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Mine 1 block, starting another fork.
         # This block belongs to case (vi).
-        sidechain2 = add_new_blocks(manager, 1, advance_clock=15, parent_block_hash=sidechain[0].hash)
+        sidechain2 = await add_new_blocks(manager, 1, advance_clock=15, parent_block_hash=sidechain[0].hash)
 
         for block in sidechain2:
             meta = block.get_metadata(force_reload=True)
@@ -267,7 +267,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Mine 2 more blocks in the new fork.
         # These blocks belong to case (vii).
-        sidechain2 += add_new_blocks(manager, 2, advance_clock=15, parent_block_hash=sidechain2[-1].hash)
+        sidechain2 += await add_new_blocks(manager, 2, advance_clock=15, parent_block_hash=sidechain2[-1].hash)
 
         for block in sidechain2:
             meta = block.get_metadata(force_reload=True)
@@ -275,7 +275,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Mine 1 block, starting another fork from sidechain2.
         # This block belongs to case (viii).
-        sidechain3 = add_new_blocks(manager, 1, advance_clock=15, parent_block_hash=sidechain2[-2].hash)
+        sidechain3 = await add_new_blocks(manager, 1, advance_clock=15, parent_block_hash=sidechain2[-2].hash)
 
         for block in sidechain3:
             meta = block.get_metadata(force_reload=True)
@@ -346,7 +346,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # Mine 50 blocks in a row with no transaction but the genesis
-        blocks = add_new_blocks(manager, 50, advance_clock=15)
+        blocks = await add_new_blocks(manager, 50, advance_clock=15)
 
         for i, block in enumerate(blocks):
             expected_height = i + 1
@@ -378,7 +378,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # number of blocks, probably not worth running all the time
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
         block_count = (self._settings.MAXIMUM_NUMBER_OF_HALVINGS + 1) * self._settings.BLOCKS_PER_HALVING
-        blocks = add_new_blocks(manager, block_count, advance_clock=block_count * 30)
+        blocks = await add_new_blocks(manager, block_count, advance_clock=block_count * 30)
         for block in blocks:
             outputs = block.outputs
             self.assertEqual(len(outputs), 1)

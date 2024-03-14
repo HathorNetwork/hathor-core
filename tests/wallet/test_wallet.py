@@ -172,7 +172,7 @@ class BaseBasicWalletTest(unittest.TestCase):
             WalletOutputInfo(decode_address(invalid_address2), 100, None)
 
     def test_separate_inputs(self):
-        block = add_new_block(self.manager, advance_clock=5)
+        block = await add_new_block(self.manager, advance_clock=5)
         my_input = TxInput(block.hash, 0, b'')
         genesis_blocks = [tx for tx in self.storage.get_all_genesis() if tx.is_block]
         genesis_block = genesis_blocks[0]
@@ -229,7 +229,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         self.assertEqual(did_enter, 2)
 
     def test_prepare_transaction(self):
-        block = add_new_block(self.manager, advance_clock=5)
+        block = await add_new_block(self.manager, advance_clock=5)
         w = self.manager.wallet
         new_address = w.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), 1, timelock=None)

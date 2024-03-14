@@ -22,14 +22,14 @@ class BaseAccumulatedWeightTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # Mine 3 blocks in a row with no transaction but the genesis
-        blocks = add_new_blocks(manager, 3, advance_clock=15)
+        blocks = await add_new_blocks(manager, 3, advance_clock=15)
         add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
         tx_list = add_new_transactions(manager, 20, advance_clock=15)
 
         # Mine more 2 blocks in a row with no transactions between them
-        blocks = add_new_blocks(manager, 2, weight=8)
+        blocks = await add_new_blocks(manager, 2, weight=8)
 
         tx0 = tx_list[0]
         for block in blocks:

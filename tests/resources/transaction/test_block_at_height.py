@@ -16,7 +16,7 @@ class BaseBlockAtHeightTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get(self):
-        blocks = add_new_blocks(self.manager, 4, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 4, advance_clock=1)
 
         # Error1: No parameter
         response1 = yield self.web.get("block_at_height")

@@ -28,7 +28,7 @@ class BaseWalletHDTest(unittest.TestCase):
         # generate a new block and check if we increase balance
         new_address = self.wallet.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), self.TOKENS, timelock=None)
-        block = add_new_block(self.manager)
+        block = await add_new_block(self.manager)
         self.manager.verification_service.verify(block)
         utxo = self.wallet.unspent_txs[self._settings.HATHOR_TOKEN_UID].get((block.hash, 0))
         self.assertIsNotNone(utxo)

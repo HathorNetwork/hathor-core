@@ -51,9 +51,9 @@ class BaseMultisigTestCase(unittest.TestCase):
         self.address = decode_address(self.manager.wallet.get_unused_address())
         self.outside_address = decode_address(self.get_address(0))
 
-    def test_spend_multisig(self):
+    async def test_spend_multisig(self) -> None:
         # Adding funds to the wallet
-        blocks = add_new_blocks(self.manager, 2, advance_clock=15)
+        blocks = await add_new_blocks(self.manager, 2, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(blk.outputs[0].value for blk in blocks)))

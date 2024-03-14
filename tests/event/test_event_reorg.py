@@ -23,11 +23,11 @@ class BaseEventReorgTest(unittest.TestCase):
         self.genesis_private_key = get_genesis_key()
         self.genesis_public_key = self.genesis_private_key.public_key()
 
-    def test_reorg_events(self) -> None:
+    async def test_reorg_events(self) -> None:
         assert self._settings.REWARD_SPEND_MIN_BLOCKS == 10, 'this test was made with this hardcoded value in mind'
 
         # add some blocks
-        blocks = add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # make a re-org
         self.log.debug('make reorg block')

@@ -261,7 +261,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         add_new_blocks(self.manager, 20, advance_clock=10)
         # finally add a tx and a block that will confirm that tx
         tx, = add_new_transactions(self.manager, 1, advance_clock=5)
-        block, = add_new_blocks(self.manager, 1, advance_clock=5)
+        block, = await add_new_blocks(self.manager, 1, advance_clock=5)
 
         # get the transaction data from the api
         response = yield self.web.get("transaction", {b'id': tx.hash_hex.encode()})
@@ -276,7 +276,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
     @inlineCallbacks
     def test_get_many(self):
         # Add some blocks and txs and get them in timestamp order
-        blocks = add_new_blocks(self.manager, 4, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 4, advance_clock=1)
         _blocks = add_blocks_unlock_reward(self.manager)
         txs = sorted(add_new_transactions(self.manager, 25), key=lambda x: (x.timestamp, x.hash))
 
@@ -477,7 +477,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
     @inlineCallbacks
     def test_negative_timestamp(self):
         # Add some blocks and txs and get them in timestamp order
-        blocks = add_new_blocks(self.manager, 4, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 4, advance_clock=1)
         add_blocks_unlock_reward(self.manager)
         add_new_transactions(self.manager, 25)
 

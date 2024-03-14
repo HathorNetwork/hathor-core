@@ -148,13 +148,13 @@ class BaseTransactionStorageTest(unittest.TestCase):
         blocks_count = 1
         txs_count = 2
 
-        blocks = add_new_blocks(self.manager, 10, advance_clock=10)
+        blocks = await add_new_blocks(self.manager, 10, advance_clock=10)
         blocks_count += len(blocks)
         blocks = add_blocks_unlock_reward(self.manager)
         blocks_count += len(blocks)
         txs = add_new_transactions(self.manager, 5, advance_clock=5)
         txs_count += len(txs)
-        blocks = add_new_blocks(self.manager, 10, advance_clock=10)
+        blocks = await add_new_blocks(self.manager, 10, advance_clock=10)
         blocks_count += len(blocks)
         txs = add_new_transactions(self.manager, 5, advance_clock=5)
         txs_count += len(txs)
@@ -522,7 +522,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
     def test_best_block_tips_cache(self):
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         self.manager.wallet.unlock(b'MYPASS')
-        spent_blocks = add_new_blocks(self.manager, 10)
+        spent_blocks = await add_new_blocks(self.manager, 10)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [spent_blocks[-1].hash])
         unspent_blocks = add_blocks_unlock_reward(self.manager)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [unspent_blocks[-1].hash])
@@ -534,7 +534,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
     def test_topological_sort(self):
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         _total = 0
-        blocks = add_new_blocks(self.manager, 1, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 1, advance_clock=1)
         _total += len(blocks)
         blocks = add_blocks_unlock_reward(self.manager)
         _total += len(blocks)

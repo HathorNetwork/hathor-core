@@ -62,7 +62,7 @@ class BaseTipsTestCase(unittest.TestCase):
         self.manager.reactor.advance(10)
 
         # Creating a new block that confirms tx3, then is will become valid and voiding tx2
-        new_block = add_new_block(self.manager, propagate=False)
+        new_block = await add_new_block(self.manager, propagate=False)
         new_block.parents = [new_block.parents[0], tx1.hash, tx3.hash]
         self.manager.cpu_mining_service.resolve(new_block)
         self.manager.verification_service.verify(new_block)
@@ -79,7 +79,7 @@ class BaseTipsTestCase(unittest.TestCase):
         genesis = self.manager.tx_storage.get_all_genesis()
         genesis_txs_hashes = [tx.hash for tx in genesis if not tx.is_block]
 
-        b = add_new_block(self.manager, advance_clock=1)
+        b = await add_new_block(self.manager, advance_clock=1)
         # The txs parents are the genesis
         self.assertCountEqual(set(b.parents[1:]), set(genesis_txs_hashes))
         reward_blocks = add_blocks_unlock_reward(self.manager)
@@ -105,7 +105,7 @@ class BaseTipsTestCase(unittest.TestCase):
         self.assertTrue(set(tx3.parents).issubset(set([tx2.hash] + tx2.parents)))
         self.assertCountEqual(self.get_tips(), set([tx3.hash]))
 
-        b2 = add_new_block(self.manager, advance_clock=1)
+        b2 = await add_new_block(self.manager, advance_clock=1)
         # With new block there are no tips and block parents
         # will be tx3 and one of tx3 parents
         self.assertEqual(len(self.get_tips()), 0)

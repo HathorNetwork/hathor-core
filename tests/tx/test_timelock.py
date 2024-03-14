@@ -16,7 +16,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
     def test_timelock(self):
-        blocks = add_new_blocks(self.manager, 5, advance_clock=15)
+        blocks = await add_new_blocks(self.manager, 5, advance_clock=15)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
         add_blocks_unlock_reward(self.manager)
 
@@ -113,7 +113,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         self.assertTrue(propagated)
 
     def test_choose_inputs(self):
-        blocks = add_new_blocks(self.manager, 1, advance_clock=15)
+        blocks = await add_new_blocks(self.manager, 1, advance_clock=15)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
         add_blocks_unlock_reward(self.manager)
 

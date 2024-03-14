@@ -37,7 +37,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
-        blocks = add_new_blocks(self.manager, 3, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 3, advance_clock=1)
         add_blocks_unlock_reward(self.manager)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
@@ -186,7 +186,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
-        blocks = add_new_blocks(self.manager, 3, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 3, advance_clock=1)
 
         output = blocks[0].outputs[0]
         script_type_out = parse_address_script(output.script)
@@ -206,7 +206,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(blocks[0].hash.hex(), response_data['history'][0]['tx_id'])
         self.assertFalse(response_data['has_more'])
 
-        new_blocks = add_new_blocks(
+        new_blocks = await add_new_blocks(
             self.manager,
             self._settings.MAX_TX_ADDRESSES_HISTORY,
             advance_clock=1,
@@ -229,7 +229,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # Test paginate with big txs
         tx_count = math.ceil(self._settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY / self._settings.MAX_NUM_INPUTS)
         blocks.extend(new_blocks)
-        new_blocks = add_new_blocks(
+        new_blocks = await add_new_blocks(
             self.manager,
             tx_count*self._settings.MAX_NUM_INPUTS - len(blocks),
             advance_clock=1,

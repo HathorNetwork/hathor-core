@@ -17,7 +17,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
-        blocks = add_new_blocks(self.manager, 3, advance_clock=15)
+        blocks = await add_new_blocks(self.manager, 3, advance_clock=15)
         self.blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
         address = self.get_address(0)

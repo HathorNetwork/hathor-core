@@ -142,7 +142,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
     # XXX We must decide what to do when different chains have the same score
     # For now we are voiding everyone until the first common block
-    def test_split_brain_only_blocks_same_height(self) -> None:
+    async def test_split_brain_only_blocks_same_height(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
@@ -217,7 +217,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(len(winners1_after), 3)
         self.assertEqual(len(winners2_after), 3)
 
-        new_block = add_new_block(manager1, advance_clock=1)
+        new_block = await add_new_block(manager1, advance_clock=1)
         self.clock.advance(20)
 
         empty_counter = 0
@@ -263,7 +263,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(len(manager2.tx_storage.get_best_block_tips()), 1)
         self.assertCountEqual(manager2.tx_storage.get_best_block_tips(), {new_block.hash})
 
-    def test_split_brain_only_blocks_bigger_score(self) -> None:
+    async def test_split_brain_only_blocks_bigger_score(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
@@ -285,7 +285,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         # Propagates a block with bigger weight, so the score of the manager2 chain
         # will be bigger than the other one
-        b = add_new_block(manager2, advance_clock=1, propagate=False)
+        b = await add_new_block(manager2, advance_clock=1, propagate=False)
         b.weight = 5
         manager2.cpu_mining_service.resolve(b)
         manager2.propagate_tx(b)

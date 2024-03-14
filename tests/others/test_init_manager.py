@@ -96,14 +96,14 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
             self.all_hashes.add(tx.hash)
 
         # generate blocks and transactions where blk1 is spent by tx1
-        self.blk1 = add_new_block(self.manager, advance_clock=15)
+        self.blk1 = await add_new_block(self.manager, advance_clock=15)
         self.block_list = add_blocks_unlock_reward(self.manager)
 
         self.tx_list = add_new_transactions(self.manager, 5, advance_clock=15)
         self.tx1 = self.tx_list[0]
         self.assertTrue(self.tx1.inputs[0].tx_id == self.blk1.hash)
 
-        self.block_list2 = add_new_blocks(self.manager, 8, advance_clock=15)
+        self.block_list2 = await add_new_blocks(self.manager, 8, advance_clock=15)
 
         # collect all hashes
         self.all_hashes.add(self.blk1.hash)

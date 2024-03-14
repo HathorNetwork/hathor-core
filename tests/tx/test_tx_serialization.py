@@ -17,7 +17,7 @@ class _SerializationTest(unittest.TestCase):
         self.tx_storage = self.manager.tx_storage
 
         data = b'This is a test block.'
-        self.blocks = add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
+        self.blocks = await add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
         add_blocks_unlock_reward(self.manager)
 
         address = self.get_address(0)

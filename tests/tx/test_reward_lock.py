@@ -141,12 +141,12 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
 
-    def test_mempool_tx_invalid_after_reorg(self):
+    async def test_mempool_tx_invalid_after_reorg(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
-        blocks = add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward, must not fail
         tx = self._spend_reward_tx(self.manager, reward_block)

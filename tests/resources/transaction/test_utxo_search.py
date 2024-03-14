@@ -46,7 +46,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data3['utxos'], [])
 
         # Add some blocks with the address that we have, we'll have 4 outputs of 64.00 HTR each, 256.00 HTR in total
-        blocks = add_new_blocks(self.manager, 4, advance_clock=1, address=decode_address(address))
+        blocks = await add_new_blocks(self.manager, 4, advance_clock=1, address=decode_address(address))
         add_blocks_unlock_reward(self.manager)
 
         # Success non-empty address with small amount (0.01 HTR), we should get the earliest block with 64.00 HTR
