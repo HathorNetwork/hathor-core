@@ -120,7 +120,6 @@ class GeometricMiner(AbstractMiner):
 
         if self._delayed_call and self._delayed_call.active():
             self._delayed_call.cancel()
-        self._delayed_call = self._clock.callLater(dt, self._schedule_next_block)
         self._delayed_call = call_async_later(self._clock, dt, self._schedule_next_block)
 
     def get_blocks_found(self) -> int:
@@ -137,4 +136,4 @@ class GeometricMiner(AbstractMiner):
         self._blocks_before_pause = n_blocks
 
         if not self._delayed_call:
-            self._delayed_call = self._clock.callLater(0, self._schedule_next_block)
+            self._delayed_call = call_async_later(self._clock, 0, self._schedule_next_block)

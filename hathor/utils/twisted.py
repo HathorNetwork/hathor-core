@@ -30,3 +30,12 @@ def call_async_later(
     **kwargs: object
 ) -> IDelayedCall:
     return reactor.callLater(delay, lambda: Deferred.fromCoroutine(coro(*args, **kwargs)))
+
+
+def add_async_callback(
+    deferred: Deferred,
+    coro: Callable[..., Coroutine[Deferred[T], Any, T]],
+    *args: object,
+    **kwargs: object,
+) -> Deferred[T]:
+    return deferred.addCallback(lambda result: Deferred.fromCoroutine(coro(result, *args, **kwargs)))

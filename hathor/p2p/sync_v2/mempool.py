@@ -19,6 +19,7 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred
 
 from hathor.transaction import BaseTransaction
+from hathor.utils.twisted import call_async_later
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -61,7 +62,7 @@ class SyncMempoolManager:
             assert self._deferred is not None
             return self._deferred
         self._is_running = True
-        self.reactor.callLater(0, self._run)
+        call_async_later(self.reactor, 0, self._run)
 
         # TODO Implement a stop() and call it after N minutes.
 

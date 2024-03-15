@@ -74,7 +74,7 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         self.assertEqual(meta2.twins, [tx1.hash])
 
         # The same as tx1 but with one output different, so it's not a twin
-        tx3 = add_new_double_spending(self.manager, tx=tx1)
+        tx3 = await add_new_double_spending(self.manager, tx=tx1)
 
         meta1 = tx1.get_metadata()
         self.assertEqual(meta1.twins, [tx2.hash])

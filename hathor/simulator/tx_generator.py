@@ -23,6 +23,7 @@ from hathor.simulator.utils import NoCandidatesError, gen_new_double_spending, g
 from hathor.transaction.exceptions import RewardLocked
 from hathor.types import VertexId
 from hathor.util import Random
+from hathor.utils.twisted import call_async_later
 from hathor.wallet.exceptions import InsufficientFunds
 
 if TYPE_CHECKING:
@@ -103,7 +104,7 @@ class RandomTransactionGenerator:
         """
         balance = self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]
         if balance.available == 0 and self.ignore_no_funds:
-            self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+            self.delayedcall = call_async_later(self.clock, 0, self.schedule_next_transaction)
             return
 
         if not self.send_to:
@@ -118,14 +119,14 @@ class RandomTransactionGenerator:
             try:
                 tx = gen_new_tx(self.manager, address, value)
             except (InsufficientFunds, RewardLocked):
-                self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+                self.delayedcall = call_async_later(self.clock, 0, self.schedule_next_transaction)
                 return
         else:
             try:
                 tx = gen_new_double_spending(self.manager)
                 tx.nonce = self.rng.getrandbits(32)
             except NoCandidatesError:
-                self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+                self.delayedcall = call_async_later(self.clock, 0, self.schedule_next_transaction)
                 return
 
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
@@ -136,5 +137,5 @@ class RandomTransactionGenerator:
         dt = 1.0 * trials / self.hashpower
 
         self.tx = tx
-        self.delayedcall = self.clock.callLater(dt, self.schedule_next_transaction)
+        self.delayedcall = call_async_later(self.clock, dt, self.schedule_next_transaction)
         self.log.debug('randomized step: schedule next transaction', dt=dt, hash=tx.hash_hex)

@@ -8,6 +8,7 @@ from hathor.simulator import FakeConnection
 from hathor.transaction import Block, Transaction
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.util import not_none
+from hathor.utils.twisted import add_async_callback
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
@@ -279,7 +280,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
 
         deferred1 = downloader.get_tx(blocks[0].hash, node_sync1)
-        deferred1.addCallback(node_sync1.on_tx_success)
+        add_async_callback(deferred1, node_sync1.on_tx_success)
 
         self.assertEqual(len(downloader.pending_transactions), 1)
 
@@ -288,7 +289,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         self.assertEqual(len(downloader.downloading_deque), 1)
 
         deferred2 = downloader.get_tx(blocks[0].hash, node_sync2)
-        deferred2.addCallback(node_sync2.on_tx_success)
+        add_async_callback(deferred2, node_sync2.on_tx_success)
 
         self.assertEqual(len(downloader.pending_transactions), 1)
         self.assertEqual(len(downloader.pending_transactions[blocks[0].hash].connections), 2)

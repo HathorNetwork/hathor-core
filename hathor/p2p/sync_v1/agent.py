@@ -32,6 +32,7 @@ from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import json_dumps, json_loads
+from hathor.utils.twisted import add_async_callback
 
 logger = get_logger()
 
@@ -247,7 +248,7 @@ class NodeSyncTimestamp(SyncAgent):
         :rtype: Deferred
         """
         d = self.downloader.get_tx(hash_bytes, self)
-        d.addCallback(self.on_tx_success)
+        add_async_callback(d, self.on_tx_success)
         d.addErrback(self.on_get_data_failed, hash_bytes)
         return d
 

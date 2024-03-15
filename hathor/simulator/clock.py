@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import heapq
-from typing import Any, Callable
+from typing import Any, Callable, Coroutine
 
 from twisted.internet.base import DelayedCall
+from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IDelayedCall, IReactorTime
 from twisted.internet.testing import MemoryReactor
 from zope.interface import implementer
@@ -79,7 +80,9 @@ class HeapClock:
             heapq.heappop(self.calls)
             if not call.cancelled:
                 call.called = 1
-                call.func(*call.args, **call.kw)
+                result = call.func(*call.args, **call.kw)
+                if isinstance(result, Coroutine):
+                    Deferred.fromCoroutine(result)
 
     def pump(self, timings):
         """
