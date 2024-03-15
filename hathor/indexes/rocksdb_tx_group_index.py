@@ -110,8 +110,8 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
     def _get_from_key(self, key: KT) -> Iterable[bytes]:
         return self._util_get_from_key(key)
 
-    def _get_sorted_from_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> Iterable[bytes]:
-        return self._util_get_from_key(key, tx)
+    def _get_sorted_from_key(self, key: KT, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
+        return self._util_get_from_key(key, tx_start)
 
     def _util_get_from_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         self.log.debug('seek to', key=key)

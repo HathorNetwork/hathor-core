@@ -63,14 +63,14 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
         for _, h in self.index[key]:
             yield h
 
-    def _get_sorted_from_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> Iterable[bytes]:
+    def _get_sorted_from_key(self, key: KT, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         sorted_elements = sorted(self.index[key])
         found = False
         for _, h in sorted_elements:
-            if tx and h == tx.hash:
+            if tx_start and h == tx_start.hash:
                 found = True
 
-            if found or not tx:
+            if found or not tx_start:
                 yield h
 
     def _is_key_empty(self, key: KT) -> bool:

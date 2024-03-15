@@ -186,8 +186,7 @@ class AddressHistoryResource(Resource):
                         'message': 'Hash {} is not a transaction hash.'.format(ref_hash)
                     })
 
-            # In rocksdb we can get an iterator directly from the hash
-            # sent in the ref_hash
+            # The address index returns an iterable that starts at `tx`.
             hashes = addresses_index.get_sorted_from_address(address, tx)
             did_break = False
             for tx_hash in hashes:
