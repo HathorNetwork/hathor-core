@@ -194,12 +194,11 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(tx.outputs[0].token_data, 0)
         self.assertEqual(tx.outputs[0].script, script)
 
-    @inlineCallbacks
-    def test_tx_propagate(self):
+    async def test_tx_propagate(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
         src_tx = self.unspent_tx
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
-        resp = (yield self.web.post('create_tx', {
+        resp = (await self.web.post('create_tx', {
             'inputs': [
                 {
                     'tx_id': src_tx.hash_hex,
@@ -232,11 +231,10 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.manager.cpu_mining_service.resolve(tx, update_time=False)
         self.assertTrue(await self.manager.propagate_tx(tx))
 
-    @inlineCallbacks
-    def test_tx_propagate_multiple_inputs(self):
+    async def test_tx_propagate_multiple_inputs(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
-        resp = (yield self.web.post('create_tx', {
+        resp = (await self.web.post('create_tx', {
             'inputs': [
                 {
                     'tx_id': self.unspent_tx.hash_hex,

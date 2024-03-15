@@ -1,7 +1,11 @@
 from hathor.crypto.util import decode_address
+from hathor.indexes.memory_address_index import MemoryAddressIndex
+from hathor.indexes.memory_utxo_index import MemoryUtxoIndex
+from hathor.manager import HathorManager
 from hathor.simulator.utils import add_new_blocks, gen_new_tx
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.util import not_none
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
@@ -10,7 +14,7 @@ from tests.utils import add_blocks_unlock_reward
 class BaseSimulatorIndexesTestCase(unittest.TestCase):
     __test__ = False
 
-    async def _build_randomized_blockchain(self, *, utxo_index: bool = False) -> None:
+    async def _build_randomized_blockchain(self, *, utxo_index: bool = False) -> HathorManager:
         tx_storage = TransactionMemoryStorage()
         manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True,
                                    use_memory_index=True, utxo_index=utxo_index)
@@ -18,9 +22,9 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         await add_new_blocks(manager, 50, advance_clock=15)
 
         await add_blocks_unlock_reward(manager)
-        address1 = self.get_address(0)
-        address2 = self.get_address(1)
-        address3 = self.get_address(2)
+        address1 = not_none(self.get_address(0))
+        address2 = not_none(self.get_address(1))
+        address3 = not_none(self.get_address(2))
         output1 = WalletOutputInfo(address=decode_address(address1), value=123, timelock=None)
         output2 = WalletOutputInfo(address=decode_address(address2), value=234, timelock=None)
         output3 = WalletOutputInfo(address=decode_address(address3), value=345, timelock=None)
@@ -48,7 +52,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         assert await manager.propagate_tx(tx3, False)
 
         for _ in range(100):
-            address = self.get_address(0)
+            address = not_none(self.get_address(0))
             value = 500
             tx = gen_new_tx(manager, address, value)
             assert await manager.propagate_tx(tx)
@@ -62,6 +66,9 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         # XXX: this test makes use of the internals of TipsIndex, AddressIndex and UtxoIndex
         tx_storage = self.manager.tx_storage
         assert tx_storage.indexes is not None
+        assert tx_storage.indexes.all_tips is not None
+        assert isinstance(tx_storage.indexes.addresses, MemoryAddressIndex)
+        assert isinstance(tx_storage.indexes.utxo, MemoryUtxoIndex)
 
         # XXX: sanity check that we've at least produced something
         self.assertGreater(tx_storage.get_vertices_count(), 3)

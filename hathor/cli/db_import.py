@@ -88,7 +88,7 @@ class DbImport(RunNode):
             assert tx is not None
             assert tx.hash is not None
             tx.storage = self.tx_storage
-            self.manager.on_new_tx(tx, quiet=True, fails_silently=False, skip_block_weight_verification=True)
+            await self.manager.on_new_tx(tx, quiet=True, fails_silently=False, skip_block_weight_verification=True)
             yield tx
 
 

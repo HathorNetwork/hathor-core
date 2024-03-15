@@ -46,7 +46,7 @@ class BaseWalletHDTest(unittest.TestCase):
         verifier.verify_script(tx=tx1, input_tx=tx1.inputs[0], spent_tx=block)
         tx1.storage = self.tx_storage
         tx1.get_metadata().validation = ValidationState.FULL
-        self.wallet.on_new_tx(tx1)
+        await self.wallet.on_new_tx(tx1)
         self.tx_storage.save_transaction(tx1)
         self.assertEqual(len(self.wallet.spent_txs), 1)
         utxo = self.wallet.unspent_txs[self._settings.HATHOR_TOKEN_UID].get((tx1.hash, 0))
@@ -66,7 +66,7 @@ class BaseWalletHDTest(unittest.TestCase):
         verifier.verify_script(tx=tx2, input_tx=tx2.inputs[0], spent_tx=tx1)
         tx2.get_metadata().validation = ValidationState.FULL
         self.tx_storage.save_transaction(tx2)
-        self.wallet.on_new_tx(tx2)
+        await self.wallet.on_new_tx(tx2)
         self.assertEqual(len(self.wallet.spent_txs), 2)
         self.assertEqual(self.wallet.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, self.TOKENS))
 

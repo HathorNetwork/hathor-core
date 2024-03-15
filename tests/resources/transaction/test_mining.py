@@ -90,10 +90,9 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
             'error': 'Node syncing',
         })
 
-    @inlineCallbacks
-    def test_get_block_template_and_submit_block(self):
+    async def test_get_block_template_and_submit_block(self) -> None:
         from hathor.client import create_tx_from_dict
-        resp = yield self.get_block_template.get('', {b'address': b'HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7'})
+        resp = await self.get_block_template.get('', {b'address': b'HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7'})
         data = resp.json_value()
         block = create_tx_from_dict(data)
         CpuMiningService().resolve(block, update_time=False)

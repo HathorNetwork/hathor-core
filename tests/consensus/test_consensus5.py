@@ -9,7 +9,7 @@ from tests.utils import gen_custom_tx
 
 class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
-    def create_chain(
+    async def create_chain(
         self,
         manager: HathorManager,
         first_parent_block_hash: VertexId,
@@ -33,7 +33,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
             current = blk.hash
         return v
 
-    def test_conflict_with_parent_tx(self) -> None:
+    async def test_conflict_with_parent_tx(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -46,7 +46,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(await manager1.propagate_tx(b1))
         self.simulator.run(10)
 
-        self.create_chain(manager1, b1.hash, 20, '')
+        await self.create_chain(manager1, b1.hash, 20, '')
 
         txA1 = gen_custom_tx(manager1, [(b1, 0)])
         self.graphviz.labels[txA1.hash] = 'txA1'

@@ -11,7 +11,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_transactions
 class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
         self.resource = self.create_resource()
         self.web = StubSite(self.resource)
@@ -20,8 +20,8 @@ class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
         self.manager.wallet.unlock(b'MYPASS')
 
         # Creating blocks, txs and a conflict tx to test graphviz with it
-        add_new_blocks(self.manager, 2, advance_clock=2)
-        add_blocks_unlock_reward(self.manager)
+        await add_new_blocks(self.manager, 2, advance_clock=2)
+        await add_blocks_unlock_reward(self.manager)
         txs = add_new_transactions(self.manager, 2, advance_clock=2)
         tx = txs[0]
 

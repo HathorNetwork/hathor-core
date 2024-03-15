@@ -31,7 +31,7 @@ class BaseTransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
-    def _add_reward_block(self):
+    async def _add_reward_block(self) -> None:
         reward_block = self.manager.generate_mining_block(
             address=get_address_from_public_key(self.genesis_public_key)
         )
@@ -62,7 +62,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx.update_initial_metadata(save=False)
         return tx
 
-    def test_classic_reward_lock(self):
+    async def test_classic_reward_lock(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
@@ -72,54 +72,54 @@ class BaseTransactionTest(unittest.TestCase):
             self.assertEqual(tx.get_metadata().min_height, unlock_height)
             with self.assertRaises(RewardLocked):
                 self.manager.verification_service.verify(tx)
-            add_new_blocks(self.manager, 1, advance_clock=1)
+            await add_new_blocks(self.manager, 1, advance_clock=1)
 
         # now it should be spendable
         tx = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
         self.assertTrue(await self.manager.propagate_tx(tx, fails_silently=False))
 
-    def test_block_with_not_enough_height(self):
+    async def test_block_with_not_enough_height(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
         # add one less block than needed
-        add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
+        await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
 
         # add tx bypassing reward-lock verification
         # XXX: this situation is impossible in practice, but we force it to test that when a block tries to confirms a
         #      transaction before it can the RewardLocked exception is raised
         tx = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False, reject_locked_reward=False))
+        self.assertTrue(await self.manager.on_new_tx(tx, fails_silently=False, reject_locked_reward=False))
 
         # new block will try to confirm it and fail
         with self.assertRaises(RewardLocked):
-            add_new_blocks(self.manager, 1, advance_clock=1)
+            await add_new_blocks(self.manager, 1, advance_clock=1)
 
-    def test_block_with_enough_height(self):
+    async def test_block_with_enough_height(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
-        add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
+        await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward
         tx = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(await self.manager.on_new_tx(tx, fails_silently=False))
 
         # new block will be able to confirm it
-        add_new_blocks(self.manager, 1, advance_clock=1)
+        await add_new_blocks(self.manager, 1, advance_clock=1)
 
-    def test_mempool_tx_with_not_enough_height(self):
+    async def test_mempool_tx_with_not_enough_height(self) -> None:
         from hathor.exception import InvalidNewTransaction
 
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
         # add one less block than needed
-        add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
+        await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
 
         # add tx to mempool, must fail reward-lock verification
         tx = self._spend_reward_tx(self.manager, reward_block)
@@ -127,19 +127,19 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(RewardLocked):
             self.manager.verification_service.verify(tx)
         with self.assertRaises(InvalidNewTransaction):
-            self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+            self.assertTrue(await self.manager.on_new_tx(tx, fails_silently=False))
 
-    def test_mempool_tx_with_enough_height(self):
+    async def test_mempool_tx_with_enough_height(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
         # add just enough blocks
-        add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
+        await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward, must not fail
         tx = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(await self.manager.on_new_tx(tx, fails_silently=False))
 
     async def test_mempool_tx_invalid_after_reorg(self) -> None:
         # add block with a reward we can spend
@@ -151,7 +151,7 @@ class BaseTransactionTest(unittest.TestCase):
         # add tx that spends the reward, must not fail
         tx = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(await self.manager.on_new_tx(tx, fails_silently=False))
 
         # re-org: replace last two blocks with one block, new height will be just one short of enough
         block_to_replace = blocks[-2]

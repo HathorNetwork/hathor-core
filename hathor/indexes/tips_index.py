@@ -15,7 +15,7 @@
 from abc import abstractmethod
 from enum import Enum
 
-from intervaltree import Interval
+from intervaltree import Interval, IntervalTree
 from structlog import get_logger
 
 from hathor.indexes.base_index import BaseIndex
@@ -59,6 +59,8 @@ class TipsIndex(BaseIndex):
 
     TODO Use an interval tree stored in disk, possibly using a B-tree.
     """
+
+    tree: IntervalTree
 
     def __init__(self, *, scope_type: ScopeType):
         self._scope_type = scope_type

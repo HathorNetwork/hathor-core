@@ -385,13 +385,12 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(response2.responseCode, 503)
         self.assertFalse(data2['success'])
 
-    @inlineCallbacks
-    def test_token_history(self):
+    async def test_token_history(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
         resource = StubSite(TokenHistoryResource(self.manager))
 
-        add_new_blocks(self.manager, 1, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
+        await add_new_blocks(self.manager, 1, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
         tx = create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
         token_uid = tx.tokens[0]
 

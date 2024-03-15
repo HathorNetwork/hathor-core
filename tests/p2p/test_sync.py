@@ -29,7 +29,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
-    def _add_new_tx(self, address: str, value: int) -> Transaction:
+    async def _add_new_tx(self, address: str, value: int) -> Transaction:
         from hathor.wallet.base_wallet import WalletOutputInfo
 
         outputs = []
@@ -49,30 +49,30 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(10)
         return tx
 
-    def _add_new_transactions(self, num_txs: int) -> list[Transaction]:
+    async def _add_new_transactions(self, num_txs: int) -> list[Transaction]:
         txs = []
         for _ in range(num_txs):
             address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 50, 100, 120])
-            tx = self._add_new_tx(address, value)
+            tx = await self._add_new_tx(address, value)
             txs.append(tx)
         return txs
 
-    def _add_new_block(self, propagate: bool = True) -> Block:
+    async def _add_new_block(self, propagate: bool = True) -> Block:
         block: Block = self.manager1.generate_mining_block()
         self.assertTrue(self.manager1.cpu_mining_service.resolve(block))
         self.manager1.verification_service.verify(block)
-        self.manager1.on_new_tx(block, propagate_to_peers=propagate)
+        await self.manager1.on_new_tx(block, propagate_to_peers=propagate)
         self.clock.advance(10)
         return block
 
-    def _add_new_blocks(self, num_blocks: int, propagate: bool = True) -> list[Block]:
+    async def _add_new_blocks(self, num_blocks: int, propagate: bool = True) -> list[Block]:
         blocks = []
         for _ in range(num_blocks):
-            blocks.append(self._add_new_block(propagate=propagate))
+            blocks.append(await self._add_new_block(propagate=propagate))
         return blocks
 
-    def test_get_blocks_before(self) -> None:
+    async def test_get_blocks_before(self) -> None:
         genesis_block = self.genesis_blocks[0]
         result = self.manager1.tx_storage.get_blocks_before(genesis_block.hash)
         self.assertEqual(0, len(result))
@@ -80,7 +80,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         with self.assertRaises(TransactionIsNotABlock):
             self.manager1.tx_storage.get_blocks_before(genesis_tx.hash)
 
-        blocks = self._add_new_blocks(20)
+        blocks = await self._add_new_blocks(20)
         num_blocks = 5
 
         for i, block in enumerate(blocks):
@@ -105,8 +105,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
 
-    def test_block_sync_new_blocks(self) -> None:
-        self._add_new_blocks(15)
+    async def test_block_sync_new_blocks(self) -> None:
+        await self._add_new_blocks(15)
 
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -126,8 +126,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_many_new_blocks(self) -> None:
-        self._add_new_blocks(150)
+    async def test_block_sync_many_new_blocks(self) -> None:
+        await self._add_new_blocks(150)
 
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -146,11 +146,11 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_new_blocks_and_txs(self) -> None:
-        self._add_new_blocks(25)
-        self._add_new_transactions(3)
-        self._add_new_blocks(4)
-        self._add_new_transactions(5)
+    async def test_block_sync_new_blocks_and_txs(self) -> None:
+        await self._add_new_blocks(25)
+        await self._add_new_transactions(3)
+        await self._add_new_blocks(4)
+        await self._add_new_transactions(5)
 
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -175,10 +175,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_tx_propagation_nat_peers(self) -> None:
+    async def test_tx_propagation_nat_peers(self) -> None:
         """ manager1 <- manager2 <- manager3
         """
-        self._add_new_blocks(25)
+        await self._add_new_blocks(25)
 
         self.manager2 = self.create_peer(self.network)
         self.conn1 = FakeConnection(self.manager1, self.manager2)
@@ -191,7 +191,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             self.clock.advance(0.1)
         self.assertTipsEqual(self.manager1, self.manager2)
 
-        self._add_new_blocks(1)
+        await self._add_new_blocks(1)
 
         for _ in range(1000):
             if self.conn1.is_empty():
@@ -214,7 +214,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertTipsEqual(self.manager1, self.manager2)
         self.assertTipsEqual(self.manager1, self.manager3)
 
-        self._add_new_transactions(1)
+        await self._add_new_transactions(1)
 
         for i in range(1000):
             # XXX: give it at least 100 steps before checking for emptyness
@@ -232,14 +232,14 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager2)
         self.assertConsensusValid(self.manager3)
 
-    def test_check_sync_state(self) -> None:
+    async def test_check_sync_state(self) -> None:
         """Tests if the LoopingCall to check the sync state works"""
         # Initially it should do nothing, since there is no recent activity
         self.manager1.check_sync_state()
         self.assertFalse(hasattr(self.manager1, "first_time_fully_synced"))
 
         # We force some sync activity to happen
-        self._add_new_block()
+        await self._add_new_block()
 
         # Make sure enough time passes so the LoopingCall runs
         self.clock.advance(self.manager1.lc_check_sync_state_interval)
@@ -252,10 +252,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
     __test__ = True
 
-    def test_downloader(self) -> None:
+    async def test_downloader(self) -> None:
         from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 
-        blocks = self._add_new_blocks(3)
+        blocks = await self._add_new_blocks(3)
 
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -329,7 +329,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         downloader.check_downloading_queue()
         self.assertEqual(len(downloader.downloading_deque), 0)
 
-    def _downloader_bug_setup(self) -> None:
+    async def _downloader_bug_setup(self) -> None:
         """ This is an auxiliary method to setup a bug scenario."""
         from hathor.p2p.sync_version import SyncVersion
 
@@ -339,7 +339,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         # - peer_Y will be manager2
         # - and manager_bug will be where the bug will happen
         # add blocks
-        self.blocks = self._add_new_blocks(10)
+        self.blocks = await self._add_new_blocks(10)
         self.tx_A = self.blocks[0]
         self.tx_B = self.blocks[1]
 
@@ -393,7 +393,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         # by this point everything should be set to so we can trigger the bug, any issues that happen before this
         # comment are an issue in setting up the scenario, not related to the problem itself
 
-    def test_downloader_retry_reorder(self) -> None:
+    async def test_downloader_retry_reorder(self) -> None:
         """ Reproduce the bug that causes a reorder in the downloader queue.
 
         The tracking issue for this bug is #465
@@ -420,7 +420,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
           - tx_A is eventually downloaded (or not, this doesn't have to happen)
           - tx_B is processed, but it will fail because tx_A has not been added yet
         """
-        self._downloader_bug_setup()
+        await self._downloader_bug_setup()
 
         # disconnect and wait for the download of tx_A to timeout but not yet the download of tx_B
         self.conn1.disconnect(Failure(Exception('testing')))
@@ -457,12 +457,12 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         # if the fix is applied, we would see tx_A in storage by this point
         self.assertTrue(self.manager_bug.tx_storage.transaction_exists(self.tx_A.hash))
 
-    def test_downloader_disconnect(self) -> None:
+    async def test_downloader_disconnect(self) -> None:
         """ This is related to test_downloader_retry_reorder, but it basically tests the change in behavior instead.
 
         When a peer disconnects it should be immediately removed from the tx-detail's connections list.
         """
-        self._downloader_bug_setup()
+        await self._downloader_bug_setup()
 
         # disconnect and check if the connections were removed from the tx-details (which also means the tx-details
         # will be removed from pending_transactions)
@@ -482,13 +482,13 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
 
         height = 0
         # add a mix of blocks and transactions
-        height += len(self._add_new_blocks(8))
+        height += len(await self._add_new_blocks(8))
         height += len(await add_blocks_unlock_reward(self.manager1))
-        self._add_new_transactions(2)
-        height += len(self._add_new_blocks(1))
-        self._add_new_transactions(4)
-        height += len(self._add_new_blocks(2))
-        self._add_new_transactions(2)
+        await self._add_new_transactions(2)
+        height += len(await self._add_new_blocks(1))
+        await self._add_new_transactions(4)
+        height += len(await self._add_new_blocks(2))
+        await self._add_new_transactions(2)
 
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -522,8 +522,8 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             self.assertCountEqual(meta1.conflict_with or [], meta2.conflict_with or [])
             self.assertCountEqual(meta1.twins or [], meta2.twins or [])
 
-    def test_tx_propagation_nat_peers(self) -> None:
-        super().test_tx_propagation_nat_peers()
+    async def test_tx_propagation_nat_peers(self) -> None:
+        await super().test_tx_propagation_nat_peers()
 
         node_sync1 = self.conn1.proto1.state.sync_agent
         self.assertEqual(self.manager1.tx_storage.latest_timestamp, self.manager2.tx_storage.latest_timestamp)
@@ -537,11 +537,11 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertEqual(node_sync2.peer_best_block.height, self.manager2.tx_storage.get_height_best_block())
         self.assertConsensusEqual(self.manager2, self.manager3)
 
-    def test_block_sync_new_blocks_and_txs(self) -> None:
-        self._add_new_blocks(25)
-        self._add_new_transactions(3)
-        self._add_new_blocks(4)
-        self._add_new_transactions(5)
+    async def test_block_sync_new_blocks_and_txs(self) -> None:
+        await self._add_new_blocks(25)
+        await self._add_new_transactions(3)
+        await self._add_new_blocks(4)
+        await self._add_new_transactions(5)
 
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -566,8 +566,8 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_many_new_blocks(self) -> None:
-        self._add_new_blocks(150)
+    async def test_block_sync_many_new_blocks(self) -> None:
+        await self._add_new_blocks(150)
 
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -587,8 +587,8 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_new_blocks(self) -> None:
-        self._add_new_blocks(15)
+    async def test_block_sync_new_blocks(self) -> None:
+        await self._add_new_blocks(15)
 
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -610,14 +610,14 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
 
     async def test_full_sync(self) -> None:
         # 10 blocks
-        blocks = self._add_new_blocks(10)
+        blocks = await self._add_new_blocks(10)
         # N blocks to unlock the reward
         unlock_reward_blocks = await add_blocks_unlock_reward(self.manager1)
         len_reward_unlock = len(unlock_reward_blocks)
         # 3 transactions still before the last checkpoint
-        self._add_new_transactions(3)
+        await self._add_new_transactions(3)
         # 5 more blocks and the last one is the last checkpoint
-        new_blocks = self._add_new_blocks(5)
+        new_blocks = await self._add_new_blocks(5)
 
         LAST_CHECKPOINT = len(blocks) + len_reward_unlock + len(new_blocks)
         FIRST_CHECKPOINT = LAST_CHECKPOINT // 2
@@ -628,14 +628,14 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         ]
 
         # 5 blocks after the last checkpoint
-        self._add_new_blocks(5)
+        await self._add_new_blocks(5)
         # 3 transactions
-        self._add_new_transactions(3)
+        await self._add_new_transactions(3)
         # 5 more blocks
-        self._add_new_blocks(5)
+        await self._add_new_blocks(5)
 
         # Add transactions to the mempool
-        self._add_new_transactions(2)
+        await self._add_new_transactions(2)
 
         self.manager1.checkpoints = cps
 
@@ -680,11 +680,11 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertEqual(len(manager2.tx_storage.indexes.mempool_tips.get()), 1)
         self.assertEqual(len(self.manager1.tx_storage.indexes.mempool_tips.get()), 1)
 
-    def test_block_sync_checkpoints(self) -> None:
+    async def test_block_sync_checkpoints(self) -> None:
         TOTAL_BLOCKS = 30
         LAST_CHECKPOINT = 15
         FIRST_CHECKPOINT = LAST_CHECKPOINT // 2
-        blocks = self._add_new_blocks(TOTAL_BLOCKS, propagate=False)
+        blocks = await self._add_new_blocks(TOTAL_BLOCKS, propagate=False)
         cps = [
             cp(0, self.genesis_blocks[0].hash),
             cp(FIRST_CHECKPOINT, blocks[FIRST_CHECKPOINT - 1].hash),

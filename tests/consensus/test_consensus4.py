@@ -8,8 +8,7 @@ from tests.utils import gen_custom_tx
 
 
 class BaseConsensusSimulatorTestCase(SimulatorTestCase):
-
-    def create_chain(
+    async def create_chain(
         self,
         manager: HathorManager,
         first_parent_block_hash: VertexId,
@@ -33,7 +32,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
             current = blk.hash
         return v
 
-    def test_conflict_with_parent_tx(self) -> None:
+    async def test_conflict_with_parent_tx(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -46,7 +45,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(await manager1.propagate_tx(b1))
         self.simulator.run(10)
 
-        A_list = self.create_chain(manager1, b1.hash, 15, 'A-')
+        A_list = await self.create_chain(manager1, b1.hash, 15, 'A-')
 
         tx1 = gen_custom_tx(manager1, [(A_list[0], 0)])
         tx1.parents = manager1.get_new_tx_parents(tx1.timestamp)
@@ -74,7 +73,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.assertIsNone(tx31.get_metadata().voided_by)
         self.assertEqual({tx32.hash}, tx32.get_metadata().voided_by)
 
-        self.create_chain(manager1, b1.hash, 20, 'B-', tx_parents=b1.parents[1:])
+        await self.create_chain(manager1, b1.hash, 20, 'B-', tx_parents=b1.parents[1:])
 
         self.assertEqual({A_list[0].hash, tx31.hash}, tx31.get_metadata().voided_by)
         self.assertEqual({A_list[0].hash, tx31.hash, tx32.hash}, tx32.get_metadata().voided_by)

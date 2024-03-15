@@ -38,7 +38,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         manager.cpu_mining_service.resolve(tx_fund0)
         self.assertTrue(await manager.propagate_tx(tx_fund0))
 
-        def do_step(tx_fund: Transaction) -> Transaction:
+        async def do_step(tx_fund: Transaction) -> Transaction:
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
             outputs = [WalletOutputInfo(decode_address(addr), 1, None)]
             tx1 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)
@@ -128,7 +128,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         manager.cpu_mining_service.resolve(tx_fund0)
         self.assertTrue(await manager.propagate_tx(tx_fund0))
 
-        def do_step(tx_fund: Transaction) -> Transaction:
+        async def do_step(tx_fund: Transaction) -> Transaction:
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
             outputs = [WalletOutputInfo(decode_address(addr), 1, None)]
             tx1 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)
