@@ -238,7 +238,7 @@ def get_address_from_redeem_script_hash(redeem_script_hash: bytes, version_byte:
     return address
 
 
-def decode_address(address58: str) -> bytes:
+def decode_address(address58: str | bytes) -> bytes:
     """ Decode address in base58 to bytes
 
     :param address58: Wallet address in base58

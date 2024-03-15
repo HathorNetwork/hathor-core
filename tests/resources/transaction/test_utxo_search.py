@@ -16,7 +16,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
         self.manager.wallet.unlock(b'MYPASS')
 
     async def test_simple_gets(self) -> None:
-        address = not_none(self.get_address(0))
+        address = not_none(self.get_address(0)).encode('ascii')
 
         await add_new_blocks(self.manager, 4, advance_clock=1)
 
