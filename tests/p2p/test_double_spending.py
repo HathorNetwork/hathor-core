@@ -65,14 +65,14 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertNotEqual(tx1.hash, tx3.hash)
         self.assertNotEqual(tx2.hash, tx3.hash)
 
-        self.assertTrue(self.manager1.propagate_tx(tx1, False))
+        self.assertTrue(await self.manager1.propagate_tx(tx1, False))
         self.run_to_completion()
         meta1 = tx1.get_metadata()
         self.assertEqual(meta1.conflict_with, None)
         self.assertEqual(meta1.voided_by, None)
 
         # Propagate a conflicting transaction.
-        self.assertTrue(self.manager1.propagate_tx(tx2, False))
+        self.assertTrue(await self.manager1.propagate_tx(tx2, False))
         self.run_to_completion()
 
         meta1 = tx1.get_metadata(force_reload=True)
@@ -98,7 +98,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
 
         # Propagate another conflicting transaction, but with higher weight.
-        self.manager1.propagate_tx(tx3)
+        await self.manager1.propagate_tx(tx3)
         self.run_to_completion()
 
         meta1 = tx1.get_metadata(force_reload=True)
@@ -185,7 +185,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         self.clock.advance(15)
-        self.assertTrue(self.manager1.propagate_tx(tx1))
+        self.assertTrue(await self.manager1.propagate_tx(tx1))
         self.clock.advance(15)
 
         # ---
@@ -202,7 +202,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx2.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx2)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx2)
+        await self.manager1.propagate_tx(tx2)
         self.clock.advance(15)
 
         self.assertGreater(tx2.timestamp, tx1.timestamp)
@@ -221,13 +221,13 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx3.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx3)
         self.clock.advance(15)
-        self.assertTrue(self.manager1.propagate_tx(tx3))
+        self.assertTrue(await self.manager1.propagate_tx(tx3))
         self.clock.advance(15)
 
         # ---
 
         self.clock.advance(15)
-        self.assertTrue(self.manager1.propagate_tx(tx4, False))
+        self.assertTrue(await self.manager1.propagate_tx(tx4, False))
         self.clock.advance(15)
 
         self.run_to_completion()
@@ -252,7 +252,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx5.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx5)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx5)
+        await self.manager1.propagate_tx(tx5)
         self.clock.advance(15)
 
         meta5 = tx5.get_metadata()
@@ -268,7 +268,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx6.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx6)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx6)
+        await self.manager1.propagate_tx(tx6)
         self.clock.advance(15)
 
         meta6 = tx6.get_metadata()
@@ -289,7 +289,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx7.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx7)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx7, False)
+        await self.manager1.propagate_tx(tx7, False)
         self.clock.advance(15)
 
         meta1 = tx1.get_metadata(force_reload=True)

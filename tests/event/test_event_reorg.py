@@ -37,7 +37,7 @@ class BaseEventReorgTest(unittest.TestCase):
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
         self.manager.verification_service.verify(b0)
-        self.manager.propagate_tx(b0, fails_silently=False)
+        await self.manager.propagate_tx(b0, fails_silently=False)
         self.log.debug('reorg block propagated')
         self.run_to_completion()
 

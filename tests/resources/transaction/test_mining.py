@@ -97,7 +97,7 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
         data = resp.json_value()
         block = create_tx_from_dict(data)
         CpuMiningService().resolve(block, update_time=False)
-        self.assertTrue(self.manager.propagate_tx(block))
+        self.assertTrue(await self.manager.propagate_tx(block))
 
 
 class SyncV1MiningApiTest(unittest.SyncV1Params, BaseMiningApiTest):

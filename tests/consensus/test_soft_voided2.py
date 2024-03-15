@@ -93,14 +93,14 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         return txH
 
-    def gen_block(self, manager1: HathorManager, tx: Transaction, parent_block: Block | None = None) -> Block:
+    async def gen_block(self, manager1: HathorManager, tx: Transaction, parent_block: Block | None = None) -> Block:
         parent_block_hash = parent_block.hash if parent_block else None
         block = manager1.generate_mining_block(parent_block_hash=parent_block_hash, address=BURN_ADDRESS)
         block.parents[1] = tx.hash
         block.timestamp = max(block.timestamp, tx.timestamp + 1)
         block.nonce = self.rng.getrandbits(32)
         block.update_hash()
-        self.assertTrue(manager1.propagate_tx(block, fails_silently=False))
+        self.assertTrue(await manager1.propagate_tx(block, fails_silently=False))
         return block
 
     async def _run_test(self, simulator: Simulator, soft_voided_tx_ids: set[VertexId]) -> AsyncGenerator[None, None]:
@@ -129,27 +129,27 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.graphviz.labels[initial.hash] = 'initial'
 
         x = initial
-        b0 = self.gen_block(manager1, x)
+        b0 = await self.gen_block(manager1, x)
         self.graphviz.labels[b0.hash] = 'b0'
 
         x = await self.do_step(0, manager1, x)
-        b1 = self.gen_block(manager1, x, parent_block=b0)
+        b1 = await self.gen_block(manager1, x, parent_block=b0)
         self.graphviz.labels[b1.hash] = 'b1'
 
         x = await self.do_step(1, manager1, x)
-        b2 = self.gen_block(manager1, x, parent_block=b1)
+        b2 = await self.gen_block(manager1, x, parent_block=b1)
         self.graphviz.labels[b2.hash] = 'b2'
 
         x = await self.do_step(2, manager1, x)
-        b3 = self.gen_block(manager1, x, parent_block=b2)
+        b3 = await self.gen_block(manager1, x, parent_block=b2)
         self.graphviz.labels[b3.hash] = 'b3'
 
         x = await self.do_step(3, manager1, x)
-        b4 = self.gen_block(manager1, x, parent_block=b3)
+        b4 = await self.gen_block(manager1, x, parent_block=b3)
         self.graphviz.labels[b4.hash] = 'b4'
 
         x = await self.do_step(4, manager1, x)
-        b5 = self.gen_block(manager1, x, parent_block=b4)
+        b5 = await self.gen_block(manager1, x, parent_block=b4)
         self.graphviz.labels[b5.hash] = 'b5'
 
         yield

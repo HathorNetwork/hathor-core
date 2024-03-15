@@ -37,7 +37,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.tx1.parents = self.manager.get_new_tx_parents()
         self.tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(self.tx1)
-        self.manager.propagate_tx(self.tx1)
+        await self.manager.propagate_tx(self.tx1)
         self.run_to_completion()
 
     def test_balance_update1(self):
@@ -55,7 +55,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx2)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         meta1 = self.tx1.get_metadata(force_reload=True)
@@ -101,7 +101,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx2)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         meta1 = self.tx1.get_metadata(force_reload=True)
@@ -130,7 +130,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx2)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         meta1 = self.tx1.get_metadata(force_reload=True)
@@ -164,7 +164,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx2.parents = [self.tx1.hash, self.tx1.parents[0]]
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         # Test create same tx with allow double spending
@@ -185,7 +185,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx3)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx3)
         self.run_to_completion()
 
         meta2 = tx2.get_metadata(force_reload=True)
@@ -227,8 +227,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx3)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx3)
         self.run_to_completion()
 
         meta2 = tx2.get_metadata()
@@ -272,8 +272,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx3)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx3)
         self.run_to_completion()
 
         # Balance is the same
@@ -308,8 +308,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx3)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx3)
         self.run_to_completion()
 
         meta2 = tx2.get_metadata(force_reload=True)
@@ -340,7 +340,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         outputs3 = [
@@ -351,7 +351,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx3.parents = self.manager.get_new_tx_parents()
         tx3.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx3)
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx3)
         self.run_to_completion()
 
         self.clock.advance(1)
@@ -364,7 +364,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx4.parents = [tx3.hash, tx3.parents[0]]
         tx4.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx4)
-        self.manager.propagate_tx(tx4)
+        await self.manager.propagate_tx(tx4)
         self.run_to_completion()
 
         # Change of parents only, so it's a twin.
@@ -374,7 +374,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx5)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx5)
+        await self.manager.propagate_tx(tx5)
         self.run_to_completion()
 
         meta4 = tx4.get_metadata(force_reload=True)
@@ -427,7 +427,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
         # verify balance
         self.assertEqual(self.manager.wallet.balance[token_id], WalletBalance(0, amount - 30))

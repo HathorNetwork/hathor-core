@@ -45,7 +45,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx.parents = self.manager1.get_new_tx_parents()
         self.manager1.cpu_mining_service.resolve(tx)
         self.manager1.verification_service.verify(tx)
-        self.manager1.propagate_tx(tx)
+        await self.manager1.propagate_tx(tx)
         self.clock.advance(10)
         return tx
 

@@ -10,14 +10,14 @@ from tests.utils import add_blocks_unlock_reward
 class BaseSimulatorIndexesTestCase(unittest.TestCase):
     __test__ = False
 
-    def _build_randomized_blockchain(self, *, utxo_index=False):
+    async def _build_randomized_blockchain(self, *, utxo_index: bool = False) -> None:
         tx_storage = TransactionMemoryStorage()
         manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True,
                                    use_memory_index=True, utxo_index=utxo_index)
 
-        add_new_blocks(manager, 50, advance_clock=15)
+        await add_new_blocks(manager, 50, advance_clock=15)
 
-        add_blocks_unlock_reward(manager)
+        await add_blocks_unlock_reward(manager)
         address1 = self.get_address(0)
         address2 = self.get_address(1)
         address3 = self.get_address(2)
@@ -31,7 +31,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         tx1.parents = manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         manager.cpu_mining_service.resolve(tx1)
-        assert manager.propagate_tx(tx1, False)
+        assert await manager.propagate_tx(tx1, False)
 
         tx2 = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
         tx2.weight = 2.0
@@ -39,25 +39,25 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
         manager.cpu_mining_service.resolve(tx2)
-        assert manager.propagate_tx(tx2, False)
+        assert await manager.propagate_tx(tx2, False)
 
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.weight = 3.0
         tx3.parents = tx1.parents
         manager.cpu_mining_service.resolve(tx3)
-        assert manager.propagate_tx(tx3, False)
+        assert await manager.propagate_tx(tx3, False)
 
         for _ in range(100):
             address = self.get_address(0)
             value = 500
             tx = gen_new_tx(manager, address, value)
-            assert manager.propagate_tx(tx)
+            assert await manager.propagate_tx(tx)
         return manager
 
-    def test_index_initialization(self):
+    async def test_index_initialization(self) -> None:
         from copy import deepcopy
 
-        self.manager = self._build_randomized_blockchain(utxo_index=True)
+        self.manager = await self._build_randomized_blockchain(utxo_index=True)
 
         # XXX: this test makes use of the internals of TipsIndex, AddressIndex and UtxoIndex
         tx_storage = self.manager.tx_storage
@@ -113,8 +113,8 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         self.assertEqual(newinit_address_index, base_address_index)
         self.assertEqual(newinit_utxo_index, base_utxo_index)
 
-    def test_topological_iterators(self):
-        self.manager = self._build_randomized_blockchain()
+    async def test_topological_iterators(self) -> None:
+        self.manager = await self._build_randomized_blockchain()
         tx_storage = self.manager.tx_storage
 
         # XXX: sanity check that we've at least produced something

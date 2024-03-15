@@ -100,7 +100,7 @@ class NanoContractExecuteResource(Resource):
         tx.update_timestamp(int(self.manager.reactor.seconds()))
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
         self.manager.cpu_mining_service.resolve(tx)
-        success = self.manager.propagate_tx(tx)
+        success = await self.manager.propagate_tx(tx)
 
         ret = {'success': success, 'hex_tx': tx.get_struct().hex()}
         return json_dumpb(ret)

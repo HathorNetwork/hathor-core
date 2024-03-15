@@ -40,7 +40,7 @@ class BaseWalletIndexTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx2)
         self.assertNotEqual(tx1.hash, tx2.hash)
 
-        self.manager.propagate_tx(tx1)
+        await self.manager.propagate_tx(tx1)
         self.run_to_completion()
 
         wallet_data = self.manager.tx_storage.indexes.addresses.get_from_address(address)
@@ -48,7 +48,7 @@ class BaseWalletIndexTest(unittest.TestCase):
         self.assertEqual(wallet_data, [tx1.hash])
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         wallet_data = self.manager.tx_storage.indexes.addresses.get_from_address(address)

@@ -36,7 +36,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         tx_fund0.parents = manager.get_new_tx_parents()
         tx_fund0.timestamp = int(self.clock.seconds())
         manager.cpu_mining_service.resolve(tx_fund0)
-        self.assertTrue(manager.propagate_tx(tx_fund0))
+        self.assertTrue(await manager.propagate_tx(tx_fund0))
 
         def do_step(tx_fund: Transaction) -> Transaction:
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
@@ -45,7 +45,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx1.weight = 1
             tx1.parents = manager.get_new_tx_parents(tx1.timestamp)
             manager.cpu_mining_service.resolve(tx1)
-            self.assertTrue(manager.propagate_tx(tx1))
+            self.assertTrue(await manager.propagate_tx(tx1))
 
             inputs = []
             inputs.append(WalletInputInfo(tx1.hash, 0, manager.wallet.get_private_key(addr)))
@@ -55,7 +55,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx2.weight = 1
             tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
             manager.cpu_mining_service.resolve(tx2)
-            self.assertTrue(manager.propagate_tx(tx2))
+            self.assertTrue(await manager.propagate_tx(tx2))
 
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
             outputs = [WalletOutputInfo(decode_address(addr), 1, None)]
@@ -63,7 +63,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx3.weight = tx1.weight + tx2.weight + 0.1
             tx3.parents = manager.get_new_tx_parents(tx3.timestamp)
             manager.cpu_mining_service.resolve(tx3)
-            self.assertTrue(manager.propagate_tx(tx3))
+            self.assertTrue(await manager.propagate_tx(tx3))
 
             inputs = [WalletInputInfo(tx_fund.hash, 1, manager.wallet.get_private_key(addr))]
             outputs = [WalletOutputInfo(decode_address(addr), tx_fund.outputs[1].value, None)]
@@ -71,7 +71,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx4.weight = 1
             tx4.parents = manager.get_new_tx_parents(tx4.timestamp)
             manager.cpu_mining_service.resolve(tx4)
-            self.assertTrue(manager.propagate_tx(tx4))
+            self.assertTrue(await manager.propagate_tx(tx4))
 
             inputs = []
             inputs.append(WalletInputInfo(tx2.hash, 0, manager.wallet.get_private_key(addr)))
@@ -83,7 +83,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx5.weight = tx3.weight - tx1.weight + 0.1
             tx5.parents = [tx2.hash, tx4.hash]
             manager.cpu_mining_service.resolve(tx5)
-            self.assertTrue(manager.propagate_tx(tx5))
+            self.assertTrue(await manager.propagate_tx(tx5))
             return tx5
 
         tx = tx_fund0
@@ -126,7 +126,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         tx_fund0.parents = manager.get_new_tx_parents()
         tx_fund0.timestamp = int(self.clock.seconds())
         manager.cpu_mining_service.resolve(tx_fund0)
-        self.assertTrue(manager.propagate_tx(tx_fund0))
+        self.assertTrue(await manager.propagate_tx(tx_fund0))
 
         def do_step(tx_fund: Transaction) -> Transaction:
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
@@ -135,7 +135,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx1.weight = 1
             tx1.parents = manager.get_new_tx_parents(tx1.timestamp)
             manager.cpu_mining_service.resolve(tx1)
-            self.assertTrue(manager.propagate_tx(tx1))
+            self.assertTrue(await manager.propagate_tx(tx1))
 
             inputs = []
             inputs.append(WalletInputInfo(tx1.hash, 0, manager.wallet.get_private_key(addr)))
@@ -145,7 +145,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx2.weight = 1.1
             tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
             manager.cpu_mining_service.resolve(tx2)
-            self.assertTrue(manager.propagate_tx(tx2))
+            self.assertTrue(await manager.propagate_tx(tx2))
 
             inputs = []
             inputs.append(WalletInputInfo(tx_fund.hash, 2, manager.wallet.get_private_key(addr)))
@@ -155,7 +155,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx3.weight = 1
             tx3.parents = manager.get_new_tx_parents(tx3.timestamp)
             manager.cpu_mining_service.resolve(tx3)
-            self.assertTrue(manager.propagate_tx(tx3))
+            self.assertTrue(await manager.propagate_tx(tx3))
 
             inputs = []
             inputs.append(WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr)))
@@ -165,7 +165,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx4.weight = tx1.weight + tx2.weight + 0.1
             tx4.parents = manager.get_new_tx_parents(tx4.timestamp)
             manager.cpu_mining_service.resolve(tx4)
-            self.assertTrue(manager.propagate_tx(tx4))
+            self.assertTrue(await manager.propagate_tx(tx4))
 
             inputs = []
             inputs.append(WalletInputInfo(tx3.hash, 0, manager.wallet.get_private_key(addr)))
@@ -178,7 +178,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             tx5.weight = 1
             tx5.parents = manager.get_new_tx_parents(tx5.timestamp)
             manager.cpu_mining_service.resolve(tx5)
-            self.assertTrue(manager.propagate_tx(tx5))
+            self.assertTrue(await manager.propagate_tx(tx5))
             return tx5
 
         tx = tx_fund0

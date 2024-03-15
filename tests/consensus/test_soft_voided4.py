@@ -80,7 +80,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         txC.parents = tx_base.parents
         txC.update_hash()
         self.graphviz.labels[txC.hash] = 'txC'
-        self.assertTrue(manager2.propagate_tx(txC, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(txC, fails_silently=False))
         metaC = txC.get_metadata()
         self.assertIsNone(metaC.voided_by)
 
@@ -100,7 +100,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         # dot = self.graphviz.dot()
         # dot.render('dot0')
 
-        self.assertTrue(manager2.propagate_tx(blk1, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(blk1, fails_silently=False))
         blk1meta = blk1.get_metadata()
         self.graphviz.labels[blk1.hash] = 'blk1'
         self.assertIsNone(blk1meta.voided_by)
@@ -111,7 +111,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             blk2.update_timestamp(int(manager2.reactor.seconds()))
         blk2.nonce = self.rng.getrandbits(32)
         blk2.update_hash()
-        self.assertTrue(manager2.propagate_tx(blk2, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(blk2, fails_silently=False))
         blk2meta = blk2.get_metadata()
         self.graphviz.labels[blk2.hash] = 'blk2'
         self.assertIsNone(blk2meta.voided_by)
@@ -122,7 +122,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             blk3.parents[1] = txB.hash
         blk3.nonce = self.rng.getrandbits(32)
         blk3.update_hash()
-        self.assertTrue(manager2.propagate_tx(blk3, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(blk3, fails_silently=False))
         blk3meta = blk3.get_metadata()
         self.graphviz.labels[blk3.hash] = 'blk3'
 

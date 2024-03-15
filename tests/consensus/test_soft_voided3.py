@@ -85,7 +85,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         blk1.timestamp = txD1.timestamp + 1
         blk1.nonce = self.rng.getrandbits(32)
         blk1.update_hash()
-        self.assertTrue(manager2.propagate_tx(blk1, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(blk1, fails_silently=False))
         blk1meta = blk1.get_metadata()
         self.assertIsNone(blk1meta.voided_by)
         graphviz.labels[blk1.hash] = 'blk1'

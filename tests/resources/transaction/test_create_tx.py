@@ -230,7 +230,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         tx.inputs[0].data = input_data
         # XXX: tx.resolve is a bit CPU intensive, but not so much as to make this test disabled by default
         self.manager.cpu_mining_service.resolve(tx, update_time=False)
-        self.assertTrue(self.manager.propagate_tx(tx))
+        self.assertTrue(await self.manager.propagate_tx(tx))
 
     @inlineCallbacks
     def test_tx_propagate_multiple_inputs(self):
@@ -277,7 +277,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         tx.inputs[2].data = input_data
         # XXX: tx.resolve is a bit CPU intensive, but not so much as to make this test disabled by default
         self.manager.cpu_mining_service.resolve(tx, update_time=False)
-        self.assertTrue(self.manager.propagate_tx(tx))
+        self.assertTrue(await self.manager.propagate_tx(tx))
 
     @inlineCallbacks
     def test_already_spent(self):

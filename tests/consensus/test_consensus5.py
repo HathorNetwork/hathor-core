@@ -27,7 +27,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
                 blk.parents[1:] = tx_parents
             blk.update_hash()
             self.graphviz.labels[blk.hash] = f'{prefix}b{i}'
-            self.assertTrue(manager.propagate_tx(blk))
+            self.assertTrue(await manager.propagate_tx(blk))
             self.simulator.run(10)
             v.append(blk)
             current = blk.hash
@@ -43,19 +43,19 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         b1.nonce = self.rng.getrandbits(32)
         b1.update_hash()
         self.graphviz.labels[b1.hash] = 'b1'
-        self.assertTrue(manager1.propagate_tx(b1))
+        self.assertTrue(await manager1.propagate_tx(b1))
         self.simulator.run(10)
 
         self.create_chain(manager1, b1.hash, 20, '')
 
         txA1 = gen_custom_tx(manager1, [(b1, 0)])
         self.graphviz.labels[txA1.hash] = 'txA1'
-        self.assertTrue(manager1.propagate_tx(txA1))
+        self.assertTrue(await manager1.propagate_tx(txA1))
         self.simulator.run(10)
 
         txA2 = gen_custom_tx(manager1, [(b1, 0)])
         self.graphviz.labels[txA2.hash] = 'txA2'
-        self.assertTrue(manager1.propagate_tx(txA2))
+        self.assertTrue(await manager1.propagate_tx(txA2))
         self.simulator.run(10)
 
         b2 = manager1.generate_mining_block()
@@ -64,7 +64,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         b2.nonce = self.rng.getrandbits(32)
         b2.update_hash()
         self.graphviz.labels[b2.hash] = 'b2'
-        self.assertTrue(manager1.propagate_tx(b2, fails_silently=False))
+        self.assertTrue(await manager1.propagate_tx(b2, fails_silently=False))
         self.simulator.run(10)
 
         self.assertIsNone(txA1.get_metadata().voided_by)
@@ -72,11 +72,11 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         txC1 = gen_custom_tx(manager1, [(txA2, 0)])
         self.graphviz.labels[txC1.hash] = 'txC1'
-        self.assertTrue(manager1.propagate_tx(txC1))
+        self.assertTrue(await manager1.propagate_tx(txC1))
 
         txC2 = gen_custom_tx(manager1, [(txA2, 0)], inc_timestamp=1)
         self.graphviz.labels[txC2.hash] = 'txC2'
-        self.assertTrue(manager1.propagate_tx(txC2))
+        self.assertTrue(await manager1.propagate_tx(txC2))
 
         self.assertEqual({txA2.hash, txC1.hash}, txC1.get_metadata().voided_by)
         self.assertEqual({txA2.hash, txC2.hash}, txC2.get_metadata().voided_by)

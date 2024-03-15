@@ -155,7 +155,7 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         # check tokens index
@@ -262,7 +262,7 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         # check tokens index
@@ -401,7 +401,7 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[2].data = data
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         # there should only be one element on the indexes for the token
@@ -422,7 +422,7 @@ class BaseTokenTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx3.hash, tx2.hash)
         self.assertTrue(tx3.weight > tx2.weight)
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx3)
         self.run_to_completion()
 
         # new tx should be on tokens index. Old tx should not be present

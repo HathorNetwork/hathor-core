@@ -135,7 +135,7 @@ class SendTokensResource(Resource):
         """
         message = ''
         try:
-            success = self.manager.propagate_tx(tx, fails_silently=False)
+            success = await self.manager.propagate_tx(tx, fails_silently=False)
         except (InvalidNewTransaction, TxValidationError) as e:
             success = False
             message = str(e)

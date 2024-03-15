@@ -129,7 +129,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         # Propagate fork block.
         # This block belongs to case (ii).
-        self.assertTrue(manager.propagate_tx(fork_block1))
+        self.assertTrue(await manager.propagate_tx(fork_block1))
         fork_meta1 = fork_block1.get_metadata()
         self.assertEqual(fork_meta1.voided_by, {fork_block1.hash})
 
@@ -168,7 +168,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         fork_block3 = manager.generate_mining_block(parent_block_hash=fork_block1.hash)
         manager.cpu_mining_service.resolve(fork_block3)
         manager.verification_service.verify(fork_block3)
-        self.assertTrue(manager.propagate_tx(fork_block3))
+        self.assertTrue(await manager.propagate_tx(fork_block3))
         fork_meta3 = fork_block3.get_metadata()
         self.assertEqual(fork_meta3.voided_by, {fork_block3.hash})
 
@@ -238,7 +238,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         fork_block2 = manager.generate_mining_block(parent_block_hash=sidechain[-1].hash)
         manager.cpu_mining_service.resolve(fork_block2)
         manager.verification_service.verify(fork_block2)
-        self.assertTrue(manager.propagate_tx(fork_block2))
+        self.assertTrue(await manager.propagate_tx(fork_block2))
         sidechain.append(fork_block2)
 
         # Now, both chains have the same score.
@@ -286,7 +286,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         fork_block3 = manager.generate_mining_block(parent_block_hash=fork_block2.hash)
         manager.cpu_mining_service.resolve(fork_block3)
         manager.verification_service.verify(fork_block3)
-        self.assertTrue(manager.propagate_tx(fork_block3))
+        self.assertTrue(await manager.propagate_tx(fork_block3))
         sidechain.append(fork_block3)
 
         # The side chains have exceeded the score (after it has the same score)
@@ -312,7 +312,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         fork_block4.weight = 10
         manager.cpu_mining_service.resolve(fork_block4)
         manager.verification_service.verify(fork_block4)
-        self.assertTrue(manager.propagate_tx(fork_block4))
+        self.assertTrue(await manager.propagate_tx(fork_block4))
         sidechain3.append(fork_block4)
 
         for block in blocks:

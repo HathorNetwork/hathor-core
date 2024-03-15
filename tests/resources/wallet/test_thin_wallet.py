@@ -427,7 +427,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         tx2.weight = self.manager.daa.minimum_tx_weight(tx2)
         tx2.parents = self.manager.get_new_tx_parents()
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
 
         # Now we have 2 txs with this token
         response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'3'})

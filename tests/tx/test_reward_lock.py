@@ -36,7 +36,7 @@ class BaseTransactionTest(unittest.TestCase):
             address=get_address_from_public_key(self.genesis_public_key)
         )
         self.manager.cpu_mining_service.resolve(reward_block)
-        self.assertTrue(self.manager.propagate_tx(reward_block))
+        self.assertTrue(await self.manager.propagate_tx(reward_block))
         # XXX: calculate unlock height AFTER adding the block so the height is correctly calculated
         unlock_height = reward_block.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS + 1
         return reward_block, unlock_height
@@ -77,7 +77,7 @@ class BaseTransactionTest(unittest.TestCase):
         # now it should be spendable
         tx = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
-        self.assertTrue(self.manager.propagate_tx(tx, fails_silently=False))
+        self.assertTrue(await self.manager.propagate_tx(tx, fails_silently=False))
 
     def test_block_with_not_enough_height(self):
         # add block with a reward we can spend
@@ -160,7 +160,7 @@ class BaseTransactionTest(unittest.TestCase):
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
         self.manager.verification_service.verify(b0)
-        self.manager.propagate_tx(b0, fails_silently=False)
+        await self.manager.propagate_tx(b0, fails_silently=False)
 
         # now the new tx should not pass verification considering the reward lock
         with self.assertRaises(RewardLocked):

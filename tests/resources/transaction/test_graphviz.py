@@ -29,7 +29,7 @@ class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
         self.tx2.parents = [tx.parents[1], tx.parents[0]]
         self.manager.cpu_mining_service.resolve(self.tx2)
 
-        self.manager.propagate_tx(self.tx2)
+        await self.manager.propagate_tx(self.tx2)
 
     def create_resource(self):
         raise NotImplementedError

@@ -51,7 +51,7 @@ class BaseTipsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx3)
 
         # Propagate a conflicting twin transaction with tx2
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx3)
 
         meta1 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, [tx3.hash])
@@ -66,7 +66,7 @@ class BaseTipsTestCase(unittest.TestCase):
         new_block.parents = [new_block.parents[0], tx1.hash, tx3.hash]
         self.manager.cpu_mining_service.resolve(new_block)
         self.manager.verification_service.verify(new_block)
-        self.manager.propagate_tx(new_block, fails_silently=False)
+        await self.manager.propagate_tx(new_block, fails_silently=False)
 
         self.manager.reactor.advance(10)
 
@@ -134,7 +134,7 @@ class BaseTipsTestCase(unittest.TestCase):
         tx4 = (await add_new_transactions(self.manager, 1, advance_clock=1, propagate=False))[0]
         tx4.parents = [tx1.hash, tx2.hash]
         self.manager.cpu_mining_service.resolve(tx4)
-        self.manager.propagate_tx(tx4, fails_silently=False)
+        await self.manager.propagate_tx(tx4, fails_silently=False)
         self.manager.reactor.advance(10)
         self.assertCountEqual(self.get_tips(), set([tx4.hash, tx3.hash]))
 
@@ -142,7 +142,7 @@ class BaseTipsTestCase(unittest.TestCase):
         tx5 = Transaction.create_from_struct(tx4.get_struct())
         tx5.parents = [tx2.hash, tx3.hash]
         self.manager.cpu_mining_service.resolve(tx5)
-        self.manager.propagate_tx(tx5)
+        await self.manager.propagate_tx(tx5)
         self.manager.reactor.advance(10)
 
         # tx4 and tx5 are twins, so both are voided
@@ -154,7 +154,7 @@ class BaseTipsTestCase(unittest.TestCase):
         tx6 = (await add_new_transactions(self.manager, 1, advance_clock=1, propagate=False))[0]
         tx6.parents = [tx5.hash, tx2.hash]
         self.manager.cpu_mining_service.resolve(tx6)
-        self.manager.propagate_tx(tx6, fails_silently=False)
+        await self.manager.propagate_tx(tx6, fails_silently=False)
         self.manager.reactor.advance(10)
         self.assertIsNotNone(tx4.get_metadata(force_reload=True).voided_by)
         self.assertIsNone(tx5.get_metadata(force_reload=True).voided_by)

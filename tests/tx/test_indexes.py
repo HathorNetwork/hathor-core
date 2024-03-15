@@ -37,7 +37,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
-        self.assertTrue(self.manager.propagate_tx(tx1, False))
+        self.assertTrue(await self.manager.propagate_tx(tx1, False))
         assert self.manager.tx_storage.indexes is not None
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
@@ -53,7 +53,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
         self.manager.cpu_mining_service.resolve(tx2)
-        self.assertTrue(self.manager.propagate_tx(tx2, False))
+        self.assertTrue(await self.manager.propagate_tx(tx2, False))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
                 {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
@@ -65,7 +65,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertIn(tx1.hash, tx3.parents)
         self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx2.hash, tx3.hash)
-        self.assertTrue(self.manager.propagate_tx(tx3, False))
+        self.assertTrue(await self.manager.propagate_tx(tx3, False))
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
@@ -96,7 +96,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
-        self.assertTrue(self.manager.propagate_tx(tx1, False))
+        self.assertTrue(await self.manager.propagate_tx(tx1, False))
         assert self.manager.tx_storage.indexes is not None
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
@@ -110,7 +110,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
         self.manager.cpu_mining_service.resolve(tx2)
-        self.assertTrue(self.manager.propagate_tx(tx2, False))
+        self.assertTrue(await self.manager.propagate_tx(tx2, False))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
                 {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
@@ -124,7 +124,7 @@ class BaseIndexesTest(unittest.TestCase):
         # self.assertIn(tx1.hash, tx3.parents)
         self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx2.hash, tx3.hash)
-        self.assertTrue(self.manager.propagate_tx(tx3, False))
+        self.assertTrue(await self.manager.propagate_tx(tx3, False))
         # self.assertIn(tx3.hash, tx2.get_metadata().voided_by)
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
         if self.manager.tx_storage.indexes.mempool_tips is not None:
@@ -500,7 +500,7 @@ class BaseIndexesTest(unittest.TestCase):
             *wallet.get_input_aux_data(tx1.get_sighash_all(), wallet.get_private_key(address))
         )
         self.manager.cpu_mining_service.resolve(tx1)
-        self.assertTrue(self.manager.propagate_tx(tx1, False))
+        self.assertTrue(await self.manager.propagate_tx(tx1, False))
 
         self.assertEqual(
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
@@ -576,7 +576,7 @@ class BaseIndexesTest(unittest.TestCase):
             *wallet.get_input_aux_data(tx1.get_sighash_all(), wallet.get_private_key(address))
         )
         self.manager.cpu_mining_service.resolve(tx1)
-        self.assertTrue(self.manager.propagate_tx(tx1, False))
+        self.assertTrue(await self.manager.propagate_tx(tx1, False))
 
         # querying for exact values
 

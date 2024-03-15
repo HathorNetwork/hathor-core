@@ -71,7 +71,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
-        self.manager.propagate_tx(tx1)
+        await self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
@@ -104,7 +104,7 @@ class BaseMultisigTestCase(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(tx)
         # Transaction is still locked
-        self.assertFalse(self.manager.propagate_tx(tx))
+        self.assertFalse(await self.manager.propagate_tx(tx))
 
         self.clock.advance(6)
         tx.timestamp = int(self.clock.seconds())
@@ -118,10 +118,10 @@ class BaseMultisigTestCase(unittest.TestCase):
         tx2 = Transaction.create_from_struct(tx.get_struct())
         tx2.inputs[0].data = p2pkh_input_data
         self.manager.cpu_mining_service.resolve(tx2)
-        self.assertFalse(self.manager.propagate_tx(tx2))
+        self.assertFalse(await self.manager.propagate_tx(tx2))
 
         # Now we propagate the correct
-        self.assertTrue(self.manager.propagate_tx(tx))
+        self.assertTrue(await self.manager.propagate_tx(tx))
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, first_block_amount + 300))
