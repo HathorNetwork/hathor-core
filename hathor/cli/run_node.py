@@ -525,7 +525,7 @@ class RunNode:
     def parse_args(self, argv: list[str]) -> Namespace:
         return self.parser.parse_args(argv)
 
-    async def run(self) -> None:
+    def run(self) -> None:
         self.reactor.run()
 
 

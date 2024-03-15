@@ -89,7 +89,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         tx = tx_fund0
         N = 10
         for _ in range(N):
-            tx = do_step(tx)
+            tx = await do_step(tx)
 
         block = await add_new_block(manager)
         self.assertIn(tx.hash, block.parents)
@@ -184,7 +184,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         tx = tx_fund0
         N = 10
         for _ in range(N):
-            tx = do_step(tx)
+            tx = await do_step(tx)
 
         self.run_to_completion()
         block = await add_new_block(manager)
