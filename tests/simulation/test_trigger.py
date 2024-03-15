@@ -27,7 +27,7 @@ class TriggerTestCase(unittest.TestCase):
 
     def test_stop_after_n_mined_blocks(self) -> None:
         miner1 = self.simulator.create_miner(self.manager1, hashpower=1e6)
-        miner1.start()
+        await miner1.start()
 
         reactor = self.simulator.get_reactor()
 
@@ -50,7 +50,7 @@ class TriggerTestCase(unittest.TestCase):
 
     def test_stop_after_minimum_balance(self) -> None:
         miner1 = self.simulator.create_miner(self.manager1, hashpower=1e6)
-        miner1.start()
+        await miner1.start()
 
         wallet = not_none(self.manager1.wallet)
         settings = self.simulator.settings

@@ -66,7 +66,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # mine 20 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
-        miner.start()
+        await miner.start()
         trigger = StopAfterNMinedBlocks(miner, quantity=20)
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
         miner.stop()
@@ -89,7 +89,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # mine 20 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
-        miner.start()
+        await miner.start()
         trigger = StopAfterNMinedBlocks(miner, quantity=20)
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
         miner.stop()
@@ -241,7 +241,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # mine 10 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
-        miner.start()
+        await miner.start()
         trigger = StopAfterNMinedBlocks(miner, quantity=10)
         self.assertTrue(self.simulator.run(720, trigger=trigger))
         miner.stop()
@@ -287,7 +287,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # mine 10 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
-        miner.start()
+        await miner.start()
         trigger = StopAfterNMinedBlocks(miner, quantity=10)
         self.assertTrue(self.simulator.run(720, trigger=trigger))
         miner.stop()
@@ -372,7 +372,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # mine 20 blocks
         miner = self.simulator.create_miner(manager1, hashpower=1e6)
-        miner.start()
+        await miner.start()
         trigger = StopAfterNMinedBlocks(miner, quantity=20)
         self.assertTrue(self.simulator.run(1440, trigger=trigger))
         miner.stop()

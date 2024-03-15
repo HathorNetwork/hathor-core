@@ -48,7 +48,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         manager1.allow_mining_without_peers()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         trigger: Trigger = StopAfterNMinedBlocks(miner1, quantity=50)
         self.assertTrue(self.simulator.run(3 * 3600, trigger=trigger))
 
@@ -140,7 +140,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
         # Start generators again to test real time sync.
-        miner1.start()
+        await miner1.start()
         await gen_tx1.start()
         self.simulator.run(600)
         miner1.stop()
@@ -174,7 +174,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         # Find 50 blocks.
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         trigger: Trigger = StopAfterNMinedBlocks(miner1, quantity=100)
         self.assertTrue(self.simulator.run(3 * 3600, trigger=trigger))
         miner1.stop()
@@ -188,7 +188,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         gen_tx1.stop()
 
         # Find 1 block.
-        miner1.start()
+        await miner1.start()
         trigger = StopAfterNMinedBlocks(miner1, quantity=1)
         self.assertTrue(self.simulator.run(3600, trigger=trigger))
         miner1.stop()
@@ -261,7 +261,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         self.assertTrue(self.simulator.run(24 * 3600))
         miner1.stop()
 
@@ -346,7 +346,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         # mine some blocks (10, could be any amount)
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNMinedBlocks(miner1, quantity=100)))
         miner1.stop()
 
@@ -357,7 +357,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         gen_tx1.stop()
 
         # mine some blocks (2 to be sure, 1 should be enough)
-        miner1.start()
+        await miner1.start()
         self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNMinedBlocks(miner1, quantity=2)))
         miner1.stop()
 

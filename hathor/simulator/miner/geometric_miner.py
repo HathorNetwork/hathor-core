@@ -20,6 +20,7 @@ from hathor.exception import BlockTemplateTimestampError
 from hathor.manager import HathorEvents
 from hathor.simulator.miner.abstract_miner import AbstractMiner
 from hathor.util import Random
+from hathor.utils.twisted import call_async_later
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -120,6 +121,7 @@ class GeometricMiner(AbstractMiner):
         if self._delayed_call and self._delayed_call.active():
             self._delayed_call.cancel()
         self._delayed_call = self._clock.callLater(dt, self._schedule_next_block)
+        self._delayed_call = call_async_later(self._clock, dt, self._schedule_next_block)
 
     def get_blocks_found(self) -> int:
         return self._blocks_found

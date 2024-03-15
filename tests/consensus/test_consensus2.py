@@ -60,7 +60,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         manager1.allow_mining_without_peers()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         self.simulator.run(60)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
@@ -96,7 +96,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         manager1.allow_mining_without_peers()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         self.simulator.run(60)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)

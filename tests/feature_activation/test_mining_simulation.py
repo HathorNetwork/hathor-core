@@ -67,7 +67,7 @@ class BaseMiningSimulationTest(SimulatorTestCase):
         manager = self.simulator.create_peer(builder)
         manager.allow_mining_without_peers()
         miner = self.simulator.create_miner(manager, hashpower=1e12)
-        miner.start()
+        await miner.start()
 
         # There are 3 resources available for miners, and all of them should contain the correct signal_bits
         get_block_template_resource = GetBlockTemplateResource(manager)

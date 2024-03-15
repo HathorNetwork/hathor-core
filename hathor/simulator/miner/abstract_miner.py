@@ -40,15 +40,15 @@ class AbstractMiner(ABC):
 
         self.log = logger.new()
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Start mining blocks."""
         self._manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self._on_new_tx)
 
-        self._schedule_next_block()
+        await self._schedule_next_block()
 
     def stop(self) -> None:
         """Stop mining blocks."""
-        if self._delayed_call:
+        if self._delayed_call and self._delayed_call.active():
             self._delayed_call.cancel()
             self._delayed_call = None
 
@@ -60,7 +60,7 @@ class AbstractMiner(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _schedule_next_block(self):
+    async def _schedule_next_block(self) -> None:
         """Schedule the propagation of the next block, and propagate a block if it has been found."""
         raise NotImplementedError
 

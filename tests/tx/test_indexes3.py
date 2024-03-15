@@ -16,11 +16,11 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.simulator.run(10)
 
         miner1 = self.simulator.create_miner(manager, hashpower=100e6)
-        miner1.start()
+        await miner1.start()
         self.simulator.run(10)
 
         miner2 = self.simulator.create_miner(manager, hashpower=100e6)
-        miner2.start()
+        await miner2.start()
         self.simulator.run(10)
 
         gen_tx1 = self.simulator.create_tx_generator(manager, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)

@@ -76,7 +76,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         manager = self.create_simulator_peer(simulator, peer_id_pool)
         nodes.append(manager)
         miner = simulator.create_miner(manager, hashpower=10e6)
-        miner.start()
+        await miner.start()
         miners.append(miner)
 
         simulator.run(10)
@@ -88,7 +88,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                 simulator.add_connection(conn)
             nodes.append(manager)
             miner = simulator.create_miner(manager, hashpower=hashpower)
-            miner.start()
+            await miner.start()
             miners.append(miner)
 
         for i, rate in enumerate([5, 4, 3]):
@@ -156,14 +156,14 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         manager1 = self.create_simulator_peer(self.simulator1, peer_id_pool1)
         nodes1.append(manager1)
         miner1 = self.simulator1.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         miners1.append(miner1)
 
         self.log.debug('part1 simulator2')
         manager2 = self.create_simulator_peer(self.simulator2, peer_id_pool2)
         nodes2.append(manager2)
         miner2 = self.simulator2.create_miner(manager2, hashpower=10e6)
-        miner2.start()
+        await miner2.start()
         miners2.append(miner2)
 
         for _ in range(3):
@@ -182,7 +182,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                 self.simulator1.add_connection(conn)
             nodes1.append(manager1)
             miner1 = self.simulator1.create_miner(manager1, hashpower=hashpower)
-            miner1.start()
+            await miner1.start()
             miners1.append(miner1)
 
             self.log.debug(f'part2.{i} simulator2')
@@ -192,7 +192,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                 self.simulator2.add_connection(conn)
             nodes2.append(manager2)
             miner2 = self.simulator2.create_miner(manager2, hashpower=hashpower)
-            miner2.start()
+            await miner2.start()
             miners2.append(miner2)
 
         for i, rate in enumerate([5, 4, 3]):

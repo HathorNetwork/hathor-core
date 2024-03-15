@@ -20,7 +20,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         manager1 = self.create_peer()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=100e6)
-        miner1.start()
+        await miner1.start()
         self.simulator.run(10)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
@@ -35,7 +35,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         manager2 = self.create_peer()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         self.simulator.run(10)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
@@ -47,7 +47,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(60)
 
         miner2 = self.simulator.create_miner(manager2, hashpower=10e9)
-        miner2.start()
+        await miner2.start()
         self.simulator.run(120)
 
         gen_tx2 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
@@ -81,7 +81,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             nodes.append(manager)
 
             miner = self.simulator.create_miner(manager, hashpower=hashpower)
-            miner.start()
+            await miner.start()
             miners.append(miner)
 
         self.simulator.run(600)
@@ -106,7 +106,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         manager = self.create_peer()
         nodes.append(manager)
         miner = self.simulator.create_miner(manager, hashpower=10e6)
-        miner.start()
+        await miner.start()
         miners.append(miner)
         self.simulator.run(600)
 
@@ -118,7 +118,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             nodes.append(manager)
 
             miner = self.simulator.create_miner(manager, hashpower=hashpower)
-            miner.start()
+            await miner.start()
             miners.append(miner)
 
         for i, rate in enumerate([5, 4, 3]):
@@ -175,7 +175,7 @@ class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomS
         mempool_tips = tx_storage.indexes.mempool_tips
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         self.simulator.run(10)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
@@ -187,7 +187,7 @@ class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomS
         self.simulator.run(10)
 
         miner2 = self.simulator.create_miner(manager2, hashpower=100e6)
-        miner2.start()
+        await miner2.start()
         self.simulator.run(10)
 
         gen_tx2 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)

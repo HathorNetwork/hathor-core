@@ -31,7 +31,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         manager1.allow_mining_without_peers()
 
         miner1 = simulator.create_miner(manager1, hashpower=5e6)
-        miner1.start()
+        await miner1.start()
         simulator.run(60)
 
         gen_tx1 = simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
@@ -46,7 +46,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         simulator.add_connection(conn12)
 
         miner2 = simulator.create_miner(manager2, hashpower=10e6)
-        miner2.start()
+        await miner2.start()
 
         gen_tx2 = simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         await gen_tx2.start()

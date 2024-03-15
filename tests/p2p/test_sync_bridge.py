@@ -17,7 +17,7 @@ class MixedSyncRandomSimulatorTestCase(SimulatorTestCase):
 
         for manager in managers:
             miner = self.simulator.create_miner(manager, hashpower=100e6)
-            miner.start()
+            await miner.start()
             miners.append(miner)
             tx_gen = self.simulator.create_tx_generator(manager, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
             await tx_gen.start()
@@ -56,7 +56,7 @@ class MixedSyncRandomSimulatorTestCase(SimulatorTestCase):
 
         for manager in managers:
             miner = self.simulator.create_miner(manager, hashpower=100e6)
-            miner.start()
+            await miner.start()
             miners.append(miner)
             tx_gen = self.simulator.create_tx_generator(manager, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
             await tx_gen.start()

@@ -10,7 +10,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         manager1.allow_mining_without_peers()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         trigger = StopAfterNMinedBlocks(miner1, quantity=20)
         self.simulator.run(3600, trigger=trigger)
 
