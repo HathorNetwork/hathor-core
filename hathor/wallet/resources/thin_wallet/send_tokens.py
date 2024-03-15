@@ -32,6 +32,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
+from hathor.utils.twisted import add_async_callback
 
 logger = get_logger()
 
@@ -181,7 +182,7 @@ class SendTokensResource(Resource):
 
         deferred = threads.deferToThreadPool(self.reactor, self.manager.pow_thread_pool,
                                              self._render_POST_thread, context)
-        deferred.addCallback(self._cb_tx_resolve)
+        add_async_callback(deferred, self._cb_tx_resolve)
         deferred.addErrback(self._err_tx_resolve, context, 'python_resolve')
 
     def _responseFailed(self, err, context):
@@ -208,7 +209,7 @@ class SendTokensResource(Resource):
 
         deferred = threads.deferToThreadPool(self.reactor, self.manager.pow_thread_pool,
                                              self._stratum_thread_verify, context)
-        deferred.addCallback(self._cb_tx_resolve)
+        add_async_callback(deferred, self._cb_tx_resolve)
         deferred.addErrback(self._err_tx_resolve, context, 'stratum_resolve')
 
     def _stratum_thread_verify(self, context: _Context) -> _Context:

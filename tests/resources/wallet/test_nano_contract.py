@@ -1,5 +1,3 @@
-from twisted.internet.defer import inlineCallbacks
-
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import DecodeTxResource, PushTxResource
@@ -194,12 +192,12 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertTrue(data['success'])
 
-    def test_decode_error(self):
+    async def test_decode_error(self) -> None:
         resource = NanoContractExecuteResource(self.manager)
         request = TestDummyRequest('POST', 'wallet/nano_contracts/execute')
         request.content.setvalue(b'abc')
 
-        response = resource.render_POST(request)
+        response = await resource.render_POST(request)
         data_response = json_loadb(response)
         self.assertFalse(data_response['success'])
 

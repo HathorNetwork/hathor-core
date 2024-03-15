@@ -1,7 +1,5 @@
 import base64
 
-from twisted.internet.defer import inlineCallbacks
-
 from hathor.daa import TestMode
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.resources import MiningResource

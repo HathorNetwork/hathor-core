@@ -24,6 +24,7 @@ from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
+from hathor.utils.twisted import add_async_callback
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
 
@@ -111,7 +112,7 @@ class SendTokensResource(Resource):
         }
 
         deferred = threads.deferToThread(self._render_POST_thread, values, request)
-        deferred.addCallback(self._cb_tx_resolve, request)
+        add_async_callback(deferred, self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request)
 
         from twisted.web.server import NOT_DONE_YET

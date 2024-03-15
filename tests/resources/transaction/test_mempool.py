@@ -1,5 +1,3 @@
-from twisted.internet.defer import inlineCallbacks
-
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import MempoolResource
 from tests import unittest

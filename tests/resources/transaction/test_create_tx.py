@@ -23,9 +23,9 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.unspent_blocks = await add_blocks_unlock_reward(self.manager)
         await add_blocks_unlock_reward(self.manager)
         self.unspent_address = self.manager.wallet.get_unused_address()
-        self.unspent_tx = add_new_tx(self.manager, self.unspent_address, 100)
-        self.unspent_tx2 = add_new_tx(self.manager, self.unspent_address, 200)
-        self.unspent_tx3 = add_new_tx(self.manager, self.unspent_address, 300)
+        self.unspent_tx = await add_new_tx(self.manager, self.unspent_address, 100)
+        self.unspent_tx2 = await add_new_tx(self.manager, self.unspent_address, 200)
+        self.unspent_tx3 = await add_new_tx(self.manager, self.unspent_address, 300)
         await add_blocks_unlock_reward(self.manager)
 
     # Example from the design:

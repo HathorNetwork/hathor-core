@@ -99,7 +99,7 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
         self.blk1 = await add_new_block(self.manager, advance_clock=15)
         self.block_list = await add_blocks_unlock_reward(self.manager)
 
-        self.tx_list = add_new_transactions(self.manager, 5, advance_clock=15)
+        self.tx_list = await add_new_transactions(self.manager, 5, advance_clock=15)
         self.tx1 = self.tx_list[0]
         self.assertTrue(self.tx1.inputs[0].tx_id == self.blk1.hash)
 
@@ -148,20 +148,20 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
         self.tx_storage.reset_indexes()
         self.create_peer('testnet', tx_storage=self.tx_storage)
 
-    def test_init_not_voided_tips(self):
+    async def test_init_not_voided_tips(self) -> None:
         # add a bunch of blocks and transactions
         for i in range(30):
-            add_new_block(self.manager, advance_clock=15)
-            add_new_transactions(self.manager, 5, advance_clock=15)
+            await add_new_block(self.manager, advance_clock=15)
+            await add_new_transactions(self.manager, 5, advance_clock=15)
 
         # add a bunch of conflicting transactions, these will all become voided
         for i in range(50):
-            add_new_double_spending(self.manager)
+            await add_new_double_spending(self.manager)
 
         # finish up with another bunch of blocks and transactions
         for i in range(30):
-            add_new_block(self.manager, advance_clock=15)
-            add_new_transactions(self.manager, 5, advance_clock=15)
+            await add_new_block(self.manager, advance_clock=15)
+            await add_new_transactions(self.manager, 5, advance_clock=15)
 
         # not the point of this test, but just a sanity check
         self.assertConsensusValid(self.manager)

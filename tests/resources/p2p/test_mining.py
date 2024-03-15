@@ -22,9 +22,8 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
         self.assertGreater(len(data['parents']), 0)
         self.assertIsNotNone(data.get('block_bytes'))
 
-    @inlineCallbacks
-    def test_post(self):
-        response_get = yield self.web.get('mining')
+    async def test_post(self) -> None:
+        response_get = await self.web.get('mining')
         data_get = response_get.json_value()
         block_bytes_str = data_get.get('block_bytes')
 
@@ -36,20 +35,19 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
         block_bytes = bytes(block)
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
 
-        response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
+        response_post = await self.web.post('mining', {'block_bytes': block_bytes_str})
         self.assertEqual(response_post.written[0], b'1')
 
         block.weight = 100
         block_bytes = bytes(block)
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
 
-        response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
+        response_post = await self.web.post('mining', {'block_bytes': block_bytes_str})
         # Probability 2^(100 - 256) of failing
         self.assertEqual(response_post.written[0], b'0')
 
-    @inlineCallbacks
-    def test_post_invalid_data(self):
-        response_get = yield self.web.get('mining')
+    async def test_post_invalid_data(self) -> None:
+        response_get = await self.web.get('mining')
         data_get = response_get.json_value()
         block_bytes_str = data_get.get('block_bytes')
 
@@ -62,15 +60,15 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
 
         # missing post data
-        response_post = yield self.web.post('mining')
+        response_post = await self.web.post('mining')
         self.assertEqual(response_post.written[0], b'0')
 
         # invalid block bytes
-        response_post = yield self.web.post('mining', {'block_bytes': base64.b64encode(b'aaa').decode('ascii')})
+        response_post = await self.web.post('mining', {'block_bytes': base64.b64encode(b'aaa').decode('ascii')})
         self.assertEqual(response_post.written[0], b'0')
 
         # invalid base64
-        response_post = yield self.web.post('mining', {'block_bytes': 'YWFha'})
+        response_post = await self.web.post('mining', {'block_bytes': 'YWFha'})
         self.assertEqual(response_post.written[0], b'0')
 
 

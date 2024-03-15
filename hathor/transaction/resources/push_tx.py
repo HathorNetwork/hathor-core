@@ -109,7 +109,7 @@ class PushTxResource(Resource):
             data['tx'] = tx.to_json()
         return data
 
-    def render_GET(self, request: Request) -> bytes:
+    async def render_GET(self, request: Request) -> bytes:
         """ GET request for /push_tx/
             Expects 'hex_tx' as args parameter that is the hex representation of the whole tx
 
@@ -128,10 +128,10 @@ class PushTxResource(Resource):
         data = parsed['args']
         data['force'] = b'force' in args and args[b'force'][0].decode('utf-8') == 'true'
 
-        ret = self.handle_push_tx(data, self._get_client_ip(request))
+        ret = await self.handle_push_tx(data, self._get_client_ip(request))
         return json_dumpb(ret)
 
-    def render_POST(self, request: Request) -> bytes:
+    async def render_POST(self, request: Request) -> bytes:
         """ POST request for /push_tx/
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
@@ -160,7 +160,7 @@ class PushTxResource(Resource):
         if 'hex_tx' not in data:
             return error_ret
 
-        ret = self.handle_push_tx(data, self._get_client_ip(request))
+        ret = await self.handle_push_tx(data, self._get_client_ip(request))
         return json_dumpb(ret)
 
     def render_OPTIONS(self, request: Request) -> int:

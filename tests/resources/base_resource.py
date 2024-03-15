@@ -1,4 +1,6 @@
-from twisted.internet.defer import succeed
+from typing import Coroutine
+
+from twisted.internet.defer import Deferred, succeed
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest
 
@@ -88,6 +90,8 @@ class StubSite(server.Site):
         return self._resolveResult(request, result)
 
     def _resolveResult(self, request, result):
+        if isinstance(result, Coroutine):
+            result = Deferred.fromCoroutine(result).result
         if isinstance(result, bytes):
             request.write(result)
             request.finish()

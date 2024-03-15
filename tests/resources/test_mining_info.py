@@ -1,5 +1,3 @@
-from twisted.internet.defer import inlineCallbacks
-
 from hathor.p2p.resources import MiningInfoResource
 from hathor.simulator.utils import add_new_blocks
 from hathor.util import not_none

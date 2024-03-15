@@ -1,7 +1,5 @@
-from twisted.internet.defer import inlineCallbacks
-
 from hathor.transaction.resources import DecodeTxResource
-from hathor.transaction.scripts import parse_address_script, P2PKH
+from hathor.transaction.scripts import P2PKH, parse_address_script
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, create_tokens

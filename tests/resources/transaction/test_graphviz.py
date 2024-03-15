@@ -22,7 +22,7 @@ class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
         # Creating blocks, txs and a conflict tx to test graphviz with it
         await add_new_blocks(self.manager, 2, advance_clock=2)
         await add_blocks_unlock_reward(self.manager)
-        txs = add_new_transactions(self.manager, 2, advance_clock=2)
+        txs = await add_new_transactions(self.manager, 2, advance_clock=2)
         tx = txs[0]
 
         self.tx2 = Transaction.create_from_struct(tx.get_struct())
