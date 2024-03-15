@@ -109,7 +109,7 @@ class BaseBasicWalletTest(unittest.TestCase):
 
         # test keypair exception
         with self.assertRaises(WalletLocked):
-            key_pair.get_private_key(Mock())
+            key_pair.get_private_key(b'')
 
     def test_block_increase_balance(self):
         # generate a new block and check if we increase balance
