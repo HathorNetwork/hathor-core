@@ -79,8 +79,8 @@ class BaseWalletHDTest(unittest.TestCase):
 
             self.wallet.get_unused_address(**kwargs)
 
-    def test_insuficient_funds(self):
-        add_blocks_unlock_reward(self.manager)
+    async def test_insuficient_funds(self) -> None:
+        await add_blocks_unlock_reward(self.manager)
         # create transaction spending some value
         new_address = self.wallet.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), self.TOKENS, timelock=None)

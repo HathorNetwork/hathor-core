@@ -22,19 +22,18 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.manager.wallet.unlock(b"MYPASS")
 
-    @inlineCallbacks
-    def test_match_values(self):
+    async def test_match_values(self) -> None:
         decode_resource = StubSite(NanoContractDecodeResource(self.manager))
         execute_resource = StubSite(NanoContractExecuteResource(self.manager))
         match_value_resource = StubSite(NanoContractMatchValueResource(self.manager))
         pushtx_resource = StubSite(PushTxResource(self.manager, allow_non_standard_script=True))
         signtx_resource = StubSite(SignTxResource(self.manager))
         decodetx_resource = StubSite(DecodeTxResource(self.manager))
-        add_new_blocks(self.manager, 3)
-        add_blocks_unlock_reward(self.manager)
+        await add_new_blocks(self.manager, 3)
+        await add_blocks_unlock_reward(self.manager)
         self.reactor.advance(3)
         # Options
-        yield match_value_resource.options("wallet/nano_contracts/match_values")
+        await match_value_resource.options("wallet/nano_contracts/match_values")
 
         total_value = self.manager.get_tokens_issued_per_block(1)
 
@@ -51,32 +50,32 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
             }]
         }
         # Error missing parameter
-        response_error = yield match_value_resource.post("wallet/nano_contracts/match_value", data_post)
+        response_error = await match_value_resource.post("wallet/nano_contracts/match_value", data_post)
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
         self.assertEqual(data_error['message'], 'Missing parameter: oracle_pubkey_hash')
 
         # create nano contract
         data_post['oracle_pubkey_hash'] = '6o6ul2c+sqAariBVW+CwNaSJb9w='
-        response = yield match_value_resource.post("wallet/nano_contracts/match_value", data_post)
+        response = await match_value_resource.post("wallet/nano_contracts/match_value", data_post)
         data = response.json_value()
         self.assertTrue(data['success'])
         self.assertIsNotNone(data['hex_tx'])
         nano_contract_hex = data['hex_tx']
 
         # Error missing parameter
-        response_error = yield decode_resource.get("wallet/nano_contracts/decode", {})
+        response_error = await decode_resource.get("wallet/nano_contracts/decode", {})
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
         self.assertEqual(data_error['message'], 'Missing parameter: hex_tx')
 
         # Error invalid hex
-        response_error2 = yield decode_resource.get("wallet/nano_contracts/decode", {b'hex_tx': b'123'})
+        response_error2 = await decode_resource.get("wallet/nano_contracts/decode", {b'hex_tx': b'123'})
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
         # Error valid hex but invalid tx struct
-        response_error3 = yield decode_resource.get("wallet/nano_contracts/decode", {b'hex_tx': b'1334'})
+        response_error3 = await decode_resource.get("wallet/nano_contracts/decode", {b'hex_tx': b'1334'})
         data_error3 = response_error3.json_value()
         self.assertFalse(data_error3['success'])
 
@@ -84,7 +83,7 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         genesis_output = [tx for tx in self.manager.tx_storage.get_all_genesis() if tx.is_block][0].outputs[0]
         partial_tx = Transaction.create_from_struct(bytes.fromhex(nano_contract_hex))
         partial_tx.outputs.append(genesis_output)
-        response_decode = yield decode_resource.get("wallet/nano_contracts/decode",
+        response_decode = await decode_resource.get("wallet/nano_contracts/decode",
                                                     {b'hex_tx': bytes(partial_tx.get_struct().hex(), 'utf-8')})
         data = response_decode.json_value()
         self.assertTrue(data['success'])
@@ -99,14 +98,14 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         address2 = self.get_address(2)
         data_put = {'new_values': [{'address': address2, 'value': 500}], 'input_value': total_value}
         # Error missing parameter
-        response_error = yield match_value_resource.put("wallet/nano_contracts/match_value", data_put)
+        response_error = await match_value_resource.put("wallet/nano_contracts/match_value", data_put)
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
         self.assertEqual(data_error['message'], 'Missing parameter: hex_tx')
 
         # update
         data_put['hex_tx'] = partial_tx.get_struct().hex()
-        response = yield match_value_resource.put("wallet/nano_contracts/match_value", data_put)
+        response = await match_value_resource.put("wallet/nano_contracts/match_value", data_put)
         data = response.json_value()
         self.assertTrue(data['success'])
         self.assertIsNotNone(data['hex_tx'])
@@ -115,23 +114,23 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         new_tx = Transaction.create_from_struct(partial_tx.get_struct())
         new_tx.outputs = []
         data_put['hex_tx'] = new_tx.get_struct().hex()
-        response = yield match_value_resource.put("wallet/nano_contracts/match_value", data_put)
+        response = await match_value_resource.put("wallet/nano_contracts/match_value", data_put)
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # Error missing parameter
-        response_error = yield signtx_resource.get("wallet/sign_tx", {})
+        response_error = await signtx_resource.get("wallet/sign_tx", {})
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
         self.assertEqual(data_error['message'], 'Missing parameter: hex_tx')
 
         # Error wrong parameter value
-        response_error2 = yield signtx_resource.get("wallet/sign_tx", {b'hex_tx': b'123', b'prepare_to_send': b'true'})
+        response_error2 = await signtx_resource.get("wallet/sign_tx", {b'hex_tx': b'123', b'prepare_to_send': b'true'})
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
         # Error valid hex but wrong tx struct value
-        response_error3 = yield signtx_resource.get("wallet/sign_tx", {
+        response_error3 = await signtx_resource.get("wallet/sign_tx", {
             b'hex_tx': b'1334',
             b'prepare_to_send': b'true'
         })
@@ -139,7 +138,7 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data_error3['success'])
 
         # sign tx
-        response = yield signtx_resource.get("wallet/sign_tx", {
+        response = await signtx_resource.get("wallet/sign_tx", {
             b'hex_tx': bytes(nano_contract_hex, 'utf-8'),
             b'prepare_to_send': b'true'
         })
@@ -148,29 +147,29 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         nano_contract_hex = data['hex_tx']
 
         # sign tx without preparing
-        response2 = yield signtx_resource.get("wallet/sign_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})
+        response2 = await signtx_resource.get("wallet/sign_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})
         data2 = response2.json_value()
         self.assertTrue(data2['success'])
         self.assertIsNotNone(data2['hex_tx'])
 
         # propagate tx
-        response = yield pushtx_resource.get("push_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})
+        response = await pushtx_resource.get("push_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})
         data = response.json_value()
         self.assertTrue(data['success'])
 
         self.reactor.advance(3)
 
         # get tx hash
-        response = yield decodetx_resource.get("decode_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})
+        response = await decodetx_resource.get("decode_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})
         data = response.json_value()
         self.assertTrue(data['success'])
         hash_hex = data['tx']['hash']
 
         # Options
-        yield execute_resource.options("wallet/nano_contracts/execute")
+        await execute_resource.options("wallet/nano_contracts/execute")
 
         # Error no data
-        response_error = yield execute_resource.post("wallet/nano_contracts/execute")
+        response_error = await execute_resource.post("wallet/nano_contracts/execute")
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
 
@@ -184,14 +183,14 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
             'address': address1,
             'value': total_value,
         }
-        response_error2 = yield execute_resource.post("wallet/nano_contracts/execute", data)
+        response_error2 = await execute_resource.post("wallet/nano_contracts/execute", data)
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
         self.assertEqual(data_error2['message'], 'Missing parameter: spent_tx_id')
 
         # execute nano contract
         data['spent_tx_id'] = hash_hex
-        response = yield execute_resource.post("wallet/nano_contracts/execute", data)
+        response = await execute_resource.post("wallet/nano_contracts/execute", data)
         data = response.json_value()
         self.assertTrue(data['success'])
 

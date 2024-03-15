@@ -20,7 +20,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(CreateTxResource(self.manager))
         self.manager.wallet.unlock(b'MYPASS')
         self.spent_blocks = await add_new_blocks(self.manager, 10)
-        self.unspent_blocks = add_blocks_unlock_reward(self.manager)
+        self.unspent_blocks = await add_blocks_unlock_reward(self.manager)
         await add_blocks_unlock_reward(self.manager)
         self.unspent_address = self.manager.wallet.get_unused_address()
         self.unspent_tx = add_new_tx(self.manager, self.unspent_address, 100)

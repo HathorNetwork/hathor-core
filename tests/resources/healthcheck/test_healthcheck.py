@@ -113,16 +113,15 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             }
         })
 
-    @inlineCallbacks
-    def test_get_no_connected_peer(self):
+    async def test_get_no_connected_peer(self) -> None:
         """Scenario where the node doesn't have any connected peer
         """
         # This will make sure the node has recent activity
-        add_new_blocks(self.manager, 5)
+        await add_new_blocks(self.manager, 5)
 
         self.assertEqual(self.manager.has_recent_activity(), True)
 
-        response = yield self.web.get('/health')
+        response = await self.web.get('/health')
         data = response.json_value()
 
         self.assertEqual(response.responseCode, 503)
@@ -140,12 +139,11 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             }
         })
 
-    @inlineCallbacks
-    def test_get_peer_out_of_sync(self):
+    async def test_get_peer_out_of_sync(self) -> None:
         """Scenario where the node is connected with a peer but not synced
         """
         # This will make sure the node has recent activity
-        add_new_blocks(self.manager, 5)
+        await add_new_blocks(self.manager, 5)
 
         self.manager2 = self.create_peer('testnet')
         self.conn1 = FakeConnection(self.manager, self.manager2)
@@ -155,7 +153,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
 
         self.assertEqual(self.manager2.state, self.manager2.NodeState.READY)
 
-        response = yield self.web.get('/health')
+        response = await self.web.get('/health')
         data = response.json_value()
 
         self.assertEqual(response.responseCode, 503)
@@ -173,22 +171,21 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
             }
         })
 
-    @inlineCallbacks
-    def test_get_ready(self):
+    async def test_get_ready(self) -> None:
         """Scenario where the node is ready
         """
         self.manager2 = self.create_peer('testnet')
         self.conn1 = FakeConnection(self.manager, self.manager2)
 
         # This will make sure the node has recent activity
-        add_new_blocks(self.manager, 5)
+        await add_new_blocks(self.manager, 5)
 
         # This will make sure the peers are synced
         for _ in range(600):
             self.conn1.run_one_step(debug=True)
             self.clock.advance(0.1)
 
-        response = yield self.web.get('/health')
+        response = await self.web.get('/health')
         data = response.json_value()
 
         self.assertEqual(response.responseCode, 200)

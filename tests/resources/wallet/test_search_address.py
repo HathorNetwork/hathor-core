@@ -12,7 +12,7 @@ from tests.utils import add_blocks_unlock_reward, create_tokens
 class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
 
         self.network = 'testnet'
@@ -21,9 +21,9 @@ class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
-        add_new_blocks(self.manager, 1, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        tx = create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
+        await add_new_blocks(self.manager, 1, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        tx = await create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
         self.token_uid = tx.tokens[0]
 
         # Create a tx with the same address, so we can have more tx in the history
@@ -34,7 +34,7 @@ class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
         # Using token creation address as search address
         # Token creation address has change output for the genesis (1B - 0.01 HTR of token deposit)
         self.address_bytes = decode_address(self.address)
-        add_new_blocks(self.manager, 5, advance_clock=1, address=self.address_bytes)
+        await add_new_blocks(self.manager, 5, advance_clock=1, address=self.address_bytes)
 
     @inlineCallbacks
     def test_search(self):

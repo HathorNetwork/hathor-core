@@ -97,7 +97,7 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
 
         # generate blocks and transactions where blk1 is spent by tx1
         self.blk1 = await add_new_block(self.manager, advance_clock=15)
-        self.block_list = add_blocks_unlock_reward(self.manager)
+        self.block_list = await add_blocks_unlock_reward(self.manager)
 
         self.tx_list = add_new_transactions(self.manager, 5, advance_clock=15)
         self.tx1 = self.tx_list[0]

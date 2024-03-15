@@ -1,6 +1,7 @@
 import shutil
 import tempfile
 from collections import defaultdict
+from unittest.mock import Mock
 
 from cryptography.hazmat.primitives import serialization
 
@@ -52,7 +53,7 @@ class BaseBasicWalletTest(unittest.TestCase):
             key2 = w2.keys.pop(address)
             self.assertEqual(key, key2)
 
-    def test_wallet_create_transaction(self):
+    async def test_wallet_create_transaction(self) -> None:
         from hathor.transaction.validation_state import ValidationState
 
         genesis_private_key_bytes = get_private_key_bytes(
@@ -78,7 +79,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         self.assertEqual(w.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
         # create transaction spending this value, but sending to same wallet
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         new_address = w.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), 100, timelock=None)
         tx1 = w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
@@ -92,7 +93,7 @@ class BaseBasicWalletTest(unittest.TestCase):
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
-        input_info = WalletInputInfo(tx1.hash, 1, None)
+        input_info = WalletInputInfo(tx1.hash, 1, Mock())
         new_address = w.get_unused_address()
         key2 = w.keys[new_address]
         out = WalletOutputInfo(decode_address(key2.address), 100, timelock=None)
@@ -108,7 +109,7 @@ class BaseBasicWalletTest(unittest.TestCase):
 
         # test keypair exception
         with self.assertRaises(WalletLocked):
-            key_pair.get_private_key(None)
+            key_pair.get_private_key(Mock())
 
     def test_block_increase_balance(self):
         # generate a new block and check if we increase balance
@@ -183,10 +184,10 @@ class BaseBasicWalletTest(unittest.TestCase):
         self.assertEqual(len(other_inputs), 1)
         self.assertEqual(other_inputs[0], other_input)
 
-    def test_create_token_transaction(self):
-        add_new_block(self.manager, advance_clock=5)
-        add_blocks_unlock_reward(self.manager)
-        tx = create_tokens(self.manager)
+    async def test_create_token_transaction(self) -> None:
+        await add_new_block(self.manager, advance_clock=5)
+        await add_blocks_unlock_reward(self.manager)
+        tx = await create_tokens(self.manager)
 
         tokens_created = tx.outputs[0].value
         token_uid = tx.tokens[0]
@@ -209,7 +210,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         self.manager.verification_service.verify(tx2)
 
         self.assertNotEqual(len(tx2.inputs), 0)
-        token_dict = defaultdict(int)
+        token_dict: dict[bytes, int] = defaultdict(int)
         for _input in tx2.inputs:
             output_tx = self.manager.tx_storage.get_transaction(_input.tx_id)
             output = output_tx.outputs[_input.index]

@@ -1,7 +1,7 @@
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.resources import DecodeTxResource
-from hathor.transaction.scripts import parse_address_script
+from hathor.transaction.scripts import parse_address_script, P2PKH
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, create_tokens
@@ -14,8 +14,7 @@ class BaseDecodeTxTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(DecodeTxResource(self.manager))
 
-    @inlineCallbacks
-    def test_get(self):
+    async def test_get(self) -> None:
         genesis = list(self.manager.tx_storage.get_all_genesis())
         genesis.sort(key=lambda x: x.timestamp)
         self.assertTrue(genesis[0].is_block)
@@ -23,7 +22,7 @@ class BaseDecodeTxTest(_BaseResourceTest._ResourceTest):
             self.assertTrue(tx.is_transaction)
 
         genesis_tx = genesis[1]
-        response_success = yield self.web.get("decode_tx", {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
+        response_success = await self.web.get("decode_tx", {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
         data_success = response_success.json_value()
 
         self.assertTrue(data_success['success'])
@@ -35,23 +34,24 @@ class BaseDecodeTxTest(_BaseResourceTest._ResourceTest):
         self.assertTrue('spent_outputs' in data_success)
 
         # Invalid hex
-        response_error1 = yield self.web.get("decode_tx", {b'hex_tx': b'XXXX'})
+        response_error1 = await self.web.get("decode_tx", {b'hex_tx': b'XXXX'})
         data_error1 = response_error1.json_value()
 
         self.assertFalse(data_error1['success'])
 
         # Invalid tx hex
-        response_error2 = yield self.web.get("decode_tx", {b'hex_tx': b'a12c'})
+        response_error2 = await self.web.get("decode_tx", {b'hex_tx': b'a12c'})
         data_error2 = response_error2.json_value()
 
         self.assertFalse(data_error2['success'])
 
         # Token creation tx
         script_type_out = parse_address_script(genesis[0].outputs[0].script)
+        assert isinstance(script_type_out, P2PKH)
         address = script_type_out.address
-        add_blocks_unlock_reward(self.manager)
-        tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=True)
-        response = yield self.web.get('decode_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
+        await add_blocks_unlock_reward(self.manager)
+        tx2 = await create_tokens(self.manager, address, mint_amount=100, propagate=True)
+        response = await self.web.get('decode_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
         data = response.json_value()
         self.assertTrue(data['success'])
 

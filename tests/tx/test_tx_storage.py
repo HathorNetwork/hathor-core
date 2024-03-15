@@ -508,7 +508,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         tx._metadata.hash = tx.hash
         self.validate_save(tx)
 
-    async def _add_new_block(self, parents: list[VertexId] | None = None) -> None:
+    async def _add_new_block(self, parents: list[VertexId] | None = None) -> Block:
         block = self.manager.generate_mining_block()
         block.data = b'Testing, testing, 1, 2, 3... testing, testing...'
         if parents is not None:

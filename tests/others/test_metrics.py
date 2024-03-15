@@ -80,7 +80,7 @@ class BaseMetricsTest(unittest.TestCase):
         manager.metrics.stop()
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_tx_storage_data_collection_with_rocksdb_storage_and_no_cache(self):
+    async def test_tx_storage_data_collection_with_rocksdb_storage_and_no_cache(self) -> None:
         """Tests storage data collection when using RocksDB Storage
            with cache disabled.
 
@@ -116,7 +116,7 @@ class BaseMetricsTest(unittest.TestCase):
         manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
         manager.tx_storage.update_best_block_tips_cache(None)
 
-        add_new_blocks(manager, 10)
+        await add_new_blocks(manager, 10)
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
         # But I think we could do this in a better way if we had a python-binding for this Flush method in
         # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396
@@ -131,7 +131,7 @@ class BaseMetricsTest(unittest.TestCase):
         self.assertGreater(manager.metrics.rocksdb_cfs_sizes[b'meta'], 1000)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_tx_storage_data_collection_with_rocksdb_storage_and_cache(self):
+    async def test_tx_storage_data_collection_with_rocksdb_storage_and_cache(self) -> None:
         """Tests storage data collection when using RocksDB Storage
            with cache enabled.
 
@@ -169,7 +169,7 @@ class BaseMetricsTest(unittest.TestCase):
         manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
         manager.tx_storage.update_best_block_tips_cache(None)
 
-        add_new_blocks(manager, 10)
+        await add_new_blocks(manager, 10)
 
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
         # But I think we could do this in a better way if we had a python-binding for this Flush method in

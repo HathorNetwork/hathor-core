@@ -2,6 +2,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningInfoResource
 from hathor.simulator.utils import add_new_blocks
+from hathor.util import not_none
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
@@ -14,9 +15,8 @@ class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(MiningInfoResource(self.manager))
         self.manager.wallet.unlock(b'MYPASS')
 
-    @inlineCallbacks
-    def test_get_many(self):
-        response1 = yield self.web.get("getmininginfo")
+    async def test_get_many(self) -> None:
+        response1 = await self.web.get("getmininginfo")
         data1 = response1.json_value()
         self.assertTrue(data1['success'])
         # No blocks
@@ -25,9 +25,9 @@ class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data1['difficulty'], 1)
 
         # Add 10 blocks
-        add_new_blocks(self.manager, 10, advance_clock=1)
+        await add_new_blocks(self.manager, 10, advance_clock=1)
 
-        response2 = yield self.web.get("getmininginfo")
+        response2 = await self.web.get("getmininginfo")
         data2 = response2.json_value()
         self.assertTrue(data2['success'])
         # 10 blocks
@@ -37,29 +37,28 @@ class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):
         # Hashrate < 1 because of low weight and many blocks added fast
         self.assertLess(data2['hashrate'], 1)
 
-    @inlineCallbacks
-    def test_mined_tokens(self):
+    async def test_mined_tokens(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
 
-        response = yield self.web.get("mined_tokens")
+        response = await self.web.get("mined_tokens")
         data = response.json_value()
         self.assertEqual(data['blocks'], 0)
         self.assertEqual(data['mined_tokens'], 0)
 
-        add_new_blocks(self.manager, 5, advance_clock=1)
+        await add_new_blocks(self.manager, 5, advance_clock=1)
 
-        response = yield self.web.get("mined_tokens")
+        response = await self.web.get("mined_tokens")
         data = response.json_value()
         self.assertEqual(data['blocks'], 5)
         self.assertEqual(data['mined_tokens'], 5*self._settings.INITIAL_TOKENS_PER_BLOCK)
 
-        add_new_blocks(self.manager, self._settings.BLOCKS_PER_HALVING + 15, advance_clock=1)
-        mined_tokens = (self._settings.BLOCKS_PER_HALVING * self._settings.INITIAL_TOKENS_PER_BLOCK +
+        await add_new_blocks(self.manager, not_none(self._settings.BLOCKS_PER_HALVING) + 15, advance_clock=1)
+        mined_tokens = (not_none(self._settings.BLOCKS_PER_HALVING) * self._settings.INITIAL_TOKENS_PER_BLOCK +
                         20 * self._settings.INITIAL_TOKENS_PER_BLOCK // 2)
 
-        response = yield self.web.get("mined_tokens")
+        response = await self.web.get("mined_tokens")
         data = response.json_value()
-        self.assertEqual(data['blocks'], self._settings.BLOCKS_PER_HALVING + 20)
+        self.assertEqual(data['blocks'], not_none(self._settings.BLOCKS_PER_HALVING) + 20)
         self.assertEqual(data['mined_tokens'], mined_tokens)
 
 
