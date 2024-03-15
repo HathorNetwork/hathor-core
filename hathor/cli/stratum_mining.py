@@ -45,7 +45,7 @@ def execute(args: Namespace) -> None:
 
     reactor = initialize_global_reactor()
     miner = StratumClient(proc_count=args.nproc, address=address, reactor=reactor)
-    await miner.start()
+    miner.start()
     point = TCP4ClientEndpoint(reactor, args.host, args.port)
     connectProtocol(point, miner)
     reactor.run()

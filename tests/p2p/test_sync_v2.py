@@ -257,7 +257,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager2)
 
-    def _prepare_sync_v2_find_best_common_block_reorg(self) -> FakeConnection:
+    async def _prepare_sync_v2_find_best_common_block_reorg(self) -> FakeConnection:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
@@ -273,7 +273,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         return conn12
 
     async def test_sync_v2_find_best_common_block_reorg_1(self) -> None:
-        conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        conn12 = await self._prepare_sync_v2_find_best_common_block_reorg()
         assert isinstance(conn12._proto1.state, ReadyState)
         sync_agent = conn12._proto1.state.sync_agent
         assert isinstance(sync_agent, NodeBlockSync)
@@ -306,7 +306,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             self.assertIsNone(common_block_info)
 
     async def test_sync_v2_find_best_common_block_reorg_2(self) -> None:
-        conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        conn12 = await self._prepare_sync_v2_find_best_common_block_reorg()
         assert isinstance(conn12._proto1.state, ReadyState)
         sync_agent = conn12._proto1.state.sync_agent
         assert isinstance(sync_agent, NodeBlockSync)

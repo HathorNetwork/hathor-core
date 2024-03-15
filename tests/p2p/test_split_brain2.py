@@ -20,7 +20,7 @@ class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
         manager2.allow_mining_without_peers()
 
         miner11 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner11.start()
+        await miner11.start()
         gen_tx11 = self.simulator.create_tx_generator(manager1, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         await gen_tx11.start()
         gen_tx12 = self.simulator.create_tx_generator(manager1, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
@@ -28,7 +28,7 @@ class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
         await gen_tx12.start()
 
         miner21 = self.simulator.create_miner(manager2, hashpower=10e6)
-        miner21.start()
+        await miner21.start()
         gen_tx21 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         await gen_tx21.start()
         gen_tx22 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)

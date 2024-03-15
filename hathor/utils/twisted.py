@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Coroutine, Any, TypeVar, Callable
+from typing import Any, Callable, Coroutine, TypeVar
 
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IDelayedCall

@@ -35,7 +35,7 @@ from tests.simulation.base import SimulatorTestCase
 
 
 class BaseMiningSimulationTest(SimulatorTestCase):
-    def test_signal_bits_in_mining(self) -> None:
+    async def test_signal_bits_in_mining(self) -> None:
         settings_dict = get_settings()._asdict()
         settings_dict.update(
             FEATURE_ACTIVATION=FeatureSettings(

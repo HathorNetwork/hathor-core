@@ -25,7 +25,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         proto.dataReceived(line.encode('utf-8'))
 
-    def test_get_best_blockchain(self) -> None:
+    async def test_get_best_blockchain(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -81,7 +81,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         assert isinstance(state1.peer_best_blockchain[0], HeightInfo)
         assert isinstance(state2.peer_best_blockchain[0], HeightInfo)
 
-    def test_handle_get_best_blockchain(self) -> None:
+    async def test_handle_get_best_blockchain(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -200,7 +200,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.run(60)
         self.assertTrue(conn12.tr2.disconnecting)
 
-    def test_node_without_get_best_blockchain_capability(self) -> None:
+    async def test_node_without_get_best_blockchain_capability(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
 
@@ -258,7 +258,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.run(60)
         self.assertTrue(conn12.tr2.disconnecting)
 
-    def test_best_blockchain_from_storage(self) -> None:
+    async def test_best_blockchain_from_storage(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)

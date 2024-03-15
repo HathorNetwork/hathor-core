@@ -64,7 +64,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(conn12.is_connected)
         self.assertTipsEqual(manager1, manager2)
 
-    def test_many_miners_since_beginning(self) -> None:
+    async def test_many_miners_since_beginning(self) -> None:
         nodes: list[HathorManager] = []
         miners = []
         stop_triggers: list[Trigger] = []

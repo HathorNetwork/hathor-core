@@ -1,12 +1,13 @@
 import pytest
 
+from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
 
 class BaseSimulatorIndexesTestCase(SimulatorTestCase):
-    def _build_randomized_blockchain(self):
+    async def _build_randomized_blockchain(self) -> HathorManager:
         manager = self.create_peer()
 
         # FIXME: this second peer is only needed because of some problem on the simulator
@@ -24,11 +25,11 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.simulator.run(10)
 
         gen_tx1 = self.simulator.create_tx_generator(manager, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.simulator.run(10)
 
         gen_tx2 = self.simulator.create_tx_generator(manager, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx2.start()
+        await gen_tx2.start()
         self.simulator.run(10 * 60)
 
         miner1.stop()

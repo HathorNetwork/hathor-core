@@ -844,7 +844,7 @@ class StratumClient(JSONRPC):
         if self._iter_id:
             return str(next(self._iter_id))
 
-    async def start(self) -> None:
+    def start(self) -> None:
         """
         Starts the client, instantiating mining processes and scheduling miner supervisor calls.
         """
@@ -858,7 +858,7 @@ class StratumClient(JSONRPC):
         self.loop.start(self.SUPERVISOR_LOOP_INTERVAL)
 
         for miner in self.miners:
-            await miner.start()
+            miner.start()
 
     def stop(self) -> None:
         """
