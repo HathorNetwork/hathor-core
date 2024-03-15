@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Optional
 from mnemonic import Mnemonic
 
 from hathor.pubsub import HathorEvents
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.wallet import BaseWallet
 from hathor.wallet.exceptions import InvalidWords
 

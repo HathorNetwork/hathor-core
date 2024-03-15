@@ -16,7 +16,7 @@ import io
 import struct
 import sys
 from argparse import ArgumentParser, FileType
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, AsyncGenerator
 
 from hathor.cli.run_node import RunNode
 
@@ -44,9 +44,8 @@ class DbImport(RunNode):
         # allocating io.BufferedReader here so we "own" it
         self.in_file = io.BufferedReader(self._args.import_file)
 
-    def run(self) -> None:
+    async def run(self) -> None:
         from hathor.cli.db_export import MAGIC_HEADER
-        from hathor.util import tx_progress
 
         header = self.in_file.read(len(MAGIC_HEADER))
         if header != MAGIC_HEADER:
@@ -55,12 +54,12 @@ class DbImport(RunNode):
 
         tx_count, = struct.unpack('!I', self.in_file.read(4))
         block_count, = struct.unpack('!I', self.in_file.read(4))
-        total = tx_count + block_count
+        # total = tx_count + block_count  # TODO
         self.log.info('import database', tx_count=tx_count, block_count=block_count)
         self.tx_storage.pre_init()
         actual_tx_count = 0
         actual_block_count = 0
-        for tx in tx_progress(self._import_txs(), log=self.log, total=total):
+        async for tx in self._import_txs():  # TODO: add tx_progress
             if tx.is_block:
                 actual_block_count += 1
             else:
@@ -72,7 +71,7 @@ class DbImport(RunNode):
         del self.in_file
         self.log.info('imported', tx_count=tx_count, block_count=block_count)
 
-    def _import_txs(self) -> Iterator['BaseTransaction']:
+    async def _import_txs(self) -> AsyncGenerator['BaseTransaction', None]:
         from hathor.transaction.base_transaction import tx_or_block_from_bytes
         while True:
             # read tx
@@ -92,5 +91,6 @@ class DbImport(RunNode):
             yield tx
 
 
+# TODO: Run all CLI tools and check if it's working after async/await refactor
 def main():
     DbImport().run()

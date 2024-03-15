@@ -49,7 +49,7 @@ class NanoContractExecuteResource(Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def render_POST(self, request):
+    async def render_POST(self, request):
         """ Creates and propagates a tx to spend a nano contract output.
 
         Post data should be a json with the following items:

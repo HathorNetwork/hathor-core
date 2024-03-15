@@ -36,13 +36,13 @@ class GraphvizLogAnimation:
         """ Start recording.
         """
         os.makedirs(self.dirname, exist_ok=True)
-        self.manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, await self.on_new_tx)
+        self.manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self.on_new_tx)
         self.is_running = True
 
     def stop(self):
         """ Stop recording.
         """
-        self.manager.pubsub.unsubscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, await self.on_new_tx)
+        self.manager.pubsub.unsubscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self.on_new_tx)
         self.is_running = False
 
     def on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:

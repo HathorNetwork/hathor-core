@@ -2,7 +2,7 @@ import pytest
 
 from hathor.crypto.util import get_address_from_public_key
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import Transaction, TxInput, TxOutput, Block
+from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage

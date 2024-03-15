@@ -273,7 +273,7 @@ class SendTokensResource(Resource):
         self.manager.verification_service.verify(context.tx)
         return context
 
-    def _cb_tx_resolve(self, context: _Context) -> None:
+    async def _cb_tx_resolve(self, context: _Context) -> None:
         """ Called when `_render_POST_thread` finishes
         """
         tx = context.tx
