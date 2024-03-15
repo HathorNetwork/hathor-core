@@ -1,6 +1,7 @@
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.util import not_none
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
@@ -15,11 +16,11 @@ class BaseWalletIndexTest(unittest.TestCase):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True, wallet_index=True)
 
-    def test_twin_tx(self):
-        add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+    async def test_twin_tx(self) -> None:
+        await add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager)
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
         value1 = 100
         value2 = 101
 

@@ -1,7 +1,10 @@
+from unittest.mock import Mock
+
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
+from hathor.util import not_none
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import PrivateKeyNotFound
 from tests import unittest
@@ -40,7 +43,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         await self.manager.propagate_tx(self.tx1)
         self.run_to_completion()
 
-    def test_balance_update1(self):
+    async def test_balance_update1(self) -> None:
         # Tx2 is twin with tx1 but less acc weight, so it will get voided
 
         # Start balance
@@ -87,7 +90,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(len(self.manager.wallet.voided_spent[key]), 1)
         self.assertEqual(self.manager.wallet.voided_spent[key][0].to_dict(), voided_spent.to_dict())
 
-    def test_balance_update2(self):
+    async def test_balance_update2(self) -> None:
         # Tx2 is twin with tx1 with equal acc weight, so both will get voided
 
         # Start balance
@@ -115,7 +118,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(self.blocks_tokens[:3])))
 
-    def test_balance_update3(self):
+    async def test_balance_update3(self) -> None:
         # Tx2 is twin with tx1 with higher acc weight, so tx1 will get voided
 
         # Start balance
@@ -144,7 +147,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, self.initial_balance))
 
-    def test_balance_update4(self):
+    async def test_balance_update4(self) -> None:
         # Tx2 spends Tx1 output
         # Tx3 is twin of Tx2 with same acc weight, so both will get voided
 
@@ -156,7 +159,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager.wallet.get_unused_address_bytes()
         value = self.blocks_tokens[0] - 100
-        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
+        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=Mock())]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
@@ -199,7 +202,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, self.initial_balance))
 
-    def test_balance_update5(self):
+    async def test_balance_update5(self) -> None:
         # Tx2 spends Tx1 output
         # Tx3 is twin of Tx1, with less acc weight
         # So we have conflict between all three txs but tx1 and tx2 are winners and tx3 is voided
@@ -212,7 +215,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager.wallet.get_unused_address_bytes()
         value = self.blocks_tokens[0] - 100
-        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
+        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=Mock())]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
@@ -243,7 +246,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, self.initial_balance))
 
-    def test_balance_update6(self):
+    async def test_balance_update6(self) -> None:
         # Tx2 is twin of tx1, so both voided
         # Tx3 has tx1 as parent, so increases tx1 acc weight, then tx1 is winner against tx2
 
@@ -258,7 +261,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         self.manager.cpu_mining_service.resolve(tx2)
 
-        address = self.get_address(0)
+        address = not_none(self.get_address(0))
         value = 100
 
         outputs = [
@@ -280,7 +283,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, self.initial_balance - 100))
 
-    def test_balance_update7(self):
+    async def test_balance_update7(self) -> None:
         # Tx2 spends Tx1 output
         # Tx3 is twin of Tx1 with higher acc weight, so tx1 and tx2 are voided and tx3 is the winner
 
@@ -292,7 +295,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager.wallet.get_unused_address_bytes()
         value = self.blocks_tokens[0] - 100
-        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
+        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=Mock())]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
@@ -324,7 +327,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, self.initial_balance))
 
-    def test_balance_update_twin_tx(self):
+    async def test_balance_update_twin_tx(self) -> None:
         # Start balance
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, self.initial_balance))
@@ -356,7 +359,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.clock.advance(1)
         new_address = self.manager.wallet.get_unused_address_bytes()
-        inputs = [WalletInputInfo(tx_id=tx3.hash, index=0, private_key=None)]
+        inputs = [WalletInputInfo(tx_id=tx3.hash, index=0, private_key=Mock())]
         outputs = [WalletOutputInfo(address=new_address, value=self.blocks_tokens[0], timelock=None)]
         tx4 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
@@ -387,13 +390,13 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, self.initial_balance))
 
-    def test_tokens_balance(self):
+    async def test_tokens_balance(self) -> None:
         # create tokens and check balances
 
         # initial tokens
         address_b58 = self.manager.wallet.get_unused_address()
         address = decode_address(address_b58)
-        tx = create_tokens(self.manager, address_b58)
+        tx = await create_tokens(self.manager, address_b58)
         token_id = tx.tokens[0]
         amount = tx.outputs[0].value
 

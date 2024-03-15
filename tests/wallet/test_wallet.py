@@ -71,7 +71,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         genesis_value = sum([output.value for output in genesis_block.outputs])
 
         # wallet will receive genesis block and store in unspent_tx
-        await w.on_new_tx(genesis_block)
+        w.on_new_tx(genesis_block)
         for index in range(len(genesis_block.outputs)):
             utxo = w.unspent_txs[self._settings.HATHOR_TOKEN_UID].get((genesis_block.hash, index))
             self.assertIsNotNone(utxo)
@@ -86,7 +86,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx1.update_hash()
         tx1.get_metadata().validation = ValidationState.FULL
         self.storage.save_transaction(tx1)
-        await w.on_new_tx(tx1)
+        w.on_new_tx(tx1)
         self.assertEqual(len(w.spent_txs), 1)
         self.assertEqual(w.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
@@ -102,7 +102,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx2.update_hash()
         tx2.get_metadata().validation = ValidationState.FULL
         self.storage.save_transaction(tx2)
-        await w.on_new_tx(tx2)
+        w.on_new_tx(tx2)
         self.assertEqual(len(w.spent_txs), 2)
         self.assertEqual(w.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
@@ -119,7 +119,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         out = WalletOutputInfo(decode_address(key.address), BLOCK_REWARD, timelock=None)
         tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
         tx.update_hash()
-        await w.on_new_tx(tx)
+        w.on_new_tx(tx)
         utxo = w.unspent_txs[self._settings.HATHOR_TOKEN_UID].get((tx.hash, 0))
         self.assertIsNotNone(utxo)
         self.assertEqual(w.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, BLOCK_REWARD))
@@ -240,9 +240,9 @@ class BaseBasicWalletTest(unittest.TestCase):
         await add_blocks_unlock_reward(self.manager)
         w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
 
-    def test_maybe_spent_txs(self):
-        add_new_block(self.manager, advance_clock=15)
-        blocks = add_blocks_unlock_reward(self.manager)
+    async def test_maybe_spent_txs(self) -> None:
+        await add_new_block(self.manager, advance_clock=15)
+        blocks = await add_blocks_unlock_reward(self.manager)
         w = self.manager.wallet
         new_address = w.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), 1, timelock=None)

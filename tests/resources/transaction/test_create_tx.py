@@ -218,6 +218,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         struct_bytes = bytes.fromhex(hex_data)
         orig_tx = Transaction.create_from_struct(struct_bytes)
         tx = orig_tx.clone()
+        assert isinstance(tx, Transaction)
         tx_data = tx.to_json()
         del tx_data['hash']
         del tx_data['nonce']
@@ -262,6 +263,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         struct_bytes = bytes.fromhex(hex_data)
         orig_tx = Transaction.create_from_struct(struct_bytes)
         tx = orig_tx.clone()
+        assert isinstance(tx, Transaction)
         tx_data = tx.to_json()
         del tx_data['hash']
         del tx_data['nonce']

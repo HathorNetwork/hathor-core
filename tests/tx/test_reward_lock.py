@@ -2,7 +2,7 @@ import pytest
 
 from hathor.crypto.util import get_address_from_public_key
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction import Transaction, TxInput, TxOutput, Block
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -31,7 +31,7 @@ class BaseTransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
-    async def _add_reward_block(self) -> None:
+    async def _add_reward_block(self) -> tuple[Block, int]:
         reward_block = self.manager.generate_mining_block(
             address=get_address_from_public_key(self.genesis_public_key)
         )
@@ -64,7 +64,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     async def test_classic_reward_lock(self) -> None:
         # add block with a reward we can spend
-        reward_block, unlock_height = self._add_reward_block()
+        reward_block, unlock_height = await self._add_reward_block()
 
         # reward cannot be spent while not enough blocks are added
         for _ in range(self._settings.REWARD_SPEND_MIN_BLOCKS):
@@ -81,7 +81,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     async def test_block_with_not_enough_height(self) -> None:
         # add block with a reward we can spend
-        reward_block, unlock_height = self._add_reward_block()
+        reward_block, unlock_height = await self._add_reward_block()
 
         # add one less block than needed
         await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
@@ -99,7 +99,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     async def test_block_with_enough_height(self) -> None:
         # add block with a reward we can spend
-        reward_block, unlock_height = self._add_reward_block()
+        reward_block, unlock_height = await self._add_reward_block()
 
         # add just enough blocks
         await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
@@ -116,7 +116,7 @@ class BaseTransactionTest(unittest.TestCase):
         from hathor.exception import InvalidNewTransaction
 
         # add block with a reward we can spend
-        reward_block, unlock_height = self._add_reward_block()
+        reward_block, unlock_height = await self._add_reward_block()
 
         # add one less block than needed
         await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
@@ -131,7 +131,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     async def test_mempool_tx_with_enough_height(self) -> None:
         # add block with a reward we can spend
-        reward_block, unlock_height = self._add_reward_block()
+        reward_block, unlock_height = await self._add_reward_block()
 
         # add just enough blocks
         await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
@@ -143,7 +143,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     async def test_mempool_tx_invalid_after_reorg(self) -> None:
         # add block with a reward we can spend
-        reward_block, unlock_height = self._add_reward_block()
+        reward_block, unlock_height = await self._add_reward_block()
 
         # add just enough blocks
         blocks = await add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
@@ -174,12 +174,12 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertFalse(self.manager.tx_storage.transaction_exists(tx.hash))
 
     @pytest.mark.xfail(reason='this is no longer the case, timestamp will not matter', strict=True)
-    def test_classic_reward_lock_timestamp_expected_to_fail(self):
+    async def test_classic_reward_lock_timestamp_expected_to_fail(self) -> None:
         # add block with a reward we can spend
-        reward_block, unlock_height = self._add_reward_block()
+        reward_block, unlock_height = await self._add_reward_block()
 
         # we add enough blocks that this output could be spent based on block height
-        blocks = add_blocks_unlock_reward(self.manager)
+        blocks = await add_blocks_unlock_reward(self.manager)
 
         # tx timestamp is equal to the block that unlock the spent rewards. It should
         # be greater, so it'll fail
