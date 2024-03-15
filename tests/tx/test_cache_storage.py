@@ -144,10 +144,10 @@ class BaseCacheStorageTest(unittest.TestCase):
         del self.cache_storage.cache[next(iter(self.cache_storage.dirty_txs))]
         self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
 
-    def test_topological_sort_dfs(self):
+    async def test_topological_sort_dfs(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
-        add_new_blocks(self.manager, 11, advance_clock=1)
-        tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
+        await add_new_blocks(self.manager, 11, advance_clock=1)
+        tx = (await add_new_transactions(self.manager, 1, advance_clock=1))[0]
 
         total = 0
         for tx in self.cache_storage._run_topological_sort_dfs(root=tx, visited=dict()):

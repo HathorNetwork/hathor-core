@@ -94,7 +94,7 @@ class DbExport(RunNode):
                     continue
             yield tx
 
-    async def run(self) -> None:
+    def run(self) -> None:
         from hathor.transaction import Block
         from hathor.util import tx_progress
         self.log.info('export')

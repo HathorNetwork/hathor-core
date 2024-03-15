@@ -371,8 +371,8 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertFalse(self.tx_storage.is_partially_validated_allowed())
         self.assertFalse(self.tx_storage.is_invalid_allowed())
 
-    def test_save_token_creation_tx(self):
-        tx = create_tokens(self.manager, propagate=False)
+    async def test_save_token_creation_tx(self) -> None:
+        tx = await create_tokens(self.manager, propagate=False)
         tx.get_metadata().validation = ValidationState.FULL
         self.validate_save(tx)
 
@@ -472,20 +472,20 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
         self.assertEqual(total, 4)
 
-    def test_storage_new_blocks(self):
+    async def test_storage_new_blocks(self) -> None:
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(tip_blocks, [self.genesis_blocks[0].hash])
 
-        block1 = self._add_new_block()
+        block1 = await self._add_new_block()
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(tip_blocks, [block1.hash])
 
-        block2 = self._add_new_block()
+        block2 = await self._add_new_block()
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(tip_blocks, [block2.hash])
 
         # Block3 has the same parents as block2.
-        block3 = self._add_new_block(parents=block2.parents)
+        block3 = await self._add_new_block(parents=block2.parents)
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 
@@ -548,8 +548,8 @@ class BaseTransactionStorageTest(unittest.TestCase):
         # added blocks + genesis txs + added tx
         self.assertEqual(total, _total + 3 + 1)
 
-    def test_get_best_block_weight(self):
-        block = self._add_new_block()
+    async def test_get_best_block_weight(self) -> None:
+        block = await self._add_new_block()
         weight = self.tx_storage.get_weight_best_block()
         self.assertEqual(block.weight, weight)
 

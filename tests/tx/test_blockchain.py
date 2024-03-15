@@ -387,7 +387,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             height = block.get_metadata().height
             self.assertEqual(output.value, manager.get_tokens_issued_per_block(height))
 
-    def test_daa_sanity(self):
+    async def test_daa_sanity(self) -> None:
         # sanity test the DAA
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
         manager.daa.TEST_MODE = TestMode.DISABLED
@@ -396,22 +396,22 @@ class BaseBlockchainTestCase(unittest.TestCase):
         manager.avg_time_between_blocks = T
         # stabilize weight on 2 and lower the minimum to 1, so it can vary around 2
         manager.min_block_weight = 2
-        add_new_blocks(manager, N * 2, advance_clock=T)
+        await add_new_blocks(manager, N * 2, advance_clock=T)
         manager.min_block_weight = 1
         for i in range(N):
             # decreasing solvetime should increase weight
             base_weight = manager.generate_mining_block().weight
-            add_new_blocks(manager, i, advance_clock=T)
-            add_new_blocks(manager, 1, advance_clock=T * 0.9)
-            add_new_blocks(manager, N - i, advance_clock=T)
+            await add_new_blocks(manager, i, advance_clock=T)
+            await add_new_blocks(manager, 1, advance_clock=T * 0.9)
+            await add_new_blocks(manager, N - i, advance_clock=T)
             new_weight = manager.generate_mining_block().weight
             self.assertGreater(new_weight, base_weight)
-            add_new_blocks(manager, N, advance_clock=T)
+            await add_new_blocks(manager, N, advance_clock=T)
             # increasing solvetime should decrease weight
             base_weight = manager.generate_mining_block().weight
-            add_new_blocks(manager, i, advance_clock=T)
-            add_new_blocks(manager, 1, advance_clock=T * 1.1)
-            add_new_blocks(manager, N - i, advance_clock=T)
+            await add_new_blocks(manager, i, advance_clock=T)
+            await add_new_blocks(manager, 1, advance_clock=T * 1.1)
+            await add_new_blocks(manager, N - i, advance_clock=T)
             new_weight = manager.generate_mining_block().weight
             self.assertLess(new_weight, base_weight)
 
@@ -432,14 +432,14 @@ class BaseBlockchainTestCase(unittest.TestCase):
                 distance += 1
         self.assertAlmostEqual(self.daa.get_weight_decay_amount(distance), 11 * amount)
 
-    def test_daa_weight_decay_blocks(self):
+    async def test_daa_weight_decay_blocks(self) -> None:
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
         manager.daa.TEST_MODE = TestMode.DISABLED
         amount = self._settings.WEIGHT_DECAY_AMOUNT
 
         manager.daa.AVG_TIME_BETWEEN_BLOCKS = self._settings.AVG_TIME_BETWEEN_BLOCKS
         manager.daa.MIN_BLOCK_WEIGHT = 2 + 2 * self._settings.WEIGHT_DECAY_AMOUNT
-        add_new_blocks(
+        await add_new_blocks(
             manager,
             2 * self._settings.BLOCK_DIFFICULTY_N_BLOCKS,
             advance_clock=self._settings.AVG_TIME_BETWEEN_BLOCKS
@@ -449,9 +449,9 @@ class BaseBlockchainTestCase(unittest.TestCase):
         base_weight = manager.generate_mining_block().weight
         self.assertGreater(base_weight, manager.daa.MIN_BLOCK_WEIGHT)
 
-        add_new_blocks(manager, 20, advance_clock=self._settings.AVG_TIME_BETWEEN_BLOCKS)
+        await add_new_blocks(manager, 20, advance_clock=self._settings.AVG_TIME_BETWEEN_BLOCKS)
 
-        dt = self._settings.AVG_TIME_BETWEEN_BLOCKS  # the latest call to add_new_blocks will advance the clock
+        dt = self._settings.AVG_TIME_BETWEEN_BLOCKS  # the latest call to await add_new_blocks will advance the clock
         while dt < self._settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
             weight = manager.generate_mining_block().weight
             self.assertAlmostEqual(weight, base_weight)

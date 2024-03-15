@@ -61,7 +61,7 @@ class Shell(RunNode):
         self.extra_args = extra_args
         return self.parser.parse_args(argv)
 
-    async def run(self) -> None:
+    def run(self) -> None:
         self.shell()
 
 

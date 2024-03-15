@@ -44,7 +44,7 @@ class DbImport(RunNode):
         # allocating io.BufferedReader here so we "own" it
         self.in_file = io.BufferedReader(self._args.import_file)
 
-    async def run(self) -> None:
+    async def run(self) -> None:  # type: ignore[override] # TODO: fix async
         from hathor.cli.db_export import MAGIC_HEADER
 
         header = self.in_file.read(len(MAGIC_HEADER))

@@ -52,10 +52,10 @@ class QuickTest(RunNode):
             sys.exit(1)
         self.reactor.callLater(timeout, exit_with_error)
 
-    async def run(self) -> None:
+    def run(self) -> None:
         if self._no_wait:
             return
-        await super().run()
+        super().run()
 
 
 def main():

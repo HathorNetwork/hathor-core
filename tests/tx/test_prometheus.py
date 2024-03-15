@@ -21,7 +21,7 @@ class BasePrometheusTest(unittest.TestCase):
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
     @pytest.mark.skipif(sys.platform == 'win32', reason='set_new_metrics fails on Windows')
-    def test_wallet(self):
+    async def test_wallet(self):
         tmpdir = tempfile.mkdtemp()
         tmpfile = tempfile.NamedTemporaryFile(dir=tmpdir, suffix='.prom', delete=False)
         filename = os.path.basename(tmpfile.name)
@@ -39,8 +39,8 @@ class BasePrometheusTest(unittest.TestCase):
             text.index('blocks 1.0')
             text.index('transactions 2.0')
 
-        add_new_blocks(self.manager, 30, advance_clock=1)
-        add_new_transactions(self.manager, 5, advance_clock=1)
+        await add_new_blocks(self.manager, 30, advance_clock=1)
+        await add_new_transactions(self.manager, 5, advance_clock=1)
 
         with open(full_path, 'r') as f:
             text = list(filter(

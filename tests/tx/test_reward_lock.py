@@ -14,7 +14,7 @@ from tests.utils import add_blocks_unlock_reward, get_genesis_key
 class BaseTransactionTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
         self.wallet = Wallet()
 
@@ -28,7 +28,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
         self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True)
-        blocks = add_blocks_unlock_reward(self.manager)
+        blocks = await add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
     async def _add_reward_block(self) -> tuple[Block, int]:

@@ -16,7 +16,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_double_spending, creat
 class BaseTokenTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
 
@@ -33,7 +33,7 @@ class BaseTokenTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # add some blocks so we can spend the genesis outputs
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
     def test_tokens_in_block(self):
         # a block with token index > 1 should be invalid
@@ -502,10 +502,10 @@ class BaseTokenTest(unittest.TestCase):
         update_tx(tx)
         self.manager.verification_service.verify(tx)
 
-    def test_token_mint_zero(self):
+    async def test_token_mint_zero(self) -> None:
         # try to mint 0 tokens
         with self.assertRaises(InvalidToken):
-            create_tokens(self.manager, self.address_b58, mint_amount=0)
+            await create_tokens(self.manager, self.address_b58, mint_amount=0)
 
     async def test_token_struct(self) -> None:
         tx = await create_tokens(self.manager, self.address_b58, mint_amount=500)

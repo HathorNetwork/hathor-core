@@ -40,12 +40,12 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.simulator.run(5 * 60)
         return manager
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
 
         # XXX: having this on the setUp makes it so when this fails it's an error (E) and not a failure (F), which has
         #      slightly different meaning
-        self.manager = self._build_randomized_blockchain()
+        self.manager = await self._build_randomized_blockchain()
 
     @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_tips_index_initialization(self):
