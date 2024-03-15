@@ -27,7 +27,7 @@ class Scenario(Enum):
     REORG = 'REORG'
     UNVOIDED_TRANSACTION = 'UNVOIDED_TRANSACTION'
 
-    def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
+    async def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
         simulate_fns = {
             Scenario.ONLY_LOAD: simulate_only_load,
             Scenario.SINGLE_CHAIN_ONE_BLOCK: simulate_single_chain_one_block,
@@ -38,10 +38,10 @@ class Scenario(Enum):
 
         simulate_fn = simulate_fns[self]
 
-        simulate_fn(simulator, manager)
+        await simulate_fn(simulator, manager)
 
 
-def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> None:
+async def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> None:
     simulator.run(60)
 
 
@@ -65,13 +65,13 @@ async def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', 
     tx = gen_new_tx(manager, address, 1000)
     tx.weight = manager.daa.minimum_tx_weight(tx)
     tx.update_hash()
-    assert manager.propagate_tx(tx, fails_silently=False)
+    assert await manager.propagate_tx(tx, fails_silently=False)
     simulator.run(60)
 
     tx = gen_new_tx(manager, address, 2000)
     tx.weight = manager.daa.minimum_tx_weight(tx)
     tx.update_hash()
-    assert manager.propagate_tx(tx, fails_silently=False)
+    assert await manager.propagate_tx(tx, fails_silently=False)
     simulator.run(60)
 
     await add_new_blocks(manager, 1)
@@ -112,7 +112,7 @@ async def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'Hathor
     tx = gen_new_tx(manager, address, 1000)
     tx.weight = 19.0005
     tx.update_hash()
-    assert manager.propagate_tx(tx, fails_silently=False)
+    assert await manager.propagate_tx(tx, fails_silently=False)
     simulator.run(60)
 
     # A clone is created with a greater timestamp and a lower weight. It's a voided twin tx.
@@ -120,7 +120,7 @@ async def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'Hathor
     tx2.timestamp += 60
     tx2.weight = 19
     tx2.update_hash()
-    assert manager.propagate_tx(tx2, fails_silently=False)
+    assert await manager.propagate_tx(tx2, fails_silently=False)
     simulator.run(60)
 
     # Only the second tx is voided
