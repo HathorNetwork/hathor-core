@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import Generic, Iterable, Sized, TypeVar
+from typing import Generic, Iterable, Optional, Sized, TypeVar
 
 from structlog import get_logger
 
@@ -49,7 +49,7 @@ class TxGroupIndex(BaseIndex, Generic[KT]):
         raise NotImplementedError
 
     @abstractmethod
-    def _get_sorted_from_key(self, key: KT) -> Iterable[bytes]:
+    def _get_sorted_from_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         """Get all transactions that have a given key, sorted by timestamp."""
         raise NotImplementedError
 

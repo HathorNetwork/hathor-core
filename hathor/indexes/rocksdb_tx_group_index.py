@@ -108,9 +108,15 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
             self._db.delete((self._cf, self._to_rocksdb_key(key, tx)))
 
     def _get_from_key(self, key: KT) -> Iterable[bytes]:
+        return self._util_get_from_key(key)
+
+    def _get_sorted_from_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> Iterable[bytes]:
+        return self._util_get_from_key(key, tx)
+
+    def _util_get_from_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         self.log.debug('seek to', key=key)
         it = self._db.iterkeys(self._cf)
-        it.seek(self._to_rocksdb_key(key))
+        it.seek(self._to_rocksdb_key(key, tx))
         for _cf, rocksdb_key in it:
             key2, _, tx_hash = self._from_rocksdb_key(rocksdb_key)
             if key2 != key:
@@ -118,9 +124,6 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
             self.log.debug('seek found', tx=tx_hash.hex())
             yield tx_hash
         self.log.debug('seek end')
-
-    def _get_sorted_from_key(self, key: KT) -> Iterable[bytes]:
-        return self._get_from_key(key)
 
     def _is_key_empty(self, key: KT) -> bool:
         self.log.debug('seek to', key=key)
