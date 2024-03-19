@@ -5,7 +5,7 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Optional, cast
+from typing import Optional
 
 import requests
 from hathorlib.scripts import DataScript
@@ -378,7 +378,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         assert genesis_hash is not None
         deposit_input = [TxInput(genesis_hash, 0, b'')]
         change_output = TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0)
-        parents = [cast(bytes, tx.hash) for tx in genesis_txs]
+        parents = [tx.hash for tx in genesis_txs]
         timestamp = int(manager.reactor.seconds())
     else:
         total_reward = 0
