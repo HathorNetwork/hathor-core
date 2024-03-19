@@ -14,9 +14,10 @@
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional, Union
 
 from structlog import get_logger
+from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IDelayedCall, IReactorFromThreads
 from twisted.python.threadable import isInIOThread
 
@@ -158,7 +159,10 @@ class EventArguments:
         return hasattr(self, key)
 
 
-PubSubCallable = Callable[[HathorEvents, EventArguments], None]
+PubSubCallable = Union[
+    Callable[[HathorEvents, EventArguments], None],
+    Callable[[HathorEvents, EventArguments], Coroutine[Deferred[None], Any, None]]
+]
 
 
 class PubSubManager:
@@ -205,7 +209,9 @@ class PubSubManager:
         try:
             while self.queue:
                 fn, key, args = self.queue.popleft()
-                fn(key, args)
+                result = fn(key, args)
+                if isinstance(result, Coroutine):
+                    Deferred.fromCoroutine(result)
         except Exception:
             self.log.error('event processing failed', key=key, args=args)
             raise

@@ -33,6 +33,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.util import not_none
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
@@ -41,7 +42,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_s
 class BaseTransactionTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
         self.wallet = Wallet()
 
@@ -58,7 +59,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-        blocks = add_blocks_unlock_reward(self.manager)
+        blocks = await add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
     def test_input_output_match(self):
@@ -80,14 +81,14 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(InputOutputMismatch):
             self._verifiers.tx.verify_sum(tx.get_complete_token_info())
 
-    def test_validation(self):
+    async def test_validation(self) -> None:
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
-        blocks = add_new_blocks(self.manager, 100, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 100, advance_clock=1)
         iblocks = iter(blocks)
         block_from_chain = self.last_block
         for _ in range(100):
             block_from_list = next(iblocks)
-            block_from_chain = block_from_chain.get_next_block_best_chain()
+            block_from_chain = not_none(block_from_chain.get_next_block_best_chain())
             self.assertEqual(block_from_chain, block_from_list)
             self.assertTrue(block_from_chain.has_basic_block_parent())
         self.assertEqual(block_from_chain.get_next_block_best_chain(), None)
@@ -671,38 +672,38 @@ class BaseTransactionTest(unittest.TestCase):
         tx.update_timestamp(ts)
         self.assertEquals(tx.timestamp, ts)
 
-    def test_propagation_error(self):
+    async def test_propagation_error(self) -> None:
         manager = self.create_peer('testnet', unlock_wallet=True)
         manager.daa.TEST_MODE = TestMode.DISABLED
 
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]
         genesis_block.storage = manager.tx_storage
-        self.assertFalse(manager.propagate_tx(genesis_block))
+        self.assertFalse(await manager.propagate_tx(genesis_block))
 
         # 2. propagate block with weight 1
         block = manager.generate_mining_block()
         block.weight = 1
         self.manager.cpu_mining_service.resolve(block)
-        self.assertFalse(manager.propagate_tx(block))
+        self.assertFalse(await manager.propagate_tx(block))
 
         # 3. propagate block with wrong amount of tokens
         block = manager.generate_mining_block()
         output = TxOutput(1, block.outputs[0].script)
         block.outputs = [output]
         self.manager.cpu_mining_service.resolve(block)
-        self.assertFalse(manager.propagate_tx(block))
+        self.assertFalse(await manager.propagate_tx(block))
 
         # 4. propagate block from the future
         block = manager.generate_mining_block()
         block.timestamp = int(self.clock.seconds()) + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED + 100
         manager.cpu_mining_service.resolve(block, update_time=False)
-        self.assertFalse(manager.propagate_tx(block))
+        self.assertFalse(await manager.propagate_tx(block))
 
-    def test_tx_methods(self):
-        blocks = add_new_blocks(self.manager, 2, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        txs = add_new_transactions(self.manager, 2, advance_clock=1)
+    async def test_tx_methods(self) -> None:
+        blocks = await add_new_blocks(self.manager, 2, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        txs = await add_new_transactions(self.manager, 2, advance_clock=1)
 
         # Validate __str__, __bytes__, __eq__
         tx = txs[0]
@@ -716,7 +717,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertFalse(tx == tx2)
 
         tx2_hash = tx2.hash
-        tx2.hash = None
+        tx2._hash = None
         self.assertFalse(tx == tx2)
         tx2.hash = tx2_hash
 
@@ -769,15 +770,15 @@ class BaseTransactionTest(unittest.TestCase):
 
         assert cloned_block == block
 
-    def test_block_data(self):
-        def add_block_with_data(data: bytes = b'') -> None:
-            add_new_blocks(self.manager, 1, advance_clock=1, block_data=data)[0]
+    async def test_block_data(self) -> None:
+        async def add_block_with_data(data: bytes = b'') -> None:
+            await add_new_blocks(self.manager, 1, advance_clock=1, block_data=data)
 
-        add_block_with_data()
-        add_block_with_data(b'Testing, testing 1, 2, 3...')
-        add_block_with_data(100*b'a')
+        await add_block_with_data()
+        await add_block_with_data(b'Testing, testing 1, 2, 3...')
+        await add_block_with_data(100*b'a')
         with self.assertRaises(TransactionDataError):
-            add_block_with_data(101*b'a')
+            await add_block_with_data(101*b'a')
 
     def test_output_serialization(self):
         from hathor.transaction.base_transaction import (
@@ -960,12 +961,12 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(InvalidInputDataSize):
             self._test_txin_data_limit(offset=1)
 
-    def test_txin_data_limit_success(self):
-        add_blocks_unlock_reward(self.manager)
+    async def test_txin_data_limit_success(self) -> None:
+        await add_blocks_unlock_reward(self.manager)
         self._test_txin_data_limit(offset=-1)
         self._test_txin_data_limit(offset=0)
 
-    def test_wallet_index(self):
+    async def test_wallet_index(self) -> None:
         # First transaction: send tokens to output with address=address_b58
         parents = [tx.hash for tx in self.genesis_txs]
         genesis_block = self.genesis_blocks[0]
@@ -975,7 +976,9 @@ class BaseTransactionTest(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
 
-        address_b58 = parse_address_script(script).address
+        p2pkh_script = parse_address_script(script)
+        assert isinstance(p2pkh_script, P2PKH)
+        address_b58 = p2pkh_script.address
         # Get how many transactions wallet index already has for this address
         wallet_index_count = len(self.tx_storage.indexes.addresses.get_from_address(address_b58))
 
@@ -988,7 +991,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         self.manager.cpu_mining_service.resolve(tx)
-        self.manager.propagate_tx(tx)
+        await self.manager.propagate_tx(tx)
 
         # This transaction has an output to address_b58, so we need one more element on the index
         self.assertEqual(len(self.tx_storage.indexes.addresses.get_from_address(address_b58)), wallet_index_count + 1)
@@ -996,7 +999,7 @@ class BaseTransactionTest(unittest.TestCase):
         # Second transaction: spend tokens from output with address=address_b58 and
         # send tokens to 2 outputs, one with address=address_b58 and another one
         # with address=new_address_b58, which is an address of a random wallet
-        new_address_b58 = self.get_address(0)
+        new_address_b58 = not_none(self.get_address(0))
         new_address = decode_address(new_address_b58)
 
         output1 = TxOutput(value - 100, script)
@@ -1012,7 +1015,7 @@ class BaseTransactionTest(unittest.TestCase):
         input1.data = P2PKH.create_input_data(public_bytes, signature)
 
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
 
         # tx2 has two outputs, for address_b58 and new_address_b58
         # So we must have one more element on address_b58 index and only one on new_address_b58
@@ -1021,7 +1024,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # Third transaction: spend tokens from output with address=address_b58 and send
         # tokens to a new address = output3_address_b58, which is from a random wallet
-        output3_address_b58 = self.get_address(1)
+        output3_address_b58 = not_none(self.get_address(1))
         output3_address = decode_address(output3_address_b58)
         script3 = P2PKH.create_output_script(output3_address)
         output3 = TxOutput(value-100, script3)
@@ -1035,7 +1038,7 @@ class BaseTransactionTest(unittest.TestCase):
         input2.data = P2PKH.create_input_data(public_bytes, signature)
 
         self.manager.cpu_mining_service.resolve(tx3)
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx3)
 
         # tx3 has one output, for another new address (output3_address_b58) and it's spending an output of address_b58
         # So address_b58 index must have one more element and output3_address_b58 should have one element also
@@ -1177,9 +1180,9 @@ class BaseTransactionTest(unittest.TestCase):
         tx.update_hash()
         self._verifiers.tx.verify_sigops_input(tx)
 
-    def test_compare_bytes_equal(self) -> None:
+    async def test_compare_bytes_equal(self) -> None:
         # create some block
-        [block1] = add_new_blocks(self.manager, 1, advance_clock=1)
+        [block1] = await add_new_blocks(self.manager, 1, advance_clock=1)
 
         # clone it to make sure we have a new instance
         block2 = block1.clone()
@@ -1187,9 +1190,9 @@ class BaseTransactionTest(unittest.TestCase):
         # the storage already has block1 and should correctly return True
         self.assertTrue(self.tx_storage.compare_bytes_with_local_tx(block2))
 
-    def test_compare_bytes_different(self) -> None:
+    async def test_compare_bytes_different(self) -> None:
         # create some block
-        [block1] = add_new_blocks(self.manager, 1, advance_clock=1)
+        [block1] = await add_new_blocks(self.manager, 1, advance_clock=1)
 
         # clone it and change something, doesn't matter what it is
         # XXX: note the hash is not being update on purpose, we expect a failure even if the hash hasn't changed
@@ -1199,11 +1202,11 @@ class BaseTransactionTest(unittest.TestCase):
         # the storage already has block1 and should correctly return False
         self.assertFalse(self.tx_storage.compare_bytes_with_local_tx(block2))
 
-    def test_compare_bytes_partially_validated_equal(self) -> None:
+    async def test_compare_bytes_partially_validated_equal(self) -> None:
         from hathor.transaction.validation_state import ValidationState
 
         # create some block, make it partially valid and save it
-        [block1] = add_new_blocks(self.manager, 1, advance_clock=1)
+        [block1] = await add_new_blocks(self.manager, 1, advance_clock=1)
         block1.set_validation(ValidationState.BASIC)
         with self.tx_storage.allow_partially_validated_context():
             self.tx_storage.save_transaction(block1)
@@ -1214,11 +1217,11 @@ class BaseTransactionTest(unittest.TestCase):
         # the storage already has block1 and should correctly return True
         self.assertTrue(self.tx_storage.compare_bytes_with_local_tx(block2))
 
-    def test_compare_bytes_partially_validated_different(self) -> None:
+    async def test_compare_bytes_partially_validated_different(self) -> None:
         from hathor.transaction.validation_state import ValidationState
 
         # create some block, make it partially valid and save it
-        [block1] = add_new_blocks(self.manager, 1, advance_clock=1)
+        [block1] = await add_new_blocks(self.manager, 1, advance_clock=1)
         block1.set_validation(ValidationState.BASIC)
         with self.tx_storage.allow_partially_validated_context():
             self.tx_storage.save_transaction(block1)

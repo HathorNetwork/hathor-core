@@ -208,7 +208,8 @@ class JSONRPC(LineReceiver, ABC):
         msgid = data.get('id')
 
         if 'method' in data:
-            return self.handle_request(data['method'], data.get('params'), msgid)
+            Deferred.fromCoroutine(self.handle_request(data['method'], data.get('params'), msgid))
+            return
         elif 'result' in data and 'error' in data:
             if data['result'] and data['error'] is None:
                 return self.handle_result(data['result'], msgid)
@@ -226,7 +227,7 @@ class JSONRPC(LineReceiver, ABC):
             })
 
     @abstractmethod
-    def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
+    async def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
         """ Handles any valid request.
 
         :param method: JSON-RPC 2.0 request method
@@ -400,7 +401,7 @@ class StratumProtocol(JSONRPC):
         assert self.miner_id is not None
         self.factory.miner_protocols.pop(self.miner_id, None)
 
-    def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
+    async def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
         """ Handles subscribe and submit requests.
 
         :param method: JSON-RPC 2.0 request method
@@ -423,7 +424,7 @@ class StratumProtocol(JSONRPC):
             return self.handle_subscribe(params, msgid)
         if method in ['mining.submit', 'submit']:
             params = cast(dict, params)
-            return self.handle_submit(params, msgid)
+            return await self.handle_submit(params, msgid)
 
         self.send_error(METHOD_NOT_FOUND, msgid, data={'method': method, 'supported_methods': ['submit', 'subscribe']})
 
@@ -473,7 +474,7 @@ class StratumProtocol(JSONRPC):
         self.subscribed = True
         self.job_request()
 
-    def handle_submit(self, params: dict, msgid: Optional[str]) -> None:
+    async def handle_submit(self, params: dict, msgid: Optional[str]) -> None:
         """ Handles submit request by validating and propagating the result
 
         :param params: a dict containing a valid uui4 hex as `job_id` and a valid transaction nonce as `nonce`
@@ -559,7 +560,7 @@ class StratumProtocol(JSONRPC):
                 # We only propagate blocks here in stratum
                 # For tx we need to propagate in the resource,
                 # so we can get the possible errors
-                self.manager.submit_block(tx, fails_silently=False)
+                await self.manager.submit_block(tx, fails_silently=False)
                 self.blocks_found += 1
             except (InvalidNewTransaction, TxValidationError) as e:
                 # Block propagation failed, but the share was succesfully submited
@@ -874,7 +875,7 @@ class StratumClient(JSONRPC):
     def connectionMade(self) -> None:
         self.send_request('subscribe', {'address': self.address}, self._next_id())
 
-    def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
+    async def handle_request(self, method: str, params: Optional[Union[list, dict]], msgid: Optional[str]) -> None:
         """ Handles job requests.
 
         :param method: JSON-RPC 2.0 request method

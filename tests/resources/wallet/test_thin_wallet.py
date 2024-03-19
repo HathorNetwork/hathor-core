@@ -6,6 +6,7 @@ from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
+from hathor.util import not_none
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -32,27 +33,27 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(sendtokens_resource)
         self.web_address_history = StubSite(AddressHistoryResource(self.manager))
 
-    @inlineCallbacks
-    def test_post(self):
+    async def test_post(self) -> None:
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
-        blocks = add_new_blocks(self.manager, 3, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
+        blocks = await add_new_blocks(self.manager, 3, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens))
 
         # Options
-        yield self.web.options('thin_wallet/send_tokens')
+        await self.web.options('thin_wallet/send_tokens')
 
         tx_id = blocks[0].hash
         output = blocks[0].outputs[0]
         script_type_out = parse_address_script(output.script)
+        assert isinstance(script_type_out, P2PKH)
         address = script_type_out.address
         private_key = self.manager.wallet.get_private_key(address)
 
-        output_address = decode_address(self.get_address(0))
+        output_address = decode_address(not_none(self.get_address(0)))
         value = blocks_tokens[0]
         o = TxOutput(value, create_output_script(output_address, None))
         o_invalid_amount = TxOutput(value-1, create_output_script(output_address, None))
@@ -69,7 +70,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         tx.timestamp = int(self.clock.seconds())
         tx.weight = 0
 
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx.get_struct().hex()})
+        response = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx.get_struct().hex()})
         data = response.json_value()
         self.assertFalse(data['success'])
 
@@ -84,7 +85,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         tx2.timestamp = int(self.clock.seconds())
         tx2.weight = self.manager.daa.minimum_tx_weight(tx2)
 
-        response_wrong_amount = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2.get_struct().hex()})
+        response_wrong_amount = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2.get_struct().hex()})
         data_wrong_amount = response_wrong_amount.json_value()
         self.assertFalse(data_wrong_amount['success'])
 
@@ -100,14 +101,14 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         tx3.weight = self.manager.daa.minimum_tx_weight(tx3)
 
         # Then send tokens
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
+        response = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
         data = response.json_value()
         self.assertTrue(data['success'])
 
         # Trying to send a double spending will not have success
         self.clock.advance(5)
         tx3.timestamp = int(self.clock.seconds())
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
+        response = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
         data_error = response.json_value()
         self.assertFalse(data_error['success'])
         self.clock.advance(5)
@@ -118,7 +119,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
             sum(blocks_tokens[:-1])
         )
 
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': address.encode(),
             }
@@ -128,10 +129,10 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertIn(data['tx']['hash'], [x['tx_id'] for x in response_data])
 
         # Create token tx
-        tx4 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
+        tx4 = await create_tokens(self.manager, address, mint_amount=100, propagate=False)
         tx4.nonce = 0
         tx4.timestamp = int(self.clock.seconds())
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx4.get_struct().hex()})
+        response = await self.web.post('thin_wallet/send_tokens', {'tx_hex': tx4.get_struct().hex()})
         data = response.json_value()
         self.assertTrue(data['success'])
 #
@@ -181,20 +182,20 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 #        for d in deferreds:
 #            yield d.request.thread_deferred
 
-    @inlineCallbacks
-    def test_history_paginate(self):
+    async def test_history_paginate(self) -> None:
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
-        blocks = add_new_blocks(self.manager, 3, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 3, advance_clock=1)
 
         output = blocks[0].outputs[0]
         script_type_out = parse_address_script(output.script)
+        assert isinstance(script_type_out, P2PKH)
         address = script_type_out.address
         address_bytes = decode_address(address)
 
         # Test paginate
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': address.encode(),
                 b'paginate': b'true'
@@ -206,7 +207,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(blocks[0].hash.hex(), response_data['history'][0]['tx_id'])
         self.assertFalse(response_data['has_more'])
 
-        new_blocks = add_new_blocks(
+        new_blocks = await add_new_blocks(
             self.manager,
             self._settings.MAX_TX_ADDRESSES_HISTORY,
             advance_clock=1,
@@ -214,7 +215,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         )
 
         # Test paginate with two pages
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': address.encode(),
                 b'paginate': b'true'
@@ -229,23 +230,23 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # Test paginate with big txs
         tx_count = math.ceil(self._settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY / self._settings.MAX_NUM_INPUTS)
         blocks.extend(new_blocks)
-        new_blocks = add_new_blocks(
+        new_blocks = await add_new_blocks(
             self.manager,
             tx_count*self._settings.MAX_NUM_INPUTS - len(blocks),
             advance_clock=1,
             address=address_bytes
         )
         blocks.extend(new_blocks)
-        random_address = self.get_address(0)
-        add_blocks_unlock_reward(self.manager)
+        random_address = not_none(self.get_address(0))
+        await add_blocks_unlock_reward(self.manager)
 
         for i in range(tx_count):
             start_index = i*self._settings.MAX_NUM_INPUTS
             end_index = start_index + self._settings.MAX_NUM_INPUTS
             amount = sum([b.outputs[0].value for b in blocks[start_index:end_index]])
-            add_new_tx(self.manager, random_address, amount, advance_clock=1)
+            await add_new_tx(self.manager, random_address, amount, advance_clock=1)
 
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': random_address.encode(),
                 b'paginate': b'true'
@@ -257,7 +258,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # 1 block + 3 big txs
         self.assertEqual(len(response_data['history']), tx_count - 1)
 
-        response_history = yield self.web_address_history.get(
+        response_history = await self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': random_address.encode(),
                 b'hash': response_data['first_hash'].encode(),
@@ -281,40 +282,39 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         resource._err_tx_resolve('Error', _Context(tx=dummy_tx, request=request), 'error')
         self.assertIsNone(request._finishedDeferreds)
 
-    @inlineCallbacks
-    def test_token(self):
+    async def test_token(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
         resource = StubSite(TokenResource(self.manager))
 
         # test list of tokens empty
-        response_list1 = yield resource.get('thin_wallet/token')
+        response_list1 = await resource.get('thin_wallet/token')
         data_list1 = response_list1.json_value()
         self.assertTrue(data_list1['success'])
         self.assertEqual(len(data_list1['tokens']), 0)
 
         # test invalid token id
-        response = yield resource.get('thin_wallet/token', {b'id': 'vvvv'.encode()})
+        response = await resource.get('thin_wallet/token', {b'id': 'vvvv'.encode()})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # test invalid token id
-        response = yield resource.get('thin_wallet/token', {b'id': '1234'.encode()})
+        response = await resource.get('thin_wallet/token', {b'id': '1234'.encode()})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # test unknown token id
         unknown_uid = '00000000228ed1dd74a2e1b920c1d64bf81dc63875dce4fac486001073b45a27'.encode()
-        response = yield resource.get('thin_wallet/token', {b'id': unknown_uid})
+        response = await resource.get('thin_wallet/token', {b'id': unknown_uid})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # test success case
-        add_new_blocks(self.manager, 1, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
+        await add_new_blocks(self.manager, 1, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
         token_name = 'MyTestToken'
         token_symbol = 'MTT'
         amount = 150
-        tx = create_tokens(
+        tx = await create_tokens(
             self.manager,
             mint_amount=amount,
             token_name=token_name,
@@ -322,7 +322,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
             use_genesis=False
         )
         token_uid = tx.tokens[0]
-        response = yield resource.get('thin_wallet/token', {b'id': token_uid.hex().encode()})
+        response = await resource.get('thin_wallet/token', {b'id': token_uid.hex().encode()})
         data = response.json_value()
         self.assertTrue(data['success'])
         self.assertEqual(len(data['mint']), 1)
@@ -336,7 +336,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['symbol'], token_symbol)
 
         # test list of tokens with one token
-        response_list2 = yield resource.get('thin_wallet/token')
+        response_list2 = await resource.get('thin_wallet/token')
         data_list2 = response_list2.json_value()
         self.assertTrue(data_list2['success'])
         self.assertEqual(len(data_list2['tokens']), 1)
@@ -346,7 +346,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
         token_name2 = 'New Token'
         token_symbol2 = 'NTK'
-        tx2 = create_tokens(
+        tx2 = await create_tokens(
             self.manager,
             mint_amount=amount,
             token_name=token_name2,
@@ -356,7 +356,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
         token_name3 = 'Wat Coin'
         token_symbol3 = 'WTC'
-        tx3 = create_tokens(
+        tx3 = await create_tokens(
             self.manager,
             mint_amount=amount,
             token_name=token_name3,
@@ -365,7 +365,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         )
 
         # test list of tokens with 3 tokens
-        response_list3 = yield resource.get('thin_wallet/token')
+        response_list3 = await resource.get('thin_wallet/token')
         data_list3 = response_list3.json_value()
         self.assertTrue(data_list3['success'])
         self.assertEqual(len(data_list3['tokens']), 3)
@@ -379,22 +379,21 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # test no wallet index
         manager2 = self.create_peer(self.network, unlock_wallet=True)
         resource2 = StubSite(TokenResource(manager2))
-        response2 = yield resource2.get('thin_wallet/token')
+        response2 = await resource2.get('thin_wallet/token')
         data2 = response2.json_value()
         self.assertEqual(response2.responseCode, 503)
         self.assertFalse(data2['success'])
 
-    @inlineCallbacks
-    def test_token_history(self):
+    async def test_token_history(self) -> None:
         self.manager.wallet.unlock(b'MYPASS')
         resource = StubSite(TokenHistoryResource(self.manager))
 
-        add_new_blocks(self.manager, 1, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        tx = create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
+        await add_new_blocks(self.manager, 1, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        tx = await create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
         token_uid = tx.tokens[0]
 
-        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'3'})
+        response = await resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'3'})
         data = response.json_value()
         # Success returning the token creation tx
         self.assertTrue(data['success'])
@@ -402,7 +401,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(1, len(data['transactions']))
         self.assertEqual(tx.hash.hex(), data['transactions'][0]['tx_id'])
 
-        response = yield resource.get('thin_wallet/token_history', {b'id': b'123', b'count': b'3'})
+        response = await resource.get('thin_wallet/token_history', {b'id': b'123', b'count': b'3'})
         data = response.json_value()
         # Fail because token is unknown
         self.assertFalse(data['success'])
@@ -410,10 +409,11 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # Create a tx with this token, so we can have more tx in the history
         output = tx.outputs[0]
         script_type_out = parse_address_script(output.script)
+        assert isinstance(script_type_out, P2PKH)
         address = script_type_out.address
         private_key = self.manager.wallet.get_private_key(address)
 
-        output_address = decode_address(self.get_address(0))
+        output_address = decode_address(not_none(self.get_address(0)))
         o = TxOutput(100, create_output_script(output_address, None), 1)
         i = TxInput(tx.hash, 0, b'')
 
@@ -426,10 +426,10 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         tx2.weight = self.manager.daa.minimum_tx_weight(tx2)
         tx2.parents = self.manager.get_new_tx_parents()
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
 
         # Now we have 2 txs with this token
-        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'3'})
+        response = await resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'3'})
         data = response.json_value()
         # Success returning the token creation tx and newly created tx
         self.assertTrue(data['success'])
@@ -438,14 +438,14 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(tx2.hash.hex(), data['transactions'][0]['tx_id'])
         self.assertEqual(tx.hash.hex(), data['transactions'][1]['tx_id'])
 
-        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'1'})
+        response = await resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'1'})
         data = response.json_value()
         # Testing has_more
         self.assertTrue(data['success'])
         self.assertTrue(data['has_more'])
         self.assertEqual(1, len(data['transactions']))
 
-        response = yield resource.get('thin_wallet/token_history', {
+        response = await resource.get('thin_wallet/token_history', {
             b'id': token_uid.hex().encode(),
             b'count': b'10',
             b'page': b'next',
@@ -459,7 +459,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(1, len(data['transactions']))
         self.assertEqual(tx.hash.hex(), data['transactions'][0]['tx_id'])
 
-        response = yield resource.get('thin_wallet/token_history', {
+        response = await resource.get('thin_wallet/token_history', {
             b'id': token_uid.hex().encode(),
             b'count': b'10',
             b'page': b'previous',
@@ -473,7 +473,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(1, len(data['transactions']))
         self.assertEqual(tx2.hash.hex(), data['transactions'][0]['tx_id'])
 
-        response = yield resource.get('thin_wallet/token_history', {
+        response = await resource.get('thin_wallet/token_history', {
             b'id': token_uid.hex().encode(),
             b'count': b'10',
             b'page': b'previous',

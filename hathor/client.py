@@ -185,7 +185,7 @@ class MiningChannel(IMiningChannel):
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> BlockTemplates:
         try:
             return await self._queue
         finally:
@@ -297,7 +297,7 @@ class HathorClientStub(IHathorClient):
         return self.manager.generate_mining_block(address=baddress, merge_mined=merged_mining)
 
     async def submit_block(self, block: Block) -> bool:
-        return self.manager.submit_block(block)
+        return await self.manager.submit_block(block)
 
     async def mining(self) -> IMiningChannel:
         return MiningChannelStub(self.manager)
@@ -317,7 +317,7 @@ class MiningChannelStub(IMiningChannel):
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> BlockTemplates:
         try:
             return await self._queue
         finally:

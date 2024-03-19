@@ -62,7 +62,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
         return simulator.create_peer(builder)
 
-    def _simulate_run(self, run_i: int, simulator: Simulator) -> list[HathorManager]:
+    async def _simulate_run(self, run_i: int, simulator: Simulator) -> list[HathorManager]:
         # XXX: the following was adapted from test_new_syncing_peer, it doesn't matter too much, but has good coverage
         #      of different behaviors that can be affected by non-determinism on the fullnode implementation
 
@@ -76,7 +76,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         manager = self.create_simulator_peer(simulator, peer_id_pool)
         nodes.append(manager)
         miner = simulator.create_miner(manager, hashpower=10e6)
-        miner.start()
+        await miner.start()
         miners.append(miner)
 
         simulator.run(10)
@@ -88,12 +88,12 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                 simulator.add_connection(conn)
             nodes.append(manager)
             miner = simulator.create_miner(manager, hashpower=hashpower)
-            miner.start()
+            await miner.start()
             miners.append(miner)
 
         for i, rate in enumerate([5, 4, 3]):
             tx_gen = simulator.create_tx_generator(nodes[i], rate=rate * 1 / 60., hashpower=1e6, ignore_no_funds=True)
-            tx_gen.start()
+            await tx_gen.start()
             tx_generators.append(tx_gen)
 
         simulator.run(10)
@@ -118,14 +118,14 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
     # XXX: marked as flaky because of a known random issue
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_determinism_full_runs(self) -> None:
+    async def test_determinism_full_runs(self) -> None:
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)
         self.assertEqual(self.simulator1.seed, self.simulator3.seed)
 
-        nodes1 = self._simulate_run(1, self.simulator1)
-        nodes2 = self._simulate_run(2, self.simulator2)
-        nodes3 = self._simulate_run(2, self.simulator3)
+        nodes1 = await self._simulate_run(1, self.simulator1)
+        nodes2 = await self._simulate_run(2, self.simulator2)
+        nodes3 = await self._simulate_run(2, self.simulator3)
 
         # now we check they reached the same state
 
@@ -136,7 +136,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
     # XXX: marked as flaky because of a known random issue
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_determinism_interleaved(self) -> None:
+    async def test_determinism_interleaved(self) -> None:
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)
 
@@ -156,14 +156,14 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         manager1 = self.create_simulator_peer(self.simulator1, peer_id_pool1)
         nodes1.append(manager1)
         miner1 = self.simulator1.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         miners1.append(miner1)
 
         self.log.debug('part1 simulator2')
         manager2 = self.create_simulator_peer(self.simulator2, peer_id_pool2)
         nodes2.append(manager2)
         miner2 = self.simulator2.create_miner(manager2, hashpower=10e6)
-        miner2.start()
+        await miner2.start()
         miners2.append(miner2)
 
         for _ in range(3):
@@ -182,7 +182,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                 self.simulator1.add_connection(conn)
             nodes1.append(manager1)
             miner1 = self.simulator1.create_miner(manager1, hashpower=hashpower)
-            miner1.start()
+            await miner1.start()
             miners1.append(miner1)
 
             self.log.debug(f'part2.{i} simulator2')
@@ -192,20 +192,20 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                 self.simulator2.add_connection(conn)
             nodes2.append(manager2)
             miner2 = self.simulator2.create_miner(manager2, hashpower=hashpower)
-            miner2.start()
+            await miner2.start()
             miners2.append(miner2)
 
         for i, rate in enumerate([5, 4, 3]):
             self.log.debug(f'part3.{i} simulator1')
             tx_gen1 = self.simulator1.create_tx_generator(nodes1[i], rate=rate * 1 / 60., hashpower=1e6,
                                                           ignore_no_funds=True)
-            tx_gen1.start()
+            await tx_gen1.start()
             tx_generators1.append(tx_gen1)
 
             self.log.debug(f'part3.{i} simulator2')
             tx_gen2 = self.simulator2.create_tx_generator(nodes2[i], rate=rate * 1 / 60., hashpower=1e6,
                                                           ignore_no_funds=True)
-            tx_gen2.start()
+            await tx_gen2.start()
             tx_generators2.append(tx_gen2)
 
         for _ in range(3):

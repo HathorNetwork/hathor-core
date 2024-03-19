@@ -25,9 +25,9 @@ class TriggerTestCase(unittest.TestCase):
         super().tearDown()
         self.simulator.stop()
 
-    def test_stop_after_n_mined_blocks(self) -> None:
+    async def test_stop_after_n_mined_blocks(self) -> None:
         miner1 = self.simulator.create_miner(self.manager1, hashpower=1e6)
-        miner1.start()
+        await miner1.start()
 
         reactor = self.simulator.get_reactor()
 
@@ -48,9 +48,9 @@ class TriggerTestCase(unittest.TestCase):
         self.assertEqual(miner1.get_blocks_found(), 16)
         self.assertLess(reactor.seconds(), t0 + 3600)
 
-    def test_stop_after_minimum_balance(self) -> None:
+    async def test_stop_after_minimum_balance(self) -> None:
         miner1 = self.simulator.create_miner(self.manager1, hashpower=1e6)
-        miner1.start()
+        await miner1.start()
 
         wallet = not_none(self.manager1.wallet)
         settings = self.simulator.settings

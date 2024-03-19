@@ -43,7 +43,7 @@ def create_parser() -> ArgumentParser:
     return parser
 
 
-def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
+async def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     from hathor.conf import UNITTESTS_SETTINGS_FILEPATH
     os.environ['HATHOR_CONFIG_YAML'] = UNITTESTS_SETTINGS_FILEPATH
     from hathor.cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
@@ -86,7 +86,7 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     log.info('Started simulating events', scenario=args.scenario, seed=simulator.seed)
 
     forwarding_ws_factory.start(stream_id='simulator_stream_id')
-    scenario.simulate(simulator, manager)
+    await scenario.simulate(simulator, manager)
     reactor.listenTCP(args.port, site)
     reactor.run()
 
@@ -96,4 +96,4 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
     reactor = initialize_global_reactor()
-    execute(args, reactor)
+    execute(args, reactor)  # TODO: Have to await here

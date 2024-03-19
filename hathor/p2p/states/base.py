@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections.abc import Coroutine
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, Union
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
@@ -26,12 +26,16 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
+CmdCallable: TypeAlias = Union[
+    Callable[[str], None],
+    Callable[[str], Deferred[None]],
+    Callable[[str], Coroutine[Deferred[None], Any, None]]
+]
+
+
 class BaseState:
     protocol: 'HathorProtocol'
-    cmd_map: dict[
-        ProtocolMessages,
-        Callable[[str], None] | Callable[[str], Deferred[None]] | Callable[[str], Coroutine[Deferred[None], Any, None]]
-    ]
+    cmd_map: dict[ProtocolMessages, CmdCallable]
 
     def __init__(self, protocol: 'HathorProtocol'):
         self.log = logger.new(**protocol.get_logger_context())

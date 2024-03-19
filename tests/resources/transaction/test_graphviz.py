@@ -11,7 +11,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_transactions
 class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
         self.resource = self.create_resource()
         self.web = StubSite(self.resource)
@@ -20,16 +20,16 @@ class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
         self.manager.wallet.unlock(b'MYPASS')
 
         # Creating blocks, txs and a conflict tx to test graphviz with it
-        add_new_blocks(self.manager, 2, advance_clock=2)
-        add_blocks_unlock_reward(self.manager)
-        txs = add_new_transactions(self.manager, 2, advance_clock=2)
+        await add_new_blocks(self.manager, 2, advance_clock=2)
+        await add_blocks_unlock_reward(self.manager)
+        txs = await add_new_transactions(self.manager, 2, advance_clock=2)
         tx = txs[0]
 
         self.tx2 = Transaction.create_from_struct(tx.get_struct())
         self.tx2.parents = [tx.parents[1], tx.parents[0]]
         self.manager.cpu_mining_service.resolve(self.tx2)
 
-        self.manager.propagate_tx(self.tx2)
+        await self.manager.propagate_tx(self.tx2)
 
     def create_resource(self):
         raise NotImplementedError

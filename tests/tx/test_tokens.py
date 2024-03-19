@@ -16,7 +16,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_double_spending, creat
 class BaseTokenTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
 
@@ -33,7 +33,7 @@ class BaseTokenTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # add some blocks so we can spend the genesis outputs
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
 
     def test_tokens_in_block(self):
         # a block with token index > 1 should be invalid
@@ -93,9 +93,9 @@ class BaseTokenTest(unittest.TestCase):
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx)
 
-    def test_token_transfer(self):
+    async def test_token_transfer(self) -> None:
         wallet = self.manager.wallet
-        tx = create_tokens(self.manager, self.address_b58)
+        tx = await create_tokens(self.manager, self.address_b58)
         token_uid = tx.tokens[0]
         utxo = tx.outputs[0]
 
@@ -124,9 +124,9 @@ class BaseTokenTest(unittest.TestCase):
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx3)
 
-    def test_token_mint(self):
+    async def test_token_mint(self) -> None:
         wallet = self.manager.wallet
-        tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
+        tx = await create_tokens(self.manager, self.address_b58, mint_amount=500)
         token_uid = tx.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
@@ -155,7 +155,7 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         # check tokens index
@@ -230,9 +230,9 @@ class BaseTokenTest(unittest.TestCase):
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx5)
 
-    def test_token_melt(self):
+    async def test_token_melt(self) -> None:
         wallet = self.manager.wallet
-        tx = create_tokens(self.manager, self.address_b58)
+        tx = await create_tokens(self.manager, self.address_b58)
         token_uid = tx.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
@@ -262,7 +262,7 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         # check tokens index
@@ -318,9 +318,9 @@ class BaseTokenTest(unittest.TestCase):
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx4)
 
-    def test_token_transfer_authority(self):
+    async def test_token_transfer_authority(self) -> None:
         wallet = self.manager.wallet
-        tx = create_tokens(self.manager, self.address_b58)
+        tx = await create_tokens(self.manager, self.address_b58)
         token_uid = tx.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
@@ -349,14 +349,14 @@ class BaseTokenTest(unittest.TestCase):
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx3)
 
-    def test_token_index_with_conflict(self, mint_amount=0):
+    async def test_token_index_with_conflict(self) -> None:
         # create a new token and have a mint operation done. The tx that mints the
         # tokens has the following outputs:
         # 0. minted tokens
         # 1. mint authority;
         # 2. melt authority
         # 3. HTR deposit change
-        tx = create_tokens(self.manager, self.address_b58, mint_amount=100)
+        tx = await create_tokens(self.manager, self.address_b58, mint_amount=100)
         token_uid = tx.tokens[0]
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(tx.tokens[0])
         mint = list(tokens_index.iter_mint_utxos())
@@ -401,7 +401,7 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[2].data = data
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.verification_service.verify(tx2)
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
         # there should only be one element on the indexes for the token
@@ -422,7 +422,7 @@ class BaseTokenTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx3.hash, tx2.hash)
         self.assertTrue(tx3.weight > tx2.weight)
-        self.manager.propagate_tx(tx3)
+        await self.manager.propagate_tx(tx3)
         self.run_to_completion()
 
         # new tx should be on tokens index. Old tx should not be present
@@ -437,7 +437,7 @@ class BaseTokenTest(unittest.TestCase):
         # should have same amount of tokens
         self.assertEqual(400, tokens_index.get_total())
 
-    def test_token_info(self):
+    async def test_token_info(self) -> None:
         def update_tx(tx):
             """ sighash_all data changes with token name or symbol, so we have to compute signature again
             """
@@ -447,7 +447,7 @@ class BaseTokenTest(unittest.TestCase):
             self.manager.cpu_mining_service.resolve(tx)
 
         # test token name and symbol
-        tx = create_tokens(self.manager, self.address_b58)
+        tx = await create_tokens(self.manager, self.address_b58)
 
         # max token name length
         tx.token_name = 'a' * self._settings.MAX_LENGTH_TOKEN_NAME
@@ -502,19 +502,19 @@ class BaseTokenTest(unittest.TestCase):
         update_tx(tx)
         self.manager.verification_service.verify(tx)
 
-    def test_token_mint_zero(self):
+    async def test_token_mint_zero(self) -> None:
         # try to mint 0 tokens
         with self.assertRaises(InvalidToken):
-            create_tokens(self.manager, self.address_b58, mint_amount=0)
+            await create_tokens(self.manager, self.address_b58, mint_amount=0)
 
-    def test_token_struct(self):
-        tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
+    async def test_token_struct(self) -> None:
+        tx = await create_tokens(self.manager, self.address_b58, mint_amount=500)
         tx2 = TokenCreationTransaction.create_from_struct(tx.get_struct())
         self.assertEqual(tx.hash, tx2.hash)
 
-    def test_unknown_authority(self):
+    async def test_unknown_authority(self) -> None:
         wallet = self.manager.wallet
-        tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
+        tx = await create_tokens(self.manager, self.address_b58, mint_amount=500)
         token_uid = tx.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
@@ -541,8 +541,8 @@ class BaseTokenTest(unittest.TestCase):
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(tx2)
 
-    def test_token_info_serialization(self):
-        tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
+    async def test_token_info_serialization(self) -> None:
+        tx = await create_tokens(self.manager, self.address_b58, mint_amount=500)
         info = tx.serialize_token_info()
         # try with version 2
         info2 = bytes([0x02]) + info[1:]
@@ -594,8 +594,8 @@ class BaseTokenTest(unittest.TestCase):
         with self.assertRaises(InvalidToken):
             self.manager.verification_service.verify(block)
 
-    def test_voided_token_creation(self):
-        tx1 = create_tokens(self.manager, self.address_b58, mint_amount=500, use_genesis=False)
+    async def test_voided_token_creation(self) -> None:
+        tx1 = await create_tokens(self.manager, self.address_b58, mint_amount=500, use_genesis=False)
         token_uid = tx1.tokens[0]
 
         # check tokens index
@@ -606,7 +606,7 @@ class BaseTokenTest(unittest.TestCase):
         self.assertEqual(1, len(melt))
 
         # add simple tx that will void the token created above
-        tx2 = add_new_double_spending(self.manager, tx=tx1, weight=(tx1.weight + 3), use_same_parents=True)
+        tx2 = await add_new_double_spending(self.manager, tx=tx1, weight=(tx1.weight + 3), use_same_parents=True)
         self.assertFalse(bool(tx2.get_metadata().voided_by))
         self.assertTrue(bool(tx1.get_metadata().voided_by))
         mint = list(tokens_index.iter_mint_utxos())

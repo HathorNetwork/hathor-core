@@ -55,11 +55,11 @@ class BaseMiningTest(unittest.TestCase):
             signal_bits=0
         ))
 
-    def test_regular_block_template(self) -> None:
+    async def test_regular_block_template(self) -> None:
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # add 100 blocks
-        blocks = add_new_blocks(manager, 100, advance_clock=15)
+        blocks = await add_new_blocks(manager, 100, advance_clock=15)
 
         block_templates = manager.get_block_templates()
         self.assertEqual(len(block_templates), 1)

@@ -43,17 +43,17 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
                     partial_blocks.add(tx.hash)
         return partial_blocks
 
-    def _run_restart_test(self, *, full_verification: bool, use_tx_storage_cache: bool) -> None:
+    async def _run_restart_test(self, *, full_verification: bool, use_tx_storage_cache: bool) -> None:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         trigger: Trigger = StopAfterNMinedBlocks(miner1, quantity=50)
         self.assertTrue(self.simulator.run(3 * 3600, trigger=trigger))
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=2., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         trigger = StopAfterNTransactions(gen_tx1, quantity=500)
         self.assertTrue(self.simulator.run(3600, trigger=trigger))
 
@@ -140,8 +140,8 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
         # Start generators again to test real time sync.
-        miner1.start()
-        gen_tx1.start()
+        await miner1.start()
+        await gen_tx1.start()
         self.simulator.run(600)
         miner1.stop()
         gen_tx1.stop()
@@ -153,42 +153,42 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_full_verification(self) -> None:
-        self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
+    async def test_restart_fullnode_full_verification(self) -> None:
+        await self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_quick(self) -> None:
-        self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
+    async def test_restart_fullnode_quick(self) -> None:
+        await self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_quick_with_cache(self) -> None:
-        self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
+    async def test_restart_fullnode_quick_with_cache(self) -> None:
+        await self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_full_verification_with_cache(self) -> None:
-        self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
+    async def test_restart_fullnode_full_verification_with_cache(self) -> None:
+        await self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
 
-    def test_exceeds_streaming_and_mempool_limits(self) -> None:
+    async def test_exceeds_streaming_and_mempool_limits(self) -> None:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
 
         # Find 50 blocks.
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         trigger: Trigger = StopAfterNMinedBlocks(miner1, quantity=100)
         self.assertTrue(self.simulator.run(3 * 3600, trigger=trigger))
         miner1.stop()
 
         # Generate 500 txs.
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3., hashpower=10e9, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         trigger = StopAfterNTransactions(gen_tx1, quantity=500)
         self.simulator.run(3600, trigger=trigger)
         self.assertGreater(manager1.tx_storage.get_vertices_count(), 500)
         gen_tx1.stop()
 
         # Find 1 block.
-        miner1.start()
+        await miner1.start()
         trigger = StopAfterNMinedBlocks(miner1, quantity=1)
         self.assertTrue(self.simulator.run(3600, trigger=trigger))
         miner1.stop()
@@ -207,7 +207,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertGreater(cnt, 400)
 
         # Generate 500 txs in mempool.
-        gen_tx1.start()
+        await gen_tx1.start()
         trigger = StopAfterNTransactions(gen_tx1, quantity=500)
         self.simulator.run(3600, trigger=trigger)
         self.assertGreater(manager1.tx_storage.get_vertices_count(), 1000)
@@ -257,11 +257,11 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager2)
 
-    def _prepare_sync_v2_find_best_common_block_reorg(self) -> FakeConnection:
+    async def _prepare_sync_v2_find_best_common_block_reorg(self) -> FakeConnection:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         self.assertTrue(self.simulator.run(24 * 3600))
         miner1.stop()
 
@@ -273,7 +273,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         return conn12
 
     async def test_sync_v2_find_best_common_block_reorg_1(self) -> None:
-        conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        conn12 = await self._prepare_sync_v2_find_best_common_block_reorg()
         assert isinstance(conn12._proto1.state, ReadyState)
         sync_agent = conn12._proto1.state.sync_agent
         assert isinstance(sync_agent, NodeBlockSync)
@@ -306,7 +306,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             self.assertIsNone(common_block_info)
 
     async def test_sync_v2_find_best_common_block_reorg_2(self) -> None:
-        conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        conn12 = await self._prepare_sync_v2_find_best_common_block_reorg()
         assert isinstance(conn12._proto1.state, ReadyState)
         sync_agent = conn12._proto1.state.sync_agent
         assert isinstance(sync_agent, NodeBlockSync)
@@ -340,24 +340,24 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             common_block_info = await sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
             self.assertIsNone(common_block_info)
 
-    def test_multiple_unexpected_txs(self) -> None:
+    async def test_multiple_unexpected_txs(self) -> None:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
 
         # mine some blocks (10, could be any amount)
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNMinedBlocks(miner1, quantity=100)))
         miner1.stop()
 
         # generate some transactions (10, could by any amount >1)
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3., hashpower=10e9, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNTransactions(gen_tx1, quantity=10)))
         gen_tx1.stop()
 
         # mine some blocks (2 to be sure, 1 should be enough)
-        miner1.start()
+        await miner1.start()
         self.assertTrue(self.simulator.run(3 * 3600, trigger=StopAfterNMinedBlocks(miner1, quantity=2)))
         miner1.stop()
 

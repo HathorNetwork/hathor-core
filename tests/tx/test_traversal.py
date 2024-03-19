@@ -9,7 +9,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_transactions, add_new_
 class _TraversalTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
 
         self.manager = self.create_peer(network='testnet')
@@ -18,20 +18,20 @@ class _TraversalTestCase(unittest.TestCase):
         for genesis in self.manager.tx_storage.get_all_genesis():
             self.hashes_before.add(genesis.hash)
 
-        self.blocks_before = add_new_blocks(self.manager, 3, advance_clock=1)
-        self.blocks_before.extend(add_blocks_unlock_reward(self.manager))
-        self.txs_before = add_new_transactions(self.manager, 5)
+        self.blocks_before = await add_new_blocks(self.manager, 3, advance_clock=1)
+        self.blocks_before.extend(await add_blocks_unlock_reward(self.manager))
+        self.txs_before = await add_new_transactions(self.manager, 5)
         for block in self.blocks_before:
             self.hashes_before.add(block.hash)
         for tx in self.txs_before:
             self.hashes_before.add(tx.hash)
 
         address = self.get_address(0)
-        self.root_tx = add_new_tx(self.manager, address=address, value=100)
+        self.root_tx = await add_new_tx(self.manager, address=address, value=100)
 
-        self.blocks_after = add_blocks_unlock_reward(self.manager)
-        self.txs_after = add_new_transactions(self.manager, 5)
-        self.blocks_after.extend(add_new_blocks(self.manager, 3, advance_clock=1))
+        self.blocks_after = await add_blocks_unlock_reward(self.manager)
+        self.txs_after = await add_new_transactions(self.manager, 5)
+        self.blocks_after.extend(await add_new_blocks(self.manager, 3, advance_clock=1))
 
         self.hashes_after = set()
         for block in self.blocks_after:

@@ -41,7 +41,7 @@ class MiningResource(Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def render_POST(self, request: Request) -> bytes:
+    async def render_POST(self, request: Request) -> bytes:
         """ POST request /mining/
             Expects a parameter 'block_bytes' that is the block in bytes
             Create the block object from the bytes and propagate it
@@ -67,7 +67,7 @@ class MiningResource(Resource):
             # binascii.Error: incorrect base64 data
             return b'0'
 
-        ret = self.manager.submit_block(block)
+        ret = await self.manager.submit_block(block)
         if ret:
             return b'1'
         return b'0'

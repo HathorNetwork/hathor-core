@@ -15,9 +15,9 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
-    def test_twin_tx(self) -> None:
-        add_new_blocks(self.manager, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+    async def test_twin_tx(self) -> None:
+        await add_new_blocks(self.manager, 5, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager)
 
         address = not_none(self.get_address(0))
         value1 = 100
@@ -54,14 +54,14 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         tx3.timestamp = tx1.timestamp
         self.manager.cpu_mining_service.resolve(tx3)
 
-        self.manager.propagate_tx(tx1)
+        await self.manager.propagate_tx(tx1)
         meta1 = tx1.get_metadata()
         self.assertEqual(meta1.conflict_with, None)
         self.assertEqual(meta1.voided_by, None)
         self.assertEqual(meta1.twins, [])
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
 
         meta1 = tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, [tx2.hash])
@@ -74,7 +74,7 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         self.assertEqual(meta2.twins, [tx1.hash])
 
         # The same as tx1 but with one output different, so it's not a twin
-        tx3 = add_new_double_spending(self.manager, tx=tx1)
+        tx3 = await add_new_double_spending(self.manager, tx=tx1)
 
         meta1 = tx1.get_metadata()
         self.assertEqual(meta1.twins, [tx2.hash])

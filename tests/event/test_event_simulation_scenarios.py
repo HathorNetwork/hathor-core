@@ -42,10 +42,10 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
     seed_config = 6946502462188444706
 
-    def test_only_load(self) -> None:
+    async def test_only_load(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
-        Scenario.ONLY_LOAD.simulate(self.simulator, self.manager)
+        await Scenario.ONLY_LOAD.simulate(self.simulator, self.manager)
         self._start_stream()
 
         responses = self._get_success_responses()
@@ -65,10 +65,10 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
-    def test_single_chain_one_block(self) -> None:
+    async def test_single_chain_one_block(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
-        Scenario.SINGLE_CHAIN_ONE_BLOCK.simulate(self.simulator, self.manager)
+        await Scenario.SINGLE_CHAIN_ONE_BLOCK.simulate(self.simulator, self.manager)
         self._start_stream()
 
         responses = self._get_success_responses()
@@ -94,10 +94,10 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
-    def test_single_chain_blocks_and_transactions(self) -> None:
+    async def test_single_chain_blocks_and_transactions(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
-        Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS.simulate(self.simulator, self.manager)
+        await Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS.simulate(self.simulator, self.manager)
         self._start_stream()
 
         responses = self._get_success_responses()
@@ -160,10 +160,10 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
-    def test_reorg(self) -> None:
+    async def test_reorg(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
-        Scenario.REORG.simulate(self.simulator, self.manager)
+        await Scenario.REORG.simulate(self.simulator, self.manager)
         self._start_stream()
 
         responses = self._get_success_responses()
@@ -209,10 +209,10 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
-    def test_unvoided_transaction(self) -> None:
+    async def test_unvoided_transaction(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
-        Scenario.UNVOIDED_TRANSACTION.simulate(self.simulator, self.manager)
+        await Scenario.UNVOIDED_TRANSACTION.simulate(self.simulator, self.manager)
         self._start_stream()
 
         responses = self._get_success_responses()

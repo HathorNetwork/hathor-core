@@ -5,17 +5,17 @@ from tests.simulation.base import SimulatorTestCase
 
 
 class BaseRandomSimulatorTestCase(SimulatorTestCase):
-    def test_new_node_disabled(self) -> None:
+    async def test_new_node_disabled(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         trigger = StopAfterNMinedBlocks(miner1, quantity=20)
         self.simulator.run(3600, trigger=trigger)
 
         gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         self.simulator.run(3600)
 
         for _ in range(20):

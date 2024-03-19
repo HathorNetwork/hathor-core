@@ -875,7 +875,7 @@ class HathorManager:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         return self.daa.get_tokens_issued_per_block(height)
 
-    def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
+    async def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
         """Used by submit block from all mining APIs.
         """
         tips = self.tx_storage.get_best_block_tips()
@@ -892,10 +892,10 @@ class HathorManager:
         )
         if blk.weight <= min_insignificant_weight:
             self.log.warn('submit_block(): insignificant weight? accepted anyway', blk=blk.hash_hex, weight=blk.weight)
-        return self.propagate_tx(blk, fails_silently=fails_silently)
+        return await self.propagate_tx(blk, fails_silently=fails_silently)
 
-    def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,
-                max_output_script_size: int | None = None) -> None:
+    async def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,
+                      max_output_script_size: int | None = None) -> None:
         """Used by all APIs that accept a new transaction (like push_tx)
         """
         if max_output_script_size is None:
@@ -926,9 +926,9 @@ class HathorManager:
         except TxValidationError as e:
             raise InvalidNewTransaction(str(e))
 
-        self.propagate_tx(tx, fails_silently=False)
+        await self.propagate_tx(tx, fails_silently=False)
 
-    def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
+    async def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
         :return: True if the transaction was accepted
@@ -939,12 +939,12 @@ class HathorManager:
         else:
             tx.storage = self.tx_storage
 
-        return self.on_new_tx(tx, fails_silently=fails_silently, propagate_to_peers=True)
+        return await self.on_new_tx(tx, fails_silently=fails_silently, propagate_to_peers=True)
 
     @cpu.profiler('on_new_tx')
-    def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
-                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
-                  skip_block_weight_verification: bool = False, reject_locked_reward: bool = True) -> bool:
+    async def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
+                        quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
+                        skip_block_weight_verification: bool = False, reject_locked_reward: bool = True) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param tx: transaction to be added

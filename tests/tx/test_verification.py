@@ -99,10 +99,10 @@ class BaseVerificationTest(unittest.TestCase):
 
         return tx
 
-    def _get_valid_token_creation_tx(self) -> TokenCreationTransaction:
-        add_blocks_unlock_reward(self.manager)
+    async def _get_valid_token_creation_tx(self) -> TokenCreationTransaction:
+        await add_blocks_unlock_reward(self.manager)
         assert self.manager.wallet
-        return create_tokens(self.manager, self.manager.wallet.get_unused_address())
+        return await create_tokens(self.manager, self.manager.wallet.get_unused_address())
 
     def test_block_verify_basic(self) -> None:
         block = self._get_valid_block()
@@ -554,8 +554,8 @@ class BaseVerificationTest(unittest.TestCase):
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
 
-    def test_transaction_verify(self) -> None:
-        add_blocks_unlock_reward(self.manager)
+    async def test_transaction_verify(self) -> None:
+        await add_blocks_unlock_reward(self.manager)
         tx = self._get_valid_tx()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
@@ -604,9 +604,9 @@ class BaseVerificationTest(unittest.TestCase):
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
 
-    def test_transaction_validate_basic(self) -> None:
+    async def test_transaction_validate_basic(self) -> None:
         # add enough blocks so that it can be fully validated later on the tests
-        add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         tx = self._get_valid_tx()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
@@ -682,8 +682,8 @@ class BaseVerificationTest(unittest.TestCase):
         # validation should still be FULL, it must not be BASIC
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
-    def test_transaction_validate_full(self) -> None:
-        add_blocks_unlock_reward(self.manager)
+    async def test_transaction_validate_full(self) -> None:
+        await add_blocks_unlock_reward(self.manager)
         tx = self._get_valid_tx()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
@@ -773,8 +773,8 @@ class BaseVerificationTest(unittest.TestCase):
         # validation should still be FULL, it must not be BASIC
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
-    def test_token_creation_transaction_verify_basic(self) -> None:
-        tx = self._get_valid_token_creation_tx()
+    async def test_token_creation_transaction_verify_basic(self) -> None:
+        tx = await self._get_valid_token_creation_tx()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
@@ -810,8 +810,8 @@ class BaseVerificationTest(unittest.TestCase):
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
 
-    def test_token_creation_transaction_verify_without_storage(self) -> None:
-        tx = self._get_valid_token_creation_tx()
+    async def test_token_creation_transaction_verify_without_storage(self) -> None:
+        tx = await self._get_valid_token_creation_tx()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
@@ -841,8 +841,8 @@ class BaseVerificationTest(unittest.TestCase):
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
 
-    def test_token_creation_transaction_verify(self) -> None:
-        tx = self._get_valid_token_creation_tx()
+    async def test_token_creation_transaction_verify(self) -> None:
+        tx = await self._get_valid_token_creation_tx()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
@@ -899,8 +899,8 @@ class BaseVerificationTest(unittest.TestCase):
         verify_token_info_wrapped.assert_called_once()
         verify_minted_tokens_wrapped.assert_called_once()
 
-    def test_token_creation_transaction_validate_basic(self) -> None:
-        tx = self._get_valid_token_creation_tx()
+    async def test_token_creation_transaction_validate_basic(self) -> None:
+        tx = await self._get_valid_token_creation_tx()
         tx.get_metadata().validation = ValidationState.INITIAL
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
@@ -976,8 +976,8 @@ class BaseVerificationTest(unittest.TestCase):
         # validation should still be FULL, it must not be BASIC
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
-    def test_token_creation_transaction_validate_full(self) -> None:
-        tx = self._get_valid_token_creation_tx()
+    async def test_token_creation_transaction_validate_full(self) -> None:
+        tx = await self._get_valid_token_creation_tx()
         tx.get_metadata().validation = ValidationState.INITIAL
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)

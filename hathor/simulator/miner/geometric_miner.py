@@ -20,6 +20,7 @@ from hathor.exception import BlockTemplateTimestampError
 from hathor.manager import HathorEvents
 from hathor.simulator.miner.abstract_miner import AbstractMiner
 from hathor.util import Random
+from hathor.utils.twisted import call_async_later
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -53,7 +54,7 @@ class GeometricMiner(AbstractMiner):
         self._blocks_found: int = 0
         self._blocks_before_pause: float = math.inf
 
-    def _on_new_tx(self, key: HathorEvents, args: 'EventArguments') -> None:
+    async def _on_new_tx(self, key: HathorEvents, args: 'EventArguments') -> None:
         """ Called when a new tx or block is received. It updates the current mining to the
         new block.
         """
@@ -68,7 +69,7 @@ class GeometricMiner(AbstractMiner):
         if self._block.parents[0] not in tips:
             # Head changed
             self._block = None
-            self._schedule_next_block()
+            await self._schedule_next_block()
 
     def _generate_mining_block(self) -> 'Block':
         """Generates a block ready to be mined."""
@@ -82,7 +83,7 @@ class GeometricMiner(AbstractMiner):
 
         return block
 
-    def _schedule_next_block(self):
+    async def _schedule_next_block(self) -> None:
         if self._blocks_before_pause <= 0:
             self._delayed_call = None
             return
@@ -91,7 +92,7 @@ class GeometricMiner(AbstractMiner):
             self._block.nonce = self._rng.getrandbits(32)
             self._block.update_hash()
             self.log.debug('randomized step: found new block', hash=self._block.hash_hex, nonce=self._block.nonce)
-            self._manager.propagate_tx(self._block, fails_silently=False)
+            await self._manager.propagate_tx(self._block, fails_silently=False)
             self._blocks_found += 1
             self._blocks_before_pause -= 1
             self._block = None
@@ -100,7 +101,7 @@ class GeometricMiner(AbstractMiner):
             try:
                 block = self._generate_mining_block()
             except BlockTemplateTimestampError:
-                dt = 5  # Try again in 5 seconds.
+                dt: float = 5  # Try again in 5 seconds.
             else:
                 geometric_p = 2**(-block.weight)
                 trials = self._rng.geometric(geometric_p)
@@ -119,7 +120,7 @@ class GeometricMiner(AbstractMiner):
 
         if self._delayed_call and self._delayed_call.active():
             self._delayed_call.cancel()
-        self._delayed_call = self._clock.callLater(dt, self._schedule_next_block)
+        self._delayed_call = call_async_later(self._clock, dt, self._schedule_next_block)
 
     def get_blocks_found(self) -> int:
         return self._blocks_found
@@ -135,4 +136,4 @@ class GeometricMiner(AbstractMiner):
         self._blocks_before_pause = n_blocks
 
         if not self._delayed_call:
-            self._delayed_call = self._clock.callLater(0, self._schedule_next_block)
+            self._delayed_call = call_async_later(self._clock, 0, self._schedule_next_block)

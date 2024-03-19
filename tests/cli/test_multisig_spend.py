@@ -54,12 +54,12 @@ class BaseMultiSigSpendTest(unittest.TestCase):
         self.address = decode_address(self.manager.wallet.get_unused_address())
         self.outside_address = decode_address(self.get_address(0))
 
-    def test_spend_multisig(self):
+    async def test_spend_multisig(self) -> None:
         # Adding funds to the wallet
         # XXX: note further down the test, 20.00 HTR will be used, block_count must yield at least that amount
         block_count = 3  # 3 * 8.00 -> 24.00 HTR is enough
-        blocks = add_new_blocks(self.manager, block_count, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        blocks = await add_new_blocks(self.manager, block_count, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
         available_tokens = sum(blocks_tokens)
         self.assertEqual(
@@ -76,7 +76,7 @@ class BaseMultiSigSpendTest(unittest.TestCase):
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
-        self.manager.propagate_tx(tx1)
+        await self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
         wallet_balance = WalletBalance(0, available_tokens - block_reward)
@@ -120,7 +120,7 @@ class BaseMultiSigSpendTest(unittest.TestCase):
         tx_raw = output[0].split(':')[1].strip()
 
         tx = Transaction.create_from_struct(bytes.fromhex(tx_raw))
-        self.assertTrue(self.manager.propagate_tx(tx, False))
+        self.assertTrue(await self.manager.propagate_tx(tx, False))
 
 
 class SyncV1MultiSigSpendTest(unittest.SyncV1Params, BaseMultiSigSpendTest):

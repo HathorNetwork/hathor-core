@@ -51,10 +51,10 @@ class BaseMultisigTestCase(unittest.TestCase):
         self.address = decode_address(self.manager.wallet.get_unused_address())
         self.outside_address = decode_address(self.get_address(0))
 
-    def test_spend_multisig(self):
+    async def test_spend_multisig(self) -> None:
         # Adding funds to the wallet
-        blocks = add_new_blocks(self.manager, 2, advance_clock=15)
-        add_blocks_unlock_reward(self.manager)
+        blocks = await add_new_blocks(self.manager, 2, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(blk.outputs[0].value for blk in blocks)))
 
@@ -71,7 +71,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
-        self.manager.propagate_tx(tx1)
+        await self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
@@ -104,7 +104,7 @@ class BaseMultisigTestCase(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(tx)
         # Transaction is still locked
-        self.assertFalse(self.manager.propagate_tx(tx))
+        self.assertFalse(await self.manager.propagate_tx(tx))
 
         self.clock.advance(6)
         tx.timestamp = int(self.clock.seconds())
@@ -118,17 +118,17 @@ class BaseMultisigTestCase(unittest.TestCase):
         tx2 = Transaction.create_from_struct(tx.get_struct())
         tx2.inputs[0].data = p2pkh_input_data
         self.manager.cpu_mining_service.resolve(tx2)
-        self.assertFalse(self.manager.propagate_tx(tx2))
+        self.assertFalse(await self.manager.propagate_tx(tx2))
 
         # Now we propagate the correct
-        self.assertTrue(self.manager.propagate_tx(tx))
+        self.assertTrue(await self.manager.propagate_tx(tx))
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, first_block_amount + 300))
 
         # Testing the MultiSig class methods
         cls_script = parse_address_script(multisig_script)
-        self.assertTrue(isinstance(cls_script, MultiSig))
+        assert isinstance(cls_script, MultiSig)
         self.assertEqual(cls_script.address, self.multisig_address_b58)
 
         expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}

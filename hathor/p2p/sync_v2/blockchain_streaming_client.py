@@ -80,7 +80,7 @@ class BlockchainStreamingClient:
         with self.tx_storage.allow_partially_validated_context():
             return self.tx_storage.transaction_exists(vertex_id)
 
-    def handle_blocks(self, blk: Block) -> None:
+    async def handle_blocks(self, blk: Block) -> None:
         """This method is called by the sync agent when a BLOCKS message is received."""
         if self._deferred.called:
             return
@@ -133,7 +133,7 @@ class BlockchainStreamingClient:
 
         if blk.can_validate_full():
             try:
-                self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+                await self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
             except HathorError:
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return

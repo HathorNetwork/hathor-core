@@ -14,6 +14,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
+from hathor.types import VertexId
 from tests.unittest import TestBuilder
 from tests.utils import (
     BURN_ADDRESS,
@@ -142,21 +143,21 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(2, len(tx_parents_hash))
         self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
-    def test_vertices_count(self):
+    async def test_vertices_count(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         blocks_count = 1
         txs_count = 2
 
-        blocks = add_new_blocks(self.manager, 10, advance_clock=10)
+        blocks = await add_new_blocks(self.manager, 10, advance_clock=10)
         blocks_count += len(blocks)
-        blocks = add_blocks_unlock_reward(self.manager)
+        blocks = await add_blocks_unlock_reward(self.manager)
         blocks_count += len(blocks)
-        txs = add_new_transactions(self.manager, 5, advance_clock=5)
+        txs = await add_new_transactions(self.manager, 5, advance_clock=5)
         txs_count += len(txs)
-        blocks = add_new_blocks(self.manager, 10, advance_clock=10)
+        blocks = await add_new_blocks(self.manager, 10, advance_clock=10)
         blocks_count += len(blocks)
-        txs = add_new_transactions(self.manager, 5, advance_clock=5)
+        txs = await add_new_transactions(self.manager, 5, advance_clock=5)
         txs_count += len(txs)
 
         vertices_count = blocks_count + txs_count
@@ -370,8 +371,8 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertFalse(self.tx_storage.is_partially_validated_allowed())
         self.assertFalse(self.tx_storage.is_invalid_allowed())
 
-    def test_save_token_creation_tx(self):
-        tx = create_tokens(self.manager, propagate=False)
+    async def test_save_token_creation_tx(self) -> None:
+        tx = await create_tokens(self.manager, propagate=False)
         tx.get_metadata().validation = ValidationState.FULL
         self.validate_save(tx)
 
@@ -471,20 +472,20 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
         self.assertEqual(total, 4)
 
-    def test_storage_new_blocks(self):
+    async def test_storage_new_blocks(self) -> None:
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(tip_blocks, [self.genesis_blocks[0].hash])
 
-        block1 = self._add_new_block()
+        block1 = await self._add_new_block()
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(tip_blocks, [block1.hash])
 
-        block2 = self._add_new_block()
+        block2 = await self._add_new_block()
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(tip_blocks, [block2.hash])
 
         # Block3 has the same parents as block2.
-        block3 = self._add_new_block(parents=block2.parents)
+        block3 = await self._add_new_block(parents=block2.parents)
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 
@@ -507,7 +508,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         tx._metadata.hash = tx.hash
         self.validate_save(tx)
 
-    def _add_new_block(self, parents=None):
+    async def _add_new_block(self, parents: list[VertexId] | None = None) -> Block:
         block = self.manager.generate_mining_block()
         block.data = b'Testing, testing, 1, 2, 3... testing, testing...'
         if parents is not None:
@@ -515,30 +516,30 @@ class BaseTransactionStorageTest(unittest.TestCase):
         block.weight = 10
         self.assertTrue(self.manager.cpu_mining_service.resolve(block))
         self.manager.verification_service.verify(block)
-        self.manager.propagate_tx(block, fails_silently=False)
+        await self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)
         return block
 
-    def test_best_block_tips_cache(self):
+    async def test_best_block_tips_cache(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         self.manager.wallet.unlock(b'MYPASS')
-        spent_blocks = add_new_blocks(self.manager, 10)
+        spent_blocks = await add_new_blocks(self.manager, 10)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [spent_blocks[-1].hash])
-        unspent_blocks = add_blocks_unlock_reward(self.manager)
+        unspent_blocks = await add_blocks_unlock_reward(self.manager)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [unspent_blocks[-1].hash])
-        latest_blocks = add_blocks_unlock_reward(self.manager)
+        latest_blocks = await add_blocks_unlock_reward(self.manager)
         unspent_address = self.manager.wallet.get_unused_address()
-        add_new_tx(self.manager, unspent_address, 100)
+        await add_new_tx(self.manager, unspent_address, 100)
         self.assertEqual(self.tx_storage._best_block_tips_cache, [latest_blocks[-1].hash])
 
-    def test_topological_sort(self):
+    async def test_topological_sort(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         _total = 0
-        blocks = add_new_blocks(self.manager, 1, advance_clock=1)
+        blocks = await add_new_blocks(self.manager, 1, advance_clock=1)
         _total += len(blocks)
-        blocks = add_blocks_unlock_reward(self.manager)
+        blocks = await add_blocks_unlock_reward(self.manager)
         _total += len(blocks)
-        add_new_transactions(self.manager, 1, advance_clock=1)
+        await add_new_transactions(self.manager, 1, advance_clock=1)
 
         total = 0
         for tx in self.tx_storage._topological_sort_dfs():
@@ -547,8 +548,8 @@ class BaseTransactionStorageTest(unittest.TestCase):
         # added blocks + genesis txs + added tx
         self.assertEqual(total, _total + 3 + 1)
 
-    def test_get_best_block_weight(self):
-        block = self._add_new_block()
+    async def test_get_best_block_weight(self) -> None:
+        block = await self._add_new_block()
         weight = self.tx_storage.get_weight_best_block()
         self.assertEqual(block.weight, weight)
 

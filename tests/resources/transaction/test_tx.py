@@ -21,10 +21,9 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(TransactionResource(self.manager))
         self.manager.wallet.unlock(b'MYPASS')
 
-    @inlineCallbacks
-    def test_get_one(self):
+    async def test_get_one(self) -> None:
         genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_block)
-        response_success = yield self.web.get("transaction", {b'id': bytes(genesis_tx.hash.hex(), 'utf-8')})
+        response_success = await self.web.get("transaction", {b'id': bytes(genesis_tx.hash.hex(), 'utf-8')})
         data_success = response_success.json_value()
         self.assertTrue(data_success['success'])
         dict_test = genesis_tx.to_json(decode_script=True)
@@ -35,30 +34,30 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data_success['tx'], dict_test)
 
         # Test sending hash that does not exist
-        response_error1 = yield self.web.get(
+        response_error1 = await self.web.get(
             "transaction", {b'id': b'000000831cff82fa730cbdf8640fae6c130aab1681336e2f8574e314a5533848'})
         data_error1 = response_error1.json_value()
         self.assertFalse(data_error1['success'])
 
         # Test sending invalid hash
-        response_error2 = yield self.web.get(
+        response_error2 = await self.web.get(
             "transaction", {b'id': b'000000831cff82fa730cbdf8640fae6c130aab1681336e2f8574e314a553384'})
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
         # Adding blocks to have funds
-        add_new_blocks(self.manager, 2, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        tx = add_new_transactions(self.manager, 1)[0]
+        await add_new_blocks(self.manager, 2, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        tx = (await add_new_transactions(self.manager, 1))[0]
 
         tx2 = Transaction.create_from_struct(tx.get_struct())
         tx2.parents = [tx.parents[1], tx.parents[0]]
         self.manager.cpu_mining_service.resolve(tx2)
 
-        self.manager.propagate_tx(tx2)
+        await self.manager.propagate_tx(tx2)
 
         # Now we get a tx with conflict, voided_by and twin
-        response_conflict = yield self.web.get("transaction", {b'id': bytes(tx2.hash.hex(), 'utf-8')})
+        response_conflict = await self.web.get("transaction", {b'id': bytes(tx2.hash.hex(), 'utf-8')})
         data_conflict = response_conflict.json_value()
         self.assertTrue(data_conflict['success'])
 
@@ -252,19 +251,18 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['tx']['outputs'][1]['token_data'], 129)
         self.assertEqual(data['tx']['outputs'][1]['decoded']['token_data'], 129)
 
-    @inlineCallbacks
-    def test_first_block(self):
+    async def test_first_block(self) -> None:
         # add some txs and blocks
-        add_new_blocks(self.manager, 4, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        add_new_transactions(self.manager, 10, advance_clock=1)
-        add_new_blocks(self.manager, 20, advance_clock=10)
+        await add_new_blocks(self.manager, 4, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        await add_new_transactions(self.manager, 10, advance_clock=1)
+        await add_new_blocks(self.manager, 20, advance_clock=10)
         # finally add a tx and a block that will confirm that tx
-        tx, = add_new_transactions(self.manager, 1, advance_clock=5)
-        block, = add_new_blocks(self.manager, 1, advance_clock=5)
+        tx, = await add_new_transactions(self.manager, 1, advance_clock=5)
+        block, = await add_new_blocks(self.manager, 1, advance_clock=5)
 
         # get the transaction data from the api
-        response = yield self.web.get("transaction", {b'id': tx.hash_hex.encode()})
+        response = await self.web.get("transaction", {b'id': tx.hash_hex.encode()})
         data = response.json_value()
 
         # check that it has the correct first block hash
@@ -273,12 +271,11 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         # now check that the first_block_height was correctly included
         self.assertEqual(data['meta']['first_block_height'], block.get_metadata().height)
 
-    @inlineCallbacks
-    def test_get_many(self):
+    async def test_get_many(self) -> None:
         # Add some blocks and txs and get them in timestamp order
-        blocks = add_new_blocks(self.manager, 4, advance_clock=1)
-        _blocks = add_blocks_unlock_reward(self.manager)
-        txs = sorted(add_new_transactions(self.manager, 25), key=lambda x: (x.timestamp, x.hash))
+        blocks = await add_new_blocks(self.manager, 4, advance_clock=1)
+        _blocks = await add_blocks_unlock_reward(self.manager)
+        txs = sorted(await add_new_transactions(self.manager, 25), key=lambda x: (x.timestamp, x.hash))
 
         blocks.extend(_blocks)
         blocks = sorted(blocks, key=lambda x: (x.timestamp, x.hash))
@@ -287,7 +284,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         expected1 = blocks[-2:]
         expected1.reverse()
 
-        response1 = yield self.web.get("transaction", {b'count': b'2', b'type': b'block'})
+        response1 = await self.web.get("transaction", {b'count': b'2', b'type': b'block'})
         data1 = response1.json_value()
 
         for expected, result in zip(expected1, data1['transactions']):
@@ -300,10 +297,10 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         expected2 = txs[-8:]
         expected2.reverse()
 
-        response2 = yield self.web.get("transaction", {b'count': b'8', b'type': b'tx'})
+        response2 = await self.web.get("transaction", {b'count': b'8', b'type': b'tx'})
         data2 = response2.json_value()
 
-        for expected, result in zip(expected2, data2['transactions']):
+        for expected, result in zip(expected2, data2['transactions']):  # type: ignore[assignment]
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
@@ -313,7 +310,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         expected3 = blocks[:2]
         expected3.reverse()
 
-        response3 = yield self.web.get(
+        response3 = await self.web.get(
             "transaction", {
                 b'count': b'3',
                 b'type': b'block',
@@ -330,7 +327,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data3['has_more'])
 
         # Get newer txs with hash reference
-        response4 = yield self.web.get(
+        response4 = await self.web.get(
             "transaction", {
                 b'count': b'16',
                 b'type': b'tx',
@@ -340,7 +337,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
             })
         data4 = response4.json_value()
 
-        for expected, result in zip(expected2, data4['transactions']):
+        for expected, result in zip(expected2, data4['transactions']):  # type: ignore[assignment]
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
@@ -350,7 +347,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         expected5 = blocks[-2:]
         expected5.reverse()
 
-        response5 = yield self.web.get(
+        response5 = await self.web.get(
             "transaction", {
                 b'count': b'3',
                 b'type': b'block',
@@ -370,7 +367,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         expected6 = txs[:8]
         expected6.reverse()
 
-        response6 = yield self.web.get(
+        response6 = await self.web.get(
             "transaction", {
                 b'count': b'8',
                 b'type': b'tx',
@@ -380,36 +377,35 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
             })
         data6 = response6.json_value()
 
-        for expected, result in zip(expected6, data6['transactions']):
+        for expected, result in zip(expected6, data6['transactions']):  # type: ignore[assignment]
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
         self.assertTrue(data6['has_more'])
 
-    @inlineCallbacks
-    def test_invalid_params(self):
+    async def test_invalid_params(self) -> None:
         # Add some blocks and txs
-        add_new_blocks(self.manager, 4, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        add_new_transactions(self.manager, 3)
+        await add_new_blocks(self.manager, 4, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        await add_new_transactions(self.manager, 3)
 
         # invalid count
-        response = yield self.web.get("transaction", {b'count': b'a', b'type': b'block'})
+        response = await self.web.get("transaction", {b'count': b'a', b'type': b'block'})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # missing type
-        response = yield self.web.get("transaction", {b'count': b'3'})
+        response = await self.web.get("transaction", {b'count': b'3'})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # invalid type
-        response = yield self.web.get("transaction", {b'count': b'3', b'type': b'block1'})
+        response = await self.web.get("transaction", {b'count': b'3', b'type': b'block1'})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # missing timestamp
-        response = yield self.web.get(
+        response = await self.web.get(
                 "transaction", {
                     b'count': b'3',
                     b'type': b'block',
@@ -419,7 +415,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
         # invalid timestamp
-        response = yield self.web.get(
+        response = await self.web.get(
                 "transaction", {
                     b'count': b'3',
                     b'type': b'block',
@@ -430,7 +426,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
         # missing page
-        response = yield self.web.get(
+        response = await self.web.get(
                 "transaction", {
                     b'count': b'3',
                     b'type': b'block',
@@ -441,7 +437,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
         # invalid timestamp
-        response = yield self.web.get(
+        response = await self.web.get(
                 "transaction", {
                     b'count': b'3',
                     b'type': b'block',
@@ -474,14 +470,13 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertFalse(data['success'])
 
-    @inlineCallbacks
-    def test_negative_timestamp(self):
+    async def test_negative_timestamp(self) -> None:
         # Add some blocks and txs and get them in timestamp order
-        blocks = add_new_blocks(self.manager, 4, advance_clock=1)
-        add_blocks_unlock_reward(self.manager)
-        add_new_transactions(self.manager, 25)
+        blocks = await add_new_blocks(self.manager, 4, advance_clock=1)
+        await add_blocks_unlock_reward(self.manager)
+        await add_new_transactions(self.manager, 25)
 
-        response = yield self.web.get(
+        response = await self.web.get(
                 "transaction", {
                     b'count': b'3',
                     b'type': b'block',

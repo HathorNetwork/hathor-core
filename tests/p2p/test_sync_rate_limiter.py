@@ -13,11 +13,11 @@ from tests.simulation.base import SimulatorTestCase
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
     __test__ = True
 
-    def test_sync_rate_limiter(self) -> None:
+    async def test_sync_rate_limiter(self) -> None:
         manager1 = self.create_peer()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
+        await miner1.start()
         trigger = StopAfterNMinedBlocks(miner1, quantity=20)
         self.simulator.run(3600, trigger=trigger)
 

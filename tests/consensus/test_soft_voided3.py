@@ -1,4 +1,4 @@
-from typing import Iterator
+from typing import AsyncGenerator
 
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulator
@@ -22,20 +22,20 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             tx2_voided_by = tx2_meta.voided_by or set()
             self.assertNotIn(self._settings.SOFT_VOIDED_ID, tx2_voided_by)
 
-    def _run_test(
+    async def _run_test(
         self,
         simulator: Simulator,
         soft_voided_tx_ids: set[VertexId]
-    ) -> Iterator[RandomTransactionGenerator]:
+    ) -> AsyncGenerator[RandomTransactionGenerator, None]:
         manager1 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
         manager1.allow_mining_without_peers()
 
         miner1 = simulator.create_miner(manager1, hashpower=5e6)
-        miner1.start()
+        await miner1.start()
         simulator.run(60)
 
         gen_tx1 = simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
+        await gen_tx1.start()
         simulator.run(300)
 
         manager2 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
@@ -46,10 +46,10 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         simulator.add_connection(conn12)
 
         miner2 = simulator.create_miner(manager2, hashpower=10e6)
-        miner2.start()
+        await miner2.start()
 
         gen_tx2 = simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx2.start()
+        await gen_tx2.start()
 
         trigger = StopAfterNTransactions(gen_tx2, quantity=1)
         self.assertTrue(simulator.run(7200, trigger=trigger))
@@ -68,12 +68,12 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         self.assertEqual({self._settings.SOFT_VOIDED_ID, txA.hash}, metaA.voided_by)
         graphviz.labels[txA.hash] = 'txA'
 
-        txB = add_custom_tx(manager2, [(txA, 0)])
+        txB = await add_custom_tx(manager2, [(txA, 0)])
         metaB = txB.get_metadata()
         self.assertEqual({txA.hash}, metaB.voided_by)
         graphviz.labels[txB.hash] = 'txB'
 
-        txD1 = add_custom_tx(manager2, [(txB, 0)])
+        txD1 = await add_custom_tx(manager2, [(txB, 0)])
         metaD1 = txD1.get_metadata()
         self.assertEqual({txA.hash}, metaD1.voided_by)
         graphviz.labels[txD1.hash] = 'txD1'
@@ -85,7 +85,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         blk1.timestamp = txD1.timestamp + 1
         blk1.nonce = self.rng.getrandbits(32)
         blk1.update_hash()
-        self.assertTrue(manager2.propagate_tx(blk1, fails_silently=False))
+        self.assertTrue(await manager2.propagate_tx(blk1, fails_silently=False))
         blk1meta = blk1.get_metadata()
         self.assertIsNone(blk1meta.voided_by)
         graphviz.labels[blk1.hash] = 'blk1'
@@ -98,7 +98,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             txC.parents[1] = txD1.hash
         txC.weight = 25
         txC.update_hash()
-        manager2.propagate_tx(txC, fails_silently=False)
+        await manager2.propagate_tx(txC, fails_silently=False)
         metaC = txC.get_metadata()
         self.assertIsNone(metaC.voided_by)
         graphviz.labels[txC.hash] = 'txC'
@@ -106,7 +106,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         txD2 = gen_custom_tx(manager2, [(txB, 0)])
         txD2.timestamp = txD1.timestamp + 2
         txD2.update_hash()
-        manager2.propagate_tx(txD2, fails_silently=False)
+        await manager2.propagate_tx(txD2, fails_silently=False)
         graphviz.labels[txD2.hash] = 'txD2'
 
         blk1meta = blk1.get_metadata()
@@ -118,25 +118,23 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         # dot = graphviz.dot()
         # dot.render('test_soft_voided3')
 
-    def _get_txA_hash(self) -> VertexId:
+    async def _get_txA_hash(self) -> VertexId:
         simulator = Simulator(seed=self.simulator.seed)
         simulator.start()
 
         try:
             it = self._run_test(simulator, set())
-            tx_gen = next(it)
+            tx_gen = await anext(it)
             txA_hash = tx_gen.latest_transactions[0]
         finally:
             simulator.stop()
 
         return txA_hash
 
-    def test_soft_voided(self) -> None:
-        txA_hash = self._get_txA_hash()
-        soft_voided_tx_ids = set([
-            txA_hash,
-        ])
-        for _ in self._run_test(self.simulator, soft_voided_tx_ids):
+    async def test_soft_voided(self) -> None:
+        txA_hash = await self._get_txA_hash()
+        soft_voided_tx_ids = {txA_hash}
+        async for _ in self._run_test(self.simulator, soft_voided_tx_ids):
             pass
 
 

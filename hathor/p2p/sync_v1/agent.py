@@ -15,7 +15,7 @@
 import base64
 import struct
 from math import inf
-from typing import TYPE_CHECKING, Any, Callable, Generator, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional
 from weakref import WeakSet
 
 from structlog import get_logger
@@ -24,6 +24,7 @@ from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
+from hathor.p2p.states.base import CmdCallable
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.reactor import ReactorProtocol as Reactor
@@ -31,6 +32,7 @@ from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import json_dumps, json_loads
+from hathor.utils.twisted import add_async_callback
 
 logger = get_logger()
 
@@ -125,7 +127,7 @@ class NodeSyncTimestamp(SyncAgent):
             'synced_timestamp': self.synced_timestamp,
         }
 
-    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, CmdCallable]:
         """ Return a dict of messages.
         """
         return {
@@ -246,7 +248,7 @@ class NodeSyncTimestamp(SyncAgent):
         :rtype: Deferred
         """
         d = self.downloader.get_tx(hash_bytes, self)
-        d.addCallback(self.on_tx_success)
+        add_async_callback(d, self.on_tx_success)
         d.addErrback(self.on_get_data_failed, hash_bytes)
         return d
 
@@ -589,7 +591,7 @@ class NodeSyncTimestamp(SyncAgent):
         payload = base64.b64encode(tx.get_struct()).decode('ascii')
         self.send_message(ProtocolMessages.DATA, payload)
 
-    def handle_data(self, payload: str) -> None:
+    async def handle_data(self, payload: str) -> None:
         """ Handle a received DATA message.
         """
         if not payload:
@@ -630,7 +632,7 @@ class NodeSyncTimestamp(SyncAgent):
             self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=True)
+            result = await self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=True)
             self.update_received_stats(tx, result)
 
     def update_received_stats(self, tx: 'BaseTransaction', result: bool) -> None:
@@ -667,7 +669,7 @@ class NodeSyncTimestamp(SyncAgent):
         key = self.get_data_key(hash_bytes)
         self.deferred_by_key.pop(key, None)
 
-    def on_tx_success(self, tx: 'BaseTransaction') -> 'BaseTransaction':
+    async def on_tx_success(self, tx: 'BaseTransaction') -> 'BaseTransaction':
         """ Callback for the deferred when we add a new tx to the DAG
         """
         # When we have multiple callbacks in a deferred
@@ -680,7 +682,7 @@ class NodeSyncTimestamp(SyncAgent):
                 success = True
             else:
                 # Add tx to the DAG.
-                success = self.manager.on_new_tx(tx)
+                success = await self.manager.on_new_tx(tx)
             # Updating stats data
             self.update_received_stats(tx, success)
         return tx

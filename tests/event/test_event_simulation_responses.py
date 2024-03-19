@@ -50,9 +50,9 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         assert len(responses) == 2  # genesis events 3 and 4
         assert responses[0].event.id == 3  # ack=2, so we get from event 3
 
-    def test_no_start_with_blocks(self) -> None:
+    async def test_no_start_with_blocks(self) -> None:
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
-        miner.start()
+        await miner.start()
 
         trigger = StopAfterNMinedBlocks(miner, quantity=100)
         self.simulator.run(36000, trigger=trigger)
@@ -61,13 +61,13 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
 
         assert len(responses) == 0  # no events because not started
 
-    def test_start_pre_blocks(self) -> None:
+    async def test_start_pre_blocks(self) -> None:
         start_stream = StartStreamRequest(type='START_STREAM', window_size=8, last_ack_event_id=None)
         self._send_request(start_stream)
         self.simulator.run(36000)
 
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
-        miner.start()
+        await miner.start()
 
         trigger = StopAfterNMinedBlocks(miner, quantity=100)
         self.simulator.run(36000, trigger=trigger)
@@ -77,13 +77,13 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         assert len(responses) == 8  # 8 events because of window size
         assert responses[0].event.id == 0  # no ack, so we get from the first event
 
-    def test_start_pre_blocks_with_ack(self) -> None:
+    async def test_start_pre_blocks_with_ack(self) -> None:
         start_stream = StartStreamRequest(type='START_STREAM', window_size=8, last_ack_event_id=6)
         self._send_request(start_stream)
         self.simulator.run(36000)
 
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
-        miner.start()
+        await miner.start()
 
         trigger = StopAfterNMinedBlocks(miner, quantity=100)
         self.simulator.run(36000, trigger=trigger)
@@ -93,9 +93,9 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         assert len(responses) == 8  # 8 events because of window size
         assert responses[0].event.id == 7  # ack=6, so we get from event 7
 
-    def test_start_post_blocks(self) -> None:
+    async def test_start_post_blocks(self) -> None:
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
-        miner.start()
+        await miner.start()
 
         trigger = StopAfterNMinedBlocks(miner, quantity=100)
         self.simulator.run(36000, trigger=trigger)
@@ -109,9 +109,9 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         assert len(responses) == 8  # 8 events because of window size
         assert responses[0].event.id == 0  # no ack, so we get from the first event
 
-    def test_start_post_blocks_with_ack(self) -> None:
+    async def test_start_post_blocks_with_ack(self) -> None:
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
-        miner.start()
+        await miner.start()
 
         trigger = StopAfterNMinedBlocks(miner, quantity=100)
         self.simulator.run(36000, trigger=trigger)
@@ -125,7 +125,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         assert len(responses) == 8  # 8 events because of window size
         assert responses[0].event.id == 49  # ack=48, so we get from event 49
 
-    def test_restart(self) -> None:
+    async def test_restart(self) -> None:
         # start the event stream
         start_stream = StartStreamRequest(type='START_STREAM', window_size=100, last_ack_event_id=None)
         self._send_request(start_stream)
@@ -133,7 +133,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
 
         # generate 10 blocks
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
-        miner.start()
+        await miner.start()
 
         trigger = StopAfterNMinedBlocks(miner, quantity=10)
         self.simulator.run(36000, trigger=trigger)
@@ -176,7 +176,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         assert len(responses) == 27 + 2 * 10
         assert responses[0].event.id == 0  # no ack, so we get from the first event
 
-    def test_restart_with_ack(self) -> None:
+    async def test_restart_with_ack(self) -> None:
         # start the event stream
         start_stream = StartStreamRequest(type='START_STREAM', window_size=100, last_ack_event_id=None)
         self._send_request(start_stream)
@@ -184,7 +184,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
 
         # generate 10 blocks
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
-        miner.start()
+        await miner.start()
 
         trigger = StopAfterNMinedBlocks(miner, quantity=10)
         self.simulator.run(36000, trigger=trigger)
@@ -227,7 +227,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         assert len(responses) == 2 * 10
         assert responses[0].event.id == 27  # ack=26, so we get from event 27
 
-    def test_restart_with_ack_too_small(self) -> None:
+    async def test_restart_with_ack_too_small(self) -> None:
         # start the event stream
         start_stream = StartStreamRequest(type='START_STREAM', window_size=100, last_ack_event_id=None)
         self._send_request(start_stream)
@@ -237,7 +237,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
 
         trigger = StopAfterNMinedBlocks(miner, quantity=10)
-        miner.start()
+        await miner.start()
         self.simulator.run(36000, trigger=trigger)
         miner.stop()
 
@@ -262,7 +262,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
 
         # generate 10 blocks
         trigger.reset()
-        miner.start()
+        await miner.start()
         self.simulator.run(36000, trigger=trigger)
         miner.stop()
 
@@ -284,12 +284,12 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
 
         assert str(response.type) == InvalidRequestType.ACK_TOO_SMALL.value
 
-    def test_multiple_interactions(self) -> None:
+    async def test_multiple_interactions(self) -> None:
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
 
         # generate 10 blocks
         trigger = StopAfterNMinedBlocks(miner, quantity=10)
-        miner.start()
+        await miner.start()
         self.simulator.run(36000, trigger=trigger)
         miner.stop()
 

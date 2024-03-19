@@ -54,7 +54,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         """Return the heights of blocks that calculate_new_state_mock was called with."""
         return [call.kwargs['boundary_block'].get_height() for call in calculate_new_state_mock.call_args_list]
 
-    def test_feature(self) -> None:
+    async def test_feature(self) -> None:
         """
         Tests that a feature goes through all possible states in the correct block heights, and also assert internal
         method calls to make sure we're executing it in the intended, most performatic way.
@@ -96,7 +96,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             patch.object(FeatureService, '_get_ancestor_iteratively', get_ancestor_iteratively_mock),
         ):
             # at the beginning, the feature is DEFINED:
-            add_new_blocks(manager, 10)
+            await add_new_blocks(manager, 10)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -122,7 +122,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 19, the feature is DEFINED, just before becoming STARTED:
-            add_new_blocks(manager, 9)
+            await add_new_blocks(manager, 9)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -147,7 +147,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 20, the feature becomes STARTED:
-            add_new_blocks(manager, 1)
+            await add_new_blocks(manager, 1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -170,11 +170,11 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
 
             # we add one block before resetting the mock, just to make sure block 20 gets a chance to be saved
-            add_new_blocks(manager, 1)
+            await add_new_blocks(manager, 1)
             calculate_new_state_mock.reset_mock()
 
             # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
-            add_new_blocks(manager, 34)
+            await add_new_blocks(manager, 34)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -198,7 +198,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 56, the feature becomes MUST_SIGNAL:
-            add_new_blocks(manager, 1)
+            await add_new_blocks(manager, 1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -221,7 +221,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
 
             # we add one block before resetting the mock, just to make sure block 56 gets a chance to be saved
-            add_new_blocks(manager, 1, signal_bits=0b1)
+            await add_new_blocks(manager, 1, signal_bits=0b1)
             calculate_new_state_mock.reset_mock()
 
             # if we try to propagate a non-signaling block, it is not accepted
@@ -232,10 +232,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             with pytest.raises(BlockMustSignalError):
                 manager.verification_service.verify(non_signaling_block)
 
-            assert not manager.propagate_tx(non_signaling_block)
+            assert not await manager.propagate_tx(non_signaling_block)
 
             # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
-            add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
+            await add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -260,7 +260,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 60, the feature becomes LOCKED_IN:
-            add_new_blocks(manager, 1)
+            await add_new_blocks(manager, 1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -283,11 +283,11 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
 
             # we add one block before resetting the mock, just to make sure block 60 gets a chance to be saved
-            add_new_blocks(manager, 1)
+            await add_new_blocks(manager, 1)
             calculate_new_state_mock.reset_mock()
 
             # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
-            add_new_blocks(manager, 10)
+            await add_new_blocks(manager, 10)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -311,7 +311,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 72, the feature becomes ACTIVE, forever:
-            add_new_blocks(manager, 1)
+            await add_new_blocks(manager, 1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -334,7 +334,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
 
-    def test_reorg(self) -> None:
+    async def test_reorg(self) -> None:
         feature_settings = FeatureSettings(
             evaluation_interval=4,
             max_signal_bits=4,
@@ -384,7 +384,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         )
 
         # at block 4, the feature becomes STARTED with 0% acceptance
-        add_new_blocks(manager, 4)
+        await add_new_blocks(manager, 4)
         self.simulator.run(60)
         result = self._get_result(web_client)
         assert result == dict(
@@ -405,8 +405,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         )
 
         # at block 7, acceptance is 25% (we're signaling 1 block out of 4)
-        add_new_blocks(manager, 2)
-        add_new_blocks(manager, 1, signal_bits=0b10)
+        await add_new_blocks(manager, 2)
+        await add_new_blocks(manager, 1, signal_bits=0b10)
         self.simulator.run(60)
         result = self._get_result(web_client)
         assert result == dict(
@@ -428,8 +428,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
         # at block 11, acceptance is 75% (we're signaling 3 blocks out of 4),
         # so the feature will be locked-in in the next block
-        add_new_blocks(manager, 1)
-        add_new_blocks(manager, 3, signal_bits=0b10)
+        await add_new_blocks(manager, 1)
+        await add_new_blocks(manager, 3, signal_bits=0b10)
         self.simulator.run(60)
         result = self._get_result(web_client)
         assert result == dict(
@@ -450,7 +450,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         )
 
         # at block 12, the feature is locked-in
-        add_new_blocks(manager, 1)
+        await add_new_blocks(manager, 1)
         self.simulator.run(60)
         result = self._get_result(web_client)
         assert result == dict(
@@ -471,7 +471,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         )
 
         # at block 16, the feature is activated
-        add_new_blocks(manager, 4)
+        await add_new_blocks(manager, 4)
         self.simulator.run(60)
         result = self._get_result(web_client)
         assert result == dict(
@@ -497,7 +497,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         artifacts2 = self.simulator.create_artifacts(builder2)
         manager2 = artifacts2.manager
 
-        add_new_blocks(manager2, 17)
+        await add_new_blocks(manager2, 17)
         self.simulator.run(60)
 
         connection = FakeConnection(manager, manager2)
@@ -545,7 +545,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         rocksdb_directory = self.get_rocksdb_directory()
         return self.get_simulator_builder_from_dir(rocksdb_directory)
 
-    def test_feature_from_existing_storage(self) -> None:
+    async def test_feature_from_existing_storage(self) -> None:
         """
         Tests that feature states are correctly retrieved from an existing storage, so no recalculation is required.
         """
@@ -589,7 +589,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
 
             # we add 64 blocks so the feature becomes active. It would be active by timeout anyway,
             # we just set signal bits to conform with the MUST_SIGNAL phase.
-            add_new_blocks(manager1, 64, signal_bits=0b1)
+            await add_new_blocks(manager1, 64, signal_bits=0b1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(

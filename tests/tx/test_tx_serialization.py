@@ -9,7 +9,7 @@ from tests.utils import add_blocks_unlock_reward
 class _SerializationTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
 
         self.network = 'testnet'
@@ -17,8 +17,8 @@ class _SerializationTest(unittest.TestCase):
         self.tx_storage = self.manager.tx_storage
 
         data = b'This is a test block.'
-        self.blocks = add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
-        add_blocks_unlock_reward(self.manager)
+        self.blocks = await add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
+        await add_blocks_unlock_reward(self.manager)
 
         address = self.get_address(0)
         value = 100
@@ -32,7 +32,7 @@ class _SerializationTest(unittest.TestCase):
         self.tx1.parents = self.manager.get_new_tx_parents()
         self.tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(self.tx1)
-        self.manager.propagate_tx(self.tx1)
+        await self.manager.propagate_tx(self.tx1)
 
         # Change of parents only, so it's a twin.
         # With less weight, so the balance will continue because tx1 will be the winner
@@ -42,7 +42,7 @@ class _SerializationTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(self.tx2)
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(self.tx2)
+        await self.manager.propagate_tx(self.tx2)
 
     def _reserialize(self, tx):
         raise NotImplementedError

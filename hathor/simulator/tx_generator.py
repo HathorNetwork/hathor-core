@@ -16,12 +16,14 @@ from collections import deque
 from typing import TYPE_CHECKING
 
 from structlog import get_logger
+from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.simulator.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 from hathor.transaction.exceptions import RewardLocked
 from hathor.types import VertexId
 from hathor.util import Random
+from hathor.utils.twisted import call_async_later
 from hathor.wallet.exceptions import InsufficientFunds
 
 if TYPE_CHECKING:
@@ -55,7 +57,7 @@ class RandomTransactionGenerator:
         self.hashpower = hashpower
         self.ignore_no_funds = ignore_no_funds
         self.tx = None
-        self.delayedcall = None
+        self.delayedcall: IDelayedCall | None = None
         self.log = logger.new()
         self.rng = rng
 
@@ -66,26 +68,26 @@ class RandomTransactionGenerator:
 
         self.double_spending_only = False
 
-    def start(self):
+    async def start(self) -> None:
         """ Start generating random transactions.
         """
-        self.schedule_next_transaction()
+        await self.schedule_next_transaction()
 
     def stop(self):
         """ Stop generating random transactions.
         """
-        if self.delayedcall:
+        if self.delayedcall and self.delayedcall.active():
             self.delayedcall.cancel()
             self.delayedcall = None
 
     def enable_double_spending(self):
         self.double_spending_only = True
 
-    def schedule_next_transaction(self):
+    async def schedule_next_transaction(self) -> None:
         """ Schedule the generation of a new transaction.
         """
         if self.tx:
-            ret = self.manager.propagate_tx(self.tx, fails_silently=False)
+            ret = await self.manager.propagate_tx(self.tx, fails_silently=False)
             assert ret is True
             self.transactions_found += 1
             self.latest_transactions.appendleft(self.tx.hash)
@@ -102,7 +104,7 @@ class RandomTransactionGenerator:
         """
         balance = self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]
         if balance.available == 0 and self.ignore_no_funds:
-            self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+            self.delayedcall = call_async_later(self.clock, 0, self.schedule_next_transaction)
             return
 
         if not self.send_to:
@@ -117,14 +119,14 @@ class RandomTransactionGenerator:
             try:
                 tx = gen_new_tx(self.manager, address, value)
             except (InsufficientFunds, RewardLocked):
-                self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+                self.delayedcall = call_async_later(self.clock, 0, self.schedule_next_transaction)
                 return
         else:
             try:
                 tx = gen_new_double_spending(self.manager)
                 tx.nonce = self.rng.getrandbits(32)
             except NoCandidatesError:
-                self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+                self.delayedcall = call_async_later(self.clock, 0, self.schedule_next_transaction)
                 return
 
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
@@ -135,5 +137,5 @@ class RandomTransactionGenerator:
         dt = 1.0 * trials / self.hashpower
 
         self.tx = tx
-        self.delayedcall = self.clock.callLater(dt, self.schedule_next_transaction)
+        self.delayedcall = call_async_later(self.clock, dt, self.schedule_next_transaction)
         self.log.debug('randomized step: schedule next transaction', dt=dt, hash=tx.hash_hex)

@@ -72,7 +72,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             nodes.append(manager)
 
             miner = MinerSimulator(manager, hashpower=hashpower)
-            miner.start()
+            await miner.start()
             miners.append(miner)
 
             rate = random.randint(1, 30)
@@ -96,7 +96,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         for manager in nodes:
             miner = MinerSimulator(manager, hashpower=hashpower)
-            miner.start()
+            await miner.start()
             miners.append(miner)
 
             rate = random.randint(1, 5)

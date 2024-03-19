@@ -11,28 +11,32 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 from unittest.mock import Mock
+
+from twisted.trial import unittest
 
 from hathor.cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
 from hathor.cli.events_simulator.events_simulator import create_parser, execute
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
 
-def test_events_simulator() -> None:
-    parser = create_parser()
-    args = parser.parse_args(['--scenario', 'ONLY_LOAD'])
-    reactor = TestMemoryReactorClock()
+class TestEventsSimulator(unittest.TestCase):
+    async def test_events_simulator(self) -> None:
+        parser = create_parser()
+        args = parser.parse_args(['--scenario', 'ONLY_LOAD'])
+        reactor = TestMemoryReactorClock()
 
-    execute(args, reactor)
-    reactor.advance(1)
+        await execute(args, reactor)
+        reactor.advance(1)
 
-    factory = EventForwardingWebsocketFactory(
-        simulator=Mock(),
-        peer_id='test_peer_id',
-        network='test_network',
-        reactor=reactor,
-        event_storage=Mock()
-    )
-    protocol = factory.buildProtocol(Mock())
+        factory = EventForwardingWebsocketFactory(
+            simulator=Mock(),
+            peer_id='test_peer_id',
+            network='test_network',
+            reactor=reactor,
+            event_storage=Mock()
+        )
+        protocol = factory.buildProtocol(Mock())
 
-    assert protocol is not None
+        assert protocol is not None

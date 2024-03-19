@@ -15,18 +15,18 @@ from tests.utils import add_blocks_unlock_reward, add_new_tx
 class BaseTransactionTest(_BaseResourceTest._ResourceTest):
     __test__ = False
 
-    def setUp(self):
+    async def setUp(self):
         super().setUp()
         self.web = StubSite(CreateTxResource(self.manager))
         self.manager.wallet.unlock(b'MYPASS')
-        self.spent_blocks = add_new_blocks(self.manager, 10)
-        self.unspent_blocks = add_blocks_unlock_reward(self.manager)
-        add_blocks_unlock_reward(self.manager)
+        self.spent_blocks = await add_new_blocks(self.manager, 10)
+        self.unspent_blocks = await add_blocks_unlock_reward(self.manager)
+        await add_blocks_unlock_reward(self.manager)
         self.unspent_address = self.manager.wallet.get_unused_address()
-        self.unspent_tx = add_new_tx(self.manager, self.unspent_address, 100)
-        self.unspent_tx2 = add_new_tx(self.manager, self.unspent_address, 200)
-        self.unspent_tx3 = add_new_tx(self.manager, self.unspent_address, 300)
-        add_blocks_unlock_reward(self.manager)
+        self.unspent_tx = await add_new_tx(self.manager, self.unspent_address, 100)
+        self.unspent_tx2 = await add_new_tx(self.manager, self.unspent_address, 200)
+        self.unspent_tx3 = await add_new_tx(self.manager, self.unspent_address, 300)
+        await add_blocks_unlock_reward(self.manager)
 
     # Example from the design:
     #
@@ -194,12 +194,11 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(tx.outputs[0].token_data, 0)
         self.assertEqual(tx.outputs[0].script, script)
 
-    @inlineCallbacks
-    def test_tx_propagate(self):
+    async def test_tx_propagate(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
         src_tx = self.unspent_tx
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
-        resp = (yield self.web.post('create_tx', {
+        resp = (await self.web.post('create_tx', {
             'inputs': [
                 {
                     'tx_id': src_tx.hash_hex,
@@ -219,6 +218,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         struct_bytes = bytes.fromhex(hex_data)
         orig_tx = Transaction.create_from_struct(struct_bytes)
         tx = orig_tx.clone()
+        assert isinstance(tx, Transaction)
         tx_data = tx.to_json()
         del tx_data['hash']
         del tx_data['nonce']
@@ -230,13 +230,12 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         tx.inputs[0].data = input_data
         # XXX: tx.resolve is a bit CPU intensive, but not so much as to make this test disabled by default
         self.manager.cpu_mining_service.resolve(tx, update_time=False)
-        self.assertTrue(self.manager.propagate_tx(tx))
+        self.assertTrue(await self.manager.propagate_tx(tx))
 
-    @inlineCallbacks
-    def test_tx_propagate_multiple_inputs(self):
+    async def test_tx_propagate_multiple_inputs(self) -> None:
         self.manager.daa.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
-        resp = (yield self.web.post('create_tx', {
+        resp = (await self.web.post('create_tx', {
             'inputs': [
                 {
                     'tx_id': self.unspent_tx.hash_hex,
@@ -264,6 +263,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         struct_bytes = bytes.fromhex(hex_data)
         orig_tx = Transaction.create_from_struct(struct_bytes)
         tx = orig_tx.clone()
+        assert isinstance(tx, Transaction)
         tx_data = tx.to_json()
         del tx_data['hash']
         del tx_data['nonce']
@@ -277,7 +277,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         tx.inputs[2].data = input_data
         # XXX: tx.resolve is a bit CPU intensive, but not so much as to make this test disabled by default
         self.manager.cpu_mining_service.resolve(tx, update_time=False)
-        self.assertTrue(self.manager.propagate_tx(tx))
+        self.assertTrue(await self.manager.propagate_tx(tx))
 
     @inlineCallbacks
     def test_already_spent(self):

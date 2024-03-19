@@ -21,18 +21,18 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
-    def _add_new_transactions(self, manager: HathorManager, num_txs: int) -> list[Transaction]:
+    async def _add_new_transactions(self, manager: HathorManager, num_txs: int) -> list[Transaction]:
         txs = []
         for _ in range(num_txs):
             address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 15, 20])
-            tx = add_new_tx(manager, address, value)
+            tx = await add_new_tx(manager, address, value)
             txs.append(tx)
         return txs
 
-    def test_simple_double_spending(self) -> None:
-        add_new_blocks(self.manager1, 5, advance_clock=15)
-        add_blocks_unlock_reward(self.manager1)
+    async def test_simple_double_spending(self) -> None:
+        await add_new_blocks(self.manager1, 5, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo
@@ -65,14 +65,14 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertNotEqual(tx1.hash, tx3.hash)
         self.assertNotEqual(tx2.hash, tx3.hash)
 
-        self.assertTrue(self.manager1.propagate_tx(tx1, False))
+        self.assertTrue(await self.manager1.propagate_tx(tx1, False))
         self.run_to_completion()
         meta1 = tx1.get_metadata()
         self.assertEqual(meta1.conflict_with, None)
         self.assertEqual(meta1.voided_by, None)
 
         # Propagate a conflicting transaction.
-        self.assertTrue(self.manager1.propagate_tx(tx2, False))
+        self.assertTrue(await self.manager1.propagate_tx(tx2, False))
         self.run_to_completion()
 
         meta1 = tx1.get_metadata(force_reload=True)
@@ -98,7 +98,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
 
         # Propagate another conflicting transaction, but with higher weight.
-        self.manager1.propagate_tx(tx3)
+        await self.manager1.propagate_tx(tx3)
         self.run_to_completion()
 
         meta1 = tx1.get_metadata(force_reload=True)
@@ -131,9 +131,9 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.assertConsensusValid(self.manager1)
 
-    def test_double_spending_propagation(self) -> None:
-        blocks = add_new_blocks(self.manager1, 4, advance_clock=15)
-        add_blocks_unlock_reward(self.manager1)
+    async def test_double_spending_propagation(self) -> None:
+        blocks = await add_new_blocks(self.manager1, 4, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
@@ -185,7 +185,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         self.clock.advance(15)
-        self.assertTrue(self.manager1.propagate_tx(tx1))
+        self.assertTrue(await self.manager1.propagate_tx(tx1))
         self.clock.advance(15)
 
         # ---
@@ -202,7 +202,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx2.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx2)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx2)
+        await self.manager1.propagate_tx(tx2)
         self.clock.advance(15)
 
         self.assertGreater(tx2.timestamp, tx1.timestamp)
@@ -221,13 +221,13 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx3.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx3)
         self.clock.advance(15)
-        self.assertTrue(self.manager1.propagate_tx(tx3))
+        self.assertTrue(await self.manager1.propagate_tx(tx3))
         self.clock.advance(15)
 
         # ---
 
         self.clock.advance(15)
-        self.assertTrue(self.manager1.propagate_tx(tx4, False))
+        self.assertTrue(await self.manager1.propagate_tx(tx4, False))
         self.clock.advance(15)
 
         self.run_to_completion()
@@ -252,7 +252,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx5.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx5)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx5)
+        await self.manager1.propagate_tx(tx5)
         self.clock.advance(15)
 
         meta5 = tx5.get_metadata()
@@ -268,7 +268,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx6.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx6)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx6)
+        await self.manager1.propagate_tx(tx6)
         self.clock.advance(15)
 
         meta6 = tx6.get_metadata()
@@ -289,7 +289,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx7.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx7)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx7, False)
+        await self.manager1.propagate_tx(tx7, False)
         self.clock.advance(15)
 
         meta1 = tx1.get_metadata(force_reload=True)
@@ -308,13 +308,13 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta6.voided_by, None)
         self.assertEqual(meta7.voided_by, None)
 
-        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
-        add_blocks_unlock_reward(self.manager1)
-        self._add_new_transactions(self.manager1, 10)
-        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
-        add_blocks_unlock_reward(self.manager1)
-        self._add_new_transactions(self.manager1, 10)
-        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+        blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager1)
+        await self._add_new_transactions(self.manager1, 10)
+        blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
+        await add_blocks_unlock_reward(self.manager1)
+        await self._add_new_transactions(self.manager1, 10)
+        blocks = await add_new_blocks(self.manager1, 1, advance_clock=15)
 
         self.assertConsensusValid(self.manager1)
 
