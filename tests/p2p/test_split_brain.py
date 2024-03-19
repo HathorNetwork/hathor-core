@@ -27,7 +27,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
-        manager = super().create_peer(network, wallet=wallet)
+        manager: HathorManager = super().create_peer(network, wallet=wallet)
         manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.

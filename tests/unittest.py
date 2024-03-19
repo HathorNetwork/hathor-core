@@ -3,7 +3,7 @@ import secrets
 import shutil
 import tempfile
 import time
-from typing import Callable, Collection, Iterable, Iterator, Optional
+from typing import Any, Callable, Collection, Iterable, Iterator, Optional
 from unittest import main as ut_main
 
 from structlog import get_logger
@@ -121,7 +121,7 @@ class TestCase(unittest.TestCase):
         self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config
         self.log.info('set seed', seed=self.seed)
         self.rng = Random(self.seed)
-        self._pending_cleanups: list[Callable] = []
+        self._pending_cleanups: list[Callable[..., Any]] = []
         self._settings = get_global_settings()
 
     def tearDown(self) -> None:

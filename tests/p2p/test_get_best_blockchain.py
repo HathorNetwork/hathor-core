@@ -23,7 +23,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         else:
             line = '{} {}\r\n'.format(cmd, payload)
 
-        return proto.dataReceived(line.encode('utf-8'))
+        proto.dataReceived(line.encode('utf-8'))
 
     def test_get_best_blockchain(self) -> None:
         manager1 = self.create_peer()
