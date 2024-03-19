@@ -16,7 +16,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
     def _run_test(
         self,
         simulator: Simulator,
-        soft_voided_tx_ids: set[VertexId] | list[VertexId]
+        soft_voided_tx_ids: list[VertexId]
     ) -> Iterator[RandomTransactionGenerator]:
         manager1 = self.create_peer(soft_voided_tx_ids=set(soft_voided_tx_ids), simulator=simulator)
         manager1.allow_mining_without_peers()
@@ -138,7 +138,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         simulator.start()
 
         try:
-            it = self._run_test(simulator, set())
+            it = self._run_test(simulator, [])
             gen_tx = next(it)
             txA_hash = gen_tx.latest_transactions[0]
         finally:
@@ -151,7 +151,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         simulator.start()
 
         try:
-            it = self._run_test(simulator, set([txA_hash]))
+            it = self._run_test(simulator, [txA_hash])
             _ = next(it)
             _ = next(it)
             gen_tx = next(it)
