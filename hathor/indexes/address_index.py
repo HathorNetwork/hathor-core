@@ -95,8 +95,8 @@ class AddressIndex(TxGroupIndex[str]):
     def get_sorted_from_address(self, address: str, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         """ Get a sorted list of transaction hashes of an address
 
-        The parameter tx_start means the transaction from which the iterator will start, and it is used for pagination.
-        When it's None it means that the iterator will start from the beginning.
+        `tx_start` serves as a pagination marker, indicating the starting position for the iteration.
+        When tx_start is None, the iteration begins from the initial element.
         """
         raise NotImplementedError
 
