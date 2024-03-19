@@ -114,6 +114,7 @@ async def add_new_block(
     manager.verification_service.validate_full(block)
     if propagate:
         await manager.propagate_tx(block, fails_silently=False)
+    advance_clock = advance_clock or 0.1
     if advance_clock:
         assert hasattr(manager.reactor, 'advance')
         manager.reactor.advance(advance_clock)
