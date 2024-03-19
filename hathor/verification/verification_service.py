@@ -52,7 +52,7 @@ class VerificationService:
         skip_block_weight_verification: bool = False,
         sync_checkpoints: bool = False,
         reject_locked_reward: bool = True
-    ) -> bool:
+    ) -> bool:  # TODO: Return None
         """ Run full validations (these need access to all dependencies) and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
