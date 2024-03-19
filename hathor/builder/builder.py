@@ -47,7 +47,8 @@ from hathor.transaction.storage import (
     TransactionStorage,
 )
 from hathor.util import Random, get_environment_info, not_none
-from hathor.verification.verification_service import VerificationService, VertexVerifiers
+from hathor.verification.verification_service import VerificationService
+from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()

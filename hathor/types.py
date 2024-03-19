@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import TypeAlias
+
 # XXX There is a lot of refactor to be done before we can use `NewType`.
 #     So, let's skip using NewType until everything is refactored.
 
-VertexId = bytes        # NewType('TxId', bytes)
-Address = bytes         # NewType('Address', bytes)
-AddressB58 = str
-TxOutputScript = bytes  # NewType('TxOutputScript', bytes)
-Timestamp = int         # NewType('Timestamp', int)
-TokenUid = VertexId     # NewType('TokenUid', VertexId)
-Amount = int            # NewType('Amount', int)
+VertexId: TypeAlias = bytes        # NewType('TxId', bytes)
+Address: TypeAlias = bytes         # NewType('Address', bytes)
+AddressB58: TypeAlias = str
+TxOutputScript: TypeAlias = bytes  # NewType('TxOutputScript', bytes)
+Timestamp: TypeAlias = int         # NewType('Timestamp', int)
+TokenUid: TypeAlias = VertexId     # NewType('TokenUid', VertexId)
+Amount: TypeAlias = int            # NewType('Amount', int)
