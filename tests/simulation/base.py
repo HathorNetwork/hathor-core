@@ -2,6 +2,7 @@ from typing import Optional
 
 from hathor.manager import HathorManager
 from hathor.simulator import Simulator
+from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.types import VertexId
 from tests import unittest
 
@@ -14,7 +15,8 @@ class SimulatorTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.simulator = Simulator(self.seed_config)
+        self.clock = MemoryReactorHeapClock()
+        self.simulator = Simulator(self.seed_config, clock=self.clock)
         self.simulator.start()
 
         print('-'*30)

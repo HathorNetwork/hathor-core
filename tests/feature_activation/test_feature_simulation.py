@@ -17,6 +17,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from twisted.internet.defer import inlineCallbacks, Deferred
+from twisted.python.failure import Failure
 
 from hathor.builder import Builder
 from hathor.conf.get_settings import get_global_settings
@@ -26,13 +27,14 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.simulator import FakeConnection
+from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.util import not_none
 from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
+from tests.utils import HAS_ROCKSDB, test_async_simulator
 
 
 class BaseFeatureSimulationTest(SimulatorTestCase):
@@ -55,8 +57,310 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         """Return the heights of blocks that calculate_new_state_mock was called with."""
         return [call.kwargs['boundary_block'].get_height() for call in calculate_new_state_mock.call_args_list]
 
-    @inlineCallbacks
-    def test_feature(self) -> None:
+    # def test_feature2(self) -> None:
+    #     """
+    #     Tests that a feature goes through all possible states in the correct block heights, and also assert internal
+    #     method calls to make sure we're executing it in the intended, most performatic way.
+    #     """
+    #     clock: MemoryReactorHeapClock
+    #
+    #     async def f() -> None:
+    #         nonlocal clock
+    #         clock = self.simulator._clock
+    #         feature_settings = FeatureSettings(
+    #             evaluation_interval=4,
+    #             max_signal_bits=4,
+    #             default_threshold=3,
+    #             features={
+    #                 Feature.NOP_FEATURE_1: Criteria(
+    #                     bit=0,
+    #                     start_height=20,
+    #                     timeout_height=60,
+    #                     minimum_activation_height=72,
+    #                     lock_in_on_timeout=True,
+    #                     version='0.0.0'
+    #                 )
+    #             }
+    #         )
+    #
+    #         settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+    #         builder = self.get_simulator_builder().set_settings(settings)
+    #         artifacts = self.simulator.create_artifacts(builder)
+    #         feature_service = artifacts.feature_service
+    #         manager = artifacts.manager
+    #
+    #         feature_resource = FeatureResource(
+    #             feature_settings=feature_settings,
+    #             feature_service=feature_service,
+    #             tx_storage=artifacts.tx_storage
+    #         )
+    #         web_client = StubSite(feature_resource)
+    #
+    #         calculate_new_state_mock = Mock(wraps=feature_service._calculate_new_state)
+    #         get_ancestor_iteratively_mock = Mock(wraps=feature_service._get_ancestor_iteratively)
+    #
+    #         with (
+    #             patch.object(FeatureService, '_calculate_new_state', calculate_new_state_mock),
+    #             patch.object(FeatureService, '_get_ancestor_iteratively', get_ancestor_iteratively_mock),
+    #         ):
+    #             # at the beginning, the feature is DEFINED:
+    #             await add_new_blocks(manager, 10)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=10,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='DEFINED',
+    #                         acceptance=None,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             # so we calculate states all the way down to the first evaluation boundary (after genesis):
+    #             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 4
+    #             # no blocks are voided, so we only use the height index, and not get_ancestor_iteratively:
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #             calculate_new_state_mock.reset_mock()
+    #
+    #             # at block 19, the feature is DEFINED, just before becoming STARTED:
+    #             await add_new_blocks(manager, 9)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=19,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='DEFINED',
+    #                         acceptance=None,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             # so we calculate states down to block 12, as block 8's state is saved:
+    #             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 12
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #             calculate_new_state_mock.reset_mock()
+    #
+    #             # at block 20, the feature becomes STARTED:
+    #             await add_new_blocks(manager, 1)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=20,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='STARTED',
+    #                         acceptance=0,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 20
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #
+    #             # we add one block before resetting the mock, just to make sure block 20 gets a chance to be saved
+    #             await add_new_blocks(manager, 1)
+    #             calculate_new_state_mock.reset_mock()
+    #
+    #             # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
+    #             await add_new_blocks(manager, 34)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=55,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='STARTED',
+    #                         acceptance=0,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 24
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #             calculate_new_state_mock.reset_mock()
+    #
+    #             # at block 56, the feature becomes MUST_SIGNAL:
+    #             await add_new_blocks(manager, 1)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=56,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='MUST_SIGNAL',
+    #                         acceptance=0,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 56
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #
+    #             # we add one block before resetting the mock, just to make sure block 56 gets a chance to be saved
+    #             await add_new_blocks(manager, 1, signal_bits=0b1)
+    #             calculate_new_state_mock.reset_mock()
+    #
+    #             # if we try to propagate a non-signaling block, it is not accepted
+    #             non_signaling_block = manager.generate_mining_block()
+    #             manager.cpu_mining_service.resolve(non_signaling_block)
+    #             non_signaling_block.signal_bits = 0b10
+    #
+    #             with pytest.raises(BlockMustSignalError):
+    #                 manager.verification_service.verify(non_signaling_block)
+    #
+    #             assert not (await manager.propagate_tx(non_signaling_block))
+    #
+    #             # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
+    #             await add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=59,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='MUST_SIGNAL',
+    #                         acceptance=0.75,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             # we don't need to calculate any new state, as block 56's state is saved:
+    #             assert len(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 0
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #             calculate_new_state_mock.reset_mock()
+    #
+    #             # at block 60, the feature becomes LOCKED_IN:
+    #             await add_new_blocks(manager, 1)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=60,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='LOCKED_IN',
+    #                         acceptance=None,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 60
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #
+    #             # we add one block before resetting the mock, just to make sure block 60 gets a chance to be saved
+    #             await add_new_blocks(manager, 1)
+    #             calculate_new_state_mock.reset_mock()
+    #
+    #             # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
+    #             await add_new_blocks(manager, 10)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=71,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='LOCKED_IN',
+    #                         acceptance=None,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 64
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #             calculate_new_state_mock.reset_mock()
+    #
+    #             # at block 72, the feature becomes ACTIVE, forever:
+    #             await add_new_blocks(manager, 1)
+    #             self.simulator.run(60)
+    #             result = self._get_result(web_client)
+    #             assert result == dict(
+    #                 block_height=72,
+    #                 features=[
+    #                     dict(
+    #                         name='NOP_FEATURE_1',
+    #                         state='ACTIVE',
+    #                         acceptance=None,
+    #                         threshold=0.75,
+    #                         start_height=20,
+    #                         timeout_height=60,
+    #                         minimum_activation_height=72,
+    #                         lock_in_on_timeout=True,
+    #                         version='0.0.0'
+    #                     )
+    #                 ]
+    #             )
+    #             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 72
+    #             assert get_ancestor_iteratively_mock.call_count == 0
+    #             calculate_new_state_mock.reset_mock()
+    #             assert False
+    #
+    #     d = Deferred.fromCoroutine(f())
+    #
+    #     while not d.called:
+    #         c = clock.getDelayedCalls()
+    #         for call in c:
+    #             amount = call.getTime() - clock.seconds()
+    #             if amount > 0:
+    #                 clock.advance(amount)
+    #
+    #     # clock.advance(1000)
+    #
+    #     assert d.called
+    #
+    #     if isinstance(d.result, Failure):
+    #         d.result.raiseException()
+
+    @test_async_simulator
+    async def test_feature(self) -> None:
         """
         Tests that a feature goes through all possible states in the correct block heights, and also assert internal
         method calls to make sure we're executing it in the intended, most performatic way.
@@ -98,7 +402,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             patch.object(FeatureService, '_get_ancestor_iteratively', get_ancestor_iteratively_mock),
         ):
             # at the beginning, the feature is DEFINED:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 10))
+            await add_new_blocks(manager, 10)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -124,7 +428,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 19, the feature is DEFINED, just before becoming STARTED:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 9))
+            await add_new_blocks(manager, 9)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -149,7 +453,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 20, the feature becomes STARTED:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 1))
+            await add_new_blocks(manager, 1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -172,11 +476,11 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
 
             # we add one block before resetting the mock, just to make sure block 20 gets a chance to be saved
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 1))
+            await add_new_blocks(manager, 1)
             calculate_new_state_mock.reset_mock()
 
             # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 34))
+            await add_new_blocks(manager, 34)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -200,7 +504,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 56, the feature becomes MUST_SIGNAL:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 1))
+            await add_new_blocks(manager, 1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -223,7 +527,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
 
             # we add one block before resetting the mock, just to make sure block 56 gets a chance to be saved
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 1, signal_bits=0b1))
+            await add_new_blocks(manager, 1, signal_bits=0b1)
             calculate_new_state_mock.reset_mock()
 
             # if we try to propagate a non-signaling block, it is not accepted
@@ -234,10 +538,10 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             with pytest.raises(BlockMustSignalError):
                 manager.verification_service.verify(non_signaling_block)
 
-            assert not (yield Deferred.fromCoroutine( manager.propagate_tx(non_signaling_block)))
+            assert not (await manager.propagate_tx(non_signaling_block))
 
             # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, num_blocks=2, signal_bits=0b1))
+            await add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -262,7 +566,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 60, the feature becomes LOCKED_IN:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 1))
+            await add_new_blocks(manager, 1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -285,11 +589,11 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
 
             # we add one block before resetting the mock, just to make sure block 60 gets a chance to be saved
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 1))
+            await add_new_blocks(manager, 1)
             calculate_new_state_mock.reset_mock()
 
             # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 10))
+            await add_new_blocks(manager, 10)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
@@ -313,7 +617,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             calculate_new_state_mock.reset_mock()
 
             # at block 72, the feature becomes ACTIVE, forever:
-            yield Deferred.fromCoroutine( add_new_blocks(manager, 1))
+            await add_new_blocks(manager, 1)
             self.simulator.run(60)
             result = self._get_result(web_client)
             assert result == dict(
