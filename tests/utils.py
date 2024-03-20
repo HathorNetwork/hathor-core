@@ -1,16 +1,19 @@
 import base64
+import functools
 import os
 import string
 import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Callable, Coroutine, TypeVar
 
 import requests
 from cryptography.hazmat.primitives.asymmetric import ec
 from hathorlib.scripts import DataScript
+from twisted.internet.defer import Deferred
 from twisted.internet.task import Clock
+from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
@@ -25,6 +28,7 @@ from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_addres
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
 from hathor.util import Random, not_none
+from tests.simulation.base import SimulatorTestCase
 
 try:
     import rocksdb  # noqa: F401
@@ -633,3 +637,23 @@ class EventMocker:
             type=EventType.VERTEX_METADATA_CHANGED,
             data=cls.tx_data
         )
+
+
+T = TypeVar('T')
+
+
+def test_async_simulator(
+    test_func: Callable[[SimulatorTestCase], Coroutine[Deferred[T], Any, T]]
+) -> Callable[[SimulatorTestCase], None]:
+    @functools.wraps(test_func)
+    def wrapper(self: SimulatorTestCase) -> None:
+        coro = test_func(self)
+        deferred = Deferred.fromCoroutine(coro)
+
+        while not deferred.called:
+            self.run_to_completion()
+
+        if isinstance(deferred.result, Failure):
+            deferred.result.raiseException()
+
+    return wrapper

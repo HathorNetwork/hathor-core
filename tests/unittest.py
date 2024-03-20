@@ -283,7 +283,8 @@ class TestCase(unittest.TestCase):
         """
         for call in self.clock.getDelayedCalls():
             amount = call.getTime() - self.clock.seconds()
-            self.clock.advance(amount)
+            if amount >= 0:
+                self.clock.advance(amount)
 
     def assertIsTopological(self, tx_sequence: Iterator[BaseTransaction], message: Optional[str] = None,
                             *, initial: Optional[Iterator[bytes]] = None) -> None:

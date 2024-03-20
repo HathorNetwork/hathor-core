@@ -48,7 +48,7 @@ SIMULATOR_AVG_TIME_BETWEEN_BLOCKS: int = 64
 
 
 class Simulator:
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, *, clock: MemoryReactorHeapClock | None = None):
         self.log = logger.new()
         if seed is None:
             seed = secrets.randbits(64)
@@ -56,7 +56,7 @@ class Simulator:
         self.rng = Random(self.seed)
         self.settings = get_global_settings()._replace(AVG_TIME_BETWEEN_BLOCKS=SIMULATOR_AVG_TIME_BETWEEN_BLOCKS)
         self._network = 'testnet'
-        self._clock = MemoryReactorHeapClock()
+        self._clock = clock or MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
         self._connections: list['FakeConnection'] = []
         self._started = False
