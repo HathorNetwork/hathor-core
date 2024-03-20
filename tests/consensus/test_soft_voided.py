@@ -39,7 +39,6 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         simulator.run(300)
 
         manager2 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
-        manager2.soft_voided_tx_ids = soft_voided_tx_ids
 
         graphviz = GraphvizVisualizer(manager2.tx_storage, include_verifications=True, include_funds=True)
 
@@ -83,6 +82,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         metaD1 = txD1.get_metadata()
         self.assertEqual({txA.hash, txD1.hash}, metaD1.voided_by)
 
+        assert manager2.wallet is not None
         address = manager2.wallet.get_unused_address(mark_as_used=False)
         value = 1
         txC = gen_new_tx(manager2, address, value)

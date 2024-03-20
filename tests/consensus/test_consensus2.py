@@ -75,6 +75,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         self.graphviz = GraphvizVisualizer(manager1.tx_storage, include_verifications=True, include_funds=True)
 
+        assert manager1.wallet is not None
         address = manager1.wallet.get_unused_address(mark_as_used=False)
         value = 10
         initial = gen_new_tx(manager1, address, value)
@@ -110,6 +111,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         self.graphviz = GraphvizVisualizer(manager1.tx_storage, include_verifications=True, include_funds=True)
 
+        assert manager1.wallet is not None
         address = manager1.wallet.get_unused_address(mark_as_used=False)
         value = 10
         initial = gen_new_tx(manager1, address, value)
