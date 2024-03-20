@@ -154,6 +154,20 @@ warn_return_any = true
 # disallow_subclassing_any = true
 # disallow_untyped_calls = true
 
+# We also override to add disallow_untyped_defs for some specific test modules
+[[tool.mypy.overrides]]
+module = [
+    "tests.consensus.*",
+    "tests.crypto.*",
+    "tests.event.*",
+    "tests.execution_manager.*",
+    "tests.feature_activation.*",
+#    "tests.p2p.*",
+    "tests.pubsub.*",
+#    "tests.simulation.*",
+]
+disallow_untyped_defs = true
+
 [tool.pydantic-mypy]
 init_typed = true
 init_forbid_extra = true

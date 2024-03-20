@@ -64,7 +64,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
-    def test_single_chain_one_block(self):
+    def test_single_chain_one_block(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         Scenario.SINGLE_CHAIN_ONE_BLOCK.simulate(self.simulator, self.manager)
         self._start_stream()
@@ -92,7 +92,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
-    def test_single_chain_blocks_and_transactions(self):
+    def test_single_chain_blocks_and_transactions(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS.simulate(self.simulator, self.manager)
         self._start_stream()
@@ -157,7 +157,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
-    def test_reorg(self):
+    def test_reorg(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         Scenario.REORG.simulate(self.simulator, self.manager)
         self._start_stream()
@@ -205,7 +205,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         expected = _remove_timestamp(expected)
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
-    def test_unvoided_transaction(self):
+    def test_unvoided_transaction(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         Scenario.UNVOIDED_TRANSACTION.simulate(self.simulator, self.manager)
         self._start_stream()
