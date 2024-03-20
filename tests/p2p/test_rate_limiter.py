@@ -1,13 +1,14 @@
 from hathor.p2p.rate_limiter import RateLimiter
+from hathor.util import not_none
 from tests import unittest
 
 
 class RateLimiterTestCase(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.rate_limiter = RateLimiter(reactor=self.clock)
 
-    def test_limiter(self):
+    def test_limiter(self) -> None:
         key = 'test'
         self.rate_limiter.set_limit(key, 2, 2)
 
@@ -31,7 +32,7 @@ class RateLimiterTestCase(unittest.TestCase):
         self.assertTrue(self.rate_limiter.add_hit(key))
 
         # Get limit
-        self.assertEqual(self.rate_limiter.get_limit(key).max_hits, 2)
+        self.assertEqual(not_none(self.rate_limiter.get_limit(key)).max_hits, 2)
 
         # Unset limit
         self.rate_limiter.unset_limit(key)

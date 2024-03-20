@@ -57,8 +57,8 @@ from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
-from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none

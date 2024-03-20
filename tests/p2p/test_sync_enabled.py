@@ -5,7 +5,7 @@ from tests.simulation.base import SimulatorTestCase
 
 
 class BaseRandomSimulatorTestCase(SimulatorTestCase):
-    def test_new_node_disabled(self):
+    def test_new_node_disabled(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -39,7 +39,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         v2 = list(manager2.tx_storage.get_all_transactions())
         self.assertEqual(3, len(v2))
 
-    def test_sync_rotate(self):
+    def test_sync_rotate(self) -> None:
         manager1 = self.create_peer()
         manager1.connections.MAX_ENABLED_SYNC = 3
         other_managers = [self.create_peer() for _ in range(15)]

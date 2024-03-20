@@ -10,16 +10,21 @@ from structlog import get_logger
 from twisted.trial import unittest
 
 from hathor.builder import BuildArtifacts, Builder
+from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.conf.get_settings import get_global_settings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.event import EventManager
+from hathor.event.storage import EventStorage
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
+from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.transaction import BaseTransaction
-from hathor.util import Random
-from hathor.wallet import HDWallet, Wallet
+from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.util import Random, not_none
+from hathor.wallet import BaseWallet, HDWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
 logger = get_logger()
@@ -180,28 +185,28 @@ class TestCase(unittest.TestCase):
 
         return manager
 
-    def create_peer(
+    def create_peer(  # type: ignore[no-untyped-def]
         self,
-        network,
-        peer_id=None,
-        wallet=None,
-        tx_storage=None,
-        unlock_wallet=True,
-        wallet_index=False,
-        capabilities=None,
-        full_verification=True,
-        enable_sync_v1=None,
-        enable_sync_v2=None,
-        checkpoints=None,
-        utxo_index=False,
-        event_manager=None,
-        use_memory_index=None,
-        start_manager=True,
-        pubsub=None,
-        event_storage=None,
-        enable_event_queue=None,
-        use_memory_storage=None
-    ):
+        network: str,
+        peer_id: PeerId | None = None,
+        wallet: BaseWallet | None = None,
+        tx_storage: TransactionStorage | None = None,
+        unlock_wallet: bool = True,
+        wallet_index: bool = False,
+        capabilities: list[str] | None = None,
+        full_verification: bool = True,
+        enable_sync_v1: bool | None = None,
+        enable_sync_v2: bool | None = None,
+        checkpoints: list[Checkpoint] | None = None,
+        utxo_index: bool = False,
+        event_manager: EventManager | None = None,
+        use_memory_index: bool | None = None,
+        start_manager: bool = True,
+        pubsub: PubSubManager | None = None,
+        event_storage: EventStorage | None = None,
+        enable_event_queue: bool | None = None,
+        use_memory_storage: bool | None = None
+    ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
         builder = self.get_builder(network) \
@@ -220,8 +225,9 @@ class TestCase(unittest.TestCase):
         if not wallet:
             wallet = self._create_test_wallet()
             if unlock_wallet:
+                assert isinstance(wallet, Wallet)
                 wallet.unlock(b'MYPASS')
-        builder.set_wallet(wallet)
+        builder.set_wallet(not_none(wallet))
 
         if event_storage:
             builder.set_event_storage(event_storage)
