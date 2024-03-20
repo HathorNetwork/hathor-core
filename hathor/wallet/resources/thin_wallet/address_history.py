@@ -21,6 +21,7 @@ from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 
@@ -166,12 +167,6 @@ class AddressHistoryResource(Resource):
 
         history = []
         seen: set[bytes] = set()
-        # XXX In this algorithm we need to sort all transactions of an address
-        # and find one specific (in case of a pagination request)
-        # so if this address has many txs, this could become slow
-        # I've done some tests with 10k txs in one address and the request
-        # returned in less than 50ms, so we will move forward with it for now
-        # but this could be improved in the future
         for idx, address in enumerate(addresses):
             try:
                 decode_address(address)
@@ -181,31 +176,28 @@ class AddressHistoryResource(Resource):
                     'message': 'The address {} is invalid'.format(address)
                 })
 
-            hashes = addresses_index.get_sorted_from_address(address)
-            start_index = 0
-            if ref_hash_bytes and idx == 0:
-                # It's not the first request, so we must continue from the hash
-                # but we do it only for the first address
+            tx = None
+            if ref_hash_bytes:
                 try:
-                    # Find index where the hash is
-                    start_index = hashes.index(ref_hash_bytes)
-                except ValueError:
-                    # ref_hash is not in the list
+                    tx = self.manager.tx_storage.get_transaction(ref_hash_bytes)
+                except TransactionDoesNotExist:
                     return json_dumpb({
                         'success': False,
-                        'message': 'Hash {} is not a transaction from the address {}.'.format(ref_hash, address)
+                        'message': 'Hash {} is not a transaction hash.'.format(ref_hash)
                     })
 
-            # Slice the hashes array from the start_index
-            to_iterate = hashes[start_index:]
+            # The address index returns an iterable that starts at `tx`.
+            hashes = addresses_index.get_sorted_from_address(address, tx)
             did_break = False
-            for index, tx_hash in enumerate(to_iterate):
+            for tx_hash in hashes:
                 if total_added == self._settings.MAX_TX_ADDRESSES_HISTORY:
                     # If already added the max number of elements possible, then break
                     # I need to add this if at the beginning of the loop to handle the case
                     # when the first tx of the address exceeds the limit, so we must return
                     # that the next request should start in the first tx of this address
                     did_break = True
+                    # Saving the first tx hash for the next request
+                    first_hash = tx_hash.hex()
                     break
 
                 if tx_hash not in seen:
@@ -216,6 +208,8 @@ class AddressHistoryResource(Resource):
                         # It's important to validate also the maximum number of inputs and outputs because some txs
                         # are really big and the response payload becomes too big
                         did_break = True
+                        # Saving the first tx hash for the next request
+                        first_hash = tx_hash.hex()
                         break
 
                     seen.add(tx_hash)
@@ -226,10 +220,8 @@ class AddressHistoryResource(Resource):
             if did_break:
                 # We stopped in the middle of the txs of this address
                 # So we return that we still have more data to send
-                break_index = start_index + index
                 has_more = True
                 # The hash to start the search and which address this hash belongs
-                first_hash = hashes[break_index].hex()
                 first_address = address
                 break
 

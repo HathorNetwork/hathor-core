@@ -92,8 +92,11 @@ class AddressIndex(TxGroupIndex[str]):
         raise NotImplementedError
 
     @abstractmethod
-    def get_sorted_from_address(self, address: str) -> list[bytes]:
+    def get_sorted_from_address(self, address: str, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         """ Get a sorted list of transaction hashes of an address
+
+        `tx_start` serves as a pagination marker, indicating the starting position for the iteration.
+        When tx_start is None, the iteration begins from the initial element.
         """
         raise NotImplementedError
 
