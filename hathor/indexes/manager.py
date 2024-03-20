@@ -348,7 +348,6 @@ class RocksDBIndexesManager(IndexesManager):
             self.utxo = RocksDBUtxoIndex(self._db)
 
     def enable_mempool_index(self) -> None:
-        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
+        from hathor.indexes.rocksdb_mempool_tips_index import RocksDBMempoolTipsIndex
         if self.mempool_tips is None:
-            # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
-            self.mempool_tips = MemoryMempoolTipsIndex()
+            self.mempool_tips = RocksDBMempoolTipsIndex(self._db)
