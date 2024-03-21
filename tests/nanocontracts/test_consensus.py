@@ -110,6 +110,8 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         nc.timestamp = int(self.manager.reactor.seconds())
         nc.parents = self.manager.get_new_tx_parents()
         nc.weight = self.manager.daa.minimum_tx_weight(nc)
+
+        self.manager.reactor.advance(10)
         return nc
 
     def test_nc_consensus_unknown_blueprint(self):
@@ -248,6 +250,15 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         nc_id = nc.hash
 
         self.assertTrue(self.simulator.run(600))
+        nc_loaded = self.manager.tx_storage.get_transaction(nc_id)
+        nc_loaded_meta = nc_loaded.get_metadata()
+        self.assertIsNotNone(nc_loaded_meta.first_block)
+        self.assertIsNone(nc_loaded_meta.voided_by)
+
+        block_initialize = self.manager.tx_storage.get_best_block()
+
+        nc_storage = self.manager.get_best_block_nc_storage(nc_id)
+        self.assertEqual(nc_storage.get('token_uid'), self.token_uid)
 
         # Make a deposit.
 
@@ -265,7 +276,9 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertIsNotNone(meta.first_block)
         self.assertIsNone(meta.voided_by)
 
-        nc_storage = self.manager.consensus_algorithm.nc_storage_factory(nc_id)
+        block_deposit = self.manager.tx_storage.get_best_block()
+
+        nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(deposit_amount, nc_storage.get_balance(self.token_uid))
 
         # Make a withdrawal of 1 HTR.
@@ -283,7 +296,7 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertIsNotNone(meta2.first_block)
         self.assertIsNone(meta2.voided_by)
 
-        nc_storage = self.manager.consensus_algorithm.nc_storage_factory(nc_id)
+        nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(deposit_amount - 1, nc_storage.get_balance(self.token_uid))
 
         # Make a withdrawal of the remainder.
@@ -301,7 +314,7 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertIsNotNone(meta3.first_block)
         self.assertIsNone(meta3.voided_by)
 
-        nc_storage = self.manager.consensus_algorithm.nc_storage_factory(nc_id)
+        nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(1, nc_storage.get_balance(self.token_uid))
 
         # Try to withdraw more than available, so it fails.
@@ -319,7 +332,15 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertIsNotNone(meta4.first_block)
         self.assertEqual(meta4.voided_by, {settings.NC_EXECUTION_FAIL_ID})
 
-        nc_storage = self.manager.consensus_algorithm.nc_storage_factory(nc_id)
+        nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(1, nc_storage.get_balance(self.token_uid))
 
         self.assertNoBlocksVoided()
+
+        # Check balance at different blocks
+
+        nc_storage = self.manager.get_nc_storage(block_initialize, nc_id)
+        self.assertEqual(0, nc_storage.get_balance(self.token_uid))
+
+        nc_storage = self.manager.get_nc_storage(block_deposit, nc_id)
+        self.assertEqual(deposit_amount, nc_storage.get_balance(self.token_uid))

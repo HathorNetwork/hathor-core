@@ -178,7 +178,6 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             self.genesis_private_key,
         )
         self.assertTrue(self.manager.on_new_tx(nc, fails_silently=False))
-        nc_storage = self.manager.consensus_algorithm.nc_storage_factory(nc.hash)
         # Execute the nano contract
         add_new_block(self.manager)
 
@@ -249,7 +248,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         # Add to DAG.
         self.assertTrue(self.manager.on_new_tx(nc_bet, fails_silently=False))
         # Execute the deposit
-        nc_bet.execute(nc_storage)
+        add_new_block(self.manager)
 
         address_param = "address_details.a'{}'".format(address_b58)
         response2 = yield self.web.get(

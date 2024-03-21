@@ -87,6 +87,10 @@ class NanoContract(Transaction):
         # Cache.
         self._blueprint_class: Optional[Type[Blueprint]] = None
 
+    def is_creating_a_new_contract(self) -> bool:
+        """Return true if this transaction is creating a new contract."""
+        return self.nc_method == NC_INITIALIZE_METHOD
+
     def get_nanocontract_id(self) -> bytes:
         """Return the contract id."""
         if self.nc_method == NC_INITIALIZE_METHOD:

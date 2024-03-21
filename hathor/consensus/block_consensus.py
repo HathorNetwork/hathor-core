@@ -46,33 +46,80 @@ class BlockConsensusAlgorithm:
 
     def update_consensus(self, block: Block) -> None:
         self.update_voided_info(block)
-        self.execute_nano_contracts(block)
+        if self._settings.ENABLE_NANO_CONTRACTS:
+            self.execute_nano_contracts(block)
 
     def execute_nano_contracts(self, block: Block) -> None:
         """Execute the method calls for transactions confirmed by this block."""
         from hathor.nanocontracts import NanoContract, NCFail
+
+        # If we reach this point, Nano Contracts must be enabled.
+        assert self._settings.ENABLE_NANO_CONTRACTS
+
         meta = block.get_metadata()
         if meta.voided_by:
             # Nothing to execute!
             return
 
-        nc_calls: list[NanoContract] = [tx for tx in self.context.txs_affected if isinstance(tx, NanoContract)]
-        if not nc_calls:
+        if block.is_genesis:
+            # Nothing to execute!
             return
 
-        # If we reach this point, Nano Contracts must be enabled.
-        assert self._settings.ENABLE_NANO_CONTRACTS
+        assert meta.nc_block_root_id is None
+        parent = block.get_block_parent()
+        parent_meta = parent.get_metadata()
+        block_root_id = parent_meta.nc_block_root_id
+
+        nc_calls: list[NanoContract] = []
+        for tx in block.iter_transactions_in_this_block():
+            if not isinstance(tx, NanoContract):
+                # Skip other type of transactions.
+                continue
+            tx_meta = tx.get_metadata()
+            if tx_meta.voided_by:
+                # Skip voided transactions.
+                continue
+            nc_calls.append(tx)
+
+        if not nc_calls:
+            meta.nc_block_root_id = block_root_id
+            self.context.save(block)
+            return
+
+        block_trie = self.context.consensus.nc_storage_factory.get_block_trie(block_root_id)
 
         # TODO Bad ordering because tx.timestamp can be cherry picked. It's here just for testing.
         nc_calls.sort(key=lambda tx: (tx.timestamp, tx.hash))
         for tx in nc_calls:
-            nc_storage = self.context.consensus.nc_storage_factory(tx.get_nanocontract_id())
+            nc_id = tx.get_nanocontract_id()
+
+            if tx.is_creating_a_new_contract():
+                # A contract tree cannot exist before the contract is created.
+                assert not block_trie.has_key(nc_id)
+                nc_root_id = None
+            else:
+                # A contract tree must always exist after the contract has been created.
+                nc_root_id = block_trie.get(nc_id)
+
+            nc_storage = self.context.consensus.nc_storage_factory(nc_id, nc_root_id)
             try:
                 tx.execute(nc_storage)
+                # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
+                #      method once per contract per block, just like we do for the block_trie. This ensures we will
+                #      have a clean database with no orphan nodes.
+                nc_storage.commit()
+                block_trie.update(nc_id, nc_storage.get_root_id())
             except NCFail:
+                self.log.exception('nc execution failed', tx=tx.hash.hex())
                 tx_meta = tx.get_metadata()
                 tx_meta.add_voided_by(self._settings.NC_EXECUTION_FAIL_ID)
                 self.context.save(tx)
+
+        # Save block state root id. If nothings happens, it should be the same as its block parent.
+        block_trie.commit()
+        assert block_trie.root.id is not None
+        meta.nc_block_root_id = block_trie.root.id
+        self.context.save(block)
 
     def update_voided_info(self, block: Block) -> None:
         """ This method is called only once when a new block arrives.

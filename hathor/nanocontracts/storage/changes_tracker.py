@@ -14,8 +14,8 @@
 
 from typing import Any
 
-from hathor.nanocontracts.storage.base_storage import BalanceKey, DataKey, NCBaseStorage
-from hathor.nanocontracts.storage.types import DeletedKey
+from hathor.nanocontracts.storage.base_storage import AttrKey, BalanceKey, NCBaseStorage
+from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey
 
 
 class NCChangesTracker(NCBaseStorage):
@@ -27,27 +27,27 @@ class NCChangesTracker(NCBaseStorage):
         self.storage = storage
         self.nc_id = nc_id
 
-        self.data: dict[DataKey, Any] = {}
+        self.data: dict[AttrKey, Any] = {}
         self.balance_diff: dict[BalanceKey, int] = {}
 
         self.has_been_commited = False
 
-    def _to_key(self, key: str) -> DataKey:
+    def _to_key(self, key: str) -> AttrKey:
         """Return the actual key used in the storage."""
         assert self.nc_id is not None
-        return DataKey(self.nc_id, key)
+        return AttrKey(self.nc_id, key)
 
     def check_if_locked(self) -> None:
         """Check if this instance has been locked. A lock occurs after a commit is executed."""
         if self.has_been_commited:
             raise RuntimeError('you cannot change any value after the commit has been executed')
 
-    def get(self, key: str) -> Any:
+    def get(self, key: str, *, default: Any = _NOT_PROVIDED) -> Any:
         internal_key = self._to_key(key)
         if internal_key in self.data:
             value = self.data[internal_key]
         else:
-            value = self.storage.get(key)
+            value = self.storage.get(key, default=default)
         if value is DeletedKey:
             raise KeyError(key)
         return value
@@ -101,3 +101,6 @@ class NCChangesTracker(NCBaseStorage):
 
     def is_empty(self) -> bool:
         return not bool(self.data)
+
+    def get_root_id(self) -> bytes:
+        raise NotImplementedError

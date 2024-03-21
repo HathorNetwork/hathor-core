@@ -81,7 +81,7 @@ class NanoContractStateResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Nano contract failed execution: {params.id}')
             return error_response.json_dumpb()
 
-        nc_storage = self.manager.consensus_algorithm.nc_storage_factory(nc_id_bytes)
+        nc_storage = self.manager.get_best_block_nc_storage(nc_id_bytes)
         value: Any
 
         # Get balances.

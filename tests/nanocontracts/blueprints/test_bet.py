@@ -17,7 +17,7 @@ from hathor.nanocontracts.blueprints.bet import (
 from hathor.nanocontracts.exception import NCInsufficientFunds
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.storage import NCMemoryStorage
+from hathor.nanocontracts.storage import NCMemoryStorageFactory
 from hathor.nanocontracts.types import Context, NCAction, NCActionType, SignedData
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
@@ -55,7 +55,9 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         super().setUp()
         self.manager = self.create_peer('testnet')
         self.token_uid = settings.HATHOR_TOKEN_UID
-        self.nc_storage = NCMemoryStorage()
+
+        nc_storage_factory = NCMemoryStorageFactory()
+        self.nc_storage = nc_storage_factory(b'', None)
         self.runner = self.get_runner(Bet, self.nc_storage)
 
     def _get_any_tx(self):

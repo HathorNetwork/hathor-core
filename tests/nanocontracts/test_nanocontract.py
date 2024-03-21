@@ -8,7 +8,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, NCMethodNotFound, NCSerializationError
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.nanocontract import NanoContract
-from hathor.nanocontracts.storage import NCMemoryStorage
+from hathor.nanocontracts.storage import NCMemoryStorageFactory
 from hathor.nanocontracts.types import Context, NCActionType, public
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import TokenAuthorityNotAllowed
@@ -166,9 +166,11 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.assertIn(address, related_addresses)
 
     def test_execute_success(self):
-        nc_storage = NCMemoryStorage()
-
         nc = self._get_nc()
+
+        factory = NCMemoryStorageFactory()
+        nc_storage = factory(nc.hash, None)
+
         nc.execute(nc_storage)
 
         self.assertEqual('string', nc.call_private_method(nc_storage, 'get_a'))

@@ -1,7 +1,7 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import NCFail, NCInsufficientFunds, NCPrivateMethodError, UnknownFieldType
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.storage import NCMemoryStorage
+from hathor.nanocontracts.storage import NCMemoryStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.base_storage import BalanceKey
 from hathor.nanocontracts.types import Context, NCAction, NCActionType, public
 from tests import unittest
@@ -80,8 +80,12 @@ class NCBlueprintTestCase(unittest.TestCase):
     _enable_sync_v1 = True
     _enable_sync_v2 = True
 
+    def get_nc_storage(self) -> NCMemoryStorage:
+        factory = NCMemoryStorageFactory()
+        return factory(b'', None)
+
     def test_simple_fields(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(SimpleFields, nc_id, storage)
 
@@ -103,7 +107,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(storage.get('e'), e)
 
     def test_container_fields(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(ContainerFields, nc_id, storage)
 
@@ -123,7 +127,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(storage.get('a:c'), '3')
 
     def test_public_method_fails(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(MyBlueprint, nc_id, storage)
 
@@ -135,31 +139,31 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(1, storage.get('a'))
 
     def test_private_method_change_state(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(MyBlueprint, nc_id, storage)
         with self.assertRaises(NCPrivateMethodError):
             runner.call_private_method('my_private_method_fail')
 
     def test_private_method_success(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(MyBlueprint, nc_id, storage)
         self.assertEqual(1, runner.call_private_method('my_private_method_nop'))
 
     def test_initial_balance(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         self.assertEqual(0, storage.get_balance(b''))
 
     def test_nop(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(MyBlueprint, nc_id, storage)
         ctx = Context([], None, b'', timestamp=0)
         runner.call_public_method('nop', ctx)
 
     def test_withdrawal_fail(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(MyBlueprint, nc_id, storage)
         action = NCAction(NCActionType.WITHDRAWAL, b'\0', 1)
@@ -168,7 +172,7 @@ class NCBlueprintTestCase(unittest.TestCase):
             runner.call_public_method('nop', ctx)
 
     def test_deposits_and_withdrawals(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(MyBlueprint, nc_id, storage)
 
@@ -194,7 +198,7 @@ class NCBlueprintTestCase(unittest.TestCase):
             runner.call_public_method('nop', ctx)
 
     def test_withdraw_wrong_token(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(MyBlueprint, nc_id, storage)
 
@@ -222,7 +226,7 @@ class NCBlueprintTestCase(unittest.TestCase):
                     self.a = [1, 2, 3]
 
     def test_balances(self):
-        storage = NCMemoryStorage()
+        storage = self.get_nc_storage()
         nc_id = b''
         runner = Runner(MyBlueprint, nc_id, storage)
 

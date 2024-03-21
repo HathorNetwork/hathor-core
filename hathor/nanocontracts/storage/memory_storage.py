@@ -12,53 +12,123 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
+import pickle
+from typing import Any, Optional
 
-from hathor.nanocontracts.storage.base_storage import BalanceKey, DataKey, NCBaseStorage, NCStorageFactory
+from hathor.nanocontracts.storage.base_storage import AttrKey, BalanceKey, NCBaseStorage, NCStorageFactory, _Tag
+from hathor.nanocontracts.storage.patricia_trie import Node, PatriciaTrie
+from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
+from hathor.types import VertexId
 
 
 class NCMemoryStorage(NCBaseStorage):
     """Memory implementation of the storage."""
 
-    def __init__(self, *, nc_id: bytes = b'') -> None:
-        # Data
-        self.data: dict[DataKey, Any] = {}
+    def __init__(self, *, trie: PatriciaTrie, nc_id: VertexId) -> None:
+        # State (balances and attributes)
+        self._trie: PatriciaTrie = trie
 
-        # Balances
-        self.balances: dict[BalanceKey, int] = {}
-
-        # Prefix
+        # Nano contract id
         self.nc_id = nc_id
 
-    def _to_key(self, key: str) -> DataKey:
-        """Return the actual key used in the storage."""
-        return DataKey(self.nc_id, key)
+    def _serialize(self, value: Any) -> bytes:
+        """Serialize a value to be stored on the trie."""
+        return pickle.dumps(value)
 
-    def get(self, key: str) -> Any:
-        internal_key = self._to_key(key)
-        return self.data[internal_key]
+    def _deserialize(self, _bytes: bytes) -> Any:
+        """Deserialize a value stored on the trie."""
+        value = pickle.loads(_bytes)
+        if isinstance(value, DeletedKeyType):
+            return DeletedKey
+        return value
+
+    def _trie_get(self, key: bytes, *, default: Any = _NOT_PROVIDED) -> Any:
+        """Internal method that gets the value of a key from the trie."""
+        try:
+            value_bytes = self._trie.get(key)
+        except KeyError:
+            if default is _NOT_PROVIDED:
+                raise
+            return default
+        else:
+            return self._deserialize(value_bytes)
+
+    def _trie_update(self, key: bytes, value: Any) -> None:
+        """Internal method that updates the value of a key in the trie."""
+        value_bytes = self._serialize(value)
+        self._trie.update(key, value_bytes)
+
+    def _to_attr_key(self, key: str) -> AttrKey:
+        """Return the actual key used in the storage."""
+        return AttrKey(self.nc_id, key)
+
+    def get(self, key: str, *, default: Any = _NOT_PROVIDED) -> Any:
+        internal_key = self._to_attr_key(key)
+        internal_key_bytes = bytes(internal_key)
+        try:
+            value = self._trie_get(internal_key_bytes, default=default)
+        except KeyError as e:
+            raise KeyError(f'key={key!r} key_bytes={internal_key_bytes!r}') from e
+        if value is DeletedKey:
+            raise KeyError(key)
+        return value
 
     def put(self, key: str, value: Any) -> None:
-        internal_key = self._to_key(key)
-        self.data[internal_key] = value
+        internal_key = self._to_attr_key(key)
+        self._trie_update(bytes(internal_key), value)
 
     def delete(self, key: str) -> None:
-        internal_key = self._to_key(key)
-        del self.data[internal_key]
+        internal_key = self._to_attr_key(key)
+        self._trie_update(bytes(internal_key), DeletedKey)
 
     def get_balance(self, token_uid: bytes) -> int:
         key = BalanceKey(self.nc_id, token_uid)
-        return self.balances.get(key, 0)
+        return self._trie_get(bytes(key), default=0)
 
     def get_all_balances(self) -> dict[BalanceKey, int]:
-        return dict(self.balances)
+        balances: dict[BalanceKey, int] = {}
+        balance_tag = self._trie._encode_key(_Tag.BALANCE.value)
+
+        node = self._trie._find_nearest_node(balance_tag)
+        if node.key.startswith(balance_tag):
+            balance_root = node
+        else:
+            for prefix, child_id in node.children.items():
+                child = self._trie.get_node(child_id)
+                if child.key.startswith(balance_tag):
+                    balance_root = child
+                    break
+            else:
+                # No balance found.
+                return balances
+
+        for node, _, is_leaf in self._trie.iter_dfs(node=balance_root):
+            if node.value is None:
+                # Skip all nodes with no value.
+                continue
+            # Found a leaf!
+            assert is_leaf
+            assert node.value is not None
+            value = self._deserialize(node.value)
+            token_uid = self._trie._decode_key(node.key)[1:]
+            key = BalanceKey(self.nc_id, token_uid)
+            balances[key] = value
+        return balances
 
     def add_balance(self, token_uid: bytes, amount: int) -> None:
         key = BalanceKey(self.nc_id, token_uid)
-        old = self.balances.get(key, 0)
+        key_bytes = bytes(key)
+        old = self._trie_get(key_bytes, default=0)
         new = old + amount
         assert new >= 0, 'balance cannot be negative'
-        self.balances[key] = new
+        self._trie_update(key_bytes, new)
+
+    def commit(self) -> None:
+        self._trie.commit()
+
+    def get_root_id(self) -> bytes:
+        assert self._trie.root.id is not None
+        return self._trie.root.id
 
 
 class NCMemoryStorageFactory(NCStorageFactory):
@@ -69,14 +139,13 @@ class NCMemoryStorageFactory(NCStorageFactory):
     """
 
     def __init__(self) -> None:
-        # This attribute stores data from all contracts.
-        self.data: dict[DataKey, Any] = {}
+        # As it is a memory storage, the factory uses this attribute to store all contract-related data.
+        self._db: dict[bytes, Node] = {}
 
-        # This attribute stores balances from all contracts.
-        self.balances: dict[BalanceKey, int] = {}
+    def get_block_trie(self, root_id: Optional[bytes]) -> PatriciaTrie:
+        trie = PatriciaTrie(db=self._db, root_id=root_id)
+        return trie
 
-    def __call__(self, nano_contract_id: bytes) -> NCBaseStorage:
-        storage = NCMemoryStorage(nc_id=nano_contract_id)
-        storage.data = self.data
-        storage.balances = self.balances
-        return storage
+    def __call__(self, nano_contract_id: bytes, nc_root_id: Optional[bytes]) -> NCMemoryStorage:
+        trie = self.get_block_trie(nc_root_id)
+        return NCMemoryStorage(trie=trie, nc_id=nano_contract_id)

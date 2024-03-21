@@ -12,18 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 from abc import ABC, abstractmethod
-from typing import Any, NamedTuple
+from enum import Enum
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+
+from hathor.nanocontracts.storage.types import _NOT_PROVIDED
+
+if TYPE_CHECKING:
+    from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
+
+
+class _Tag(Enum):
+    ATTR = b'\0'
+    BALANCE = b'\1'
+
+
+class AttrKey(NamedTuple):
+    nc_id: bytes
+    key: str
+
+    def __bytes__(self):
+        base = self.key.encode('ascii')
+        return _Tag.ATTR.value + hashlib.sha1(base).digest()
 
 
 class BalanceKey(NamedTuple):
-    nanocontract_id: bytes
+    nc_id: bytes
     token_uid: bytes
 
-
-class DataKey(NamedTuple):
-    nc_id: bytes
-    key: str
+    def __bytes__(self):
+        return _Tag.BALANCE.value + self.token_uid
 
 
 class NCBaseStorage(ABC):
@@ -31,10 +50,10 @@ class NCBaseStorage(ABC):
     """
 
     @abstractmethod
-    def get(self, key: str) -> Any:
+    def get(self, key: str, *, default: Any = _NOT_PROVIDED) -> Any:
         """Return the value of the provided `key`.
 
-        It raises KeyError if key is not found.
+        It raises KeyError if key is not found and a default value is not provided.
         """
         raise NotImplementedError
 
@@ -67,8 +86,24 @@ class NCBaseStorage(ABC):
         Note that the amount might be negative."""
         raise NotImplementedError
 
+    @abstractmethod
+    def commit(self) -> None:
+        """Flush all local changes to the storage."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_root_id(self) -> bytes:
+        """Return the current merkle root id of the trie."""
+        raise NotImplementedError
+
 
 class NCStorageFactory(ABC):
-    def __call__(self, nano_contract_id: bytes) -> NCBaseStorage:
+    @abstractmethod
+    def get_block_trie(self, root_id: Optional[bytes]) -> 'PatriciaTrie':
+        """Return a PatriciaTrie object with a given root."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def __call__(self, nano_contract_id: bytes, root_id: Optional[bytes]) -> NCBaseStorage:
         """Return a storage object for a given nano contract."""
         raise NotImplementedError
