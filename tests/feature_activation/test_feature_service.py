@@ -119,6 +119,7 @@ def service(feature_settings: FeatureSettings, tx_storage: TransactionStorage) -
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
 
     return service
 
@@ -169,6 +170,7 @@ def test_get_state_from_defined(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -200,6 +202,7 @@ def test_get_state_from_started_to_failed(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -231,11 +234,13 @@ def test_get_state_from_started_to_must_signal_on_timeout(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.MUST_SIGNAL
+    service.bit_signaling_service.on_must_signal.assert_called_once_with(Feature.NOP_FEATURE_1)
 
 
 @pytest.mark.parametrize('block_height', [8, 9, 10, 11])
@@ -263,6 +268,7 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -294,6 +300,7 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -333,6 +340,7 @@ def test_get_state_from_started_to_started(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -362,6 +370,7 @@ def test_get_state_from_must_signal_to_locked_in(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -394,6 +403,7 @@ def test_get_state_from_locked_in_to_active(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -426,6 +436,7 @@ def test_get_state_from_locked_in_to_locked_in(
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -451,6 +462,7 @@ def test_get_state_from_active(block_mocks: list[Block], tx_storage: Transaction
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -473,6 +485,7 @@ def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStor
         }
     )
     service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
     calculate_new_state_mock = Mock(wraps=service._calculate_new_state)
 
@@ -507,6 +520,7 @@ def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStor
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.is_feature_active(block=block, feature=Feature.NOP_FEATURE_1)
@@ -531,6 +545,7 @@ def test_get_state_from_failed(block_mocks: list[Block], tx_storage: Transaction
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -559,6 +574,7 @@ def test_get_bits_description(tx_storage: TransactionStorage) -> None:
         feature_settings=feature_settings,
         tx_storage=tx_storage
     )
+    service.bit_signaling_service = Mock()
 
     def get_state(self: FeatureService, *, block: Block, feature: Feature) -> FeatureState:
         states = {
@@ -596,6 +612,7 @@ def test_get_ancestor_at_height_invalid(
     ancestor_height: int
 ) -> None:
     service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     with pytest.raises(AssertionError) as e:
@@ -625,6 +642,7 @@ def test_get_ancestor_at_height(
     ancestor_height: int
 ) -> None:
     service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
     result = service._get_ancestor_at_height(block=block, ancestor_height=ancestor_height)
 
@@ -653,6 +671,7 @@ def test_get_ancestor_at_height_voided(
     ancestor_height: int
 ) -> None:
     service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
     parent_block = block_mocks[block_height - 1]
     parent_block.get_metadata().voided_by = {b'some'}
@@ -711,6 +730,7 @@ def test_check_must_signal(
         }
     )
     service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
     result = service.is_signaling_mandatory_features(block)
