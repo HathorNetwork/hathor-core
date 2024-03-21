@@ -1,5 +1,6 @@
 import pytest
 
+from hathor.builder import SyncSupportLevel
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator import FakeConnection, Simulator
@@ -54,11 +55,13 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                                                       'the test class or pass `enable_sync_v2` by argument')
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
+        sync_v1_support = SyncSupportLevel.ENABLED if enable_sync_v1 else SyncSupportLevel.DISABLED
+        sync_v2_support = SyncSupportLevel.ENABLED if enable_sync_v2 else SyncSupportLevel.DISABLED
 
         builder = simulator.get_default_builder() \
             .set_peer_id(self.get_random_peer_id_from_pool()) \
-            .set_enable_sync_v1(enable_sync_v1) \
-            .set_enable_sync_v2(enable_sync_v2)
+            .set_sync_v1_support(sync_v1_support) \
+            .set_sync_v2_support(sync_v2_support)
 
         return simulator.create_peer(builder)
 

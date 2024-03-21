@@ -87,6 +87,8 @@ class TestBuilder(Builder):
     def __init__(self) -> None:
         super().__init__()
         self.set_network('testnet')
+        # default builder has sync-v2 enabled for tests
+        self.enable_sync_v2()
 
     def build(self) -> BuildArtifacts:
         artifacts = super().build()
