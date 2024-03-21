@@ -495,7 +495,11 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
             if total:
                 progress_ = count / total
                 elapsed_time = t_log - t_start
-                remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
+                remaining_time: str | LogDuration
+                if progress_ == 0:
+                    remaining_time = '?'
+                else:
+                    remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
                 log.info(
                     f'loading... {math.floor(progress_ * 100):2.0f}%',
                     progress=progress_,
