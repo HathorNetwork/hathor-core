@@ -131,6 +131,8 @@ class RunNode:
                                help='Enable running both sync protocols.')
         sync_args.add_argument('--sync-v1-only', action='store_true', help='Disable support for running sync-v2.')
         sync_args.add_argument('--sync-v2-only', action='store_true', help='Disable support for running sync-v1.')
+        sync_args.add_argument('--x-remove-sync-v1', action='store_true', help='Make sync-v1 unavailable, thus '
+                               'possible to be enable in runtime.')
         sync_args.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # old argument
         sync_args.add_argument('--x-sync-bridge', action='store_true', help=SUPPRESS)  # old argument
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
