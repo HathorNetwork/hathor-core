@@ -139,10 +139,9 @@ class BitSignalingService:
 
     def on_must_signal(self, feature: Feature) -> None:
         """
-        When the MUST_SIGNAL phase is reached, feature support is automatically enabled, unless explicitly disabled.
+        When the MUST_SIGNAL phase is reached, feature support is automatically enabled.
         """
-        if feature not in self._not_support_features:
-            self.add_feature_support(feature)
+        self.add_feature_support(feature)
 
     def _log_signal_bits(self, feature: Feature, enable_bit: bool, support: bool, not_support: bool) -> None:
         """Generate info log for a feature's signal."""

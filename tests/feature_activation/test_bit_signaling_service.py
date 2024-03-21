@@ -295,12 +295,13 @@ def test_on_must_signal_not_supported() -> None:
         tx_storage=Mock(),
         support_features=set(),
         not_support_features={Feature.NOP_FEATURE_1},
+        feature_storage=Mock(),
     )
 
     service.on_must_signal(feature=Feature.NOP_FEATURE_1)
 
-    assert service._support_features == set()
-    assert service._not_support_features == {Feature.NOP_FEATURE_1}
+    assert service._support_features == {Feature.NOP_FEATURE_1}
+    assert service._not_support_features == set()
 
 
 def test_on_must_signal_supported() -> None:
@@ -310,6 +311,7 @@ def test_on_must_signal_supported() -> None:
         tx_storage=Mock(),
         support_features=set(),
         not_support_features=set(),
+        feature_storage=Mock(),
     )
 
     service.on_must_signal(feature=Feature.NOP_FEATURE_1)
