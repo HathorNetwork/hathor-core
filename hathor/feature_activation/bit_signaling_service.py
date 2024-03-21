@@ -81,29 +81,50 @@ class BitSignalingService:
 
         Returns: a number that represents the signal bits in binary.
         """
-        signaling_features = self._get_signaling_features(block)
+        feature_signals = self._calculate_feature_signals(block=block, log=log)
         signal_bits = 0
+
+        for feature, (criteria, enable_bit) in feature_signals.items():
+            signal_bits |= int(enable_bit) << criteria.bit
+
+        return signal_bits
+
+    def _calculate_feature_signals(self, *, block: Block, log: bool = False) -> dict[Feature, tuple[Criteria, bool]]:
+        """
+        Calculate the signal value for each signaling feature.
+
+        Args:
+            block: the block that is used to determine signaling features.
+            log: whether to log the signal for each feature.
+
+        Returns: a dict with each feature paired with its criteria and its signal value.
+        """
+        signaling_features = self._get_signaling_features(block)
+        signals: dict[Feature, tuple[Criteria, bool]] = {}
 
         for feature, criteria in signaling_features.items():
             default_enable_bit = criteria.signal_support_by_default
             support = feature in self._support_features
             not_support = feature in self._not_support_features
             enable_bit = (default_enable_bit or support) and not not_support
+            signals[feature] = (criteria, enable_bit)
 
             if log:
                 self._log_signal_bits(feature, enable_bit, support, not_support)
 
-            signal_bits |= int(enable_bit) << criteria.bit
-
-        return signal_bits
+        return signals
 
     def get_support_features(self) -> list[Feature]:
-        """Get a list of features with explicitly enabled support."""
-        return list(self._support_features)
+        """Get a list of features with enabled support."""
+        best_block = self._tx_storage.get_best_block()
+        feature_signals = self._calculate_feature_signals(block=best_block)
+        return [feature for feature, (_, enable_bit) in feature_signals.items() if enable_bit]
 
     def get_not_support_features(self) -> list[Feature]:
-        """Get a list of features with explicitly disabled support."""
-        return list(self._not_support_features)
+        """Get a list of features with disabled support."""
+        best_block = self._tx_storage.get_best_block()
+        feature_signals = self._calculate_feature_signals(block=best_block)
+        return [feature for feature, (_, enable_bit) in feature_signals.items() if not enable_bit]
 
     def add_feature_support(self, feature: Feature) -> None:
         """Add explicit support for a feature by enabling its signaling bit."""

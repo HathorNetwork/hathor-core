@@ -49,20 +49,20 @@ class FeatureActivationSysctl(Sysctl):
         )
 
     def get_support_features(self) -> list[str]:
-        """Get a list of feature names with explicitly enabled support."""
+        """Get a list of feature names with enabled support."""
         return [feature.value for feature in self._bit_signaling_service.get_support_features()]
 
     def get_not_support_features(self) -> list[str]:
-        """Get a list of feature names with explicitly disabled support."""
+        """Get a list of feature names with disabled support."""
         return [feature.value for feature in self._bit_signaling_service.get_not_support_features()]
 
     def add_feature_support(self, *features: str) -> None:
-        """Add explicit support for a feature by enabling its signaling bit."""
+        """Explicitly add support for a feature by enabling its signaling bit."""
         for feature in features:
             self._bit_signaling_service.add_feature_support(Feature[feature])
 
     def remove_feature_support(self, *features: str) -> None:
-        """Remove explicit support for a feature by disabling its signaling bit."""
+        """Explicitly remove support for a feature by disabling its signaling bit."""
         for feature in features:
             self._bit_signaling_service.remove_feature_support(Feature[feature])
 
