@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import getpass
-import json
 import os
 import platform
 import sys
@@ -96,8 +95,7 @@ class CliBuilder:
         self.log = logger.new()
         self.reactor = reactor
 
-        peer_id = self.create_peer_id()
-
+        peer_id = PeerId.create_from_json_path(self._args.peer) if self._args.peer else PeerId()
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
         self.log.info(
@@ -367,7 +365,7 @@ class CliBuilder:
             self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         for description in self._args.listen:
-            p2p_manager.add_listen_address(description)
+            p2p_manager.add_listen_address_description(description)
 
         if self._args.peer_id_blacklist:
             self.log.info('with peer id blacklist', blacklist=self._args.peer_id_blacklist)
@@ -396,14 +394,6 @@ class CliBuilder:
                 sys.exit(-1)
             print('Hostname discovered and set to {}'.format(hostname))
         return hostname
-
-    def create_peer_id(self) -> PeerId:
-        if not self._args.peer:
-            peer_id = PeerId()
-        else:
-            data = json.load(open(self._args.peer, 'r'))
-            peer_id = PeerId.create_from_json(data)
-        return peer_id
 
     def create_wallet(self) -> BaseWallet:
         if self._args.wallet == 'hd':

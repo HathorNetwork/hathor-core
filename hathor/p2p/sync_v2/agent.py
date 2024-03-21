@@ -142,7 +142,8 @@ class NodeBlockSync(SyncAgent):
         # Saves if I am in the middle of a mempool sync
         # we don't execute any sync while in the middle of it
         self.mempool_manager = SyncMempoolManager(self)
-        self._receiving_tips: Optional[list[bytes]] = None
+        self._receiving_tips: Optional[list[VertexId]] = None
+        self.max_receiving_tips: int = self._settings.MAX_MEMPOOL_RECEIVING_TIPS
 
         # Cache for get_tx calls
         self._get_tx_cache: OrderedDict[bytes, BaseTransaction] = OrderedDict()
@@ -476,7 +477,13 @@ class NodeBlockSync(SyncAgent):
         data = json.loads(payload)
         data = [bytes.fromhex(x) for x in data]
         # filter-out txs we already have
-        self._receiving_tips.extend(tx_id for tx_id in data if not self.partial_vertex_exists(tx_id))
+        try:
+            self._receiving_tips.extend(VertexId(tx_id) for tx_id in data if not self.partial_vertex_exists(tx_id))
+        except ValueError:
+            self.protocol.send_error_and_close_connection('Invalid trasaction ID received')
+        # XXX: it's OK to do this *after* the extend because the payload is limited by the line protocol
+        if len(self._receiving_tips) > self.max_receiving_tips:
+            self.protocol.send_error_and_close_connection(f'Too many tips: {len(self._receiving_tips)}')
 
     def handle_tips_end(self, _payload: str) -> None:
         """ Handle a TIPS-END message.

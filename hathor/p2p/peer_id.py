@@ -14,6 +14,7 @@
 
 import base64
 import hashlib
+import json
 from enum import Enum
 from math import inf
 from typing import TYPE_CHECKING, Any, Optional, cast
@@ -24,6 +25,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from OpenSSL.crypto import X509, PKey
+from structlog import get_logger
 from twisted.internet.interfaces import ISSLTransport
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
 
@@ -34,6 +36,8 @@ from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+
+logger = get_logger()
 
 
 class InvalidPeerIdException(Exception):
@@ -64,8 +68,10 @@ class PeerId:
     retry_attempts: int     # how many retries were made
     last_seen: float        # last time this peer was seen
     flags: set[str]
+    source_file: str | None
 
     def __init__(self, auto_generate_keys: bool = True) -> None:
+        self._log = logger.new()
         self._settings = get_global_settings()
         self.id = None
         self.private_key = None
@@ -160,8 +166,14 @@ class PeerId:
             return True
 
     @classmethod
+    def create_from_json_path(cls, path: str) -> 'PeerId':
+        """Create a new PeerId from a JSON file."""
+        data = json.load(open(path, 'r'))
+        return PeerId.create_from_json(data)
+
+    @classmethod
     def create_from_json(cls, data: dict[str, Any]) -> 'PeerId':
-        """ Create a new PeerId from a JSON.
+        """ Create a new PeerId from JSON data.
 
         It is used both to load a PeerId from disk and to create a PeerId
         from a peer connection.
@@ -408,3 +420,20 @@ class PeerId:
             return False
 
         return True
+
+    def reload_entrypoints_from_source_file(self) -> None:
+        """Update this PeerId's entrypoints from the json file."""
+        if not self.source_file:
+            raise Exception('Trying to reload entrypoints but no peer config file was provided.')
+
+        new_peer_id = PeerId.create_from_json_path(self.source_file)
+
+        if new_peer_id.id != self.id:
+            self._log.error(
+                'Ignoring peer id file update because the peer_id does not match.',
+                current_peer_id=self.id,
+                new_peer_id=new_peer_id.id,
+            )
+            return
+
+        self.entrypoints = new_peer_id.entrypoints

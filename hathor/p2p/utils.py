@@ -33,18 +33,18 @@ from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import get_representation_for_all_genesis
 
 
-def discover_hostname() -> Optional[str]:
-    """ Try to discover your hostname. It is a synchonous operation and
+def discover_hostname(timeout: float | None = None) -> Optional[str]:
+    """ Try to discover your hostname. It is a synchronous operation and
     should not be called from twisted main loop.
     """
-    return discover_ip_ipify()
+    return discover_ip_ipify(timeout)
 
 
-def discover_ip_ipify() -> Optional[str]:
+def discover_ip_ipify(timeout: float | None = None) -> Optional[str]:
     """ Try to discover your IP address using ipify's api.
-    It is a synchonous operation and should not be called from twisted main loop.
+    It is a synchronous operation and should not be called from twisted main loop.
     """
-    response = requests.get('https://api.ipify.org')
+    response = requests.get('https://api.ipify.org', timeout=timeout)
     if response.ok:
         # It may be either an ipv4 or ipv6 in string format.
         ip = response.text

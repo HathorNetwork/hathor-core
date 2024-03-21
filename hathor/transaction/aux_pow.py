@@ -18,6 +18,8 @@ from structlog import get_logger
 
 logger = get_logger()
 
+MAX_MERKLE_PATH_COUNT = 100
+
 
 class BitcoinAuxPow(NamedTuple):
     header_head: bytes  # 36 bytes
@@ -96,8 +98,11 @@ class BitcoinAuxPow(NamedTuple):
         coinbase_head = read_bytes(a)
         coinbase_tail = read_bytes(a)
         c = read_varint(a)
+        if c > MAX_MERKLE_PATH_COUNT:
+            raise ValueError(f'invalid merkle path count: {c} > {MAX_MERKLE_PATH_COUNT}')
         merkle_path = []
         for _ in range(c):
+            assert len(a) >= 32
             merkle_path.append(bytes(a[:32]))
             del a[:32]
         header_tail = read_nbytes(a, 12)
