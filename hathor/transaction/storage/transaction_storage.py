@@ -73,6 +73,7 @@ class TransactionStorage(ABC):
 
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
+    _latest_n_height_tips: list[HeightInfo]
 
     log = get_logger()
 

@@ -1,13 +1,15 @@
 import base64
 import re
+from unittest.mock import patch
 
 import pytest
-from twisted.internet.defer import inlineCallbacks, succeed
+from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.sync_v2.agent import _HeightInfo
+from hathor.p2p.states import ReadyState
+from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import (
     StopAfterNMinedBlocks,
@@ -17,7 +19,10 @@ from hathor.simulator.trigger import (
     Trigger,
 )
 from hathor.transaction.storage import TransactionRocksDBStorage
+from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.traversal import DFSWalk
+from hathor.types import VertexId
+from hathor.util import not_none
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
 
@@ -27,7 +32,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
     seed_config = 2
 
-    def _get_partial_blocks(self, tx_storage):
+    def _get_partial_blocks(self, tx_storage: TransactionStorage) -> set[VertexId]:
         with tx_storage.allow_partially_validated_context():
             partial_blocks = set()
             for tx in tx_storage.get_all_transactions():
@@ -148,19 +153,19 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_full_verification(self):
+    def test_restart_fullnode_full_verification(self) -> None:
         self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_quick(self):
+    def test_restart_fullnode_quick(self) -> None:
         self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_quick_with_cache(self):
+    def test_restart_fullnode_quick_with_cache(self) -> None:
         self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_restart_fullnode_full_verification_with_cache(self):
+    def test_restart_fullnode_full_verification_with_cache(self) -> None:
         self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
 
     def test_exceeds_streaming_and_mempool_limits(self) -> None:
@@ -252,7 +257,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager2)
 
-    def _prepare_sync_v2_find_best_common_block_reorg(self):
+    def _prepare_sync_v2_find_best_common_block_reorg(self) -> FakeConnection:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
         manager1.allow_mining_without_peers()
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
@@ -267,50 +272,53 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(self.simulator.run(3600))
         return conn12
 
-    @inlineCallbacks
-    def test_sync_v2_find_best_common_block_reorg_1(self):
+    async def test_sync_v2_find_best_common_block_reorg_1(self) -> None:
         conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        assert isinstance(conn12._proto1.state, ReadyState)
         sync_agent = conn12._proto1.state.sync_agent
+        assert isinstance(sync_agent, NodeBlockSync)
         rng = conn12.manager2.rng
 
         my_best_block = sync_agent.get_my_best_block()
-        peer_best_block = sync_agent.peer_best_block
+        peer_best_block = not_none(sync_agent.peer_best_block)
 
         fake_peer_best_block = _HeightInfo(my_best_block.height + 3, rng.randbytes(32))
         reorg_height = peer_best_block.height - 50
 
-        def fake_get_peer_block_hashes(heights):
+        def fake_get_peer_block_hashes(heights: list[int]) -> Deferred[list[_HeightInfo]]:
             # return empty as soon as the search lowest height is not the genesis
             if heights[0] != 0:
-                return []
+                return succeed([])
 
             # simulate a reorg
             response = []
             for h in heights:
                 if h < reorg_height:
-                    vertex_id = conn12.manager2.tx_storage.indexes.height.get(h)
+                    index_manager = not_none(conn12.manager2.tx_storage.indexes)
+                    vertex_id = not_none(index_manager.height.get(h))
                 else:
                     vertex_id = rng.randbytes(32)
                 response.append(_HeightInfo(height=h, id=vertex_id))
             return succeed(response)
 
-        sync_agent.get_peer_block_hashes = fake_get_peer_block_hashes
-        common_block_info = yield sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
-        self.assertIsNone(common_block_info)
+        with patch.object(sync_agent, 'get_peer_block_hashes', new=fake_get_peer_block_hashes):
+            common_block_info = await sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
+            self.assertIsNone(common_block_info)
 
-    @inlineCallbacks
-    def test_sync_v2_find_best_common_block_reorg_2(self):
+    async def test_sync_v2_find_best_common_block_reorg_2(self) -> None:
         conn12 = self._prepare_sync_v2_find_best_common_block_reorg()
+        assert isinstance(conn12._proto1.state, ReadyState)
         sync_agent = conn12._proto1.state.sync_agent
+        assert isinstance(sync_agent, NodeBlockSync)
         rng = conn12.manager2.rng
 
         my_best_block = sync_agent.get_my_best_block()
-        peer_best_block = sync_agent.peer_best_block
+        peer_best_block = not_none(sync_agent.peer_best_block)
 
         fake_peer_best_block = _HeightInfo(my_best_block.height + 3, rng.randbytes(32))
         reorg_height = peer_best_block.height - 50
 
-        def fake_get_peer_block_hashes(heights):
+        def fake_get_peer_block_hashes(heights: list[int]) -> Deferred[list[_HeightInfo]]:
             if heights[0] != 0:
                 return succeed([
                     _HeightInfo(height=h, id=rng.randbytes(32))
@@ -321,15 +329,16 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             response = []
             for h in heights:
                 if h < reorg_height:
-                    vertex_id = conn12.manager2.tx_storage.indexes.height.get(h)
+                    index_manager = not_none(conn12.manager2.tx_storage.indexes)
+                    vertex_id = not_none(index_manager.height.get(h))
                 else:
                     vertex_id = rng.randbytes(32)
                 response.append(_HeightInfo(height=h, id=vertex_id))
             return succeed(response)
 
-        sync_agent.get_peer_block_hashes = fake_get_peer_block_hashes
-        common_block_info = yield sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
-        self.assertIsNone(common_block_info)
+        with patch.object(sync_agent, 'get_peer_block_hashes', new=fake_get_peer_block_hashes):
+            common_block_info = await sync_agent.find_best_common_block(my_best_block, fake_peer_best_block)
+            self.assertIsNone(common_block_info)
 
     def test_multiple_unexpected_txs(self) -> None:
         manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
