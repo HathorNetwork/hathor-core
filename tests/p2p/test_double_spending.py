@@ -4,6 +4,7 @@ from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_tx
 
@@ -23,7 +24,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
     def _add_new_transactions(self, manager: HathorManager, num_txs: int) -> list[Transaction]:
         txs = []
         for _ in range(num_txs):
-            address = self.get_address(0)
+            address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 15, 20])
             tx = add_new_tx(manager, address, value)
             txs.append(tx)

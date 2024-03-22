@@ -5,9 +5,10 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import requests
+from cryptography.hazmat.primitives.asymmetric import ec
 from hathorlib.scripts import DataScript
 from twisted.internet.task import Clock
 
@@ -19,7 +20,7 @@ from hathor.event.model.event_type import EventType
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_double_spending, gen_new_tx
-from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput
+from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
@@ -134,7 +135,13 @@ def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
     return tx
 
 
-def add_new_tx(manager, address, value, advance_clock=None, propagate=True):
+def add_new_tx(
+    manager: HathorManager,
+    address: str,
+    value: int,
+    advance_clock: int | None = None,
+    propagate: bool = True
+) -> Transaction:
     """ Create, resolve and propagate a new tx
 
         :param manager: Manager object to handle the creation
@@ -153,11 +160,16 @@ def add_new_tx(manager, address, value, advance_clock=None, propagate=True):
     if propagate:
         manager.propagate_tx(tx, fails_silently=False)
     if advance_clock:
-        manager.reactor.advance(advance_clock)
+        manager.reactor.advance(advance_clock)  # type: ignore[attr-defined]
     return tx
 
 
-def add_new_transactions(manager, num_txs, advance_clock=None, propagate=True):
+def add_new_transactions(
+    manager: HathorManager,
+    num_txs: int,
+    advance_clock: int | None = None,
+    propagate: bool = True
+) -> list[Transaction]:
     """ Create, resolve and propagate some transactions
 
         :param manager: Manager object to handle the creation
@@ -178,7 +190,7 @@ def add_new_transactions(manager, num_txs, advance_clock=None, propagate=True):
     return txs
 
 
-def add_blocks_unlock_reward(manager):
+def add_blocks_unlock_reward(manager: HathorManager) -> list[Block]:
     """This method adds new blocks to a 'burn address' to make sure the existing
     block rewards can be spent. It uses a 'burn address' so the manager's wallet
     is not impacted.
@@ -186,7 +198,14 @@ def add_blocks_unlock_reward(manager):
     return add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1, address=BURN_ADDRESS)
 
 
-def run_server(hostname='localhost', listen=8005, status=8085, bootstrap=None, tries=100, alive_for_at_least_sec=3):
+def run_server(
+    hostname: str = 'localhost',
+    listen: int = 8005,
+    status: int = 8085,
+    bootstrap: str | None = None,
+    tries: int = 100,
+    alive_for_at_least_sec: int = 3
+) -> subprocess.Popen[bytes]:
     """ Starts a full node in a subprocess running the cli command
 
         :param hostname: Hostname used to be accessed by other peers
@@ -249,7 +268,14 @@ def run_server(hostname='localhost', listen=8005, status=8085, bootstrap=None, t
     return process
 
 
-def request_server(path, method, host='http://localhost', port=8085, data=None, prefix=settings.API_VERSION_PREFIX):
+def request_server(
+    path: str,
+    method: str,
+    host: str = 'http://localhost',
+    port: int = 8085,
+    data: dict[str, Any] | None = None,
+    prefix: str = settings.API_VERSION_PREFIX
+) -> dict[str, Any]:
     """ Execute a request for status server
 
         :param path: Url path of the request
@@ -283,8 +309,14 @@ def request_server(path, method, host='http://localhost', port=8085, data=None, 
     return response.json()
 
 
-def execute_mining(path='mining', *, count, host='http://localhost', port=8085, data=None,
-                   prefix=settings.API_VERSION_PREFIX):
+def execute_mining(
+    path: str = 'mining',
+    *,
+    count: int,
+    host: str = 'http://localhost',
+    port: int = 8085,
+    prefix: str = settings.API_VERSION_PREFIX
+) -> None:
     """Execute a mining on a given server"""
     from hathor.cli.mining import create_parser, execute
     partial_url = '{}:{}/{}/'.format(host, port, prefix)
@@ -294,8 +326,16 @@ def execute_mining(path='mining', *, count, host='http://localhost', port=8085, 
     execute(args)
 
 
-def execute_tx_gen(*, count, address=None, value=None, timestamp=None, host='http://localhost', port=8085, data=None,
-                   prefix=settings.API_VERSION_PREFIX):
+def execute_tx_gen(
+    *,
+    count: int,
+    address: str | None = None,
+    value: int | None = None,
+    timestamp: str | None = None,
+    host: str = 'http://localhost',
+    port: int = 8085,
+    prefix: str = settings.API_VERSION_PREFIX
+) -> None:
     """Execute a tx generator on a given server"""
     from hathor.cli.tx_generator import create_parser, execute
     url = '{}:{}/{}/'.format(host, port, prefix)
@@ -311,7 +351,7 @@ def execute_tx_gen(*, count, address=None, value=None, timestamp=None, host='htt
     execute(args)
 
 
-def get_genesis_key():
+def get_genesis_key() -> ec.EllipticCurvePrivateKeyWithSerialization:
     private_key_bytes = base64.b64decode(
         'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgOCgCddzDZsfKgiMJLOt97eov9RLwHeePyBIK2WPF8MChRA'
         'NCAAQ/XSOK+qniIY0F3X+lDrb55VQx5jWeBLhhzZnH6IzGVTtlAj9Ki73DVBm5+VXK400Idd6ddzS7FahBYYC7IaTl'
