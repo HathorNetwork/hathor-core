@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
@@ -52,6 +52,12 @@ from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
+
+
+class SyncSupportLevel(IntEnum):
+    UNAVAILABLE = 0  # not possible to enable at runtime
+    DISABLED = 1  # available but disabled by default, possible to enable at runtime
+    ENABLED = 2  # available and enabled by default, possible to disable at runtime
 
 
 class StorageType(Enum):
@@ -145,8 +151,8 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._enable_sync_v1: bool = True
-        self._enable_sync_v2: bool = False
+        self._sync_v1_support: SyncSupportLevel = SyncSupportLevel.DISABLED
+        self._sync_v2_support: SyncSupportLevel = SyncSupportLevel.ENABLED
 
         self._enable_stratum_server: Optional[bool] = None
 
@@ -162,6 +168,9 @@ class Builder:
 
         if self._network is None:
             raise TypeError('you must set a network')
+
+        if SyncSupportLevel.ENABLED not in {self._sync_v1_support, self._sync_v2_support}:
+            raise TypeError('you must enable at least one sync version')
 
         settings = self._get_or_create_settings()
         reactor = self._get_reactor()
@@ -369,11 +378,15 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
         )
-        p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
-        p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
-        if self._enable_sync_v1:
+        # sync-v1 support:
+        if self._sync_v1_support > SyncSupportLevel.UNAVAILABLE:
+            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+        if self._sync_v1_support is SyncSupportLevel.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
-        if self._enable_sync_v2:
+        # sync-v2 support:
+        if self._sync_v2_support > SyncSupportLevel.UNAVAILABLE:
+            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+        if self._sync_v2_support is SyncSupportLevel.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
         return p2p_manager
 
@@ -666,34 +679,34 @@ class Builder:
         self._network = network
         return self
 
-    def set_enable_sync_v1(self, enable_sync_v1: bool) -> 'Builder':
+    def set_sync_v1_support(self, support_level: SyncSupportLevel) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = enable_sync_v1
+        self._sync_v1_support = support_level
         return self
 
-    def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
+    def set_sync_v2_support(self, support_level: SyncSupportLevel) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = enable_sync_v2
+        self._sync_v2_support = support_level
         return self
 
     def enable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = True
+        self._sync_v1_support = SyncSupportLevel.ENABLED
         return self
 
     def disable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = False
+        self._sync_v1_support = SyncSupportLevel.DISABLED
         return self
 
     def enable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = True
+        self._sync_v2_support = SyncSupportLevel.ENABLED
         return self
 
     def disable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = False
+        self._sync_v2_support = SyncSupportLevel.DISABLED
         return self
 
     def set_full_verification(self, full_verification: bool) -> 'Builder':
