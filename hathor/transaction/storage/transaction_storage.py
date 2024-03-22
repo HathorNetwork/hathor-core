@@ -647,15 +647,23 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> list[bytes]:
+    def get_best_block_tips(self, *, skip_cache: bool = False) -> list[bytes]:
         """ Return a list of blocks that are heads in a best chain. It must be used when mining.
 
         When more than one block is returned, it means that there are multiple best chains and
         you can choose any of them.
         """
-        if timestamp is None and not skip_cache and self._best_block_tips_cache is not None:
-            return self._best_block_tips_cache[:]
+        # ignoring cache because current implementation is ~O(1)
+        assert self.indexes is not None
+        return [self.indexes.height.get_tip()]
 
+    @abstractmethod
+    def get_past_best_block_tips(self, timestamp: Optional[float] = None) -> list[bytes]:
+        """ Return a list of blocks that are heads in a best chain. It must be used when mining.
+
+        When more than one block is returned, it means that there are multiple best chains and
+        you can choose any of them.
+        """
         best_score = 0.0
         best_tip_blocks: list[bytes] = []
 
@@ -1050,6 +1058,7 @@ class TransactionStorage(ABC):
         This method requires indexes to be enabled.
         """
         assert self.indexes is not None
+        assert self.indexes.tx_tips is not None
         tx_tips = self.indexes.tx_tips
 
         for interval in tx_tips[self.latest_timestamp + 1]:
@@ -1210,8 +1219,11 @@ class BaseTransactionStorage(TransactionStorage):
         """Remove all caches in case we don't need it."""
         self.indexes = None
 
-    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> list[bytes]:
-        return super().get_best_block_tips(timestamp, skip_cache=skip_cache)
+    def get_best_block_tips(self, *, skip_cache: bool = False) -> list[bytes]:
+        return super().get_best_block_tips(skip_cache=skip_cache)
+
+    def get_past_best_block_tips(self, timestamp: Optional[float] = None) -> list[bytes]:
+        return super().get_past_best_block_tips(timestamp)
 
     def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
         block = self.get_best_block()
@@ -1230,6 +1242,7 @@ class BaseTransactionStorage(TransactionStorage):
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
+        assert self.indexes.block_tips is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
         return self.indexes.block_tips[timestamp]
@@ -1238,6 +1251,7 @@ class BaseTransactionStorage(TransactionStorage):
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
+        assert self.indexes.tx_tips is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
         tips = self.indexes.tx_tips[timestamp]
@@ -1255,6 +1269,7 @@ class BaseTransactionStorage(TransactionStorage):
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
+        assert self.indexes.all_tips is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
 

@@ -13,13 +13,16 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import NamedTuple, Optional
+from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block
 from hathor.types import VertexId
 from hathor.util import not_none
+
+if TYPE_CHECKING:  # pragma: no cover
+    from hathor.transaction.storage import TransactionStorage
 
 SCOPE = Scope(
     include_blocks=True,
@@ -86,6 +89,18 @@ class HeightIndex(BaseIndex):
         """ Return the block hash for the given height, or None if it is not set.
         """
         raise NotImplementedError
+
+    def find_by_timestamp(self, timestamp: float, tx_storage: 'TransactionStorage') -> Optional[Block]:
+        """ This method starts from the tip and advances to the parent until it finds a block with lower timestamp.
+        """
+        # TODO: optimize
+        if timestamp < self.get_genesis_block_entry().timestamp:
+            return None
+        block = tx_storage.get_transaction(self.get_tip())
+        assert isinstance(block, Block)
+        while block.timestamp > timestamp:
+            block = block.get_block_parent()
+        return block
 
     @abstractmethod
     def get_tip(self) -> bytes:
