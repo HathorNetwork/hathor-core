@@ -143,7 +143,8 @@ class BaseMiningSimulationTest(SimulatorTestCase):
 
     def _get_signal_bits_from_get_block_template(self, web_client: StubSite) -> int:
         result = self._get_result(web_client)
-        return result['signal_bits']
+        signal_bits: int = result['signal_bits']
+        return signal_bits
 
     def _get_signal_bits_from_mining(self, web_client: StubSite) -> int:
         result = self._get_result(web_client)
@@ -153,13 +154,14 @@ class BaseMiningSimulationTest(SimulatorTestCase):
     @staticmethod
     def _get_result(web_client: StubSite) -> dict[str, Any]:
         response = web_client.get('')
-        return response.result.json_value()
+        result: dict[str, Any] = response.result.json_value()
+        return result
 
     def _get_last_ws_signal_bits(self, transport: StringTransport) -> int:
         messages = self._get_transport_messages(transport)
         assert len(messages) > 0
         last_message = messages[-1]
-        signal_bits = last_message['params'][0]['signal_bits']
+        signal_bits: int = last_message['params'][0]['signal_bits']
 
         return signal_bits
 

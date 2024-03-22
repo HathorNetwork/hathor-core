@@ -28,7 +28,9 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         outputs.append(
             WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
 
-        tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
+        tx: Transaction = self.manager1.wallet.prepare_transaction_compute_inputs(
+            Transaction, outputs, self.manager1.tx_storage
+        )
         tx.timestamp = int(self.clock.seconds())
         tx.storage = self.manager1.tx_storage
         tx.weight = 10
@@ -49,7 +51,7 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         return txs
 
     def _add_new_block(self, propagate: bool = True) -> Block:
-        block = self.manager1.generate_mining_block()
+        block: Block = self.manager1.generate_mining_block()
         self.assertTrue(self.manager1.cpu_mining_service.resolve(block))
         self.manager1.verification_service.verify(block)
         self.manager1.on_new_tx(block, propagate_to_peers=propagate)
