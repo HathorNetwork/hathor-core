@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generator, Iterator, Optional
 from weakref import WeakSet
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred, inlineCallbacks
+from twisted.internet.defer import CancelledError, Deferred, inlineCallbacks
 from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf.get_settings import get_global_settings
@@ -685,12 +685,13 @@ class NodeSyncTimestamp(SyncAgent):
             self.update_received_stats(tx, success)
         return tx
 
-    def on_get_data_failed(self, reason: 'Failure', hash_bytes: bytes) -> None:
+    def on_get_data_failed(self, failure: 'Failure', hash_bytes: bytes) -> None:
         """ Method called when get_data deferred fails.
             We need this errback because otherwise the sync crashes when the deferred is canceled.
             We should just log a warning because it will continue the sync and will try to get this tx again.
         """
-        self.log.warn('failed to download tx', tx=hash_bytes.hex(), reason=reason)
+        log_func = self.log.debug if isinstance(failure.value, CancelledError) else self.log.warn
+        log_func('failed to download tx', tx=hash_bytes.hex(), reason=failure)
 
     def is_sync_enabled(self) -> bool:
         """Return True if sync is enabled for this connection."""
