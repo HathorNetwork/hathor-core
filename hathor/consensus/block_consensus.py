@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.nanocontracts import NanoContract, NCFail
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
 from hathor.util import classproperty, not_none
@@ -48,6 +49,32 @@ class BlockConsensusAlgorithm:
 
     def update_consensus(self, block: Block) -> None:
         self.update_voided_info(block)
+        self.execute_nano_contracts(block)
+
+    def execute_nano_contracts(self, block: Block) -> None:
+        """Execute the method calls for transactions confirmed by this block."""
+        meta = block.get_metadata()
+        if meta.voided_by:
+            # Nothing to execute!
+            return
+
+        nc_calls: list[NanoContract] = [tx for tx in self.context.txs_affected if isinstance(tx, NanoContract)]
+        if not nc_calls:
+            return
+
+        # If we reach this point, Nano Contracts must be enabled.
+        assert self._settings.ENABLE_NANO_CONTRACTS
+
+        # TODO Bad ordering because tx.timestamp can be cherry picked. It's here just for testing.
+        nc_calls.sort(key=lambda tx: (tx.timestamp, tx.hash))
+        for tx in nc_calls:
+            nc_storage = self.context.consensus.nc_storage_factory(tx.get_nanocontract_id())
+            try:
+                tx.execute(nc_storage)
+            except NCFail:
+                tx_meta = tx.get_metadata()
+                tx_meta.add_voided_by(self._settings.NC_EXECUTION_FAIL_ID)
+                self.context.save(tx)
 
     def update_voided_info(self, block: Block) -> None:
         """ This method is called only once when a new block arrives.
@@ -244,6 +271,7 @@ class BlockConsensusAlgorithm:
                     voided_by2 = voided_by2.copy()
                     voided_by2.discard(parent.hash)
                 voided_by.update(self.context.consensus.filter_out_soft_voided_entries(parent, voided_by2))
+                voided_by.discard(self._settings.NC_EXECUTION_FAIL_ID)
         return voided_by
 
     def update_voided_by_from_parents(self, block: Block) -> bool:

@@ -34,5 +34,7 @@ SETTINGS = HathorSettings(
     MIN_TX_WEIGHT=8,
     CHECKPOINTS=[],
     ENABLE_NANO_CONTRACTS=True,
-    BLUEPRINTS={},
+    BLUEPRINTS={
+        bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'): 'Bet',
+    },
 )

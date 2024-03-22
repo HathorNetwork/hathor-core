@@ -27,6 +27,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
+from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput
@@ -73,6 +74,7 @@ class TransactionStorage(ABC):
 
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
+    nc_catalog: Optional[NCBlueprintCatalog] = None
 
     log = get_logger()
 

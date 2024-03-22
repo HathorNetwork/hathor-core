@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import TYPE_CHECKING
+
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
@@ -23,6 +25,9 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 from hathor.util import not_none
+
+if TYPE_CHECKING:
+    from hathor.nanocontracts import NCStorageFactory
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -58,6 +63,7 @@ class ConsensusAlgorithm:
 
     def __init__(
         self,
+        nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
         *,
@@ -66,6 +72,7 @@ class ConsensusAlgorithm:
         self._settings = get_global_settings()
         self.log = logger.new()
         self._pubsub = pubsub
+        self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()

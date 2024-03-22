@@ -19,6 +19,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
+from hathor.verification.nano_contract_verifier import NanoContractVerifier
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
 from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
@@ -31,6 +32,7 @@ class VertexVerifiers(NamedTuple):
     merge_mined_block: MergeMinedBlockVerifier
     tx: TransactionVerifier
     token_creation_tx: TokenCreationTransactionVerifier
+    nano_contract: NanoContractVerifier
 
     @classmethod
     def create_defaults(
@@ -69,6 +71,7 @@ class VertexVerifiers(NamedTuple):
         merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
         tx_verifier = TransactionVerifier(settings=settings, daa=daa)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
+        nano_contract_verifier = NanoContractVerifier()
 
         return VertexVerifiers(
             vertex=vertex_verifier,
@@ -76,4 +79,5 @@ class VertexVerifiers(NamedTuple):
             merge_mined_block=merge_mined_block_verifier,
             tx=tx_verifier,
             token_creation_tx=token_creation_tx_verifier,
+            nano_contract=nano_contract_verifier,
         )

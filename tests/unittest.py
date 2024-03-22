@@ -200,7 +200,8 @@ class TestCase(unittest.TestCase):
         pubsub=None,
         event_storage=None,
         enable_event_queue=None,
-        use_memory_storage=None
+        use_memory_storage=None,
+        nc_history_index=False,
     ):
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
@@ -263,6 +264,10 @@ class TestCase(unittest.TestCase):
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
+
+        if nc_history_index:
+            builder.enable_nc_history_index()
+
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         # XXX: just making sure that tests set this up correctly

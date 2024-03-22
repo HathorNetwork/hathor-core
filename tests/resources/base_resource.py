@@ -54,7 +54,12 @@ class TestDummyRequest(DummyRequest):
         # Set request args
         args = args or {}
         for k, v in args.items():
-            self.addArg(k, v)
+            # https://github.com/twisted/twisted/blob/trunk/src/twisted/web/test/requesthelper.py#L353
+            # The addArg method replaces the old value with the new value, so we can't call it directly.
+            if isinstance(v, list):
+                self.args[k] = v
+            else:
+                self.addArg(k, v)
 
     def json_value(self):
         return json_loadb(self.written[0])
