@@ -50,7 +50,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         else:
             line = '{} {}\r\n'.format(cmd, payload)
 
-        return proto.dataReceived(line.encode('utf-8'))
+        proto.dataReceived(line.encode('utf-8'))
 
     def _check_result_only_cmd(self, result: bytes, expected_cmd: bytes) -> None:
         cmd_list = []

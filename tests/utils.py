@@ -306,7 +306,8 @@ def request_server(
         response = requests.put(url, json=data)
     else:
         raise ValueError('Unsuported method')
-    return response.json()
+    json_response: dict[str, Any] = response.json()
+    return json_response
 
 
 def execute_mining(

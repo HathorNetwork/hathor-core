@@ -79,7 +79,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             outputs = []
             outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
             outputs.append(WalletOutputInfo(decode_address(addr), 2*tx_fund.outputs[1].value, None))
-            tx5 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx2.timestamp+1)
+            tx5: Transaction = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx2.timestamp+1)
             tx5.weight = tx3.weight - tx1.weight + 0.1
             tx5.parents = [tx2.hash, tx4.hash]
             manager.cpu_mining_service.resolve(tx5)
@@ -174,7 +174,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
             outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
             outputs.append(WalletOutputInfo(decode_address(addr), 2*tx_fund.outputs[2].value, None))
-            tx5 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx4.timestamp+1)
+            tx5: Transaction = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx4.timestamp+1)
             tx5.weight = 1
             tx5.parents = manager.get_new_tx_parents(tx5.timestamp)
             manager.cpu_mining_service.resolve(tx5)

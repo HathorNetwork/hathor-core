@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -56,7 +57,7 @@ from hathor.feature_activation.settings import FeatureInterval, Settings as Feat
         )
     ]
 )
-def test_valid_settings(features: dict) -> None:
+def test_valid_settings(features: dict[str, Any]) -> None:
     data = dict(features=features)
     FeatureSettings(**data)  # type: ignore[arg-type]
 
@@ -114,7 +115,7 @@ def test_valid_settings(features: dict) -> None:
         )
     ]
 )
-def test_conflicting_bits(features: list[dict]) -> None:
+def test_conflicting_bits(features: list[dict[str, Any]]) -> None:
     with pytest.raises(ValidationError) as e:
         data = dict(features=features)
         FeatureSettings(**data)  # type: ignore[arg-type]
