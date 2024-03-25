@@ -1044,7 +1044,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertEqual(len(self.tx_storage.indexes.addresses.get_from_address(output3_address_b58)), 1)
         self.assertEqual(len(self.tx_storage.indexes.addresses.get_from_address(new_address_b58)), 1)
 
-    def test_sighash_cache(self):
+    def test_sighash_all_cache(self):
         from unittest import mock
 
         address = get_address_from_public_key(self.genesis_public_key)

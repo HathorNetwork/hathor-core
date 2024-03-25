@@ -13,16 +13,32 @@
 #  limitations under the License.
 
 import struct
-from typing import NamedTuple, Optional, Union
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 
+from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import DataIndexError, FinalStackInvalid, InvalidScriptError, OutOfData
 
+if TYPE_CHECKING:
+    from hathor.transaction.scripts.script_context import ScriptContext
 
-class ScriptExtras(NamedTuple):
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ScriptExtras:
+    """
+    A simple container for auxiliary data that may be used during execution of scripts.
+    """
     tx: Transaction
-    txin: TxInput
+    input_index: int
     spent_tx: BaseTransaction
+
+    @property
+    def txin(self) -> TxInput:
+        return self.tx.inputs[self.input_index]
+
+    def __post_init__(self) -> None:
+        assert self.txin.tx_id == self.spent_tx.hash
 
 
 # XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some
@@ -39,7 +55,7 @@ class OpcodePosition(NamedTuple):
     position: int
 
 
-def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> None:
+def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> 'ScriptContext':
     """ Execute eval from data executing opcode methods
 
         :param data: data to be evaluated that contains data and opcodes
@@ -56,8 +72,9 @@ def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> None:
     """
     from hathor.transaction.scripts.opcode import Opcode, execute_op_code
     from hathor.transaction.scripts.script_context import ScriptContext
+    settings = get_global_settings()
     stack: Stack = []
-    context = ScriptContext(stack=stack, logs=log, extras=extras)
+    context = ScriptContext(settings=settings, stack=stack, logs=log, extras=extras)
     data_len = len(data)
     pos = 0
     while pos < data_len:
@@ -69,6 +86,8 @@ def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> None:
         execute_op_code(Opcode(opcode), context)
 
     evaluate_final_stack(stack, log)
+
+    return context
 
 
 def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
@@ -88,7 +107,7 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
         raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> None:
+def script_eval(tx: Transaction, spent_tx: BaseTransaction, *, input_index: int) -> 'ScriptContext':
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 
@@ -103,10 +122,10 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> No
 
     :raises ScriptError: if script verification fails
     """
-    input_data = txin.data
-    output_script = spent_tx.outputs[txin.index].script
+    extras = ScriptExtras(tx=tx, input_index=input_index, spent_tx=spent_tx)
+    input_data = extras.txin.data
+    output_script = spent_tx.outputs[extras.txin.index].script
     log: list[str] = []
-    extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
 
     from hathor.transaction.scripts import MultiSig
     if MultiSig.re_match.search(output_script):
@@ -115,17 +134,17 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> No
         # we can't use input_data + output_script because it will end with an invalid stack
         # i.e. the signatures will still be on the stack after ouput_script is executed
         redeem_script_pos = MultiSig.get_multisig_redeem_script_pos(input_data)
-        full_data = txin.data[redeem_script_pos:] + output_script
+        full_data = extras.txin.data[redeem_script_pos:] + output_script
         execute_eval(full_data, log, extras)
 
         # Second, we need to validate that the signatures on the input_data solves the redeem_script
         # we pop and append the redeem_script to the input_data and execute it
         multisig_data = MultiSig.get_multisig_data(extras.txin.data)
-        execute_eval(multisig_data, log, extras)
+        return execute_eval(multisig_data, log, extras)
     else:
         # merge input_data and output_script
         full_data = input_data + output_script
-        execute_eval(full_data, log, extras)
+        return execute_eval(full_data, log, extras)
 
 
 def decode_opn(opcode: int) -> int:
