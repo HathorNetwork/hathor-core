@@ -20,7 +20,7 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.model.feature_description import FeatureDescription
+from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block
@@ -32,11 +32,11 @@ from hathor.transaction.storage import TransactionStorage
     [
         {},
         {
-            Feature.NOP_FEATURE_1: FeatureDescription(state=FeatureState.DEFINED, criteria=Mock())
+            Feature.NOP_FEATURE_1: FeatureInfo(state=FeatureState.DEFINED, criteria=Mock())
         },
         {
-            Feature.NOP_FEATURE_1: FeatureDescription(state=FeatureState.FAILED, criteria=Mock()),
-            Feature.NOP_FEATURE_2: FeatureDescription(state=FeatureState.ACTIVE, criteria=Mock())
+            Feature.NOP_FEATURE_1: FeatureInfo(state=FeatureState.FAILED, criteria=Mock()),
+            Feature.NOP_FEATURE_2: FeatureInfo(state=FeatureState.ACTIVE, criteria=Mock())
         }
     ]
 )
@@ -50,7 +50,7 @@ from hathor.transaction.storage import TransactionStorage
     ]
 )
 def test_generate_signal_bits_no_signaling_features(
-    features_description: dict[Feature, FeatureDescription],
+    features_description: dict[Feature, FeatureInfo],
     support_features: set[Feature],
     not_support_features: set[Feature]
 ) -> None:
@@ -74,7 +74,7 @@ def test_generate_signal_bits_signaling_features(
     expected_signal_bits: int,
 ) -> None:
     features_description = {
-        Feature.NOP_FEATURE_1: FeatureDescription(
+        Feature.NOP_FEATURE_1: FeatureInfo(
             state=FeatureState.STARTED,
             criteria=Criteria(
                 bit=0,
@@ -83,7 +83,7 @@ def test_generate_signal_bits_signaling_features(
                 version='0.0.0'
             )
         ),
-        Feature.NOP_FEATURE_2: FeatureDescription(
+        Feature.NOP_FEATURE_2: FeatureInfo(
             state=FeatureState.MUST_SIGNAL,
             criteria=Criteria(
                 bit=1,
@@ -92,7 +92,7 @@ def test_generate_signal_bits_signaling_features(
                 version='0.0.0'
             )
         ),
-        Feature.NOP_FEATURE_3: FeatureDescription(
+        Feature.NOP_FEATURE_3: FeatureInfo(
             state=FeatureState.LOCKED_IN,
             criteria=Criteria(
                 bit=3,
@@ -124,7 +124,7 @@ def test_generate_signal_bits_signaling_features_with_defaults(
     expected_signal_bits: int,
 ) -> None:
     features_description = {
-        Feature.NOP_FEATURE_1: FeatureDescription(
+        Feature.NOP_FEATURE_1: FeatureInfo(
             state=FeatureState.STARTED,
             criteria=Criteria(
                 bit=0,
@@ -134,7 +134,7 @@ def test_generate_signal_bits_signaling_features_with_defaults(
                 signal_support_by_default=True
             )
         ),
-        Feature.NOP_FEATURE_2: FeatureDescription(
+        Feature.NOP_FEATURE_2: FeatureInfo(
             state=FeatureState.MUST_SIGNAL,
             criteria=Criteria(
                 bit=1,
@@ -144,7 +144,7 @@ def test_generate_signal_bits_signaling_features_with_defaults(
                 signal_support_by_default=True
             )
         ),
-        Feature.NOP_FEATURE_3: FeatureDescription(
+        Feature.NOP_FEATURE_3: FeatureInfo(
             state=FeatureState.LOCKED_IN,
             criteria=Criteria(
                 bit=3,
@@ -161,12 +161,12 @@ def test_generate_signal_bits_signaling_features_with_defaults(
 
 
 def _test_generate_signal_bits(
-    features_description: dict[Feature, FeatureDescription],
+    features_description: dict[Feature, FeatureInfo],
     support_features: set[Feature],
     not_support_features: set[Feature]
 ) -> int:
     feature_service = Mock(spec_set=FeatureService)
-    feature_service.get_bits_description = lambda block: features_description
+    feature_service.get_feature_info = lambda block: features_description
 
     service = BitSignalingService(
         feature_settings=FeatureSettings(),
@@ -258,13 +258,13 @@ def test_non_signaling_features_warning(
     tx_storage = Mock(spec_set=TransactionStorage)
     tx_storage.get_best_block = lambda: best_block
 
-    def get_bits_description_mock(block: Block) -> dict[Feature, FeatureDescription]:
+    def get_feature_info_mock(block: Block) -> dict[Feature, FeatureInfo]:
         if block == best_block:
             return {}
         raise NotImplementedError
 
     feature_service = Mock(spec_set=FeatureService)
-    feature_service.get_bits_description = get_bits_description_mock
+    feature_service.get_feature_info = get_feature_info_mock
 
     service = BitSignalingService(
         feature_settings=FeatureSettings(),

@@ -24,7 +24,6 @@ from hathor.builder import BuildArtifacts, Builder
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
@@ -243,11 +242,7 @@ class Simulator:
         return True
 
 
-def _build_vertex_verifiers(
-    settings: HathorSettings,
-    daa: DifficultyAdjustmentAlgorithm,
-    feature_service: FeatureService
-) -> VertexVerifiers:
+def _build_vertex_verifiers(settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm) -> VertexVerifiers:
     """
     A custom VertexVerifiers builder to be used by the simulator.
     """
@@ -255,5 +250,4 @@ def _build_vertex_verifiers(
         settings=settings,
         vertex_verifier=SimulatorVertexVerifier(settings=settings, daa=daa),
         daa=daa,
-        feature_service=feature_service,
     )

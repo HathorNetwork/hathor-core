@@ -14,6 +14,9 @@
 
 from typing_extensions import assert_never
 
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import BlockSignalingState, FeatureService
+from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -26,10 +29,11 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('verifiers', )
+    __slots__ = ('verifiers', '_feature_service')
 
-    def __init__(self, *, verifiers: VertexVerifiers) -> None:
+    def __init__(self, *, verifiers: VertexVerifiers, feature_service: FeatureService | None = None) -> None:
         self.verifiers = verifiers
+        self._feature_service = feature_service
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -124,14 +128,18 @@ class VerificationService:
         """Run all verifications. Raises on error.
 
         Used by `self.validate_full`. Should not modify the validation state."""
+        assert self._feature_service is not None
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 assert type(vertex) is Block
-                self._verify_block(vertex)
+                signaling_state = self._feature_service.is_signaling_mandatory_features(vertex)
+                self._verify_block(vertex, signaling_state)
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
-                self._verify_merge_mined_block(vertex)
+                signaling_state = self._feature_service.is_signaling_mandatory_features(vertex)
+                feature_info = self._feature_service.get_feature_info(block=vertex)
+                self._verify_merge_mined_block(vertex, signaling_state, feature_info)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
                 self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
@@ -142,7 +150,7 @@ class VerificationService:
                 assert_never(vertex.version)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
-    def _verify_block(self, block: Block) -> None:
+    def _verify_block(self, block: Block, signaling_state: BlockSignalingState) -> None:
         """
             (1) confirms at least two pending transactions and references last block
             (2) solves the pow with the correct weight (done in HathorManager)
@@ -163,10 +171,16 @@ class VerificationService:
 
         self.verifiers.block.verify_height(block)
 
-        self.verifiers.block.verify_mandatory_signaling(block)
+        self.verifiers.block.verify_mandatory_signaling(signaling_state)
 
-    def _verify_merge_mined_block(self, block: MergeMinedBlock) -> None:
-        self._verify_block(block)
+    def _verify_merge_mined_block(
+        self,
+        block: MergeMinedBlock,
+        signaling_state: BlockSignalingState,
+        feature_info: dict[Feature, FeatureInfo]
+    ) -> None:
+        self.verifiers.merge_mined_block.verify_aux_pow(block, feature_info)
+        self._verify_block(block, signaling_state)
 
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
     def _verify_tx(
@@ -237,7 +251,6 @@ class VerificationService:
         self.verifiers.vertex.verify_sigops_output(block)
 
     def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
-        self.verifiers.merge_mined_block.verify_aux_pow(block)
         self._verify_without_storage_block(block)
 
     def _verify_without_storage_tx(self, tx: Transaction) -> None:

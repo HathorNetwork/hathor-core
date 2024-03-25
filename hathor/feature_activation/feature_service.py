@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeAlias
 
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.model.feature_description import FeatureDescription
+from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 
@@ -62,7 +62,7 @@ class FeatureService:
         height = block.get_height()
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         remaining_blocks = self._feature_settings.evaluation_interval - offset_to_boundary - 1
-        descriptions = self.get_bits_description(block=block)
+        descriptions = self.get_feature_info(block=block)
 
         must_signal_features = (
             feature for feature, description in descriptions.items()
@@ -188,10 +188,10 @@ class FeatureService:
 
         raise ValueError(f'Unknown previous state: {previous_state}')
 
-    def get_bits_description(self, *, block: 'Block') -> dict[Feature, FeatureDescription]:
+    def get_feature_info(self, *, block: 'Block') -> dict[Feature, FeatureInfo]:
         """Returns the criteria definition and feature state for all features at a certain block."""
         return {
-            feature: FeatureDescription(
+            feature: FeatureInfo(
                 criteria=criteria,
                 state=self.get_state(block=block, feature=feature)
             )

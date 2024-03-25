@@ -42,3 +42,7 @@ class FeatureState(Enum):
         support it or not through bit signals is valid during those states.
         """
         return {FeatureState.STARTED, FeatureState.MUST_SIGNAL, FeatureState.LOCKED_IN}
+
+    def is_active(self) -> bool:
+        """Return whether the state is active."""
+        return self is FeatureState.ACTIVE

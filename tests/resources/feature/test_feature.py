@@ -19,7 +19,7 @@ import pytest
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.model.feature_description import FeatureDescription
+from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
@@ -58,9 +58,9 @@ def web():
 
     feature_service = Mock(spec_set=FeatureService)
     feature_service.get_state = Mock(side_effect=get_state)
-    feature_service.get_bits_description = Mock(return_value={
-        Feature.NOP_FEATURE_1: FeatureDescription(state=FeatureState.DEFINED, criteria=nop_feature_1_criteria),
-        Feature.NOP_FEATURE_2: FeatureDescription(state=FeatureState.LOCKED_IN, criteria=nop_feature_2_criteria),
+    feature_service.get_feature_info = Mock(return_value={
+        Feature.NOP_FEATURE_1: FeatureInfo(state=FeatureState.DEFINED, criteria=nop_feature_1_criteria),
+        Feature.NOP_FEATURE_2: FeatureInfo(state=FeatureState.LOCKED_IN, criteria=nop_feature_2_criteria),
     })
 
     feature_settings = FeatureSettings(

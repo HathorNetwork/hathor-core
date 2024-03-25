@@ -68,7 +68,7 @@ class FeatureResource(Resource):
             return error.json_dumpb()
 
         signal_bits = []
-        feature_descriptions = self._feature_service.get_bits_description(block=block)
+        feature_descriptions = self._feature_service.get_feature_info(block=block)
 
         for feature, description in feature_descriptions.items():
             if description.state not in FeatureState.get_signaling_states():
