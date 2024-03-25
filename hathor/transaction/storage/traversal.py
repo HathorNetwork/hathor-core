@@ -134,7 +134,6 @@ class GenericWalk(ABC):
         roots = root if isinstance(root, Iterable) else [root]
 
         for root in roots:
-            assert root.hash is not None
             self.seen.add(root.hash)
             if not skip_root:
                 self._push_visit(root)
@@ -143,7 +142,6 @@ class GenericWalk(ABC):
 
         while not self._is_empty():
             tx = self._pop_visit()
-            assert tx.hash is not None
             yield tx
             if not self._ignore_neighbors:
                 self.add_neighbors(tx)
@@ -172,7 +170,6 @@ class BFSTimestampWalk(GenericWalk):
         tx = item.tx
         # We can safely remove it because we are walking in topological order
         # and it won't appear again in the future because this would be a cycle.
-        assert tx.hash is not None
         self.seen.remove(tx.hash)
         return tx
 

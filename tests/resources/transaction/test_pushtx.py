@@ -7,7 +7,6 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
-from hathor.util import not_none
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from tests import unittest
@@ -100,7 +99,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # invalid transaction, without forcing
         tx.timestamp = 5
-        tx.inputs = [TxInput(not_none(blocks[1].hash), 0, b'')]
+        tx.inputs = [TxInput(blocks[1].hash, 0, b'')]
         script_type_out = parse_address_script(blocks[1].outputs[0].script)
         assert script_type_out is not None
         private_key = self.manager.wallet.get_private_key(script_type_out.address)
@@ -226,7 +225,6 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         p2pkh = parse_address_script(txout.script)
         assert p2pkh is not None
         private_key = wallet.get_private_key(p2pkh.address)
-        assert tx.hash is not None
         inputs = [WalletInputInfo(tx_id=tx.hash, index=0, private_key=private_key)]
         outputs = [WalletOutputInfo(address=decode_address(p2pkh.address), value=txout.value, timelock=None), ]
         tx2 = self.get_tx(inputs, outputs)
@@ -237,7 +235,6 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # Now we set this tx2 as voided and try to push a tx3 that spends tx2
         tx_meta = tx2.get_metadata()
-        assert tx2.hash is not None
         tx_meta.voided_by = {tx2.hash}
         self.manager.tx_storage.save_transaction(tx2, only_metadata=True)
 

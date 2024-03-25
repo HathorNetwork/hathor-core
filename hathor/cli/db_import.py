@@ -86,7 +86,6 @@ class DbImport(RunNode):
                 sys.exit(2)
             tx = tx_or_block_from_bytes(tx_bytes)
             assert tx is not None
-            assert tx.hash is not None
             tx.storage = self.tx_storage
             self.manager.on_new_tx(tx, quiet=True, fails_silently=False, skip_block_weight_verification=True)
             yield tx

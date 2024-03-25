@@ -19,7 +19,6 @@ from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block
 from hathor.types import VertexId
-from hathor.util import not_none
 
 SCOPE = Scope(
     include_blocks=True,
@@ -66,7 +65,6 @@ class HeightIndex(BaseIndex):
         if tx.is_genesis:
             return
         assert isinstance(tx, Block)
-        assert tx.hash is not None
         if tx.get_metadata().voided_by:
             return
         self.add_new(tx.get_height(), tx.hash, tx.timestamp)
@@ -118,7 +116,7 @@ class HeightIndex(BaseIndex):
         add_to_index: list[_AddToIndexItem] = []
         while self.get(block_height) != side_chain_block.hash:
             add_to_index.append(
-                _AddToIndexItem(block_height, not_none(side_chain_block.hash), side_chain_block.timestamp)
+                _AddToIndexItem(block_height, side_chain_block.hash, side_chain_block.timestamp)
             )
 
             side_chain_block = side_chain_block.get_block_parent()

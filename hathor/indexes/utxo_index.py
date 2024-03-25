@@ -59,7 +59,6 @@ class UtxoIndexItem:
 
     @classmethod
     def from_tx_output(cls, tx: BaseTransaction, index: int, tx_output: TxOutput) -> 'UtxoIndexItem':
-        assert tx.hash is not None
         settings = get_global_settings()
 
         if tx_output.is_token_authority():
@@ -136,7 +135,6 @@ class UtxoIndex(BaseIndex):
         - inputs are removed from the index
         """
         tx_meta = tx.get_metadata()
-        assert tx.hash is not None
         assert not tx_meta.voided_by
         log = self.log.new(tx=tx.hash_hex)
         log.debug('update executed')
@@ -170,7 +168,6 @@ class UtxoIndex(BaseIndex):
         - outpus are removed from the index
         """
         tx_meta = tx.get_metadata()
-        assert tx.hash is not None
         assert tx_meta.voided_by
         log = self.log.new(tx=tx.hash_hex)
         log.debug('update voided')

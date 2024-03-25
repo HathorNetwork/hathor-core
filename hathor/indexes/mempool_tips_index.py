@@ -104,14 +104,12 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
     # PROVIDES:
 
     def update(self, tx: BaseTransaction, *, remove: Optional[bool] = None) -> None:
-        assert tx.hash is not None
         assert tx.storage is not None
         tx_meta = tx.get_metadata()
         to_remove: set[bytes] = set()
         to_remove_parents: set[bytes] = set()
         tx_storage = tx.storage
         for tip_tx in self.iter(tx_storage):
-            assert tip_tx.hash is not None
             meta = tip_tx.get_metadata()
             # a new tx/block added might cause a tx in the tips to become voided. For instance, there might be a tx1 a
             # double spending tx2, where tx1 is valid and tx2 voided. A new block confirming tx2 will make it valid
@@ -175,7 +173,6 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         self._discard_many(set(tx.parents))
 
         if tx.is_transaction and tx_meta.first_block is None:
-            assert tx.hash is not None
             self._add(tx.hash)
 
     def iter(self, tx_storage: 'TransactionStorage', max_timestamp: Optional[float] = None) -> Iterator[Transaction]:

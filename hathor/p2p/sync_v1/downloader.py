@@ -247,7 +247,6 @@ class Downloader:
     def on_new_tx(self, tx: 'BaseTransaction') -> None:
         """ This is called when a new transaction arrives.
         """
-        assert tx.hash is not None
         self.log.debug('new tx/block', tx=tx.hash_hex)
 
         details = self.pending_transactions.get(tx.hash, None)

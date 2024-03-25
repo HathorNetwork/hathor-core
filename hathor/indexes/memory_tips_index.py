@@ -78,7 +78,6 @@ class MemoryTipsIndex(TipsIndex):
 
         :param tx: Transaction to be added
         """
-        assert tx.hash is not None
         assert tx.storage is not None
         if tx.hash in self.tx_last_interval:
             return False
@@ -110,7 +109,6 @@ class MemoryTipsIndex(TipsIndex):
     def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Remove a transaction from the index.
         """
-        assert tx.hash is not None
         assert tx.storage is not None
 
         interval = self.tx_last_interval.pop(tx.hash, None)
@@ -134,7 +132,6 @@ class MemoryTipsIndex(TipsIndex):
         """ Update a tx according to its children.
         """
         assert tx.storage is not None
-        assert tx.hash is not None
 
         meta = tx.get_metadata()
         if meta.voided_by:

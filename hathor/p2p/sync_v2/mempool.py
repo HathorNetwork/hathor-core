@@ -133,6 +133,5 @@ class SyncMempoolManager:
 
     def _add_tx(self, tx: BaseTransaction) -> None:
         """Add tx to the DAG."""
-        assert tx.hash is not None
         self.missing_tips.discard(tx.hash)
         self.manager.on_new_tx(tx)

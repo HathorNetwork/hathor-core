@@ -59,7 +59,6 @@ class TransactionConsensusAlgorithm:
     def mark_input_as_used(self, tx: Transaction, txin: TxInput) -> None:
         """ Mark a given input as used
         """
-        assert tx.hash is not None
         assert tx.storage is not None
 
         spent_tx = tx.storage.get_transaction(txin.tx_id)
@@ -117,7 +116,6 @@ class TransactionConsensusAlgorithm:
 
         :param transactions: list of transactions to be checked if they are twins with self
         """
-        assert tx.hash is not None
         assert tx.storage is not None
 
         # Getting tx metadata to save the new twins
@@ -128,7 +126,6 @@ class TransactionConsensusAlgorithm:
         sorted_outputs = sorted(tx.outputs, key=lambda x: (x.script, x.value))
 
         for candidate in transactions:
-            assert candidate.hash is not None
 
             # If quantity of inputs is different, it's not a twin.
             if len(candidate.inputs) != len(tx.inputs):
@@ -170,7 +167,6 @@ class TransactionConsensusAlgorithm:
     def update_voided_info(self, tx: Transaction) -> None:
         """ This method should be called only once when the transactions is added to the DAG.
         """
-        assert tx.hash is not None
         assert tx.storage is not None
 
         voided_by: set[bytes] = set()
@@ -267,7 +263,6 @@ class TransactionConsensusAlgorithm:
         The verification is made for each input, and `self` is only marked as winner if it
         wins in all its inputs.
         """
-        assert tx.hash is not None
         assert tx.storage is not None
         self.log.debug('tx.check_conflicts', tx=tx.hash_hex)
 
@@ -326,7 +321,6 @@ class TransactionConsensusAlgorithm:
         """ Mark a transaction as winner when it has a conflict and its aggregated weight
         is the greatest one.
         """
-        assert tx.hash is not None
         self.log.debug('tx.mark_as_winner', tx=tx.hash_hex)
         meta = tx.get_metadata()
         assert bool(meta.conflict_with)  # FIXME: this looks like a runtime guarantee, MUST NOT be an assert
@@ -341,7 +335,6 @@ class TransactionConsensusAlgorithm:
         """
         from hathor.transaction.storage.traversal import BFSTimestampWalk
 
-        assert tx.hash is not None
         assert tx.storage is not None
 
         meta = tx.get_metadata()
@@ -382,7 +375,6 @@ class TransactionConsensusAlgorithm:
         """ Mark a transaction as voided when it has a conflict and its aggregated weight
         is NOT the greatest one.
         """
-        assert tx.hash is not None
         self.log.debug('tx.mark_as_voided', tx=tx.hash_hex)
         meta = tx.get_metadata()
         assert bool(meta.conflict_with)
@@ -395,7 +387,6 @@ class TransactionConsensusAlgorithm:
         """ Add a hash from `meta.voided_by` and its descendants (both from verification DAG
         and funds tree).
         """
-        assert tx.hash is not None
         assert tx.storage is not None
 
         meta = tx.get_metadata()
@@ -415,7 +406,6 @@ class TransactionConsensusAlgorithm:
         check_list: list[Transaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
-            assert tx2.hash is not None
             meta2 = tx2.get_metadata()
 
             if tx2.is_block:

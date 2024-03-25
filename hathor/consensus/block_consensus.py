@@ -20,7 +20,7 @@ from structlog import get_logger
 from hathor.conf.get_settings import get_global_settings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
-from hathor.util import classproperty, not_none
+from hathor.util import classproperty
 
 if TYPE_CHECKING:
     from hathor.consensus.context import ConsensusAlgorithmContext
@@ -107,7 +107,6 @@ class BlockConsensusAlgorithm:
             return
 
         assert block.storage is not None
-        assert block.hash is not None
 
         storage = block.storage
         assert storage.indexes is not None
@@ -216,8 +215,8 @@ class BlockConsensusAlgorithm:
                         if common_block not in heads:
                             self.context.mark_as_reorg(common_block)
                 else:
-                    best_block_tips = [not_none(blk.hash) for blk in heads]
-                    best_block_tips.append(not_none(block.hash))
+                    best_block_tips = [blk.hash for blk in heads]
+                    best_block_tips.append(block.hash)
                     storage.update_best_block_tips_cache(best_block_tips)
                     if not meta.voided_by:
                         self.context.mark_as_reorg(common_block)
@@ -231,7 +230,6 @@ class BlockConsensusAlgorithm:
         """
         voided_by: set[bytes] = set()
         for parent in block.get_parents():
-            assert parent.hash is not None
             parent_meta = parent.get_metadata()
             voided_by2 = parent_meta.voided_by
             if voided_by2:
@@ -370,7 +368,6 @@ class BlockConsensusAlgorithm:
         the block's own hash.
         """
         assert block.storage is not None
-        assert block.hash is not None
 
         storage = block.storage
 
@@ -401,7 +398,6 @@ class BlockConsensusAlgorithm:
         the block's own hash.
         """
         assert block.storage is not None
-        assert block.hash is not None
 
         storage = block.storage
 
@@ -454,7 +450,6 @@ class BlockConsensusAlgorithm:
         """ Internal method to run a DFS. It is used by `calculate_score()`.
         """
         assert block.storage is not None
-        assert block.hash is not None
         assert block.is_block
 
         storage = block.storage
@@ -475,7 +470,6 @@ class BlockConsensusAlgorithm:
                 from hathor.transaction.storage.traversal import BFSTimestampWalk
                 bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_left_to_right=False)
                 for tx in bfs.run(parent, skip_root=False):
-                    assert tx.hash is not None
                     assert not tx.is_block
 
                     if tx.hash in used:

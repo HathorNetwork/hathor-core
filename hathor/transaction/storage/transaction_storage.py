@@ -49,7 +49,6 @@ from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_con
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
-from hathor.util import not_none
 
 cpu = get_cpu_profiler()
 
@@ -331,14 +330,12 @@ class TransactionStorage(ABC):
 
         for tx in genesis_txs:
             try:
-                assert tx.hash is not None
                 tx2 = self.get_transaction(tx.hash)
                 assert tx == tx2
             except TransactionDoesNotExist:
                 self.save_transaction(tx)
                 self.add_to_indexes(tx)
                 tx2 = tx
-            assert tx2.hash is not None
             self._genesis_cache[tx2.hash] = tx2
         self._saving_genesis = False
 
@@ -347,7 +344,6 @@ class TransactionStorage(ABC):
         """
         if self._tx_weakref_disabled:
             return
-        assert tx.hash is not None
         tx2 = self._tx_weakref.get(tx.hash, None)
         if tx2 is None:
             self._tx_weakref[tx.hash] = tx
@@ -359,7 +355,6 @@ class TransactionStorage(ABC):
         """
         if self._tx_weakref_disabled:
             return
-        assert tx.hash is not None
         self._tx_weakref.pop(tx.hash, None)
 
     def get_transaction_from_weakref(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
@@ -425,7 +420,6 @@ class TransactionStorage(ABC):
         :param tx: Transaction to save
         :param only_metadata: Don't save the transaction, only the metadata of this transaction
         """
-        assert tx.hash is not None
         meta = tx.get_metadata()
         self.pre_save_validation(tx, meta)
 
@@ -438,7 +432,6 @@ class TransactionStorage(ABC):
         This method receives the transaction AND the metadata in order to avoid calling ".get_metadata()" which could
         potentially create a fresh metadata.
         """
-        assert tx.hash is not None
         assert tx_meta.hash is not None
         assert tx.hash == tx_meta.hash, f'{tx.hash.hex()} != {tx_meta.hash.hex()}'
         self._validate_partial_marker_consistency(tx_meta)
@@ -498,9 +491,8 @@ class TransactionStorage(ABC):
         """
         parents_to_update: dict[bytes, list[bytes]] = defaultdict(list)
         dangling_children: set[bytes] = set()
-        txset = {not_none(tx.hash) for tx in txs}
+        txset = {tx.hash for tx in txs}
         for tx in txs:
-            assert tx.hash is not None
             tx_meta = tx.get_metadata()
             assert not tx_meta.validation.is_checkpoint()
             for parent in set(tx.parents) - txset:
@@ -535,7 +527,6 @@ class TransactionStorage(ABC):
 
     def compare_bytes_with_local_tx(self, tx: BaseTransaction) -> bool:
         """Compare byte-per-byte `tx` with the local transaction."""
-        assert tx.hash is not None
         # XXX: we have to accept any scope because we only want to know what bytes we have stored
         with tx_allow_context(self, allow_scope=TxAllowScope.ALL):
             local_tx = self.get_transaction(tx.hash)
@@ -1370,7 +1361,6 @@ class BaseTransactionStorage(TransactionStorage):
         heapq.heapify(to_visit)
         while to_visit:
             item = heapq.heappop(to_visit)
-            assert item.tx.hash is not None
             yield item.tx
             # XXX: We can safely discard because no other tx will try to visit this one, since timestamps are strictly
             #      higher in children, meaning we cannot possibly have item.tx as a descendant of any tx in to_visit.
@@ -1404,7 +1394,6 @@ class BaseTransactionStorage(TransactionStorage):
         stack = [root]
         while stack:
             tx = stack[-1]
-            assert tx.hash is not None
             if tx.hash in visited:
                 if visited[tx.hash] == 0:
                     visited[tx.hash] = 1  # 1 = Visited

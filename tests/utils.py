@@ -24,7 +24,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxO
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
-from hathor.util import Random, not_none
+from hathor.util import Random
 
 try:
     import rocksdb  # noqa: F401
@@ -73,7 +73,6 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     value = 0
     parents = []
     for tx_base, txout_index in tx_inputs:
-        assert tx_base.hash is not None
         spent_tx = tx_base
         spent_txout = spent_tx.outputs[txout_index]
         p2pkh = parse_address_script(spent_txout.script)
@@ -81,7 +80,6 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
 
         from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
         value += spent_txout.value
-        assert spent_tx.hash is not None
         private_key = wallet.get_private_key(p2pkh.address)
         inputs.append(WalletInputInfo(tx_id=spent_tx.hash, index=txout_index, private_key=private_key))
         if not tx_base.is_block:
@@ -110,7 +108,6 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     tx2.parents = parents[:2]
     if len(tx2.parents) < 2:
         if base_parent:
-            assert base_parent.hash is not None
             tx2.parents.append(base_parent.hash)
         elif not tx_base.is_block:
             tx2.parents.append(tx_base.parents[0])
@@ -426,7 +423,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         deposit_input = []
         while total_reward < deposit_amount:
             block = add_new_block(manager, advance_clock=1, address=address)
-            deposit_input.append(TxInput(not_none(block.hash), 0, b''))
+            deposit_input.append(TxInput(block.hash, 0, b''))
             total_reward += block.outputs[0].value
 
         if total_reward > deposit_amount:
@@ -516,7 +513,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     burn_input = []
     while total_reward < burn_amount:
         block = add_new_block(manager, advance_clock=1, address=address)
-        burn_input.append(TxInput(not_none(block.hash), 0, b''))
+        burn_input.append(TxInput(block.hash, 0, b''))
         total_reward += block.outputs[0].value
 
     # Create the change output, if needed

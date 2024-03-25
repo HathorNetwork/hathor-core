@@ -86,7 +86,6 @@ def get_tx_extra_data(tx: BaseTransaction, *, detail_tokens: bool = True) -> dic
             tx2 = tx.storage.get_transaction(tx_in.tx_id)
             tx2_out = tx2.outputs[tx_in.index]
             output = tx2_out.to_json(decode_script=True)
-            assert tx2.hash is not None
             output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index
 

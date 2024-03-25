@@ -430,8 +430,6 @@ class HathorManager:
 
         self.log.debug('load blocks and transactions')
         for tx in self.tx_storage._topological_sort_dfs():
-            assert tx.hash is not None
-
             tx_meta = tx.get_metadata()
 
             t2 = time.time()
@@ -491,7 +489,6 @@ class HathorManager:
                 block_count += 1
 
                 # this works because blocks on the best chain are iterated from lower to higher height
-                assert tx.hash is not None
                 assert tx_meta.validation.is_at_least_basic()
                 assert isinstance(tx, Block)
                 blk_height = tx.get_height()
@@ -654,7 +651,6 @@ class HathorManager:
                 tx = self.tx_storage.get_transaction(checkpoint.hash)
             except TransactionDoesNotExist as e:
                 raise InitializationError(f'Expected checkpoint does not exist in database: {checkpoint}') from e
-            assert tx.hash is not None
             tx_meta = tx.get_metadata()
             if tx_meta.height != checkpoint.height:
                 raise InitializationError(
@@ -783,7 +779,6 @@ class HathorManager:
                              with_weight_decay: bool = False) -> BlockTemplate:
         """ Further implementation of making block template, used by make_block_template and make_custom_block_template
         """
-        assert parent_block.hash is not None
         # the absolute minimum would be the previous timestamp + 1
         timestamp_abs_min = parent_block.timestamp + 1
         # and absolute maximum limited by max time between blocks
@@ -955,7 +950,6 @@ class HathorManager:
         :param skip_block_weight_verification: if True will not check the tx PoW
         """
         assert self.tx_storage.is_only_valid_allowed()
-        assert tx.hash is not None
 
         already_exists = False
         if self.tx_storage.transaction_exists(tx.hash):
@@ -1056,7 +1050,6 @@ class HathorManager:
         This might happen immediately after we receive the tx, if we have all dependencies
         already. Or it might happen later.
         """
-        assert tx.hash is not None
         assert self.tx_storage.indexes is not None
 
         # Publish to pubsub manager the new tx accepted, now that it's full validated

@@ -141,7 +141,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
                 self.store._save_transaction(tx)
 
     def remove_transaction(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
         super().remove_transaction(tx)
         self.cache.pop(tx.hash, None)
         self.dirty_txs.discard(tx.hash)
@@ -160,7 +159,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""
-        assert tx.hash is not None
         self._update_cache(tx)
         self.dirty_txs.add(tx.hash)
 
@@ -179,7 +177,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         If we need to evict a tx from cache and it's dirty, write it to disk immediately.
         """
-        assert tx.hash is not None
         _tx = self.cache.get(tx.hash, None)
         if not _tx:
             if len(self.cache) >= self.capacity:

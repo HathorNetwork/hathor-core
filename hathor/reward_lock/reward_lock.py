@@ -43,7 +43,6 @@ def get_spent_reward_locked_info(tx: 'Transaction', storage: 'VertexStorageProto
     unlocked."""
     from hathor.transaction.transaction import RewardLockedInfo
     for blk in iter_spent_rewards(tx, storage):
-        assert blk.hash is not None
         needed_height = _spent_reward_needed_height(blk, storage)
         if needed_height > 0:
             return RewardLockedInfo(blk.hash, needed_height)

@@ -298,7 +298,6 @@ class TestCase(unittest.TestCase):
         valid_deps = set(get_all_genesis_hashes(self._settings) if initial is None else initial)
 
         for tx in tx_sequence:
-            assert tx.hash is not None
             for dep in tx.get_all_dependencies():
                 self.assertIn(dep, valid_deps, message)
             valid_deps.add(tx.hash)
@@ -426,7 +425,6 @@ class TestCase(unittest.TestCase):
             tx_voided = set()
             tx_partial = set()
             for tx in tx_storage.get_all_transactions():
-                assert tx.hash is not None
                 tx_meta = tx.get_metadata()
                 if not tx_meta.validation.is_fully_connected():
                     tx_partial.add(tx.hash)

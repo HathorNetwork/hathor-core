@@ -517,7 +517,6 @@ class BaseWallet:
         If an output matches, will add it to the unspent_txs dict.
         If an input matches, removes from unspent_txs dict and adds to spent_txs dict.
         """
-        assert tx.hash is not None
 
         meta = tx.get_metadata()
         if meta.voided_by is not None:
@@ -614,7 +613,6 @@ class BaseWallet:
             :param tx: Transaction that was voided
             :type tx: :py:class:`hathor.transaction.Transaction`
         """
-        assert tx.hash is not None
         assert tx.storage is not None
 
         should_update = False
@@ -736,7 +734,6 @@ class BaseWallet:
             :param tx: Transaction that was voided
             :type tx: :py:class:`hathor.transaction.Transaction`
         """
-        assert tx.hash is not None
         assert tx.storage is not None
 
         should_update = False

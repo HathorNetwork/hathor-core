@@ -603,7 +603,6 @@ class NodeSyncTimestamp(SyncAgent):
             return
 
         assert tx is not None
-        assert tx.hash is not None
 
         self.log.debug('tx received from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
 
@@ -612,7 +611,6 @@ class NodeSyncTimestamp(SyncAgent):
             # Will it reduce peer reputation score?
             return
         tx.storage = self.protocol.node.tx_storage
-        assert tx.hash is not None
 
         key = self.get_data_key(tx.hash)
         deferred = self.deferred_by_key.pop(key, None)
@@ -674,7 +672,6 @@ class NodeSyncTimestamp(SyncAgent):
         # the parameter of the second callback is the return of the first
         # so I need to return the same tx to guarantee that all peers will receive it
         if tx:
-            assert tx.hash is not None
             if self.manager.tx_storage.transaction_exists(tx.hash):
                 self.manager.tx_storage.compare_bytes_with_local_tx(tx)
                 success = True

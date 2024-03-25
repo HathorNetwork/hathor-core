@@ -167,8 +167,7 @@ class SyncV1TipsTestCase(unittest.SyncV1Params, BaseTipsTestCase):
     __test__ = True
 
     def get_tips(self):
-        from hathor.util import not_none
-        return {not_none(tx.hash) for tx in self.manager.tx_storage.iter_mempool_tips_from_tx_tips()}
+        return {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips_from_tx_tips()}
 
 
 class SyncV2TipsTestCase(unittest.SyncV2Params, BaseTipsTestCase):

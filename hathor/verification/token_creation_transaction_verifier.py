@@ -18,7 +18,6 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import clean_token_string
 from hathor.types import TokenUid
-from hathor.util import not_none
 
 
 class TokenCreationTransactionVerifier:
@@ -36,7 +35,7 @@ class TokenCreationTransactionVerifier:
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
         # make sure tokens are being minted
-        token_info = token_dict[not_none(tx.hash)]
+        token_info = token_dict[tx.hash]
         if token_info.amount <= 0:
             raise InvalidToken('Token creation transaction must mint new tokens')
 
