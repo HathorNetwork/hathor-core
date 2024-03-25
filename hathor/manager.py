@@ -89,31 +89,34 @@ class HathorManager:
     # This is the interval to be used by the task to check if the node is synced
     CHECK_SYNC_STATE_INTERVAL = 30  # seconds
 
-    def __init__(self,
-                 reactor: Reactor,
-                 *,
-                 settings: HathorSettings,
-                 pubsub: PubSubManager,
-                 consensus_algorithm: ConsensusAlgorithm,
-                 daa: DifficultyAdjustmentAlgorithm,
-                 peer_id: PeerId,
-                 tx_storage: TransactionStorage,
-                 p2p_manager: ConnectionsManager,
-                 event_manager: EventManager,
-                 feature_service: FeatureService,
-                 bit_signaling_service: BitSignalingService,
-                 verification_service: VerificationService,
-                 cpu_mining_service: CpuMiningService,
-                 network: str,
-                 execution_manager: ExecutionManager,
-                 hostname: Optional[str] = None,
-                 wallet: Optional[BaseWallet] = None,
-                 capabilities: Optional[list[str]] = None,
-                 checkpoints: Optional[list[Checkpoint]] = None,
-                 rng: Optional[Random] = None,
-                 environment_info: Optional[EnvironmentInfo] = None,
-                 full_verification: bool = False,
-                 enable_event_queue: bool = False):
+    def __init__(
+        self,
+        reactor: Reactor,
+        *,
+        settings: HathorSettings,
+        pubsub: PubSubManager,
+        consensus_algorithm: ConsensusAlgorithm,
+        daa: DifficultyAdjustmentAlgorithm,
+        peer_id: PeerId,
+        tx_storage: TransactionStorage,
+        p2p_manager: ConnectionsManager,
+        event_manager: EventManager,
+        feature_service: FeatureService,
+        bit_signaling_service: BitSignalingService,
+        verification_service: VerificationService,
+        cpu_mining_service: CpuMiningService,
+        network: str,
+        execution_manager: ExecutionManager,
+        hostname: Optional[str] = None,
+        wallet: Optional[BaseWallet] = None,
+        capabilities: Optional[list[str]] = None,
+        checkpoints: Optional[list[Checkpoint]] = None,
+        rng: Optional[Random] = None,
+        environment_info: Optional[EnvironmentInfo] = None,
+        full_verification: bool = False,
+        enable_event_queue: bool = False,
+        peer_id_json_path: str | None = None,
+    ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node.
@@ -135,6 +138,7 @@ class HathorManager:
         self._settings = settings
         self.daa = daa
         self._cmd_path: Optional[str] = None
+        self._peer_id_json_path = peer_id_json_path
 
         self.log = logger.new()
 
@@ -1172,6 +1176,15 @@ class HathorManager:
     def get_cmd_path(self) -> Optional[str]:
         """Return the cmd path. If no cmd path is set, returns None."""
         return self._cmd_path
+
+    def update_peer_id(self) -> None:
+        """Update this manager's PeerId from the json file. Only entrypoints can be changed."""
+        if not self._peer_id_json_path:
+            return
+
+        new_peer_id = PeerId.create_from_json_path(self._peer_id_json_path)
+        assert new_peer_id.id == self.my_peer.id, 'The Peer ID cannot be changed.'
+        self.my_peer.entrypoints = new_peer_id.entrypoints
 
 
 class ParentTxs(NamedTuple):

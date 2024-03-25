@@ -14,6 +14,7 @@
 
 import base64
 import hashlib
+import json
 from enum import Enum
 from math import inf
 from typing import TYPE_CHECKING, Any, Optional, cast
@@ -160,8 +161,14 @@ class PeerId:
             return True
 
     @classmethod
+    def create_from_json_path(cls, path: str) -> 'PeerId':
+        """Create a new PeerId from a JSON file."""
+        data = json.load(open(path, 'r'))
+        return PeerId.create_from_json(data)
+
+    @classmethod
     def create_from_json(cls, data: dict[str, Any]) -> 'PeerId':
-        """ Create a new PeerId from a JSON.
+        """ Create a new PeerId from JSON data.
 
         It is used both to load a PeerId from disk and to create a PeerId
         from a peer connection.
