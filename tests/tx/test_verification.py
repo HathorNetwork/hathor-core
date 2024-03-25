@@ -340,7 +340,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped.assert_called_once()
 
         # MergeMinedBlock methods
-        verify_pow_wrapped.assert_called_once()
+        verify_aux_pow_wrapped.assert_called_once()
 
     def test_merge_mined_block_verify(self) -> None:
         block = self._get_valid_merge_mined_block()
@@ -389,7 +389,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_mandatory_signaling_wrapped.assert_called_once()
 
         # MergeMinedBlock methods
-        verify_pow_wrapped.assert_called_once()
+        verify_aux_pow_wrapped.assert_called_once()
 
     def test_merge_mined_block_validate_basic(self) -> None:
         block = self._get_valid_merge_mined_block()
@@ -484,7 +484,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_mandatory_signaling_wrapped.assert_called_once()
 
         # MergeMinedBlock methods
-        verify_pow_wrapped.assert_called_once()
+        verify_aux_pow_wrapped.assert_called_once()
 
     def test_transaction_verify_basic(self) -> None:
         tx = self._get_valid_tx()
