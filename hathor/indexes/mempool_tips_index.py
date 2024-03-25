@@ -14,6 +14,7 @@
 
 from abc import abstractmethod
 from collections.abc import Collection
+from itertools import chain
 from typing import TYPE_CHECKING, Iterable, Iterator, Optional, cast
 
 import structlog
@@ -27,10 +28,25 @@ if TYPE_CHECKING:  # pragma: no cover
     from hathor.transaction.storage import TransactionStorage
 
 SCOPE = Scope(
-    include_blocks=True,
+    include_blocks=False,
     include_txs=True,
     include_voided=True,
+    topological_order=False,
 )
+
+
+def any_non_voided(tx_storage: 'TransactionStorage', hashes: Iterable[bytes]) -> bool:
+    """
+    If there's any vertex with hash in hashes that is not voided, this function returns True, otherwise False.
+
+    Notice that this means that an empty `hashes` also returns False.
+    """
+    for tx_hash in hashes:
+        tx = tx_storage.get_transaction(tx_hash)
+        tx_meta = tx.get_metadata()
+        if not tx_meta.voided_by:
+            return True
+    return False
 
 
 class MempoolTipsIndex(BaseIndex):
@@ -39,10 +55,6 @@ class MempoolTipsIndex(BaseIndex):
     def get_scope(self) -> Scope:
         return SCOPE
 
-    def init_loop_step(self, tx: BaseTransaction) -> None:
-        self.update(tx)
-
-    # originally tx_storage.update_mempool_tips
     @abstractmethod
     def update(self, tx: BaseTransaction, *, remove: Optional[bool] = None) -> None:
         """
@@ -52,7 +64,6 @@ class MempoolTipsIndex(BaseIndex):
         """
         raise NotImplementedError
 
-    # originally tx_storage.iter_mempool_tips
     @abstractmethod
     def iter(self, tx_storage: 'TransactionStorage', max_timestamp: Optional[float] = None) -> Iterator[Transaction]:
         """
@@ -60,7 +71,6 @@ class MempoolTipsIndex(BaseIndex):
         """
         raise NotImplementedError
 
-    # originally tx_storage.iter_mempool
     @abstractmethod
     def iter_all(self, tx_storage: 'TransactionStorage') -> Iterator[Transaction]:
         """
@@ -68,7 +78,6 @@ class MempoolTipsIndex(BaseIndex):
         """
         raise NotImplementedError
 
-    # originally tx_storage.get_mempool_tips_index
     @abstractmethod
     def get(self) -> set[bytes]:
         """
@@ -84,6 +93,23 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
 
     log: 'structlog.stdlib.BoundLogger'
     _index: 'Collection[bytes]'
+
+    def init_loop_step(self, tx: BaseTransaction) -> None:
+        assert tx.hash is not None
+        assert tx.storage is not None
+        tx_meta = tx.get_metadata()
+        # do not include transactions that have been confirmed
+        if tx_meta.first_block:
+            return
+        tx_storage = tx.storage
+        # do not include transactions that have a non-voided child
+        if any_non_voided(tx_storage, tx_meta.children):
+            return
+        # do not include transactions that have a non-voided spent output
+        if any_non_voided(tx_storage, chain(*tx_meta.spent_outputs.values())):
+            return
+        # include them otherwise
+        self._add(tx.hash)
 
     @abstractmethod
     def _discard(self, tx: bytes) -> None:
