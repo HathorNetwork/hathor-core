@@ -1,4 +1,4 @@
-# Event Queue
+# Feature: event queue
 
 ## Introduction
 
