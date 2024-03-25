@@ -71,6 +71,7 @@ class BuildArtifacts(NamedTuple):
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
     feature_service: FeatureService
+    bit_signaling_service: BitSignalingService
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
@@ -247,6 +248,7 @@ class Builder:
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
             feature_service=feature_service,
+            bit_signaling_service=bit_signaling_service
         )
 
         return self.artifacts
