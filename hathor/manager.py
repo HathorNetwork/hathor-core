@@ -17,6 +17,7 @@ import queue
 import sys
 import time
 from cProfile import Profile
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from enum import Enum
 from queue import Queue
@@ -26,7 +27,7 @@ from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
-from twisted.internet.task import LoopingCall
+from twisted.internet.task import LoopingCall, deferLater
 from twisted.python.threadpool import ThreadPool
 
 from hathor.checkpoint import Checkpoint
@@ -250,9 +251,9 @@ class HathorManager:
         # self._lc_process_post_validation_queue = LoopingCall(self._process_post_validation_queue)
         # self._lc_process_post_validation_queue.clock = self.reactor
 
-        self._post_validation_queue: Queue[NewTx] = Queue()
+        self._post_validation_queue: deque[NewTx] = deque()
         self._is_processing: bool = False
-        self._deferreds: dict[VertexId, Deferred] = {}
+        self._deferreds: defaultdict[VertexId, Deferred[None]] = defaultdict(Deferred)
 
     def get_default_capabilities(self) -> list[str]:
         """Return the default capabilities for this manager."""
@@ -340,8 +341,8 @@ class HathorManager:
         self.start_time = time.time()
 
         self.lc_check_sync_state.start(self.lc_check_sync_state_interval, now=False)
-        # self._lc_process_post_validation_queue.start(0.1, now=False)
-        self.reactor.callLater(0.01, self._process_post_validation_queue)
+        # self._lc_process_post_validation_queue.start(3, now=False)
+        self.reactor.callLater(0, self._process_post_validation_queue)
 
         if self.wallet:
             self.wallet.start()
@@ -1021,7 +1022,11 @@ class HathorManager:
         assert self._is_processing is False
         self._is_processing = True
         try:
-            new_tx = self._post_validation_queue.get(block=False)
+            new_tx: NewTx | None = self._post_validation_queue.popleft()
+        except IndexError:
+            new_tx = None
+
+        if new_tx:
             self._save_and_run_consensus(
                 new_tx.tx,
                 quiet=new_tx.quiet,
@@ -1030,16 +1035,9 @@ class HathorManager:
             )
             d = self._deferreds.pop(new_tx.tx.hash)
             d.callback(None)
-            # self._post_validation_queue.task_done()
-        except queue.Empty:
-            pass
-        except Exception as e:
-            self.log.error(repr(e), exc_info=True)
-            # self._is_processing = False
-            raise e
-        finally:
-            self._is_processing = False
-            self.reactor.callLater(0.0001, self._process_post_validation_queue)
+
+        self._is_processing = False
+        self.reactor.callLater(0, self._process_post_validation_queue)
 
     # @cpu.profiler('on_new_tx')
     async def on_new_tx(
@@ -1064,19 +1062,19 @@ class HathorManager:
         if not is_valid:
             return False
 
-        d = Deferred()
-        self._deferreds[not_none(tx.hash)] = d  # TODO: What if the tx is already in the dict?
-
-        self._post_validation_queue.put(
-            NewTx(
-                tx=tx,
-                quiet=quiet,
-                propagate_to_peers=propagate_to_peers,
-                reject_locked_reward=reject_locked_reward,
+        if tx.hash not in self._deferreds:
+            self._post_validation_queue.append(
+                NewTx(
+                    tx=tx,
+                    quiet=quiet,
+                    propagate_to_peers=propagate_to_peers,
+                    reject_locked_reward=reject_locked_reward,
+                )
             )
-        )
 
-        await d
+        deferred = self._deferreds[tx.hash]
+
+        await deferred
 
         return True
 
