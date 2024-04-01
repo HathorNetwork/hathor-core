@@ -14,8 +14,8 @@
 
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.transaction import MergeMinedBlock
+from hathor.verification.verification_dependencies import BlockDependencies
 
 
 class MergeMinedBlockVerifier:
@@ -24,13 +24,13 @@ class MergeMinedBlockVerifier:
     def __init__(self, *, settings: HathorSettings) -> None:
         self._settings = settings
 
-    def verify_aux_pow(self, block: MergeMinedBlock, feature_info: dict[Feature, FeatureInfo]) -> None:
+    def verify_aux_pow(self, block: MergeMinedBlock, block_deps: BlockDependencies) -> None:
         """ Verify auxiliary proof-of-work (for merged mining).
         """
         assert block.aux_pow is not None
 
         max_merkle_path_length = self._settings.OLD_MAX_MERKLE_PATH_LENGTH
-        merkle_path_info = feature_info.get(Feature.INCREASE_MAX_MERKLE_PATH_LENGTH)
+        merkle_path_info = block_deps.feature_info.get(Feature.INCREASE_MAX_MERKLE_PATH_LENGTH)
 
         if merkle_path_info and merkle_path_info.state.is_active():
             max_merkle_path_length = self._settings.NEW_MAX_MERKLE_PATH_LENGTH
