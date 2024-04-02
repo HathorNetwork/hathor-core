@@ -17,6 +17,7 @@ from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
+from hathor.util import not_none
 
 
 class SimpleMemoryStorage:
@@ -24,11 +25,12 @@ class SimpleMemoryStorage:
     Instances of this class simply facilitate storing some data in memory, specifically for pre-fetched verification
     dependencies.
     """
-    __slots__ = ('_blocks', '_transactions',)
+    __slots__ = ('_blocks', '_transactions', '_best_block_tips')
 
     def __init__(self) -> None:
         self._blocks: dict[VertexId, BaseTransaction] = {}
         self._transactions: dict[VertexId, BaseTransaction] = {}
+        self._best_block_tips: list[VertexId] = []
 
     @property
     def _vertices(self) -> dict[VertexId, BaseTransaction]:
@@ -46,6 +48,10 @@ class SimpleMemoryStorage:
         tx = self._get_vertex(self._transactions, tx_id)
         assert isinstance(tx, Transaction)
         return tx
+
+    def get_vertex(self, vertex_id: VertexId) -> BaseTransaction:
+        """Return a vertex from the storage, raise if it's not found."""
+        return self._get_vertex(self._vertices, vertex_id)
 
     @staticmethod
     def _get_vertex(storage: dict[VertexId, BaseTransaction], vertex_id: VertexId) -> BaseTransaction:
@@ -71,13 +77,19 @@ class SimpleMemoryStorage:
 
     def add_vertex_from_storage(self, storage: TransactionStorage, vertex_id: VertexId) -> None:
         """
-        Add a vertex to this storage. It automatically fetches data from the provided TransactionStorage and a list
-        of ids.
+        Add a vertex to this storage. It automatically fetches data from the provided TransactionStorage and vertex_id.
         """
+        vertex = storage.get_transaction(vertex_id)
+
+        self.add_vertex(vertex)
+
+    def add_vertex(self, vertex: BaseTransaction) -> None:
+        """Add a vertex to this storage."""
+        vertex_id = not_none(vertex.hash)
+
         if vertex_id in self._vertices:
             return
 
-        vertex = storage.get_transaction(vertex_id)
         clone = vertex.clone(include_metadata=True, include_storage=False)
 
         if isinstance(vertex, Block):
@@ -90,10 +102,12 @@ class SimpleMemoryStorage:
 
         raise NotImplementedError
 
-    def get_vertex(self, vertex_id: VertexId) -> BaseTransaction:
-        # TODO: Currently unused, will be implemented in a next PR.
-        raise NotImplementedError
+    def set_best_block_tips_from_storage(self, storage: TransactionStorage) -> None:
+        """Get the best block tips from a storage and save them in this instance."""
+        tips = storage.get_best_block_tips()
+        self.add_vertices_from_storage(storage, tips)
+        self._best_block_tips = tips
 
     def get_best_block_tips(self) -> list[VertexId]:
-        # TODO: Currently unused, will be implemented in a next PR.
-        raise NotImplementedError
+        """Return the best block saved in this instance."""
+        return self._best_block_tips

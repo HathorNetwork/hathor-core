@@ -293,7 +293,7 @@ class VertexHandler:
         if not isinstance(vertex, Block):
             return
 
-        feature_descriptions = self._feature_service.get_bits_description(block=vertex)
+        feature_descriptions = self._feature_service.get_feature_info(block=vertex)
         state_by_feature = {
             feature.value: description.state.value
             for feature, description in feature_descriptions.items()

@@ -34,10 +34,9 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
-from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
-from hathor.types import TokenUid, VertexId
-from hathor.util import not_none
+from hathor.types import VertexId
+from hathor.verification.verification_dependencies import TransactionDependencies
 
 cpu = get_cpu_profiler()
 
@@ -51,8 +50,6 @@ class TransactionVerifier:
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
-        assert tx.storage is not None
-
         # check if parents are duplicated
         parents_set = set(tx.parents)
         if len(tx.parents) > len(parents_set):
@@ -72,7 +69,7 @@ class TransactionVerifier:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
 
-    def verify_sigops_input(self, tx: Transaction) -> None:
+    def verify_sigops_input(self, tx: Transaction, tx_deps: TransactionDependencies) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
         """
         from hathor.transaction.scripts import get_sigops_count
@@ -80,7 +77,7 @@ class TransactionVerifier:
         n_txops = 0
         for tx_input in tx.inputs:
             try:
-                spent_tx = tx.get_spent_tx(tx_input)
+                spent_tx = tx_deps.storage.get_vertex(tx_input.tx_id)
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
             assert spent_tx.hash is not None
@@ -93,7 +90,7 @@ class TransactionVerifier:
             raise TooManySigOps(
                 'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(tx.hash_hex, n_txops))
 
-    def verify_inputs(self, tx: Transaction, *, skip_script: bool = False) -> None:
+    def verify_inputs(self, tx: Transaction, tx_deps: TransactionDependencies, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
@@ -105,7 +102,7 @@ class TransactionVerifier:
                 ))
 
             try:
-                spent_tx = tx.get_spent_tx(input_tx)
+                spent_tx = tx_deps.storage.get_vertex(input_tx.tx_id)
                 assert spent_tx.hash is not None
                 if input_tx.index >= len(spent_tx.outputs):
                     raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
@@ -143,10 +140,10 @@ class TransactionVerifier:
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def verify_reward_locked(self, tx: Transaction) -> None:
+    def verify_reward_locked(self, tx: Transaction, tx_deps: TransactionDependencies) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
         the block rewards spent by this tx itself, and not the inherited `min_height`."""
-        info = get_spent_reward_locked_info(tx, not_none(tx.storage))
+        info = get_spent_reward_locked_info(tx, storage=tx_deps.storage)
         if info is not None:
             raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
 
@@ -169,7 +166,7 @@ class TransactionVerifier:
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def verify_sum(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verify_sum(self, tx_deps: TransactionDependencies) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
 
@@ -182,7 +179,7 @@ class TransactionVerifier:
         """
         withdraw = 0
         deposit = 0
-        for token_uid, token_info in token_dict.items():
+        for token_uid, token_info in tx_deps.token_info.items():
             if token_uid == self._settings.HATHOR_TOKEN_UID:
                 continue
 
@@ -204,7 +201,7 @@ class TransactionVerifier:
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
+        htr_info = tx_deps.token_info[self._settings.HATHOR_TOKEN_UID]
         if htr_info.amount != htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
                 htr_info.amount,
