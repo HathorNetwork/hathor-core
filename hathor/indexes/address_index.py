@@ -69,9 +69,9 @@ class AddressIndex(TxGroupIndex[str]):
             return
         if addresses is None:
             addresses = tx.get_related_addresses()
-        data = tx.to_json_extended()
-        for address in addresses:
-            self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
+        # data = tx.to_json_extended()
+        # for address in addresses:
+        #     self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
 
     @abstractmethod
     def add_tx(self, tx: BaseTransaction) -> None:

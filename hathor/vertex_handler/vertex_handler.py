@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from structlog import get_logger
 from twisted.internet import defer
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
@@ -114,11 +114,22 @@ class VertexHandler:
         if not is_valid:
             return False
 
+        metadata = vertex.get_metadata()
+        if not metadata.validation.is_fully_connected():
+            try:
+                self._verification_service.validate_full(vertex, reject_locked_reward=new_vertex.reject_locked_reward)
+            except HathorError as e:
+                if not fails_silently:
+                    raise InvalidNewTransaction('full validation failed') from e
+                self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
+                return False
+
         self._save_and_run_consensus(vertex)
         self._post_consensus(new_vertex)
 
         return True
 
+    @inlineCallbacks
     def on_new_vertex_async(
         self,
         vertex: BaseTransaction,
@@ -149,6 +160,18 @@ class VertexHandler:
 
         if not is_valid:
             return defer.succeed(False)
+
+        metadata = vertex.get_metadata()
+        if not metadata.validation.is_fully_connected():
+            try:
+                coro = self._verification_service.validate_full_async(vertex, reject_locked_reward=new_vertex.reject_locked_reward)
+            except HathorError as e:
+                if not fails_silently:
+                    raise InvalidNewTransaction('full validation failed') from e
+                self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
+                return defer.succeed(False)
+
+            yield Deferred.fromCoroutine(coro)
 
         deferred: Deferred[bool] = Deferred()
         self._post_validation_queue.append((new_vertex, deferred))
@@ -209,15 +232,6 @@ class VertexHandler:
                 raise InvalidNewTransaction('previously marked as invalid')
             self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
             return False
-
-        if not metadata.validation.is_fully_connected():
-            try:
-                self._verification_service.validate_full(vertex, reject_locked_reward=new_vertex.reject_locked_reward)
-            except HathorError as e:
-                if not new_vertex.fails_silently:
-                    raise InvalidNewTransaction('full validation failed') from e
-                self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
-                return False
 
         return True
 

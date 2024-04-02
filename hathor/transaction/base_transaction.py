@@ -611,7 +611,7 @@ class BaseTransaction(ABC):
             self._metadata = metadata
         if not metadata.hash:
             metadata.hash = self._hash
-        metadata._tx_ref = weakref.ref(self)
+        # metadata._tx_ref = weakref.ref(self)
         return metadata
 
     def reset_metadata(self) -> None:
@@ -630,7 +630,7 @@ class BaseTransaction(ABC):
         else:
             self._metadata.validation = ValidationState.INITIAL
             self._metadata.voided_by = {self._settings.PARTIALLY_VALIDATED_ID}
-        self._metadata._tx_ref = weakref.ref(self)
+        # self._metadata._tx_ref = weakref.ref(self)
 
         self._update_height_metadata()
 
