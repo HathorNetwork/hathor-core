@@ -56,6 +56,7 @@ class BitSignalingService:
         self._feature_storage = feature_storage
 
         self._validate_support_intersection()
+        self._feature_service.bit_signaling_service = self
 
     def start(self) -> None:
         """
@@ -135,6 +136,12 @@ class BitSignalingService:
         """Remove explicit support for a feature by disabling its signaling bit."""
         self._support_features.discard(feature)
         self._not_support_features.add(feature)
+
+    def on_must_signal(self, feature: Feature) -> None:
+        """
+        When the MUST_SIGNAL phase is reached, feature support is automatically enabled.
+        """
+        self.add_feature_support(feature)
 
     def _log_signal_bits(self, feature: Feature, enable_bit: bool, support: bool, not_support: bool) -> None:
         """Generate info log for a feature's signal."""
