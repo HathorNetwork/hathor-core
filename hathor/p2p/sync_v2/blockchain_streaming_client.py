@@ -133,7 +133,7 @@ class BlockchainStreamingClient:
 
         if blk.can_validate_full():
             try:
-                self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+                self.manager.vertex_handler.on_new_vertex_async(blk, propagate_to_peers=False, fails_silently=False)
             except HathorError:
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return

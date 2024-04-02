@@ -485,10 +485,6 @@ class BaseTransaction(ABC):
         """
         meta = self.get_metadata()
         meta.validation = validation
-        if validation.is_fully_connected():
-            self._unmark_partially_validated()
-        else:
-            self._mark_partially_validated()
 
     def validate_checkpoint(self, checkpoints: list[Checkpoint]) -> bool:
         """ Run checkpoint validations  and update the validation state.
@@ -498,26 +494,6 @@ class BaseTransaction(ABC):
         self.verify_checkpoint(checkpoints)
         self.set_validation(ValidationState.CHECKPOINT)
         return True
-
-    def _mark_partially_validated(self) -> None:
-        """ This function is used to add the partially-validated mark from the voided-by metadata.
-
-        It is idempotent: calling it multiple time has the same effect as calling it once. But it must only be called
-        when the validation state is *NOT* "fully connected", otherwise it'll raise an assertion error.
-        """
-        tx_meta = self.get_metadata()
-        assert not tx_meta.validation.is_fully_connected()
-        tx_meta.add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
-
-    def _unmark_partially_validated(self) -> None:
-        """ This function is used to remove the partially-validated mark from the voided-by metadata.
-
-        It is idempotent: calling it multiple time has the same effect as calling it once. But it must only be called
-        when the validation state is "fully connected", otherwise it'll raise an assertion error.
-        """
-        tx_meta = self.get_metadata()
-        assert tx_meta.validation.is_fully_connected()
-        tx_meta.del_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
 
     @abstractmethod
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:

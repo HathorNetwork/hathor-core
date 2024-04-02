@@ -119,6 +119,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         out = WalletOutputInfo(decode_address(key.address), BLOCK_REWARD, timelock=None)
         tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
         tx.update_hash()
+        tx.get_metadata().voided_by = None
         w.on_new_tx(tx)
         utxo = w.unspent_txs[self._settings.HATHOR_TOKEN_UID].get((tx.hash, 0))
         self.assertIsNotNone(utxo)

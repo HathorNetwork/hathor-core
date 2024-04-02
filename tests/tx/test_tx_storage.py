@@ -208,7 +208,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.validate_save(self.tx)
 
     def test_pre_save_validation_invalid_tx_1(self):
-        self.tx.get_metadata().validation = ValidationState.BASIC
+        self.tx.get_metadata()._validation = ValidationState.BASIC
         with self.assertRaises(AssertionError):
             # XXX: avoid using validate_save because an exception could be raised for other reasons
             self.tx_storage.save_transaction(self.tx)

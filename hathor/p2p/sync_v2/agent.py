@@ -603,11 +603,11 @@ class NodeBlockSync(SyncAgent):
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         for tx in vertex_list:
             if not self.tx_storage.transaction_exists(not_none(tx.hash)):
-                self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
+                self.manager.vertex_handler.on_new_vertex_async(tx, propagate_to_peers=False, fails_silently=False)
             yield deferLater(self.reactor, 0, lambda: None)
 
         if not self.tx_storage.transaction_exists(not_none(blk.hash)):
-            self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+            self.manager.vertex_handler.on_new_vertex_async(blk, propagate_to_peers=False, fails_silently=False)
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
@@ -1160,7 +1160,7 @@ class NodeBlockSync(SyncAgent):
             # in the network, thus, we propagate it as well.
             if tx.can_validate_full():
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                self.manager.on_new_tx(tx, propagate_to_peers=True)
+                self.manager.vertex_handler.on_new_vertex_async(tx, propagate_to_peers=True)
             else:
                 self.log.debug('skipping tx received in real time from peer',
                                tx=tx.hash_hex, peer=self.protocol.get_peer_id())
