@@ -49,6 +49,7 @@ from hathor.transaction.storage import (
 from hathor.util import Random, get_environment_info, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
+from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
@@ -155,6 +156,8 @@ class Builder:
         self._soft_voided_tx_ids: Optional[set[bytes]] = None
 
         self._execution_manager: ExecutionManager | None = None
+        self._vertex_handler: VertexHandler | None = None
+        self._consensus: ConsensusAlgorithm | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -170,8 +173,7 @@ class Builder:
         peer_id = self._get_peer_id()
 
         execution_manager = self._get_or_create_execution_manager()
-        soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub, execution_manager=execution_manager)
+        consensus_algorithm = self._get_or_create_consensus()
 
         p2p_manager = self._get_p2p_manager()
 
@@ -184,6 +186,7 @@ class Builder:
         verification_service = self._get_or_create_verification_service()
         daa = self._get_or_create_daa()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
+        vertex_handler = self._get_or_create_vertex_handler()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -218,11 +221,11 @@ class Builder:
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
             environment_info=get_environment_info(self._cmdline, peer_id.id),
-            feature_service=feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
+            vertex_handler=vertex_handler,
             **kwargs
         )
 
@@ -320,6 +323,15 @@ class Builder:
             self._execution_manager = ExecutionManager(reactor)
 
         return self._execution_manager
+
+    def _get_or_create_consensus(self) -> ConsensusAlgorithm:
+        if self._consensus is None:
+            soft_voided_tx_ids = self._get_soft_voided_tx_ids()
+            pubsub = self._get_or_create_pubsub()
+            execution_manager = self._get_or_create_execution_manager()
+            self._consensus = ConsensusAlgorithm(soft_voided_tx_ids, pubsub, execution_manager=execution_manager)
+
+        return self._consensus
 
     def _get_or_create_pubsub(self) -> PubSubManager:
         if self._pubsub is None:
@@ -534,6 +546,22 @@ class Builder:
 
         return self._cpu_mining_service
 
+    def _get_or_create_vertex_handler(self) -> VertexHandler:
+        if self._vertex_handler is None:
+            self._vertex_handler = VertexHandler(
+                reactor=self._get_reactor(),
+                settings=self._get_or_create_settings(),
+                tx_storage=self._get_or_create_tx_storage(),
+                verification_service=self._get_or_create_verification_service(),
+                consensus=self._get_or_create_consensus(),
+                p2p_manager=self._get_p2p_manager(),
+                feature_service=self._get_or_create_feature_service(),
+                pubsub=self._get_or_create_pubsub(),
+                wallet=self._get_or_create_wallet(),
+            )
+
+        return self._vertex_handler
+
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.MEMORY
@@ -563,16 +591,14 @@ class Builder:
 
     def _get_or_create_wallet(self) -> Optional[BaseWallet]:
         if self._wallet is not None:
-            assert self._wallet_directory is None
-            assert self._wallet_unlock is None
             return self._wallet
 
         if self._wallet_directory is None:
             return None
-        wallet = Wallet(directory=self._wallet_directory)
+        self._wallet = Wallet(directory=self._wallet_directory)
         if self._wallet_unlock is not None:
-            wallet.unlock(self._wallet_unlock)
-        return wallet
+            self._wallet.unlock(self._wallet_unlock)
+        return self._wallet
 
     def set_wallet(self, wallet: BaseWallet) -> 'Builder':
         self.check_if_can_modify()
