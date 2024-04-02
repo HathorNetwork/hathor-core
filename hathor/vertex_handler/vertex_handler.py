@@ -135,6 +135,9 @@ class VertexHandler:
         :param fails_silently: if False will raise an exception when tx cannot be added
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
+        with self._tx_storage.allow_partially_validated_context():
+            self._tx_storage.save_transaction(vertex)
+
         new_vertex = _NewVertex(
             vertex=vertex,
             quiet=quiet,
@@ -149,7 +152,9 @@ class VertexHandler:
 
         deferred: Deferred[bool] = Deferred()
         self._post_validation_queue.append((new_vertex, deferred))
-        self._reactor.callLater(0, self._process_post_validation_queue)
+
+        if len(self._post_validation_queue) == 1:
+            self._reactor.callLater(0, self._process_post_validation_queue)
 
         return deferred
 
@@ -157,12 +162,15 @@ class VertexHandler:
         if len(self._post_validation_queue) == 0:
             return
 
-        new_vertex, deferred = self._post_validation_queue.popleft()
-        self._save_and_run_consensus(new_vertex.vertex)
-        self._post_consensus(new_vertex)
-
-        deferred.callback(True)
-        self._reactor.callLater(0, self._process_post_validation_queue)
+        try:
+            new_vertex, deferred = self._post_validation_queue.popleft()
+            self._save_and_run_consensus(new_vertex.vertex)
+            self._post_consensus(new_vertex)
+            deferred.callback(True)
+        except Exception as e:
+            self._log.error(f'Unhandled exception while processing post validation queue: {e}', exc_info=True)
+        finally:
+            self._reactor.callLater(0, self._process_post_validation_queue)
 
     def _validate_vertex(self, new_vertex: _NewVertex) -> bool:
         assert self._tx_storage.is_only_valid_allowed()

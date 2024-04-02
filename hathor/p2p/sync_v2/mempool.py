@@ -135,4 +135,4 @@ class SyncMempoolManager:
         """Add tx to the DAG."""
         assert tx.hash is not None
         self.missing_tips.discard(tx.hash)
-        self.manager.on_new_tx(tx)
+        self.manager.vertex_handler.on_new_vertex_async(tx)
