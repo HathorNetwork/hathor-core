@@ -135,6 +135,7 @@ class VertexHandler:
         :param fails_silently: if False will raise an exception when tx cannot be added
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
+        vertex.get_metadata()
         with self._tx_storage.allow_partially_validated_context():
             self._tx_storage.save_transaction(vertex)
 
