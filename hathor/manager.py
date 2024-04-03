@@ -957,7 +957,7 @@ class HathorManager:
         :param fails_silently: if False will raise an exception when tx cannot be added
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        return self.vertex_handler.on_new_tx(
+        return self.vertex_handler.on_new_vertex(
             tx,
             quiet=quiet,
             fails_silently=fails_silently,
