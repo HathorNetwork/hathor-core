@@ -70,10 +70,6 @@ class AddressHistoryResource(Resource):
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_history/
 
-            If 'paginate' parameter exists, it calls the new resource method
-            otherwise, it will call the old and deprecated one because it's
-            a request from a wallet still in an older version
-
             Expects 'addresses[]' as request args, and 'hash'
             as optional args to be used in pagination
 
@@ -125,24 +121,18 @@ class AddressHistoryResource(Resource):
             return json_dumpb({'success': False})
 
         raw_args = get_args(request)
-        paginate = b'paginate' in raw_args and raw_args[b'paginate'][0].decode('utf-8') == 'true'
 
-        if paginate:
-            # New resource
-            if b'addresses[]' not in raw_args:
-                return get_missing_params_msg('addresses[]')
+        if b'addresses[]' not in raw_args:
+            return get_missing_params_msg('addresses[]')
 
-            addresses = raw_args[b'addresses[]']
+        addresses = raw_args[b'addresses[]']
 
-            ref_hash = None
-            if b'hash' in raw_args:
-                # If hash parameter is in the request, it must be a valid hex
-                ref_hash = raw_args[b'hash'][0].decode('utf-8')
+        ref_hash = None
+        if b'hash' in raw_args:
+            # If hash parameter is in the request, it must be a valid hex
+            ref_hash = raw_args[b'hash'][0].decode('utf-8')
 
-            return self.get_address_history([address.decode('utf-8') for address in addresses], ref_hash)
-        else:
-            # Old and deprecated resource
-            return self.deprecated_resource(request)
+        return self.get_address_history([address.decode('utf-8') for address in addresses], ref_hash)
 
     def get_address_history(self, addresses: list[str], ref_hash: Optional[str]) -> bytes:
         ref_hash_bytes = None
@@ -234,38 +224,6 @@ class AddressHistoryResource(Resource):
         }
         return json_dumpb(data)
 
-    def deprecated_resource(self, request: Request) -> bytes:
-        """ This resource is deprecated. It's here only to keep
-            compatibility with old wallet versions
-        """
-        raw_args = get_args(request)
-        if b'addresses[]' not in raw_args:
-            return get_missing_params_msg('addresses[]')
-
-        addresses_index = self.manager.tx_storage.indexes.addresses
-
-        addresses = raw_args[b'addresses[]']
-        history = []
-        seen: set[bytes] = set()
-        for address_to_decode in addresses:
-            address = address_to_decode.decode('utf-8')
-            try:
-                decode_address(address)
-            except InvalidAddress:
-                return json_dumpb({
-                    'success': False,
-                    'message': 'The address {} is invalid'.format(address)
-                })
-
-            for tx_hash in addresses_index.get_from_address(address):
-                tx = self.manager.tx_storage.get_transaction(tx_hash)
-                if tx_hash not in seen:
-                    seen.add(tx_hash)
-                    history.append(tx.to_json_extended())
-
-        data = {'history': history}
-        return json_dumpb(data)
-
 
 AddressHistoryResource.openapi = {
     '/thin_wallet/address_history': {
@@ -317,60 +275,6 @@ AddressHistoryResource.openapi = {
                                         'first_hash': '00000299670db5814f69cede8b347f83'
                                                       '0f73985eaa4cd1ce87c9a7c793771332',
                                         'first_address': '1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS',
-                                        'history': [
-                                            {
-                                                "hash": "00000299670db5814f69cede8b347f83"
-                                                        "0f73985eaa4cd1ce87c9a7c793771336",
-                                                "timestamp": 1552422415,
-                                                "is_voided": False,
-                                                'parents': [
-                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb5',
-                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb1'
-                                                ],
-                                                "inputs": [
-                                                    {
-                                                        "value": 42500000044,
-                                                        "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "17Fbx9ouRUD1sd32bp4ptGkmgNzg7p2Krj",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00",
-                                                        "tx": "000002d28696f94f89d639022ae81a1d"
-                                                              "870d55d189c27b7161d9cb214ad1c90c",
-                                                        "index": 0
-                                                        }
-                                                    ],
-                                                "outputs": [
-                                                    {
-                                                        "value": 42499999255,
-                                                        "script": "dqkU/B6Jbf5OnslsQrvHXQ4WKDTSEGKIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00"
-                                                        },
-                                                    {
-                                                        "value": 789,
-                                                        "script": "dqkUrWoWhiP+qPeI/qwfwb5fgnmtd4CIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "1GovzJvbzLw6x4H2a1hHb529cpEWzh3YRd",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00"
-                                                        }
-                                                    ]
-                                                }
-                                        ]
-                                    }
-                                },
-                                'deprecated_success': {
-                                    'summary': 'Deprecated success',
-                                    'value': {
                                         'history': [
                                             {
                                                 "hash": "00000299670db5814f69cede8b347f83"
