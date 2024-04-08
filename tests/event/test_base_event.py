@@ -40,6 +40,7 @@ def test_create_base_event(event_id: int, group_id: int | None) -> None:
             hash='abc',
             nonce=123,
             timestamp=456,
+            signal_bits=0,
             version=1,
             weight=10.0,
             inputs=[],
