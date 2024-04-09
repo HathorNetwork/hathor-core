@@ -49,7 +49,7 @@ class Migration(BaseMigration):
 
         for vertex in progress(topological_iterator, log=log, total=None):
             if vertex.is_block:
-                meta = vertex.get_metadata()
+                meta = storage.metadata_service.get(vertex)
                 assert meta.height is not None
                 # This is the start_height of the **second** Phased Testing, so we clear anything before it.
                 if meta.height < 3_386_880:

@@ -49,6 +49,6 @@ class Migration(BaseMigration):
 
         for vertex in progress(topological_iterator, log=log, total=None):
             if vertex.is_block:
-                meta = vertex.get_metadata()
+                meta = storage.metadata_service.get(vertex)
                 meta.feature_states = None
                 storage.save_transaction(vertex, only_metadata=True)

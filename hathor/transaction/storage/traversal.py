@@ -91,14 +91,14 @@ class GenericWalk(ABC):
 
         if self.is_dag_verifications:
             if is_left_to_right:
-                meta = meta or tx.get_metadata()
+                meta = meta or self.storage.metadata_service.get(tx)
                 it = chain(it, meta.children)
             else:
                 it = chain(it, tx.parents)
 
         if self.is_dag_funds:
             if is_left_to_right:
-                meta = meta or tx.get_metadata()
+                meta = meta or self.storage.metadata_service.get(tx)
                 it = chain(it, *meta.spent_outputs.values())
             else:
                 it = chain(it, [txin.tx_id for txin in tx.inputs])

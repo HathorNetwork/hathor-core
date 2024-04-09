@@ -172,7 +172,7 @@ class BlockchainStreamingServer(_StreamingServerBase):
         assert cur is not None
         assert cur.hash is not None
 
-        meta = cur.get_metadata()
+        meta = self.sync_agent.manager.metadata_service.get(cur)
         if meta.voided_by:
             self.sync_agent.stop_blk_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
             return
@@ -230,7 +230,8 @@ class TransactionsStreamingServer(_StreamingServerBase):
 
         # Validate that all transactions in `start_from` are confirmed by the first block.
         for tx in start_from:
-            assert tx.get_metadata().first_block == self.first_block.hash
+            meta = self.sync_agent.manager.metadata_service.get(tx)
+            assert meta.first_block == self.first_block.hash
 
         self.current_block: Optional[Block] = self.first_block
         self.bfs = BFSOrderWalk(self.tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
@@ -261,7 +262,8 @@ class TransactionsStreamingServer(_StreamingServerBase):
                 break
 
             # Check if this block is still in the best blockchain.
-            if self.current_block.get_metadata().voided_by:
+            meta = self.sync_agent.manager.metadata_service.get(self.current_block)
+            if meta.voided_by:
                 self.sync_agent.stop_tx_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
                 return
 
@@ -289,7 +291,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
         assert isinstance(cur, Transaction)
         assert cur.hash is not None
 
-        cur_metadata = cur.get_metadata()
+        cur_metadata = self.sync_agent.manager.metadata_service.get(cur)
         if cur_metadata.first_block is None:
             self.log.debug('reached a tx that is not confirmed, stopping streaming')
             self.sync_agent.stop_tx_streaming_server(StreamEnd.TX_NOT_CONFIRMED)
@@ -299,7 +301,9 @@ class TransactionsStreamingServer(_StreamingServerBase):
         assert cur_metadata.first_block is not None
         assert self.current_block is not None
         first_block = self.tx_storage.get_transaction(cur_metadata.first_block)
-        if not_none(first_block.get_metadata().height) < not_none(self.current_block.get_metadata().height):
+        first_block_meta = self.sync_agent.manager.metadata_service.get(first_block)
+        current_block_meta = self.sync_agent.manager.metadata_service.get(self.current_block)
+        if not_none(first_block_meta.height) < not_none(current_block_meta.height):
             self.log.debug('skipping tx: out of current block')
             self.bfs.skip_neighbors(cur)
             return

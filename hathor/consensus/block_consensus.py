@@ -21,6 +21,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
 from hathor.util import classproperty, not_none
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:
     from hathor.consensus.context import ConsensusAlgorithmContext
@@ -34,9 +35,10 @@ _base_transaction_log = logger.new()
 class BlockConsensusAlgorithm:
     """Implement the consensus algorithm for blocks."""
 
-    def __init__(self, context: 'ConsensusAlgorithmContext') -> None:
+    def __init__(self, context: 'ConsensusAlgorithmContext', metadata_service: VertexMetadataService) -> None:
         self._settings = get_global_settings()
         self.context = context
+        self._metadata_service = metadata_service
 
     @classproperty
     def log(cls) -> Any:
@@ -119,7 +121,7 @@ class BlockConsensusAlgorithm:
         assert block.hash not in voided_by
         for h in voided_by:
             tx = storage.get_transaction(h)
-            tx_meta = tx.get_metadata()
+            tx_meta = self._metadata_service.get(tx)
             tx_meta.accumulated_weight = sum_weights(tx_meta.accumulated_weight, block.weight)
             self.context.save(tx)
 
@@ -131,7 +133,7 @@ class BlockConsensusAlgorithm:
                 self.context.transaction_algorithm.check_conflicts(tx)
 
         parent = block.get_block_parent()
-        parent_meta = parent.get_metadata()
+        parent_meta = self._metadata_service.get(parent)
         assert block.hash in parent_meta.children
 
         # This method is called after the metadata of the parent is updated.
@@ -144,7 +146,7 @@ class BlockConsensusAlgorithm:
             self.update_score_and_mark_as_the_best_chain_if_possible(block)
             # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
             # we need to check that block is not voided.
-            meta = block.get_metadata()
+            meta = self._metadata_service.get(block)
             if not meta.voided_by:
                 storage.indexes.height.add_new(block.get_height(), block.hash, block.timestamp)
                 storage.update_best_block_tips_cache([block.hash])
@@ -188,7 +190,7 @@ class BlockConsensusAlgorithm:
 
                 valid_heads = []
                 for head in heads:
-                    meta = head.get_metadata()
+                    meta = self._metadata_service.get(head)
                     if not meta.voided_by:
                         valid_heads.append(head)
 
@@ -205,7 +207,7 @@ class BlockConsensusAlgorithm:
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
                     # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
                     # we need to check that block is not voided.
-                    meta = block.get_metadata()
+                    meta = self._metadata_service.get(block)
                     height = block.get_height()
                     if not meta.voided_by:
                         self.log.debug('index new winner block', height=height, block=block.hash_hex)
@@ -232,7 +234,7 @@ class BlockConsensusAlgorithm:
         voided_by: set[bytes] = set()
         for parent in block.get_parents():
             assert parent.hash is not None
-            parent_meta = parent.get_metadata()
+            parent_meta = self._metadata_service.get(parent)
             voided_by2 = parent_meta.voided_by
             if voided_by2:
                 if parent.is_block:
@@ -252,7 +254,7 @@ class BlockConsensusAlgorithm:
         assert block.storage is not None
         voided_by: set[bytes] = self.union_voided_by_from_parents(block)
         if voided_by:
-            meta = block.get_metadata()
+            meta = self._metadata_service.get(block)
             if meta.voided_by:
                 meta.voided_by.update(voided_by)
             else:
@@ -272,7 +274,7 @@ class BlockConsensusAlgorithm:
             while True:
                 if head.timestamp <= first_block.timestamp:
                     break
-                meta = head.get_metadata()
+                meta = self._metadata_service.get(head)
                 if not (meta.voided_by and head.hash in meta.voided_by):
                     # Only mark as voided when it is non-voided.
                     self.mark_as_voided(head)
@@ -349,7 +351,7 @@ class BlockConsensusAlgorithm:
         while True:
             parent = storage.get_transaction(parent_hash)
             assert isinstance(parent, Block)
-            parent_meta = parent.get_metadata()
+            parent_meta = self._metadata_service.get(parent)
             if not parent_meta.voided_by:
                 break
             assert len(parent.parents) > 0, 'This should never happen because the genesis is always in the best chain'
@@ -378,7 +380,7 @@ class BlockConsensusAlgorithm:
             voided_hash = block.hash
         assert voided_hash is not None
 
-        meta = block.get_metadata()
+        meta = self._metadata_service.get(block)
         if not meta.voided_by:
             meta.voided_by = set()
         if voided_hash in meta.voided_by:
@@ -408,7 +410,7 @@ class BlockConsensusAlgorithm:
         if voided_hash is None:
             voided_hash = block.hash
 
-        meta = block.get_metadata()
+        meta = self._metadata_service.get(block)
         if not meta.voided_by:
             return False
         if voided_hash not in meta.voided_by:
@@ -441,7 +443,7 @@ class BlockConsensusAlgorithm:
                 bfs.skip_neighbors(tx)
                 continue
 
-            meta = tx.get_metadata()
+            meta = self._metadata_service.get(tx)
             if meta.first_block != block.hash:
                 bfs.skip_neighbors(tx)
                 continue
@@ -465,7 +467,7 @@ class BlockConsensusAlgorithm:
             if parent.is_block:
                 assert isinstance(parent, Block)
                 if parent.timestamp <= newest_timestamp:
-                    meta = parent.get_metadata()
+                    meta = self._metadata_service.get(parent)
                     x = meta.score
                 else:
                     x = self._score_block_dfs(parent, used, mark_as_best_chain, newest_timestamp)
@@ -483,7 +485,7 @@ class BlockConsensusAlgorithm:
                         continue
                     used.add(tx.hash)
 
-                    meta = tx.get_metadata()
+                    meta = self._metadata_service.get(tx)
                     if meta.first_block:
                         first_block = storage.get_transaction(meta.first_block)
                         if first_block.timestamp <= newest_timestamp:
@@ -498,7 +500,7 @@ class BlockConsensusAlgorithm:
                     score = sum_weights(score, tx.weight)
 
         # Always save the score when it is calculated.
-        meta = block.get_metadata()
+        meta = self._metadata_service.get(block)
         if not meta.score:
             meta.score = score
             self.context.save(block)
@@ -521,7 +523,7 @@ class BlockConsensusAlgorithm:
         assert block.storage is not None
         if block.is_genesis:
             if mark_as_best_chain:
-                meta = block.get_metadata()
+                meta = self._metadata_service.get(block)
                 meta.score = block.weight
                 self.context.save(block)
             return block.weight
@@ -534,5 +536,9 @@ class BlockConsensusAlgorithm:
 
 
 class BlockConsensusAlgorithmFactory:
-    def __call__(self, context: 'ConsensusAlgorithmContext') -> BlockConsensusAlgorithm:
-        return BlockConsensusAlgorithm(context)
+    def __call__(
+        self,
+        context: 'ConsensusAlgorithmContext',
+        metadata_service: VertexMetadataService
+    ) -> BlockConsensusAlgorithm:
+        return BlockConsensusAlgorithm(context, metadata_service)

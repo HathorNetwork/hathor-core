@@ -337,7 +337,7 @@ class NodeBlockSync(SyncAgent):
         """Return my best block info."""
         bestblock = self.tx_storage.get_best_block()
         assert bestblock.hash is not None
-        meta = bestblock.get_metadata()
+        meta = self.manager.metadata_service.get(bestblock)
         assert meta.validation.is_fully_connected()
         return _HeightInfo(height=bestblock.get_height(), id=bestblock.hash)
 
@@ -588,7 +588,8 @@ class NodeBlockSync(SyncAgent):
                 except TransactionDoesNotExist:
                     hi = info
                 else:
-                    assert blk.get_metadata().validation.is_fully_connected()
+                    meta = self.manager.metadata_service.get(blk)
+                    assert meta.validation.is_fully_connected()
                     assert isinstance(blk, Block)
                     assert info.height == blk.get_height()
                     lo = info
@@ -639,7 +640,7 @@ class NodeBlockSync(SyncAgent):
             if blk_hash is None:
                 break
             blk = self.tx_storage.get_transaction(blk_hash)
-            if blk.get_metadata().voided_by:
+            if self.manager.metadata_service.get(blk).voided_by:
                 break
             data.append((h, blk_hash.hex()))
         payload = json.dumps(data)
@@ -829,7 +830,7 @@ class NodeBlockSync(SyncAgent):
         """ Handle a GET-BEST-BLOCK message.
         """
         best_block = self.tx_storage.get_best_block()
-        meta = best_block.get_metadata()
+        meta = self.manager.metadata_service.get(best_block)
         assert meta.validation.is_fully_connected()
         payload = BestBlockPayload(
             block=not_none(best_block.hash),
@@ -949,7 +950,7 @@ class NodeBlockSync(SyncAgent):
                 return
             assert tx.hash is not None
             assert first_block.hash is not None
-            meta = tx.get_metadata()
+            meta = self.manager.metadata_service.get(tx)
             if meta.first_block != first_block.hash:
                 self.log.debug('requested start_from not confirmed by first_block',
                                vertex_id=tx.hash.hex(),

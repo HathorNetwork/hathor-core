@@ -49,6 +49,7 @@ from hathor.transaction.storage import (
 from hathor.util import Random, get_environment_info, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
@@ -156,6 +157,7 @@ class Builder:
         self._soft_voided_tx_ids: Optional[set[bytes]] = None
 
         self._execution_manager: ExecutionManager | None = None
+        self._metadata_service: VertexMetadataService | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -167,12 +169,18 @@ class Builder:
         settings = self._get_or_create_settings()
         reactor = self._get_reactor()
         pubsub = self._get_or_create_pubsub()
+        metadata_service = self._get_or_create_metadata_service()
 
         peer_id = self._get_peer_id()
 
         execution_manager = self._get_or_create_execution_manager()
         soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub, execution_manager=execution_manager)
+        consensus_algorithm = ConsensusAlgorithm(
+            soft_voided_tx_ids,
+            pubsub,
+            execution_manager=execution_manager,
+            metadata_service=metadata_service
+        )
 
         p2p_manager = self._get_p2p_manager()
 
@@ -224,6 +232,7 @@ class Builder:
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
+            metadata_service=metadata_service,
             **kwargs
         )
 
@@ -407,12 +416,21 @@ class Builder:
         if self._tx_storage_cache:
             store_indexes = None
 
+        metadata_service = self._get_or_create_metadata_service()
+
         if self._storage_type == StorageType.MEMORY:
-            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes)
+            self._tx_storage = TransactionMemoryStorage(
+                indexes=store_indexes,
+                metadata_service=metadata_service,
+            )
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes)
+            self._tx_storage = TransactionRocksDBStorage(
+                rocksdb_storage,
+                indexes=store_indexes,
+                metadata_service=metadata_service,
+            )
 
         else:
             raise NotImplementedError
@@ -536,6 +554,12 @@ class Builder:
             self._cpu_mining_service = CpuMiningService()
 
         return self._cpu_mining_service
+
+    def _get_or_create_metadata_service(self) -> VertexMetadataService:
+        if self._metadata_service is None:
+            self._metadata_service = VertexMetadataService()
+
+        return self._metadata_service
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()

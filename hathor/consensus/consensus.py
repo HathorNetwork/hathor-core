@@ -23,6 +23,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 from hathor.util import not_none
+from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -61,7 +62,8 @@ class ConsensusAlgorithm:
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
         *,
-        execution_manager: ExecutionManager
+        execution_manager: ExecutionManager,
+        metadata_service: VertexMetadataService
     ) -> None:
         self._settings = get_global_settings()
         self.log = logger.new()
@@ -70,6 +72,7 @@ class ConsensusAlgorithm:
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
         self._execution_manager = execution_manager
+        self.metadata_service = metadata_service
 
     def create_context(self) -> ConsensusAlgorithmContext:
         """Handy method to create a context that can be used to access block and transaction algorithms."""
@@ -79,7 +82,7 @@ class ConsensusAlgorithm:
     def update(self, base: BaseTransaction) -> None:
         assert base.storage is not None
         assert base.storage.is_only_valid_allowed()
-        meta = base.get_metadata()
+        meta = self.metadata_service.get(base)
         assert meta.validation.is_valid()
         try:
             self._unsafe_update(base)
@@ -94,7 +97,7 @@ class ConsensusAlgorithm:
         from hathor.transaction import Block, Transaction
 
         # XXX: first make sure we can run the consensus update on this tx:
-        meta = base.get_metadata()
+        meta = self.metadata_service.get(base)
         assert meta.voided_by is None or (self._settings.PARTIALLY_VALIDATED_ID not in meta.voided_by)
         assert meta.validation.is_fully_connected()
 
@@ -144,7 +147,7 @@ class ConsensusAlgorithm:
                                    reorg_size=reorg_size)
 
         # finally signal an index update for all affected transactions
-        for tx_affected in _sorted_affected_txs(context.txs_affected):
+        for tx_affected in self._sorted_affected_txs(context.txs_affected):
             assert tx_affected.storage is not None
             assert tx_affected.storage.indexes is not None
             tx_affected.storage.indexes.update(tx_affected)
@@ -169,22 +172,21 @@ class ConsensusAlgorithm:
                 continue
             assert tx.storage is not None
             tx3 = tx.storage.get_transaction(h)
-            tx3_meta = tx3.get_metadata()
+            tx3_meta = self.metadata_service.get(tx3)
             tx3_voided_by: set[bytes] = tx3_meta.voided_by or set()
             if not (self.soft_voided_tx_ids & tx3_voided_by):
                 ret.add(h)
         return ret
 
+    def _sorted_affected_txs(self, affected_txs: set[BaseTransaction]) -> list[BaseTransaction]:
+        """
+        Sort affected txs by voided first, then descending timestamp (reverse topological order).
+        This is useful for generating Reliable Integration events.
+        """
+        def sorter(tx: BaseTransaction) -> tuple[bool, int]:
+            meta = self.metadata_service.get(tx)
+            is_voided = bool(meta.voided_by)
 
-def _sorted_affected_txs(affected_txs: set[BaseTransaction]) -> list[BaseTransaction]:
-    """
-    Sort affected txs by voided first, then descending timestamp (reverse topological order).
-    This is useful for generating Reliable Integration events.
-    """
-    def sorter(tx: BaseTransaction) -> tuple[bool, int]:
-        meta = tx.get_metadata()
-        is_voided = bool(meta.voided_by)
+            return is_voided, not_none(tx.timestamp)
 
-        return is_voided, not_none(tx.timestamp)
-
-    return sorted(affected_txs, key=sorter, reverse=True)
+        return sorted(affected_txs, key=sorter, reverse=True)

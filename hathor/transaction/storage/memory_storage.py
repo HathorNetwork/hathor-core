@@ -20,12 +20,19 @@ from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.vertex_metadata import VertexMetadataService
 
 _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
 
 
 class TransactionMemoryStorage(BaseTransactionStorage):
-    def __init__(self, indexes: Optional[IndexesManager] = None, *, _clone_if_needed: bool = False) -> None:
+    def __init__(
+        self,
+        indexes: Optional[IndexesManager] = None,
+        *,
+        metadata_service: VertexMetadataService,
+        _clone_if_needed: bool = False
+    ) -> None:
         """
         :param _clone_if_needed: *private parameter*, defaults to True, controls whether to clone
                                  transaction/blocks/metadata when returning those objects.
@@ -36,7 +43,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         # Store custom key/value attributes
         self.attributes: dict[str, Any] = {}
         self._clone_if_needed = _clone_if_needed
-        super().__init__(indexes=indexes)
+        super().__init__(indexes=indexes, metadata_service=metadata_service)
 
     def _check_and_set_network(self) -> None:
         # XXX: does not apply to memory storage, can safely be ignored

@@ -43,6 +43,7 @@ from hathor.stratum import StratumFactory
 from hathor.util import Random, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -124,12 +125,13 @@ class CliBuilder:
         feature_storage: FeatureActivationStorage | None = None
         self.rocksdb_storage: Optional[RocksDBStorage] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
+        metadata_service = VertexMetadataService()
 
         if self._args.memory_storage:
             self.check_or_raise(not self._args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             indexes = MemoryIndexesManager()
-            tx_storage = TransactionMemoryStorage(indexes)
+            tx_storage = TransactionMemoryStorage(indexes, metadata_service=metadata_service)
             event_storage = EventMemoryStorage()
             self.check_or_raise(not self._args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
@@ -152,14 +154,23 @@ class CliBuilder:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
                 kwargs['indexes'] = indexes
-            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage, **kwargs)
+            tx_storage = TransactionRocksDBStorage(
+                self.rocksdb_storage,
+                metadata_service=metadata_service,
+                **kwargs
+            )
             event_storage = EventRocksDBStorage(self.rocksdb_storage)
             feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
         if self._args.cache:
             self.check_or_raise(not self._args.memory_storage, '--cache should not be used with --memory-storage')
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes)
+            tx_storage = TransactionCacheStorage(
+                tx_storage,
+                reactor,
+                indexes=indexes,
+                metadata_service=metadata_service
+            )
             if self._args.cache_size:
                 tx_storage.capacity = self._args.cache_size
             if self._args.cache_interval:
@@ -246,7 +257,8 @@ class CliBuilder:
         consensus_algorithm = ConsensusAlgorithm(
             soft_voided_tx_ids,
             pubsub=pubsub,
-            execution_manager=execution_manager
+            execution_manager=execution_manager,
+            metadata_service=metadata_service,
         )
 
         if self._args.x_enable_event_queue:
@@ -322,6 +334,7 @@ class CliBuilder:
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
+            metadata_service=metadata_service,
         )
 
         if self._args.x_ipython_kernel:

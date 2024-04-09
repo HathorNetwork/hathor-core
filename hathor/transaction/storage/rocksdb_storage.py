@@ -22,6 +22,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import json_dumpb, json_loadb
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:
     import rocksdb
@@ -43,7 +44,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     It uses Protobuf serialization internally.
     """
 
-    def __init__(self, rocksdb_storage: RocksDBStorage, indexes: Optional[IndexesManager] = None):
+    def __init__(
+        self,
+        rocksdb_storage: RocksDBStorage,
+        metadata_service: VertexMetadataService,
+        indexes: Optional[IndexesManager] = None,
+    ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
         self._cf_attr = rocksdb_storage.get_or_create_column_family(_CF_NAME_ATTR)
@@ -51,7 +57,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
         self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
-        super().__init__(indexes=indexes)
+        super().__init__(indexes=indexes, metadata_service=metadata_service)
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.base_transaction import tx_or_block_from_bytes

@@ -17,6 +17,7 @@ from enum import Flag, auto
 from typing import TYPE_CHECKING, Generator
 
 from hathor.transaction.base_transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -33,9 +34,9 @@ class TxAllowScope(Flag):
     INVALID = auto()
     ALL = VALID | PARTIAL | INVALID
 
-    def is_allowed(self, tx: BaseTransaction) -> bool:
+    def is_allowed(self, tx: BaseTransaction, metadata_service: VertexMetadataService) -> bool:
         """True means it is allowed to be used in the storage (as argument or as return), False means not allowed."""
-        tx_meta = tx.get_metadata()
+        tx_meta = metadata_service.get(tx)
         # XXX: partial/invalid/fully_connected never overlap and cover all possible validation states
         #      see hathor.transaction.transaction_metadata.ValidationState for more details
         validation = tx_meta.validation

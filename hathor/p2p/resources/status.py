@@ -93,7 +93,7 @@ class StatusResource(Resource):
         best_block_tips = []
         for tip in self.manager.tx_storage.get_best_block_tips():
             tx = self.manager.tx_storage.get_transaction(tip)
-            meta = tx.get_metadata()
+            meta = self.manager.metadata_service.get(tx)
             best_block_tips.append({'hash': tx.hash_hex, 'height': meta.height})
 
         best_block = self.manager.tx_storage.get_best_block()
@@ -122,7 +122,7 @@ class StatusResource(Resource):
                 'best_block_tips': best_block_tips,
                 'best_block': {
                     'hash': best_block.hash_hex,
-                    'height': best_block.get_metadata().height,
+                    'height': self.manager.metadata_service.get(best_block).height,
                 },
                 'best_blockchain': best_blockchain,
             }

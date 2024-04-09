@@ -63,6 +63,7 @@ from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none
 from hathor.verification.verification_service import VerificationService
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import BaseWallet
 
 logger = get_logger()
@@ -89,31 +90,34 @@ class HathorManager:
     # This is the interval to be used by the task to check if the node is synced
     CHECK_SYNC_STATE_INTERVAL = 30  # seconds
 
-    def __init__(self,
-                 reactor: Reactor,
-                 *,
-                 settings: HathorSettings,
-                 pubsub: PubSubManager,
-                 consensus_algorithm: ConsensusAlgorithm,
-                 daa: DifficultyAdjustmentAlgorithm,
-                 peer_id: PeerId,
-                 tx_storage: TransactionStorage,
-                 p2p_manager: ConnectionsManager,
-                 event_manager: EventManager,
-                 feature_service: FeatureService,
-                 bit_signaling_service: BitSignalingService,
-                 verification_service: VerificationService,
-                 cpu_mining_service: CpuMiningService,
-                 network: str,
-                 execution_manager: ExecutionManager,
-                 hostname: Optional[str] = None,
-                 wallet: Optional[BaseWallet] = None,
-                 capabilities: Optional[list[str]] = None,
-                 checkpoints: Optional[list[Checkpoint]] = None,
-                 rng: Optional[Random] = None,
-                 environment_info: Optional[EnvironmentInfo] = None,
-                 full_verification: bool = False,
-                 enable_event_queue: bool = False):
+    def __init__(
+        self,
+        reactor: Reactor,
+        *,
+        settings: HathorSettings,
+        pubsub: PubSubManager,
+        consensus_algorithm: ConsensusAlgorithm,
+        daa: DifficultyAdjustmentAlgorithm,
+        peer_id: PeerId,
+        tx_storage: TransactionStorage,
+        p2p_manager: ConnectionsManager,
+        event_manager: EventManager,
+        feature_service: FeatureService,
+        bit_signaling_service: BitSignalingService,
+        verification_service: VerificationService,
+        cpu_mining_service: CpuMiningService,
+        network: str,
+        execution_manager: ExecutionManager,
+        metadata_service: VertexMetadataService,
+        hostname: Optional[str] = None,
+        wallet: Optional[BaseWallet] = None,
+        capabilities: Optional[list[str]] = None,
+        checkpoints: Optional[list[Checkpoint]] = None,
+        rng: Optional[Random] = None,
+        environment_info: Optional[EnvironmentInfo] = None,
+        full_verification: bool = False,
+        enable_event_queue: bool = False,
+    ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node.
@@ -189,6 +193,7 @@ class HathorManager:
         self._bit_signaling_service = bit_signaling_service
         self.verification_service = verification_service
         self.cpu_mining_service = cpu_mining_service
+        self.metadata_service = metadata_service
 
         self.consensus_algorithm = consensus_algorithm
 
@@ -432,7 +437,7 @@ class HathorManager:
         for tx in self.tx_storage._topological_sort_dfs():
             assert tx.hash is not None
 
-            tx_meta = tx.get_metadata()
+            tx_meta = self.metadata_service.get(tx)
 
             t2 = time.time()
             dt = LogDuration(t2 - t1)
@@ -627,7 +632,7 @@ class HathorManager:
                 # so it's fine, we will mark it as soft voided when we get it through sync
                 pass
             else:
-                soft_voided_meta = soft_voided_tx.get_metadata()
+                soft_voided_meta = self.metadata_service.get(soft_voided_tx)
                 voided_set = soft_voided_meta.voided_by or set()
                 # If the tx is not marked as soft voided, then we can't continue the initialization
                 if self._settings.SOFT_VOIDED_ID not in voided_set:
@@ -655,7 +660,7 @@ class HathorManager:
             except TransactionDoesNotExist as e:
                 raise InitializationError(f'Expected checkpoint does not exist in database: {checkpoint}') from e
             assert tx.hash is not None
-            tx_meta = tx.get_metadata()
+            tx_meta = self.metadata_service.get(tx)
             if tx_meta.height != checkpoint.height:
                 raise InitializationError(
                     f'Expected checkpoint of hash {tx.hash_hex} to have height {checkpoint.height}, but instead it has'
@@ -814,7 +819,7 @@ class HathorManager:
                 f'(current_timestamp={current_timestamp})'
             )
         timestamp = min(max(current_timestamp, timestamp_min), timestamp_max)
-        parent_block_metadata = parent_block.get_metadata()
+        parent_block_metadata = self.metadata_service.get(parent_block)
         # this is the min weight to cause an increase of twice the WEIGHT_TOL, we make sure to generate a template with
         # at least this weight (note that the user of the API can set its own weight, the block sumit API will also
         # protect agains a weight that is too small but using WEIGHT_TOL instead of 2*WEIGHT_TOL)
@@ -884,7 +889,7 @@ class HathorManager:
             self.log.warn('submit_block(): Ignoring block: parent not a tip', blk=blk.hash_hex)
             return False
         parent_block = self.tx_storage.get_transaction(parent_hash)
-        parent_block_metadata = parent_block.get_metadata()
+        parent_block_metadata = self.metadata_service.get(parent_block)
         # this is the smallest weight that won't cause the score to increase, anything equal or smaller is bad
         min_insignificant_weight = calculate_min_significant_weight(
             parent_block_metadata.score,
@@ -974,7 +979,7 @@ class HathorManager:
         tx.storage = self.tx_storage
 
         try:
-            metadata = tx.get_metadata()
+            metadata = self.metadata_service.get(tx)
         except TransactionDoesNotExist:
             if not fails_silently:
                 raise InvalidNewTransaction('cannot get metadata')
@@ -1030,7 +1035,7 @@ class HathorManager:
     def log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
         """ A shortcut for logging additional information for block/txs.
         """
-        metadata = tx.get_metadata()
+        metadata = self.metadata_service.get(tx)
         now = datetime.datetime.fromtimestamp(self.reactor.seconds())
         kwargs = {
             'tx': tx,

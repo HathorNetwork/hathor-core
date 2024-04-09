@@ -50,6 +50,7 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
 from hathor.util import not_none
+from hathor.vertex_metadata import VertexMetadataService
 
 cpu = get_cpu_profiler()
 
@@ -74,6 +75,7 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
     _latest_n_height_tips: list[HeightInfo]
+    metadata_service: VertexMetadataService
 
     log = get_logger()
 
@@ -103,8 +105,9 @@ class TransactionStorage(ABC):
 
     _migrations: list[BaseMigration]
 
-    def __init__(self) -> None:
+    def __init__(self, metadata_service: VertexMetadataService) -> None:
         self._settings = get_global_settings()
+        self.metadata_service = metadata_service
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -317,7 +320,7 @@ class TransactionStorage(ABC):
         block_hash = self.indexes.height.get_tip()
         block = self.get_transaction(block_hash)
         assert isinstance(block, Block)
-        assert block.get_metadata().validation.is_fully_connected()
+        assert self.metadata_service.get(block).validation.is_fully_connected()
         return block
 
     def _save_or_verify_genesis(self) -> None:
@@ -426,7 +429,7 @@ class TransactionStorage(ABC):
         :param only_metadata: Don't save the transaction, only the metadata of this transaction
         """
         assert tx.hash is not None
-        meta = tx.get_metadata()
+        meta = self.metadata_service.get(tx)
         self.pre_save_validation(tx, meta)
 
     def pre_save_validation(self, tx: BaseTransaction, tx_meta: TransactionMetadata) -> None:
@@ -451,7 +454,7 @@ class TransactionStorage(ABC):
         A failure means there is a bug in the code that allowed the condition to reach the "get" code. This is a last
         second measure to prevent getting a transaction while using the wrong scope.
         """
-        tx_meta = tx.get_metadata()
+        tx_meta = self.metadata_service.get(tx)
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
         self._validate_block_height_metadata(tx)
@@ -465,13 +468,13 @@ class TransactionStorage(ABC):
                'Inconsistent ValidationState and voided_by'
 
     def _validate_transaction_in_scope(self, tx: BaseTransaction) -> None:
-        if not self.get_allow_scope().is_allowed(tx):
-            tx_meta = tx.get_metadata()
+        if not self.get_allow_scope().is_allowed(tx, self.metadata_service):
+            tx_meta = self.metadata_service.get(tx)
             raise TransactionNotInAllowedScopeError(tx.hash_hex, self.get_allow_scope().name, tx_meta.validation.name)
 
     def _validate_block_height_metadata(self, tx: BaseTransaction) -> None:
         if tx.is_block:
-            tx_meta = tx.get_metadata()
+            tx_meta = self.metadata_service.get(tx)
             assert tx_meta.height is not None
 
     @abstractmethod
@@ -501,7 +504,7 @@ class TransactionStorage(ABC):
         txset = {not_none(tx.hash) for tx in txs}
         for tx in txs:
             assert tx.hash is not None
-            tx_meta = tx.get_metadata()
+            tx_meta = self.metadata_service.get(tx)
             assert not tx_meta.validation.is_checkpoint()
             for parent in set(tx.parents) - txset:
                 parents_to_update[parent].append(tx.hash)
@@ -510,14 +513,14 @@ class TransactionStorage(ABC):
                 dangling_children.update(set(spending_txs) - txset)
             for tx_input in tx.inputs:
                 spent_tx = tx.get_spent_tx(tx_input)
-                spent_tx_meta = spent_tx.get_metadata()
+                spent_tx_meta = self.metadata_service.get(spent_tx)
                 if tx.hash in spent_tx_meta.spent_outputs[tx_input.index]:
                     spent_tx_meta.spent_outputs[tx_input.index].remove(tx.hash)
                     self.save_transaction(spent_tx, only_metadata=True)
         assert not dangling_children, 'It is an error to try to remove transactions that would leave a gap in the DAG'
         for parent_hash, children_to_remove in parents_to_update.items():
             parent_tx = self.get_transaction(parent_hash)
-            parent_meta = parent_tx.get_metadata()
+            parent_meta = self.metadata_service.get(parent_tx)
             for child in children_to_remove:
                 parent_meta.children.remove(child)
             self.save_transaction(parent_tx, only_metadata=True)
@@ -620,7 +623,7 @@ class TransactionStorage(ABC):
         # time of iterator creation.
         scope = self.get_allow_scope()
         for tx in self._get_all_transactions():
-            if scope.is_allowed(tx):
+            if scope.is_allowed(tx, self.metadata_service):
                 yield tx
 
     @abstractmethod
@@ -1054,7 +1057,7 @@ class TransactionStorage(ABC):
 
         for interval in tx_tips[self.latest_timestamp + 1]:
             tx = self.get_transaction(interval.data)
-            tx_meta = tx.get_metadata()
+            tx_meta = self.metadata_service.get(tx)
             assert isinstance(tx, Transaction)  # XXX: tx_tips only has transactions
             # XXX: skip txs that have already been confirmed
             if tx_meta.first_block:
@@ -1074,7 +1077,7 @@ class TransactionStorage(ABC):
         root = self.iter_mempool_tips_from_tx_tips()
         walk = BFSTimestampWalk(self, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False)
         for tx in walk.run(root):
-            tx_meta = tx.get_metadata()
+            tx_meta = self.metadata_service.get(tx)
             # XXX: skip blocks and tx-tips that have already been confirmed
             if tx_meta.first_block is not None or tx.is_block:
                 walk.skip_neighbors(tx)
@@ -1106,7 +1109,7 @@ class TransactionStorage(ABC):
         from hathor.transaction.validation_state import ValidationState
         to_remove: list[BaseTransaction] = []
         for tx in self.iter_mempool_from_best_index():
-            tx_min_height = tx.get_metadata().min_height
+            tx_min_height = self.metadata_service.get(tx).min_height
             assert tx_min_height is not None
             # We use +1 here because a tx is valid if it can be confirmed by the next block
             if new_best_height + 1 < tx_min_height:
@@ -1171,8 +1174,14 @@ class TransactionStorage(ABC):
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]
 
-    def __init__(self, indexes: Optional[IndexesManager] = None, pubsub: Optional[Any] = None) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        *,
+        metadata_service: VertexMetadataService,
+        indexes: Optional[IndexesManager] = None,
+        pubsub: Optional[Any] = None
+    ) -> None:
+        super().__init__(metadata_service=metadata_service)
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
@@ -1375,7 +1384,7 @@ class BaseTransactionStorage(TransactionStorage):
             # XXX: We can safely discard because no other tx will try to visit this one, since timestamps are strictly
             #      higher in children, meaning we cannot possibly have item.tx as a descendant of any tx in to_visit.
             seen.discard(item.tx.hash)
-            for child_tx_hash in item.tx.get_metadata().children:
+            for child_tx_hash in self.metadata_service.get(item.tx).children:
                 if child_tx_hash in seen:
                     continue
                 child_tx = self.get_transaction(child_tx_hash)

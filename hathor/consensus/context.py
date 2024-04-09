@@ -45,8 +45,11 @@ class ConsensusAlgorithmContext:
     def __init__(self, consensus: 'ConsensusAlgorithm', pubsub: PubSubManager) -> None:
         self.consensus = consensus
         self.pubsub = pubsub
-        self.block_algorithm = self.consensus.block_algorithm_factory(self)
-        self.transaction_algorithm = self.consensus.transaction_algorithm_factory(self)
+        self.block_algorithm = self.consensus.block_algorithm_factory(self, self.consensus.metadata_service)
+        self.transaction_algorithm = self.consensus.transaction_algorithm_factory(
+            self,
+            self.consensus.metadata_service
+        )
         self.txs_affected = set()
         self.reorg_common_block = None
 

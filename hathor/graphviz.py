@@ -72,7 +72,7 @@ class GraphvizVisualizer:
         if self.show_weight:
             parts.append('w: {:.2f}'.format(tx.weight))
         if self.show_acc_weight:
-            meta = tx.get_metadata()
+            meta = self.storage.metadata_service.get(tx)
             parts.append('a: {:.2f}'.format(meta.accumulated_weight))
         return '\n'.join(parts)
 
@@ -87,7 +87,7 @@ class GraphvizVisualizer:
         if tx.is_genesis:
             node_attrs.update(self.genesis_attrs)
 
-        meta = tx.get_metadata()
+        meta = self.storage.metadata_service.get(tx)
         if meta.voided_by and len(meta.voided_by) > 0:
             if meta.voided_by and tx.hash in meta.voided_by:
                 node_attrs.update(self.conflict_attrs)
@@ -212,7 +212,7 @@ class GraphvizVisualizer:
             if tx.hash == root.hash:
                 node_attrs.update(dict(style='filled', penwidth='5.0'))
 
-            meta = tx.get_metadata()
+            meta = self.storage.metadata_service.get(tx)
 
             if graph_type == 'verification':
                 if tx.is_block:
