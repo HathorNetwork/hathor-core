@@ -24,14 +24,22 @@ from twisted.internet.interfaces import IDelayedCall
 
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.pubsub import HathorEvents
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import BaseWallet
 from hathor.wallet.exceptions import OutOfUnusedAddresses
 from hathor.wallet.keypair import KeyPair
 
 
 class Wallet(BaseWallet):
-    def __init__(self, keys: Optional[Any] = None, directory: str = './', filename: str = 'keys.json',
-                 pubsub: Optional[Any] = None, reactor: Optional[Any] = None) -> None:
+    def __init__(
+        self,
+        keys: Optional[Any] = None,
+        directory: str = './',
+        filename: str = 'keys.json',
+        pubsub: Optional[Any] = None,
+        reactor: Optional[Any] = None,
+        metadata_service: VertexMetadataService | None = None,
+    ) -> None:
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -50,7 +58,7 @@ class Wallet(BaseWallet):
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
         """
-        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
+        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor, metadata_service=metadata_service)
 
         self.filepath = os.path.join(directory, filename)
         self.keys: dict[str, Any] = keys or {}  # dict[string(b58_address), KeyPair]

@@ -20,6 +20,7 @@ from sortedcontainers import SortedSet
 from structlog import get_logger
 
 from hathor.indexes.utxo_index import UtxoIndex, UtxoIndexItem
+from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 
@@ -62,8 +63,8 @@ class _IndexItem:
 class MemoryUtxoIndex(UtxoIndex):
     _index: defaultdict[_IndexKey, _IndexItem]
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         self._index = defaultdict(_IndexItem)
 
     def get_db_name(self) -> Optional[str]:

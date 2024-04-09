@@ -19,6 +19,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:
     from hathor.feature_activation.bit_signaling_service import BitSignalingService
@@ -42,11 +43,18 @@ BlockSignalingState: TypeAlias = BlockIsSignaling | BlockIsMissingSignal
 
 
 class FeatureService:
-    __slots__ = ('_feature_settings', '_tx_storage', 'bit_signaling_service')
+    __slots__ = ('_feature_settings', '_tx_storage', 'bit_signaling_service', '_metadata_service')
 
-    def __init__(self, *, feature_settings: FeatureSettings, tx_storage: 'TransactionStorage') -> None:
+    def __init__(
+        self,
+        *,
+        feature_settings: FeatureSettings,
+        tx_storage: 'TransactionStorage',
+        metadata_service: VertexMetadataService,
+    ) -> None:
         self._feature_settings = feature_settings
         self._tx_storage = tx_storage
+        self._metadata_service = metadata_service
         self.bit_signaling_service: Optional['BitSignalingService'] = None
 
     def is_feature_active(self, *, block: 'Block', feature: Feature) -> bool:
@@ -216,7 +224,7 @@ class FeatureService:
         # It's possible that this method is called before the consensus runs for this block, therefore we do not know
         # if it's in the best blockchain. For this reason, we have to get the ancestor starting from our parent block.
         parent_block = block.get_block_parent()
-        parent_metadata = parent_block.get_metadata()
+        parent_metadata = self._metadata_service.get(parent_block)
         assert parent_metadata.validation.is_fully_connected(), 'The parent should always be fully validated.'
 
         if parent_block.get_height() == ancestor_height:

@@ -73,7 +73,7 @@ class TokensIndex(BaseIndex):
         return SCOPE
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
-        tx_meta = tx.get_metadata()
+        tx_meta = self.metadata_service.get(tx)
         if tx_meta.voided_by:
             return
         self.add_tx(tx)

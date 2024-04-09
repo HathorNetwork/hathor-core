@@ -4,6 +4,7 @@ from hathor.mining import BlockTemplate
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.vertex_metadata import VertexMetadataService
 from tests import unittest
 
 
@@ -24,7 +25,8 @@ class BaseMiningTest(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.tx_storage = TransactionMemoryStorage()
+        metadata_service = VertexMetadataService()
+        self.tx_storage = TransactionMemoryStorage(metadata_service=metadata_service)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

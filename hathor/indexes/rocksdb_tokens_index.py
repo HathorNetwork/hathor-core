@@ -30,6 +30,7 @@ from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoIn
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.util import collect_n, json_dumpb, json_loadb
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -84,7 +85,14 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
+    def __init__(
+        self,
+        db: 'rocksdb.DB',
+        *,
+        metadata_service: VertexMetadataService,
+        cf_name: Optional[bytes] = None
+    ) -> None:
+        TokensIndex.__init__(self, metadata_service=metadata_service)
         self._settings = get_global_settings()
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_TOKENS_INDEX)

@@ -43,7 +43,7 @@ class BaseUnlockTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_unlocking_hd_wallet(self):
-        self.manager.wallet = HDWallet()
+        self.manager.wallet = HDWallet(metadata_service=self.manager.metadata_service)
         self.manager.wallet._manually_initialize()
         self.manager.wallet.unlock(tx_storage=self.manager.tx_storage)
 

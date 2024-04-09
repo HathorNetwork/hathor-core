@@ -15,6 +15,7 @@
 from typing import Optional
 
 from hathor.indexes.height_index import HeightIndex, HeightInfo, IndexEntry
+from hathor.vertex_metadata import VertexMetadataService
 
 
 class MemoryHeightIndex(HeightIndex):
@@ -23,8 +24,8 @@ class MemoryHeightIndex(HeightIndex):
 
     _index: list[IndexEntry]
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, *, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         self.force_clear()
 
     def get_db_name(self) -> Optional[str]:

@@ -18,6 +18,7 @@ from structlog import get_logger
 
 from hathor.indexes.height_index import HeightIndex, HeightInfo, IndexEntry
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -42,9 +43,15 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
+    def __init__(
+        self,
+        db: 'rocksdb.DB',
+        *,
+        metadata_service: VertexMetadataService,
+        cf_name: Optional[bytes] = None
+    ) -> None:
         self.log = logger.new()
-        HeightIndex.__init__(self)
+        HeightIndex.__init__(self, metadata_service=metadata_service)
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_HEIGHT_INDEX)
 
     def get_db_name(self) -> Optional[str]:

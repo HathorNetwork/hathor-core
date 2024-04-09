@@ -20,6 +20,7 @@ from structlog import get_logger
 
 from hathor.indexes.tips_index import ScopeType, TipsIndex
 from hathor.transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 
@@ -47,8 +48,8 @@ class MemoryTipsIndex(TipsIndex):
     # It is useful because the interval tree allows access only by the interval.
     tx_last_interval: dict[bytes, Interval]
 
-    def __init__(self, *, scope_type: ScopeType):
-        super().__init__(scope_type=scope_type)
+    def __init__(self, *, scope_type: ScopeType, metadata_service: VertexMetadataService) -> None:
+        super().__init__(scope_type=scope_type, metadata_service=metadata_service)
         self.log = logger.new()
         self.tree = IntervalTree()
         self.tx_last_interval = {}
@@ -61,7 +62,7 @@ class MemoryTipsIndex(TipsIndex):
         self.tx_last_interval.clear()
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
-        tx_meta = tx.get_metadata()
+        tx_meta = self.metadata_service.get(tx)
         if not tx_meta.validation.is_final():
             return
         self.add_tx(tx)
@@ -96,7 +97,7 @@ class MemoryTipsIndex(TipsIndex):
         # Check whether any children has already been added.
         # It so, the end of the interval is equal to the smallest timestamp of the children.
         min_timestamp = inf
-        meta = tx.get_metadata()
+        meta = self.metadata_service.get(tx)
         for child_hash in meta.children:
             if child_hash in self.tx_last_interval:
                 child = tx.storage.get_transaction(child_hash)
@@ -136,7 +137,7 @@ class MemoryTipsIndex(TipsIndex):
         assert tx.storage is not None
         assert tx.hash is not None
 
-        meta = tx.get_metadata()
+        meta = self.metadata_service.get(tx)
         if meta.voided_by:
             if not relax_assert:
                 assert tx.hash not in self.tx_last_interval

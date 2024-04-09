@@ -21,6 +21,7 @@ from structlog import get_logger
 from hathor.indexes.tx_group_index import TxGroupIndex
 from hathor.transaction import BaseTransaction
 from hathor.util import not_none
+from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 
@@ -33,7 +34,8 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
 
     index: defaultdict[KT, set[tuple[int, bytes]]]
 
-    def __init__(self) -> None:
+    def __init__(self, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         self.force_clear()
 
     def force_clear(self) -> None:

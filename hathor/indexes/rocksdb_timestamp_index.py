@@ -20,6 +20,7 @@ from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
 from hathor.indexes.timestamp_index import RangeIdx, ScopeType, TimestampIndex
 from hathor.transaction import BaseTransaction
 from hathor.util import collect_n, skip_n
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -38,8 +39,8 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, scope_type: ScopeType):
-        TimestampIndex.__init__(self, scope_type=scope_type)
+    def __init__(self, db: 'rocksdb.DB', *, scope_type: ScopeType, metadata_service: VertexMetadataService) -> None:
+        TimestampIndex.__init__(self, scope_type=scope_type, metadata_service=metadata_service)
         self._name = scope_type.get_name()
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, f'timestamp-sorted-{self._name}'.encode())

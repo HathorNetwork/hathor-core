@@ -27,6 +27,7 @@ from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.reactor import get_global_reactor
 from hathor.util import json_dumpb, json_loadb, json_loads
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 settings = HathorSettings()
@@ -85,7 +86,12 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def buildProtocol(self, addr):
         return self.protocol(self)
 
-    def __init__(self, metrics: Optional[Metrics] = None, address_index: Optional[AddressIndex] = None):
+    def __init__(
+        self,
+        metadata_service: VertexMetadataService,
+        metrics: Optional[Metrics] = None,
+        address_index: Optional[AddressIndex] = None
+    ) -> None:
         """
         :param metrics: If not given, a new one is created.
         :type metrics: :py:class:`hathor.metrics.Metrics`
@@ -114,6 +120,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         # A timer to periodically broadcast dashboard metrics
         self._lc_send_metrics = LoopingCall(self._send_metrics)
         self._lc_send_metrics.clock = self.reactor
+
+        self._metadata_service = metadata_service
 
     def start(self):
         self.is_running = True
@@ -201,7 +209,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             data = tx.to_json_extended()
             data['is_block'] = tx.is_block
             # needed to check if the transaction is from the mempool
-            first_block = tx.get_metadata().first_block
+            first_block = self._metadata_service.get(tx).first_block
             first_block_hex: Optional[str] = None if first_block is None else first_block.hex()
             data['first_block'] = first_block_hex
             return data

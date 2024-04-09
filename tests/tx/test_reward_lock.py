@@ -6,6 +6,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
@@ -23,7 +24,8 @@ class BaseTransactionTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # this makes sure we can spend the genesis outputs
-        self.tx_storage = TransactionMemoryStorage()
+        metadata_service = VertexMetadataService()
+        self.tx_storage = TransactionMemoryStorage(metadata_service=metadata_service)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

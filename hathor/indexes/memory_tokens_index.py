@@ -28,6 +28,7 @@ from hathor.indexes.utils import (
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.util import is_token_uid_valid
+from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 
@@ -67,7 +68,8 @@ class MemoryTokenIndexInfo(TokenIndexInfo):
 
 
 class MemoryTokensIndex(TokensIndex):
-    def __init__(self) -> None:
+    def __init__(self, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         self.log = logger.new()
         self.force_clear()
 

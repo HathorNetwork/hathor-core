@@ -34,6 +34,7 @@ from hathor.transaction.scripts import P2PKH, create_output_script, parse_addres
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.types import AddressB58, Amount, TokenUid
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
 settings = HathorSettings()
@@ -79,8 +80,13 @@ class BaseWallet:
         # Normal key pair wallet
         KEY_PAIR = 'keypair'
 
-    def __init__(self, directory: str = './', pubsub: Optional[PubSubManager] = None,
-                 reactor: Optional[Reactor] = None) -> None:
+    def __init__(
+        self,
+        metadata_service: VertexMetadataService | None = None,
+        directory: str = './',
+        pubsub: Optional[PubSubManager] = None,
+        reactor: Optional[Reactor] = None,
+    ) -> None:
         """ A wallet will hold the unspent and spent transactions
 
         All files will be stored in the same directory, and it should
@@ -131,6 +137,8 @@ class BaseWallet:
         if reactor is None:
             reactor = get_global_reactor()
         self.reactor = reactor
+
+        self.metadata_service = metadata_service
 
     def _manually_initialize(self) -> None:
         pass
@@ -518,8 +526,9 @@ class BaseWallet:
         If an input matches, removes from unspent_txs dict and adds to spent_txs dict.
         """
         assert tx.hash is not None
+        assert self.metadata_service is not None
 
-        meta = tx.get_metadata()
+        meta = self.metadata_service.get(tx)
         if meta.voided_by is not None:
             # Nothing to do!
             return
@@ -589,7 +598,8 @@ class BaseWallet:
 
     def on_tx_update(self, tx: Transaction) -> None:
         """This method is called when a tx is updated by the consensus algorithm."""
-        meta = tx.get_metadata()
+        assert self.metadata_service is not None
+        meta = self.metadata_service.get(tx)
         if not meta.voided_by:
             self.on_tx_winner(tx)
         else:

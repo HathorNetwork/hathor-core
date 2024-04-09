@@ -24,6 +24,7 @@ from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block, TxOutput
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import sorted_merger
+from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 
@@ -108,7 +109,8 @@ class UtxoIndex(BaseIndex):
     address can be extracted from.
     """
 
-    def __init__(self):
+    def __init__(self, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         self.log = logger.new()
 
     # interface methods provided by the base class
@@ -120,7 +122,7 @@ class UtxoIndex(BaseIndex):
         self.update(tx)
 
     def update(self, tx: BaseTransaction) -> None:
-        tx_meta = tx.get_metadata()
+        tx_meta = self.metadata_service.get(tx)
         if tx_meta.voided_by:
             self._update_voided(tx)
         else:
@@ -135,7 +137,7 @@ class UtxoIndex(BaseIndex):
         - mark transaction as added
         - inputs are removed from the index
         """
-        tx_meta = tx.get_metadata()
+        tx_meta = self.metadata_service.get(tx)
         assert tx.hash is not None
         assert not tx_meta.voided_by
         log = self.log.new(tx=tx.hash_hex)
@@ -169,7 +171,7 @@ class UtxoIndex(BaseIndex):
         - inputs are added back to the index
         - outpus are removed from the index
         """
-        tx_meta = tx.get_metadata()
+        tx_meta = self.metadata_service.get(tx)
         assert tx.hash is not None
         assert tx_meta.voided_by
         log = self.log.new(tx=tx.hash_hex)
@@ -190,10 +192,10 @@ class UtxoIndex(BaseIndex):
             if _should_skip_output(spent_tx_output):
                 log_it.debug('ignore input')
                 continue
-            if spent_tx.get_metadata().voided_by:
+            if self.metadata_service.get(spent_tx).voided_by:
                 log_it.debug('do not re-add input that spend voided')
                 continue
-            spent_tx_meta = spent_tx.get_metadata()
+            spent_tx_meta = self.metadata_service.get(spent_tx)
             spent_by = spent_tx_meta.get_output_spent_by(tx_input.index)
             if spent_by is not None and spent_by != tx.hash:
                 log_it.debug('do not re-add input that is spent by other tx', spent_by=spent_by.hex())

@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives import serialization
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction, TxInput
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import Wallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
@@ -64,7 +65,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         key_pair = KeyPair(private_key_bytes=genesis_private_key_bytes, address=genesis_address, used=True)
         keys = {}
         keys[key_pair.address] = key_pair
-        w = Wallet(keys=keys, directory=self.directory)
+        w = Wallet(keys=keys, directory=self.directory, metadata_service=VertexMetadataService())
         w.unlock(PASSWORD)
         genesis_blocks = [tx for tx in self.storage.get_all_genesis() if tx.is_block]
         genesis_block = genesis_blocks[0]
@@ -112,7 +113,7 @@ class BaseBasicWalletTest(unittest.TestCase):
 
     def test_block_increase_balance(self):
         # generate a new block and check if we increase balance
-        w = Wallet(directory=self.directory)
+        w = Wallet(directory=self.directory, metadata_service=VertexMetadataService())
         w.unlock(PASSWORD)
         new_address = w.get_unused_address()
         key = w.keys[new_address]

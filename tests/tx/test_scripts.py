@@ -57,6 +57,7 @@ from hathor.transaction.scripts.opcode import (
 )
 from hathor.transaction.scripts.script_context import ScriptContext
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import HDWallet
 from tests import unittest
 from tests.utils import BURN_ADDRESS, get_genesis_key
@@ -65,7 +66,8 @@ from tests.utils import BURN_ADDRESS, get_genesis_key
 class TestScripts(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        tx_storage = TransactionMemoryStorage()
+        metadata_service = VertexMetadataService()
+        tx_storage = TransactionMemoryStorage(metadata_service=metadata_service)
         self.genesis_blocks = [tx for tx in tx_storage.get_all_genesis() if tx.is_block]
         self.genesis_txs = [tx for tx in tx_storage.get_all_genesis() if not tx.is_block]
 

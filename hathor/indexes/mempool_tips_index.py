@@ -106,13 +106,13 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
     def update(self, tx: BaseTransaction, *, remove: Optional[bool] = None) -> None:
         assert tx.hash is not None
         assert tx.storage is not None
-        tx_meta = tx.get_metadata()
+        tx_meta = self.metadata_service.get(tx)
         to_remove: set[bytes] = set()
         to_remove_parents: set[bytes] = set()
         tx_storage = tx.storage
         for tip_tx in self.iter(tx_storage):
             assert tip_tx.hash is not None
-            meta = tip_tx.get_metadata()
+            meta = self.metadata_service.get(tip_tx)
             # a new tx/block added might cause a tx in the tips to become voided. For instance, there might be a tx1 a
             # double spending tx2, where tx1 is valid and tx2 voided. A new block confirming tx2 will make it valid
             # while tx1 becomes voided, so it has to be removed from the tips. The txs confirmed by tx1 need to be
@@ -189,7 +189,7 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         bfs = BFSTimestampWalk(tx_storage, is_dag_verifications=True, is_left_to_right=False)
         for tx in bfs.run(self.iter(tx_storage), skip_root=False):
             assert isinstance(tx, Transaction)
-            if tx.get_metadata().first_block is not None:
+            if self.metadata_service.get(tx).first_block is not None:
                 bfs.skip_neighbors(tx)
             else:
                 yield tx

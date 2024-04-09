@@ -43,7 +43,7 @@ class TransactionAccWeightResource(Resource):
         if tx.is_block:
             return {'success': False, 'message': 'not allowed on blocks'}
 
-        meta = tx.get_metadata()
+        meta = self.manager.metadata_service.get(tx)
         data: dict[str, Any] = {'success': True}
 
         if meta.first_block:

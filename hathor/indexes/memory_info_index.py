@@ -16,14 +16,15 @@ from typing import TYPE_CHECKING, Optional
 
 from hathor.indexes.info_index import InfoIndex
 from hathor.transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.indexes.manager import IndexesManager
 
 
 class MemoryInfoIndex(InfoIndex):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         self._block_count = 0
         self._tx_count = 0
         self._first_timestamp = 0

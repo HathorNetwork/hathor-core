@@ -2,6 +2,7 @@ from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks, gen_new_tx
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
@@ -11,7 +12,8 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
     __test__ = False
 
     def _build_randomized_blockchain(self, *, utxo_index=False):
-        tx_storage = TransactionMemoryStorage()
+        metadata_service = VertexMetadataService()
+        tx_storage = TransactionMemoryStorage(metadata_service=metadata_service)
         manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True,
                                    use_memory_index=True, utxo_index=utxo_index)
 

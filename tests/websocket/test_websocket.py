@@ -6,6 +6,7 @@ from twisted.internet.testing import StringTransport
 
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.util import json_dumpb, json_dumps, json_loadb
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket import WebsocketStatsResource
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
@@ -22,7 +23,8 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, wallet_index=True)
 
-        self.factory = HathorAdminWebsocketFactory(self.manager.metrics)
+        metadata_service = VertexMetadataService()
+        self.factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics, metadata_service=metadata_service)
         self.factory.subscribe(self.manager.pubsub)
         self.factory._setup_rate_limit()
         self.factory.openHandshakeTimeout = 0

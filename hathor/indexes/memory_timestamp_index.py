@@ -25,6 +25,7 @@ from hathor.indexes.utils import (
     get_older_sorted_key_list,
 )
 from hathor.transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 
@@ -35,8 +36,8 @@ class MemoryTimestampIndex(TimestampIndex):
 
     _index: 'SortedKeyList[TransactionIndexElement]'
 
-    def __init__(self, *, scope_type: ScopeType):
-        super().__init__(scope_type=scope_type)
+    def __init__(self, *, scope_type: ScopeType, metadata_service: VertexMetadataService) -> None:
+        super().__init__(scope_type=scope_type, metadata_service=metadata_service)
         self.log = logger.new()
         self.force_clear()
 

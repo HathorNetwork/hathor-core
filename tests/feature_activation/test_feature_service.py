@@ -117,7 +117,8 @@ def feature_settings() -> FeatureSettings:
 def service(feature_settings: FeatureSettings, tx_storage: TransactionStorage) -> FeatureService:
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
 
@@ -168,7 +169,8 @@ def test_get_state_from_defined(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -200,7 +202,8 @@ def test_get_state_from_started_to_failed(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -232,7 +235,8 @@ def test_get_state_from_started_to_must_signal_on_timeout(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -266,7 +270,8 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -298,7 +303,8 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -338,7 +344,8 @@ def test_get_state_from_started_to_started(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -368,7 +375,8 @@ def test_get_state_from_must_signal_to_locked_in(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -401,7 +409,8 @@ def test_get_state_from_locked_in_to_active(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -434,7 +443,8 @@ def test_get_state_from_locked_in_to_locked_in(
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -460,7 +470,8 @@ def test_get_state_from_active(block_mocks: list[Block], tx_storage: Transaction
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -484,7 +495,11 @@ def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStor
             )
         }
     )
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service
+    )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
     calculate_new_state_mock = Mock(wraps=service._calculate_new_state)
@@ -518,7 +533,8 @@ def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStor
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -543,7 +559,8 @@ def test_get_state_from_failed(block_mocks: list[Block], tx_storage: Transaction
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
@@ -572,7 +589,8 @@ def test_get_feature_info(tx_storage: TransactionStorage) -> None:
     )
     service = FeatureService(
         feature_settings=feature_settings,
-        tx_storage=tx_storage
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service,
     )
     service.bit_signaling_service = Mock()
 
@@ -611,7 +629,11 @@ def test_get_ancestor_at_height_invalid(
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service
+    )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 
@@ -641,10 +663,14 @@ def test_get_ancestor_at_height(
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service
+    )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
-    result = service._get_ancestor_at_height(block=block, ancestor_height=ancestor_height)
+    result = service._get_ancestor_at_height(block=block, ancestor_height=ancestor_height)  # TODO
 
     assert result == block_mocks[ancestor_height]
     assert result.get_height() == ancestor_height
@@ -670,7 +696,11 @@ def test_get_ancestor_at_height_voided(
     block_height: int,
     ancestor_height: int
 ) -> None:
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service
+    )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
     parent_block = block_mocks[block_height - 1]
@@ -729,7 +759,11 @@ def test_check_must_signal(
             )
         }
     )
-    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    service = FeatureService(
+        feature_settings=feature_settings,
+        tx_storage=tx_storage,
+        metadata_service=tx_storage.metadata_service
+    )
     service.bit_signaling_service = Mock()
     block = block_mocks[block_height]
 

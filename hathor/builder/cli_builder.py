@@ -130,7 +130,7 @@ class CliBuilder:
         if self._args.memory_storage:
             self.check_or_raise(not self._args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
-            indexes = MemoryIndexesManager()
+            indexes = MemoryIndexesManager(metadata_service=metadata_service)
             tx_storage = TransactionMemoryStorage(indexes, metadata_service=metadata_service)
             event_storage = EventMemoryStorage()
             self.check_or_raise(not self._args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
@@ -145,9 +145,9 @@ class CliBuilder:
 
             # Initialize indexes manager.
             if self._args.memory_indexes:
-                indexes = MemoryIndexesManager()
+                indexes = MemoryIndexesManager(metadata_service=metadata_service)
             else:
-                indexes = RocksDBIndexesManager(self.rocksdb_storage)
+                indexes = RocksDBIndexesManager(self.rocksdb_storage, metadata_service=metadata_service)
 
             kwargs = {}
             if not self._args.cache:
@@ -181,7 +181,7 @@ class CliBuilder:
 
         self.wallet = None
         if self._args.wallet:
-            self.wallet = self.create_wallet()
+            self.wallet = self.create_wallet(metadata_service=metadata_service)
             self.log.info('with wallet', wallet=self.wallet, path=self._args.data)
 
         hostname = self.get_hostname()
@@ -267,7 +267,8 @@ class CliBuilder:
 
         self.feature_service = FeatureService(
             feature_settings=settings.FEATURE_ACTIVATION,
-            tx_storage=tx_storage
+            tx_storage=tx_storage,
+            metadata_service=metadata_service,
         )
 
         bit_signaling_service = BitSignalingService(
@@ -291,7 +292,8 @@ class CliBuilder:
         verification_service = VerificationService(
             verifiers=vertex_verifiers,
             daa=daa,
-            feature_service=self.feature_service
+            feature_service=self.feature_service,
+            metadata_service=metadata_service,
         )
 
         cpu_mining_service = CpuMiningService()
@@ -418,7 +420,7 @@ class CliBuilder:
             peer_id = PeerId.create_from_json(data)
         return peer_id
 
-    def create_wallet(self) -> BaseWallet:
+    def create_wallet(self, metadata_service: VertexMetadataService) -> BaseWallet:
         if self._args.wallet == 'hd':
             kwargs: dict[str, Any] = {
                 'words': self._args.words,
@@ -435,9 +437,9 @@ class CliBuilder:
         elif self._args.wallet == 'keypair':
             print('Using KeyPairWallet')
             if self._args.data:
-                wallet = Wallet(directory=self._args.data)
+                wallet = Wallet(directory=self._args.data, metadata_service=metadata_service)
             else:
-                wallet = Wallet()
+                wallet = Wallet(metadata_service=metadata_service)
 
             wallet.flush_to_disk_interval = 5  # seconds
 

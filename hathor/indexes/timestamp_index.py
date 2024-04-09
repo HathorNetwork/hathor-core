@@ -21,6 +21,7 @@ from structlog import get_logger
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 
@@ -55,7 +56,8 @@ class TimestampIndex(BaseIndex):
     """ Index of transactions sorted by their timestamps.
     """
 
-    def __init__(self, *, scope_type: ScopeType):
+    def __init__(self, *, scope_type: ScopeType, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         self._scope_type = scope_type
 
     def get_scope(self) -> Scope:

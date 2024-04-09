@@ -88,7 +88,7 @@ class DbExport(RunNode):
             assert tx.hash is not None
             # XXX: if we're skipping voided transactions, we have to be careful not to skip soft-voided ones
             if self.skip_voided:
-                voided_by = tx.get_metadata().voided_by or set()
+                voided_by = self.tx_storage.metadata_service.get(tx).voided_by or set()
                 soft_voided_by = voided_by & soft_voided_ids
                 if voided_by and not soft_voided_by:
                     continue
@@ -109,9 +109,15 @@ class DbExport(RunNode):
         # estimated total, this will obviously be wrong if we're not exporting everything, but it's still better than
         # nothing, and it's probably better to finish sooner than expected, rather than later than expected
         total = self.tx_storage.get_vertices_count()
-        for tx in tx_progress(self.iter_tx(), log=self.log, total=total):
+        it = tx_progress(
+            self.iter_tx(),
+            log=self.log,
+            total=total,
+            metadata_service=self.tx_storage.metadata_service
+        )
+        for tx in it:
             assert tx.hash is not None
-            tx_meta = tx.get_metadata()
+            tx_meta = self.tx_storage.metadata_service.get(tx)
             if tx.is_block:
                 assert isinstance(tx, Block)
                 if not tx_meta.voided_by:

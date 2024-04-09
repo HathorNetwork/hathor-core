@@ -30,6 +30,7 @@ from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
 from hathor.transaction import BaseTransaction
 from hathor.util import tx_progress
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.pubsub import PubSubManager
@@ -64,6 +65,9 @@ class IndexesManager(ABC):
     addresses: Optional[AddressIndex]
     tokens: Optional[TokensIndex]
     utxo: Optional[UtxoIndex]
+
+    def __init__(self, *, metadata_service: VertexMetadataService) -> None:
+        self.metadata_service = metadata_service
 
     def __init_checks__(self):
         """ Implementations must call this at the **end** of their __init__ for running ValueError checks."""
@@ -164,7 +168,12 @@ class IndexesManager(ABC):
         if indexes_to_init:
             overall_scope = reduce(operator.__or__, map(lambda i: i.get_scope(), indexes_to_init))
             tx_iter_inner = overall_scope.get_iterator(tx_storage)
-            tx_iter = tx_progress(tx_iter_inner, log=self.log, total=tx_storage.get_vertices_count())
+            tx_iter = tx_progress(
+                tx_iter_inner,
+                log=self.log,
+                total=tx_storage.get_vertices_count(),
+                metadata_service=self.metadata_service
+            )
             self.log.debug('indexes init', scope=overall_scope)
         else:
             tx_iter = iter([])
@@ -173,7 +182,7 @@ class IndexesManager(ABC):
         for tx in tx_iter:
             # feed each transaction to the indexes that they are interested in
             for index in indexes_to_init:
-                if index.get_scope().matches(tx):
+                if index.get_scope().matches(tx, metadata_service=self.metadata_service):
                     index.init_loop_step(tx)
 
         # Restore cache capacity.
@@ -260,25 +269,32 @@ class IndexesManager(ABC):
 
 
 class MemoryIndexesManager(IndexesManager):
-    def __init__(self) -> None:
+    def __init__(self, *, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         from hathor.indexes.memory_height_index import MemoryHeightIndex
         from hathor.indexes.memory_info_index import MemoryInfoIndex
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
         from hathor.indexes.memory_tips_index import MemoryTipsIndex
 
-        self.info = MemoryInfoIndex()
-        self.all_tips = MemoryTipsIndex(scope_type=TipsScopeType.ALL)
-        self.block_tips = MemoryTipsIndex(scope_type=TipsScopeType.BLOCKS)
-        self.tx_tips = MemoryTipsIndex(scope_type=TipsScopeType.TXS)
+        self.info = MemoryInfoIndex(metadata_service=metadata_service)
+        self.all_tips = MemoryTipsIndex(scope_type=TipsScopeType.ALL, metadata_service=self.metadata_service)
+        self.block_tips = MemoryTipsIndex(scope_type=TipsScopeType.BLOCKS, metadata_service=self.metadata_service)
+        self.tx_tips = MemoryTipsIndex(scope_type=TipsScopeType.TXS, metadata_service=self.metadata_service)
 
-        self.sorted_all = MemoryTimestampIndex(scope_type=TimestampScopeType.ALL)
-        self.sorted_blocks = MemoryTimestampIndex(scope_type=TimestampScopeType.BLOCKS)
-        self.sorted_txs = MemoryTimestampIndex(scope_type=TimestampScopeType.TXS)
+        self.sorted_all = MemoryTimestampIndex(
+            scope_type=TimestampScopeType.ALL, metadata_service=self.metadata_service
+        )
+        self.sorted_blocks = MemoryTimestampIndex(
+            scope_type=TimestampScopeType.BLOCKS, metadata_service=self.metadata_service
+        )
+        self.sorted_txs = MemoryTimestampIndex(
+            scope_type=TimestampScopeType.TXS, metadata_service=self.metadata_service
+        )
 
         self.addresses = None
         self.tokens = None
         self.utxo = None
-        self.height = MemoryHeightIndex()
+        self.height = MemoryHeightIndex(metadata_service=metadata_service)
         self.mempool_tips = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
@@ -287,26 +303,27 @@ class MemoryIndexesManager(IndexesManager):
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.memory_address_index import MemoryAddressIndex
         if self.addresses is None:
-            self.addresses = MemoryAddressIndex(pubsub)
+            self.addresses = MemoryAddressIndex(pubsub=pubsub, metadata_service=self.metadata_service)
 
     def enable_tokens_index(self) -> None:
         from hathor.indexes.memory_tokens_index import MemoryTokensIndex
         if self.tokens is None:
-            self.tokens = MemoryTokensIndex()
+            self.tokens = MemoryTokensIndex(metadata_service=self.metadata_service)
 
     def enable_utxo_index(self) -> None:
         from hathor.indexes.memory_utxo_index import MemoryUtxoIndex
         if self.utxo is None:
-            self.utxo = MemoryUtxoIndex()
+            self.utxo = MemoryUtxoIndex(metadata_service=self.metadata_service)
 
     def enable_mempool_index(self) -> None:
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         if self.mempool_tips is None:
-            self.mempool_tips = MemoryMempoolTipsIndex()
+            self.mempool_tips = MemoryMempoolTipsIndex(metadata_service=self.metadata_service)
 
 
 class RocksDBIndexesManager(IndexesManager):
-    def __init__(self, rocksdb_storage: 'RocksDBStorage') -> None:
+    def __init__(self, rocksdb_storage: 'RocksDBStorage', *, metadata_service: VertexMetadataService) -> None:
+        super().__init__(metadata_service=metadata_service)
         from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
@@ -314,15 +331,27 @@ class RocksDBIndexesManager(IndexesManager):
 
         self._db = rocksdb_storage.get_db()
 
-        self.info = RocksDBInfoIndex(self._db)
-        self.height = RocksDBHeightIndex(self._db)
-        self.all_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.ALL)
-        self.block_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.BLOCKS)
-        self.tx_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.TXS)
+        self.info = RocksDBInfoIndex(self._db, metadata_service=metadata_service)
+        self.height = RocksDBHeightIndex(self._db, metadata_service=metadata_service)
+        self.all_tips = PartialRocksDBTipsIndex(
+            self._db, scope_type=TipsScopeType.ALL, metadata_service=self.metadata_service
+        )
+        self.block_tips = PartialRocksDBTipsIndex(
+            self._db, scope_type=TipsScopeType.BLOCKS, metadata_service=self.metadata_service
+        )
+        self.tx_tips = PartialRocksDBTipsIndex(
+            self._db, scope_type=TipsScopeType.TXS, metadata_service=self.metadata_service
+        )
 
-        self.sorted_all = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.ALL)
-        self.sorted_blocks = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.BLOCKS)
-        self.sorted_txs = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.TXS)
+        self.sorted_all = RocksDBTimestampIndex(
+            self._db, scope_type=TimestampScopeType.ALL, metadata_service=self.metadata_service
+        )
+        self.sorted_blocks = RocksDBTimestampIndex(
+            self._db, scope_type=TimestampScopeType.BLOCKS, metadata_service=self.metadata_service
+        )
+        self.sorted_txs = RocksDBTimestampIndex(
+            self._db, scope_type=TimestampScopeType.TXS, metadata_service=self.metadata_service
+        )
 
         self.addresses = None
         self.tokens = None
@@ -335,20 +364,20 @@ class RocksDBIndexesManager(IndexesManager):
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
         if self.addresses is None:
-            self.addresses = RocksDBAddressIndex(self._db, pubsub=pubsub)
+            self.addresses = RocksDBAddressIndex(self._db, pubsub=pubsub, metadata_service=self.metadata_service)
 
     def enable_tokens_index(self) -> None:
         from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
         if self.tokens is None:
-            self.tokens = RocksDBTokensIndex(self._db)
+            self.tokens = RocksDBTokensIndex(self._db, metadata_service=self.metadata_service)
 
     def enable_utxo_index(self) -> None:
         from hathor.indexes.rocksdb_utxo_index import RocksDBUtxoIndex
         if self.utxo is None:
-            self.utxo = RocksDBUtxoIndex(self._db)
+            self.utxo = RocksDBUtxoIndex(self._db, metadata_service=self.metadata_service)
 
     def enable_mempool_index(self) -> None:
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         if self.mempool_tips is None:
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
-            self.mempool_tips = MemoryMempoolTipsIndex()
+            self.mempool_tips = MemoryMempoolTipsIndex(metadata_service=self.metadata_service)

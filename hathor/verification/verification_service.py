@@ -22,22 +22,25 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.verification_dependencies import BlockDependencies, TransactionDependencies
 from hathor.verification.vertex_verifiers import VertexVerifiers
+from hathor.vertex_metadata import VertexMetadataService
 
 cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('verifiers', '_daa', '_feature_service')
+    __slots__ = ('verifiers', '_daa', '_feature_service', '_metadata_service')
 
     def __init__(
         self,
         *,
         verifiers: VertexVerifiers,
         daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None
+        feature_service: FeatureService | None = None,
+        metadata_service: VertexMetadataService | None = None,
     ) -> None:
         self.verifiers = verifiers
         self._daa = daa
+        self._metadata_service = metadata_service
         self._feature_service = feature_service
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
@@ -45,8 +48,9 @@ class VerificationService:
 
         If no exception is raised, the ValidationState will end up as `BASIC` and return `True`.
         """
+        assert self._metadata_service is not None
         # XXX: skip validation if previously validated
-        if vertex.get_metadata().validation.is_at_least_basic():
+        if self._metadata_service.get(vertex).validation.is_at_least_basic():
             return True
 
         self.verify_basic(vertex, skip_block_weight_verification=skip_block_weight_verification)
@@ -67,8 +71,9 @@ class VerificationService:
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
         from hathor.transaction.transaction_metadata import ValidationState
+        assert self._metadata_service is not None
 
-        meta = vertex.get_metadata()
+        meta = self._metadata_service.get(vertex)
 
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
@@ -194,7 +199,7 @@ class VerificationService:
         # (1) and (4)
         self.verifiers.vertex.verify_parents(block, block_deps)
 
-        self.verifiers.block.verify_height(block)
+        self.verifiers.block.verify_height(block_deps)
 
         self.verifiers.block.verify_mandatory_signaling(block_deps)
 

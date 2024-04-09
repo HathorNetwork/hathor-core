@@ -71,7 +71,7 @@ def get_tx_extra_data(tx: BaseTransaction, *, detail_tokens: bool = True) -> dic
         for spent in spent_set:
             if tx.storage:
                 spent_tx = tx.storage.get_transaction(spent)
-                spent_meta = spent_tx.get_metadata()
+                spent_meta = tx.storage.metadata_service.get(spent_tx)
                 if not spent_meta.voided_by:
                     spent_outputs[index] = spent_tx.hash_hex
                     break

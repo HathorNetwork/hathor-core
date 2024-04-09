@@ -392,12 +392,14 @@ class Builder:
         if self._indexes_manager is not None:
             return self._indexes_manager
 
+        metadata_service = self._get_or_create_metadata_service()
+
         if self._force_memory_index or self._storage_type == StorageType.MEMORY:
-            self._indexes_manager = MemoryIndexesManager()
+            self._indexes_manager = MemoryIndexesManager(metadata_service=metadata_service)
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            self._indexes_manager = RocksDBIndexesManager(rocksdb_storage)
+            self._indexes_manager = RocksDBIndexesManager(rocksdb_storage, metadata_service=metadata_service)
 
         else:
             raise NotImplementedError
@@ -440,7 +442,12 @@ class Builder:
             kwargs: dict[str, Any] = {}
             if self._tx_storage_cache_capacity is not None:
                 kwargs['capacity'] = self._tx_storage_cache_capacity
-            self._tx_storage = TransactionCacheStorage(self._tx_storage, reactor, indexes=indexes, **kwargs)
+            self._tx_storage = TransactionCacheStorage(
+                self._tx_storage,
+                reactor, indexes=indexes,
+                metadata_service=metadata_service,
+                **kwargs
+            )
 
         return self._tx_storage
 
@@ -484,9 +491,11 @@ class Builder:
         if self._feature_service is None:
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
+            metadata_service = self._get_or_create_metadata_service()
             self._feature_service = FeatureService(
                 feature_settings=settings.FEATURE_ACTIVATION,
-                tx_storage=tx_storage
+                tx_storage=tx_storage,
+                metadata_service=metadata_service,
             )
 
         return self._feature_service
@@ -513,10 +522,12 @@ class Builder:
             verifiers = self._get_or_create_vertex_verifiers()
             daa = self._get_or_create_daa()
             feature_service = self._get_or_create_feature_service()
+            metadata_service = self._get_or_create_metadata_service()
             self._verification_service = VerificationService(
                 verifiers=verifiers,
                 daa=daa,
-                feature_service=feature_service
+                feature_service=feature_service,
+                metadata_service=metadata_service,
             )
 
         return self._verification_service
@@ -596,7 +607,8 @@ class Builder:
 
         if self._wallet_directory is None:
             return None
-        wallet = Wallet(directory=self._wallet_directory)
+        metadata_service = self._get_or_create_metadata_service()
+        wallet = Wallet(directory=self._wallet_directory, metadata_service=metadata_service)
         if self._wallet_unlock is not None:
             wallet.unlock(self._wallet_unlock)
         return wallet
@@ -604,6 +616,8 @@ class Builder:
     def set_wallet(self, wallet: BaseWallet) -> 'Builder':
         self.check_if_can_modify()
         self._wallet = wallet
+        if self._wallet.metadata_service is None:
+            self._wallet.metadata_service = self._get_or_create_metadata_service()
         return self
 
     def enable_keypair_wallet(self, directory: str, *, unlock: Optional[bytes] = None) -> 'Builder':

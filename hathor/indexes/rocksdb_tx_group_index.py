@@ -20,6 +20,7 @@ from structlog import get_logger
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.indexes.tx_group_index import TxGroupIndex
 from hathor.transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -48,7 +49,8 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
     _KEY_SIZE: int
     _CF_NAME: bytes
 
-    def __init__(self, db: 'rocksdb.DB', cf_name: bytes) -> None:
+    def __init__(self, db: 'rocksdb.DB', cf_name: bytes, metadata_service: VertexMetadataService) -> None:
+        TxGroupIndex.__init__(self, metadata_service=metadata_service)
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, cf_name)
 

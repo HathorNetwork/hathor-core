@@ -15,6 +15,7 @@
 from typing import TYPE_CHECKING, Iterator, NamedTuple
 
 from hathor.transaction.base_transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.transaction.storage import TransactionStorage
@@ -49,14 +50,14 @@ class Scope(NamedTuple):
             topological_order=self.topological_order | other.topological_order,
         )
 
-    def matches(self, tx: BaseTransaction) -> bool:
+    def matches(self, tx: BaseTransaction, *, metadata_service: VertexMetadataService) -> bool:
         """ Check if a transaction matches this scope, True means the index is interested in this transaction.
         """
         if tx.is_block and not self.include_blocks:
             return False
         if tx.is_transaction and not self.include_txs:
             return False
-        tx_meta = tx.get_metadata()
+        tx_meta = metadata_service.get(tx)
         if tx_meta.voided_by and not self.include_voided:
             return False
         if not tx_meta.validation.is_fully_connected() and not self.include_partial:
@@ -78,14 +79,14 @@ class Scope(NamedTuple):
             iterator = tx_storage.get_all_transactions()
             iterator_covers_partial = True
         for tx in iterator:
-            if self.matches(tx):
+            if self.matches(tx, metadata_service=tx_storage.metadata_service):
                 yield tx
         if self.include_partial and not iterator_covers_partial:
             # if partial transactions are needed and were not already covered, we use get_all_transactions, which
             # includes partial transactions, to yield them, skipping all that aren't partial
             for tx in tx_storage.get_all_transactions():
-                tx_meta = tx.get_metadata()
+                tx_meta = tx_storage.metadata_service.get(tx)
                 if tx_meta.validation.is_fully_connected():
                     continue
-                if self.matches(tx):
+                if self.matches(tx, metadata_service=tx_storage.metadata_service):
                     yield tx

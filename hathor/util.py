@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     import structlog
 
     from hathor.transaction.base_transaction import BaseTransaction
+    from hathor.vertex_metadata import VertexMetadataService
 
 logger = get_logger()
 
@@ -441,18 +442,28 @@ def progress(
         log.info('loaded', count=count, rate=rate, total_dt=dt_total)
 
 
-def tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
-                total: Optional[int] = None) -> Iterator['BaseTransaction']:
+def tx_progress(
+    iter_tx: Iterator['BaseTransaction'],
+    *,
+    metadata_service: 'VertexMetadataService',
+    log: Optional['structlog.stdlib.BoundLogger'] = None,
+    total: Optional[int] = None
+) -> Iterator['BaseTransaction']:
     """ Log the progress of a transaction iterator while iterating.
     """
     if log is None:
         log = logger.new()
 
-    yield from _tx_progress(iter_tx, log=log, total=total)
+    yield from _tx_progress(iter_tx, log=log, total=total, metadata_service=metadata_service)
 
 
-def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int]
-                 ) -> Iterator['BaseTransaction']:
+def _tx_progress(
+    iter_tx: Iterator['BaseTransaction'],
+    *,
+    log: 'structlog.stdlib.BoundLogger',
+    total: Optional[int],
+    metadata_service: 'VertexMetadataService',
+) -> Iterator['BaseTransaction']:
     """ Inner implementation of progress helper.
     """
     t_start = time.time()
@@ -479,7 +490,7 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
 
         assert tx.hash is not None
         # XXX: this is only informative and made to work with either partially/fully validated blocks/transactions
-        meta = tx.get_metadata()
+        meta = metadata_service.get(tx)
         if meta.height:
             h = max(h, meta.height)
         ts_tx = max(ts_tx, tx.timestamp)

@@ -124,8 +124,8 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     simulator.run(60)
 
     # Only the second tx is voided
-    assert not tx.get_metadata().voided_by
-    assert tx2.get_metadata().voided_by
+    assert not manager.metadata_service.get(tx).voided_by
+    assert manager.metadata_service.get(tx2).voided_by
 
     # We add a block confirming the second tx, increasing its acc weight
     block = add_new_block(manager, propagate=False)
@@ -139,5 +139,5 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     simulator.run(60)
 
     # The first tx gets voided and the second gets unvoided
-    assert tx.get_metadata().voided_by
-    assert not tx2.get_metadata().voided_by
+    assert manager.metadata_service.get(tx).voided_by
+    assert not manager.metadata_service.get(tx2).voided_by

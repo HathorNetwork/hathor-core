@@ -60,7 +60,13 @@ class DbImport(RunNode):
         self.tx_storage.pre_init()
         actual_tx_count = 0
         actual_block_count = 0
-        for tx in tx_progress(self._import_txs(), log=self.log, total=total):
+        it = tx_progress(
+            self._import_txs(),
+            log=self.log,
+            total=total,
+            metadata_service=self.tx_storage.metadata_service
+        )
+        for tx in it:
             if tx.is_block:
                 actual_block_count += 1
             else:

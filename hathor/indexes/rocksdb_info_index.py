@@ -19,6 +19,7 @@ from structlog import get_logger
 from hathor.indexes.memory_info_index import MemoryInfoIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -37,10 +38,16 @@ _DB_LATEST_TIMESTAMP = b'latest_ts'
 
 
 class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
+    def __init__(
+        self,
+        db: 'rocksdb.DB',
+        *,
+        metadata_service: VertexMetadataService,
+        cf_name: Optional[bytes] = None
+    ) -> None:
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
-        MemoryInfoIndex.__init__(self)
+        MemoryInfoIndex.__init__(self, metadata_service=metadata_service)
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:
         self._load_all_values()

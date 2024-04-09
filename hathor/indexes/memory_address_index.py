@@ -19,6 +19,7 @@ from structlog import get_logger
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.memory_tx_group_index import MemoryTxGroupIndex
 from hathor.transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.pubsub import PubSubManager
@@ -30,8 +31,8 @@ class MemoryAddressIndex(MemoryTxGroupIndex[str], AddressIndex):
     """ Index of inputs/outputs by address
     """
 
-    def __init__(self, pubsub: Optional['PubSubManager'] = None) -> None:
-        super().__init__()
+    def __init__(self, metadata_service: VertexMetadataService, pubsub: Optional['PubSubManager'] = None) -> None:
+        super().__init__(metadata_service=metadata_service)
         self.pubsub = pubsub
         if self.pubsub:
             self._subscribe_pubsub_events()

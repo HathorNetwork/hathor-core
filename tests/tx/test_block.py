@@ -25,11 +25,13 @@ from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.verification_dependencies import BlockDependencies
+from hathor.vertex_metadata import VertexMetadataService
 
 
-def test_calculate_feature_activation_bit_counts_genesis():
+def test_calculate_feature_activation_bit_counts_genesis() -> None:
     settings = get_global_settings()
-    storage = TransactionMemoryStorage()
+    metadata_service = VertexMetadataService()
+    storage = TransactionMemoryStorage(metadata_service=metadata_service)
     genesis_block = storage.get_transaction(settings.GENESIS_BLOCK_HASH)
     assert isinstance(genesis_block, Block)
     result = genesis_block.get_feature_activation_bit_counts()
@@ -144,6 +146,7 @@ def test_verify_must_signal() -> None:
     verifier = BlockVerifier(settings=settings, daa=Mock())
     deps = BlockDependencies(
         storage=Mock(),
+        metadata=Mock(),
         signaling_state=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1),
         feature_info={}
     )
@@ -157,6 +160,6 @@ def test_verify_must_signal() -> None:
 def test_verify_must_not_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
     verifier = BlockVerifier(settings=settings, daa=Mock())
-    deps = BlockDependencies(storage=Mock(), signaling_state=BlockIsSignaling(), feature_info={})
+    deps = BlockDependencies(storage=Mock(), signaling_state=BlockIsSignaling(), feature_info={}, metadata=Mock())
 
     verifier.verify_mandatory_signaling(deps)

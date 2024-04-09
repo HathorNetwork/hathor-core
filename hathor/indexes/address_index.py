@@ -50,7 +50,7 @@ class AddressIndex(TxGroupIndex[str]):
         """
         data = args.__dict__
         tx = data['tx']
-        meta = tx.get_metadata()
+        meta = self.metadata_service.get(tx)
         if meta.has_voided_by_changed_since_last_call() or meta.has_spent_by_changed_since_last_call():
             self._publish_tx(tx)
 

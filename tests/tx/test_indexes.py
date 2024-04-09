@@ -6,6 +6,7 @@ from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
 from hathor.util import iwindows
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
@@ -695,7 +696,8 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
 
         super().setUp()
         self.wallet = Wallet()
-        self.tx_storage = TransactionMemoryStorage()
+        metadata_service = VertexMetadataService()
+        self.tx_storage = TransactionMemoryStorage(metadata_service=metadata_service)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
@@ -725,7 +727,8 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         directory = tempfile.mkdtemp()
         self.tmpdirs.append(directory)
         rocksdb_storage = RocksDBStorage(path=directory)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage)
+        metadata_service = VertexMetadataService()
+        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage, metadata_service=metadata_service)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

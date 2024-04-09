@@ -20,6 +20,7 @@ from structlog import get_logger
 from hathor.conf.get_settings import get_global_settings
 from hathor.indexes.scope import Scope
 from hathor.transaction.base_transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.indexes.manager import IndexesManager
@@ -33,9 +34,10 @@ class BaseIndex(ABC):
     This class exists so we can interact with indexes without knowing anything specific to its implemented. It was
     created to generalize how we initialize indexes and keep track of which ones are up-to-date.
     """
-    def __init__(self) -> None:
+    def __init__(self, *, metadata_service: VertexMetadataService) -> None:
         self._settings = get_global_settings()
         self.log = logger.new()
+        self.metadata_service = metadata_service
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:
         """ This method will always be called when starting the index manager, regardless of initialization state.

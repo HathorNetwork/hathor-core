@@ -20,7 +20,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockSignalingState, FeatureService
 from hathor.feature_activation.model.feature_description import FeatureInfo
-from hathor.transaction import Block
+from hathor.transaction import Block, TransactionMetadata
 from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
 from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.types import TokenUid
@@ -35,6 +35,7 @@ class VertexDependencies:
 @dataclass(frozen=True, slots=True)
 class BlockDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for block verification."""
+    metadata: TransactionMetadata
     signaling_state: BlockSignalingState
     feature_info: dict[Feature, FeatureInfo]
 
@@ -53,6 +54,7 @@ class BlockDependencies(VertexDependencies):
 
         return cls(
             storage=simple_storage,
+            metadata=feature_service._metadata_service.get(block),
             signaling_state=signaling_state,
             feature_info=feature_info,
         )

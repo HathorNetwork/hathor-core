@@ -9,6 +9,7 @@ from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
+from hathor.vertex_metadata import VertexMetadataService
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import HAS_ROCKSDB
@@ -53,7 +54,8 @@ class BaseMetricsTest(unittest.TestCase):
            to update the Metrics class with info from ConnectionsManager class
         """
         # Preparation
-        tx_storage = TransactionMemoryStorage()
+        metadata_service = VertexMetadataService()
+        tx_storage = TransactionMemoryStorage(metadata_service=metadata_service)
         tmpdir = tempfile.mkdtemp()
         self.tmpdirs.append(tmpdir)
         wallet = Wallet(directory=tmpdir)
@@ -191,7 +193,8 @@ class BaseMetricsTest(unittest.TestCase):
            The expected result is that nothing is done, because we currently only collect
            data for RocksDB storage
         """
-        tx_storage = TransactionMemoryStorage()
+        metadata_service = VertexMetadataService()
+        tx_storage = TransactionMemoryStorage(metadata_service=metadata_service)
 
         # All
         manager = self.create_peer('testnet', tx_storage=tx_storage)
@@ -260,8 +263,9 @@ class BaseMetricsTest(unittest.TestCase):
             TransactionCacheStorage
         """
         # Preparation
-        base_storage = TransactionMemoryStorage()
-        tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None)
+        metadata_service = VertexMetadataService()
+        base_storage = TransactionMemoryStorage(metadata_service=metadata_service)
+        tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None, metadata_service=metadata_service)
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)
 

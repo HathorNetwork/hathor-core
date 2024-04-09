@@ -20,6 +20,7 @@ from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.rocksdb_tx_group_index import RocksDBTxGroupIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.transaction import BaseTransaction
+from hathor.vertex_metadata import VertexMetadataService
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -38,9 +39,16 @@ class RocksDBAddressIndex(RocksDBTxGroupIndex[str], AddressIndex, RocksDBIndexUt
 
     _KEY_SIZE = 34
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None,
-                 pubsub: Optional['PubSubManager'] = None) -> None:
-        RocksDBTxGroupIndex.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
+    def __init__(
+        self,
+        db: 'rocksdb.DB',
+        *,
+        metadata_service: VertexMetadataService,
+        cf_name: Optional[bytes] = None,
+        pubsub: Optional['PubSubManager'] = None
+    ) -> None:
+        AddressIndex.__init__(self, metadata_service=metadata_service)
+        RocksDBTxGroupIndex.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX, metadata_service=metadata_service)
 
         self.pubsub = pubsub
         if self.pubsub:

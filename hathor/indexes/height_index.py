@@ -67,7 +67,7 @@ class HeightIndex(BaseIndex):
             return
         assert isinstance(tx, Block)
         assert tx.hash is not None
-        if tx.get_metadata().voided_by:
+        if self.metadata_service.get(tx).voided_by:
             return
         self.add_new(tx.get_height(), tx.hash, tx.timestamp)
 
