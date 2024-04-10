@@ -134,4 +134,4 @@ class SyncMempoolManager:
         """Add tx to the DAG."""
         assert tx.hash is not None
         self.missing_tips.discard(tx.hash)
-        self.manager.on_new_tx(tx, is_sync_v2=True)
+        self.sync_agent.p2p_vertex_handler.handle_new_vertex(tx)

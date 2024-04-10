@@ -27,6 +27,7 @@ from twisted.internet.task import LoopingCall, deferLater
 from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.p2p_storage import P2PStorage
+from hathor.p2p.p2p_vertex_handler import P2PVertexHandler
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
@@ -84,7 +85,14 @@ class NodeBlockSync(SyncAgent):
     """
     name: str = 'node-block-sync'
 
-    def __init__(self, protocol: 'HathorProtocol', reactor: Reactor) -> None:
+    def __init__(
+        self,
+        *,
+        protocol: 'HathorProtocol',
+        reactor: Reactor,
+        p2p_storage: P2PStorage,
+        p2p_vertex_handler: P2PVertexHandler,
+    ) -> None:
         """
         :param protocol: Protocol of the connection.
         :type protocol: HathorProtocol
@@ -95,7 +103,8 @@ class NodeBlockSync(SyncAgent):
         self._settings = get_global_settings()
         self.protocol = protocol
         self.manager = protocol.node
-        self.p2p_storage = P2PStorage(protocol.node.tx_storage)
+        self.p2p_storage = p2p_storage
+        self.p2p_vertex_handler = p2p_vertex_handler
         self.state = PeerState.UNKNOWN
 
         self.DEFAULT_STREAMING_LIMIT = DEFAULT_STREAMING_LIMIT
@@ -592,11 +601,11 @@ class NodeBlockSync(SyncAgent):
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         for tx in vertex_list:
             if not self.p2p_storage.transaction_exists(tx.hash):
-                self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False, is_sync_v2=True)
+                self.p2p_vertex_handler.handle_new_vertex(tx, propagate_to_peers=False, fails_silently=False)
             yield deferLater(self.reactor, 0, lambda: None)
 
         if not self.p2p_storage.transaction_exists(blk.hash):
-            self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False, is_sync_v2=True)
+            self.p2p_vertex_handler.handle_new_vertex(blk, propagate_to_peers=False, fails_silently=False)
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
@@ -1144,7 +1153,7 @@ class NodeBlockSync(SyncAgent):
             # in the network, thus, we propagate it as well.
             if self.p2p_storage.can_validate_full(tx):
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                self.manager.on_new_tx(tx, propagate_to_peers=True, is_sync_v2=True)
+                self.p2p_vertex_handler.handle_new_vertex(tx, propagate_to_peers=True)
             else:
                 self.log.debug('skipping tx received in real time from peer',
                                tx=tx.hash_hex, peer=self.protocol.get_peer_id())

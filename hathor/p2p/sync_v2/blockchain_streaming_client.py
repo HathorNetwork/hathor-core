@@ -126,7 +126,11 @@ class BlockchainStreamingClient:
 
         if self.sync_agent.p2p_storage.can_validate_full(blk):
             try:
-                self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False, is_sync_v2=True)
+                self.sync_agent.p2p_vertex_handler.handle_new_vertex(
+                    blk,
+                    propagate_to_peers=False,
+                    fails_silently=False
+                )
             except HathorError:
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return

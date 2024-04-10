@@ -20,13 +20,16 @@ from hathor.types import VertexId
 class P2PStorage:
     __slots__ = ('_tx_storage', '_mempool_tips_index', '_height_index')
 
-    def __init__(self, tx_storage: TransactionStorage) -> None:
+    def __init__(self, *, tx_storage: TransactionStorage) -> None:
         assert tx_storage.indexes is not None
         assert tx_storage.indexes.mempool_tips is not None
         assert tx_storage.indexes.height is not None
         self._tx_storage = tx_storage
         self._mempool_tips_index = tx_storage.indexes.mempool_tips
         self._height_index = tx_storage.indexes.height
+
+    def add_new_vertex(self, vertex: BaseTransaction) -> None:
+        raise NotImplementedError
 
     def get_mempool_tips(self) -> set[VertexId]:
         return self._mempool_tips_index.get()
