@@ -34,9 +34,10 @@ class P2PVertexHandler:
         fails_silently: bool = True,
         propagate_to_peers: bool = True,
     ) -> Deferred[bool]:
+        vertex.storage = self._manager.tx_storage
         deferred: Deferred[bool] = deferLater(
             self._manager.reactor,
-            0,
+            2,
             self._manager.on_new_tx,
             vertex,
             fails_silently=fails_silently,

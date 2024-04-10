@@ -71,7 +71,7 @@ class P2PStorage:
 
         deferred.addBoth(self._remove_vertex, vertex)
 
-    def _remove_vertex(self, _deferred_result: bool | Failure, vertex: BaseTransaction) -> None:
+    def _remove_vertex(self, deferred_result: bool | Failure, vertex: BaseTransaction) -> bool | Failure:
         match vertex:
             case Block():
                 del self._blocks_and_heights[vertex.hash]
@@ -86,6 +86,8 @@ class P2PStorage:
 
         for children in self._children.values():
             children.discard(vertex.hash)
+
+        return deferred_result
 
     def _calculate_height(self, block: Block) -> int:
         parent_hash = block.get_block_parent_hash()

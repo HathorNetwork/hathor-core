@@ -958,8 +958,8 @@ class HathorManager:
         assert self.tx_storage.is_only_valid_allowed()
         assert tx.hash is not None
 
-        if is_sync_v2:
-            assert tx.storage is None
+        # if is_sync_v2:
+        #     assert tx.storage is None
 
         already_exists = False
         if self.tx_storage.transaction_exists(tx.hash):

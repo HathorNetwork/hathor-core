@@ -344,8 +344,8 @@ class NodeBlockSync(SyncAgent):
         """Return my best block info."""
         bestblock = self.p2p_storage.get_best_block()
         assert bestblock.hash is not None
-        meta = bestblock.get_metadata()
-        assert meta.validation.is_fully_connected()
+        # meta = bestblock.get_metadata()
+        # assert meta.validation.is_fully_connected()
         return _HeightInfo(height=bestblock.get_height(), id=bestblock.hash)
 
     @inlineCallbacks
