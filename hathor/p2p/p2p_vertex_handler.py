@@ -12,6 +12,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from twisted.internet.defer import Deferred
+from twisted.internet.task import deferLater
+
 from hathor.manager import HathorManager
 from hathor.p2p.p2p_storage import P2PStorage
 from hathor.transaction import BaseTransaction
@@ -30,10 +33,16 @@ class P2PVertexHandler:
         *,
         fails_silently: bool = True,
         propagate_to_peers: bool = True,
-    ) -> bool:
-        return self._manager.on_new_tx(
+    ) -> Deferred[bool]:
+        deferred: Deferred[bool] = deferLater(
+            self._manager.reactor,
+            0,
+            self._manager.on_new_tx,
             vertex,
             fails_silently=fails_silently,
             propagate_to_peers=propagate_to_peers,
             is_sync_v2=True
         )
+        self._p2p_storage.add_new_vertex(vertex, deferred)
+
+        return deferred

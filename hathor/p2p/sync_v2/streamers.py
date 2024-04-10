@@ -302,7 +302,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
         # Check if tx is confirmed by the `self.current_block` or any next block.
         assert cur_metadata.first_block is not None
         assert self.current_block is not None
-        first_block = self.sync_agent.p2p_storage.get_transaction(cur_metadata.first_block)
+        first_block = self.sync_agent.p2p_storage.get_vertex(cur_metadata.first_block)
         if not_none(first_block.get_metadata().height) < not_none(self.current_block.get_metadata().height):
             self.log.debug('skipping tx: out of current block')
             self.bfs.skip_neighbors(cur)

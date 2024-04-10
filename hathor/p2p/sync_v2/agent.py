@@ -582,7 +582,7 @@ class NodeBlockSync(SyncAgent):
             for info in block_info_list:
                 try:
                     # We must check only fully validated transactions.
-                    blk = self.p2p_storage.get_transaction(info.id)
+                    blk = self.p2p_storage.get_vertex(info.id)
                 except TransactionDoesNotExist:
                     hi = info
                 else:
@@ -635,7 +635,7 @@ class NodeBlockSync(SyncAgent):
             blk_hash = self.p2p_storage.get_block_by_height(h)
             if blk_hash is None:
                 break
-            blk = self.p2p_storage.get_transaction(blk_hash)
+            blk = self.p2p_storage.get_vertex(blk_hash)
             if blk.get_metadata().voided_by:
                 break
             data.append((h, blk_hash.hex()))
@@ -686,7 +686,7 @@ class NodeBlockSync(SyncAgent):
     def _validate_block(self, _hash: VertexId) -> Optional[Block]:
         """Validate block given in the GET-NEXT-BLOCKS and GET-TRANSACTIONS-BFS messages."""
         try:
-            blk = self.p2p_storage.get_transaction(_hash)
+            blk = self.p2p_storage.get_vertex(_hash)
         except TransactionDoesNotExist:
             self.log.debug('requested block not found', blk_id=_hash.hex())
             self.send_message(ProtocolMessages.NOT_FOUND, _hash.hex())
@@ -936,7 +936,7 @@ class NodeBlockSync(SyncAgent):
         start_from_txs = []
         for start_from_hash in data.start_from:
             try:
-                tx = self.p2p_storage.get_transaction(start_from_hash)
+                tx = self.p2p_storage.get_vertex(start_from_hash)
             except TransactionDoesNotExist:
                 # In case the tx does not exist we send a NOT-FOUND message
                 self.log.debug('requested start_from_hash not found', start_from_hash=start_from_hash.hex())
@@ -1029,7 +1029,7 @@ class NodeBlockSync(SyncAgent):
             self.log.debug('tx in cache', tx=tx_id.hex())
             return tx
         try:
-            tx = self.p2p_storage.get_transaction(tx_id)
+            tx = self.p2p_storage.get_vertex(tx_id)
         except TransactionDoesNotExist:
             tx = yield self.get_data(tx_id, 'mempool')
             assert tx is not None
@@ -1100,7 +1100,7 @@ class NodeBlockSync(SyncAgent):
         origin = data.get('origin', '')
         # self.log.debug('handle_get_data', payload=hash_hex)
         try:
-            tx = self.p2p_storage.get_transaction(bytes.fromhex(txid_hex))
+            tx = self.p2p_storage.get_vertex(bytes.fromhex(txid_hex))
             self.send_data(tx, origin=origin)
         except TransactionDoesNotExist:
             # In case the tx does not exist we send a NOT-FOUND message
