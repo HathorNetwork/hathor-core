@@ -4,6 +4,7 @@ import atheris
 
 with atheris.instrument_imports():
     import sys
+    from struct import error as StructError
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
 def TestOneInput(data):
@@ -12,7 +13,7 @@ def TestOneInput(data):
 
     try:
         TokenCreationTransaction.deserialize_token_info(data)
-    except ValueError:
+    except (ValueError, StructError):
         pass
 
 def main():

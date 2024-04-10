@@ -4,6 +4,7 @@ import atheris
 
 with atheris.instrument_imports():
     import sys
+    from struct import error as StructError
     from hathor.transaction.exceptions import InvalidOutputValue
     from hathor.transaction import Block, MergeMinedBlock, Transaction
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -17,7 +18,7 @@ def TestOneInput(data):
         MergeMinedBlock.create_from_struct(data)
         Transaction.create_from_struct(data)
         TokenCreationTransaction.create_from_struct(data)
-    except (ValueError, InvalidOutputValue):
+    except (ValueError, InvalidOutputValue, StructError):
         pass
 
 def main():
