@@ -461,7 +461,7 @@ class HathorManager:
                 tx.calculate_height()
                 tx._update_parents_children_metadata()
 
-                if tx.can_validate_full():
+                if self.tx_storage.can_validate_full(tx):
                     tx.update_initial_metadata()
                     tx.calculate_min_height()
                     if tx.is_genesis:
@@ -944,7 +944,8 @@ class HathorManager:
     @cpu.profiler('on_new_tx')
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
                   quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
-                  skip_block_weight_verification: bool = False, reject_locked_reward: bool = True) -> bool:
+                  skip_block_weight_verification: bool = False, reject_locked_reward: bool = True,
+                  is_sync_v2: bool = False) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param tx: transaction to be added
@@ -956,6 +957,9 @@ class HathorManager:
         """
         assert self.tx_storage.is_only_valid_allowed()
         assert tx.hash is not None
+
+        if is_sync_v2:
+            assert tx.storage is None
 
         already_exists = False
         if self.tx_storage.transaction_exists(tx.hash):

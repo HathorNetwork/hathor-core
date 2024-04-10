@@ -1167,6 +1167,27 @@ class TransactionStorage(ABC):
         assert isinstance(block, Block)
         return block
 
+    def can_validate_full(self, vertex: BaseTransaction) -> bool:
+        """ Check if this transaction is ready to be fully validated, either all deps are full-valid or one is invalid.
+        """
+        if vertex.is_genesis:
+            return True
+        deps = vertex.get_all_dependencies()
+        all_exist = True
+        all_valid = True
+        # either they all exist and are fully valid
+        for dep in deps:
+            meta = self.get_metadata(dep)
+            if meta is None:
+                all_exist = False
+                continue
+            if not meta.validation.is_fully_connected():
+                all_valid = False
+            if meta.validation.is_invalid():
+                # or any of them is invalid (which would make this one invalid too)
+                return True
+        return all_exist and all_valid
+
 
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Union
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
-    from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.transaction.storage import VertexStorageProtocol  # noqa: F401
     from hathor.types import VertexId
 
 
@@ -47,8 +47,8 @@ class GenericWalk(ABC):
     """
     seen: set['VertexId']
 
-    def __init__(self, storage: 'TransactionStorage', *, is_dag_funds: bool = False,
-                 is_dag_verifications: bool = False, is_left_to_right: bool = True):
+    def __init__(self, storage: 'VertexStorageProtocol', *, is_dag_funds: bool = False,
+                 is_dag_verifications: bool = False, is_left_to_right: bool = True) -> None:
         """
         If `is_left_to_right` is `True`, we walk in the direction of the unverified transactions.
         Otherwise, we walk in the direction of the genesis.
@@ -112,7 +112,7 @@ class GenericWalk(ABC):
         for _hash in it:
             if _hash not in self.seen:
                 self.seen.add(_hash)
-                neighbor = self.storage.get_transaction(_hash)
+                neighbor = self.storage.get_vertex(_hash)
                 self._push_visit(neighbor)
 
     def skip_neighbors(self, tx: 'BaseTransaction') -> None:
@@ -157,8 +157,14 @@ class BFSTimestampWalk(GenericWalk):
     """
     _to_visit: list[HeapItem]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, storage: 'VertexStorageProtocol', *, is_dag_funds: bool = False,
+                 is_dag_verifications: bool = False, is_left_to_right: bool = True) -> None:
+        super().__init__(
+            storage,
+            is_dag_funds=is_dag_funds,
+            is_dag_verifications=is_dag_verifications,
+            is_left_to_right=is_left_to_right
+        )
         self._to_visit = []
 
     def _is_empty(self) -> bool:
@@ -182,8 +188,14 @@ class BFSOrderWalk(GenericWalk):
     """
     _to_visit: deque['BaseTransaction']
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, storage: 'VertexStorageProtocol', *, is_dag_funds: bool = False,
+                 is_dag_verifications: bool = False, is_left_to_right: bool = True) -> None:
+        super().__init__(
+            storage,
+            is_dag_funds=is_dag_funds,
+            is_dag_verifications=is_dag_verifications,
+            is_left_to_right=is_left_to_right
+        )
         self._to_visit = deque()
 
     def _is_empty(self) -> bool:
@@ -201,8 +213,14 @@ class DFSWalk(GenericWalk):
     """
     _to_visit: list['BaseTransaction']
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, storage: 'VertexStorageProtocol', *, is_dag_funds: bool = False,
+                 is_dag_verifications: bool = False, is_left_to_right: bool = True) -> None:
+        super().__init__(
+            storage,
+            is_dag_funds=is_dag_funds,
+            is_dag_verifications=is_dag_verifications,
+            is_left_to_right=is_left_to_right
+        )
         self._to_visit = []
 
     def _is_empty(self) -> bool:

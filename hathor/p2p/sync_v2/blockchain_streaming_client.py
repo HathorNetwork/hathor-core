@@ -27,7 +27,6 @@ from hathor.p2p.sync_v2.exception import (
 from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import Block
 from hathor.transaction.exceptions import HathorError
-from hathor.types import VertexId
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
@@ -39,7 +38,6 @@ class BlockchainStreamingClient:
     def __init__(self, sync_agent: 'NodeBlockSync', start_block: '_HeightInfo', end_block: '_HeightInfo') -> None:
         self.sync_agent = sync_agent
         self.protocol = self.sync_agent.protocol
-        self.tx_storage = self.sync_agent.tx_storage
         self.manager = self.sync_agent.manager
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
@@ -75,11 +73,6 @@ class BlockchainStreamingClient:
         """Fail the execution by resolving the deferred with an error."""
         self._deferred.errback(reason)
 
-    def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
-        """Return true if the vertex exists no matter its validation state."""
-        with self.tx_storage.allow_partially_validated_context():
-            return self.tx_storage.transaction_exists(vertex_id)
-
     def handle_blocks(self, blk: Block) -> None:
         """This method is called by the sync agent when a BLOCKS message is received."""
         if self._deferred.called:
@@ -106,7 +99,7 @@ class BlockchainStreamingClient:
         # Check for repeated blocks.
         assert blk.hash is not None
         is_duplicated = False
-        if self.partial_vertex_exists(blk.hash):
+        if self.sync_agent.p2p_storage.partial_vertex_exists(blk.hash):
             # We reached a block we already have. Skip it.
             self._blk_repeated += 1
             is_duplicated = True
@@ -131,9 +124,9 @@ class BlockchainStreamingClient:
         else:
             self.log.debug('block received', blk_id=blk.hash.hex())
 
-        if blk.can_validate_full():
+        if self.sync_agent.p2p_storage.can_validate_full(blk):
             try:
-                self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+                self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False, is_sync_v2=True)
             except HathorError:
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return
