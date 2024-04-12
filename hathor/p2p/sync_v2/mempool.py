@@ -36,7 +36,6 @@ class SyncMempoolManager:
         # Shortcuts.
         self.sync_agent = sync_agent
         self.manager = self.sync_agent.manager
-        self.tx_storage = self.manager.tx_storage
         self.reactor = self.sync_agent.reactor
 
         self._deferred: Optional[Deferred[bool]] = None
@@ -87,7 +86,7 @@ class SyncMempoolManager:
         if not self.missing_tips:
             # No missing tips? Let's get them!
             tx_hashes: list[bytes] = yield self.sync_agent.get_tips()
-            self.missing_tips.update(h for h in tx_hashes if not self.tx_storage.transaction_exists(h))
+            self.missing_tips.update(h for h in tx_hashes if not self.sync_agent.p2p_storage.local_vertex_exists(h))
 
         while self.missing_tips:
             self.log.debug('We have missing tips! Let\'s start!', missing_tips=[x.hex() for x in self.missing_tips])
@@ -124,10 +123,10 @@ class SyncMempoolManager:
         """Get the first missing dependency found of tx."""
         assert not tx.is_block
         for txin in tx.inputs:
-            if not self.tx_storage.transaction_exists(txin.tx_id):
+            if not self.sync_agent.p2p_storage.local_vertex_exists(txin.tx_id):
                 return txin.tx_id
         for parent in tx.parents:
-            if not self.tx_storage.transaction_exists(parent):
+            if not self.sync_agent.p2p_storage.local_vertex_exists(parent):
                 return parent
         return None
 
@@ -135,4 +134,4 @@ class SyncMempoolManager:
         """Add tx to the DAG."""
         assert tx.hash is not None
         self.missing_tips.discard(tx.hash)
-        self.manager.on_new_tx(tx)
+        self.sync_agent.p2p_vertex_handler.handle_new_vertex(tx)

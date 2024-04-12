@@ -23,12 +23,15 @@ from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall, deferLater
+from typing_extensions import assert_never
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
+from hathor.p2p.sync_v2.p2p_storage import LocalBlock, LocalData, P2PStorage
+from hathor.p2p.sync_v2.p2p_vertex_handler import P2PVertexHandler
 from hathor.p2p.sync_v2.payloads import BestBlockPayload, GetNextBlocksPayload, GetTransactionsBFSPayload
 from hathor.p2p.sync_v2.streamers import (
     DEFAULT_STREAMING_LIMIT,
@@ -46,7 +49,6 @@ from hathor.util import collect_n, not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
-    from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
 
@@ -84,7 +86,14 @@ class NodeBlockSync(SyncAgent):
     """
     name: str = 'node-block-sync'
 
-    def __init__(self, protocol: 'HathorProtocol', reactor: Reactor) -> None:
+    def __init__(
+        self,
+        *,
+        protocol: 'HathorProtocol',
+        reactor: Reactor,
+        p2p_storage: P2PStorage,
+        p2p_vertex_handler: P2PVertexHandler,
+    ) -> None:
         """
         :param protocol: Protocol of the connection.
         :type protocol: HathorProtocol
@@ -95,7 +104,8 @@ class NodeBlockSync(SyncAgent):
         self._settings = get_global_settings()
         self.protocol = protocol
         self.manager = protocol.node
-        self.tx_storage: 'TransactionStorage' = protocol.node.tx_storage
+        self.p2p_storage = p2p_storage
+        self.p2p_vertex_handler = p2p_vertex_handler
         self.state = PeerState.UNKNOWN
 
         self.DEFAULT_STREAMING_LIMIT = DEFAULT_STREAMING_LIMIT
@@ -166,9 +176,7 @@ class NodeBlockSync(SyncAgent):
     def get_status(self) -> dict[str, Any]:
         """ Return the status of the sync.
         """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
-        tips = self.tx_storage.indexes.mempool_tips.get()
+        tips = self.p2p_storage.get_mempool_tips()
         tips_limited, tips_has_more = collect_n(iter(tips), MAX_MEMPOOL_STATUS_TIPS)
         res = {
             'is_enabled': self.is_sync_enabled(),
@@ -335,11 +343,19 @@ class NodeBlockSync(SyncAgent):
 
     def get_my_best_block(self) -> _HeightInfo:
         """Return my best block info."""
-        bestblock = self.tx_storage.get_best_block()
-        assert bestblock.hash is not None
-        meta = bestblock.get_metadata()
-        assert meta.validation.is_fully_connected()
-        return _HeightInfo(height=bestblock.get_height(), id=bestblock.hash)
+        best_block = self.p2p_storage.get_local_best_block()
+
+        match best_block:
+            case LocalBlock(best_block, height):
+                pass
+            case Block():
+                meta = best_block.get_metadata()
+                assert meta.validation.is_fully_connected()
+                height = best_block.get_height()
+            case _:
+                assert_never(best_block)
+
+        return _HeightInfo(height=height, id=best_block.hash)
 
     @inlineCallbacks
     def run_sync_blocks(self) -> Generator[Any, Any, bool]:
@@ -347,7 +363,6 @@ class NodeBlockSync(SyncAgent):
 
         Notice that we might already have all other peer's blocks while the other peer is still syncing.
         """
-        assert self.tx_storage.indexes is not None
         self.state = PeerState.SYNCING_BLOCKS
 
         # Get my best block.
@@ -370,7 +385,11 @@ class NodeBlockSync(SyncAgent):
         # Not synced but same blockchain?
         if self.peer_best_block.height <= my_best_block.height:
             # Is peer behind me at the same blockchain?
-            common_block_hash = self.tx_storage.indexes.height.get(self.peer_best_block.height)
+            common_block_hash = self.p2p_storage.get_local_block_by_height(self.peer_best_block.height)
+
+            if isinstance(common_block_hash, LocalData):
+                common_block_hash = common_block_hash.data
+
             if common_block_hash == self.peer_best_block.id:
                 # If yes, nothing to sync from this peer.
                 if not self.is_synced():
@@ -448,15 +467,13 @@ class NodeBlockSync(SyncAgent):
     def handle_get_tips(self, _payload: str) -> None:
         """ Handle a GET-TIPS message.
         """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
         if self._is_streaming:
             self.log.warn('can\'t send while streaming')  # XXX: or can we?
             self.send_message(ProtocolMessages.MEMPOOL_END)
             return
         self.log.debug('handle_get_tips')
         # TODO Use a streaming of tips
-        for tx_id in self.tx_storage.indexes.mempool_tips.get():
+        for tx_id in self.p2p_storage.get_mempool_tips():
             self.send_tips(tx_id)
         self.log.debug('tips end')
         self.send_message(ProtocolMessages.TIPS_END)
@@ -476,7 +493,7 @@ class NodeBlockSync(SyncAgent):
         data = json.loads(payload)
         data = [bytes.fromhex(x) for x in data]
         # filter-out txs we already have
-        self._receiving_tips.extend(tx_id for tx_id in data if not self.partial_vertex_exists(tx_id))
+        self._receiving_tips.extend(tx_id for tx_id in data if not self.p2p_storage.local_partial_vertex_exists(tx_id))
 
     def handle_tips_end(self, _payload: str) -> None:
         """ Handle a TIPS-END message.
@@ -536,12 +553,6 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.state is not None
         self.protocol.state.send_message(cmd, payload)
 
-    def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
-        """ Return true if the vertex exists no matter its validation state.
-        """
-        with self.tx_storage.allow_partially_validated_context():
-            return self.tx_storage.transaction_exists(vertex_id)
-
     @inlineCallbacks
     def find_best_common_block(self,
                                my_best_block: _HeightInfo,
@@ -584,13 +595,15 @@ class NodeBlockSync(SyncAgent):
             for info in block_info_list:
                 try:
                     # We must check only fully validated transactions.
-                    blk = self.tx_storage.get_transaction(info.id)
+                    block = self.p2p_storage.get_local_block(info.id)
                 except TransactionDoesNotExist:
                     hi = info
                 else:
-                    assert blk.get_metadata().validation.is_fully_connected()
-                    assert isinstance(blk, Block)
-                    assert info.height == blk.get_height()
+                    match block:
+                        case LocalBlock(height=height): pass
+                        case Block(): height = block.get_height()
+                        case _: assert_never(block)
+                    assert info.height == height
                     lo = info
                     break
 
@@ -602,12 +615,12 @@ class NodeBlockSync(SyncAgent):
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         for tx in vertex_list:
-            if not self.tx_storage.transaction_exists(not_none(tx.hash)):
-                self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
+            if not self.p2p_storage.local_vertex_exists(tx.hash):
+                self.p2p_vertex_handler.handle_new_vertex(tx, propagate_to_peers=False, fails_silently=False)
             yield deferLater(self.reactor, 0, lambda: None)
 
-        if not self.tx_storage.transaction_exists(not_none(blk.hash)):
-            self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+        if not self.p2p_storage.local_vertex_exists(blk.hash):
+            self.p2p_vertex_handler.handle_new_vertex(blk, propagate_to_peers=False, fails_silently=False)
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
@@ -627,7 +640,6 @@ class NodeBlockSync(SyncAgent):
     def handle_get_peer_block_hashes(self, payload: str) -> None:
         """ Handle a GET-PEER-BLOCK-HASHES message.
         """
-        assert self.tx_storage.indexes is not None
         heights = json.loads(payload)
         if len(heights) > 20:
             self.log.info('too many heights', heights_qty=len(heights))
@@ -635,10 +647,10 @@ class NodeBlockSync(SyncAgent):
             return
         data = []
         for h in heights:
-            blk_hash = self.tx_storage.indexes.height.get(h)
+            blk_hash = self.p2p_storage.get_block_by_height(h)
             if blk_hash is None:
                 break
-            blk = self.tx_storage.get_transaction(blk_hash)
+            blk = self.p2p_storage.get_vertex(blk_hash)
             if blk.get_metadata().voided_by:
                 break
             data.append((h, blk_hash.hex()))
@@ -689,7 +701,7 @@ class NodeBlockSync(SyncAgent):
     def _validate_block(self, _hash: VertexId) -> Optional[Block]:
         """Validate block given in the GET-NEXT-BLOCKS and GET-TRANSACTIONS-BFS messages."""
         try:
-            blk = self.tx_storage.get_transaction(_hash)
+            blk = self.p2p_storage.get_vertex(_hash)
         except TransactionDoesNotExist:
             self.log.debug('requested block not found', blk_id=_hash.hex())
             self.send_message(ProtocolMessages.NOT_FOUND, _hash.hex())
@@ -766,8 +778,6 @@ class NodeBlockSync(SyncAgent):
         if not isinstance(blk, Block):
             # Not a block. Punish peer?
             return
-        blk.storage = self.tx_storage
-        assert blk.hash is not None
 
         assert self._blk_streaming_client is not None
         self._blk_streaming_client.handle_blocks(blk)
@@ -828,7 +838,7 @@ class NodeBlockSync(SyncAgent):
     def handle_get_best_block(self, _payload: str) -> None:
         """ Handle a GET-BEST-BLOCK message.
         """
-        best_block = self.tx_storage.get_best_block()
+        best_block = self.p2p_storage.get_best_block()
         meta = best_block.get_metadata()
         assert meta.validation.is_fully_connected()
         payload = BestBlockPayload(
@@ -941,7 +951,7 @@ class NodeBlockSync(SyncAgent):
         start_from_txs = []
         for start_from_hash in data.start_from:
             try:
-                tx = self.tx_storage.get_transaction(start_from_hash)
+                tx = self.p2p_storage.get_vertex(start_from_hash)
             except TransactionDoesNotExist:
                 # In case the tx does not exist we send a NOT-FOUND message
                 self.log.debug('requested start_from_hash not found', start_from_hash=start_from_hash.hex())
@@ -1021,7 +1031,6 @@ class NodeBlockSync(SyncAgent):
             self.log.warn('not a transaction', hash=tx.hash_hex)
             # Not a transaction. Punish peer?
             return
-        tx.storage = self.tx_storage
 
         assert self._tx_streaming_client is not None
         self._tx_streaming_client.handle_transaction(tx)
@@ -1035,14 +1044,15 @@ class NodeBlockSync(SyncAgent):
             self.log.debug('tx in cache', tx=tx_id.hex())
             return tx
         try:
-            tx = self.tx_storage.get_transaction(tx_id)
+            vertex = self.p2p_storage.get_local_vertex(tx_id)
+            return vertex.data if isinstance(vertex, LocalData) else vertex
         except TransactionDoesNotExist:
             tx = yield self.get_data(tx_id, 'mempool')
             assert tx is not None
             if tx.hash != tx_id:
                 self.protocol.send_error_and_close_connection(f'DATA mempool {tx_id.hex()} hash mismatch')
                 raise
-        return tx
+            return tx
 
     def get_data(self, tx_id: bytes, origin: str) -> Deferred[BaseTransaction]:
         """ Async method to request a tx by id.
@@ -1106,7 +1116,7 @@ class NodeBlockSync(SyncAgent):
         origin = data.get('origin', '')
         # self.log.debug('handle_get_data', payload=hash_hex)
         try:
-            tx = self.protocol.node.tx_storage.get_transaction(bytes.fromhex(txid_hex))
+            tx = self.p2p_storage.get_vertex(bytes.fromhex(txid_hex))
             self.send_data(tx, origin=origin)
         except TransactionDoesNotExist:
             # In case the tx does not exist we send a NOT-FOUND message
@@ -1142,25 +1152,24 @@ class NodeBlockSync(SyncAgent):
 
         assert tx is not None
         assert tx.hash is not None
-        if self.protocol.node.tx_storage.get_genesis(tx.hash):
+        if self.p2p_storage.get_genesis(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return
 
-        tx.storage = self.protocol.node.tx_storage
         assert tx.hash is not None
 
-        if self.partial_vertex_exists(tx.hash):
+        if self.p2p_storage.local_partial_vertex_exists(tx.hash):
             # transaction already added to the storage, ignore it
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
-            self.manager.tx_storage.compare_bytes_with_local_tx(tx)
+            self.p2p_storage.compare_bytes_with_local_tx(tx)
             return
         else:
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            if tx.can_validate_full():
+            if self.p2p_storage.local_can_validate_full(tx):
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                self.manager.on_new_tx(tx, propagate_to_peers=True)
+                self.p2p_vertex_handler.handle_new_vertex(tx, propagate_to_peers=True)
             else:
                 self.log.debug('skipping tx received in real time from peer',
                                tx=tx.hash_hex, peer=self.protocol.get_peer_id())
