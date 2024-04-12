@@ -461,7 +461,7 @@ class HathorManager:
                 tx.calculate_height()
                 tx._update_parents_children_metadata()
 
-                if tx.can_validate_full():
+                if self.tx_storage.can_validate_full(tx):
                     tx.update_initial_metadata()
                     tx.calculate_min_height()
                     if tx.is_genesis:

@@ -45,7 +45,6 @@ class TransactionStreamingClient:
                  limit: int) -> None:
         self.sync_agent = sync_agent
         self.protocol = self.sync_agent.protocol
-        self.tx_storage = self.sync_agent.tx_storage
         self.manager = self.sync_agent.manager
         self.reactor = self.manager.reactor
 
@@ -197,7 +196,7 @@ class TransactionStreamingClient:
     def _update_dependencies(self, tx: BaseTransaction) -> None:
         """Update _existing_deps and _waiting_for with the dependencies."""
         for dep in tx.get_all_dependencies():
-            if self.tx_storage.transaction_exists(dep) or dep in self._db:
+            if self.sync_agent.p2p_storage.local_vertex_exists(dep) or dep in self._db:
                 self._existing_deps.add(dep)
             else:
                 self._waiting_for.add(dep)

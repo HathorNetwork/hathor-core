@@ -68,7 +68,6 @@ class StreamEnd(IntFlag):
 class _StreamingServerBase:
     def __init__(self, sync_agent: 'NodeBlockSync', *, limit: int = DEFAULT_STREAMING_LIMIT):
         self.sync_agent = sync_agent
-        self.tx_storage = self.sync_agent.tx_storage
         self.protocol: 'HathorProtocol' = sync_agent.protocol
 
         assert self.protocol.transport is not None
@@ -233,7 +232,12 @@ class TransactionsStreamingServer(_StreamingServerBase):
             assert tx.get_metadata().first_block == self.first_block.hash
 
         self.current_block: Optional[Block] = self.first_block
-        self.bfs = BFSOrderWalk(self.tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
+        self.bfs = BFSOrderWalk(
+            self.sync_agent.p2p_storage,
+            is_dag_verifications=True,
+            is_dag_funds=True,
+            is_left_to_right=False
+        )
         self.iter = self.get_iter()
 
     def _stop_streaming_server(self, response_code: StreamEnd) -> None:
@@ -298,7 +302,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
         # Check if tx is confirmed by the `self.current_block` or any next block.
         assert cur_metadata.first_block is not None
         assert self.current_block is not None
-        first_block = self.tx_storage.get_transaction(cur_metadata.first_block)
+        first_block = self.sync_agent.p2p_storage.get_vertex(cur_metadata.first_block)
         if not_none(first_block.get_metadata().height) < not_none(self.current_block.get_metadata().height):
             self.log.debug('skipping tx: out of current block')
             self.bfs.skip_neighbors(cur)
