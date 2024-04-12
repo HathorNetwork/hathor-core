@@ -22,7 +22,11 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid
-from hathor.verification.verification_dependencies import BlockDependencies, TransactionDependencies
+from hathor.verification.verification_dependencies import (
+    BasicBlockDependencies,
+    BlockDependencies,
+    TransactionDependencies,
+)
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
 cpu = get_cpu_profiler()
@@ -99,11 +103,15 @@ class VerificationService:
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 assert type(vertex) is Block
-                block_deps = BlockDependencies.create(vertex, self._daa, self._feature_service)
+                block_deps = BasicBlockDependencies.create(
+                    vertex, self._daa, skip_weight_verification=skip_block_weight_verification
+                )
                 self._verify_basic_block(vertex, block_deps, skip_weight_verification=skip_block_weight_verification)
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
-                block_deps = BlockDependencies.create(vertex, self._daa, self._feature_service)
+                block_deps = BasicBlockDependencies.create(
+                    vertex, self._daa, skip_weight_verification=skip_block_weight_verification
+                )
                 self._verify_basic_merge_mined_block(
                     vertex, block_deps, skip_weight_verification=skip_block_weight_verification
                 )
@@ -119,7 +127,7 @@ class VerificationService:
     def _verify_basic_block(
         self,
         block: Block,
-        block_deps: BlockDependencies,
+        block_deps: BasicBlockDependencies,
         *,
         skip_weight_verification: bool
     ) -> None:
@@ -131,7 +139,7 @@ class VerificationService:
     def _verify_basic_merge_mined_block(
         self,
         block: MergeMinedBlock,
-        block_deps: BlockDependencies,
+        block_deps: BasicBlockDependencies,
         *,
         skip_weight_verification: bool
     ) -> None:
@@ -162,11 +170,11 @@ class VerificationService:
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 assert type(vertex) is Block
-                block_deps = BlockDependencies.create(vertex, self._daa, self._feature_service)
+                block_deps = BlockDependencies.create(vertex, self._feature_service)
                 self._verify_block(vertex, block_deps)
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
-                block_deps = BlockDependencies.create(vertex, self._daa, self._feature_service)
+                block_deps = BlockDependencies.create(vertex, self._feature_service)
                 self._verify_merge_mined_block(vertex, block_deps)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction

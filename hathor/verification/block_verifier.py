@@ -27,7 +27,7 @@ from hathor.transaction.exceptions import (
     TransactionDataError,
     WeightError,
 )
-from hathor.verification.verification_dependencies import BlockDependencies
+from hathor.verification.verification_dependencies import BasicBlockDependencies, BlockDependencies
 
 
 class BlockVerifier:
@@ -50,14 +50,14 @@ class BlockVerifier:
         if meta.height < meta.min_height:
             raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
 
-    def verify_weight(self, block: Block, block_deps: BlockDependencies) -> None:
+    def verify_weight(self, block: Block, block_deps: BasicBlockDependencies) -> None:
         """Validate minimum block difficulty."""
         min_block_weight = self._daa.calculate_block_difficulty(block, block_deps.storage)
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
 
-    def verify_reward(self, block: Block, block_deps: BlockDependencies) -> None:
+    def verify_reward(self, block: Block, block_deps: BasicBlockDependencies) -> None:
         """Validate reward amount."""
         parent_block = block_deps.storage.get_parent_block(block)
         tokens_issued_per_block = self._daa.get_tokens_issued_per_block(parent_block.get_height() + 1)

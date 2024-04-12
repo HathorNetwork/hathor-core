@@ -32,22 +32,37 @@ class VertexDependencies:
 
 
 @dataclass(frozen=True, slots=True)
+class BasicBlockDependencies(VertexDependencies):
+    """A dataclass of dependencies necessary for basic block verification."""
+
+    @classmethod
+    def create(cls, block: Block, daa: DifficultyAdjustmentAlgorithm, *, skip_weight_verification: bool) -> Self:
+        """Create a basic block dependencies instance."""
+        assert block.storage is not None
+        simple_storage = SimpleMemoryStorage()
+        daa_deps = [] if skip_weight_verification else daa.get_block_dependencies(block)
+        deps = block.parents + daa_deps
+
+        simple_storage.add_vertices_from_storage(block.storage, deps)
+
+        return cls(simple_storage)
+
+
+@dataclass(frozen=True, slots=True)
 class BlockDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for block verification."""
     signaling_state: BlockSignalingState
     feature_info: dict[Feature, FeatureInfo]
 
     @classmethod
-    def create(cls, block: Block, daa: DifficultyAdjustmentAlgorithm, feature_service: FeatureService) -> Self:
+    def create(cls, block: Block, feature_service: FeatureService) -> Self:
         """Create a block dependencies instance."""
         assert block.storage is not None
         signaling_state = feature_service.is_signaling_mandatory_features(block)
         feature_info = feature_service.get_feature_info(block=block)
         simple_storage = SimpleMemoryStorage()
-        daa_deps = daa.get_block_dependencies(block)
-        deps = block.parents + daa_deps
 
-        simple_storage.add_vertices_from_storage(block.storage, deps)
+        simple_storage.add_vertices_from_storage(block.storage, block.parents)
         simple_storage.add_vertex(block)  # we add the block itself so its metadata can be used as a dependency.
 
         return cls(
