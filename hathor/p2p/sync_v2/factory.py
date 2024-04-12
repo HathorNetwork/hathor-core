@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 class SyncV2Factory(SyncAgentFactory):
     # TODO: The problem with using a default False for async, is that tests will not run the new async path.
-    def __init__(self, connections: ConnectionsManager, *, use_async: bool = False) -> None:
+    def __init__(self, connections: ConnectionsManager, *, use_async: bool = True) -> None:
         self.connections = connections
         self._use_async = use_async
 
