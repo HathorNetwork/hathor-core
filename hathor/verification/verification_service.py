@@ -146,9 +146,27 @@ class VerificationService:
         #      ends up being CHECKPOINT_FULL instead of FULL
         if not meta.validation.is_at_least_basic():
             # run basic validation if we haven't already
-            self.verify_basic_model(verification_model, skip_block_weight_verification=skip_block_weight_verification)
+            if async_:
+                await self._mp.run(
+                    self.verify_basic_model,
+                    verification_model,
+                    skip_block_weight_verification=skip_block_weight_verification
+                )
+            else:
+                self.verify_basic_model(
+                    verification_model,
+                    skip_block_weight_verification=skip_block_weight_verification
+                )
 
-        self.verify_model(verification_model, reject_locked_reward=reject_locked_reward)
+        if async_:
+            await self._mp.run(
+                self.verify_model,
+                verification_model,
+                reject_locked_reward=reject_locked_reward
+            )
+        else:
+            self.verify_model(verification_model, reject_locked_reward=reject_locked_reward)
+
         validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
         vertex.set_validation(validation)
         return True
