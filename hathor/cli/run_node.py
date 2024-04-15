@@ -223,7 +223,7 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
-            feature_service=self.manager._feature_service,
+            feature_service=self.manager.vertex_handler._feature_service,
             bit_signaling_service=self.manager._bit_signaling_service,
         )
 
