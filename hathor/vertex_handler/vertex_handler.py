@@ -28,6 +28,7 @@ from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.verification.parallel_verifier import ParallelVerifier
 from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
@@ -55,6 +56,7 @@ class VertexHandler:
         '_feature_service',
         '_pubsub',
         '_wallet',
+        '_verifier',
     )
 
     def __init__(
@@ -80,6 +82,7 @@ class VertexHandler:
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
+        self._verifier = ParallelVerifier(verification_service=self._verification_service)
 
     def on_new_vertex(
         self,
@@ -104,8 +107,11 @@ class VertexHandler:
             propagate_to_peers=propagate_to_peers,
             reject_locked_reward=reject_locked_reward,
         )
-        is_valid = self._validate_vertex(new_vertex)
+        is_pre_valid = self._pre_validate_vertex(new_vertex)
+        if not is_pre_valid:
+            return False
 
+        is_valid = self._validate_vertex(new_vertex)
         if not is_valid:
             return False
 
@@ -137,8 +143,11 @@ class VertexHandler:
             propagate_to_peers=propagate_to_peers,
             reject_locked_reward=reject_locked_reward,
         )
-        is_valid = await self._validate_vertex_async(new_vertex)
+        is_pre_valid = self._pre_validate_vertex(new_vertex)
+        if not is_pre_valid:
+            return False
 
+        is_valid = await self._validate_vertex_async(new_vertex)
         if not is_valid:
             return False
 
@@ -147,10 +156,7 @@ class VertexHandler:
 
         return True
 
-    async def _validate_vertex_async(self, new_vertex: _NewVertex) -> bool:
-        return self._validate_vertex(new_vertex)
-
-    def _validate_vertex(self, new_vertex: _NewVertex) -> bool:
+    def _pre_validate_vertex(self, new_vertex: _NewVertex) -> bool:
         assert self._tx_storage.is_only_valid_allowed()
         already_exists = False
         vertex = new_vertex.vertex
@@ -188,9 +194,30 @@ class VertexHandler:
             self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
             return False
 
+        return True
+
+    def _validate_vertex(self, new_vertex: _NewVertex) -> bool:
+        vertex = new_vertex.vertex
+        metadata = vertex.get_metadata()
+
         if not metadata.validation.is_fully_connected():
             try:
                 self._verification_service.validate_full(vertex, reject_locked_reward=new_vertex.reject_locked_reward)
+            except HathorError as e:
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('full validation failed') from e
+                self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
+                return False
+
+        return True
+
+    async def _validate_vertex_async(self, new_vertex: _NewVertex) -> bool:
+        vertex = new_vertex.vertex
+        metadata = vertex.get_metadata()
+
+        if not metadata.validation.is_fully_connected():
+            try:
+                await self._verifier.validate_full(vertex, reject_locked_reward=new_vertex.reject_locked_reward)
             except HathorError as e:
                 if not new_vertex.fails_silently:
                     raise InvalidNewTransaction('full validation failed') from e

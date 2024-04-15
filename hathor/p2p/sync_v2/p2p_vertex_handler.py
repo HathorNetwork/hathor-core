@@ -104,6 +104,7 @@ class AsyncP2PVertexHandler(P2PVertexHandler):
         self._vertex_count += 1
         self._p2p_storage.add_new_vertex(vertex)
         current_count = self._vertex_count
+        result = False
         self._log.info(f'received vertex {current_count}', hash=vertex.hash_hex)
 
         try:
@@ -112,12 +113,9 @@ class AsyncP2PVertexHandler(P2PVertexHandler):
                 fails_silently=fails_silently,
                 propagate_to_peers=propagate_to_peers,
             )
-        except HathorError:
-            result = False
-            raise
-        except Exception as e:
-            result = False
-            self._log.error('unhandled exception in vertex completion', exception=str(e), exc_info=True)
+        except Exception as e:  # TODO: Maybe this block can be removed
+            if not isinstance(e, HathorError):
+                self._log.error('unhandled exception in vertex completion', exception=str(e), exc_info=True)
             raise
         finally:
             self._p2p_storage.complete_vertex(vertex, result)
