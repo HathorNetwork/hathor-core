@@ -13,12 +13,9 @@
 #  limitations under the License.
 
 import datetime
-from collections import deque
 from dataclasses import dataclass
 
 from structlog import get_logger
-from twisted.internet import defer
-from twisted.internet.defer import Deferred
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
@@ -58,7 +55,6 @@ class VertexHandler:
         '_feature_service',
         '_pubsub',
         '_wallet',
-        '_post_validation_queue',
     )
 
     def __init__(
@@ -84,7 +80,6 @@ class VertexHandler:
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
-        self._post_validation_queue: deque[tuple[_NewVertex, Deferred[bool]]] = deque()
 
     def on_new_vertex(
         self,
@@ -119,7 +114,7 @@ class VertexHandler:
 
         return True
 
-    def on_new_vertex_async(
+    async def on_new_vertex_async(
         self,
         vertex: BaseTransaction,
         *,
@@ -127,7 +122,7 @@ class VertexHandler:
         fails_silently: bool = True,
         propagate_to_peers: bool = True,
         reject_locked_reward: bool = True,
-    ) -> Deferred[bool]:
+    ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param vertex: transaction to be added
@@ -142,27 +137,18 @@ class VertexHandler:
             propagate_to_peers=propagate_to_peers,
             reject_locked_reward=reject_locked_reward,
         )
-        is_valid = self._validate_vertex(new_vertex)
+        is_valid = await self._validate_vertex_async(new_vertex)
 
         if not is_valid:
-            return defer.succeed(False)
+            return False
 
-        deferred: Deferred[bool] = Deferred()
-        self._post_validation_queue.append((new_vertex, deferred))
-        self._reactor.callLater(0, self._process_post_validation_queue)
-
-        return deferred
-
-    def _process_post_validation_queue(self) -> None:
-        if len(self._post_validation_queue) == 0:
-            return
-
-        new_vertex, deferred = self._post_validation_queue.popleft()
         self._save_and_run_consensus(new_vertex.vertex)
         self._post_consensus(new_vertex)
 
-        deferred.callback(True)
-        self._reactor.callLater(0, self._process_post_validation_queue)
+        return True
+
+    async def _validate_vertex_async(self, new_vertex: _NewVertex) -> bool:
+        return self._validate_vertex(new_vertex)
 
     def _validate_vertex(self, new_vertex: _NewVertex) -> bool:
         assert self._tx_storage.is_only_valid_allowed()

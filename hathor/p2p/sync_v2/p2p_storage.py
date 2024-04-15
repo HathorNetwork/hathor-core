@@ -16,11 +16,8 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred
-from twisted.python.failure import Failure
 from typing_extensions import override
 
-from hathor.exception import HathorError
 from hathor.p2p.protocol import HathorProtocol
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage import TransactionStorage
@@ -151,7 +148,7 @@ class AsyncP2PStorage(P2PStorage):
         '_blocks_and_heights',
         '_blocks_by_height',
         '_transactions',
-        '_pending_deferreds',
+        '_is_reset',
     )
 
     def __init__(self, *, protocol: HathorProtocol, tx_storage: TransactionStorage) -> None:
@@ -159,7 +156,7 @@ class AsyncP2PStorage(P2PStorage):
         self._blocks_and_heights: dict[VertexId, tuple[Block, int]] = {}
         self._blocks_by_height: dict[int, VertexId] = {}
         self._transactions: dict[VertexId, Transaction] = {}
-        self._pending_deferreds: dict[VertexId, Deferred[bool]] = {}
+        self._is_reset: bool = True
 
     @property
     def _blocks(self) -> dict[VertexId, Block]:
@@ -169,9 +166,10 @@ class AsyncP2PStorage(P2PStorage):
     def _vertices(self) -> dict[VertexId, BaseTransaction]:
         return {**self._blocks, **self._transactions}
 
-    def add_new_vertex(self, vertex: BaseTransaction, deferred: Deferred[bool]) -> None:
+    def add_new_vertex(self, vertex: BaseTransaction) -> None:
         """Add a new vertex to this storage's memory, that is, a vertex that has been received but has not yet been
         handled."""
+        self._is_reset = False
         match vertex:
             case Transaction():
                 self._transactions[vertex.hash] = vertex
@@ -180,16 +178,17 @@ class AsyncP2PStorage(P2PStorage):
                 self._blocks_and_heights[vertex.hash] = (vertex, height)
                 self._blocks_by_height[height] = vertex.hash
 
-        deferred.addBoth(self._complete_vertex, vertex)
-        self._pending_deferreds[vertex.hash] = deferred
-
-    def _complete_vertex(self, deferred_result: bool | Failure, vertex: BaseTransaction) -> None:
+    def complete_vertex(self, vertex: BaseTransaction, result: bool) -> None:
         """
         A callback that should be called when the handling of a vertex has been completed.
         It removes the vertex from this storage's memory (since it is now in the persisted storage).
         If there's been an error in the vertex handling, it also resets the storage and the connection.
         """
-        del self._pending_deferreds[vertex.hash]
+        if self._is_reset:
+            return
+        if not result:
+            self._reset()
+            return
 
         match vertex:
             case Transaction():
@@ -202,28 +201,13 @@ class AsyncP2PStorage(P2PStorage):
                     if vertex_id != vertex.hash
                 }
 
-        match deferred_result:
-            case True:
-                pass
-            case False:
-                self._reset()
-            case Failure():
-                self._reset()
-                exception = deferred_result.value
-                if not isinstance(exception, HathorError):
-                    self._log.error('unhandled exception in vertex completion', exception=str(deferred_result.value))
-
     def _reset(self) -> None:
         """Reset this storage by cleaning its memory, cancelling its deferreds, and resetting the connection."""
-        for deferred in list(self._pending_deferreds.values()):
-            if not deferred.called:
-                deferred.cancel()
-
         self._blocks_and_heights = {}
         self._blocks_by_height = {}
         self._transactions = {}
-        self._pending_deferreds = {}
         self._protocol.disconnect(force=True)
+        self._is_reset = True
 
     def _calculate_height(self, block: Block) -> int:
         """Calculate the height of a block that may or may not be persisted."""

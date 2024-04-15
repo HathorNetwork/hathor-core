@@ -12,17 +12,19 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from collections import deque
 from typing import NamedTuple
 
+from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
-from twisted.python.failure import Failure
 from typing_extensions import override
 
+from hathor.exception import HathorError
 from hathor.manager import HathorManager
 from hathor.p2p.sync_v2.p2p_storage import AsyncP2PStorage
 from hathor.transaction import BaseTransaction
+
+logger = get_logger()
 
 
 class _NewVertex(NamedTuple):
@@ -70,13 +72,14 @@ class AsyncP2PVertexHandler(P2PVertexHandler):
     received by sync-v2, it should call `handle_new_vertex()` to send the vertex to the rest of the pipeline
     (i.e. verification, consensus, saving, propagation, etc). This class handles vertices asynchronously.
     """
-    __slots__ = ('_reactor', '_p2p_storage', '_new_vertex_queue')
+    __slots__ = ('_log', '_reactor', '_p2p_storage', '_vertex_count')
 
     def __init__(self, *, manager: HathorManager, p2p_storage: AsyncP2PStorage) -> None:
         super().__init__(manager=manager)
+        self._log = logger.new()
         self._reactor = manager.reactor
         self._p2p_storage = p2p_storage
-        self._new_vertex_queue: deque[_NewVertex] = deque()
+        self._vertex_count: int = 0
 
     @override
     def handle_new_vertex(
@@ -88,28 +91,36 @@ class AsyncP2PVertexHandler(P2PVertexHandler):
     ) -> Deferred[bool]:
         """Asynchronously handle a new vertex, i.e., it returns without blocking for handling and returns a
         Deferred that will fire when the handling is complete."""
-        deferred: Deferred[bool] = Deferred()
-        self._new_vertex_queue.append(_NewVertex(vertex, fails_silently, propagate_to_peers, deferred))
-        self._p2p_storage.add_new_vertex(vertex, deferred)
-        if len(self._new_vertex_queue) == 1:
-            self._reactor.callLater(0, self._process_queue)
-        return deferred
+        coro = self._handle_new_vertex(vertex, fails_silently=fails_silently, propagate_to_peers=propagate_to_peers)
+        return Deferred.fromCoroutine(coro)
 
-    def _process_queue(self) -> None:
-        """Process the new vertex queue. It calls itself recursively until the queue is empty."""
-        if len(self._new_vertex_queue) == 0:
-            return
-
-        new_vertex = self._new_vertex_queue.popleft()
+    async def _handle_new_vertex(
+        self,
+        vertex: BaseTransaction,
+        *,
+        fails_silently: bool = True,
+        propagate_to_peers: bool = True,
+    ) -> bool:
+        self._vertex_count += 1
+        self._p2p_storage.add_new_vertex(vertex)
+        current_count = self._vertex_count
+        self._log.info(f'received vertex {current_count}', hash=vertex.hash_hex)
 
         try:
-            result = self._manager.on_new_tx(
-                new_vertex.vertex,
-                fails_silently=new_vertex.fails_silently,
-                propagate_to_peers=new_vertex.propagate_to_peers,
+            result = await self._manager.vertex_handler.on_new_vertex_async(
+                vertex,
+                fails_silently=fails_silently,
+                propagate_to_peers=propagate_to_peers,
             )
+        except HathorError:
+            result = False
+            raise
         except Exception as e:
-            result = Failure(e)
+            result = False
+            self._log.error('unhandled exception in vertex completion', exception=str(e), exc_info=True)
+            raise
+        finally:
+            self._p2p_storage.complete_vertex(vertex, result)
+            self._log.info(f'completed vertex {current_count}/{self._vertex_count}', hash=vertex.hash_hex)
 
-        new_vertex.deferred.callback(result)
-        self._reactor.callLater(0, self._process_queue)
+        return result
