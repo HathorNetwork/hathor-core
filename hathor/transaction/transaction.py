@@ -17,8 +17,12 @@ from itertools import chain
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
+from typing_extensions import override
+
 from hathor.checkpoint import Checkpoint
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.exception import InvalidNewTransaction
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import iter_spent_rewards
 from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
@@ -30,6 +34,7 @@ from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.verification.verification_model import VerificationModel
 
 cpu = get_cpu_profiler()
 
@@ -380,3 +385,22 @@ class Transaction(BaseTransaction):
             if meta.voided_by:
                 return True
         return False
+
+    @override
+    def get_verification_model(
+        self,
+        *,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService | None = None,
+        skip_weight_verification: bool = False,
+        pre_fetched_deps: dict[VertexId, 'BaseTransaction'] | None = None,
+        only_basic: bool = False
+    ) -> 'VerificationModel':
+        from hathor.verification.verification_dependencies import TransactionDependencies
+        from hathor.verification.verification_model import VerificationTransaction
+        deps = None if only_basic else TransactionDependencies.create(self, pre_fetched_deps=pre_fetched_deps)
+        return VerificationTransaction(
+            vertex=self,
+            basic_deps=None,
+            deps=deps,
+        )

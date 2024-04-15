@@ -28,6 +28,8 @@ from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
+from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -39,6 +41,7 @@ if TYPE_CHECKING:
     from _hashlib import HASH
 
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.verification.verification_model import VerificationModel
 
 logger = get_logger()
 
@@ -846,6 +849,18 @@ class BaseTransaction(ABC):
             if not dep_meta.validation.is_fully_connected():
                 return False
         return True
+
+    @abstractmethod
+    def get_verification_model(
+        self,
+        *,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService | None = None,
+        skip_weight_verification: bool = False,
+        pre_fetched_deps: dict[VertexId, 'BaseTransaction'] | None = None,
+        only_basic: bool = False
+    ) -> 'VerificationModel':
+        raise NotImplementedError
 
 
 class TxInput:

@@ -14,13 +14,20 @@
 
 from typing import TYPE_CHECKING, Any, Optional
 
+from typing_extensions import override
+
+from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction.aux_pow import BitcoinAuxPow
-from hathor.transaction.base_transaction import TxOutput, TxVersion
+from hathor.transaction.base_transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.block import Block
 from hathor.transaction.util import VerboseCallback
+from hathor.types import VertexId
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.verification.verification_model import VerificationModel
 
 
 class MergeMinedBlock(Block):
@@ -74,3 +81,37 @@ class MergeMinedBlock(Block):
         del json['nonce']
         json['aux_pow'] = bytes(self.aux_pow).hex() if self.aux_pow else None
         return json
+
+    @override
+    def get_verification_model(
+        self,
+        *,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService | None = None,
+        skip_weight_verification: bool = False,
+        pre_fetched_deps: dict[VertexId, 'BaseTransaction'] | None = None,
+        only_basic: bool = False
+    ) -> 'VerificationModel':
+        from hathor.verification.verification_dependencies import BasicBlockDependencies, BlockDependencies
+        from hathor.verification.verification_model import VerificationMergeMinedBlock
+        basic_deps = BasicBlockDependencies.create(
+            self,
+            daa=daa,
+            skip_weight_verification=skip_weight_verification,
+            pre_fetched_deps=pre_fetched_deps
+        )
+
+        if only_basic:
+            deps = None
+        else:
+            deps = BlockDependencies.create(
+                self,
+                feature_service=not_none(feature_service),
+                pre_fetched_deps=pre_fetched_deps
+            )
+
+        return VerificationMergeMinedBlock(
+            vertex=self,
+            basic_deps=basic_deps,
+            deps=deps,
+        )

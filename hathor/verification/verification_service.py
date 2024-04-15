@@ -11,7 +11,9 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from typing import cast
 
+from twisted.internet.defer import Deferred
 from typing_extensions import assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
@@ -21,10 +23,19 @@ from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
+from hathor.types import VertexId
+from hathor.util import not_none
 from hathor.verification.verification_dependencies import (
     BasicBlockDependencies,
     BlockDependencies,
     TransactionDependencies,
+)
+from hathor.verification.verification_model import (
+    VerificationBlock,
+    VerificationMergeMinedBlock,
+    VerificationModel,
+    VerificationTokenCreationTransaction,
+    VerificationTransaction,
 )
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
@@ -66,32 +77,22 @@ class VerificationService:
         *,
         skip_block_weight_verification: bool = False,
         sync_checkpoints: bool = False,
-        reject_locked_reward: bool = True
+        reject_locked_reward: bool = True,
     ) -> bool:
         """ Run full validations (these need access to all dependencies) and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
-        from hathor.transaction.transaction_metadata import ValidationState
-
-        meta = vertex.get_metadata()
-
-        # skip full validation when it is a checkpoint
-        if meta.validation.is_checkpoint():
-            vertex.set_validation(ValidationState.CHECKPOINT_FULL)
-            return True
-
-        # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
-        #      directly into trying a full validation so we should check it here to make sure the validation states
-        #      ends up being CHECKPOINT_FULL instead of FULL
-        if not meta.validation.is_at_least_basic():
-            # run basic validation if we haven't already
-            self.verify_basic(vertex, skip_block_weight_verification=skip_block_weight_verification)
-
-        self.verify(vertex, reject_locked_reward=reject_locked_reward)
-        validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
-        vertex.set_validation(validation)
-        return True
+        coro = self._validate_full(
+            vertex,
+            skip_block_weight_verification=skip_block_weight_verification,
+            sync_checkpoints=sync_checkpoints,
+            reject_locked_reward=reject_locked_reward,
+            async_=False,
+        )
+        deferred: Deferred[bool] = Deferred.fromCoroutine(coro)
+        assert deferred.called
+        return cast(bool, deferred.result)
 
     async def validate_full_async(
         self,
@@ -99,12 +100,32 @@ class VerificationService:
         *,
         skip_block_weight_verification: bool = False,
         sync_checkpoints: bool = False,
-        reject_locked_reward: bool = True
+        reject_locked_reward: bool = True,
+        pre_fetched_deps: dict[VertexId, BaseTransaction] | None = None,
     ) -> bool:
         """ Run full validations (these need access to all dependencies) and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
+        return await self._validate_full(
+            vertex,
+            skip_block_weight_verification=skip_block_weight_verification,
+            sync_checkpoints=sync_checkpoints,
+            reject_locked_reward=reject_locked_reward,
+            pre_fetched_deps=pre_fetched_deps,
+            async_=True
+        )
+
+    async def _validate_full(
+        self,
+        vertex: BaseTransaction,
+        *,
+        async_: bool,
+        skip_block_weight_verification: bool = False,
+        sync_checkpoints: bool = False,
+        reject_locked_reward: bool = True,
+        pre_fetched_deps: dict[VertexId, BaseTransaction] | None = None,
+    ) -> bool:
         from hathor.transaction.transaction_metadata import ValidationState
 
         meta = vertex.get_metadata()
@@ -114,14 +135,20 @@ class VerificationService:
             vertex.set_validation(ValidationState.CHECKPOINT_FULL)
             return True
 
+        verification_model = vertex.get_verification_model(
+            daa=self._daa,
+            skip_weight_verification=skip_block_weight_verification,
+            pre_fetched_deps=pre_fetched_deps,
+        )
+
         # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
         #      directly into trying a full validation so we should check it here to make sure the validation states
         #      ends up being CHECKPOINT_FULL instead of FULL
         if not meta.validation.is_at_least_basic():
             # run basic validation if we haven't already
-            await self.verify_basic_async(vertex, skip_block_weight_verification=skip_block_weight_verification)
+            self.verify_basic_model(verification_model, skip_block_weight_verification=skip_block_weight_verification)
 
-        await self.verify_async(vertex, reject_locked_reward=reject_locked_reward)
+        self.verify_model(verification_model, reject_locked_reward=reject_locked_reward)
         validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
         vertex.set_validation(validation)
         return True
@@ -130,72 +157,40 @@ class VerificationService:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
         Used by `self.validate_basic`. Should not modify the validation state."""
-        assert self._feature_service is not None
+        verification_model = vertex.get_verification_model(
+            daa=self._daa,
+            skip_weight_verification=skip_block_weight_verification,
+            only_basic=True,
+        )
+        self.verify_basic_model(verification_model, skip_block_weight_verification=skip_block_weight_verification)
 
-        # We assert with type() instead of isinstance() because each subclass has a specific branch.
-        match vertex.version:
-            case TxVersion.REGULAR_BLOCK:
-                assert type(vertex) is Block
-                block_deps = BasicBlockDependencies.create(
-                    vertex, self._daa, skip_weight_verification=skip_block_weight_verification
-                )
-                _verify_basic_block(
-                    self.verifiers, vertex, block_deps, skip_weight_verification=skip_block_weight_verification
-                )
-            case TxVersion.MERGE_MINED_BLOCK:
-                assert type(vertex) is MergeMinedBlock
-                block_deps = BasicBlockDependencies.create(
-                    vertex, self._daa, skip_weight_verification=skip_block_weight_verification
-                )
-                _verify_basic_merge_mined_block(
-                    self.verifiers, vertex, block_deps, skip_weight_verification=skip_block_weight_verification
-                )
-            case TxVersion.REGULAR_TRANSACTION:
-                assert type(vertex) is Transaction
-                _verify_basic_tx(self.verifiers, vertex)
-            case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert type(vertex) is TokenCreationTransaction
-                _verify_basic_token_creation_tx(self.verifiers, vertex)
-            case _:
-                assert_never(vertex.version)
-
-    async def verify_basic_async(
+    def verify_basic_model(
         self,
-        vertex: BaseTransaction,
+        vertex: VerificationModel,
         *,
         skip_block_weight_verification: bool = False
     ) -> None:
-        """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
-
-        Used by `self.validate_basic`. Should not modify the validation state."""
-        assert self._feature_service is not None
-
-        # We assert with type() instead of isinstance() because each subclass has a specific branch.
-        match vertex.version:
-            case TxVersion.REGULAR_BLOCK:
-                assert type(vertex) is Block
-                block_deps = BasicBlockDependencies.create(
-                    vertex, self._daa, skip_weight_verification=skip_block_weight_verification
+        match vertex:
+            case VerificationBlock(vertex=block, basic_deps=basic_deps):
+                _verify_basic_block(
+                    self.verifiers,
+                    block,
+                    basic_deps,
+                    skip_weight_verification=skip_block_weight_verification,
                 )
-                self._mp.run(_verify_basic_block,
-                    self.verifiers, vertex, block_deps, skip_weight_verification=skip_block_weight_verification
+            case VerificationMergeMinedBlock(vertex=block, basic_deps=basic_deps):
+                _verify_basic_merge_mined_block(
+                    self.verifiers,
+                    block,
+                    basic_deps,
+                    skip_weight_verification=skip_block_weight_verification
                 )
-            case TxVersion.MERGE_MINED_BLOCK:
-                assert type(vertex) is MergeMinedBlock
-                block_deps = BasicBlockDependencies.create(
-                    vertex, self._daa, skip_weight_verification=skip_block_weight_verification
-                )
-                self._mp.run(_verify_basic_merge_mined_block,
-                    self.verifiers, vertex, block_deps, skip_weight_verification=skip_block_weight_verification
-                )
-            case TxVersion.REGULAR_TRANSACTION:
-                assert type(vertex) is Transaction
-                self._mp.run(_verify_basic_tx, self.verifiers, vertex)
-            case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert type(vertex) is TokenCreationTransaction
-                self._mp.run(_verify_basic_token_creation_tx, self.verifiers, vertex)
+            case VerificationTransaction(vertex=tx):
+                _verify_basic_tx(self.verifiers, tx)
+            case VerificationTokenCreationTransaction(vertex=tx):
+                _verify_basic_token_creation_tx(self.verifiers, tx)
             case _:
-                assert_never(vertex.version)
+                assert_never(vertex)
 
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
@@ -204,64 +199,30 @@ class VerificationService:
         if vertex.is_genesis:
             # TODO do genesis validation
             return
-
         assert self._feature_service is not None
-        # We assert with type() instead of isinstance() because each subclass has a specific branch.
-        match vertex.version:
-            case TxVersion.REGULAR_BLOCK:
-                assert type(vertex) is Block
-                block_deps = BlockDependencies.create(vertex, self._feature_service)
-                _verify_block(self.verifiers, vertex, block_deps)
-            case TxVersion.MERGE_MINED_BLOCK:
-                assert type(vertex) is MergeMinedBlock
-                block_deps = BlockDependencies.create(vertex, self._feature_service)
-                _verify_merge_mined_block(self.verifiers, vertex, block_deps)
-            case TxVersion.REGULAR_TRANSACTION:
-                assert type(vertex) is Transaction
-                tx_deps = TransactionDependencies.create(vertex)
-                _verify_tx(self.verifiers, vertex, tx_deps, reject_locked_reward=reject_locked_reward)
-            case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert type(vertex) is TokenCreationTransaction
-                tx_deps = TransactionDependencies.create(vertex)
-                _verify_token_creation_tx(self.verifiers, vertex, tx_deps, reject_locked_reward=reject_locked_reward)
-            case _:
-                assert_never(vertex.version)
+        verification_model = vertex.get_verification_model(
+            daa=self._daa,
+            feature_service=self._feature_service,
+        )
+        self.verify_model(verification_model, reject_locked_reward=reject_locked_reward)
 
-    async def verify_async(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
-        """Run all verifications. Raises on error.
-
-        Used by `self.validate_full`. Should not modify the validation state."""
-        if vertex.is_genesis:
-            # TODO do genesis validation
-            return
-
-        assert self._feature_service is not None
-        # We assert with type() instead of isinstance() because each subclass has a specific branch.
-        match vertex.version:
-            case TxVersion.REGULAR_BLOCK:
-                assert type(vertex) is Block
-                block_deps = BlockDependencies.create(vertex, self._feature_service)
-                self._mp.run(_verify_block, self.verifiers, vertex, block_deps)
-            case TxVersion.MERGE_MINED_BLOCK:
-                assert type(vertex) is MergeMinedBlock
-                block_deps = BlockDependencies.create(vertex, self._feature_service)
-                self._mp.run(_verify_merge_mined_block, self.verifiers, vertex, block_deps)
-            case TxVersion.REGULAR_TRANSACTION:
-                assert type(vertex) is Transaction
-                tx_deps = TransactionDependencies.create(vertex)
-                self._mp.run(_verify_tx, self.verifiers, vertex, tx_deps, reject_locked_reward=reject_locked_reward)
-            case TxVersion.TOKEN_CREATION_TRANSACTION:
-                assert type(vertex) is TokenCreationTransaction
-                tx_deps = TransactionDependencies.create(vertex)
-                self._mp.run(
-                    _verify_token_creation_tx,
+    def verify_model(self, vertex: VerificationModel, *, reject_locked_reward: bool = True) -> None:
+        match vertex:
+            case VerificationBlock(vertex=block, deps=deps):
+                _verify_block(self.verifiers, block, not_none(deps))
+            case VerificationMergeMinedBlock(vertex=block, deps=deps):
+                _verify_merge_mined_block(self.verifiers, block, not_none(deps))
+            case VerificationTransaction(vertex=tx, deps=deps):
+                _verify_tx(self.verifiers, tx, not_none(deps), reject_locked_reward=reject_locked_reward)
+            case VerificationTokenCreationTransaction(vertex=tx, deps=deps):
+                _verify_token_creation_tx(
                     self.verifiers,
-                    vertex,
-                    tx_deps,
+                    tx,
+                    not_none(deps),
                     reject_locked_reward=reject_locked_reward
                 )
             case _:
-                assert_never(vertex.version)
+                assert_never(vertex)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         _verify_without_storage(self.verifiers, vertex)
@@ -340,7 +301,7 @@ def _verify_block(verifiers: VertexVerifiers, block: Block, block_deps: BlockDep
     # (1) and (4)
     verifiers.vertex.verify_parents(block, block_deps)
 
-    verifiers.block.verify_height(block)
+    verifiers.block.verify_height(block_deps)
 
     verifiers.block.verify_mandatory_signaling(block_deps)
 
@@ -351,7 +312,7 @@ def _verify_merge_mined_block(
     block_deps: BlockDependencies
 ) -> None:
     verifiers.merge_mined_block.verify_aux_pow(block, block_deps)
-    _verify_block(block, block_deps)
+    _verify_block(verifiers, block, block_deps)
 
 
 @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
@@ -393,7 +354,7 @@ def _verify_token_creation_tx(
 
     We also overload verify_sum to make some different checks
     """
-    _verify_tx(tx, tx_deps, reject_locked_reward=reject_locked_reward)
+    _verify_tx(verifiers, tx, tx_deps, reject_locked_reward=reject_locked_reward)
     verifiers.token_creation_tx.verify_minted_tokens(tx, tx_deps)
     verifiers.token_creation_tx.verify_token_info(tx)
 
