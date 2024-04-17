@@ -465,6 +465,7 @@ TransactionResource.openapi = {
                                                 ],
                                                 'tokens': [],
                                                 'height': 12345,
+                                                'first_block': None
                                             },
                                             {
                                                 'tx_id': ('00000b8792cb13e8adb51cc7d866541f'
@@ -496,7 +497,9 @@ TransactionResource.openapi = {
                                                         'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
                                                     }
                                                 ],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': ('000005af290a55b079014a0be3246479'
+                                                                'e84eeb635f02010dbf3e5f3414a85bbb')
                                             }
                                         ],
                                         'has_more': True

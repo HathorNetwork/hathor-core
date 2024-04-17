@@ -152,7 +152,8 @@ DashboardTransactionResource.openapi = {
                                                 ],
                                                 'inputs': [],
                                                 'outputs': [],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': None,
                                             },
                                             {
                                                 'tx_id': ('00002b3be4e3876e67b5e090d76dcd71'
@@ -166,7 +167,9 @@ DashboardTransactionResource.openapi = {
                                                 ],
                                                 'inputs': [],
                                                 'outputs': [],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': ('000005af290a55b079014a0be3246479'
+                                                                'e84eeb635f02010dbf3e5f3414a85bbb')
                                             }
                                         ],
                                         'blocks': [

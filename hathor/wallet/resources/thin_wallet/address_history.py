@@ -321,8 +321,10 @@ AddressHistoryResource.openapi = {
                                                             },
                                                         "token": "00"
                                                         }
-                                                    ]
-                                                }
+                                                    ],
+                                                "first_block": ("000005af290a55b079014a0be3246479"
+                                                                "e84eeb635f02010dbf3e5f3414a85bbb")
+                                            }
                                         ]
                                     }
                                 },
