@@ -16,8 +16,11 @@ import os
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.sync_version import SyncVersion
+from hathor.p2p.utils import discover_hostname
 from hathor.sysctl.exception import SysctlException
 from hathor.sysctl.sysctl import Sysctl, signal_handler_safe
+
+AUTO_HOSTNAME_TIMEOUT_SECONDS: float = 5
 
 
 def parse_text(text: str) -> list[str]:
@@ -102,6 +105,21 @@ class ConnectionsManagerSysctl(Sysctl):
             'kill_connection',
             None,
             self.set_kill_connection,
+        )
+        self.register(
+            'hostname',
+            self.get_hostname,
+            self.set_hostname,
+        )
+        self.register(
+            'refresh_auto_hostname',
+            None,
+            self.refresh_auto_hostname,
+        )
+        self.register(
+            'reload_entrypoints_and_connections',
+            None,
+            self.reload_entrypoints_and_connections,
         )
 
     def set_force_sync_rotate(self) -> None:
@@ -217,3 +235,32 @@ class ConnectionsManagerSysctl(Sysctl):
             self.log.warn('Killing connection', peer_id=peer_id)
             raise SysctlException('peer-id is not connected')
         conn.disconnect(force=force)
+
+    def get_hostname(self) -> str | None:
+        """Return the configured hostname."""
+        assert self.connections.manager is not None
+        return self.connections.manager.hostname
+
+    def set_hostname(self, hostname: str) -> None:
+        """Set the hostname and reset all connections."""
+        assert self.connections.manager is not None
+        self.connections.manager.set_hostname_and_reset_connections(hostname)
+
+    def refresh_auto_hostname(self) -> None:
+        """
+        Automatically discover the hostname and set it, if it's found. This operation blocks the event loop.
+        Then, reset all connections.
+        """
+        assert self.connections.manager is not None
+        try:
+            hostname = discover_hostname(timeout=AUTO_HOSTNAME_TIMEOUT_SECONDS)
+        except Exception as e:
+            self.log.error(f'Could not refresh hostname. Error: {str(e)}')
+            return
+
+        if hostname:
+            self.connections.manager.set_hostname_and_reset_connections(hostname)
+
+    def reload_entrypoints_and_connections(self) -> None:
+        """Kill all connections and reload entrypoints from the peer config file."""
+        self.connections.reload_entrypoints_and_connections()

@@ -89,31 +89,33 @@ class HathorManager:
     # This is the interval to be used by the task to check if the node is synced
     CHECK_SYNC_STATE_INTERVAL = 30  # seconds
 
-    def __init__(self,
-                 reactor: Reactor,
-                 *,
-                 settings: HathorSettings,
-                 pubsub: PubSubManager,
-                 consensus_algorithm: ConsensusAlgorithm,
-                 daa: DifficultyAdjustmentAlgorithm,
-                 peer_id: PeerId,
-                 tx_storage: TransactionStorage,
-                 p2p_manager: ConnectionsManager,
-                 event_manager: EventManager,
-                 feature_service: FeatureService,
-                 bit_signaling_service: BitSignalingService,
-                 verification_service: VerificationService,
-                 cpu_mining_service: CpuMiningService,
-                 network: str,
-                 execution_manager: ExecutionManager,
-                 hostname: Optional[str] = None,
-                 wallet: Optional[BaseWallet] = None,
-                 capabilities: Optional[list[str]] = None,
-                 checkpoints: Optional[list[Checkpoint]] = None,
-                 rng: Optional[Random] = None,
-                 environment_info: Optional[EnvironmentInfo] = None,
-                 full_verification: bool = False,
-                 enable_event_queue: bool = False):
+    def __init__(
+        self,
+        reactor: Reactor,
+        *,
+        settings: HathorSettings,
+        pubsub: PubSubManager,
+        consensus_algorithm: ConsensusAlgorithm,
+        daa: DifficultyAdjustmentAlgorithm,
+        peer_id: PeerId,
+        tx_storage: TransactionStorage,
+        p2p_manager: ConnectionsManager,
+        event_manager: EventManager,
+        feature_service: FeatureService,
+        bit_signaling_service: BitSignalingService,
+        verification_service: VerificationService,
+        cpu_mining_service: CpuMiningService,
+        network: str,
+        execution_manager: ExecutionManager,
+        hostname: Optional[str] = None,
+        wallet: Optional[BaseWallet] = None,
+        capabilities: Optional[list[str]] = None,
+        checkpoints: Optional[list[Checkpoint]] = None,
+        rng: Optional[Random] = None,
+        environment_info: Optional[EnvironmentInfo] = None,
+        full_verification: bool = False,
+        enable_event_queue: bool = False,
+    ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node.
@@ -1172,6 +1174,13 @@ class HathorManager:
     def get_cmd_path(self) -> Optional[str]:
         """Return the cmd path. If no cmd path is set, returns None."""
         return self._cmd_path
+
+    def set_hostname_and_reset_connections(self, new_hostname: str) -> None:
+        """Set the hostname and reset all connections."""
+        old_hostname = self.hostname
+        self.hostname = new_hostname
+        self.connections.update_hostname_entrypoints(old_hostname=old_hostname, new_hostname=self.hostname)
+        self.connections.disconnect_all_peers(force=True)
 
 
 class ParentTxs(NamedTuple):
