@@ -137,6 +137,7 @@ class VerificationService:
 
         verification_model = vertex.get_verification_model(
             daa=self._daa,
+            feature_service=self._feature_service,
             skip_weight_verification=skip_block_weight_verification,
             pre_fetched_deps=pre_fetched_deps,
         )

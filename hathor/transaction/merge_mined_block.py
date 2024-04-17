@@ -111,7 +111,7 @@ class MergeMinedBlock(Block):
             )
 
         return VerificationMergeMinedBlock(
-            vertex=self,
+            vertex=self.clone(include_storage=False, include_metadata=False),
             basic_deps=basic_deps,
             deps=deps,
         )

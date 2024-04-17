@@ -243,7 +243,7 @@ class TokenCreationTransaction(Transaction):
         from hathor.verification.verification_model import VerificationTokenCreationTransaction
         deps = None if only_basic else TransactionDependencies.create(self, pre_fetched_deps=pre_fetched_deps)
         return VerificationTokenCreationTransaction(
-            vertex=self,
+            vertex=self.clone(include_storage=False, include_metadata=False),
             basic_deps=None,
             deps=deps,
         )

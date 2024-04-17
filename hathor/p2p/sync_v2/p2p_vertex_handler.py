@@ -105,7 +105,7 @@ class AsyncP2PVertexHandler(P2PVertexHandler):
         self._p2p_storage.add_new_vertex(vertex)
         current_count = self._vertex_count
         result = False
-        self._log.info(f'received vertex {current_count}', hash=vertex.hash_hex)
+        self._log.info(f'received vertex {current_count}', hash=vertex.hash_hex, handler=self)
 
         try:
             result = await self._manager.vertex_handler.on_new_vertex_async(

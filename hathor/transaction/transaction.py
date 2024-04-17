@@ -400,7 +400,7 @@ class Transaction(BaseTransaction):
         from hathor.verification.verification_model import VerificationTransaction
         deps = None if only_basic else TransactionDependencies.create(self, pre_fetched_deps=pre_fetched_deps)
         return VerificationTransaction(
-            vertex=self,
+            vertex=self.clone(include_storage=False, include_metadata=False),
             basic_deps=None,
             deps=deps,
         )

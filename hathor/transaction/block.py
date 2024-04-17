@@ -437,7 +437,7 @@ class Block(BaseTransaction):
             )
 
         return VerificationBlock(
-            vertex=self,
+            vertex=self.clone(include_storage=False, include_metadata=False),
             basic_deps=basic_deps,
             deps=deps,
         )

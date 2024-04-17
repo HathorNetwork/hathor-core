@@ -19,6 +19,7 @@ from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
@@ -28,6 +29,7 @@ from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.util import not_none
 from hathor.verification.parallel_verifier import ParallelVerifier
 from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
@@ -82,7 +84,11 @@ class VertexHandler:
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
-        self._verifier = ParallelVerifier(verification_service=self._verification_service)
+        self._verifier = ParallelVerifier(
+            verification_service=self._verification_service,
+            tx_storage=tx_storage,
+            daa=not_none(DifficultyAdjustmentAlgorithm.singleton)
+        )
 
     def on_new_vertex(
         self,
@@ -174,25 +180,26 @@ class VertexHandler:
 
         vertex.storage = self._tx_storage
 
-        try:
-            metadata = vertex.get_metadata()
-        except TransactionDoesNotExist:
-            if not new_vertex.fails_silently:
-                raise InvalidNewTransaction('cannot get metadata')
-            self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
-            return False
+        if already_exists:
+            try:
+                metadata = vertex.get_metadata()
+            except TransactionDoesNotExist:
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('cannot get metadata')
+                self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
+                return False
 
-        if already_exists and metadata.validation.is_fully_connected():
-            if not new_vertex.fails_silently:
-                raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))
-            self._log.warn('on_new_tx(): Transaction already exists', tx=vertex.hash_hex)
-            return False
+            if metadata.validation.is_fully_connected():
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))
+                self._log.warn('on_new_tx(): Transaction already exists', tx=vertex.hash_hex)
+                return False
 
-        if metadata.validation.is_invalid():
-            if not new_vertex.fails_silently:
-                raise InvalidNewTransaction('previously marked as invalid')
-            self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
-            return False
+            if metadata.validation.is_invalid():
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('previously marked as invalid')
+                self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
+                return False
 
         return True
 
@@ -213,9 +220,12 @@ class VertexHandler:
 
     async def _validate_vertex_async(self, new_vertex: _NewVertex) -> bool:
         vertex = new_vertex.vertex
-        metadata = vertex.get_metadata()
+        try:
+            metadata = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            metadata = None
 
-        if not metadata.validation.is_fully_connected():
+        if not metadata or not metadata.validation.is_fully_connected():
             try:
                 await self._verifier.validate_full(vertex, reject_locked_reward=new_vertex.reject_locked_reward)
             except HathorError as e:

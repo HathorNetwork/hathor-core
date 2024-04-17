@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from typing import Collection
 
 from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import BaseTransaction
@@ -82,6 +83,10 @@ class SimpleMemoryStorage:
         vertex = storage.get_transaction(vertex_id)
 
         self.add_vertex(vertex)
+
+    def add_vertices(self, vertices: Collection[BaseTransaction]) -> None:
+        for vertex in vertices:
+            self.add_vertex(vertex)
 
     def add_vertex(self, vertex: BaseTransaction) -> None:
         """Add a vertex to this storage."""
