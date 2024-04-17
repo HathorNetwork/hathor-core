@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -56,9 +57,9 @@ from hathor.feature_activation.settings import FeatureInterval, Settings as Feat
         )
     ]
 )
-def test_valid_settings(features):
+def test_valid_settings(features: dict[str, Any]) -> None:
     data = dict(features=features)
-    FeatureSettings(**data)
+    FeatureSettings(**data)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -114,14 +115,14 @@ def test_valid_settings(features):
         )
     ]
 )
-def test_conflicting_bits(features):
+def test_conflicting_bits(features: list[dict[str, Any]]) -> None:
     with pytest.raises(ValidationError) as e:
         data = dict(features=features)
-        FeatureSettings(**data)
+        FeatureSettings(**data)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == 'At least one pair of Features have the same bit configured for an overlapping ' \
-                               'interval: Feature.NOP_FEATURE_1 and Feature.NOP_FEATURE_2'
+                               'interval: NOP_FEATURE_1 and NOP_FEATURE_2'
 
 
 @pytest.mark.parametrize(
@@ -131,10 +132,10 @@ def test_conflicting_bits(features):
         (100, 101, 'default_threshold must not be greater than evaluation_interval: 101 > 100')
     ]
 )
-def test_default_threshold(evaluation_interval, default_threshold, error):
+def test_default_threshold(evaluation_interval: int, default_threshold: int, error: str) -> None:
     with pytest.raises(ValidationError) as e:
         data = dict(evaluation_interval=evaluation_interval, default_threshold=default_threshold)
-        FeatureSettings(**data)
+        FeatureSettings(**data)  # type: ignore[arg-type]
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
@@ -160,5 +161,5 @@ def test_default_threshold(evaluation_interval, default_threshold, error):
         )
     ]
 )
-def test_find_overlap(intervals, expected):
+def test_find_overlap(intervals: list[FeatureInterval], expected: tuple[FeatureInterval, FeatureInterval]) -> None:
     assert expected == _find_overlap(intervals)

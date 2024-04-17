@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from typing import Optional
-from unittest.mock import ANY, Mock
+from unittest.mock import ANY, Mock, patch
 
 import pytest
 from autobahn.websocket import ConnectionRequest
@@ -27,11 +27,11 @@ from tests.utils import EventMocker
 
 
 @pytest.fixture
-def factory():
+def factory() -> Mock:
     return Mock(spec_set=EventWebsocketFactory)
 
 
-def test_init():
+def test_init() -> None:
     protocol = EventWebsocketProtocol()
 
     assert protocol.client_peer is None
@@ -41,7 +41,7 @@ def test_init():
     assert not protocol._stream_is_active
 
 
-def test_next_expected_event_id():
+def test_next_expected_event_id() -> None:
     protocol = EventWebsocketProtocol()
 
     assert protocol.next_expected_event_id() == 0
@@ -51,7 +51,7 @@ def test_next_expected_event_id():
     assert protocol.next_expected_event_id() == 6
 
 
-def test_on_connect():
+def test_on_connect() -> None:
     protocol = EventWebsocketProtocol()
     request = Mock(spec_set=ConnectionRequest)
     request.peer = 'some_peer'
@@ -61,7 +61,7 @@ def test_on_connect():
     assert protocol.client_peer == 'some_peer'
 
 
-def test_on_open(factory):
+def test_on_open(factory: Mock) -> None:
     protocol = EventWebsocketProtocol()
     protocol.factory = factory
 
@@ -70,7 +70,7 @@ def test_on_open(factory):
     factory.register.assert_called_once_with(protocol)
 
 
-def test_on_close(factory):
+def test_on_close(factory: Mock) -> None:
     protocol = EventWebsocketProtocol()
     protocol.factory = factory
 
@@ -79,7 +79,7 @@ def test_on_close(factory):
     factory.unregister.assert_called_once_with(protocol)
 
 
-def test_send_event_response():
+def test_send_event_response() -> None:
     protocol = EventWebsocketProtocol()
     protocol.sendMessage = Mock()
     response = EventResponse(
@@ -99,7 +99,8 @@ def test_send_event_response():
 
     expected_payload = (b'{"type":"EVENT","peer_id":"my_peer_id","network":"my_network","event":{"id":10,'
                         b'"timestamp":123.0,"type":"VERTEX_METADATA_CHANGED","data":{"hash":"abc","nonce":123,'
-                        b'"timestamp":456,"version":1,"weight":10.0,"inputs":[],"outputs":[],"parents":[],'
+                        b'"timestamp":456,"signal_bits":0,"version":1,"weight":10.0,"inputs":[],"outputs":[],'
+                        b'"parents":[],'
                         b'"tokens":[],"token_name":null,"token_symbol":null,"metadata":{"hash":"abc",'
                         b'"spent_outputs":[],"conflict_with":[],"voided_by":[],"received_by":[],"children":[],'
                         b'"twins":[],"accumulated_weight":10.0,"score":20.0,"first_block":null,"height":100,'
@@ -112,7 +113,11 @@ def test_send_event_response():
 @pytest.mark.parametrize('_type', [InvalidRequestType.VALIDATION_ERROR, InvalidRequestType.STREAM_IS_INACTIVE])
 @pytest.mark.parametrize('invalid_payload', [None, b'some_payload'])
 @pytest.mark.parametrize('error_message', [None, 'some error'])
-def test_send_invalid_request_response(_type, invalid_payload, error_message):
+def test_send_invalid_request_response(
+    _type: InvalidRequestType,
+    invalid_payload: bytes | None,
+    error_message: str | None
+) -> None:
     protocol = EventWebsocketProtocol()
     protocol.sendMessage = Mock()
 
@@ -173,7 +178,7 @@ def test_can_receive_event(
     assert result == expected_result
 
 
-def test_on_valid_stop_message():
+def test_on_valid_stop_message() -> None:
     protocol = EventWebsocketProtocol()
     protocol._stream_is_active = True
 
@@ -182,7 +187,7 @@ def test_on_valid_stop_message():
     assert not protocol._stream_is_active
 
 
-def test_stop_message_on_inactive():
+def test_stop_message_on_inactive() -> None:
     protocol = EventWebsocketProtocol()
     protocol.sendMessage = Mock()
     protocol._stream_is_active = False
@@ -206,7 +211,7 @@ def test_stop_message_on_inactive():
         (10, 0, 10),
     ]
 )
-def test_on_valid_ack_message(ack_event_id, window_size, last_sent_event_id):
+def test_on_valid_ack_message(ack_event_id: int, window_size: int, last_sent_event_id: int) -> None:
     protocol = EventWebsocketProtocol()
     protocol._last_sent_event_id = last_sent_event_id
     protocol.factory = Mock()
@@ -235,7 +240,7 @@ def test_on_valid_ack_message(ack_event_id, window_size, last_sent_event_id):
         (10, 0, 10),
     ]
 )
-def test_on_valid_start_message(ack_event_id, window_size, last_sent_event_id):
+def test_on_valid_start_message(ack_event_id: int, window_size: int, last_sent_event_id: int | None) -> None:
     protocol = EventWebsocketProtocol()
     protocol._last_sent_event_id = last_sent_event_id
     protocol.factory = Mock()
@@ -251,7 +256,7 @@ def test_on_valid_start_message(ack_event_id, window_size, last_sent_event_id):
     protocol.factory.send_next_event_to_connection.assert_called_once()
 
 
-def test_ack_message_on_inactive():
+def test_ack_message_on_inactive() -> None:
     protocol = EventWebsocketProtocol()
     protocol.sendMessage = Mock()
     protocol._stream_is_active = False
@@ -264,7 +269,7 @@ def test_ack_message_on_inactive():
     protocol.sendMessage.assert_called_once_with(response)
 
 
-def test_start_message_on_active():
+def test_start_message_on_active() -> None:
     protocol = EventWebsocketProtocol()
     protocol.sendMessage = Mock()
     protocol._stream_is_active = True
@@ -294,17 +299,21 @@ def test_start_message_on_active():
         (5, 1, 10, InvalidRequestType.ACK_TOO_LARGE),
     ]
 )
-def test_on_invalid_ack_message(_ack_event_id, last_sent_event_id, ack_event_id, _type):
+def test_on_invalid_ack_message(
+    _ack_event_id: int,
+    last_sent_event_id: int | None,
+    ack_event_id: int,
+    _type: InvalidRequestType,
+) -> None:
     protocol = EventWebsocketProtocol()
     protocol._ack_event_id = _ack_event_id
     protocol._last_sent_event_id = last_sent_event_id
-    protocol.send_invalid_request_response = Mock()
     protocol._stream_is_active = True
     payload = f'{{"type": "ACK", "ack_event_id": {ack_event_id}, "window_size": 0}}'.encode('utf8')
 
-    protocol.onMessage(payload, False)
-
-    protocol.send_invalid_request_response.assert_called_once_with(_type, payload)
+    with patch.object(protocol, 'send_invalid_request_response') as mock:
+        protocol.onMessage(payload, False)
+        mock.assert_called_once_with(_type, payload)
 
 
 @pytest.mark.parametrize(
@@ -318,16 +327,15 @@ def test_on_invalid_ack_message(_ack_event_id, last_sent_event_id, ack_event_id,
         (10, 5),
     ]
 )
-def test_on_invalid_start_message(_ack_event_id, ack_event_id):
+def test_on_invalid_start_message(_ack_event_id: int, ack_event_id: int | None) -> None:
     protocol = EventWebsocketProtocol()
     protocol._ack_event_id = _ack_event_id
-    protocol.send_invalid_request_response = Mock()
-    ack_event_id = 'null' if ack_event_id is None else ack_event_id
-    payload = f'{{"type": "START_STREAM", "last_ack_event_id": {ack_event_id}, "window_size": 0}}'.encode('utf8')
+    ack_event_id_str: str = 'null' if ack_event_id is None else f'{ack_event_id}'
+    payload = f'{{"type": "START_STREAM", "last_ack_event_id": {ack_event_id_str}, "window_size": 0}}'.encode('utf8')
 
-    protocol.onMessage(payload, False)
-
-    protocol.send_invalid_request_response.assert_called_once_with(InvalidRequestType.ACK_TOO_SMALL, payload)
+    with patch.object(protocol, 'send_invalid_request_response') as mock:
+        protocol.onMessage(payload, False)
+        mock.assert_called_once_with(InvalidRequestType.ACK_TOO_SMALL, payload)
 
 
 @pytest.mark.parametrize(
@@ -343,11 +351,10 @@ def test_on_invalid_start_message(_ack_event_id, ack_event_id):
         b'{"type": "ACK", "ack_event_id": -10, "window_size": 0}',
     ]
 )
-def test_validation_error_on_message(payload):
+def test_validation_error_on_message(payload: bytes) -> None:
     protocol = EventWebsocketProtocol()
-    protocol.send_invalid_request_response = Mock()
     protocol._stream_is_active = False
 
-    protocol.onMessage(payload, False)
-
-    protocol.send_invalid_request_response.assert_called_once_with(InvalidRequestType.VALIDATION_ERROR, payload, ANY)
+    with patch.object(protocol, 'send_invalid_request_response') as mock:
+        protocol.onMessage(payload, False)
+        mock.assert_called_once_with(InvalidRequestType.VALIDATION_ERROR, payload, ANY)

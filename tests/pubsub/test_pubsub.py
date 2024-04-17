@@ -1,10 +1,10 @@
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from tests.unittest import TestCase
 
 
 class PubSubTestCase(TestCase):
-    def test_duplicate_subscribe(self):
-        def noop():
+    def test_duplicate_subscribe(self) -> None:
+        def noop(event: HathorEvents, args: EventArguments) -> None:
             pass
         pubsub = PubSubManager(self.clock)
         pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, noop)

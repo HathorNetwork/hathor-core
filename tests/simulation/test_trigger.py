@@ -3,11 +3,12 @@ import re
 from hathor.p2p.messages import ProtocolMessages
 from hathor.simulator import FakeConnection, Simulator
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks, StopWhenSendLineMatch
+from hathor.util import not_none
 from tests import unittest
 
 
 class TriggerTestCase(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         self.simulator = Simulator()
@@ -20,11 +21,11 @@ class TriggerTestCase(unittest.TestCase):
         print('Simulation seed config:', self.simulator.seed)
         print('-' * 30)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         super().tearDown()
         self.simulator.stop()
 
-    def test_stop_after_n_mined_blocks(self):
+    def test_stop_after_n_mined_blocks(self) -> None:
         miner1 = self.simulator.create_miner(self.manager1, hashpower=1e6)
         miner1.start()
 
@@ -47,11 +48,11 @@ class TriggerTestCase(unittest.TestCase):
         self.assertEqual(miner1.get_blocks_found(), 16)
         self.assertLess(reactor.seconds(), t0 + 3600)
 
-    def test_stop_after_minimum_balance(self):
+    def test_stop_after_minimum_balance(self) -> None:
         miner1 = self.simulator.create_miner(self.manager1, hashpower=1e6)
         miner1.start()
 
-        wallet = self.manager1.wallet
+        wallet = not_none(self.manager1.wallet)
         settings = self.simulator.settings
 
         minimum_balance = 1000_00   # 16 blocks
@@ -62,7 +63,7 @@ class TriggerTestCase(unittest.TestCase):
         self.assertTrue(self.simulator.run(3600, trigger=trigger))
         self.assertGreaterEqual(wallet.balance[token_uid].available, minimum_balance)
 
-    def test_stop_after_sendline(self):
+    def test_stop_after_sendline(self) -> None:
         manager2 = self.simulator.create_peer()
         conn12 = FakeConnection(self.manager1, manager2, latency=0.05)
         self.simulator.add_connection(conn12)

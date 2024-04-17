@@ -139,7 +139,8 @@ def execute(args: Namespace) -> None:
 
             from hathor.conf.get_settings import get_global_settings
             from hathor.daa import DifficultyAdjustmentAlgorithm
-            from hathor.verification.verification_service import VerificationService, VertexVerifiers
+            from hathor.verification.verification_service import VerificationService
+            from hathor.verification.vertex_verifiers import VertexVerifiers
             settings = get_global_settings()
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
             verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa, feature_service=Mock())

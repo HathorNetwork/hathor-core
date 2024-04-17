@@ -101,6 +101,7 @@ class TxData(BaseEventData, extra=Extra.ignore):
     hash: str
     nonce: Optional[int] = None
     timestamp: int
+    signal_bits: int
     version: int
     weight: float
     inputs: list['TxInput']

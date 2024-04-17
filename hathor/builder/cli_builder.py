@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import getpass
-import json
 import os
 import platform
 import sys
@@ -27,8 +26,10 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.exception import BuilderError
+from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
@@ -94,8 +95,7 @@ class CliBuilder:
         self.log = logger.new()
         self.reactor = reactor
 
-        peer_id = self.create_peer_id()
-
+        peer_id = PeerId.create_from_json_path(self._args.peer) if self._args.peer else PeerId()
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
         self.log.info(
@@ -119,6 +119,7 @@ class CliBuilder:
         tx_storage: TransactionStorage
         event_storage: EventStorage
         indexes: IndexesManager
+        feature_storage: FeatureActivationStorage | None = None
         self.rocksdb_storage: Optional[RocksDBStorage] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
@@ -151,6 +152,7 @@ class CliBuilder:
                 kwargs['indexes'] = indexes
             tx_storage = TransactionRocksDBStorage(self.rocksdb_storage, **kwargs)
             event_storage = EventRocksDBStorage(self.rocksdb_storage)
+            feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
         if self._args.cache:
@@ -212,11 +214,14 @@ class CliBuilder:
                 event_storage=event_storage
             )
 
+        execution_manager = ExecutionManager(reactor)
+
         event_manager = EventManager(
             event_storage=event_storage,
             event_ws_factory=self.event_ws_factory,
             pubsub=pubsub,
-            reactor=reactor
+            reactor=reactor,
+            execution_manager=execution_manager,
         )
 
         if self._args.wallet_index and tx_storage.indexes is not None:
@@ -236,7 +241,11 @@ class CliBuilder:
             full_verification = True
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
+        consensus_algorithm = ConsensusAlgorithm(
+            soft_voided_tx_ids,
+            pubsub=pubsub,
+            execution_manager=execution_manager
+        )
 
         if self._args.x_enable_event_queue:
             self.log.info('--x-enable-event-queue flag provided. '
@@ -252,7 +261,8 @@ class CliBuilder:
             feature_service=self.feature_service,
             tx_storage=tx_storage,
             support_features=self._args.signal_support,
-            not_support_features=self._args.signal_not_support
+            not_support_features=self._args.signal_not_support,
+            feature_storage=feature_storage,
         )
 
         test_mode = TestMode.DISABLED
@@ -308,7 +318,8 @@ class CliBuilder:
             feature_service=self.feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
-            cpu_mining_service=cpu_mining_service
+            cpu_mining_service=cpu_mining_service,
+            execution_manager=execution_manager,
         )
 
         if self._args.x_ipython_kernel:
@@ -354,7 +365,7 @@ class CliBuilder:
             self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         for description in self._args.listen:
-            p2p_manager.add_listen_address(description)
+            p2p_manager.add_listen_address_description(description)
 
         if self._args.peer_id_blacklist:
             self.log.info('with peer id blacklist', blacklist=self._args.peer_id_blacklist)
@@ -383,14 +394,6 @@ class CliBuilder:
                 sys.exit(-1)
             print('Hostname discovered and set to {}'.format(hostname))
         return hostname
-
-    def create_peer_id(self) -> PeerId:
-        if not self._args.peer:
-            peer_id = PeerId()
-        else:
-            data = json.load(open(self._args.peer, 'r'))
-            peer_id = PeerId.create_from_json(data)
-        return peer_id
 
     def create_wallet(self) -> BaseWallet:
         if self._args.wallet == 'hd':

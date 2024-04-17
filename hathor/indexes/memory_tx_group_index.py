@@ -14,7 +14,7 @@
 
 from abc import abstractmethod
 from collections import defaultdict
-from typing import Iterable, Sized, TypeVar
+from typing import Iterable, Optional, Sized, TypeVar
 
 from structlog import get_logger
 
@@ -31,7 +31,7 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
     """Memory implementation of the TxGroupIndex. This class is abstract and cannot be used directly.
     """
 
-    index: defaultdict[KT, set[bytes]]
+    index: defaultdict[KT, set[tuple[int, bytes]]]
 
     def __init__(self) -> None:
         self.force_clear()
@@ -40,7 +40,7 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
         self.index = defaultdict(set)
 
     def _add_tx(self, key: KT, tx: BaseTransaction) -> None:
-        self.index[key].add(not_none(tx.hash))
+        self.index[key].add((tx.timestamp, not_none(tx.hash)))
 
     @abstractmethod
     def _extract_keys(self, tx: BaseTransaction) -> Iterable[KT]:
@@ -57,13 +57,21 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
         assert tx.hash is not None
 
         for key in self._extract_keys(tx):
-            self.index[key].discard(tx.hash)
+            self.index[key].discard((tx.timestamp, tx.hash))
 
     def _get_from_key(self, key: KT) -> Iterable[bytes]:
-        yield from self.index[key]
+        for _, h in self.index[key]:
+            yield h
 
-    def _get_sorted_from_key(self, key: KT) -> Iterable[bytes]:
-        return sorted(self.index[key])
+    def _get_sorted_from_key(self, key: KT, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
+        sorted_elements = sorted(self.index[key])
+        found = False
+        for _, h in sorted_elements:
+            if tx_start and h == tx_start.hash:
+                found = True
+
+            if found or not tx_start:
+                yield h
 
     def _is_key_empty(self, key: KT) -> bool:
         return not bool(self.index[key])

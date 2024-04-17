@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterable, cast
+from typing import TYPE_CHECKING, Any, Iterable, cast
 
 from structlog import get_logger
 
@@ -38,7 +38,7 @@ class TransactionConsensusAlgorithm:
         self.context = context
 
     @classproperty
-    def log(cls):
+    def log(cls) -> Any:
         """ This is a workaround because of a bug on structlog (or abc).
 
         See: https://github.com/hynek/structlog/issues/229

@@ -6,7 +6,7 @@ from tests import unittest
 
 
 class NetfilterMatchRemoteTest(unittest.TestCase):
-    def test_match_ip(self):
+    def test_match_ip(self) -> None:
         matcher = NetfilterMatchIPAddressRemoteURL('test', self.clock, 'http://localhost:8080')
         context = NetfilterContext(addr=IPv4Address('TCP', '192.168.0.1', 1234))
         self.assertFalse(matcher.match(context))

@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
@@ -25,9 +26,11 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
+from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
@@ -44,7 +47,8 @@ from hathor.transaction.storage import (
     TransactionStorage,
 )
 from hathor.util import Random, get_environment_info, not_none
-from hathor.verification.verification_service import VerificationService, VertexVerifiers
+from hathor.verification.verification_service import VerificationService
+from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
@@ -67,6 +71,7 @@ class BuildArtifacts(NamedTuple):
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
     feature_service: FeatureService
+    bit_signaling_service: BitSignalingService
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
@@ -150,6 +155,8 @@ class Builder:
 
         self._soft_voided_tx_ids: Optional[set[bytes]] = None
 
+        self._execution_manager: ExecutionManager | None = None
+
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
@@ -163,8 +170,9 @@ class Builder:
 
         peer_id = self._get_peer_id()
 
+        execution_manager = self._get_or_create_execution_manager()
         soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub, execution_manager=execution_manager)
 
         p2p_manager = self._get_p2p_manager()
 
@@ -215,6 +223,7 @@ class Builder:
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
+            execution_manager=execution_manager,
             **kwargs
         )
 
@@ -239,6 +248,7 @@ class Builder:
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
             feature_service=feature_service,
+            bit_signaling_service=bit_signaling_service
         )
 
         return self.artifacts
@@ -305,6 +315,13 @@ class Builder:
         if self._peer_id is not None:
             return self._peer_id
         raise ValueError('peer_id not set')
+
+    def _get_or_create_execution_manager(self) -> ExecutionManager:
+        if self._execution_manager is None:
+            reactor = self._get_reactor()
+            self._execution_manager = ExecutionManager(reactor)
+
+        return self._execution_manager
 
     def _get_or_create_pubsub(self) -> PubSubManager:
         if self._pubsub is None:
@@ -438,7 +455,8 @@ class Builder:
                 reactor=reactor,
                 pubsub=self._get_or_create_pubsub(),
                 event_storage=storage,
-                event_ws_factory=factory
+                event_ws_factory=factory,
+                execution_manager=self._get_or_create_execution_manager()
             )
 
         return self._event_manager
@@ -460,12 +478,14 @@ class Builder:
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
             feature_service = self._get_or_create_feature_service()
+            feature_storage = self._get_or_create_feature_storage()
             self._bit_signaling_service = BitSignalingService(
                 feature_settings=settings.FEATURE_ACTIVATION,
                 feature_service=feature_service,
                 tx_storage=tx_storage,
                 support_features=self._support_features,
                 not_support_features=self._not_support_features,
+                feature_storage=feature_storage,
             )
 
         return self._bit_signaling_service
@@ -476,6 +496,15 @@ class Builder:
             self._verification_service = VerificationService(verifiers=verifiers)
 
         return self._verification_service
+
+    def _get_or_create_feature_storage(self) -> FeatureActivationStorage | None:
+        match self._storage_type:
+            case StorageType.MEMORY: return None
+            case StorageType.ROCKSDB: return FeatureActivationStorage(
+                settings=self._get_or_create_settings(),
+                rocksdb_storage=self._get_or_create_rocksdb_storage()
+            )
+            case _: assert_never(self._storage_type)
 
     def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
         if self._vertex_verifiers is None:

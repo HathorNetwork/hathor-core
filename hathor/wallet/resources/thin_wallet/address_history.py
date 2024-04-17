@@ -21,6 +21,7 @@ from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 
@@ -68,10 +69,6 @@ class AddressHistoryResource(Resource):
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_history/
-
-            If 'paginate' parameter exists, it calls the new resource method
-            otherwise, it will call the old and deprecated one because it's
-            a request from a wallet still in an older version
 
             Expects 'addresses[]' as request args, and 'hash'
             as optional args to be used in pagination
@@ -124,24 +121,18 @@ class AddressHistoryResource(Resource):
             return json_dumpb({'success': False})
 
         raw_args = get_args(request)
-        paginate = b'paginate' in raw_args and raw_args[b'paginate'][0].decode('utf-8') == 'true'
 
-        if paginate:
-            # New resource
-            if b'addresses[]' not in raw_args:
-                return get_missing_params_msg('addresses[]')
+        if b'addresses[]' not in raw_args:
+            return get_missing_params_msg('addresses[]')
 
-            addresses = raw_args[b'addresses[]']
+        addresses = raw_args[b'addresses[]']
 
-            ref_hash = None
-            if b'hash' in raw_args:
-                # If hash parameter is in the request, it must be a valid hex
-                ref_hash = raw_args[b'hash'][0].decode('utf-8')
+        ref_hash = None
+        if b'hash' in raw_args:
+            # If hash parameter is in the request, it must be a valid hex
+            ref_hash = raw_args[b'hash'][0].decode('utf-8')
 
-            return self.get_address_history([address.decode('utf-8') for address in addresses], ref_hash)
-        else:
-            # Old and deprecated resource
-            return self.deprecated_resource(request)
+        return self.get_address_history([address.decode('utf-8') for address in addresses], ref_hash)
 
     def get_address_history(self, addresses: list[str], ref_hash: Optional[str]) -> bytes:
         ref_hash_bytes = None
@@ -166,12 +157,6 @@ class AddressHistoryResource(Resource):
 
         history = []
         seen: set[bytes] = set()
-        # XXX In this algorithm we need to sort all transactions of an address
-        # and find one specific (in case of a pagination request)
-        # so if this address has many txs, this could become slow
-        # I've done some tests with 10k txs in one address and the request
-        # returned in less than 50ms, so we will move forward with it for now
-        # but this could be improved in the future
         for idx, address in enumerate(addresses):
             try:
                 decode_address(address)
@@ -181,31 +166,28 @@ class AddressHistoryResource(Resource):
                     'message': 'The address {} is invalid'.format(address)
                 })
 
-            hashes = addresses_index.get_sorted_from_address(address)
-            start_index = 0
-            if ref_hash_bytes and idx == 0:
-                # It's not the first request, so we must continue from the hash
-                # but we do it only for the first address
+            tx = None
+            if ref_hash_bytes:
                 try:
-                    # Find index where the hash is
-                    start_index = hashes.index(ref_hash_bytes)
-                except ValueError:
-                    # ref_hash is not in the list
+                    tx = self.manager.tx_storage.get_transaction(ref_hash_bytes)
+                except TransactionDoesNotExist:
                     return json_dumpb({
                         'success': False,
-                        'message': 'Hash {} is not a transaction from the address {}.'.format(ref_hash, address)
+                        'message': 'Hash {} is not a transaction hash.'.format(ref_hash)
                     })
 
-            # Slice the hashes array from the start_index
-            to_iterate = hashes[start_index:]
+            # The address index returns an iterable that starts at `tx`.
+            hashes = addresses_index.get_sorted_from_address(address, tx)
             did_break = False
-            for index, tx_hash in enumerate(to_iterate):
+            for tx_hash in hashes:
                 if total_added == self._settings.MAX_TX_ADDRESSES_HISTORY:
                     # If already added the max number of elements possible, then break
                     # I need to add this if at the beginning of the loop to handle the case
                     # when the first tx of the address exceeds the limit, so we must return
                     # that the next request should start in the first tx of this address
                     did_break = True
+                    # Saving the first tx hash for the next request
+                    first_hash = tx_hash.hex()
                     break
 
                 if tx_hash not in seen:
@@ -216,6 +198,8 @@ class AddressHistoryResource(Resource):
                         # It's important to validate also the maximum number of inputs and outputs because some txs
                         # are really big and the response payload becomes too big
                         did_break = True
+                        # Saving the first tx hash for the next request
+                        first_hash = tx_hash.hex()
                         break
 
                     seen.add(tx_hash)
@@ -226,10 +210,8 @@ class AddressHistoryResource(Resource):
             if did_break:
                 # We stopped in the middle of the txs of this address
                 # So we return that we still have more data to send
-                break_index = start_index + index
                 has_more = True
                 # The hash to start the search and which address this hash belongs
-                first_hash = hashes[break_index].hex()
                 first_address = address
                 break
 
@@ -240,38 +222,6 @@ class AddressHistoryResource(Resource):
             'first_hash': first_hash,
             'first_address': first_address
         }
-        return json_dumpb(data)
-
-    def deprecated_resource(self, request: Request) -> bytes:
-        """ This resource is deprecated. It's here only to keep
-            compatibility with old wallet versions
-        """
-        raw_args = get_args(request)
-        if b'addresses[]' not in raw_args:
-            return get_missing_params_msg('addresses[]')
-
-        addresses_index = self.manager.tx_storage.indexes.addresses
-
-        addresses = raw_args[b'addresses[]']
-        history = []
-        seen: set[bytes] = set()
-        for address_to_decode in addresses:
-            address = address_to_decode.decode('utf-8')
-            try:
-                decode_address(address)
-            except InvalidAddress:
-                return json_dumpb({
-                    'success': False,
-                    'message': 'The address {} is invalid'.format(address)
-                })
-
-            for tx_hash in addresses_index.get_from_address(address):
-                tx = self.manager.tx_storage.get_transaction(tx_hash)
-                if tx_hash not in seen:
-                    seen.add(tx_hash)
-                    history.append(tx.to_json_extended())
-
-        data = {'history': history}
         return json_dumpb(data)
 
 
@@ -325,60 +275,6 @@ AddressHistoryResource.openapi = {
                                         'first_hash': '00000299670db5814f69cede8b347f83'
                                                       '0f73985eaa4cd1ce87c9a7c793771332',
                                         'first_address': '1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS',
-                                        'history': [
-                                            {
-                                                "hash": "00000299670db5814f69cede8b347f83"
-                                                        "0f73985eaa4cd1ce87c9a7c793771336",
-                                                "timestamp": 1552422415,
-                                                "is_voided": False,
-                                                'parents': [
-                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb5',
-                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb1'
-                                                ],
-                                                "inputs": [
-                                                    {
-                                                        "value": 42500000044,
-                                                        "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "17Fbx9ouRUD1sd32bp4ptGkmgNzg7p2Krj",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00",
-                                                        "tx": "000002d28696f94f89d639022ae81a1d"
-                                                              "870d55d189c27b7161d9cb214ad1c90c",
-                                                        "index": 0
-                                                        }
-                                                    ],
-                                                "outputs": [
-                                                    {
-                                                        "value": 42499999255,
-                                                        "script": "dqkU/B6Jbf5OnslsQrvHXQ4WKDTSEGKIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00"
-                                                        },
-                                                    {
-                                                        "value": 789,
-                                                        "script": "dqkUrWoWhiP+qPeI/qwfwb5fgnmtd4CIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "1GovzJvbzLw6x4H2a1hHb529cpEWzh3YRd",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00"
-                                                        }
-                                                    ]
-                                                }
-                                        ]
-                                    }
-                                },
-                                'deprecated_success': {
-                                    'summary': 'Deprecated success',
-                                    'value': {
                                         'history': [
                                             {
                                                 "hash": "00000299670db5814f69cede8b347f83"

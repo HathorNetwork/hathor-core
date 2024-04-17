@@ -24,7 +24,7 @@ from hathor.simulator.clock import MemoryReactorHeapClock
 from tests.utils import EventMocker
 
 
-def test_started_register():
+def test_started_register() -> None:
     factory = _get_factory()
     connection = Mock(spec_set=EventWebsocketProtocol)
     connection.send_invalid_request_response = Mock()
@@ -35,7 +35,7 @@ def test_started_register():
     connection.send_invalid_request_response.assert_not_called()
 
 
-def test_non_started_register():
+def test_non_started_register() -> None:
     factory = _get_factory()
     connection = Mock(spec_set=EventWebsocketProtocol)
     connection.send_invalid_request_response = Mock()
@@ -45,7 +45,7 @@ def test_non_started_register():
     connection.send_invalid_request_response.assert_called_once_with(InvalidRequestType.EVENT_WS_NOT_RUNNING)
 
 
-def test_stopped_register():
+def test_stopped_register() -> None:
     factory = _get_factory()
     connection = Mock(spec_set=EventWebsocketProtocol)
     connection.send_invalid_request_response = Mock()
@@ -84,7 +84,7 @@ def test_broadcast_event(can_receive_event: bool) -> None:
     connection.send_event_response.assert_called_once_with(response)
 
 
-def test_broadcast_multiple_events_multiple_connections():
+def test_broadcast_multiple_events_multiple_connections() -> None:
     stream_id = 'stream_id'
     factory = _get_factory(10)
     connection1 = Mock(spec_set=EventWebsocketProtocol)

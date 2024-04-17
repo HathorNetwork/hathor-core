@@ -1,6 +1,8 @@
 from typing import Optional
 
+from hathor.manager import HathorManager
 from hathor.simulator import Simulator
+from hathor.types import VertexId
 from tests import unittest
 
 
@@ -9,7 +11,7 @@ class SimulatorTestCase(unittest.TestCase):
 
     seed_config: Optional[int] = None
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         self.simulator = Simulator(self.seed_config)
@@ -19,11 +21,17 @@ class SimulatorTestCase(unittest.TestCase):
         print('Simulation seed config:', self.simulator.seed)
         print('-'*30)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.simulator.stop()
         super().tearDown()
 
-    def create_peer(self, enable_sync_v1=None, enable_sync_v2=None, soft_voided_tx_ids=None, simulator=None):
+    def create_peer(  # type: ignore[override]
+        self,
+        enable_sync_v1: bool | None = None,
+        enable_sync_v2: bool | None = None,
+        soft_voided_tx_ids: set[VertexId] = set(),
+        simulator: Simulator | None = None
+    ) -> HathorManager:
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')

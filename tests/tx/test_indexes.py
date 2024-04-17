@@ -631,7 +631,7 @@ class BaseIndexesTest(unittest.TestCase):
         address = self.get_address(10)
         assert address is not None
         self.assertTrue(addresses_indexes.is_address_empty(address))
-        self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
+        self.assertEqual(list(addresses_indexes.get_sorted_from_address(address)), [])
 
     def test_addresses_index_last(self):
         """
@@ -653,7 +653,7 @@ class BaseIndexesTest(unittest.TestCase):
         # XXX: this artificial address should major (be greater byte-wise) any possible "natural" address
         address = '\x7f' * 34
         self.assertTrue(addresses_indexes.is_address_empty(address))
-        self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
+        self.assertEqual(list(addresses_indexes.get_sorted_from_address(address)), [])
 
         # XXX: since we didn't add any multisig address, this is guaranteed to be reach the tail end of the index
         assert self._settings.P2PKH_VERSION_BYTE[0] < self._settings.MULTISIG_VERSION_BYTE[0]
@@ -666,7 +666,7 @@ class BaseIndexesTest(unittest.TestCase):
         assert address is not None
 
         self.assertTrue(addresses_indexes.is_address_empty(address))
-        self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
+        self.assertEqual(list(addresses_indexes.get_sorted_from_address(address)), [])
 
     def test_height_index(self):
         from hathor.indexes.height_index import HeightInfo

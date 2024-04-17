@@ -17,7 +17,7 @@ settings = get_global_settings()
 
 class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
     @patch('hathor.p2p.states.peer_id.settings', new=settings._replace(ENABLE_PEER_WHITELIST=True))
-    def test_sync_v11_whitelist_no_no(self):
+    def test_sync_v11_whitelist_no_no(self) -> None:
         network = 'testnet'
 
         manager1 = self.create_peer(network)
@@ -39,7 +39,7 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         self.assertTrue(conn.tr2.disconnecting)
 
     @patch('hathor.p2p.states.peer_id.settings', new=settings._replace(ENABLE_PEER_WHITELIST=True))
-    def test_sync_v11_whitelist_yes_no(self):
+    def test_sync_v11_whitelist_yes_no(self) -> None:
         network = 'testnet'
 
         manager1 = self.create_peer(network)
@@ -63,7 +63,7 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         self.assertTrue(conn.tr2.disconnecting)
 
     @patch('hathor.p2p.states.peer_id.settings', new=settings._replace(ENABLE_PEER_WHITELIST=True))
-    def test_sync_v11_whitelist_yes_yes(self):
+    def test_sync_v11_whitelist_yes_yes(self) -> None:
         network = 'testnet'
 
         manager1 = self.create_peer(network)

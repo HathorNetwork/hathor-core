@@ -83,7 +83,7 @@ class Settings(BaseModel, validate_all=True):
                 first, second = overlap
                 raise ValueError(
                     f'At least one pair of Features have the same bit configured for an overlapping interval: '
-                    f'{first.feature} and {second.feature}'
+                    f'{first.feature.value} and {second.feature.value}'
                 )
 
         return features

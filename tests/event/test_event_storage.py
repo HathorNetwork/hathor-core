@@ -2,6 +2,7 @@ import tempfile
 
 import pytest
 
+from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.node_state import NodeState
 from hathor.event.storage import EventStorage
 from hathor.event.storage.memory_storage import EventMemoryStorage
@@ -16,18 +17,18 @@ class EventStorageBaseTest(unittest.TestCase):
 
     event_storage: EventStorage
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.event_mocker = EventMocker(self.rng)
 
-    def test_save_event_and_retrieve(self):
+    def test_save_event_and_retrieve(self) -> None:
         event = self.event_mocker.generate_mocked_event()
         self.event_storage.save_event(event)
         event_retrieved = self.event_storage.get_event(event.id)
 
         assert event_retrieved == event
 
-    def test_save_events_and_retrieve(self):
+    def test_save_events_and_retrieve(self) -> None:
         event1 = self.event_mocker.generate_mocked_event()
         event2 = self.event_mocker.generate_mocked_event()
         self.event_storage.save_events([event1, event2])
@@ -37,7 +38,7 @@ class EventStorageBaseTest(unittest.TestCase):
         assert event1_retrieved == event1
         assert event2_retrieved == event2
 
-    def test_get_negative_key(self):
+    def test_get_negative_key(self) -> None:
         with self.assertRaises(ValueError) as cm:
             self.event_storage.get_event(-1)
 
@@ -46,20 +47,22 @@ class EventStorageBaseTest(unittest.TestCase):
             str(cm.exception)
         )
 
-    def test_get_nonexistent_event(self):
+    def test_get_nonexistent_event(self) -> None:
         assert self.event_storage.get_event(0) is None
         assert self.event_storage.get_event(9999) is None
 
-    def test_save_events_and_retrieve_the_last(self):
-        last_event = None
+    def test_save_events_and_retrieve_the_last(self) -> None:
+        last_event: BaseEvent | None = None
         for i in range(10):
             last_event = self.event_mocker.generate_mocked_event(i)
             self.event_storage.save_event(last_event)
 
         event_retrieved = self.event_storage.get_last_event()
+        assert event_retrieved is not None
+        assert last_event is not None
         assert event_retrieved.id == last_event.id
 
-    def test_save_non_sequential(self):
+    def test_save_non_sequential(self) -> None:
         for i in range(10):
             event = self.event_mocker.generate_mocked_event(i)
             self.event_storage.save_event(event)
@@ -74,16 +77,16 @@ class EventStorageBaseTest(unittest.TestCase):
             str(cm.exception)
         )
 
-    def test_iter_from_event_empty(self):
+    def test_iter_from_event_empty(self) -> None:
         self._test_iter_from_event(0)
 
-    def test_iter_from_event_single(self):
+    def test_iter_from_event_single(self) -> None:
         self._test_iter_from_event(1)
 
-    def test_iter_from_event_multiple(self):
+    def test_iter_from_event_multiple(self) -> None:
         self._test_iter_from_event(20)
 
-    def _test_iter_from_event(self, n_events):
+    def _test_iter_from_event(self, n_events: int) -> None:
         expected_events = []
         for i in range(n_events):
             event = self.event_mocker.generate_mocked_event(i)
@@ -94,7 +97,7 @@ class EventStorageBaseTest(unittest.TestCase):
 
         self.assertEqual(expected_events, actual_events)
 
-    def test_iter_from_event_negative_key(self):
+    def test_iter_from_event_negative_key(self) -> None:
         with self.assertRaises(ValueError) as cm:
             events = self.event_storage.iter_from_event(-10)
             list(events)
@@ -104,7 +107,7 @@ class EventStorageBaseTest(unittest.TestCase):
             str(cm.exception)
         )
 
-    def test_save_events_and_retrieve_last_group_id(self):
+    def test_save_events_and_retrieve_last_group_id(self) -> None:
         expected_group_id = 4
 
         self._populate_events_and_last_group_id(n_events=10, last_group_id=expected_group_id)
@@ -119,38 +122,38 @@ class EventStorageBaseTest(unittest.TestCase):
             event = self.event_mocker.generate_mocked_event(i, group_id)
             self.event_storage.save_event(event)
 
-    def test_get_empty_node_state(self):
+    def test_get_empty_node_state(self) -> None:
         node_state = self.event_storage.get_node_state()
 
         assert node_state is None
 
-    def test_save_node_state_and_retrieve(self):
+    def test_save_node_state_and_retrieve(self) -> None:
         self.event_storage.save_node_state(NodeState.SYNC)
         node_state = self.event_storage.get_node_state()
 
         assert node_state == NodeState.SYNC
 
-    def test_get_empty_event_queue_state(self):
+    def test_get_empty_event_queue_state(self) -> None:
         enabled = self.event_storage.get_event_queue_state()
 
         assert enabled is False
 
-    def test_save_event_queue_enabled_and_retrieve(self):
+    def test_save_event_queue_enabled_and_retrieve(self) -> None:
         self.event_storage.save_event_queue_state(True)
         enabled = self.event_storage.get_event_queue_state()
 
         assert enabled is True
 
-    def test_save_event_queue_disabled_and_retrieve(self):
+    def test_save_event_queue_disabled_and_retrieve(self) -> None:
         self.event_storage.save_event_queue_state(False)
         enabled = self.event_storage.get_event_queue_state()
 
         assert enabled is False
 
-    def test_reset_events_empty_database(self):
+    def test_reset_events_empty_database(self) -> None:
         self._test_reset_events()
 
-    def test_reset_all_empty_database(self):
+    def test_reset_all_empty_database(self) -> None:
         self._test_reset_events()
 
     def _test_reset_events(self) -> None:
@@ -179,7 +182,7 @@ class EventStorageBaseTest(unittest.TestCase):
         assert node_state is None
         assert event_queue_state is False
 
-    def test_reset_events_full_database(self):
+    def test_reset_events_full_database(self) -> None:
         n_events = 10
         expected_last_group_id = 4
         expected_node_state = NodeState.SYNC
@@ -206,7 +209,7 @@ class EventStorageBaseTest(unittest.TestCase):
         assert node_state == expected_node_state
         assert event_queue_state is True
 
-    def test_reset_all_full_database(self):
+    def test_reset_all_full_database(self) -> None:
         n_events = 10
         expected_last_group_id = 4
         expected_node_state = NodeState.SYNC
@@ -238,7 +241,7 @@ class EventStorageBaseTest(unittest.TestCase):
 class EventStorageRocksDBTest(EventStorageBaseTest):
     __test__ = True
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.directory = tempfile.mkdtemp()
         self.tmpdirs.append(self.directory)
@@ -249,6 +252,6 @@ class EventStorageRocksDBTest(EventStorageBaseTest):
 class EventStorageMemoryTest(EventStorageBaseTest):
     __test__ = True
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.event_storage = EventMemoryStorage()

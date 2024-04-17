@@ -64,7 +64,7 @@ class SimpleIndexesTestCase(unittest.TestCase):
                 # XXX: we verified they're the same, doesn't matter which we pick:
                 idx = idx_memory
                 hashes = hashes_memory
-                self.log.debug('indexes match', idx=idx, hashes=unittest.shorten_hash(hashes))
+                self.log.debug('indexes match', idx=idx, hashes=unittest.short_hashes(hashes))
                 if idx is None:
                     break
                 offset_variety.add(idx[1])

@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Callable
+from typing import Any, Callable
 from unittest.mock import Mock, patch
 
 import pytest
@@ -78,7 +78,7 @@ def test_memory_reactor_clock_running_with_threading() -> None:
     pubsub = PubSubManager(reactor)
     handler = Mock()
 
-    def fake_call_from_thread(f: Callable) -> None:
+    def fake_call_from_thread(f: Callable[..., Any]) -> None:
         reactor.callLater(0, f)
 
     call_from_thread_mock = Mock(side_effect=fake_call_from_thread)

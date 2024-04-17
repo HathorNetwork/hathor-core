@@ -24,6 +24,7 @@ from intervaltree.interval import Interval
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
@@ -72,6 +73,7 @@ class TransactionStorage(ABC):
 
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
+    _latest_n_height_tips: list[HeightInfo]
 
     log = get_logger()
 
@@ -83,6 +85,9 @@ class TransactionStorage(ABC):
 
     # Key storage attribute to save if the manager is running
     _manager_running_attribute: str = 'manager_running'
+
+    # Key storage attribute to save if the full node crashed
+    _full_node_crashed_attribute: str = 'full_node_crashed'
 
     # Ket storage attribute to save the last time the node started
     _last_start_attribute: str = 'last_start'
@@ -968,9 +973,10 @@ class TransactionStorage(ABC):
         """
         return self.get_value(self._running_full_verification_attribute) == '1'
 
-    def start_running_manager(self) -> None:
+    def start_running_manager(self, execution_manager: ExecutionManager) -> None:
         """ Save on storage that manager is running
         """
+        execution_manager.register_on_crash_callback(self.on_full_node_crash)
         self.add_value(self._manager_running_attribute, '1')
 
     def stop_running_manager(self) -> None:
@@ -982,6 +988,14 @@ class TransactionStorage(ABC):
         """ Return if the manager is running or was running and a sudden crash stopped the full node
         """
         return self.get_value(self._manager_running_attribute) == '1'
+
+    def on_full_node_crash(self) -> None:
+        """Save on storage that the full node crashed and cannot be recovered."""
+        self.add_value(self._full_node_crashed_attribute, '1')
+
+    def is_full_node_crashed(self) -> bool:
+        """Return whether the full node was crashed."""
+        return self.get_value(self._full_node_crashed_attribute) == '1'
 
     def get_last_started_at(self) -> int:
         """ Return the timestamp when the database was last started.

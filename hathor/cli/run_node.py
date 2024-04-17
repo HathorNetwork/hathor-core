@@ -221,7 +221,8 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
-            feature_service=self.manager._feature_service
+            feature_service=self.manager._feature_service,
+            bit_signaling_service=self.manager._bit_signaling_service,
         )
 
     def start_sentry_if_possible(self) -> None:
@@ -264,9 +265,8 @@ class RunNode:
     def signal_usr1_handler(self, sig: int, frame: Any) -> None:
         """Called when USR1 signal is received."""
         try:
-            self.log.warn('USR1 received. Killing all connections...')
-            if self.manager and self.manager.connections:
-                self.manager.connections.disconnect_all_peers(force=True)
+            self.log.warn('USR1 received.')
+            self.manager.connections.reload_entrypoints_and_connections()
         except Exception:
             # see: https://docs.python.org/3/library/signal.html#note-on-signal-handlers-and-exceptions
             self.log.error('prevented exception from escaping the signal handler', exc_info=True)

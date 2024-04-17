@@ -41,6 +41,7 @@ from hathor.exception import (
     RewardLockedError,
     SpendingVoidedError,
 )
+from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
@@ -56,8 +57,8 @@ from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
-from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none
@@ -88,30 +89,33 @@ class HathorManager:
     # This is the interval to be used by the task to check if the node is synced
     CHECK_SYNC_STATE_INTERVAL = 30  # seconds
 
-    def __init__(self,
-                 reactor: Reactor,
-                 *,
-                 settings: HathorSettings,
-                 pubsub: PubSubManager,
-                 consensus_algorithm: ConsensusAlgorithm,
-                 daa: DifficultyAdjustmentAlgorithm,
-                 peer_id: PeerId,
-                 tx_storage: TransactionStorage,
-                 p2p_manager: ConnectionsManager,
-                 event_manager: EventManager,
-                 feature_service: FeatureService,
-                 bit_signaling_service: BitSignalingService,
-                 verification_service: VerificationService,
-                 cpu_mining_service: CpuMiningService,
-                 network: str,
-                 hostname: Optional[str] = None,
-                 wallet: Optional[BaseWallet] = None,
-                 capabilities: Optional[list[str]] = None,
-                 checkpoints: Optional[list[Checkpoint]] = None,
-                 rng: Optional[Random] = None,
-                 environment_info: Optional[EnvironmentInfo] = None,
-                 full_verification: bool = False,
-                 enable_event_queue: bool = False):
+    def __init__(
+        self,
+        reactor: Reactor,
+        *,
+        settings: HathorSettings,
+        pubsub: PubSubManager,
+        consensus_algorithm: ConsensusAlgorithm,
+        daa: DifficultyAdjustmentAlgorithm,
+        peer_id: PeerId,
+        tx_storage: TransactionStorage,
+        p2p_manager: ConnectionsManager,
+        event_manager: EventManager,
+        feature_service: FeatureService,
+        bit_signaling_service: BitSignalingService,
+        verification_service: VerificationService,
+        cpu_mining_service: CpuMiningService,
+        network: str,
+        execution_manager: ExecutionManager,
+        hostname: Optional[str] = None,
+        wallet: Optional[BaseWallet] = None,
+        capabilities: Optional[list[str]] = None,
+        checkpoints: Optional[list[Checkpoint]] = None,
+        rng: Optional[Random] = None,
+        environment_info: Optional[EnvironmentInfo] = None,
+        full_verification: bool = False,
+        enable_event_queue: bool = False,
+    ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node.
@@ -129,6 +133,7 @@ class HathorManager:
                 'Either enable it, or use the reset-event-queue CLI command to remove all event-related data'
             )
 
+        self._execution_manager = execution_manager
         self._settings = settings
         self.daa = daa
         self._cmd_path: Optional[str] = None
@@ -250,6 +255,15 @@ class HathorManager:
         self.is_started = True
 
         self.log.info('start manager', network=self.network)
+
+        if self.tx_storage.is_full_node_crashed():
+            self.log.error(
+                'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
+                'The storage is not reliable anymore and, because of that, you must remove your storage and do a '
+                'full sync (either from scratch or from a snapshot).'
+            )
+            sys.exit(-1)
+
         # If it's a full verification, we save on the storage that we are starting it
         # this is required because if we stop the initilization in the middle, the metadata
         # saved on the storage is not reliable anymore, only if we finish it
@@ -319,7 +333,7 @@ class HathorManager:
             self.stratum_factory.start()
 
         # Start running
-        self.tx_storage.start_running_manager()
+        self.tx_storage.start_running_manager(self._execution_manager)
 
     def stop(self) -> Deferred:
         if not self.is_started:
@@ -997,13 +1011,7 @@ class HathorManager:
         tx.update_initial_metadata(save=False)
         self.tx_storage.save_transaction(tx)
         self.tx_storage.add_to_indexes(tx)
-        try:
-            self.consensus_algorithm.update(tx)
-        except HathorError as e:
-            if not fails_silently:
-                raise InvalidNewTransaction('consensus update failed') from e
-            self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex, exc_info=True)
-            return False
+        self.consensus_algorithm.update(tx)
 
         assert self.verification_service.validate_full(
             tx,
@@ -1166,6 +1174,13 @@ class HathorManager:
     def get_cmd_path(self) -> Optional[str]:
         """Return the cmd path. If no cmd path is set, returns None."""
         return self._cmd_path
+
+    def set_hostname_and_reset_connections(self, new_hostname: str) -> None:
+        """Set the hostname and reset all connections."""
+        old_hostname = self.hostname
+        self.hostname = new_hostname
+        self.connections.update_hostname_entrypoints(old_hostname=old_hostname, new_hostname=self.hostname)
+        self.connections.disconnect_all_peers(force=True)
 
 
 class ParentTxs(NamedTuple):

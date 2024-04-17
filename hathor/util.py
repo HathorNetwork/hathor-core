@@ -30,7 +30,7 @@ from structlog import get_logger
 
 import hathor
 from hathor.conf.get_settings import get_global_settings
-from hathor.types import TokenUid
+from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
     import structlog
@@ -495,7 +495,11 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
             if total:
                 progress_ = count / total
                 elapsed_time = t_log - t_start
-                remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
+                remaining_time: str | LogDuration
+                if progress_ == 0:
+                    remaining_time = '?'
+                else:
+                    remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
                 log.info(
                     f'loading... {math.floor(progress_ * 100):2.0f}%',
                     progress=progress_,
@@ -806,3 +810,23 @@ def calculate_min_significant_weight(score: float, tol: float) -> float:
     """ This function will return the min significant weight to increase score by tol.
     """
     return score + math.log2(2 ** tol - 1)
+
+
+def bytes_to_vertexid(data: bytes) -> VertexId:
+    # XXX: using raw string for the docstring so we can more easily write byte literals
+    r""" Function to validate bytes and return a VertexId, raises ValueError if not valid.
+
+    >>> bytes_to_vertexid(b'\0' * 32)
+    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+    >>> bytes_to_vertexid(b'\0' * 31)
+    Traceback (most recent call last):
+    ...
+    ValueError: length must be exactly 32 bytes
+    >>> bytes_to_vertexid(b'\0' * 33)
+    Traceback (most recent call last):
+    ...
+    ValueError: length must be exactly 32 bytes
+    """
+    if len(data) != 32:
+        raise ValueError('length must be exactly 32 bytes')
+    return VertexId(data)

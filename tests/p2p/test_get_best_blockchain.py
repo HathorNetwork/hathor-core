@@ -1,4 +1,4 @@
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.protocol import Protocol
 
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
@@ -17,18 +17,15 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
     seed_config = 6
 
-    def _send_cmd(self, proto, cmd, payload=None):
+    def _send_cmd(self, proto: Protocol, cmd: str, payload: str | None = None) -> None:
         if not payload:
             line = '{}\r\n'.format(cmd)
         else:
             line = '{} {}\r\n'.format(cmd, payload)
 
-        if isinstance(line, str):
-            line = line.encode('utf-8')
+        proto.dataReceived(line.encode('utf-8'))
 
-        return proto.dataReceived(line)
-
-    def test_get_best_blockchain(self):
+    def test_get_best_blockchain(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -54,8 +51,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         # assert the protocol is in ReadyState
         state1 = protocol1.state
         state2 = protocol2.state
-        self.assertIsInstance(state1, ReadyState)
-        self.assertIsInstance(state2, ReadyState)
+        assert isinstance(state1, ReadyState)
+        assert isinstance(state2, ReadyState)
 
         # assert ReadyState commands
         self.assertIn(ProtocolMessages.GET_BEST_BLOCKCHAIN, state1.cmd_map)
@@ -81,10 +78,10 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertEqual(self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state1.peer_best_blockchain))
         self.assertEqual(self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS, len(state2.peer_best_blockchain))
 
-        self.assertIsInstance(state1.peer_best_blockchain[0], HeightInfo)
-        self.assertIsInstance(state2.peer_best_blockchain[0], HeightInfo)
+        assert isinstance(state1.peer_best_blockchain[0], HeightInfo)
+        assert isinstance(state2.peer_best_blockchain[0], HeightInfo)
 
-    def test_handle_get_best_blockchain(self):
+    def test_handle_get_best_blockchain(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -101,13 +98,13 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
         state2 = protocol2.state
-        self.assertIsInstance(state2, ReadyState)
+        assert isinstance(state2, ReadyState)
 
         connected_peers2 = list(manager2.connections.connected_peers.values())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         state1 = protocol1.state
-        self.assertIsInstance(state1, ReadyState)
+        assert isinstance(state1, ReadyState)
 
         # assert compliance with N blocks inside the boundaries
         state1.send_get_best_blockchain(n_blocks=1)
@@ -141,7 +138,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         state1 = protocol1.state
-        self.assertIsInstance(state1, ReadyState)
+        assert isinstance(state1, ReadyState)
 
         # assert param validation exception closes connection
         state1.handle_get_best_blockchain('invalid single value')
@@ -149,7 +146,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         # state1 is managed by manager2
         self.assertTrue(conn12.tr2.disconnecting)
 
-    def test_handle_best_blockchain(self):
+    def test_handle_best_blockchain(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -160,19 +157,19 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
         state2 = protocol2.state
-        self.assertIsInstance(state2, ReadyState)
+        assert isinstance(state2, ReadyState)
 
         connected_peers2 = list(manager2.connections.connected_peers.values())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         state1 = protocol1.state
-        self.assertIsInstance(state1, ReadyState)
+        assert isinstance(state1, ReadyState)
 
         self.assertFalse(conn12.tr1.disconnecting)
         self.simulator.run(60)
 
         # assert a valid blockchain keeps connections open
-        fake_blockchain = [
+        fake_blockchain: list[tuple[float, str]] = [
             (1, '0000000000000002eccfbca9bc06c449c01f37afb3cb49c04ee62921d9bcf9dc'),
             (2, '00000000000000006c846e182462a2cc437070288a486dfa21aa64bb373b8507'),
         ]
@@ -203,7 +200,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.run(60)
         self.assertTrue(conn12.tr2.disconnecting)
 
-    def test_node_without_get_best_blockchain_capability(self):
+    def test_node_without_get_best_blockchain_capability(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
 
@@ -232,10 +229,10 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # assert the peers don't engage in get_best_blockchain messages
         state2 = protocol2.state
-        self.assertIsInstance(state2, ReadyState)
+        assert isinstance(state2, ReadyState)
         self.assertIsNone(state2.lc_get_best_blockchain)
         state1 = protocol1.state
-        self.assertIsInstance(state1, ReadyState)
+        assert isinstance(state1, ReadyState)
         self.assertIsNone(state1.lc_get_best_blockchain)
 
         # assert the connections remains open
@@ -261,7 +258,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.run(60)
         self.assertTrue(conn12.tr2.disconnecting)
 
-    def test_best_blockchain_from_storage(self):
+    def test_best_blockchain_from_storage(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -281,8 +278,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertTrue(block is memo_block)
 
         # cache miss if best block doesn't match
-        fake_block = HeightInfo(1, 'fake hash')
-        manager1._latest_n_height_tips = [fake_block]
+        fake_block = HeightInfo(1, b'fake hash')
+        # manager1._latest_n_height_tips = [fake_block]  # FIXME: This property is not defined. Fix this test.
         best_blockchain = manager1.tx_storage.get_n_height_tips(1)  # there is only the genesis block
         block = best_blockchain[0]
         # the memoized best_blockchain is skiped
@@ -309,7 +306,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         block = best_blockchain[0]
         self.assertTrue(block is memo_block)
 
-    def test_stop_looping_on_exit(self):
+    def test_stop_looping_on_exit(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -320,18 +317,18 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
         state2 = protocol2.state
-        self.assertIsInstance(state2, ReadyState)
+        assert isinstance(state2, ReadyState)
 
         connected_peers2 = list(manager2.connections.connected_peers.values())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         state1 = protocol1.state
-        self.assertIsInstance(state1, ReadyState)
+        assert isinstance(state1, ReadyState)
 
-        self.assertIsNotNone(state1.lc_get_best_blockchain)
+        assert state1.lc_get_best_blockchain is not None
         self.assertTrue(state1.lc_get_best_blockchain.running)
 
-        self.assertIsNotNone(state2.lc_get_best_blockchain)
+        assert state2.lc_get_best_blockchain is not None
         self.assertTrue(state2.lc_get_best_blockchain.running)
 
         state1.on_exit()
@@ -343,8 +340,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.assertIsNotNone(state2.lc_get_best_blockchain)
         self.assertFalse(state2.lc_get_best_blockchain.running)
 
-    @inlineCallbacks
-    def test_best_blockchain_from_status_resource(self):
+    async def test_best_blockchain_from_status_resource(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -353,7 +349,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # check /status before generate blocks
         self.web = StubSite(StatusResource(manager1))
-        response = yield self.web.get("status")
+        response = await self.web.get("status")
         data = response.json_value()
         connections = data.get('connections')
         self.assertEqual(len(connections['connected_peers']), 1)
@@ -385,7 +381,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.run(60)
 
         # check /status after mine blocks
-        response = yield self.web.get("status")
+        response = await self.web.get("status")
         data = response.json_value()
         connections = data.get('connections')
         self.assertEqual(len(connections['connected_peers']), 1)

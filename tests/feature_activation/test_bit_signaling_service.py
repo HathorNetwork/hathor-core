@@ -173,7 +173,8 @@ def _test_generate_signal_bits(
         feature_service=feature_service,
         tx_storage=Mock(),
         support_features=support_features,
-        not_support_features=not_support_features
+        not_support_features=not_support_features,
+        feature_storage=Mock(),
     )
 
     return service.generate_signal_bits(block=Mock())
@@ -216,6 +217,7 @@ def test_support_intersection_validation(
             tx_storage=Mock(),
             support_features=support_features,
             not_support_features=not_support_features,
+            feature_storage=Mock(),
         )
 
     message = str(e.value)
@@ -256,7 +258,7 @@ def test_non_signaling_features_warning(
     tx_storage = Mock(spec_set=TransactionStorage)
     tx_storage.get_best_block = lambda: best_block
 
-    def get_bits_description_mock(block):
+    def get_bits_description_mock(block: Block) -> dict[Feature, FeatureDescription]:
         if block == best_block:
             return {}
         raise NotImplementedError
@@ -270,6 +272,7 @@ def test_non_signaling_features_warning(
         tx_storage=tx_storage,
         support_features=support_features,
         not_support_features=not_support_features,
+        feature_storage=Mock(),
     )
     logger_mock = Mock()
     service._log = logger_mock
@@ -283,3 +286,35 @@ def test_non_signaling_features_warning(
         best_block_hash='abc',
         non_signaling_features=non_signaling_features,
     )
+
+
+def test_on_must_signal_not_supported() -> None:
+    service = BitSignalingService(
+        feature_settings=Mock(),
+        feature_service=Mock(),
+        tx_storage=Mock(),
+        support_features=set(),
+        not_support_features={Feature.NOP_FEATURE_1},
+        feature_storage=Mock(),
+    )
+
+    service.on_must_signal(feature=Feature.NOP_FEATURE_1)
+
+    assert service._support_features == {Feature.NOP_FEATURE_1}
+    assert service._not_support_features == set()
+
+
+def test_on_must_signal_supported() -> None:
+    service = BitSignalingService(
+        feature_settings=Mock(),
+        feature_service=Mock(),
+        tx_storage=Mock(),
+        support_features=set(),
+        not_support_features=set(),
+        feature_storage=Mock(),
+    )
+
+    service.on_must_signal(feature=Feature.NOP_FEATURE_1)
+
+    assert service._support_features == {Feature.NOP_FEATURE_1}
+    assert service._not_support_features == set()

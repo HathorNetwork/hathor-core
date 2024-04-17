@@ -1,6 +1,12 @@
+from typing import Iterator
+
 from hathor.graphviz import GraphvizVisualizer
+from hathor.manager import HathorManager
 from hathor.simulator import Simulator
 from hathor.simulator.utils import gen_new_tx
+from hathor.transaction import Block, Transaction
+from hathor.types import VertexId
+from hathor.wallet import HDWallet
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import BURN_ADDRESS, add_custom_tx
@@ -9,7 +15,7 @@ from tests.utils import BURN_ADDRESS, add_custom_tx
 class BaseConsensusSimulatorTestCase(SimulatorTestCase):
     seed_config = 5988775361793628169
 
-    def assertValidConflictResolution(self, tx1, tx2):
+    def assertValidConflictResolution(self, tx1: Transaction, tx2: Transaction) -> None:
         meta1 = tx1.get_metadata()
         meta2 = tx2.get_metadata()
 
@@ -28,8 +34,9 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
             cnt += 1
         self.assertLessEqual(cnt, 1)
 
-    def do_step(self, i, manager1, tx_base):
+    def do_step(self, i: int, manager1: HathorManager, tx_base: Transaction) -> Transaction:
         wallet = manager1.wallet
+        assert isinstance(wallet, HDWallet)
         address = wallet.get_address(wallet.get_key_at_index(0))
 
         txA = add_custom_tx(manager1, [(tx_base, 0)], n_outputs=2, address=address)
@@ -86,7 +93,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         return txH
 
-    def gen_block(self, manager1, tx, parent_block=None):
+    def gen_block(self, manager1: HathorManager, tx: Transaction, parent_block: Block | None = None) -> Block:
         parent_block_hash = parent_block.hash if parent_block else None
         block = manager1.generate_mining_block(parent_block_hash=parent_block_hash, address=BURN_ADDRESS)
         block.parents[1] = tx.hash
@@ -96,8 +103,8 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(manager1.propagate_tx(block, fails_silently=False))
         return block
 
-    def _run_test(self, simulator, soft_voided_tx_ids):
-        self.txF_hashes = []
+    def _run_test(self, simulator: Simulator, soft_voided_tx_ids: set[VertexId]) -> Iterator[None]:
+        self.txF_hashes: list[VertexId] = []
 
         manager1 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
         manager1.allow_mining_without_peers()
@@ -112,6 +119,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         self.graphviz = GraphvizVisualizer(manager1.tx_storage, include_verifications=True, include_funds=True)
 
+        assert manager1.wallet is not None
         address = manager1.wallet.get_unused_address(mark_as_used=False)
         value = 10
         initial = gen_new_tx(manager1, address, value)
@@ -180,7 +188,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         # dot = self.graphviz.dot()
         # dot.render('dot0')
 
-    def _get_txF_hashes(self):
+    def _get_txF_hashes(self) -> list[VertexId]:
         self.skip_asserts = True
         simulator = Simulator(seed=self.simulator.seed)
         simulator.start()
@@ -194,7 +202,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         return list(self.txF_hashes)
 
-    def test_soft_voided(self):
+    def test_soft_voided(self) -> None:
         txF_hashes = self._get_txF_hashes()
         self.assertEqual(10, len(txF_hashes))
         soft_voided_tx_ids = set(txF_hashes)

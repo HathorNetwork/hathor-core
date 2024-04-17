@@ -1,7 +1,9 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
+from hathor.execution_manager import ExecutionManager
 from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
@@ -9,14 +11,14 @@ from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_n
 class BaseConsensusTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.tx_storage = TransactionMemoryStorage()
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-    def test_unhandled_exception(self):
+    def test_unhandled_exception(self) -> None:
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # Mine a few blocks in a row with no transaction but the genesis
@@ -30,16 +32,21 @@ class BaseConsensusTestCase(unittest.TestCase):
         class MyError(Exception):
             pass
 
+        execution_manager_mock = Mock(spec_set=ExecutionManager)
+        manager.consensus_algorithm._execution_manager = execution_manager_mock
         manager.consensus_algorithm._unsafe_update = MagicMock(side_effect=MyError)
 
-        with self.assertRaises(MyError):
-            manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx, fails_silently=False)
+
+        execution_manager_mock.crash_and_exit.assert_called_once_with(
+            reason=f"Consensus update failed for tx {tx.hash_hex}"
+        )
 
         tx2 = manager.tx_storage.get_transaction(tx.hash)
         meta2 = tx2.get_metadata()
         self.assertEqual({self._settings.CONSENSUS_FAIL_ID}, meta2.voided_by)
 
-    def test_revert_block_high_weight(self):
+    def test_revert_block_high_weight(self) -> None:
         """ A conflict transaction will be propagated. At first, it will be voided.
         But, a new block with high weight will verify it, which will flip it to executed.
         """
@@ -102,7 +109,7 @@ class BaseConsensusTestCase(unittest.TestCase):
 
         self.assertConsensusValid(manager)
 
-    def test_dont_revert_block_low_weight(self):
+    def test_dont_revert_block_low_weight(self) -> None:
         """ A conflict transaction will be propagated and voided.
         A new block with low weight will verify it, which won't be enough to flip to executed.
         So, it will remain voided.
@@ -156,7 +163,7 @@ class BaseConsensusTestCase(unittest.TestCase):
 
         self.assertConsensusValid(manager)
 
-    def test_dont_revert_block_high_weight_transaction_verify_other(self):
+    def test_dont_revert_block_high_weight_transaction_verify_other(self) -> None:
         """ A conflict transaction will be propagated and voided. But this transaction
         verifies its conflicting transaction. So, its accumulated weight will always be smaller
         than the others and it will never be executed.
@@ -174,8 +181,8 @@ class BaseConsensusTestCase(unittest.TestCase):
         # Create a double spending transaction.
         conflicting_tx = add_new_double_spending(manager, tx=txs[-1])
         meta = conflicting_tx.get_metadata()
-        self.assertEqual(len(meta.conflict_with), 1)
-        self.assertIn(list(meta.conflict_with)[0], conflicting_tx.parents)
+        self.assertEqual(len(not_none(meta.conflict_with)), 1)
+        self.assertIn(not_none(meta.conflict_with)[0], conflicting_tx.parents)
 
         # Add a few transactions.
         add_new_transactions(manager, 10, advance_clock=15)
@@ -213,7 +220,7 @@ class BaseConsensusTestCase(unittest.TestCase):
 
         self.assertConsensusValid(manager)
 
-    def test_dont_revert_block_high_weight_verify_both(self):
+    def test_dont_revert_block_high_weight_verify_both(self) -> None:
         """ A conflicting transaction will be propagated and voided. But the block with high weight
         verifies both the conflicting transactions, so this block will always be voided.
         """
