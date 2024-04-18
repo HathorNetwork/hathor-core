@@ -104,7 +104,6 @@ class BlockchainStreamingClient:
         #         return
 
         # Check for repeated blocks.
-        assert blk.hash is not None
         is_duplicated = False
         if self.partial_vertex_exists(blk.hash):
             # We reached a block we already have. Skip it.

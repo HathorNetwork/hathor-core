@@ -83,7 +83,6 @@ class TransactionVerifier:
                 spent_tx = tx.get_spent_tx(tx_input)
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
-            assert spent_tx.hash is not None
             if tx_input.index >= len(spent_tx.outputs):
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
@@ -106,7 +105,6 @@ class TransactionVerifier:
 
             try:
                 spent_tx = tx.get_spent_tx(input_tx)
-                assert spent_tx.hash is not None
                 if input_tx.index >= len(spent_tx.outputs):
                     raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                         input_tx.tx_id.hex(), input_tx.index))

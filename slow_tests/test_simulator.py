@@ -26,8 +26,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         print('Simulation seed config:', self.random_seed)
         print('-'*30)
 
-        def verify_pow(self) -> None:
-            assert self.hash is not None
+        def verify_pow(_) -> None:
+            pass
 
         self.old_verify_pow = BaseTransaction.verify_pow
         BaseTransaction.verify_pow = verify_pow
