@@ -746,6 +746,12 @@ class BaseTransaction(ABC):
         assert self.storage is not None
         return self.storage.get_transaction(input_tx.tx_id)
 
+    def get_spent_txs(self) -> list['BaseTransaction']:
+        spent_txs = []
+        for input_tx in self.inputs:
+            spent_txs.append(self.get_spent_tx(input_tx))
+        return spent_txs
+
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         """ Creates a json serializable dict object from self
         """

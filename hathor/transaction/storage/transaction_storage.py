@@ -1188,6 +1188,16 @@ class TransactionStorage(ABC):
                 return True  # TODO: ???
         return all_exist and all_valid
 
+    def get_tips_heights(self) -> list[int]:
+        tips = self.get_best_block_tips()
+        tips_heights = []
+
+        for tip in tips:
+            block = self.get_block(tip)
+            tips_heights.append(block.get_height())
+
+        return tips_heights
+
 
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]

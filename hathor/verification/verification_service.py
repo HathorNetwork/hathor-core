@@ -359,7 +359,7 @@ def _verify_tx(
     verifiers.vertex.verify_parents(tx, tx_deps)
     verifiers.tx.verify_sum(tx_deps)
     if reject_locked_reward:
-        verifiers.tx.verify_reward_locked(tx, tx_deps)
+        verifiers.tx.verify_reward_locked(tx_deps)
 
 
 def _verify_token_creation_tx(

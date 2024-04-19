@@ -20,9 +20,10 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockSignalingState, FeatureService
 from hathor.feature_activation.model.feature_description import FeatureInfo
+from hathor.reward_lock import get_spent_reward_locked_info
 from hathor.transaction import BaseTransaction, Block, TransactionMetadata
 from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
-from hathor.transaction.transaction import TokenInfo, Transaction
+from hathor.transaction.transaction import RewardLockedInfo, TokenInfo, Transaction
 from hathor.types import TokenUid, VertexId
 
 
@@ -97,18 +98,21 @@ class BlockDependencies(VertexDependencies):
 class TransactionDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for transaction verification."""
     token_info: dict[TokenUid, TokenInfo]
+    reward_locked_info: RewardLockedInfo | None
 
     @classmethod
     def create(cls, tx: Transaction, *, pre_fetched_deps: dict[VertexId, BaseTransaction] | None = None) -> Self:
         """Create a transaction dependencies instance."""
         assert tx.storage is not None
+        spent_txs = tx.get_spent_txs()
+        tips_heights = tx.storage.get_tips_heights()
+        reward_locked_info = get_spent_reward_locked_info(spent_txs, tips_heights)
         token_info = tx.get_complete_token_info()
         simple_storage = SimpleMemoryStorage()
-        spent_txs = [tx_input.tx_id for tx_input in tx.inputs]
-        deps = tx.parents + spent_txs
         pre_fetched_deps = pre_fetched_deps or {}
+        deps = tx.parents + [tx.hash for tx in spent_txs]
 
-        simple_storage.set_best_block_tips_from_storage(tx.storage)
+        simple_storage.add_vertices_from_storage(tx.storage, deps)
 
         for dep_id in deps:
             dep = pre_fetched_deps.get(dep_id) or tx.storage.get_vertex(dep_id)
@@ -116,5 +120,6 @@ class TransactionDependencies(VertexDependencies):
 
         return cls(
             storage=simple_storage,
-            token_info=token_info
+            token_info=token_info,
+            reward_locked_info=reward_locked_info,
         )
