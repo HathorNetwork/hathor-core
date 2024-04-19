@@ -37,7 +37,7 @@ class ExecutionManager:
 
     def _run_on_crash_callbacks(self) -> None:
         """Run all registered on crash callbacks."""
-        callbacks = sorted(self._on_crash_callbacks, reverse=True)
+        callbacks = sorted(self._on_crash_callbacks, reverse=True, key=lambda item: item[0])
 
         for _, callback in callbacks:
             try:
