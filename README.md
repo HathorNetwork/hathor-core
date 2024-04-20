@@ -4,7 +4,7 @@
 
 ## Description
 
-**Hathor core** is the official client for operating a full node in Hathor Network.
+**Hathor core** is the official and reference client for operating a full node in Hathor Network.
 
 ## Operation and usage
 
