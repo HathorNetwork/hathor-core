@@ -1198,6 +1198,12 @@ class TransactionStorage(ABC):
 
         return tips_heights
 
+    def get_spent_txs(self, tx: 'Transaction') -> dict[VertexId, 'BaseTransaction']:
+        spent_txs = {}
+        for input_tx in tx.inputs:
+            spent_txs[input_tx.tx_id] = tx.get_spent_tx(input_tx)
+        return spent_txs
+
 
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]

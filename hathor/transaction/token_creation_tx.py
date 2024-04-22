@@ -13,20 +13,15 @@
 # limitations under the License.
 
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from typing_extensions import override
 
-from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature_service import FeatureService
-from hathor.transaction.base_transaction import BaseTransaction, TxInput, TxOutput, TxVersion
+from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
-from hathor.types import TokenUid, VertexId
-
-if TYPE_CHECKING:
-    from hathor.verification.verification_model import VerificationModel
+from hathor.types import TokenUid
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
@@ -228,25 +223,6 @@ class TokenCreationTransaction(Transaction):
         token_dict[self.hash] = TokenInfo(0, True, True)
 
         return token_dict
-
-    @override
-    def get_verification_model(
-        self,
-        *,
-        daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None,
-        skip_weight_verification: bool = False,
-        pre_fetched_deps: dict[VertexId, 'BaseTransaction'] | None = None,
-        only_basic: bool = False
-    ) -> 'VerificationModel':
-        from hathor.verification.verification_dependencies import TransactionDependencies
-        from hathor.verification.verification_model import VerificationTokenCreationTransaction
-        deps = None if only_basic else TransactionDependencies.create(self, pre_fetched_deps=pre_fetched_deps)
-        return VerificationTokenCreationTransaction(
-            vertex=self.clone(include_storage=False, include_metadata=False),
-            basic_deps=None,
-            deps=deps,
-        )
 
 
 def decode_string_utf8(encoded: bytes, key: str) -> str:

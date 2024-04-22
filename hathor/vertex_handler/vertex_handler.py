@@ -180,15 +180,15 @@ class VertexHandler:
 
         vertex.storage = self._tx_storage
 
-        if already_exists:
-            try:
-                metadata = vertex.get_metadata()
-            except TransactionDoesNotExist:
-                if not new_vertex.fails_silently:
-                    raise InvalidNewTransaction('cannot get metadata')
-                self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
-                return False
+        try:
+            metadata = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            if not new_vertex.fails_silently:
+                raise InvalidNewTransaction('cannot get metadata')
+            self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
+            return False
 
+        if already_exists:
             if metadata.validation.is_fully_connected():
                 if not new_vertex.fails_silently:
                     raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))

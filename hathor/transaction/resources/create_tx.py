@@ -110,7 +110,7 @@ class CreateTxResource(Resource):
         """ Same as .verify but skipping pow and signature verification."""
         assert type(tx) is Transaction
         verifiers = self.manager.verification_service.verifiers
-        deps = TransactionDependencies.create(tx)
+        deps = TransactionDependencies.create_from_storage(tx, self.manager.tx_storage)
         verifiers.tx.verify_number_of_inputs(tx)
         verifiers.vertex.verify_number_of_outputs(tx)
         verifiers.vertex.verify_outputs(tx)

@@ -44,22 +44,21 @@ class BlockVerifier:
 
     def verify_height(self, block_deps: BlockDependencies) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
-        meta = block_deps.metadata
-        assert meta.height is not None
-        assert meta.min_height is not None
-        if meta.height < meta.min_height:
-            raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
+        height = block_deps.height
+        min_height = block_deps.min_height
+        if height < min_height:
+            raise RewardLocked(f'Block needs {min_height} height but has {height}')
 
     def verify_weight(self, block: Block, block_deps: BasicBlockDependencies) -> None:
         """Validate minimum block difficulty."""
-        min_block_weight = self._daa.calculate_block_difficulty(block, block_deps.storage)
+        min_block_weight = self._daa.calculate_block_difficulty(block, block_deps.get_daa_parent_block)
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
 
     def verify_reward(self, block: Block, block_deps: BasicBlockDependencies) -> None:
         """Validate reward amount."""
-        parent_block = block_deps.storage.get_parent_block(block)
+        parent_block = block_deps.get_parent_block()
         tokens_issued_per_block = self._daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if block.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(

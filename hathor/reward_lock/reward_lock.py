@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Collection, Optional
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction, Block
@@ -26,23 +26,23 @@ def is_spent_reward_locked(tx: 'Transaction') -> bool:
     itself, and not the inherited `min_height`"""
     assert tx.storage is not None
     tips_heights = tx.storage.get_tips_heights()
-    spent_txs = tx.get_spent_txs()
+    spent_txs = tx.storage.get_spent_txs(tx).values()
     reward_locked_info = get_spent_reward_locked_info(spent_txs, tips_heights)
     return reward_locked_info is not None
 
 
 def get_spent_reward_locked_info(
-    spent_txs: list[BaseTransaction],
+    spent_txs: Collection[BaseTransaction],
     tips_heights: list[int],
 ) -> Optional['RewardLockedInfo']:
     """Check if any input block reward is locked, returning the locked information if any, or None if they are all
     unlocked."""
     from hathor.transaction.transaction import RewardLockedInfo
     for spent_tx in spent_txs:
-        assert isinstance(spent_tx, Block)
-        needed_height = _spent_reward_needed_height(spent_tx, tips_heights)
-        if needed_height > 0:
-            return RewardLockedInfo(spent_tx.hash, needed_height)
+        if isinstance(spent_tx, Block):
+            needed_height = _spent_reward_needed_height(spent_tx, tips_heights)
+            if needed_height > 0:
+                return RewardLockedInfo(spent_tx.hash, needed_height)
     return None
 
 

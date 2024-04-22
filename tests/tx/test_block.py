@@ -143,8 +143,9 @@ def test_verify_must_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
     verifier = BlockVerifier(settings=settings, daa=Mock())
     deps = BlockDependencies(
-        storage=Mock(),
-        metadata=Mock(),
+        parents={},
+        height=0,
+        min_height=0,
         signaling_state=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1),
         feature_info={}
     )
@@ -158,6 +159,6 @@ def test_verify_must_signal() -> None:
 def test_verify_must_not_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
     verifier = BlockVerifier(settings=settings, daa=Mock())
-    deps = BlockDependencies(storage=Mock(), metadata=Mock(), signaling_state=BlockIsSignaling(), feature_info={})
+    deps = BlockDependencies(parents={}, height=0, min_height=0, signaling_state=BlockIsSignaling(), feature_info={})
 
     verifier.verify_mandatory_signaling(deps)

@@ -18,24 +18,18 @@ from operator import add
 from struct import pack
 from typing import TYPE_CHECKING, Any, Optional
 
-from typing_extensions import override
-
 from hathor.checkpoint import Checkpoint
-from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
-from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
-    from hathor.verification.verification_model import VerificationModel
 
 cpu = get_cpu_profiler()
 
@@ -407,37 +401,3 @@ class Block(BaseTransaction):
         bit_list = self._get_feature_activation_bit_list()
 
         return bit_list[bit]
-
-    @override
-    def get_verification_model(
-        self,
-        *,
-        daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None,
-        skip_weight_verification: bool = False,
-        pre_fetched_deps: dict[VertexId, 'BaseTransaction'] | None = None,
-        only_basic: bool = False
-    ) -> 'VerificationModel':
-        from hathor.verification.verification_dependencies import BasicBlockDependencies, BlockDependencies
-        from hathor.verification.verification_model import VerificationBlock
-        basic_deps = BasicBlockDependencies.create(
-            self,
-            daa=daa,
-            skip_weight_verification=skip_weight_verification,
-            pre_fetched_deps=pre_fetched_deps
-        )
-
-        if only_basic:
-            deps = None
-        else:
-            deps = BlockDependencies.create(
-                self,
-                feature_service=not_none(feature_service),
-                pre_fetched_deps=pre_fetched_deps
-            )
-
-        return VerificationBlock(
-            vertex=self.clone(include_storage=False, include_metadata=False),
-            basic_deps=basic_deps,
-            deps=deps,
-        )

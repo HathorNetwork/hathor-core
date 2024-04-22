@@ -11,9 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-from typing import cast
 
-from twisted.internet.defer import Deferred
 from typing_extensions import assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
@@ -21,9 +19,10 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.multiprocessor import Multiprocessor
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
+from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
-from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.verification.verification_dependencies import (
     BasicBlockDependencies,
@@ -36,6 +35,7 @@ from hathor.verification.verification_model import (
     VerificationModel,
     VerificationTokenCreationTransaction,
     VerificationTransaction,
+    get_verification_model_from_storage,
 )
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
@@ -43,16 +43,18 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('verifiers', '_daa', '_feature_service', '_mp')
+    __slots__ = ('verifiers', '_storage', '_daa', '_feature_service', '_mp')
 
     def __init__(
         self,
         *,
         verifiers: VertexVerifiers,
+        storage: TransactionStorage | None = None,
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService | None = None
     ) -> None:
         self.verifiers = verifiers
+        self._storage = storage
         self._daa = daa
         self._feature_service = feature_service
         self._mp = Multiprocessor()
@@ -83,90 +85,87 @@ class VerificationService:
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
-        coro = self._validate_full(
-            vertex,
-            skip_block_weight_verification=skip_block_weight_verification,
-            sync_checkpoints=sync_checkpoints,
-            reject_locked_reward=reject_locked_reward,
-            async_=False,
-        )
-        deferred: Deferred[bool] = Deferred.fromCoroutine(coro)
-        assert deferred.called
-        return cast(bool, deferred.result)
-
-    async def validate_full_async(
-        self,
-        vertex: BaseTransaction,
-        *,
-        skip_block_weight_verification: bool = False,
-        sync_checkpoints: bool = False,
-        reject_locked_reward: bool = True,
-        pre_fetched_deps: dict[VertexId, BaseTransaction] | None = None,
-    ) -> bool:
-        """ Run full validations (these need access to all dependencies) and update the validation state.
-
-        If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
-        """
-        return await self._validate_full(
-            vertex,
-            skip_block_weight_verification=skip_block_weight_verification,
-            sync_checkpoints=sync_checkpoints,
-            reject_locked_reward=reject_locked_reward,
-            pre_fetched_deps=pre_fetched_deps,
-            async_=True
-        )
-
-    async def _validate_full(
-        self,
-        vertex: BaseTransaction,
-        *,
-        async_: bool,
-        skip_block_weight_verification: bool = False,
-        sync_checkpoints: bool = False,
-        reject_locked_reward: bool = True,
-        pre_fetched_deps: dict[VertexId, BaseTransaction] | None = None,
-    ) -> bool:
         from hathor.transaction.transaction_metadata import ValidationState
+        assert self._storage is not None
 
-        meta = vertex.get_metadata()
+        try:
+            meta = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            meta = None
 
         # skip full validation when it is a checkpoint
-        if meta.validation.is_checkpoint():
+        if meta and meta.validation.is_checkpoint():
             vertex.set_validation(ValidationState.CHECKPOINT_FULL)
             return True
 
-        verification_model = vertex.get_verification_model(
+        verification_model = get_verification_model_from_storage(
+            vertex,
+            self._storage,
             daa=self._daa,
-            feature_service=self._feature_service,
+            feature_service=not_none(self._feature_service),
             skip_weight_verification=skip_block_weight_verification,
-            pre_fetched_deps=pre_fetched_deps,
         )
 
         # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
         #      directly into trying a full validation so we should check it here to make sure the validation states
         #      ends up being CHECKPOINT_FULL instead of FULL
-        if not meta.validation.is_at_least_basic():
+        if not meta or not meta.validation.is_at_least_basic():
             # run basic validation if we haven't already
-            if async_:
-                await self._mp.run(
-                    self.verify_basic_model,
-                    verification_model,
-                    skip_block_weight_verification=skip_block_weight_verification
-                )
-            else:
-                self.verify_basic_model(
-                    verification_model,
-                    skip_block_weight_verification=skip_block_weight_verification
-                )
-
-        if async_:
-            await self._mp.run(
-                self.verify_model,
+            _verify_basic_model(
+                self.verifiers,
                 verification_model,
-                reject_locked_reward=reject_locked_reward
+                skip_block_weight_verification=skip_block_weight_verification
             )
-        else:
-            self.verify_model(verification_model, reject_locked_reward=reject_locked_reward)
+
+        _verify_model(self.verifiers, verification_model, reject_locked_reward=reject_locked_reward)
+
+        validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
+        vertex.set_validation(validation)
+        return True
+
+    async def validate_full_async(
+        self,
+        verification_model: VerificationModel,
+        *,
+        skip_block_weight_verification: bool = False,
+        sync_checkpoints: bool = False,
+        reject_locked_reward: bool = True,
+    ) -> bool:
+        """ Run full validations (these need access to all dependencies) and update the validation state.
+
+        If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
+        """
+        from hathor.transaction.transaction_metadata import ValidationState
+        vertex = verification_model.vertex
+
+        try:
+            meta = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            meta = None
+
+        # skip full validation when it is a checkpoint
+        if meta and meta.validation.is_checkpoint():
+            vertex.set_validation(ValidationState.CHECKPOINT_FULL)
+            return True
+
+        # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
+        #      directly into trying a full validation so we should check it here to make sure the validation states
+        #      ends up being CHECKPOINT_FULL instead of FULL
+        if not meta or not meta.validation.is_at_least_basic():
+            # run basic validation if we haven't already
+            await self._mp.run(
+                _verify_basic_model,
+                self.verifiers,
+                verification_model,
+                skip_block_weight_verification=skip_block_weight_verification
+            )
+
+        await self._mp.run(
+            _verify_model,
+            self.verifiers,
+            verification_model,
+            reject_locked_reward=reject_locked_reward
+        )
 
         validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
         vertex.set_validation(validation)
@@ -176,75 +175,93 @@ class VerificationService:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
         Used by `self.validate_basic`. Should not modify the validation state."""
-        verification_model = vertex.get_verification_model(
+        assert self._storage is not None
+        verification_model = get_verification_model_from_storage(
+            vertex,
+            self._storage,
             daa=self._daa,
+            feature_service=not_none(self._feature_service),
             skip_weight_verification=skip_block_weight_verification,
             only_basic=True,
         )
-        self.verify_basic_model(verification_model, skip_block_weight_verification=skip_block_weight_verification)
-
-    def verify_basic_model(
-        self,
-        vertex: VerificationModel,
-        *,
-        skip_block_weight_verification: bool = False
-    ) -> None:
-        match vertex:
-            case VerificationBlock(vertex=block, basic_deps=basic_deps):
-                _verify_basic_block(
-                    self.verifiers,
-                    block,
-                    basic_deps,
-                    skip_weight_verification=skip_block_weight_verification,
-                )
-            case VerificationMergeMinedBlock(vertex=block, basic_deps=basic_deps):
-                _verify_basic_merge_mined_block(
-                    self.verifiers,
-                    block,
-                    basic_deps,
-                    skip_weight_verification=skip_block_weight_verification
-                )
-            case VerificationTransaction(vertex=tx):
-                _verify_basic_tx(self.verifiers, tx)
-            case VerificationTokenCreationTransaction(vertex=tx):
-                _verify_basic_token_creation_tx(self.verifiers, tx)
-            case _:
-                assert_never(vertex)
+        _verify_basic_model(
+            self.verifiers,
+            verification_model,
+            skip_block_weight_verification=skip_block_weight_verification
+        )
 
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
 
         Used by `self.validate_full`. Should not modify the validation state."""
+        assert self._storage is not None
         if vertex.is_genesis:
             # TODO do genesis validation
             return
         assert self._feature_service is not None
-        verification_model = vertex.get_verification_model(
+        verification_model = get_verification_model_from_storage(
+            vertex,
+            self._storage,
             daa=self._daa,
             feature_service=self._feature_service,
         )
-        self.verify_model(verification_model, reject_locked_reward=reject_locked_reward)
-
-    def verify_model(self, vertex: VerificationModel, *, reject_locked_reward: bool = True) -> None:
-        match vertex:
-            case VerificationBlock(vertex=block, deps=deps):
-                _verify_block(self.verifiers, block, not_none(deps))
-            case VerificationMergeMinedBlock(vertex=block, deps=deps):
-                _verify_merge_mined_block(self.verifiers, block, not_none(deps))
-            case VerificationTransaction(vertex=tx, deps=deps):
-                _verify_tx(self.verifiers, tx, not_none(deps), reject_locked_reward=reject_locked_reward)
-            case VerificationTokenCreationTransaction(vertex=tx, deps=deps):
-                _verify_token_creation_tx(
-                    self.verifiers,
-                    tx,
-                    not_none(deps),
-                    reject_locked_reward=reject_locked_reward
-                )
-            case _:
-                assert_never(vertex)
+        _verify_model(self.verifiers, verification_model, reject_locked_reward=reject_locked_reward)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         _verify_without_storage(self.verifiers, vertex)
+
+
+def _verify_basic_model(
+    verifiers: VertexVerifiers,
+    verification_model: VerificationModel,
+    *,
+    skip_block_weight_verification: bool = False
+) -> None:
+    match verification_model:
+        case VerificationBlock(vertex=block, basic_deps=basic_deps):
+            _verify_basic_block(
+                verifiers,
+                block,
+                basic_deps,
+                skip_weight_verification=skip_block_weight_verification,
+            )
+        case VerificationMergeMinedBlock(vertex=block, basic_deps=basic_deps):
+            _verify_basic_merge_mined_block(
+                verifiers,
+                block,
+                basic_deps,
+                skip_weight_verification=skip_block_weight_verification
+            )
+        case VerificationTransaction(vertex=tx):
+            _verify_basic_tx(verifiers, tx)
+        case VerificationTokenCreationTransaction(vertex=tx):
+            _verify_basic_token_creation_tx(verifiers, tx)
+        case _:
+            assert_never(verification_model)
+
+
+def _verify_model(
+    verifiers: VertexVerifiers,
+    verification_model: VerificationModel,
+    *,
+    reject_locked_reward: bool = True
+) -> None:
+    match verification_model:
+        case VerificationBlock(vertex=block, deps=deps):
+            _verify_block(verifiers, block, not_none(deps))
+        case VerificationMergeMinedBlock(vertex=block, deps=deps):
+            _verify_merge_mined_block(verifiers, block, not_none(deps))
+        case VerificationTransaction(vertex=tx, deps=deps):
+            _verify_tx(verifiers, tx, not_none(deps), reject_locked_reward=reject_locked_reward)
+        case VerificationTokenCreationTransaction(vertex=tx, deps=deps):
+            _verify_token_creation_tx(
+                verifiers,
+                tx,
+                not_none(deps),
+                reject_locked_reward=reject_locked_reward
+            )
+        case _:
+            assert_never(verification_model)
 
 
 def _verify_without_storage(verifiers: VertexVerifiers, vertex: BaseTransaction) -> None:

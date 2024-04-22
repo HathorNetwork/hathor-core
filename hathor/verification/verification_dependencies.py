@@ -21,74 +21,83 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockSignalingState, FeatureService
 from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.reward_lock import get_spent_reward_locked_info
-from hathor.transaction import BaseTransaction, Block, TransactionMetadata
-from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
+from hathor.transaction import BaseTransaction, Block
+from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import RewardLockedInfo, TokenInfo, Transaction
 from hathor.types import TokenUid, VertexId
+from hathor.util import not_none
 
 
 @dataclass(frozen=True, slots=True)
 class VertexDependencies:
     """A dataclass of dependencies necessary for vertex verification."""
-    storage: SimpleMemoryStorage
+    parents: dict[VertexId, BaseTransaction]
 
 
 @dataclass(frozen=True, slots=True)
 class BasicBlockDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for basic block verification."""
+    daa_deps: dict[VertexId, Block] | None
 
     @classmethod
-    def create(
+    def create_from_storage(
         cls,
         block: Block,
         *,
+        storage: TransactionStorage,
         daa: DifficultyAdjustmentAlgorithm,
         skip_weight_verification: bool,
-        pre_fetched_deps: dict[VertexId, BaseTransaction] | None = None
     ) -> Self:
         """Create a basic block dependencies instance."""
-        assert block.storage is not None
-        simple_storage = SimpleMemoryStorage()
-        daa_deps = [] if skip_weight_verification else daa.get_block_dependencies(block)
-        dep_ids = block.parents + daa_deps
-        pre_fetched_deps = pre_fetched_deps or {}
+        parents = {vertex_id: storage.get_vertex(vertex_id) for vertex_id in block.parents}
+        daa_deps: dict[VertexId, Block] | None = None
 
-        for dep_id in dep_ids:
-            dep = pre_fetched_deps.get(dep_id) or block.storage.get_vertex(dep_id)
-            simple_storage.add_vertex(dep)
+        if not skip_weight_verification and not block.is_genesis:
+            daa_dep_ids = daa.get_block_dependencies(block)
+            daa_deps = {vertex_id: storage.get_block(vertex_id) for vertex_id in daa_dep_ids}
 
-        return cls(simple_storage)
+        return cls(
+            parents=parents,
+            daa_deps=daa_deps,
+        )
+
+    def get_parent_block(self) -> Block:
+        parent_blocks = [vertex for vertex in self.parents.values() if isinstance(vertex, Block)]
+        assert len(parent_blocks) == 1
+        return parent_blocks[0]
+
+    def get_daa_parent_block(self, block: Block) -> Block:
+        assert self.daa_deps is not None
+        parent_hash = block.get_block_parent_hash()
+        return self.daa_deps[parent_hash]
 
 
 @dataclass(frozen=True, slots=True)
 class BlockDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for block verification."""
-    metadata: TransactionMetadata
+    height: int
+    min_height: int
     signaling_state: BlockSignalingState
     feature_info: dict[Feature, FeatureInfo]
 
     @classmethod
-    def create(
+    def create_from_storage(
         cls,
         block: Block,
         *,
-        feature_service: FeatureService,
-        pre_fetched_deps: dict[VertexId, BaseTransaction] | None = None,
+        storage: TransactionStorage,
+        feature_service: FeatureService
     ) -> Self:
         """Create a block dependencies instance."""
-        assert block.storage is not None
+        parents = {vertex_id: storage.get_vertex(vertex_id) for vertex_id in block.parents}
         signaling_state = feature_service.is_signaling_mandatory_features(block)
         feature_info = feature_service.get_feature_info(block=block)
-        simple_storage = SimpleMemoryStorage()
-        pre_fetched_deps = pre_fetched_deps or {}
-
-        for dep_id in block.parents:
-            dep = pre_fetched_deps.get(dep_id) or block.storage.get_vertex(dep_id)
-            simple_storage.add_vertex(dep)
+        meta = block.get_metadata()
 
         return cls(
-            storage=simple_storage,
-            metadata=block.get_metadata().clone(),
+            parents=parents,
+            height=not_none(meta.height),
+            min_height=not_none(meta.min_height),
             signaling_state=signaling_state,
             feature_info=feature_info,
         )
@@ -97,29 +106,22 @@ class BlockDependencies(VertexDependencies):
 @dataclass(frozen=True, slots=True)
 class TransactionDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for transaction verification."""
+    spent_txs: dict[VertexId, BaseTransaction]
     token_info: dict[TokenUid, TokenInfo]
     reward_locked_info: RewardLockedInfo | None
 
     @classmethod
-    def create(cls, tx: Transaction, *, pre_fetched_deps: dict[VertexId, BaseTransaction] | None = None) -> Self:
+    def create_from_storage(cls, tx: Transaction, storage: TransactionStorage) -> Self:
         """Create a transaction dependencies instance."""
-        assert tx.storage is not None
-        spent_txs = tx.get_spent_txs()
-        tips_heights = tx.storage.get_tips_heights()
-        reward_locked_info = get_spent_reward_locked_info(spent_txs, tips_heights)
+        parents = {vertex_id: storage.get_vertex(vertex_id) for vertex_id in tx.parents}
+        spent_txs = storage.get_spent_txs(tx)
+        tips_heights = storage.get_tips_heights()
+        reward_locked_info = get_spent_reward_locked_info(spent_txs.values(), tips_heights)
         token_info = tx.get_complete_token_info()
-        simple_storage = SimpleMemoryStorage()
-        pre_fetched_deps = pre_fetched_deps or {}
-        deps = tx.parents + [tx.hash for tx in spent_txs]
-
-        simple_storage.add_vertices_from_storage(tx.storage, deps)
-
-        for dep_id in deps:
-            dep = pre_fetched_deps.get(dep_id) or tx.storage.get_vertex(dep_id)
-            simple_storage.add_vertex(dep)
 
         return cls(
-            storage=simple_storage,
+            parents=parents,
+            spent_txs=spent_txs,
             token_info=token_info,
             reward_locked_info=reward_locked_info,
         )

@@ -28,8 +28,6 @@ from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
-from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -41,7 +39,6 @@ if TYPE_CHECKING:
     from _hashlib import HASH
 
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
-    from hathor.verification.verification_model import VerificationModel
 
 logger = get_logger()
 
@@ -746,12 +743,6 @@ class BaseTransaction(ABC):
         assert self.storage is not None
         return self.storage.get_transaction(input_tx.tx_id)
 
-    def get_spent_txs(self) -> list['BaseTransaction']:
-        spent_txs = []
-        for input_tx in self.inputs:
-            spent_txs.append(self.get_spent_tx(input_tx))
-        return spent_txs
-
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         """ Creates a json serializable dict object from self
         """
@@ -855,18 +846,6 @@ class BaseTransaction(ABC):
             if not dep_meta.validation.is_fully_connected():
                 return False
         return True
-
-    @abstractmethod
-    def get_verification_model(
-        self,
-        *,
-        daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None,
-        skip_weight_verification: bool = False,
-        pre_fetched_deps: dict[VertexId, 'BaseTransaction'] | None = None,
-        only_basic: bool = False
-    ) -> 'VerificationModel':
-        raise NotImplementedError
 
 
 class TxInput:

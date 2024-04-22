@@ -72,14 +72,11 @@ class TransactionVerifier:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
         """
         from hathor.transaction.scripts import get_sigops_count
-        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
         n_txops = 0
         for tx_input in tx.inputs:
-            try:
-                spent_tx = tx_deps.storage.get_vertex(tx_input.tx_id)
-            except TransactionDoesNotExist:
+            spent_tx = tx_deps.spent_txs.get(tx_input.tx_id)
+            if spent_tx is None:
                 raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
-            assert spent_tx.hash is not None
             if tx_input.index >= len(spent_tx.outputs):
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
@@ -91,8 +88,6 @@ class TransactionVerifier:
 
     def verify_inputs(self, tx: Transaction, tx_deps: TransactionDependencies, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
         spent_outputs: set[tuple[VertexId, int]] = set()
         for input_tx in tx.inputs:
             if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
@@ -100,14 +95,12 @@ class TransactionVerifier:
                     len(input_tx.data), self._settings.MAX_INPUT_DATA_SIZE
                 ))
 
-            try:
-                spent_tx = tx_deps.storage.get_vertex(input_tx.tx_id)
-                assert spent_tx.hash is not None
-                if input_tx.index >= len(spent_tx.outputs):
-                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
-                        input_tx.tx_id.hex(), input_tx.index))
-            except TransactionDoesNotExist:
+            spent_tx = tx_deps.spent_txs.get(input_tx.tx_id)
+            if spent_tx is None:
                 raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
+            if input_tx.index >= len(spent_tx.outputs):
+                raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                    input_tx.tx_id.hex(), input_tx.index))
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
