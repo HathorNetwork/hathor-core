@@ -42,6 +42,7 @@ from hathor.stratum import StratumFactory
 from hathor.util import Random, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
+from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -298,6 +299,18 @@ class CliBuilder:
         if enable_sync_v2:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
+        vertex_handler = VertexHandler(
+            reactor=reactor,
+            settings=settings,
+            tx_storage=tx_storage,
+            verification_service=verification_service,
+            consensus=consensus_algorithm,
+            p2p_manager=p2p_manager,
+            feature_service=self.feature_service,
+            pubsub=pubsub,
+            wallet=self.wallet,
+        )
+
         self.manager = HathorManager(
             reactor,
             settings=settings,
@@ -315,11 +328,11 @@ class CliBuilder:
             environment_info=get_environment_info(args=str(self._args), peer_id=peer_id.id),
             full_verification=full_verification,
             enable_event_queue=self._args.x_enable_event_queue,
-            feature_service=self.feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
+            vertex_handler=vertex_handler,
         )
 
         if self._args.x_ipython_kernel:

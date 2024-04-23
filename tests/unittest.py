@@ -101,9 +101,9 @@ class TestBuilder(Builder):
         return PeerId()
 
     def _get_reactor(self) -> Reactor:
-        if self._reactor:
-            return self._reactor
-        return MemoryReactorHeapClock()
+        if self._reactor is None:
+            self._reactor = MemoryReactorHeapClock()
+        return self._reactor
 
 
 class TestCase(unittest.TestCase):
