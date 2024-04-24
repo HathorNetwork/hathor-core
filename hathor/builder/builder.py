@@ -34,6 +34,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
@@ -160,6 +161,7 @@ class Builder:
         self._vertex_handler: VertexHandler | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
+        self._multiprocessor: Multiprocessor | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -512,14 +514,21 @@ class Builder:
             storage = self._get_or_create_tx_storage()
             daa = self._get_or_create_daa()
             feature_service = self._get_or_create_feature_service()
+            multiprocessor = self._get_or_create_multiprocessor()
             self._verification_service = VerificationService(
                 verifiers=verifiers,
                 storage=storage,
                 daa=daa,
-                feature_service=feature_service
+                feature_service=feature_service,
+                multiprocessor=multiprocessor,
             )
 
         return self._verification_service
+
+    def _get_or_create_multiprocessor(self) -> Multiprocessor:
+        if self._multiprocessor is None:
+            self._multiprocessor = Multiprocessor()
+        return self._multiprocessor
 
     def _get_or_create_feature_storage(self) -> FeatureActivationStorage | None:
         match self._storage_type:

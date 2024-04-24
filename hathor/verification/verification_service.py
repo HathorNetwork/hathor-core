@@ -43,21 +43,22 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('verifiers', '_storage', '_daa', '_feature_service', '_mp')
+    __slots__ = ('verifiers', '_storage', '_daa', '_feature_service', '_multiprocessor')
 
     def __init__(
         self,
         *,
         verifiers: VertexVerifiers,
-        storage: TransactionStorage | None = None,
         daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService | None = None
+        storage: TransactionStorage | None = None,
+        feature_service: FeatureService | None = None,
+        multiprocessor: Multiprocessor | None = None,
     ) -> None:
         self.verifiers = verifiers
         self._storage = storage
         self._daa = daa
         self._feature_service = feature_service
-        self._mp = Multiprocessor()
+        self._multiprocessor = multiprocessor
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -128,13 +129,13 @@ class VerificationService:
         verification_model: VerificationModel,
         *,
         skip_block_weight_verification: bool = False,
-        sync_checkpoints: bool = False,
         reject_locked_reward: bool = True,
     ) -> bool:
         """ Run full validations (these need access to all dependencies) and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
+        assert self._multiprocessor is not None
         from hathor.transaction.transaction_metadata import ValidationState
         vertex = verification_model.vertex
 
@@ -153,23 +154,20 @@ class VerificationService:
         #      ends up being CHECKPOINT_FULL instead of FULL
         if not meta or not meta.validation.is_at_least_basic():
             # run basic validation if we haven't already
-            await self._mp.run(
+            await self._multiprocessor.run(
                 _verify_basic_model,
                 self.verifiers,
                 verification_model.clone(),
                 skip_block_weight_verification=skip_block_weight_verification
             )
 
-        await self._mp.run(
+        await self._multiprocessor.run(
             _verify_model,
             self.verifiers,
             verification_model.clone(),
             reject_locked_reward=reject_locked_reward
         )
 
-        # TODO
-        # validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
-        # vertex.set_validation(validation)
         return True
 
     def verify_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> None:

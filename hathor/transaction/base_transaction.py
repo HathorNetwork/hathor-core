@@ -22,9 +22,10 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional, cast
 
 from structlog import get_logger
+from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
@@ -819,7 +820,7 @@ class BaseTransaction(ABC):
 
         return ret
 
-    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> 'BaseTransaction':
+    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> Self:
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
@@ -830,7 +831,7 @@ class BaseTransaction(ABC):
             new_tx._metadata = self._metadata.clone()
         if include_storage:
             new_tx.storage = self.storage
-        return new_tx
+        return cast(Self, new_tx)
 
     @abstractmethod
     def get_token_uid(self, index: int) -> TokenUid:

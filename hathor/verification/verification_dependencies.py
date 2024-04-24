@@ -15,7 +15,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Self
+from typing_extensions import Self, TypeVar
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature import Feature
@@ -28,6 +28,8 @@ from hathor.transaction.transaction import RewardLockedInfo, TokenInfo, Transact
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
 
+T = TypeVar('T', bound=BaseTransaction)
+
 
 @dataclass(frozen=True, slots=True)
 class VertexDependencies(ABC):
@@ -39,7 +41,7 @@ class VertexDependencies(ABC):
         raise NotImplementedError
 
     @staticmethod
-    def _clone_vertices(vertices: dict[VertexId, BaseTransaction]) -> dict[VertexId, BaseTransaction]:
+    def _clone_vertices(vertices: dict[VertexId, T]) -> dict[VertexId, T]:
         return {
             vertex_id: vertex.clone(include_storage=False, include_metadata=False)
             for vertex_id, vertex in vertices.items()
@@ -93,7 +95,7 @@ class BasicBlockDependencies(VertexDependencies):
         parent_hash = block.get_block_parent_hash()
         return self.daa_deps[parent_hash]
 
-    def clone(self) -> Self:
+    def clone(self) -> 'BasicBlockDependencies':
         return BasicBlockDependencies(
             parents=self._clone_vertices(self.parents),
             daa_deps=self._clone_vertices(self.daa_deps) if self.daa_deps else None,
@@ -131,7 +133,7 @@ class BlockDependencies(VertexDependencies):
             feature_info=feature_info,
         )
 
-    def clone(self) -> Self:
+    def clone(self) -> 'BlockDependencies':
         return BlockDependencies(
             parents=self._clone_vertices(self.parents),
             height=self.height,
@@ -164,7 +166,7 @@ class TransactionDependencies(VertexDependencies):
             reward_locked_info=reward_locked_info,
         )
 
-    def clone(self) -> Self:
+    def clone(self) -> 'TransactionDependencies':
         return TransactionDependencies(
             parents=self._clone_vertices(self.parents),
             spent_txs=self._clone_vertices(self.spent_txs),

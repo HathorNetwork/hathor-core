@@ -15,7 +15,7 @@
 from dataclasses import dataclass
 from typing import Generic, TypeAlias, TypeVar
 
-from typing_extensions import assert_never, Self
+from typing_extensions import assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
@@ -43,31 +43,31 @@ class _VerificationModel(Generic[T, BasicDepsT, DepsT]):
 
 @dataclass(frozen=True, slots=True)
 class VerificationBlock(_VerificationModel[Block, BasicBlockDependencies, BlockDependencies]):
-    def clone(self) -> Self:
+    def clone(self) -> 'VerificationBlock':
         return VerificationBlock(
             vertex=self.vertex.clone(include_storage=False, include_metadata=False),
             basic_deps=self.basic_deps.clone(),
-            deps=self.deps.clone()
+            deps=self.deps.clone() if self.deps else None
         )
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationMergeMinedBlock(_VerificationModel[MergeMinedBlock, BasicBlockDependencies, BlockDependencies]):
-    def clone(self) -> Self:
+    def clone(self) -> 'VerificationMergeMinedBlock':
         return VerificationMergeMinedBlock(
             vertex=self.vertex.clone(include_storage=False, include_metadata=False),
             basic_deps=self.basic_deps.clone(),
-            deps=self.deps.clone()
+            deps=self.deps.clone() if self.deps else None
         )
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationTransaction(_VerificationModel[Transaction, None, TransactionDependencies]):
-    def clone(self) -> Self:
+    def clone(self) -> 'VerificationTransaction':
         return VerificationTransaction(
             vertex=self.vertex.clone(include_storage=False, include_metadata=False),
             basic_deps=None,
-            deps=self.deps.clone()
+            deps=self.deps.clone() if self.deps else None
         )
 
 
@@ -75,11 +75,11 @@ class VerificationTransaction(_VerificationModel[Transaction, None, TransactionD
 class VerificationTokenCreationTransaction(
     _VerificationModel[TokenCreationTransaction, None, TransactionDependencies]
 ):
-    def clone(self) -> Self:
+    def clone(self) -> 'VerificationTokenCreationTransaction':
         return VerificationTokenCreationTransaction(
             vertex=self.vertex.clone(include_storage=False, include_metadata=False),
             basic_deps=None,
-            deps=self.deps.clone()
+            deps=self.deps.clone() if self.deps else None
         )
 
 
