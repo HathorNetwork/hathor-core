@@ -87,7 +87,8 @@ class VertexHandler:
         self._verifier = ParallelVerifier(
             verification_service=self._verification_service,
             tx_storage=tx_storage,
-            daa=not_none(DifficultyAdjustmentAlgorithm.singleton)
+            daa=not_none(DifficultyAdjustmentAlgorithm.singleton),
+            reactor=reactor,
         )
 
     def on_new_vertex(
@@ -152,6 +153,11 @@ class VertexHandler:
         is_pre_valid = self._pre_validate_vertex(new_vertex)
         if not is_pre_valid:
             return False
+
+        if self._verifier.is_processing(vertex.hash):
+            # TODO: If False,
+            #  this will close the connection which is not necessary, since it may be a fair and valid vertex
+            return True
 
         is_valid = await self._validate_vertex_async(new_vertex)
         if not is_valid:

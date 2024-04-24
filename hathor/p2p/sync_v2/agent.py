@@ -422,7 +422,7 @@ class NodeBlockSync(SyncAgent):
             yield self.start_blockchain_streaming(self.synced_block,
                                                   self.peer_best_block)
         except StreamingError as e:
-            self.log.error('block streaming failed', reason=repr(e))
+            self.log.info('block streaming failed', reason=repr(e))
             self.send_stop_block_streaming()
             self.receiving_stream = False
             return False

@@ -156,19 +156,20 @@ class VerificationService:
             await self._mp.run(
                 _verify_basic_model,
                 self.verifiers,
-                verification_model,
+                verification_model.clone(),
                 skip_block_weight_verification=skip_block_weight_verification
             )
 
         await self._mp.run(
             _verify_model,
             self.verifiers,
-            verification_model,
+            verification_model.clone(),
             reject_locked_reward=reject_locked_reward
         )
 
-        validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
-        vertex.set_validation(validation)
+        # TODO
+        # validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
+        # vertex.set_validation(validation)
         return True
 
     def verify_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> None:
