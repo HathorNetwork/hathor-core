@@ -822,7 +822,9 @@ class HathorManager:
             2 * self._settings.WEIGHT_TOL
         )
         weight = max(
-            self.daa.calculate_next_weight(parent_block, timestamp, self.tx_storage.get_parent_block),
+            self.daa.calculate_next_weight(
+                parent_block, parent_block.get_height(), timestamp, self.tx_storage.get_parent_block
+            ),
             min_significant_weight
         )
         height = parent_block.get_height() + 1

@@ -28,7 +28,7 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.types import VertexId
-from hathor.util import iwindows, not_none
+from hathor.util import iwindows
 
 if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
@@ -58,7 +58,12 @@ class DifficultyAdjustmentAlgorithm:
         DifficultyAdjustmentAlgorithm.singleton = self
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
-    def calculate_block_difficulty(self, block: 'Block', parent_block_getter: Callable[['Block'], 'Block']) -> float:
+    def calculate_block_difficulty(
+        self,
+        block: 'Block',
+        parent_height: int,
+        parent_block_getter: Callable[['Block'], 'Block']
+    ) -> float:
         """ Calculate block weight according to the ascendants of `block`, using calculate_next_weight."""
         if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
             return 1.0
@@ -67,27 +72,33 @@ class DifficultyAdjustmentAlgorithm:
             return self.MIN_BLOCK_WEIGHT
 
         parent_block = parent_block_getter(block)
-        return self.calculate_next_weight(parent_block, block.timestamp, parent_block_getter)
+        return self.calculate_next_weight(parent_block, parent_height, block.timestamp, parent_block_getter)
 
-    def _calculate_N(self, parent_block: 'Block') -> int:
+    def _calculate_N(self, parent_block_height: int) -> int:
         """Calculate the N value for the `calculate_next_weight` algorithm."""
-        return min(2 * self._settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_height() - 1)
+        return min(2 * self._settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block_height - 1)
 
-    def get_block_dependencies(self, block: 'Block') -> list[VertexId]:
+    def get_block_dependencies(
+        self,
+        block: 'Block',
+        parent_height: int,
+        parent_block_getter: Callable[['Block'], 'Block'],
+    ) -> list[VertexId]:
         """Return the ids of the required blocks to call `calculate_block_difficulty` for the provided block."""
-        parent_block = block.get_block_parent()
-        N = self._calculate_N(parent_block)
-        ids: list[VertexId] = [not_none(parent_block.hash)]
+        parent_block = parent_block_getter(block)
+        N = self._calculate_N(parent_height)
+        ids: list[VertexId] = [parent_block.hash]
 
         while len(ids) <= N + 1:
-            parent_block = parent_block.get_block_parent()
-            ids.append(not_none(parent_block.hash))
+            parent_block = parent_block_getter(parent_block)
+            ids.append(parent_block.hash)
 
         return ids
 
     def calculate_next_weight(
         self,
         parent_block: 'Block',
+        parent_height: int,
         timestamp: int,
         parent_block_getter: Callable[['Block'], 'Block'],
     ) -> float:
@@ -103,7 +114,7 @@ class DifficultyAdjustmentAlgorithm:
         from hathor.transaction import sum_weights
 
         root = parent_block
-        N = self._calculate_N(parent_block)
+        N = self._calculate_N(parent_height)
         K = N // 2
         T = self.AVG_TIME_BETWEEN_BLOCKS
         S = 5
@@ -114,7 +125,6 @@ class DifficultyAdjustmentAlgorithm:
         while len(blocks) < N + 1:
             blocks.append(root)
             root = parent_block_getter(root)
-            assert root is not None
 
         # TODO: revise if this assertion can be safely removed
         assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)

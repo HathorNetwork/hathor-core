@@ -15,7 +15,7 @@
 from dataclasses import dataclass
 from typing import Generic, TypeAlias, TypeVar
 
-from typing_extensions import assert_never
+from typing_extensions import assert_never, Self
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
@@ -43,24 +43,44 @@ class _VerificationModel(Generic[T, BasicDepsT, DepsT]):
 
 @dataclass(frozen=True, slots=True)
 class VerificationBlock(_VerificationModel[Block, BasicBlockDependencies, BlockDependencies]):
-    pass
+    def clone(self) -> Self:
+        return VerificationBlock(
+            vertex=self.vertex.clone(include_storage=False, include_metadata=False),
+            basic_deps=self.basic_deps.clone(),
+            deps=self.deps.clone()
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationMergeMinedBlock(_VerificationModel[MergeMinedBlock, BasicBlockDependencies, BlockDependencies]):
-    pass
+    def clone(self) -> Self:
+        return VerificationMergeMinedBlock(
+            vertex=self.vertex.clone(include_storage=False, include_metadata=False),
+            basic_deps=self.basic_deps.clone(),
+            deps=self.deps.clone()
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationTransaction(_VerificationModel[Transaction, None, TransactionDependencies]):
-    pass
+    def clone(self) -> Self:
+        return VerificationTransaction(
+            vertex=self.vertex.clone(include_storage=False, include_metadata=False),
+            basic_deps=None,
+            deps=self.deps.clone()
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationTokenCreationTransaction(
     _VerificationModel[TokenCreationTransaction, None, TransactionDependencies]
 ):
-    pass
+    def clone(self) -> Self:
+        return VerificationTokenCreationTransaction(
+            vertex=self.vertex.clone(include_storage=False, include_metadata=False),
+            basic_deps=None,
+            deps=self.deps.clone()
+        )
 
 
 VerificationModel: TypeAlias = (
