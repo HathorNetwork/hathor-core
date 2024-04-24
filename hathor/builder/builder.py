@@ -191,6 +191,7 @@ class Builder:
         daa = self._get_or_create_daa()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
         vertex_handler = self._get_or_create_vertex_handler()
+        multiprocessor = self._get_or_create_multiprocessor()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -230,6 +231,7 @@ class Builder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            multiprocessor=multiprocessor,
             **kwargs
         )
 

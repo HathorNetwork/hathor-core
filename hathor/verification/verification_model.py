@@ -43,6 +43,7 @@ class _VerificationModel(Generic[T, BasicDepsT, DepsT]):
 
 @dataclass(frozen=True, slots=True)
 class VerificationBlock(_VerificationModel[Block, BasicBlockDependencies, BlockDependencies]):
+    # TODO: If we send bytes over multiprocessing instead of objects, we may increase performance
     def clone(self) -> 'VerificationBlock':
         return VerificationBlock(
             vertex=self.vertex.clone(include_storage=False, include_metadata=False),

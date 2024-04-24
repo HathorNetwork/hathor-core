@@ -339,6 +339,7 @@ class CliBuilder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            multiprocessor=multiprocessor,
         )
 
         if self._args.x_ipython_kernel:

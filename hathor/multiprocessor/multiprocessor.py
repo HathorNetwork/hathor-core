@@ -29,14 +29,20 @@ class Multiprocessor:
 
     def __init__(self, processes: int | None = None) -> None:
         self._log = logger.new()
-        self._pool = Pool(processes=processes)
+        self._pool = Pool(processes=processes, initializer=_init_worker)
 
     def stop(self) -> None:
-        self._log.info('Stopping Multiprocessor pool...')
-        self._pool.close()
-        self._log.info('Stopped Multiprocessor pool.')
+        self._log.info('Stopping Multiprocessor pool')
+        self._pool.terminate()
+        self._pool.join()
+        self._log.info('Stopped Multiprocessor pool')
 
     def run(self, fn: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs) -> Deferred[T]:
         deferred = Deferred[T]()
         self._pool.apply_async(fn, args, kwargs, callback=deferred.callback, error_callback=deferred.errback)
         return deferred
+
+
+def _init_worker() -> None:
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN)

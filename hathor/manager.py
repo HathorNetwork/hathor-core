@@ -44,6 +44,7 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.profiler import get_cpu_profiler
@@ -104,6 +105,7 @@ class HathorManager:
         network: str,
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
+        multiprocessor: Multiprocessor,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -134,6 +136,7 @@ class HathorManager:
         self._settings = settings
         self.daa = daa
         self._cmd_path: Optional[str] = None
+        self.multiprocessor = multiprocessor
 
         self.log = logger.new()
 
@@ -364,6 +367,7 @@ class HathorManager:
             self._event_manager.stop()
 
         self.tx_storage.flush()
+        self.multiprocessor.stop()
 
         return defer.DeferredList(waits)
 
