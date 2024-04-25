@@ -1204,6 +1204,11 @@ class TransactionStorage(ABC):
             spent_txs[input_tx.tx_id] = tx.get_spent_tx(input_tx)
         return spent_txs
 
+    def get_min_height(self, vertex_id: VertexId) -> int:
+        vertex = self.get_vertex(vertex_id)
+        meta = vertex.get_metadata()
+        return not_none(meta.min_height)
+
 
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]

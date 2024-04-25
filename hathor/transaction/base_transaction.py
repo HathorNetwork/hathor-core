@@ -22,7 +22,7 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional, cast
 
 from structlog import get_logger
 from typing_extensions import Self
@@ -269,11 +269,17 @@ class BaseTransaction(ABC):
         return hash(self.hash)
 
     @abstractmethod
-    def calculate_height(self) -> int:
+    def calculate_height(self, *, block_height_getter: Callable[[VertexId], int] | None = None) -> int:
         raise NotImplementedError
 
     @abstractmethod
-    def calculate_min_height(self) -> int:
+    def calculate_min_height(
+        self,
+        *,
+        vertex_getter: Callable[[VertexId], 'BaseTransaction'] | None = None,
+        block_height_getter: Callable[[VertexId], int] | None = None,
+        min_height_getter: Callable[[VertexId], int] | None = None,
+    ) -> int:
         raise NotImplementedError
 
     @property

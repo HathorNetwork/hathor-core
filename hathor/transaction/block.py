@@ -16,7 +16,7 @@ import base64
 from itertools import starmap, zip_longest
 from operator import add
 from struct import pack
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
@@ -25,6 +25,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.utils.int import get_bit_list
 
@@ -89,24 +90,36 @@ class Block(BaseTransaction):
 
         return blc
 
-    def calculate_height(self) -> int:
+    def calculate_height(self, *, block_height_getter: Callable[[VertexId], int] | None = None) -> int:
         """Return the height of the block, i.e., the number of blocks since genesis"""
         if self.is_genesis:
             return 0
-        assert self.storage is not None
-        parent_block = self.get_block_parent()
-        return parent_block.get_height() + 1
 
-    def calculate_min_height(self) -> int:
+        block_height_getter = block_height_getter or (
+            lambda vertex_id: not_none(self.storage).get_block(vertex_id).get_height()
+        )
+
+        parent_hash = self.get_block_parent_hash()
+        parent_height = block_height_getter(parent_hash)
+        return parent_height + 1
+
+    def calculate_min_height(
+        self,
+        *,
+        vertex_getter: Callable[[VertexId], BaseTransaction] | None = None,
+        block_height_getter: Callable[[VertexId], int] | None = None,
+        min_height_getter: Callable[[VertexId], int] | None = None,
+    ) -> int:
         """The minimum height the next block needs to have, basically the maximum min-height of this block's parents.
         """
-        assert self.storage is not None
+        assert vertex_getter is None and block_height_getter is None, 'unused custom getters'
+        min_height_getter = min_height_getter or not_none(self.storage).get_min_height
+
         # maximum min-height of any parent tx
         min_height = 0
         for tx_hash in self.get_tx_parents():
-            tx = self.storage.get_transaction(tx_hash)
-            tx_min_height = tx.get_metadata().min_height
-            min_height = max(min_height, not_none(tx_min_height))
+            tx_min_height = min_height_getter(tx_hash)
+            min_height = max(min_height, tx_min_height)
 
         return min_height
 

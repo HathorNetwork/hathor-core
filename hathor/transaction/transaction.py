@@ -15,7 +15,7 @@
 import hashlib
 from itertools import chain
 from struct import pack
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional
 
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
@@ -104,42 +104,64 @@ class Transaction(BaseTransaction):
 
         return tx
 
-    def calculate_height(self) -> int:
+    def calculate_height(self, *, block_height_getter: Callable[[VertexId], int] | None = None) -> int:
+        assert block_height_getter is None, 'custom getter is never used'
         # XXX: transactions don't have height, using 0 as a placeholder
         return 0
 
-    def calculate_min_height(self) -> int:
+    def calculate_min_height(
+        self,
+        *,
+        vertex_getter: Callable[[VertexId], BaseTransaction] | None = None,
+        block_height_getter: Callable[[VertexId], int] | None = None,
+        min_height_getter: Callable[[VertexId], int] | None = None,
+    ) -> int:
         """Calculates the min height the first block confirming this tx needs to have for reward lock verification.
 
         Assumes tx has been fully verified (parents and inputs exist and have complete metadata).
         """
+        if vertex_getter or block_height_getter or min_height_getter:
+            assert vertex_getter and block_height_getter and min_height_getter, (
+                'either provide all custom getters or none'
+            )
+
         if self.is_genesis:
             return 0
-        return max(
-            # 1) don't drop the min height of any parent tx or input tx
-            self._calculate_inherited_min_height(),
-            # 2) include the min height for any reward being spent
-            self._calculate_my_min_height(),
+
+        vertex_getter = vertex_getter or not_none(self.storage).get_vertex
+        min_height_getter = min_height_getter or not_none(self.storage).get_min_height
+        block_height_getter = block_height_getter or (
+            lambda vertex_id: not_none(self.storage).get_block(vertex_id).get_height()
         )
 
-    def _calculate_inherited_min_height(self) -> int:
+        return max(
+            # 1) don't drop the min height of any parent tx or input tx
+            self._calculate_inherited_min_height(min_height_getter),
+            # 2) include the min height for any reward being spent
+            self._calculate_my_min_height(vertex_getter, block_height_getter),
+        )
+
+    def _calculate_inherited_min_height(self, min_height_getter: Callable[[VertexId], int]) -> int:
         """ Calculates min height inherited from any input or parent"""
-        assert self.storage is not None
         min_height = 0
-        iter_parents = map(self.storage.get_transaction, self.get_tx_parents())
-        iter_inputs = map(self.get_spent_tx, self.inputs)
-        for tx in chain(iter_parents, iter_inputs):
-            min_height = max(min_height, not_none(tx.get_metadata().min_height))
+        iter_parents = self.get_tx_parents()
+        iter_inputs = (tx_input.tx_id for tx_input in self.inputs)
+        for tx_hash in chain(iter_parents, iter_inputs):
+            min_height = max(min_height, min_height_getter(tx_hash))
         return min_height
 
-    def _calculate_my_min_height(self) -> int:
+    def _calculate_my_min_height(
+        self,
+        vertex_getter: Callable[[VertexId], BaseTransaction],
+        block_height_getter: Callable[[VertexId], int],
+    ) -> int:
         """ Calculates min height derived from own spent block rewards"""
-        assert self.storage is not None
         min_height = 0
         for input_tx in self.inputs:
-            spent_tx = self.storage.get_vertex(input_tx.tx_id)
+            spent_tx = vertex_getter(input_tx.tx_id)
             if isinstance(spent_tx, Block):
-                min_height = max(min_height, spent_tx.get_height() + self._settings.REWARD_SPEND_MIN_BLOCKS + 1)
+                height = block_height_getter(input_tx.tx_id)
+                min_height = max(min_height, height + self._settings.REWARD_SPEND_MIN_BLOCKS + 1)
         return min_height
 
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
