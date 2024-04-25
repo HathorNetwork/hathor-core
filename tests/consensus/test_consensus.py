@@ -81,7 +81,6 @@ class BaseConsensusTestCase(unittest.TestCase):
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
         manager.cpu_mining_service.resolve(b0)
-        manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
         b1 = add_new_block(manager, advance_clock=15)
@@ -143,7 +142,6 @@ class BaseConsensusTestCase(unittest.TestCase):
         b0 = manager.generate_mining_block()
         b0.parents = [blocks[-1].hash, conflicting_tx.hash, conflicting_tx.parents[0]]
         manager.cpu_mining_service.resolve(b0)
-        manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
         b1 = add_new_block(manager, advance_clock=15)
@@ -199,7 +197,6 @@ class BaseConsensusTestCase(unittest.TestCase):
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
         manager.cpu_mining_service.resolve(b0)
-        manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
         b1 = add_new_block(manager, advance_clock=15)
@@ -253,7 +250,6 @@ class BaseConsensusTestCase(unittest.TestCase):
         b0.parents = [b0.parents[0], conflicting_tx.hash, conflicting_tx.parents[0]]
         b0.weight = 10
         manager.cpu_mining_service.resolve(b0)
-        manager.verification_service.verify(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
         b1 = add_new_block(manager, advance_clock=15)

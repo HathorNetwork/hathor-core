@@ -3,8 +3,11 @@ import hashlib
 from math import isinf, isnan
 from unittest.mock import patch
 
+import pytest
+
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode
+from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.simulator.utils import add_new_blocks
@@ -565,6 +568,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         self.manager.cpu_mining_service.resolve(tx)
+        tx.update_reward_lock_metadata()
         self.manager.verification_service.verify(tx)
 
     def test_tx_weight_too_high(self):
@@ -776,8 +780,11 @@ class BaseTransactionTest(unittest.TestCase):
         add_block_with_data()
         add_block_with_data(b'Testing, testing 1, 2, 3...')
         add_block_with_data(100*b'a')
-        with self.assertRaises(TransactionDataError):
+
+        with pytest.raises(InvalidNewTransaction) as e:
             add_block_with_data(101*b'a')
+
+        assert isinstance(e.value.__cause__, TransactionDataError)
 
     def test_output_serialization(self):
         from hathor.transaction.base_transaction import (

@@ -3,6 +3,7 @@ from struct import error as StructError
 import pytest
 
 from hathor.crypto.util import decode_address
+from hathor.exception import InvalidNewTransaction
 from hathor.indexes.tokens_index import TokenUtxoInfo
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
@@ -111,6 +112,7 @@ class BaseTokenTest(unittest.TestCase):
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx2)
+        tx2.update_reward_lock_metadata()
         self.manager.verification_service.verify(tx2)
 
         # missing tokens
@@ -154,7 +156,6 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[0].data = data
         tx2.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.verification_service.verify(tx2)
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
@@ -261,7 +262,6 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[0].data = data
         tx2.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.verification_service.verify(tx2)
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
@@ -400,7 +400,6 @@ class BaseTokenTest(unittest.TestCase):
         tx2.inputs[1].data = data
         tx2.inputs[2].data = data
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.verification_service.verify(tx2)
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
@@ -504,8 +503,10 @@ class BaseTokenTest(unittest.TestCase):
 
     def test_token_mint_zero(self):
         # try to mint 0 tokens
-        with self.assertRaises(InvalidToken):
+        with pytest.raises(InvalidNewTransaction) as e:
             create_tokens(self.manager, self.address_b58, mint_amount=0)
+
+        assert isinstance(e.value.__cause__, InvalidToken)
 
     def test_token_struct(self):
         tx = create_tokens(self.manager, self.address_b58, mint_amount=500)

@@ -20,7 +20,7 @@ from hathor.transaction import Block, Transaction
 from hathor.types import Address, VertexId
 
 
-def gen_new_tx(manager: HathorManager, address: str, value: int, verify: bool = True) -> Transaction:
+def gen_new_tx(manager: HathorManager, address: str, value: int) -> Transaction:
     """
     Generate and return a new transaction.
 
@@ -28,7 +28,6 @@ def gen_new_tx(manager: HathorManager, address: str, value: int, verify: bool = 
         manager: the HathorManager to generate the transaction for
         address: an address for the transaction's output
         value: a value for the transaction's output
-        verify: whether to verify the generated transaction
 
     Returns: the generated transaction.
     """
@@ -48,8 +47,6 @@ def gen_new_tx(manager: HathorManager, address: str, value: int, verify: bool = 
     tx.weight = 1
     tx.parents = manager.get_new_tx_parents(tx.timestamp)
     manager.cpu_mining_service.resolve(tx)
-    if verify:
-        manager.verification_service.verify(tx)
     return tx
 
 
@@ -111,7 +108,6 @@ def add_new_block(
     if signal_bits is not None:
         block.signal_bits = signal_bits
     manager.cpu_mining_service.resolve(block)
-    manager.verification_service.validate_full(block)
     if propagate:
         manager.propagate_tx(block, fails_silently=False)
     if advance_clock:

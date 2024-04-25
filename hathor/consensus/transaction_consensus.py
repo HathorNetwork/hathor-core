@@ -310,7 +310,7 @@ class TransactionConsensusAlgorithm:
 
         # If we got here, either it was a tie or we won.
         # So, let's void the conflict txs.
-        for conflict_tx in conflict_list:
+        for conflict_tx in sorted(conflict_list, key=lambda x: x.timestamp, reverse=True):
             self.mark_as_voided(conflict_tx)
 
         if not tie_list:
