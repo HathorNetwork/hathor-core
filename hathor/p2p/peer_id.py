@@ -84,6 +84,7 @@ class PeerId:
         self.last_seen = inf
         self.flags = set()
         self._certificate_options: Optional[CertificateOptions] = None
+        self.source_file = None
 
         if auto_generate_keys:
             self.generate_keys()
@@ -169,7 +170,9 @@ class PeerId:
     def create_from_json_path(cls, path: str) -> 'PeerId':
         """Create a new PeerId from a JSON file."""
         data = json.load(open(path, 'r'))
-        return PeerId.create_from_json(data)
+        peer = PeerId.create_from_json(data)
+        peer.source_file = path
+        return peer
 
     @classmethod
     def create_from_json(cls, data: dict[str, Any]) -> 'PeerId':
