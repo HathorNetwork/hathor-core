@@ -820,6 +820,13 @@ class BaseTransaction(ABC):
             'parents': [],
         }
 
+        # A nano contract tx must be confirmed by one block at least
+        # to be considered "executed"
+        if meta.first_block is not None:
+            ret['first_block'] = meta.first_block.hex()
+        else:
+            ret['first_block'] = None
+
         for parent in self.parents:
             ret['parents'].append(parent.hex())
 
