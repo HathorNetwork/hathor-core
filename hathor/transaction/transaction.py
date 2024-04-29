@@ -21,7 +21,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
-from hathor.transaction.base_transaction import TX_HASH_SIZE
+from hathor.transaction.base_transaction import TX_HASH_SIZE, register_vertex_pickler
 from hathor.transaction.exceptions import InexistentInput, InvalidToken
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
@@ -404,3 +404,6 @@ class Transaction(BaseTransaction):
             if meta.voided_by:
                 return True
         return False
+
+
+register_vertex_pickler(Transaction)

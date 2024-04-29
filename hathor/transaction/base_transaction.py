@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import base64
+import copyreg
 import datetime
 import hashlib
 import time
@@ -25,7 +26,7 @@ from struct import error as StructError, pack
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional, cast
 
 from structlog import get_logger
-from typing_extensions import Self
+from typing_extensions import Self, TypeVar
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
@@ -1111,3 +1112,16 @@ def tx_or_block_from_bytes(data: bytes,
         return cls.create_from_struct(data, storage=storage)
     except ValueError:
         raise StructError('Invalid bytes to create transaction subclass.')
+
+
+T = TypeVar('T', bound=BaseTransaction)
+
+
+def register_vertex_pickler(type_: type[T]) -> None:
+    def unpickle_vertex(vertex_bytes: bytes) -> T:
+        return cast(T, tx_or_block_from_bytes(vertex_bytes))
+
+    def vertex_pickler(vertex: T) -> tuple[Callable[[bytes], T], tuple[bytes]]:
+        return unpickle_vertex, (bytes(vertex),)
+
+    copyreg.pickle(type_, vertex_pickler)

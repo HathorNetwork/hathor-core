@@ -23,6 +23,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
+from hathor.transaction.base_transaction import register_vertex_pickler
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.types import VertexId
@@ -414,3 +415,6 @@ class Block(BaseTransaction):
         bit_list = self._get_feature_activation_bit_list()
 
         return bit_list[bit]
+
+
+register_vertex_pickler(Block)

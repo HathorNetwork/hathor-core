@@ -43,45 +43,24 @@ class _VerificationModel(Generic[T, BasicDepsT, DepsT]):
 
 @dataclass(frozen=True, slots=True)
 class VerificationBlock(_VerificationModel[Block, BasicBlockDependencies, BlockDependencies]):
-    # TODO: If we send bytes over multiprocessing instead of objects, we may increase performance
-    def clone(self) -> 'VerificationBlock':
-        return VerificationBlock(
-            vertex=self.vertex.clone(include_storage=False, include_metadata=False),
-            basic_deps=self.basic_deps.clone(),
-            deps=self.deps.clone() if self.deps else None
-        )
+    pass
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationMergeMinedBlock(_VerificationModel[MergeMinedBlock, BasicBlockDependencies, BlockDependencies]):
-    def clone(self) -> 'VerificationMergeMinedBlock':
-        return VerificationMergeMinedBlock(
-            vertex=self.vertex.clone(include_storage=False, include_metadata=False),
-            basic_deps=self.basic_deps.clone(),
-            deps=self.deps.clone() if self.deps else None
-        )
+    pass
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationTransaction(_VerificationModel[Transaction, None, TransactionDependencies]):
-    def clone(self) -> 'VerificationTransaction':
-        return VerificationTransaction(
-            vertex=self.vertex.clone(include_storage=False, include_metadata=False),
-            basic_deps=None,
-            deps=self.deps.clone() if self.deps else None
-        )
+    pass
 
 
 @dataclass(frozen=True, slots=True)
 class VerificationTokenCreationTransaction(
     _VerificationModel[TokenCreationTransaction, None, TransactionDependencies]
 ):
-    def clone(self) -> 'VerificationTokenCreationTransaction':
-        return VerificationTokenCreationTransaction(
-            vertex=self.vertex.clone(include_storage=False, include_metadata=False),
-            basic_deps=None,
-            deps=self.deps.clone() if self.deps else None
-        )
+    pass
 
 
 VerificationModel: TypeAlias = (
