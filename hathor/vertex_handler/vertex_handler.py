@@ -84,10 +84,11 @@ class VertexHandler:
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
-        self._verifier = ParallelVerifier(
+        self._verifier = ParallelVerifier(  # TODO: Move to builder
             verification_service=self._verification_service,
             tx_storage=tx_storage,
             daa=not_none(DifficultyAdjustmentAlgorithm.singleton),
+            feature_service=feature_service,
             reactor=reactor,
         )
 
@@ -285,6 +286,10 @@ class VertexHandler:
         if new_vertex.propagate_to_peers:
             # Propagate to our peers.
             self._p2p_manager.send_tx_to_peers(vertex)
+
+        if isinstance(vertex, Block) and vertex.get_height() == 2900:
+            import os
+            os._exit(0)
 
     def _log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
         """ A shortcut for logging additional information for block/txs.

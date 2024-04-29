@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import TypeAlias
 
@@ -21,7 +21,7 @@ from typing_extensions import assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import BlockIsSignaling, BlockSignalingState
+from hathor.feature_activation.feature_service import BlockIsSignaling, BlockSignalingState, FeatureService
 from hathor.feature_activation.model.feature_description import FeatureInfo
 from hathor.reactor import ReactorProtocol
 from hathor.reward_lock import get_spent_reward_locked_info
@@ -68,6 +68,7 @@ class ParallelVerifier:
         '_tx_storage',
         '_daa',
         '_verification_service',
+        '_feature_service',
         '_processing_vertices',
         '_rev_deps',
         '_waiting_vertices',
@@ -80,11 +81,13 @@ class ParallelVerifier:
         tx_storage: TransactionStorage,
         verification_service: VerificationService,
         daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService,
         reactor: ReactorProtocol,
     ) -> None:
         self._tx_storage = tx_storage
         self._daa = daa
         self._verification_service = verification_service
+        self._feature_service = feature_service
         self._processing_vertices: dict[VertexId, tuple[BaseTransaction, _LocalMetadata]] = {}
         self._rev_deps: defaultdict[VertexId, set[BaseTransaction]] = defaultdict(set)
         self._waiting_vertices: dict[VertexId, Deferred[None]] = {}
@@ -111,7 +114,7 @@ class ParallelVerifier:
         deferred: Deferred[None] = Deferred()
 
         if not missing_deps:
-            self._reactor.callLater(0, self._finish, vertex.hash, deferred)
+            self._reactor.callLater(0, self._process_queue, vertex.hash, deferred)
         else:
             for dep_id in missing_deps:
                 self._rev_deps[dep_id].add(vertex)
@@ -124,13 +127,19 @@ class ParallelVerifier:
         del self._processing_vertices[vertex.hash]
         return result
 
-    def _finish(self, vertex_id: VertexId, deferred: Deferred[None]) -> None:
-        deferred.callback(None)
-        for rev_dep in self._rev_deps[vertex_id]:
-            if self._tx_storage.can_validate_full(rev_dep):
-                dep_deferred = self._waiting_vertices.pop(rev_dep.hash)
-                self._finish(rev_dep.hash, dep_deferred)
-        del self._rev_deps[vertex_id]
+    def _process_queue(self, vertex_id: VertexId, deferred: Deferred[None]) -> None:
+        todo = deque([(vertex_id, deferred)])
+        while True:
+            try:
+                vertex_id, deferred = todo.popleft()
+            except IndexError:
+                break
+            deferred.callback(None)
+            for rev_dep in self._rev_deps[vertex_id]:
+                if self._tx_storage.can_validate_full(rev_dep):
+                    dep_deferred = self._waiting_vertices.pop(rev_dep.hash)
+                    todo.append((rev_dep.hash, dep_deferred))
+            del self._rev_deps[vertex_id]
 
     def is_processing(self, vertex_id: VertexId) -> bool:
         return vertex_id in self._processing_vertices
@@ -257,12 +266,14 @@ class ParallelVerifier:
     def _create_block_metadata(self, block: Block) -> _BlockMetadata:
         height = block.calculate_height(block_height_getter=self._get_block_height)
         min_height = block.calculate_min_height(min_height_getter=self._get_min_height)
+        # signaling_state = self._feature_service.is_signaling_mandatory_features(block)
+        feature_info = self._feature_service.get_feature_info(block=block)
 
         return _BlockMetadata(
             height=height,
             min_height=min_height,
-            signaling_state=BlockIsSignaling(),  # TODO
-            feature_info={},  # TODO
+            signaling_state=BlockIsSignaling(),
+            feature_info=feature_info,
         )
 
     def _create_tx_metadata(self, tx: Transaction) -> _TransactionMetadata:
