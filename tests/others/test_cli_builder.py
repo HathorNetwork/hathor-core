@@ -57,7 +57,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
-        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
         self.assertFalse(self.resources_builder._built_prometheus)
         self.assertFalse(self.resources_builder._built_status)
@@ -103,7 +103,7 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_sync_default(self):
         manager = self._build(['--memory-storage'])
-        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_bridge(self):
