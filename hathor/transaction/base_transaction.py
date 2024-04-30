@@ -624,13 +624,14 @@ class BaseTransaction(ABC):
             #        happens include generating new mining blocks and some tests
             height = self.calculate_height() if self.storage else None
             score = self.weight if self.is_genesis else 0
+            min_height = 0 if self.is_genesis else None
 
             metadata = TransactionMetadata(
                 hash=self._hash,
                 accumulated_weight=self.weight,
                 height=height,
                 score=score,
-                min_height=0,
+                min_height=min_height
             )
             self._metadata = metadata
         if not metadata.hash:
@@ -713,8 +714,9 @@ class BaseTransaction(ABC):
         """
         self._update_height_metadata()
         self._update_parents_children_metadata()
-        self._update_reward_lock_metadata()
+        self.update_reward_lock_metadata()
         self._update_feature_activation_bit_counts()
+        self._update_initial_accumulated_weight()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
@@ -724,10 +726,13 @@ class BaseTransaction(ABC):
         meta = self.get_metadata()
         meta.height = self.calculate_height()
 
-    def _update_reward_lock_metadata(self) -> None:
+    def update_reward_lock_metadata(self) -> None:
         """Update the txs/block min_height metadata."""
         metadata = self.get_metadata()
-        metadata.min_height = self.calculate_min_height()
+        min_height = self.calculate_min_height()
+        if metadata.min_height is not None:
+            assert metadata.min_height == min_height
+        metadata.min_height = min_height
 
     def _update_parents_children_metadata(self) -> None:
         """Update the txs/block parent's children metadata."""
@@ -748,6 +753,11 @@ class BaseTransaction(ABC):
         assert isinstance(self, Block)
         # This method lazily calculates and stores the value in metadata
         self.get_feature_activation_bit_counts()
+
+    def _update_initial_accumulated_weight(self) -> None:
+        """Update the vertex initial accumulated_weight."""
+        metadata = self.get_metadata()
+        metadata.accumulated_weight = self.weight
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp

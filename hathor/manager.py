@@ -914,12 +914,6 @@ class HathorManager:
         if not tx_from_lib.is_standard(max_output_script_size, not allow_non_standard_script):
             raise NonStandardTxError('Transaction is non standard.')
 
-        # Validate tx.
-        try:
-            self.verification_service.verify(tx)
-        except TxValidationError as e:
-            raise InvalidNewTransaction(str(e))
-
         self.propagate_tx(tx, fails_silently=False)
 
     def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:

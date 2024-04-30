@@ -228,6 +228,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             non_signaling_block = manager.generate_mining_block()
             manager.cpu_mining_service.resolve(non_signaling_block)
             non_signaling_block.signal_bits = 0b10
+            non_signaling_block.update_reward_lock_metadata()
 
             with pytest.raises(BlockMustSignalError):
                 manager.verification_service.verify(non_signaling_block)

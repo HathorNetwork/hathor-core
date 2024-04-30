@@ -472,7 +472,6 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
 
     manager.cpu_mining_service.resolve(tx)
     if propagate:
-        manager.verification_service.verify(tx)
         manager.propagate_tx(tx, fails_silently=False)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)

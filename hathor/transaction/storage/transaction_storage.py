@@ -31,6 +31,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput
 from hathor.transaction.block import Block
+from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.storage.exceptions import (
     TransactionDoesNotExist,
     TransactionIsNotABlock,
@@ -49,6 +50,7 @@ from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_con
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
+from hathor.verification.transaction_verifier import TransactionVerifier
 
 cpu = get_cpu_profiler()
 
@@ -1097,10 +1099,11 @@ class TransactionStorage(ABC):
         from hathor.transaction.validation_state import ValidationState
         to_remove: list[BaseTransaction] = []
         for tx in self.iter_mempool_from_best_index():
-            tx_min_height = tx.get_metadata().min_height
-            assert tx_min_height is not None
-            # We use +1 here because a tx is valid if it can be confirmed by the next block
-            if new_best_height + 1 < tx_min_height:
+            try:
+                TransactionVerifier.verify_reward_locked_for_height(
+                    tx, new_best_height, assert_min_height_verification=False
+                )
+            except RewardLocked:
                 tx.set_validation(ValidationState.INVALID)
                 to_remove.append(tx)
         return to_remove

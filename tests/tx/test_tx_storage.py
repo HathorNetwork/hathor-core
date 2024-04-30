@@ -62,6 +62,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.block = Block(timestamp=previous_timestamp + 1, weight=12, outputs=[output], parents=block_parents,
                            nonce=100781, storage=self.tx_storage)
         self.manager.cpu_mining_service.resolve(self.block)
+        self.block.update_reward_lock_metadata()
         self.manager.verification_service.verify(self.block)
         self.block.get_metadata().validation = ValidationState.FULL
 
@@ -514,7 +515,6 @@ class BaseTransactionStorageTest(unittest.TestCase):
             block.parents = parents
         block.weight = 10
         self.assertTrue(self.manager.cpu_mining_service.resolve(block))
-        self.manager.verification_service.verify(block)
         self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)
         return block

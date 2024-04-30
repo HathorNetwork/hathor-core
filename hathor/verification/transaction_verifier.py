@@ -16,6 +16,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
+from hathor.reward_lock.reward_lock import get_minimum_best_height
 from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import (
     ConflictingInputs,
@@ -37,7 +38,6 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
-from hathor.util import not_none
 
 cpu = get_cpu_profiler()
 
@@ -142,11 +142,50 @@ class TransactionVerifier:
             raise InvalidInputData(e) from e
 
     def verify_reward_locked(self, tx: Transaction) -> None:
-        """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
-        the block rewards spent by this tx itself, and not the inherited `min_height`."""
-        info = get_spent_reward_locked_info(tx, not_none(tx.storage))
+        """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering both
+        the block rewards spent by this tx itself, and the inherited `min_height`."""
+        assert tx.storage is not None
+        best_height = get_minimum_best_height(tx.storage)
+        self.verify_reward_locked_for_height(tx, best_height)
+
+    @staticmethod
+    def verify_reward_locked_for_height(
+        tx: Transaction,
+        best_height: int,
+        *,
+        assert_min_height_verification: bool = True
+    ) -> None:
+        """
+        Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering both
+        the block rewards spent by this tx itself, and the inherited `min_height`.
+
+        Args:
+            tx: the transaction to be verified.
+            best_height: the height of the best chain to be used for verification.
+            assert_min_height_verification: whether the inherited `min_height` verification must pass.
+
+        Note: for verification of new transactions, `assert_min_height_verification` must be `True`. This
+        verification is always expected to pass for new txs, as a failure would mean one of its dependencies would
+        have failed too. So an `AssertionError` is raised if it fails.
+
+        However, when txs are being re-verified for Reward Lock during a reorg, it's possible that txs may fail
+        their inherited `min_height` verification. So in that case `assert_min_height_verification` is `False`,
+        and a normal `RewardLocked` exception is raised instead.
+        """
+        assert tx.storage is not None
+        info = get_spent_reward_locked_info(tx, tx.storage)
         if info is not None:
             raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
+
+        meta = tx.get_metadata()
+        assert meta.min_height is not None
+        # We use +1 here because a tx is valid if it can be confirmed by the next block
+        if best_height + 1 < meta.min_height:
+            if assert_min_height_verification:
+                raise AssertionError('a new tx should never be invalid by its inherited min_height.')
+            raise RewardLocked(
+                f'Tx {tx.hash_hex} has min_height={meta.min_height}, but the best_height={best_height}.'
+            )
 
     def verify_number_of_inputs(self, tx: Transaction) -> None:
         """Verify number of inputs is in a valid range"""

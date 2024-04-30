@@ -150,11 +150,13 @@ class VertexHandler:
             return False
 
         if not metadata.validation.is_fully_connected():
+            # TODO: Remove this from here after a refactor in metadata initialization
+            vertex.update_reward_lock_metadata()
             try:
                 self._verification_service.validate_full(vertex, reject_locked_reward=reject_locked_reward)
             except HathorError as e:
                 if not fails_silently:
-                    raise InvalidNewTransaction('full validation failed') from e
+                    raise InvalidNewTransaction(f'full validation failed: {str(e)}') from e
                 self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
                 return False
 

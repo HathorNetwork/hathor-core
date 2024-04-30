@@ -270,6 +270,7 @@ class SendTokensResource(Resource):
         if context.should_stop_mining_thread:
             raise CancelledError()
         context.tx.update_hash()
+        context.tx.update_reward_lock_metadata()
         self.manager.verification_service.verify(context.tx)
         return context
 
