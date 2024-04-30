@@ -52,6 +52,7 @@ class DecodeTxResource(Resource):
         try:
             tx_bytes = bytes.fromhex(parsed['args']['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
+            tx.init_static_metadata_from_storage(self.manager.tx_storage)
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)
         except ValueError:

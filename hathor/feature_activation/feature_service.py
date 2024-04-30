@@ -60,8 +60,8 @@ class FeatureService:
         Return whether a block is signaling features that are mandatory, that is, any feature currently in the
         MUST_SIGNAL phase.
         """
-        bit_counts = block.get_feature_activation_bit_counts()
-        height = block.get_height()
+        bit_counts = block.static_metadata.feature_activation_bit_counts
+        height = block.static_metadata.height
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         remaining_blocks = self._feature_settings.evaluation_interval - offset_to_boundary - 1
         descriptions = self.get_bits_description(block=block)
@@ -95,7 +95,7 @@ class FeatureService:
         # All blocks within the same evaluation interval have the same state, that is, the state is only defined for
         # the block in each interval boundary. Therefore, we get the state of the previous boundary block or calculate
         # a new state if this block is a boundary block.
-        height = block.get_height()
+        height = block.static_metadata.height
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
         previous_boundary_height = height - offset_to_previous_boundary
@@ -139,7 +139,7 @@ class FeatureService:
         an AssertionError. Non-boundary blocks never calculate their own state, they get it from their parent block
         instead.
         """
-        height = boundary_block.get_height()
+        height = boundary_block.static_metadata.height
         criteria = self._feature_settings.features.get(feature)
         evaluation_interval = self._feature_settings.evaluation_interval
 
@@ -162,7 +162,7 @@ class FeatureService:
             # Get the count for this block's parent. Since this is a boundary block, its parent count represents the
             # previous evaluation interval count.
             parent_block = boundary_block.get_block_parent()
-            counts = parent_block.get_feature_activation_bit_counts()
+            counts = parent_block.static_metadata.feature_activation_bit_counts
             count = counts[criteria.bit]
             threshold = criteria.get_threshold(self._feature_settings)
 
@@ -209,8 +209,9 @@ class FeatureService:
         Given a block, return its ancestor at a specific height.
         Uses the height index if the block is in the best blockchain, or search iteratively otherwise.
         """
-        assert ancestor_height < block.get_height(), (
-            f"ancestor height must be lower than the block's height: {ancestor_height} >= {block.get_height()}"
+        assert ancestor_height < block.static_metadata.height, (
+            f"ancestor height must be lower than the block's height: "
+            f"{ancestor_height} >= {block.static_metadata.height}"
         )
 
         # It's possible that this method is called before the consensus runs for this block, therefore we do not know
@@ -219,10 +220,10 @@ class FeatureService:
         parent_metadata = parent_block.get_metadata()
         assert parent_metadata.validation.is_fully_connected(), 'The parent should always be fully validated.'
 
-        if parent_block.get_height() == ancestor_height:
+        if parent_block.static_metadata.height == ancestor_height:
             return parent_block
 
-        if not parent_metadata.voided_by and (ancestor := self._tx_storage.get_transaction_by_height(ancestor_height)):
+        if not parent_metadata.voided_by and (ancestor := self._tx_storage.get_block_by_height(ancestor_height)):
             from hathor.transaction import Block
             assert isinstance(ancestor, Block)
             return ancestor
@@ -237,11 +238,11 @@ class FeatureService:
         # TODO: there are further optimizations to be done here, the latest common block height could be persisted in
         #  metadata, so we could still use the height index if the requested height is before that height.
         assert ancestor_height >= 0
-        assert block.get_height() - ancestor_height <= self._feature_settings.evaluation_interval, (
+        assert block.static_metadata.height - ancestor_height <= self._feature_settings.evaluation_interval, (
             'requested ancestor is deeper than the maximum allowed'
         )
         ancestor = block
-        while ancestor.get_height() > ancestor_height:
+        while ancestor.static_metadata.height > ancestor_height:
             ancestor = ancestor.get_block_parent()
 
         return ancestor

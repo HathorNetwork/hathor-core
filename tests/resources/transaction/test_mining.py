@@ -38,9 +38,9 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
                 'accumulated_weight': 1.0,
                 'score': 0,
                 'height': 1,
-                'min_height': None,
+                'min_height': 0,
                 'first_block': None,
-                'feature_activation_bit_counts': None
+                'feature_activation_bit_counts': [0, 0, 0, 0]
             },
             'tokens': [],
             'data': '',
@@ -71,9 +71,9 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
                 'accumulated_weight': 1.0,
                 'score': 0,
                 'height': 1,
-                'min_height': None,
+                'min_height': 0,
                 'first_block': None,
-                'feature_activation_bit_counts': None
+                'feature_activation_bit_counts': [0, 0, 0, 0]
             },
             'tokens': [],
             'data': '',

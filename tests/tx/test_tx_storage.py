@@ -62,7 +62,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.block = Block(timestamp=previous_timestamp + 1, weight=12, outputs=[output], parents=block_parents,
                            nonce=100781, storage=self.tx_storage)
         self.manager.cpu_mining_service.resolve(self.block)
-        self.block.update_reward_lock_metadata()
+        self.block.init_static_metadata_from_storage(self.tx_storage)
         self.manager.verification_service.verify(self.block)
         self.block.get_metadata().validation = ValidationState.FULL
 
@@ -81,6 +81,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             parents=tx_parents, storage=self.tx_storage)
         self.manager.cpu_mining_service.resolve(self.tx)
         self.tx.get_metadata().validation = ValidationState.FULL
+        self.tx.init_static_metadata_from_storage(self.tx_storage)
 
         # Disable weakref to test the internal methods. Otherwise, most methods return objects from weakref.
         self.tx_storage._disable_weakref()
@@ -374,6 +375,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
     def test_save_token_creation_tx(self):
         tx = create_tokens(self.manager, propagate=False)
         tx.get_metadata().validation = ValidationState.FULL
+        tx.init_static_metadata_from_storage(self.tx_storage)
         self.validate_save(tx)
 
     def _validate_not_in_index(self, tx, index):

@@ -36,6 +36,7 @@ class BaseCacheStorageTest(unittest.TestCase):
         from hathor.transaction.validation_state import ValidationState
         tx = Transaction(nonce=nonce, storage=self.cache_storage)
         tx.update_hash()
+        tx.init_static_metadata_from_storage(self.cache_storage)
         meta = TransactionMetadata(hash=tx.hash)
         meta.validation = ValidationState.FULL
         tx._metadata = meta

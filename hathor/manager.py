@@ -435,7 +435,7 @@ class HathorManager:
             dt = LogDuration(t2 - t1)
             dcnt = cnt - cnt2
             tx_rate = '?' if dt == 0 else dcnt / dt
-            h = max(h, tx_meta.height or 0)
+            h = max(h, (tx_meta.height if isinstance(tx, Block) else 0))
             if dt > 30:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
                 if h == 0:
@@ -455,12 +455,10 @@ class HathorManager:
 
             try:
                 # TODO: deal with invalid tx
-                tx.calculate_height()
                 tx._update_parents_children_metadata()
 
                 if tx.can_validate_full():
                     tx.update_initial_metadata()
-                    tx.calculate_min_height()
                     if tx.is_genesis:
                         assert tx.validate_checkpoint(self.checkpoints)
                     assert self.verification_service.validate_full(
@@ -560,8 +558,6 @@ class HathorManager:
         self.tx_storage.pre_init()
         assert self.tx_storage.indexes is not None
 
-        self._bit_signaling_service.start()
-
         started_at = int(time.time())
         last_started_at = self.tx_storage.get_last_started_at()
         if last_started_at >= started_at:
@@ -576,6 +572,8 @@ class HathorManager:
         #       method for full-verification to work, if we implement it here we'll reduce a lot of duplicate and
         #       complex code
         self.tx_storage.indexes._manually_initialize(self.tx_storage)
+
+        self._bit_signaling_service.start()
 
         # Verify if all checkpoints that exist in the database are correct
         try:

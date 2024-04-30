@@ -77,6 +77,7 @@ class GetBlockTemplateResource(Resource):
         # get block
         # XXX: miner can edit block data and output_script, so it's fine if address is None
         block = self.manager.generate_mining_block(address=address, merge_mined=merged_mining)
+        block.init_static_metadata_from_storage(self.manager.tx_storage)
 
         # serialize
         data = block.to_json(include_metadata=True)

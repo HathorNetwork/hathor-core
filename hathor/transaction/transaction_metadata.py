@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import practically_equal
 
@@ -40,17 +41,7 @@ class TransactionMetadata:
     accumulated_weight: float
     score: float
     first_block: Optional[bytes]
-    height: Optional[int]
     validation: ValidationState
-    # XXX: this is only used to defer the reward-lock verification from the transaction spending a reward to the first
-    # block that confirming this transaction, it is important to always have this set to be able to distinguish an old
-    # metadata (that does not have this calculated, from a tx with a new format that does have this calculated)
-    min_height: Optional[int]
-
-    # A list of feature activation bit counts. Must only be used by Blocks, is None otherwise.
-    # Each list index corresponds to a bit position, and its respective value is the rolling count of active bits from
-    # the previous boundary block up to this block, including it. LSB is on the left.
-    feature_activation_bit_counts: Optional[list[int]]
 
     # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
     # is None otherwise. This is only used for caching, so it can be safely cleared up, as it would be recalculated
@@ -69,9 +60,6 @@ class TransactionMetadata:
         hash: Optional[bytes] = None,
         accumulated_weight: float = 0,
         score: float = 0,
-        height: Optional[int] = None,
-        min_height: Optional[int] = None,
-        feature_activation_bit_counts: Optional[list[int]] = None
     ) -> None:
         from hathor.transaction.genesis import is_genesis
 
@@ -118,16 +106,8 @@ class TransactionMetadata:
         # If two blocks verify the same parent block and have the same score, both are valid.
         self.first_block = None
 
-        # Height
-        self.height = height
-
-        # Min height
-        self.min_height = min_height
-
         # Validation
         self.validation = ValidationState.INITIAL
-
-        self.feature_activation_bit_counts = feature_activation_bit_counts
 
         settings = get_global_settings()
 
@@ -192,7 +172,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by', 'children',
                       'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
-                      'min_height', 'feature_activation_bit_counts', 'feature_states']:
+                      'feature_states']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -225,9 +205,12 @@ class TransactionMetadata:
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight'] = self.accumulated_weight
         data['score'] = self.score
-        data['height'] = self.height
         data['min_height'] = self.min_height
-        data['feature_activation_bit_counts'] = self.feature_activation_bit_counts
+
+        from hathor.transaction import Block
+        if isinstance(self.get_tx(), Block):
+            data['height'] = self.height
+            data['feature_activation_bit_counts'] = self.feature_activation_bit_counts
 
         if self.feature_states is not None:
             data['feature_states'] = {feature.value: state.value for feature, state in self.feature_states.items()}
@@ -277,9 +260,6 @@ class TransactionMetadata:
 
         meta.accumulated_weight = data['accumulated_weight']
         meta.score = data.get('score', 0)
-        meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
-        meta.min_height = data.get('min_height')
-        meta.feature_activation_bit_counts = data.get('feature_activation_bit_counts', [])
 
         feature_states_raw = data.get('feature_states')
         if feature_states_raw:
@@ -331,3 +311,19 @@ class TransactionMetadata:
         if self.voided_by is None:
             return False
         return item in self.voided_by
+
+    @property
+    def height(self) -> int:
+        static_metadata = self.get_tx().static_metadata
+        assert isinstance(static_metadata, BlockStaticMetadata)
+        return static_metadata.height
+
+    @property
+    def min_height(self) -> int:
+        return self.get_tx().static_metadata.min_height
+
+    @property
+    def feature_activation_bit_counts(self) -> list[int]:
+        static_metadata = self.get_tx().static_metadata
+        assert isinstance(static_metadata, BlockStaticMetadata)
+        return static_metadata.feature_activation_bit_counts

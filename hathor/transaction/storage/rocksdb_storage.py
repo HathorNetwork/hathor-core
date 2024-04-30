@@ -12,15 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from structlog import get_logger
+from typing_extensions import override
 
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
+from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.types import VertexId
 from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
@@ -33,6 +36,7 @@ logger = get_logger()
 _DB_NAME = 'data_v2.db'
 _CF_NAME_TX = b'tx'
 _CF_NAME_META = b'meta'
+_CF_NAME_STATIC_META = b'static-meta'
 _CF_NAME_ATTR = b'attr'
 _CF_NAME_MIGRATIONS = b'migrations'
 
@@ -46,6 +50,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     def __init__(self, rocksdb_storage: RocksDBStorage, indexes: Optional[IndexesManager] = None):
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
+        self._cf_static_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_STATIC_META)
         self._cf_attr = rocksdb_storage.get_or_create_column_family(_CF_NAME_ATTR)
         self._cf_migrations = rocksdb_storage.get_or_create_column_family(_CF_NAME_MIGRATIONS)
 
@@ -84,6 +89,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         super().remove_transaction(tx)
         self._db.delete((self._cf_tx, tx.hash))
         self._db.delete((self._cf_meta, tx.hash))
+        self._db.delete((self._cf_static_meta, tx.hash))
         self._remove_from_weakref(tx)
 
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
@@ -98,6 +104,15 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             self._db.put((self._cf_tx, key), tx_data)
         meta_data = self._meta_to_bytes(tx.get_metadata(use_storage=False))
         self._db.put((self._cf_meta, key), meta_data)
+
+    @override
+    def _save_static_metadata(self, tx: 'BaseTransaction') -> None:
+        self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.to_bytes())
+
+    @override
+    def _get_static_metadata(self, vertex: 'BaseTransaction') -> VertexStaticMetadata | None:
+        data = self._db.get((self._cf_static_meta, vertex.hash))
+        return VertexStaticMetadata.from_bytes(data, target=vertex) if data else None
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         may_exist, _ = self._db.key_may_exist((self._cf_tx, hash_bytes))
@@ -204,3 +219,11 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         else:
             return data.decode()
+
+    @override
+    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
+        items = self._db.iteritems(self._cf_meta)
+        items.seek_to_first()
+
+        for (_, vertex_id), metadata_bytes in items:
+            yield vertex_id, json_loadb(metadata_bytes)

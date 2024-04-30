@@ -85,6 +85,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx1.storage = self.storage
         tx1.update_hash()
         tx1.get_metadata().validation = ValidationState.FULL
+        tx1.init_static_metadata_from_storage(self.storage)
         self.storage.save_transaction(tx1)
         w.on_new_tx(tx1)
         self.assertEqual(len(w.spent_txs), 1)
@@ -101,6 +102,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx2.storage = self.storage
         tx2.update_hash()
         tx2.get_metadata().validation = ValidationState.FULL
+        tx2.init_static_metadata_from_storage(self.storage)
         self.storage.save_transaction(tx2)
         w.on_new_tx(tx2)
         self.assertEqual(len(w.spent_txs), 2)
@@ -206,7 +208,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx2.timestamp = tx.timestamp + 1
         tx2.parents = self.manager.get_new_tx_parents()
         self.manager.cpu_mining_service.resolve(tx2)
-        tx2.update_reward_lock_metadata()
+        tx2.init_static_metadata_from_storage(self.manager.tx_storage)
         self.manager.verification_service.verify(tx2)
 
         self.assertNotEqual(len(tx2.inputs), 0)

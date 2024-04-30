@@ -512,6 +512,7 @@ class StratumProtocol(JSONRPC):
                 'job_id': job_id.hex
             })
 
+        job.tx.init_static_metadata_from_storage(self.manager.tx_storage)
         tx = job.tx.clone()
         block_base = tx.get_header_without_nonce()
         block_base_hash = sha256d_hash(block_base)

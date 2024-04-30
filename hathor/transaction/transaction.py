@@ -13,20 +13,20 @@
 # limitations under the License.
 
 import hashlib
-from itertools import chain
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+
+from typing_extensions import override
 
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
-from hathor.reward_lock import iter_spent_rewards
-from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
-from hathor.transaction.base_transaction import TX_HASH_SIZE
+from hathor.transaction import TxInput, TxOutput, TxVersion
+from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
-from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -51,7 +51,7 @@ class RewardLockedInfo(NamedTuple):
     blocks_needed: int
 
 
-class Transaction(BaseTransaction):
+class Transaction(GenericVertex[TransactionStaticMetadata]):
 
     SERIALIZATION_NONCE_SIZE = 4
 
@@ -104,41 +104,6 @@ class Transaction(BaseTransaction):
         tx.storage = storage
 
         return tx
-
-    def calculate_height(self) -> int:
-        # XXX: transactions don't have height, using 0 as a placeholder
-        return 0
-
-    def calculate_min_height(self) -> int:
-        """Calculates the min height the first block confirming this tx needs to have for reward lock verification.
-
-        Assumes tx has been fully verified (parents and inputs exist and have complete metadata).
-        """
-        if self.is_genesis:
-            return 0
-        return max(
-            # 1) don't drop the min height of any parent tx or input tx
-            self._calculate_inherited_min_height(),
-            # 2) include the min height for any reward being spent
-            self._calculate_my_min_height(),
-        )
-
-    def _calculate_inherited_min_height(self) -> int:
-        """ Calculates min height inherited from any input or parent"""
-        assert self.storage is not None
-        min_height = 0
-        iter_parents = map(self.storage.get_transaction, self.get_tx_parents())
-        iter_inputs = map(self.get_spent_tx, self.inputs)
-        for tx in chain(iter_parents, iter_inputs):
-            min_height = max(min_height, not_none(tx.get_metadata().min_height))
-        return min_height
-
-    def _calculate_my_min_height(self) -> int:
-        """ Calculates min height derived from own spent block rewards"""
-        min_height = 0
-        for blk in iter_spent_rewards(self, not_none(self.storage)):
-            min_height = max(min_height, blk.get_height() + self._settings.REWARD_SPEND_MIN_BLOCKS + 1)
-        return min_height
 
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.
@@ -375,3 +340,8 @@ class Transaction(BaseTransaction):
             if meta.voided_by:
                 return True
         return False
+
+    @override
+    def init_static_metadata_from_storage(self, storage: 'TransactionStorage') -> None:
+        static_metadata = TransactionStaticMetadata.create_from_storage(self, self._settings, storage)
+        self.set_static_metadata(static_metadata)

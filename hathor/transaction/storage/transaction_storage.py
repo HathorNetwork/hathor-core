@@ -32,6 +32,7 @@ from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput
 from hathor.transaction.block import Block
 from hathor.transaction.exceptions import RewardLocked
+from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import (
     TransactionDoesNotExist,
     TransactionIsNotABlock,
@@ -43,6 +44,7 @@ from hathor.transaction.storage.migrations import (
     add_feature_activation_bit_counts_metadata,
     add_feature_activation_bit_counts_metadata2,
     add_min_height_metadata,
+    migrate_static_metadata,
     remove_first_nop_features,
     remove_second_nop_features,
 )
@@ -100,6 +102,7 @@ class TransactionStorage(ABC):
         remove_first_nop_features.Migration,
         add_feature_activation_bit_counts_metadata2.Migration,
         remove_second_nop_features.Migration,
+        migrate_static_metadata.Migration,
     ]
 
     _migrations: list[BaseMigration]
@@ -331,6 +334,7 @@ class TransactionStorage(ABC):
         ]
 
         for tx in genesis_txs:
+            tx.init_static_metadata_from_storage(self)
             try:
                 tx2 = self.get_transaction(tx.hash)
                 assert tx == tx2
@@ -424,6 +428,11 @@ class TransactionStorage(ABC):
         """
         meta = tx.get_metadata()
         self.pre_save_validation(tx, meta)
+        self._save_static_metadata(tx)
+
+    @abstractmethod
+    def _save_static_metadata(self, vertex: BaseTransaction) -> None:
+        raise NotImplementedError
 
     def pre_save_validation(self, tx: BaseTransaction, tx_meta: TransactionMetadata) -> None:
         """ Must be run before every save, will raise AssertionError or TransactionNotInAllowedScopeError
@@ -438,7 +447,6 @@ class TransactionStorage(ABC):
         assert tx.hash == tx_meta.hash, f'{tx.hash.hex()} != {tx_meta.hash.hex()}'
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
-        self._validate_block_height_metadata(tx)
 
     def post_get_validation(self, tx: BaseTransaction) -> None:
         """ Must be run before every save, will raise AssertionError or TransactionNotInAllowedScopeError
@@ -449,7 +457,6 @@ class TransactionStorage(ABC):
         tx_meta = tx.get_metadata()
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
-        self._validate_block_height_metadata(tx)
 
     def _validate_partial_marker_consistency(self, tx_meta: TransactionMetadata) -> None:
         voided_by = tx_meta.get_frozen_voided_by()
@@ -463,11 +470,6 @@ class TransactionStorage(ABC):
         if not self.get_allow_scope().is_allowed(tx):
             tx_meta = tx.get_metadata()
             raise TransactionNotInAllowedScopeError(tx.hash_hex, self.get_allow_scope().name, tx_meta.validation.name)
-
-    def _validate_block_height_metadata(self, tx: BaseTransaction) -> None:
-        if tx.is_block:
-            tx_meta = tx.get_metadata()
-            assert tx_meta.height is not None
 
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:
@@ -584,14 +586,20 @@ class TransactionStorage(ABC):
         else:
             tx = self._get_transaction(hash_bytes)
         self.post_get_validation(tx)
+        if tx.is_genesis:
+            tx.init_static_metadata_from_storage(self)
+        else:
+            static_metadata = self._get_static_metadata(tx)
+            assert static_metadata is not None
+            tx.set_static_metadata(static_metadata)
         return tx
 
-    def get_transaction_by_height(self, height: int) -> Optional[BaseTransaction]:
+    def get_block_by_height(self, height: int) -> Optional[Block]:
         """Returns a transaction from the height index. This is fast."""
         assert self.indexes is not None
         ancestor_hash = self.indexes.height.get(height)
 
-        return None if ancestor_hash is None else self.get_transaction(ancestor_hash)
+        return None if ancestor_hash is None else self.get_block(ancestor_hash)
 
     def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
         """Returns the transaction metadata with hash `hash_bytes`.
@@ -605,6 +613,10 @@ class TransactionStorage(ABC):
         except TransactionDoesNotExist:
             return None
 
+    @abstractmethod
+    def _get_static_metadata(self, vertex: BaseTransaction) -> VertexStaticMetadata | None:
+        raise NotImplementedError
+
     def get_all_transactions(self) -> Iterator[BaseTransaction]:
         """Return all vertices (transactions and blocks) within the allowed scope.
         """
@@ -614,6 +626,9 @@ class TransactionStorage(ABC):
         scope = self.get_allow_scope()
         for tx in self._get_all_transactions():
             if scope.is_allowed(tx):
+                static_metadata = self._get_static_metadata(tx)
+                assert static_metadata is not None
+                tx.set_static_metadata(static_metadata)
                 yield tx
 
     @abstractmethod
@@ -1160,6 +1175,10 @@ class TransactionStorage(ABC):
         block = self.get_vertex(block_id)
         assert isinstance(block, Block)
         return block
+
+    @abstractmethod
+    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
+        raise NotImplementedError
 
 
 class BaseTransactionStorage(TransactionStorage):

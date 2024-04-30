@@ -16,6 +16,7 @@ from typing_extensions import assert_never
 
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
+from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.validation_state import ValidationState
@@ -26,10 +27,11 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('verifiers', )
+    __slots__ = ('verifiers', '_tx_storage')
 
-    def __init__(self, *, verifiers: VertexVerifiers) -> None:
+    def __init__(self, *, verifiers: VertexVerifiers, tx_storage: TransactionStorage | None = None) -> None:
         self.verifiers = verifiers
+        self._tx_storage = tx_storage
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -57,9 +59,11 @@ class VerificationService:
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
+        assert self._tx_storage is not None
         from hathor.transaction.transaction_metadata import ValidationState
 
         meta = vertex.get_metadata()
+        vertex.init_static_metadata_from_storage(self._tx_storage)
 
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
