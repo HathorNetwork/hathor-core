@@ -18,12 +18,16 @@ from operator import add
 from struct import pack
 from typing import TYPE_CHECKING, Any, Optional
 
+from typing_extensions import override
+
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import BaseTransaction, TxOutput, TxVersion
+from hathor.transaction import TxOutput, TxVersion
+from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import CheckpointError
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.util import not_none
 from hathor.utils.int import get_bit_list
@@ -40,7 +44,7 @@ _FUNDS_FORMAT_STRING = '!BBB'
 _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 
 
-class Block(BaseTransaction):
+class Block(GenericVertex[BlockStaticMetadata]):
     SERIALIZATION_NONCE_SIZE = 16
 
     def __init__(self,
@@ -401,3 +405,7 @@ class Block(BaseTransaction):
         bit_list = self._get_feature_activation_bit_list()
 
         return bit_list[bit]
+
+    @override
+    def init_static_metadata_from_storage(self, storage: 'TransactionStorage') -> None:
+        raise NotImplementedError('this will be implemented')
