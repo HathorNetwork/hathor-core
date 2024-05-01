@@ -22,13 +22,14 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, ClassVar, Iterator, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar, cast
 
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
+from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.transaction.validation_state import ValidationState
@@ -117,9 +118,11 @@ class TxVersion(IntEnum):
 
 _base_transaction_log = logger.new()
 
+StaticMetadataT = TypeVar('StaticMetadataT', bound=VertexStaticMetadata, covariant=True)
 
-class BaseTransaction(ABC):
-    """Hathor base transaction"""
+
+class GenericVertex(ABC, Generic[StaticMetadataT]):
+    """Hathor generic vertex"""
 
     # Even though nonce is serialized with different sizes for tx and blocks
     # the same size is used for hashes to enable mining algorithm compatibility
@@ -128,6 +131,7 @@ class BaseTransaction(ABC):
     HEX_BASE = 16
 
     _metadata: Optional[TransactionMetadata]
+    _static_metadata: StaticMetadataT | None
 
     # Bits extracted from the first byte of the version field. They carry extra information that may be interpreted
     # differently by each subclass of BaseTransaction.
@@ -169,6 +173,7 @@ class BaseTransaction(ABC):
         self.parents = parents or []
         self.storage = storage
         self._hash: VertexId | None = hash  # Stored as bytes.
+        self._static_metadata = None
 
     @classproperty
     def log(cls):
@@ -251,7 +256,7 @@ class BaseTransaction(ABC):
 
         :raises NotImplement: when one of the transactions do not have a calculated hash
         """
-        if not isinstance(other, BaseTransaction):
+        if not isinstance(other, GenericVertex):
             return NotImplemented
         if self._hash and other._hash:
             return self.hash == other.hash
@@ -752,7 +757,7 @@ class BaseTransaction(ABC):
         from hathor.transaction import Block
         assert isinstance(self, Block)
         # This method lazily calculates and stores the value in metadata
-        self.get_feature_activation_bit_counts()
+        cast(Block, self).get_feature_activation_bit_counts()
 
     def _update_initial_accumulated_weight(self) -> None:
         """Update the vertex initial accumulated_weight."""
@@ -865,6 +870,8 @@ class BaseTransaction(ABC):
         :return: Transaction or Block copy
         """
         new_tx = self.create_from_struct(self.get_struct())
+        # static_metadata can be safely copied as it is a frozen dataclass
+        new_tx.set_static_metadata(self._static_metadata)
         if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
@@ -886,6 +893,33 @@ class BaseTransaction(ABC):
             if not dep_meta.validation.is_fully_connected():
                 return False
         return True
+
+    @property
+    def static_metadata(self) -> StaticMetadataT:
+        """Get this vertex's static metadata. Assumes it has been initialized."""
+        assert self._static_metadata is not None
+        return self._static_metadata
+
+    @abstractmethod
+    def init_static_metadata_from_storage(self, storage: 'TransactionStorage') -> None:
+        """Initialize this vertex's static metadata using dependencies from a storage. This can be called multiple
+        times, provided the dependencies didn't change."""
+        raise NotImplementedError
+
+    def set_static_metadata(self, static_metadata: StaticMetadataT | None) -> None:
+        """Set this vertex's static metadata. After it's set, it can only be set again to the same value."""
+        assert not self._static_metadata or self._static_metadata == static_metadata, (
+            'trying to set static metadata with different values'
+        )
+        self._static_metadata = static_metadata
+
+
+"""
+Type aliases for easily working with `GenericVertex`. A `Vertex` is a superclass that includes all specific
+vertex subclasses, and a `BaseTransaction` is simply an alias to `Vertex` for backwards compatibility.
+"""
+Vertex: TypeAlias = GenericVertex[VertexStaticMetadata]
+BaseTransaction: TypeAlias = Vertex
 
 
 class TxInput:
