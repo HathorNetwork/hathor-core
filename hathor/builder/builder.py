@@ -510,7 +510,12 @@ class Builder:
         if self._verification_service is None:
             verifiers = self._get_or_create_vertex_verifiers()
             storage = self._get_or_create_tx_storage()
-            self._verification_service = VerificationService(verifiers=verifiers, tx_storage=storage)
+            settings = self._get_or_create_settings()
+            self._verification_service = VerificationService(
+                verifiers=verifiers,
+                tx_storage=storage,
+                settings=settings,
+            )
 
         return self._verification_service
 
