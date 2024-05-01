@@ -89,7 +89,7 @@ class FeatureResource(Resource):
 
     def get_features(self) -> bytes:
         best_block = self.tx_storage.get_best_block()
-        bit_counts = best_block.get_feature_activation_bit_counts()
+        bit_counts = best_block.static_metadata.feature_activation_bit_counts
         features = []
 
         for feature, criteria in self._feature_settings.features.items():

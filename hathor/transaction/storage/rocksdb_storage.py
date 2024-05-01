@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from structlog import get_logger
 from typing_extensions import override
@@ -23,6 +23,7 @@ from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.types import VertexId
 from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
@@ -218,3 +219,11 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         else:
             return data.decode()
+
+    @override
+    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
+        items = self._db.iteritems(self._cf_meta)
+        items.seek_to_first()
+
+        for (_, vertex_id), metadata_bytes in items:
+            yield vertex_id, json_loadb(metadata_bytes)

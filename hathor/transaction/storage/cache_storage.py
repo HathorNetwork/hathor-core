@@ -25,6 +25,7 @@ from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
+from hathor.types import VertexId
 
 
 class TransactionCacheStorage(BaseTransactionStorage):
@@ -245,3 +246,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def flush(self):
         self._flush_to_storage(self.dirty_txs.copy())
+
+    @override
+    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
+        return self.store.iter_all_raw_metadata()
