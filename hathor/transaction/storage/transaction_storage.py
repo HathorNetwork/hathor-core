@@ -24,6 +24,7 @@ from intervaltree.interval import Interval
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
@@ -44,6 +45,7 @@ from hathor.transaction.storage.migrations import (
     add_feature_activation_bit_counts_metadata,
     add_feature_activation_bit_counts_metadata2,
     add_min_height_metadata,
+    migrate_feature_states,
     migrate_static_metadata,
     remove_first_nop_features,
     remove_second_nop_features,
@@ -103,12 +105,13 @@ class TransactionStorage(ABC):
         add_feature_activation_bit_counts_metadata2.Migration,
         remove_second_nop_features.Migration,
         migrate_static_metadata.Migration,
+        migrate_feature_states.Migration,
     ]
 
     _migrations: list[BaseMigration]
 
-    def __init__(self) -> None:
-        self._settings = get_global_settings()
+    def __init__(self, settings: HathorSettings | None = None) -> None:
+        self._settings = settings or get_global_settings()
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -1129,6 +1132,7 @@ class TransactionStorage(ABC):
         """Return the genesis block."""
         block = Block(
             storage=self,
+            settings=self._settings,
             nonce=self._settings.GENESIS_BLOCK_NONCE,
             timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
             weight=self._settings.MIN_BLOCK_WEIGHT,
@@ -1190,8 +1194,13 @@ class TransactionStorage(ABC):
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]
 
-    def __init__(self, indexes: Optional[IndexesManager] = None, pubsub: Optional[Any] = None) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        indexes: Optional[IndexesManager] = None,
+        pubsub: Optional[Any] = None,
+        settings: HathorSettings | None = None,
+    ) -> None:
+        super().__init__(settings=settings)
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub

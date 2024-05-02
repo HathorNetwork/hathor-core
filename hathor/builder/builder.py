@@ -29,7 +29,6 @@ from hathor.event.websocket import EventWebsocketFactory
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
@@ -71,7 +70,6 @@ class BuildArtifacts(NamedTuple):
     pubsub: PubSubManager
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
-    feature_service: FeatureService
     bit_signaling_service: BitSignalingService
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
@@ -79,10 +77,7 @@ class BuildArtifacts(NamedTuple):
     stratum_factory: Optional[StratumFactory]
 
 
-_VertexVerifiersBuilder: TypeAlias = Callable[
-    [HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService],
-    VertexVerifiers
-]
+_VertexVerifiersBuilder: TypeAlias = Callable[[HathorSettingsType, DifficultyAdjustmentAlgorithm], VertexVerifiers]
 
 
 class Builder:
@@ -115,7 +110,6 @@ class Builder:
 
         self._support_features: set[Feature] = set()
         self._not_support_features: set[Feature] = set()
-        self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
         self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
@@ -183,7 +177,6 @@ class Builder:
         event_manager = self._get_or_create_event_manager()
         indexes = self._get_or_create_indexes_manager()
         tx_storage = self._get_or_create_tx_storage()
-        feature_service = self._get_or_create_feature_service()
         bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
         daa = self._get_or_create_daa()
@@ -251,7 +244,6 @@ class Builder:
             wallet=wallet,
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
-            feature_service=feature_service,
             bit_signaling_service=bit_signaling_service
         )
 
@@ -264,11 +256,6 @@ class Builder:
     def set_event_manager(self, event_manager: EventManager) -> 'Builder':
         self.check_if_can_modify()
         self._event_manager = event_manager
-        return self
-
-    def set_feature_service(self, feature_service: FeatureService) -> 'Builder':
-        self.check_if_can_modify()
-        self._feature_service = feature_service
         return self
 
     def set_bit_signaling_service(self, bit_signaling_service: BitSignalingService) -> 'Builder':
@@ -413,6 +400,7 @@ class Builder:
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
         indexes = self._get_or_create_indexes_manager()
+        settings = self._get_or_create_settings()
 
         if self._tx_storage is not None:
             # If a tx storage is provided, set the indexes manager to it.
@@ -424,11 +412,11 @@ class Builder:
             store_indexes = None
 
         if self._storage_type == StorageType.MEMORY:
-            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes)
+            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes, settings=settings)
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes)
+            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes, settings=settings)
 
         else:
             raise NotImplementedError
@@ -438,7 +426,13 @@ class Builder:
             kwargs: dict[str, Any] = {}
             if self._tx_storage_cache_capacity is not None:
                 kwargs['capacity'] = self._tx_storage_cache_capacity
-            self._tx_storage = TransactionCacheStorage(self._tx_storage, reactor, indexes=indexes, **kwargs)
+            self._tx_storage = TransactionCacheStorage(
+                self._tx_storage,
+                reactor,
+                indexes=indexes,
+                settings=settings,
+                **kwargs
+            )
 
         return self._tx_storage
 
@@ -477,27 +471,13 @@ class Builder:
 
         return self._event_manager
 
-    def _get_or_create_feature_service(self) -> FeatureService:
-        """Return the FeatureService instance set on this builder, or a new one if not set."""
-        if self._feature_service is None:
-            settings = self._get_or_create_settings()
-            tx_storage = self._get_or_create_tx_storage()
-            self._feature_service = FeatureService(
-                feature_settings=settings.FEATURE_ACTIVATION,
-                tx_storage=tx_storage
-            )
-
-        return self._feature_service
-
     def _get_or_create_bit_signaling_service(self) -> BitSignalingService:
         if self._bit_signaling_service is None:
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
-            feature_service = self._get_or_create_feature_service()
             feature_storage = self._get_or_create_feature_storage()
             self._bit_signaling_service = BitSignalingService(
-                feature_settings=settings.FEATURE_ACTIVATION,
-                feature_service=feature_service,
+                settings=settings,
                 tx_storage=tx_storage,
                 support_features=self._support_features,
                 not_support_features=self._not_support_features,
@@ -531,17 +511,12 @@ class Builder:
     def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
         if self._vertex_verifiers is None:
             settings = self._get_or_create_settings()
-            feature_service = self._get_or_create_feature_service()
             daa = self._get_or_create_daa()
 
             if self._vertex_verifiers_builder:
-                self._vertex_verifiers = self._vertex_verifiers_builder(settings, daa, feature_service)
+                self._vertex_verifiers = self._vertex_verifiers_builder(settings, daa)
             else:
-                self._vertex_verifiers = VertexVerifiers.create_defaults(
-                    settings=settings,
-                    daa=daa,
-                    feature_service=feature_service,
-                )
+                self._vertex_verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
 
         return self._vertex_verifiers
 
@@ -567,7 +542,6 @@ class Builder:
                 verification_service=self._get_or_create_verification_service(),
                 consensus=self._get_or_create_consensus(),
                 p2p_manager=self._get_or_create_p2p_manager(),
-                feature_service=self._get_or_create_feature_service(),
                 pubsub=self._get_or_create_pubsub(),
                 wallet=self._get_or_create_wallet(),
             )

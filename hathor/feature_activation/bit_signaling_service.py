@@ -14,11 +14,10 @@
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
@@ -29,8 +28,7 @@ logger = get_logger()
 class BitSignalingService:
     __slots__ = (
         '_log',
-        '_feature_settings',
-        '_feature_service',
+        '_settings',
         '_tx_storage',
         '_support_features',
         '_not_support_features',
@@ -40,23 +38,20 @@ class BitSignalingService:
     def __init__(
         self,
         *,
-        feature_settings: FeatureSettings,
-        feature_service: FeatureService,
+        settings: HathorSettings,
         tx_storage: TransactionStorage,
         support_features: set[Feature],
         not_support_features: set[Feature],
         feature_storage: FeatureActivationStorage | None,
     ) -> None:
         self._log = logger.new()
-        self._feature_settings = feature_settings
-        self._feature_service = feature_service
+        self._settings = settings
         self._tx_storage = tx_storage
         self._support_features = support_features
         self._not_support_features = not_support_features
         self._feature_storage = feature_storage
 
         self._validate_support_intersection()
-        self._feature_service.bit_signaling_service = self
 
     def start(self) -> None:
         """
@@ -163,14 +158,14 @@ class BitSignalingService:
 
     def _get_signaling_features(self, block: Block) -> dict[Feature, Criteria]:
         """Given a specific block, return all features that are in a signaling state for that block."""
-        feature_descriptions = self._feature_service.get_bits_description(block=block)
+        feature_infos = block.static_metadata.get_feature_info(self._settings)
         signaling_features = {
-            feature: description.criteria
-            for feature, description in feature_descriptions.items()
-            if description.state in FeatureState.get_signaling_states()
+            feature: feature_info.criteria
+            for feature, feature_info in feature_infos.items()
+            if feature_info.state in FeatureState.get_signaling_states()
         }
 
-        assert len(signaling_features) <= self._feature_settings.max_signal_bits, (
+        assert len(signaling_features) <= self._settings.FEATURE_ACTIVATION.max_signal_bits, (
             'Invalid state. Signaling more features than the allowed maximum.'
         )
 

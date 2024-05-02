@@ -22,7 +22,6 @@ from twisted.web.resource import Resource
 
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.prometheus import PrometheusMetricsExporter
 
 if TYPE_CHECKING:
@@ -39,7 +38,6 @@ class ResourcesBuilder:
         manager: 'HathorManager',
         args: 'RunNodeArgs',
         event_ws_factory: Optional['EventWebsocketFactory'],
-        feature_service: FeatureService
     ) -> None:
         self.log = logger.new()
         self.manager = manager
@@ -49,8 +47,6 @@ class ResourcesBuilder:
         self._args = args
         self._built_status = False
         self._built_prometheus = False
-
-        self._feature_service = feature_service
 
     def build(self) -> Optional[server.Site]:
         if self._args.prometheus:
@@ -206,8 +202,7 @@ class ResourcesBuilder:
             (
                 b'feature',
                 FeatureResource(
-                    feature_settings=settings.FEATURE_ACTIVATION,
-                    feature_service=self._feature_service,
+                    settings=settings,
                     tx_storage=self.manager.tx_storage
                 ),
                 root

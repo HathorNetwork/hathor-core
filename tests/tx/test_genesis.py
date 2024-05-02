@@ -32,7 +32,7 @@ class GenesisTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self._daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
-        verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa, feature_service=Mock())
+        verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa)
         self._verification_service = VerificationService(verifiers=verifiers, settings=self._settings)
         self.storage = TransactionMemoryStorage()
 

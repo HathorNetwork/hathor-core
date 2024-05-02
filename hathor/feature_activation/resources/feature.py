@@ -18,10 +18,9 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -33,16 +32,10 @@ class FeatureResource(Resource):
 
     isLeaf = True
 
-    def __init__(
-        self,
-        *,
-        feature_settings: FeatureSettings,
-        feature_service: FeatureService,
-        tx_storage: TransactionStorage
-    ) -> None:
+    def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
         super().__init__()
-        self._feature_settings = feature_settings
-        self._feature_service = feature_service
+        self._settings = settings
+        self._feature_settings = settings.FEATURE_ACTIVATION
         self.tx_storage = tx_storage
 
     def render_GET(self, request: Request) -> bytes:
@@ -68,17 +61,17 @@ class FeatureResource(Resource):
             return error.json_dumpb()
 
         signal_bits = []
-        feature_descriptions = self._feature_service.get_bits_description(block=block)
+        feature_infos = block.static_metadata.get_feature_info(self._settings)
 
-        for feature, description in feature_descriptions.items():
-            if description.state not in FeatureState.get_signaling_states():
+        for feature, feature_info in feature_infos.items():
+            if feature_info.state not in FeatureState.get_signaling_states():
                 continue
 
             block_feature = GetBlockFeatureResponse(
-                bit=description.criteria.bit,
-                signal=block.get_feature_activation_bit_value(description.criteria.bit),
+                bit=feature_info.criteria.bit,
+                signal=block.get_feature_activation_bit_value(feature_info.criteria.bit),
                 feature=feature,
-                feature_state=description.state.name
+                feature_state=feature_info.state.name
             )
 
             signal_bits.append(block_feature)
@@ -90,10 +83,12 @@ class FeatureResource(Resource):
     def get_features(self) -> bytes:
         best_block = self.tx_storage.get_best_block()
         bit_counts = best_block.static_metadata.feature_activation_bit_counts
+        feature_infos = best_block.static_metadata.get_feature_info(self._settings)
         features = []
 
-        for feature, criteria in self._feature_settings.features.items():
-            state = self._feature_service.get_state(block=best_block, feature=feature)
+        for feature, feature_info in feature_infos.items():
+            state = feature_info.state
+            criteria = feature_info.criteria
             threshold_count = criteria.get_threshold(self._feature_settings)
             threshold_percentage = threshold_count / self._feature_settings.evaluation_interval
             acceptance_percentage = None

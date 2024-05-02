@@ -28,7 +28,6 @@ from hathor.event import EventManager
 from hathor.exception import BuilderError
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
@@ -146,7 +145,7 @@ class CliBuilder:
             else:
                 indexes = RocksDBIndexesManager(self.rocksdb_storage)
 
-            kwargs = {}
+            kwargs: dict[str, Any] = {}
             if not self._args.cache:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
@@ -252,14 +251,8 @@ class CliBuilder:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
-        self.feature_service = FeatureService(
-            feature_settings=settings.FEATURE_ACTIVATION,
-            tx_storage=tx_storage
-        )
-
         bit_signaling_service = BitSignalingService(
-            feature_settings=settings.FEATURE_ACTIVATION,
-            feature_service=self.feature_service,
+            settings=settings,
             tx_storage=tx_storage,
             support_features=self._args.signal_support,
             not_support_features=self._args.signal_not_support,
@@ -274,11 +267,7 @@ class CliBuilder:
 
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
 
-        vertex_verifiers = VertexVerifiers.create_defaults(
-            settings=settings,
-            daa=daa,
-            feature_service=self.feature_service
-        )
+        vertex_verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
         verification_service = VerificationService(
             verifiers=vertex_verifiers,
             tx_storage=tx_storage,
@@ -310,7 +299,6 @@ class CliBuilder:
             verification_service=verification_service,
             consensus=consensus_algorithm,
             p2p_manager=p2p_manager,
-            feature_service=self.feature_service,
             pubsub=pubsub,
             wallet=self.wallet,
         )
