@@ -49,9 +49,10 @@ logger = get_logger()
 
 
 class SyncChoice(Enum):
-    V1_ONLY = auto()
-    V2_ONLY = auto()
-    BRIDGE = auto()
+    V1_DEFAULT = auto()  # v1 enabled, v2 disabled but can be enabled in runtime
+    V2_DEFAULT = auto()  # v2 enabled, v1 disabled but can be enabled in runtime
+    BRIDGE_DEFAULT = auto()  # both enabled, either can be disabled in runtime
+    V2_ONLY = auto()  # v1 is unavailable, it cannot be enabled in runtime
 
 
 class CliBuilder:
@@ -70,15 +71,13 @@ class CliBuilder:
 
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
+        from hathor.builder import SyncSupportLevel
         from hathor.conf.get_settings import get_global_settings, get_settings_source
         from hathor.daa import TestMode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
-        from hathor.p2p.sync_v1.factory import SyncV11Factory
-        from hathor.p2p.sync_v2.factory import SyncV2Factory
-        from hathor.p2p.sync_version import SyncVersion
         from hathor.storage import RocksDBStorage
         from hathor.transaction.storage import (
             TransactionCacheStorage,
@@ -177,34 +176,39 @@ class CliBuilder:
 
         sync_choice: SyncChoice
         if self._args.sync_bridge:
-            sync_choice = SyncChoice.BRIDGE
+            sync_choice = SyncChoice.BRIDGE_DEFAULT
         elif self._args.sync_v1_only:
-            sync_choice = SyncChoice.V1_ONLY
+            sync_choice = SyncChoice.V1_DEFAULT
         elif self._args.sync_v2_only:
             self.log.warn('--sync-v2-only is the default, this parameter has no effect')
+            sync_choice = SyncChoice.V2_DEFAULT
+        elif self._args.x_remove_sync_v1:
             sync_choice = SyncChoice.V2_ONLY
         elif self._args.x_sync_bridge:
             self.log.warn('--x-sync-bridge is deprecated and will be removed, use --sync-bridge instead')
-            sync_choice = SyncChoice.BRIDGE
+            sync_choice = SyncChoice.BRIDGE_DEFAULT
         elif self._args.x_sync_v2_only:
             self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
-            sync_choice = SyncChoice.V2_ONLY
+            sync_choice = SyncChoice.V2_DEFAULT
         else:
             # XXX: this is the default behavior when no parameter is given
-            sync_choice = SyncChoice.V2_ONLY
+            sync_choice = SyncChoice.V2_DEFAULT
 
-        enable_sync_v1: bool
-        enable_sync_v2: bool
+        sync_v1_support: SyncSupportLevel
+        sync_v2_support: SyncSupportLevel
         match sync_choice:
-            case SyncChoice.V1_ONLY:
-                enable_sync_v1 = True
-                enable_sync_v2 = False
+            case SyncChoice.V1_DEFAULT:
+                sync_v1_support = SyncSupportLevel.ENABLED
+                sync_v2_support = SyncSupportLevel.DISABLED
+            case SyncChoice.V2_DEFAULT:
+                sync_v1_support = SyncSupportLevel.DISABLED
+                sync_v2_support = SyncSupportLevel.ENABLED
+            case SyncChoice.BRIDGE_DEFAULT:
+                sync_v1_support = SyncSupportLevel.ENABLED
+                sync_v2_support = SyncSupportLevel.ENABLED
             case SyncChoice.V2_ONLY:
-                enable_sync_v1 = False
-                enable_sync_v2 = True
-            case SyncChoice.BRIDGE:
-                enable_sync_v1 = True
-                enable_sync_v2 = True
+                sync_v1_support = SyncSupportLevel.UNAVAILABLE
+                sync_v2_support = SyncSupportLevel.ENABLED
 
         pubsub = PubSubManager(reactor)
 
@@ -293,12 +297,7 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
         )
-        p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
-        p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
-        if enable_sync_v1:
-            p2p_manager.enable_sync_version(SyncVersion.V1_1)
-        if enable_sync_v2:
-            p2p_manager.enable_sync_version(SyncVersion.V2)
+        SyncSupportLevel.add_factories(p2p_manager, sync_v1_support, sync_v2_support)
 
         vertex_handler = VertexHandler(
             reactor=reactor,
