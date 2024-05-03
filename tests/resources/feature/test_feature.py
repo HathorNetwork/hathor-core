@@ -16,11 +16,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
@@ -37,7 +35,10 @@ def web() -> StubSite:
         height=123,
         min_height=0,
         feature_activation_bit_counts=[0, 1, 0, 0],
-        feature_states={},
+        feature_states={
+            Feature.NOP_FEATURE_1: FeatureState.DEFINED,
+            Feature.NOP_FEATURE_2: FeatureState.LOCKED_IN,
+        },
     )
     block.set_static_metadata(static_metadata)
 
@@ -45,44 +46,29 @@ def web() -> StubSite:
     tx_storage.get_best_block = Mock(return_value=block)
     tx_storage.get_transaction = Mock(return_value=block)
 
-    def get_state(*, block: Block, feature: Feature) -> FeatureState:
-        return FeatureState.ACTIVE if feature is Feature.NOP_FEATURE_1 else FeatureState.STARTED
-
-    nop_feature_1_criteria = Criteria(
-        bit=0,
-        start_height=0,
-        timeout_height=100,
-        version='0.1.0'
-    )
-    nop_feature_2_criteria = Criteria(
-        bit=1,
-        start_height=200,
-        threshold=2,
-        timeout_height=300,
-        version='0.2.0'
-    )
-
-    feature_service = Mock(spec_set=FeatureService)
-    feature_service.get_state = Mock(side_effect=get_state)
-    feature_service.get_feature_infos = Mock(return_value={
-        Feature.NOP_FEATURE_1: FeatureInfo(state=FeatureState.DEFINED, criteria=nop_feature_1_criteria),
-        Feature.NOP_FEATURE_2: FeatureInfo(state=FeatureState.LOCKED_IN, criteria=nop_feature_2_criteria),
-    })
-
-    settings = get_global_settings()._replace(
-        FEATURE_ACTIVATION=FeatureSettings(
-            evaluation_interval=4,
-            default_threshold=3,
-            features={
-                Feature.NOP_FEATURE_1: nop_feature_1_criteria,
-                Feature.NOP_FEATURE_2: nop_feature_2_criteria
-            }
-        )
+    settings = Mock(spec_set=HathorSettings)
+    settings.FEATURE_ACTIVATION = FeatureSettings(
+        evaluation_interval=4,
+        default_threshold=3,
+        features={
+            Feature.NOP_FEATURE_1: Criteria(
+                bit=0,
+                start_height=0,
+                timeout_height=100,
+                version='0.1.0'
+            ),
+            Feature.NOP_FEATURE_2: Criteria(
+                bit=1,
+                start_height=200,
+                threshold=2,
+                timeout_height=300,
+                version='0.2.0'
+            ),
+        }
     )
 
     feature_resource = FeatureResource(
         settings=settings,
-        feature_service=feature_service,
         tx_storage=tx_storage
     )
 

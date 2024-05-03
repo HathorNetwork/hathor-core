@@ -20,7 +20,6 @@ from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
@@ -33,16 +32,10 @@ class FeatureResource(Resource):
 
     isLeaf = True
 
-    def __init__(
-        self,
-        *,
-        settings: HathorSettings,
-        feature_service: FeatureService,
-        tx_storage: TransactionStorage
-    ) -> None:
+    def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
         super().__init__()
+        self._settings = settings
         self._feature_settings = settings.FEATURE_ACTIVATION
-        self._feature_service = feature_service
         self.tx_storage = tx_storage
 
     def render_GET(self, request: Request) -> bytes:
@@ -68,7 +61,7 @@ class FeatureResource(Resource):
             return error.json_dumpb()
 
         signal_bits = []
-        feature_infos = self._feature_service.get_feature_infos(block=block)
+        feature_infos = block.static_metadata.get_feature_infos(self._settings)
 
         for feature, feature_info in feature_infos.items():
             if feature_info.state not in FeatureState.get_signaling_states():
@@ -90,7 +83,7 @@ class FeatureResource(Resource):
     def get_features(self) -> bytes:
         best_block = self.tx_storage.get_best_block()
         bit_counts = best_block.static_metadata.feature_activation_bit_counts
-        feature_infos = self._feature_service.get_feature_infos(block=best_block)
+        feature_infos = best_block.static_metadata.get_feature_infos(self._settings)
         features = []
 
         for feature, feature_info in feature_infos.items():

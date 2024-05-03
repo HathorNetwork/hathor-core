@@ -20,8 +20,6 @@ from typing_extensions import override
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
-from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
@@ -305,38 +303,6 @@ class Block(GenericVertex[BlockStaticMetadata]):
         bitmask = (1 << self._settings.FEATURE_ACTIVATION.max_signal_bits) - 1
 
         return bitmask
-
-    def get_feature_state(self, *, feature: Feature) -> Optional[FeatureState]:
-        """Returns the state of a feature from metadata."""
-        metadata = self.get_metadata()
-        feature_states = metadata.feature_states or {}
-
-        return feature_states.get(feature)
-
-    def set_feature_state(self, *, feature: Feature, state: FeatureState, save: bool = False) -> None:
-        """
-        Set the state of a feature in metadata, if it's not set. Fails if it's set and the value is different.
-
-        Args:
-            feature: the feature to set the state of.
-            state: the state to set.
-            save: whether to save this block's metadata in storage.
-        """
-        previous_state = self.get_feature_state(feature=feature)
-
-        if state == previous_state:
-            return
-
-        assert previous_state is None
-        assert self.storage is not None
-
-        metadata = self.get_metadata()
-        feature_states = metadata.feature_states or {}
-        feature_states[feature] = state
-        metadata.feature_states = feature_states
-
-        if save:
-            self.storage.save_transaction(self, only_metadata=True)
 
     def get_feature_activation_bit_value(self, bit: int) -> int:
         """Get the feature activation bit value for a specific bit position."""

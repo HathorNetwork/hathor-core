@@ -31,6 +31,7 @@ from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.indexes import MemoryIndexesManager
 from hathor.transaction import Block
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
@@ -98,25 +99,33 @@ def get_settings(*, features: dict[Feature, Criteria]) -> HathorSettings:
     return settings
 
 
-def test_get_state_genesis() -> None:
+def get_feature_service(settings: HathorSettings, storage: TransactionStorage) -> FeatureService:
+    return FeatureService(
+        settings=settings,
+        vertex_getter=storage.get_vertex,
+        block_by_height_getter=storage.get_block_by_height,
+    )
+
+
+def test_calculate_state_genesis() -> None:
     settings = get_settings(features={})
     storage = get_storage(settings, up_to_height=0)
-    service = FeatureService(settings=settings, tx_storage=storage)
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(0))
-    result = service.get_state(block=block, feature=Mock())
+    result = service._calculate_state(block=block, height=0, feature=Mock())
 
     assert result == FeatureState.DEFINED
 
 
 @pytest.mark.parametrize('block_height', [0, 1, 2, 3])
-def test_get_state_first_interval(block_height: int) -> None:
+def test_calculate_state_first_interval(block_height: int) -> None:
     settings = get_settings(features={
         Feature.NOP_FEATURE_1: Mock()
     })
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.DEFINED
 
@@ -130,7 +139,7 @@ def test_get_state_first_interval(block_height: int) -> None:
         (8, FeatureState.DEFINED)
     ]
 )
-def test_get_state_from_defined(block_height: int, start_height: int, expected_state: FeatureState) -> None:
+def test_calculate_state_from_defined(block_height: int, start_height: int, expected_state: FeatureState) -> None:
     features = {
         Feature.NOP_FEATURE_1: Criteria.construct(
             bit=Mock(),
@@ -141,18 +150,17 @@ def test_get_state_from_defined(block_height: int, start_height: int, expected_s
     }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == expected_state
 
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15, 16, 17])
 @pytest.mark.parametrize('timeout_height', [8, 12])
-def test_get_state_from_started_to_failed(
+def test_calculate_state_from_started_to_failed(
     block_height: int,
     timeout_height: int,
 ) -> None:
@@ -167,18 +175,17 @@ def test_get_state_from_started_to_failed(
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.FAILED
 
 
 @pytest.mark.parametrize('block_height', [8, 9, 10, 11])
 @pytest.mark.parametrize('timeout_height', [8, 12])
-def test_get_state_from_started_to_must_signal_on_timeout(
+def test_calculate_state_from_started_to_must_signal_on_timeout(
     block_height: int,
     timeout_height: int,
 ) -> None:
@@ -193,19 +200,17 @@ def test_get_state_from_started_to_must_signal_on_timeout(
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.MUST_SIGNAL
-    service.bit_signaling_service.on_must_signal.assert_called_once_with(Feature.NOP_FEATURE_1)
 
 
 @pytest.mark.parametrize('block_height', [8, 9, 10, 11])
 @pytest.mark.parametrize('default_threshold', [0, 1, 2, 3])
-def test_get_state_from_started_to_locked_in_on_default_threshold(
+def test_calculate_state_from_started_to_locked_in_on_default_threshold(
     block_height: int,
     default_threshold: int
 ) -> None:
@@ -224,18 +229,17 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
     )
     settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.LOCKED_IN
 
 
 @pytest.mark.parametrize('block_height', [8, 9, 10, 11])
 @pytest.mark.parametrize('custom_threshold', [0, 1, 2, 3])
-def test_get_state_from_started_to_locked_in_on_custom_threshold(
+def test_calculate_state_from_started_to_locked_in_on_custom_threshold(
     block_height: int,
     custom_threshold: int
 ) -> None:
@@ -250,11 +254,10 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.LOCKED_IN
 
@@ -268,7 +271,7 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
         (True, 20),
     ]
 )
-def test_get_state_from_started_to_started(
+def test_calculate_state_from_started_to_started(
     block_height: int,
     lock_in_on_timeout: bool,
     timeout_height: int,
@@ -284,17 +287,16 @@ def test_get_state_from_started_to_started(
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.STARTED
 
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
-def test_get_state_from_must_signal_to_locked_in(
+def test_calculate_state_from_must_signal_to_locked_in(
     block_height: int,
 ) -> None:
     features = {
@@ -308,18 +310,17 @@ def test_get_state_from_must_signal_to_locked_in(
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.LOCKED_IN
 
 
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 @pytest.mark.parametrize('minimum_activation_height', [0, 4, 8, 12, 16])
-def test_get_state_from_locked_in_to_active(
+def test_calculate_state_from_locked_in_to_active(
     block_height: int,
     minimum_activation_height: int,
 ) -> None:
@@ -335,18 +336,17 @@ def test_get_state_from_locked_in_to_active(
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.ACTIVE
 
 
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 @pytest.mark.parametrize('minimum_activation_height', [17, 20, 100])
-def test_get_state_from_locked_in_to_locked_in(
+def test_calculate_state_from_locked_in_to_locked_in(
     block_height: int,
     minimum_activation_height: int,
 ) -> None:
@@ -362,17 +362,16 @@ def test_get_state_from_locked_in_to_locked_in(
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.LOCKED_IN
 
 
 @pytest.mark.parametrize('block_height', [20, 21, 22, 23])
-def test_get_state_from_active(block_height: int) -> None:
+def test_calculate_state_from_active(block_height: int) -> None:
     features = {
             Feature.NOP_FEATURE_1: Criteria.construct(
                 bit=3,
@@ -384,11 +383,10 @@ def test_get_state_from_active(block_height: int) -> None:
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.ACTIVE
 
@@ -406,20 +404,15 @@ def test_is_feature_active(block_height: int) -> None:
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(
-        settings=settings,
-        tx_storage=storage
-    )
-    service.bit_signaling_service = Mock()
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.is_feature_active(block=block, feature=Feature.NOP_FEATURE_1)
+    result = block.static_metadata.is_feature_active(Feature.NOP_FEATURE_1)
 
     assert result is True
 
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
-def test_get_state_from_failed(block_height: int) -> None:
+def test_calculate_state_from_failed(block_height: int) -> None:
     features = {
             Feature.NOP_FEATURE_1: Criteria.construct(
                 bit=Mock(),
@@ -430,48 +423,43 @@ def test_get_state_from_failed(block_height: int) -> None:
         }
     settings = get_settings(features=features)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service._calculate_state(block=block, height=block_height, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.FAILED
 
 
-def test_get_state_undefined_feature() -> None:
+def test_calculate_state_undefined_feature() -> None:
     settings = get_settings(features={})
     storage = get_storage(settings, up_to_height=10)
     block = not_none(storage.get_block_by_height(10))
-    service = FeatureService(settings=settings, tx_storage=storage)
-    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+    service = get_feature_service(settings, storage)
+    result = service._calculate_state(block=block, height=10, feature=Feature.NOP_FEATURE_1)
 
     assert result == FeatureState.DEFINED
 
 
 def test_get_feature_info() -> None:
-    criteria_mock_1 = Criteria.construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
-    criteria_mock_2 = Criteria.construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
+    criteria_mock_1 = Mock()
+    criteria_mock_2 = Mock()
     settings = get_settings(features={
         Feature.NOP_FEATURE_1: criteria_mock_1,
         Feature.NOP_FEATURE_2: criteria_mock_2
     })
-    storage = get_storage(settings, up_to_height=0)
-    service = FeatureService(
-        settings=settings,
-        tx_storage=storage
-    )
-    service.bit_signaling_service = Mock()
-
-    def get_state(self: FeatureService, *, block: Block, feature: Feature) -> FeatureState:
-        states = {
+    block = Block()
+    static_metadata = BlockStaticMetadata(
+        height=123,
+        min_height=0,
+        feature_activation_bit_counts=[],
+        feature_states={
             Feature.NOP_FEATURE_1: FeatureState.STARTED,
-            Feature.NOP_FEATURE_2: FeatureState.FAILED
+            Feature.NOP_FEATURE_2: FeatureState.FAILED,
         }
-        return states[feature]
-
-    with patch('hathor.feature_activation.feature_service.FeatureService.get_state', get_state):
-        result = service.get_feature_infos(block=Mock())
+    )
+    block.set_static_metadata(static_metadata)
+    result = block.static_metadata.get_feature_infos(settings)
 
     expected = {
         Feature.NOP_FEATURE_1: FeatureInfo(criteria_mock_1, FeatureState.STARTED),
@@ -494,12 +482,11 @@ def test_get_feature_info() -> None:
 def test_get_ancestor_at_height_invalid(block_height: int, ancestor_height: int) -> None:
     settings = get_settings(features={})
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
     with pytest.raises(AssertionError) as e:
-        service._get_ancestor_at_height(block=block, ancestor_height=ancestor_height)
+        service._get_ancestor_at_height(block=block, block_height=block_height, ancestor_height=ancestor_height)
 
     assert str(e.value) == (
         f"ancestor height must be lower than the block's height: {ancestor_height} >= {block_height}"
@@ -524,10 +511,10 @@ def test_get_ancestor_at_height(block_height: int, ancestor_height: int) -> None
 
     get_block_by_height_wrapped = Mock(wraps=storage.get_block_by_height)
     with patch.object(storage, 'get_block_by_height', get_block_by_height_wrapped):
-        service = FeatureService(settings=settings, tx_storage=storage)
-        service.bit_signaling_service = Mock()
+        service = get_feature_service(settings, storage)
         result = service._get_ancestor_at_height(
             block=block,
+            block_height=block_height,
             ancestor_height=ancestor_height
         )
 
@@ -551,8 +538,7 @@ def test_get_ancestor_at_height(block_height: int, ancestor_height: int) -> None
 def test_get_ancestor_at_height_voided(block_height: int, ancestor_height: int) -> None:
     settings = get_settings(features={})
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
+    service = get_feature_service(settings, storage)
     block = not_none(storage.get_block_by_height(block_height))
 
     parent_block = not_none(storage.get_block_by_height(block_height - 1))
@@ -560,7 +546,11 @@ def test_get_ancestor_at_height_voided(block_height: int, ancestor_height: int) 
 
     get_block_by_height_wrapped = Mock(wraps=storage.get_block_by_height)
     with patch.object(storage, 'get_block_by_height', get_block_by_height_wrapped):
-        result = service._get_ancestor_at_height(block=block, ancestor_height=ancestor_height)
+        result = service._get_ancestor_at_height(
+            block=block,
+            block_height=block_height,
+            ancestor_height=ancestor_height
+        )
 
         assert get_block_by_height_wrapped.call_count == 0
         assert result == storage.get_block_by_height(ancestor_height)
@@ -614,10 +604,8 @@ def test_check_must_signal(
     )
     settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
     storage = get_storage(settings, up_to_height=block_height)
-    service = FeatureService(settings=settings, tx_storage=storage)
-    service.bit_signaling_service = Mock()
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.is_signaling_mandatory_features(block)
+    result = FeatureService.is_signaling_mandatory_features(block, settings)
 
     assert result == signaling_state
