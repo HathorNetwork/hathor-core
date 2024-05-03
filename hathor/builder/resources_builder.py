@@ -206,7 +206,7 @@ class ResourcesBuilder:
             (
                 b'feature',
                 FeatureResource(
-                    feature_settings=settings.FEATURE_ACTIVATION,
+                    settings=settings,
                     feature_service=self._feature_service,
                     tx_storage=self.manager.tx_storage
                 ),

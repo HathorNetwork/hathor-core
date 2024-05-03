@@ -12,9 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import dataclasses
 from abc import ABC
-from dataclasses import dataclass
 from itertools import chain, starmap, zip_longest
 from operator import add
 from typing import TYPE_CHECKING, Callable
@@ -25,15 +23,15 @@ from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.types import VertexId
-from hathor.util import json_dumpb, json_loadb
+from hathor.util import json_loadb
+from hathor.utils.pydantic import BaseModel
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, Block, Transaction
     from hathor.transaction.storage import TransactionStorage
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
-class VertexStaticMetadata(ABC):
+class VertexStaticMetadata(ABC, BaseModel):
     """
     Static Metadata represents vertex attributes that are not intrinsic to the vertex data, but can be calculated from
     only the vertex itself and its dependencies, and whose values never change.
@@ -46,10 +44,6 @@ class VertexStaticMetadata(ABC):
     # block that confirming this transaction, it is important to always have this set to be able to distinguish an old
     # metadata (that does not have this calculated, from a tx with a new format that does have this calculated)
     min_height: int
-
-    def to_bytes(self) -> bytes:
-        """Convert this static metadata instance to a json bytes representation."""
-        return json_dumpb(dataclasses.asdict(self))
 
     @classmethod
     def from_bytes(cls, data: bytes, *, target: 'BaseTransaction') -> 'VertexStaticMetadata':
@@ -66,11 +60,10 @@ class VertexStaticMetadata(ABC):
         raise NotImplementedError
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
 class BlockStaticMetadata(VertexStaticMetadata):
     height: int
 
-    # A list of feature activation bit counts. Must only be used by Blocks, is None otherwise.
+    # A list of feature activation bit counts.
     # Each list index corresponds to a bit position, and its respective value is the rolling count of active bits from
     # the previous boundary block up to this block, including it. LSB is on the left.
     feature_activation_bit_counts: list[int]
@@ -178,7 +171,6 @@ class BlockStaticMetadata(VertexStaticMetadata):
         return parent_block.static_metadata.feature_activation_bit_counts
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
 class TransactionStaticMetadata(VertexStaticMetadata):
     @classmethod
     def create_from_storage(cls, tx: 'Transaction', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
