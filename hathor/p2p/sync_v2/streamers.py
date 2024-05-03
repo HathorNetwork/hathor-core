@@ -170,7 +170,6 @@ class BlockchainStreamingServer(_StreamingServerBase):
 
         cur = self.current_block
         assert cur is not None
-        assert cur.hash is not None
 
         meta = cur.get_metadata()
         if meta.voided_by:
@@ -251,7 +250,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
                 root = self.start_from
                 skip_root = False
             self.log.debug('iterating over transactions from block',
-                           block=not_none(self.current_block.hash).hex(),
+                           block=self.current_block.hash.hex(),
                            height=self.current_block.get_height(),
                            start_from=self.start_from,
                            skip_root=skip_root)
@@ -287,7 +286,6 @@ class TransactionsStreamingServer(_StreamingServerBase):
             return
 
         assert isinstance(cur, Transaction)
-        assert cur.hash is not None
 
         cur_metadata = cur.get_metadata()
         if cur_metadata.first_block is None:

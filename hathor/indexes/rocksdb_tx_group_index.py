@@ -75,7 +75,6 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         rocksdb_key = self._serialize_key(key)
         assert len(rocksdb_key) == self._KEY_SIZE
         if tx:
-            assert tx.hash is not None
             assert len(tx.hash) == 32
             rocksdb_key += struct.pack('>I', tx.timestamp) + tx.hash
             assert len(rocksdb_key) == self._KEY_SIZE + 4 + 32
@@ -94,15 +93,11 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         return key, timestamp, tx_hash
 
     def add_tx(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
-
         for key in self._extract_keys(tx):
             self.log.debug('put key', key=key)
             self._db.put((self._cf, self._to_rocksdb_key(key, tx)), b'')
 
     def remove_tx(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
-
         for key in self._extract_keys(tx):
             self.log.debug('delete key', key=key)
             self._db.delete((self._cf, self._to_rocksdb_key(key, tx)))

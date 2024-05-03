@@ -73,7 +73,6 @@ class VertexVerifier:
         for parent_hash in vertex.parents:
             try:
                 parent = vertex.storage.get_transaction(parent_hash)
-                assert parent.hash is not None
                 if vertex.timestamp <= parent.timestamp:
                     raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
                         vertex.hash_hex,
@@ -129,7 +128,6 @@ class VertexVerifier:
 
         :raises PowError: when the hash is equal or greater than the target
         """
-        assert vertex.hash is not None
         numeric_hash = int(vertex.hash_hex, vertex.HEX_BASE)
         minimum_target = vertex.get_target(override_weight)
         if numeric_hash >= minimum_target:

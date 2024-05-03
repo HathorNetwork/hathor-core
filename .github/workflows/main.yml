@@ -101,5 +101,7 @@ jobs:
       - name: Run tests
         run: poetry run make tests
       - name: Upload coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         if: matrix.python == 3.11 && startsWith(matrix.os, 'ubuntu')
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

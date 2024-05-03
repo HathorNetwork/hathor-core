@@ -276,7 +276,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Custom tx generator that generates tips
         parents = manager1.get_new_tx_parents(manager1.tx_storage.latest_timestamp)
 
-        def custom_gen_new_tx(manager: HathorManager, _address: str, value: int, verify: bool = True) -> Transaction:
+        def custom_gen_new_tx(manager: HathorManager, _address: str, value: int) -> Transaction:
             outputs = []
             # XXX: burn address guarantees that this output will not be used as input for any following transactions
             # XXX: reduce value to make sure we can generate more transactions, otherwise it will spend a linear random
@@ -294,8 +294,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             # XXX: fixed parents is the final requirement to make all the generated new tips
             tx.parents = parents
             manager.cpu_mining_service.resolve(tx)
-            if verify:
-                manager.verification_service.verify(tx)
             return tx
 
         # Generate 100 tx-tips in mempool.

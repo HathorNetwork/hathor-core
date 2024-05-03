@@ -229,7 +229,6 @@ class IndexesManager(ABC):
         :param tx: Transaction to be deleted
         """
         assert tx.storage is not None
-        assert tx.hash is not None
 
         if remove_all:
             # We delete from indexes in two cases: (i) mark tx as voided, and (ii) remove tx.

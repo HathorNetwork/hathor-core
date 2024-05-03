@@ -603,7 +603,6 @@ class NodeSyncTimestamp(SyncAgent):
             return
 
         assert tx is not None
-        assert tx.hash is not None
 
         self.log.debug('tx received from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
 
@@ -612,7 +611,6 @@ class NodeSyncTimestamp(SyncAgent):
             # Will it reduce peer reputation score?
             return
         tx.storage = self.protocol.node.tx_storage
-        assert tx.hash is not None
 
         key = self.get_data_key(tx.hash)
         deferred = self.deferred_by_key.pop(key, None)
@@ -630,7 +628,7 @@ class NodeSyncTimestamp(SyncAgent):
             self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=True)
+            result = self.manager.on_new_tx(tx, propagate_to_peers=True)
             self.update_received_stats(tx, result)
 
     def update_received_stats(self, tx: 'BaseTransaction', result: bool) -> None:
@@ -674,7 +672,6 @@ class NodeSyncTimestamp(SyncAgent):
         # the parameter of the second callback is the return of the first
         # so I need to return the same tx to guarantee that all peers will receive it
         if tx:
-            assert tx.hash is not None
             if self.manager.tx_storage.transaction_exists(tx.hash):
                 self.manager.tx_storage.compare_bytes_with_local_tx(tx)
                 success = True
