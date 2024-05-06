@@ -12,36 +12,35 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
-from hathor.indexes import MemoryIndexesManager
-from hathor.transaction import Block
+from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling
+from hathor.transaction import Block, TransactionMetadata
 from hathor.transaction.exceptions import BlockMustSignalError
-from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
-from hathor.transaction.validation_state import ValidationState
-from hathor.util import not_none
 from hathor.verification.block_verifier import BlockVerifier
+from hathor.verification.verification_dependencies import BlockDependencies
 
 
 def test_calculate_feature_activation_bit_counts_genesis():
     settings = get_global_settings()
     storage = TransactionMemoryStorage()
-    genesis_block = storage.get_block(settings.GENESIS_BLOCK_HASH)
-    result = genesis_block.static_metadata.feature_activation_bit_counts
+    genesis_block = storage.get_transaction(settings.GENESIS_BLOCK_HASH)
+    assert isinstance(genesis_block, Block)
+    result = genesis_block.get_feature_activation_bit_counts()
 
     assert result == [0, 0, 0, 0]
 
 
 @pytest.fixture
-def storage() -> TransactionStorage:
-    indexes = MemoryIndexesManager()
-    storage = TransactionMemoryStorage(indexes=indexes)
+def block_mocks() -> list[Block]:
+    settings = get_global_settings()
+    blocks: list[Block] = []
     feature_activation_bits = [
         0b0000,  # 0: boundary block
         0b1010,
@@ -57,18 +56,20 @@ def storage() -> TransactionStorage:
         0b0000,
     ]
 
-    for height, bits in enumerate(feature_activation_bits):
-        if height == 0:
-            continue
-        parent = not_none(storage.get_block_by_height(height - 1))
-        block = Block(signal_bits=bits, parents=[parent.hash], storage=storage)
-        block.update_hash()
-        block.get_metadata().validation = ValidationState.FULL
-        block.init_static_metadata_from_storage(get_global_settings(), storage)
-        storage.save_transaction(block)
-        indexes.height.add_new(height, block.hash, block.timestamp)
+    for i, bits in enumerate(feature_activation_bits):
+        genesis_hash = settings.GENESIS_BLOCK_HASH
+        block_hash = genesis_hash if i == 0 else b'some_hash'
 
-    return storage
+        storage = Mock(spec_set=TransactionStorage)
+        storage.get_metadata = Mock(return_value=None)
+
+        block = Block(hash=block_hash, storage=storage, signal_bits=bits)
+        blocks.append(block)
+
+        get_block_parent_mock = Mock(return_value=blocks[i - 1])
+        setattr(block, 'get_block_parent', get_block_parent_mock)
+
+    return blocks
 
 
 @pytest.mark.parametrize(
@@ -87,25 +88,27 @@ def storage() -> TransactionStorage:
     ]
 )
 def test_calculate_feature_activation_bit_counts(
-    storage: TransactionStorage,
+    block_mocks: list[Block],
     block_height: int,
     expected_counts: list[int]
 ) -> None:
-    block = not_none(storage.get_block_by_height(block_height))
-    assert block.static_metadata.feature_activation_bit_counts == expected_counts
+    block = block_mocks[block_height]
+    result = block.get_feature_activation_bit_counts()
+
+    assert result == expected_counts
 
 
-def test_get_height() -> None:
-    static_metadata = BlockStaticMetadata(
-        min_height=0,
-        height=10,
-        feature_activation_bit_counts=[],
-        feature_states={},
-    )
-    block = Block()
-    block.set_static_metadata(static_metadata)
+def test_get_height():
+    block_hash = b'some_hash'
+    block_height = 10
+    metadata = TransactionMetadata(hash=block_hash, height=block_height)
 
-    assert block.get_height() == 10
+    storage = Mock(spec_set=TransactionStorage)
+    storage.get_metadata = Mock(side_effect=lambda _hash: metadata if _hash == block_hash else None)
+
+    block = Block(hash=block_hash, storage=storage)
+
+    assert block.get_height() == block_height
 
 
 @pytest.mark.parametrize(
@@ -137,23 +140,25 @@ def test_get_feature_activation_bit_value() -> None:
 
 
 def test_verify_must_signal() -> None:
-    verifier = BlockVerifier(settings=Mock(), daa=Mock())
-    is_signaling_mandatory_features_mock = Mock(
-        return_value=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)
+    settings = Mock(spec_set=HathorSettings)
+    verifier = BlockVerifier(settings=settings, daa=Mock())
+    deps = BlockDependencies(
+        parents={},
+        height=0,
+        min_height=0,
+        signaling_state=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1),
+        feature_info={}
     )
-    block = Block()
 
-    with patch.object(FeatureService, 'is_signaling_mandatory_features', is_signaling_mandatory_features_mock):
-        with pytest.raises(BlockMustSignalError) as e:
-            verifier.verify_mandatory_signaling(block)
+    with pytest.raises(BlockMustSignalError) as e:
+        verifier.verify_mandatory_signaling(deps)
 
     assert str(e.value) == "Block must signal support for feature 'NOP_FEATURE_1' during MUST_SIGNAL phase."
 
 
 def test_verify_must_not_signal() -> None:
-    verifier = BlockVerifier(settings=Mock(), daa=Mock())
-    is_signaling_mandatory_features_mock = Mock(return_value=BlockIsSignaling())
-    block = Block()
+    settings = Mock(spec_set=HathorSettings)
+    verifier = BlockVerifier(settings=settings, daa=Mock())
+    deps = BlockDependencies(parents={}, height=0, min_height=0, signaling_state=BlockIsSignaling(), feature_info={})
 
-    with patch.object(FeatureService, 'is_signaling_mandatory_features', is_signaling_mandatory_features_mock):
-        verifier.verify_mandatory_signaling(block)
+    verifier.verify_mandatory_signaling(deps)

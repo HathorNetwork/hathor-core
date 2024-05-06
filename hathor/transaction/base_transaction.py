@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import base64
+import copyreg
 import datetime
 import hashlib
 import time
@@ -22,15 +23,14 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional, cast
 
 from structlog import get_logger
+from typing_extensions import Self, TypeVar
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
-from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
-from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.transaction.validation_state import ValidationState
@@ -119,11 +119,9 @@ class TxVersion(IntEnum):
 
 _base_transaction_log = logger.new()
 
-StaticMetadataT = TypeVar('StaticMetadataT', bound=VertexStaticMetadata, covariant=True)
 
-
-class GenericVertex(ABC, Generic[StaticMetadataT]):
-    """Hathor generic vertex"""
+class BaseTransaction(ABC):
+    """Hathor base transaction"""
 
     # Even though nonce is serialized with different sizes for tx and blocks
     # the same size is used for hashes to enable mining algorithm compatibility
@@ -132,7 +130,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     HEX_BASE = 16
 
     _metadata: Optional[TransactionMetadata]
-    _static_metadata: StaticMetadataT | None
 
     # Bits extracted from the first byte of the version field. They carry extra information that may be interpreted
     # differently by each subclass of BaseTransaction.
@@ -174,7 +171,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self.parents = parents or []
         self.storage = storage
         self._hash: VertexId | None = hash  # Stored as bytes.
-        self._static_metadata = None
 
     @classproperty
     def log(cls):
@@ -257,7 +253,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         :raises NotImplement: when one of the transactions do not have a calculated hash
         """
-        if not isinstance(other, GenericVertex):
+        if not isinstance(other, BaseTransaction):
             return NotImplemented
         if self._hash and other._hash:
             return self.hash == other.hash
@@ -272,6 +268,20 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
     def __hash__(self) -> int:
         return hash(self.hash)
+
+    @abstractmethod
+    def calculate_height(self, *, block_height_getter: Callable[[VertexId], int] | None = None) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def calculate_min_height(
+        self,
+        *,
+        vertex_getter: Callable[[VertexId], 'BaseTransaction'] | None = None,
+        block_height_getter: Callable[[VertexId], int] | None = None,
+        min_height_getter: Callable[[VertexId], int] | None = None,
+    ) -> int:
+        raise NotImplementedError
 
     @property
     def hash(self) -> VertexId:
@@ -453,29 +463,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         return addresses
 
-    def can_validate_full(self) -> bool:
-        """ Check if this transaction is ready to be fully validated, either all deps are full-valid or one is invalid.
-        """
-        assert self.storage is not None
-        assert self._hash is not None
-        if self.is_genesis:
-            return True
-        deps = self.get_all_dependencies()
-        all_exist = True
-        all_valid = True
-        # either they all exist and are fully valid
-        for dep in deps:
-            meta = self.storage.get_metadata(dep)
-            if meta is None:
-                all_exist = False
-                continue
-            if not meta.validation.is_fully_connected():
-                all_valid = False
-            if meta.validation.is_invalid():
-                # or any of them is invalid (which would make this one invalid too)
-                return True
-        return all_exist and all_valid
-
     def set_validation(self, validation: ValidationState) -> None:
         """ This method will set the internal validation state AND the appropriate voided_by marker.
 
@@ -617,11 +604,18 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
+            # FIXME: there is code that set use_storage=False but relies on correct height being calculated
+            #        which requires the use of a storage, this is a workaround that should be fixed, places where this
+            #        happens include generating new mining blocks and some tests
+            height = self.calculate_height() if self.storage else None
             score = self.weight if self.is_genesis else 0
+
             metadata = TransactionMetadata(
                 hash=self._hash,
                 accumulated_weight=self.weight,
+                height=height,
                 score=score,
+                min_height=0,
             )
             self._metadata = metadata
         if not metadata.hash:
@@ -646,6 +640,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             self._metadata.validation = ValidationState.INITIAL
             self._metadata.voided_by = {self._settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
+
+        self._update_height_metadata()
 
         self.storage.save_transaction(self, only_metadata=True)
 
@@ -700,11 +696,23 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         It is called when a new transaction/block is received by HathorManager.
         """
+        self._update_height_metadata()
         self._update_parents_children_metadata()
-        self._update_initial_accumulated_weight()
+        self._update_reward_lock_metadata()
+        self._update_feature_activation_bit_counts()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
+
+    def _update_height_metadata(self) -> None:
+        """Update the vertice height metadata."""
+        meta = self.get_metadata()
+        meta.height = self.calculate_height()
+
+    def _update_reward_lock_metadata(self) -> None:
+        """Update the txs/block min_height metadata."""
+        metadata = self.get_metadata()
+        metadata.min_height = self.calculate_min_height()
 
     def _update_parents_children_metadata(self) -> None:
         """Update the txs/block parent's children metadata."""
@@ -717,10 +725,14 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
                 metadata.children.append(self.hash)
                 self.storage.save_transaction(parent, only_metadata=True)
 
-    def _update_initial_accumulated_weight(self) -> None:
-        """Update the vertex initial accumulated_weight."""
-        metadata = self.get_metadata()
-        metadata.accumulated_weight = self.weight
+    def _update_feature_activation_bit_counts(self) -> None:
+        """Update the block's feature_activation_bit_counts."""
+        if not self.is_block:
+            return
+        from hathor.transaction import Block
+        assert isinstance(self, Block)
+        # This method lazily calculates and stores the value in metadata
+        self.get_feature_activation_bit_counts()
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
@@ -793,13 +805,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             'parents': [],
         }
 
-        # A nano contract tx must be confirmed by one block at least
-        # to be considered "executed"
-        if meta.first_block is not None:
-            ret['first_block'] = meta.first_block.hex()
-        else:
-            ret['first_block'] = None
-
         for parent in self.parents:
             ret['parents'].append(parent.hex())
 
@@ -822,20 +827,18 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         return ret
 
-    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> 'BaseTransaction':
+    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> Self:
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
         """
         new_tx = self.create_from_struct(self.get_struct())
-        # static_metadata can be safely copied as it is a frozen dataclass
-        new_tx.set_static_metadata(self._static_metadata)
         if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
         if include_storage:
             new_tx.storage = self.storage
-        return new_tx
+        return cast(Self, new_tx)
 
     @abstractmethod
     def get_token_uid(self, index: int) -> TokenUid:
@@ -851,34 +854,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             if not dep_meta.validation.is_fully_connected():
                 return False
         return True
-
-    @property
-    def static_metadata(self) -> StaticMetadataT:
-        """Get this vertex's static metadata. Assumes it has been initialized."""
-        assert self._static_metadata is not None
-        return self._static_metadata
-
-    @abstractmethod
-    def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
-        """Initialize this vertex's static metadata using dependencies from a storage. This can be called multiple
-        times, provided the dependencies didn't change."""
-        raise NotImplementedError
-
-    def set_static_metadata(self, static_metadata: StaticMetadataT | None) -> None:
-        """Set this vertex's static metadata. After it's set, it can only be set again to the same value."""
-        assert not self._static_metadata or self._static_metadata == static_metadata, (
-            'trying to set static metadata with different values'
-        )
-        self._static_metadata = static_metadata
-
-
-"""
-Type aliases for easily working with `GenericVertex`. A `Vertex` is a superclass that includes all specific
-vertex subclasses, and a `BaseTransaction` is simply an alias to `Vertex` for backwards compatibility (it can be
-removed in the future).
-"""
-Vertex: TypeAlias = GenericVertex[VertexStaticMetadata]
-BaseTransaction: TypeAlias = Vertex
 
 
 class TxInput:
@@ -1137,3 +1112,16 @@ def tx_or_block_from_bytes(data: bytes,
         return cls.create_from_struct(data, storage=storage)
     except ValueError:
         raise StructError('Invalid bytes to create transaction subclass.')
+
+
+T = TypeVar('T', bound=BaseTransaction)
+
+
+def register_vertex_pickler(type_: type[T]) -> None:
+    def unpickle_vertex(vertex_bytes: bytes) -> T:
+        return cast(T, tx_or_block_from_bytes(vertex_bytes))
+
+    def vertex_pickler(vertex: T) -> tuple[Callable[[bytes], T], tuple[bytes]]:
+        return unpickle_vertex, (bytes(vertex),)
+
+    copyreg.pickle(type_, vertex_pickler)

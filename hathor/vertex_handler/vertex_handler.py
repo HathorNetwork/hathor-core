@@ -13,22 +13,37 @@
 #  limitations under the License.
 
 import datetime
+from dataclasses import dataclass
 
 from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.util import not_none
+from hathor.verification.parallel_verifier import ParallelVerifier
 from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
 logger = get_logger()
+
+
+@dataclass(kw_only=True, slots=True, frozen=True)
+class _NewVertex:
+    vertex: BaseTransaction
+    quiet: bool
+    fails_silently: bool
+    propagate_to_peers: bool
+    reject_locked_reward: bool
 
 
 class VertexHandler:
@@ -40,8 +55,10 @@ class VertexHandler:
         '_verification_service',
         '_consensus',
         '_p2p_manager',
+        '_feature_service',
         '_pubsub',
         '_wallet',
+        '_verifier',
     )
 
     def __init__(
@@ -53,6 +70,7 @@ class VertexHandler:
         verification_service: VerificationService,
         consensus: ConsensusAlgorithm,
         p2p_manager: ConnectionsManager,
+        feature_service: FeatureService,
         pubsub: PubSubManager,
         wallet: BaseWallet | None,
     ) -> None:
@@ -63,8 +81,16 @@ class VertexHandler:
         self._verification_service = verification_service
         self._consensus = consensus
         self._p2p_manager = p2p_manager
+        self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
+        self._verifier = ParallelVerifier(  # TODO: Move to builder
+            verification_service=self._verification_service,
+            tx_storage=tx_storage,
+            daa=not_none(DifficultyAdjustmentAlgorithm.singleton),
+            feature_service=feature_service,
+            reactor=reactor,
+        )
 
     def on_new_vertex(
         self,
@@ -82,40 +108,77 @@ class VertexHandler:
         :param fails_silently: if False will raise an exception when tx cannot be added
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        is_valid = self._validate_vertex(
-            vertex,
+        new_vertex = _NewVertex(
+            vertex=vertex,
+            quiet=quiet,
             fails_silently=fails_silently,
-            reject_locked_reward=reject_locked_reward
+            propagate_to_peers=propagate_to_peers,
+            reject_locked_reward=reject_locked_reward,
         )
+        is_pre_valid = self._pre_validate_vertex(new_vertex)
+        if not is_pre_valid:
+            return False
 
+        is_valid = self._validate_vertex(new_vertex)
         if not is_valid:
             return False
 
         self._save_and_run_consensus(vertex)
-        self._post_consensus(
-            vertex,
-            quiet=quiet,
-            propagate_to_peers=propagate_to_peers,
-            reject_locked_reward=reject_locked_reward
-        )
+        self._post_consensus(new_vertex)
 
         return True
 
-    def _validate_vertex(
+    async def on_new_vertex_async(
         self,
         vertex: BaseTransaction,
         *,
-        fails_silently: bool,
-        reject_locked_reward: bool,
+        quiet: bool = False,
+        fails_silently: bool = True,
+        propagate_to_peers: bool = True,
+        reject_locked_reward: bool = True,
     ) -> bool:
+        """ New method for adding transactions or blocks that steps the validation state machine.
+
+        :param vertex: transaction to be added
+        :param quiet: if True will not log when a new tx is accepted
+        :param fails_silently: if False will raise an exception when tx cannot be added
+        :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
+        """
+        new_vertex = _NewVertex(
+            vertex=vertex,
+            quiet=quiet,
+            fails_silently=fails_silently,
+            propagate_to_peers=propagate_to_peers,
+            reject_locked_reward=reject_locked_reward,
+        )
+        is_pre_valid = self._pre_validate_vertex(new_vertex)
+        if not is_pre_valid:
+            return False
+
+        if self._verifier.is_processing(vertex.hash):
+            # TODO: If False,
+            #  this will close the connection which is not necessary, since it may be a fair and valid vertex
+            return True
+
+        is_valid = await self._validate_vertex_async(new_vertex)
+        if not is_valid:
+            return False
+
+        self._save_and_run_consensus(new_vertex.vertex)
+        self._post_consensus(new_vertex)
+
+        return True
+
+    def _pre_validate_vertex(self, new_vertex: _NewVertex) -> bool:
         assert self._tx_storage.is_only_valid_allowed()
         already_exists = False
+        vertex = new_vertex.vertex
         if self._tx_storage.transaction_exists(vertex.hash):
             self._tx_storage.compare_bytes_with_local_tx(vertex)
             already_exists = True
 
         if vertex.timestamp - self._reactor.seconds() > self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
-            if not fails_silently:
+            if not new_vertex.fails_silently:
                 raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
                     vertex.hash_hex, vertex.timestamp))
             self._log.warn('on_new_tx(): Ignoring transaction in the future', tx=vertex.hash_hex,
@@ -124,32 +187,57 @@ class VertexHandler:
 
         vertex.storage = self._tx_storage
 
-        try:
-            metadata = vertex.get_metadata()
-        except TransactionDoesNotExist:
-            if not fails_silently:
-                raise InvalidNewTransaction('cannot get metadata')
-            self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
-            return False
+        if already_exists:
+            try:
+                metadata = vertex.get_metadata()
+            except TransactionDoesNotExist:
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('cannot get metadata')
+                self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
+                return False
 
-        if already_exists and metadata.validation.is_fully_connected():
-            if not fails_silently:
-                raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))
-            self._log.warn('on_new_tx(): Transaction already exists', tx=vertex.hash_hex)
-            return False
+            if metadata.validation.is_fully_connected():
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))
+                self._log.warn('on_new_tx(): Transaction already exists', tx=vertex.hash_hex)
+                return False
 
-        if metadata.validation.is_invalid():
-            if not fails_silently:
-                raise InvalidNewTransaction('previously marked as invalid')
-            self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
-            return False
+            if metadata.validation.is_invalid():
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('previously marked as invalid')
+                self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
+                return False
+
+        return True
+
+    def _validate_vertex(self, new_vertex: _NewVertex) -> bool:
+        vertex = new_vertex.vertex
+        metadata = vertex.get_metadata()
 
         if not metadata.validation.is_fully_connected():
             try:
-                self._verification_service.validate_full(vertex, reject_locked_reward=reject_locked_reward)
+                self._verification_service.validate_full(vertex, reject_locked_reward=new_vertex.reject_locked_reward)
             except HathorError as e:
-                if not fails_silently:
-                    raise InvalidNewTransaction(f'full validation failed: {str(e)}') from e
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('full validation failed') from e
+                self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
+                return False
+
+        return True
+
+    async def _validate_vertex_async(self, new_vertex: _NewVertex) -> bool:
+        vertex = new_vertex.vertex
+        try:
+            metadata = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            metadata = None
+
+        if not metadata or not metadata.validation.is_fully_connected():
+            try:
+                await self._verifier.validate_full(vertex, reject_locked_reward=new_vertex.reject_locked_reward)
+            except HathorError as e:
+                if not new_vertex.fails_silently:
+                    raise InvalidNewTransaction('full validation failed') from e
                 self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
                 return False
 
@@ -165,24 +253,18 @@ class VertexHandler:
         self._tx_storage.add_to_indexes(vertex)
         self._consensus.update(vertex)
 
-    def _post_consensus(
-        self,
-        vertex: BaseTransaction,
-        *,
-        quiet: bool,
-        propagate_to_peers: bool,
-        reject_locked_reward: bool,
-    ) -> None:
+    def _post_consensus(self, new_vertex: _NewVertex) -> None:
         """ Handle operations that need to happen once the tx becomes fully validated.
 
         This might happen immediately after we receive the tx, if we have all dependencies
         already. Or it might happen later.
         """
+        vertex = new_vertex.vertex
         assert self._tx_storage.indexes is not None
         assert self._verification_service.validate_full(
             vertex,
             skip_block_weight_verification=True,
-            reject_locked_reward=reject_locked_reward
+            reject_locked_reward=new_vertex.reject_locked_reward
         )
         self._tx_storage.indexes.update(vertex)
         if self._tx_storage.indexes.mempool_tips:
@@ -198,12 +280,16 @@ class VertexHandler:
             # TODO Remove it and use pubsub instead.
             self._wallet.on_new_tx(vertex)
 
-        self._log_new_object(vertex, 'new {}', quiet=quiet)
+        self._log_new_object(vertex, 'new {}', quiet=new_vertex.quiet)
         self._log_feature_states(vertex)
 
-        if propagate_to_peers:
+        if new_vertex.propagate_to_peers:
             # Propagate to our peers.
             self._p2p_manager.send_tx_to_peers(vertex)
+
+        if isinstance(vertex, Block) and vertex.get_height() == 2900:
+            import os
+            os._exit(0)
 
     def _log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
         """ A shortcut for logging additional information for block/txs.
@@ -233,10 +319,10 @@ class VertexHandler:
         if not isinstance(vertex, Block):
             return
 
-        feature_infos = vertex.static_metadata.get_feature_infos(self._settings)
+        feature_descriptions = self._feature_service.get_feature_info(block=vertex)
         state_by_feature = {
-            feature.value: feature_info.state.value
-            for feature, feature_info in feature_infos.items()
+            feature.value: description.state.value
+            for feature, description in feature_descriptions.items()
         }
 
         self._log.info(
@@ -245,19 +331,17 @@ class VertexHandler:
             block_height=vertex.get_height(),
             features_states=state_by_feature
         )
-        self._log_active_features(vertex)
 
-    def _log_active_features(self, block: Block) -> None:
-        """Log ACTIVE features for a block. Used as part of the Feature Activation Phased Testing."""
-        if not self._settings.NETWORK_NAME == 'mainnet':
-            # We're currently only performing phased testing on mainnet, so we won't log in other networks.
-            return
+        features = [Feature.NOP_FEATURE_1, Feature.NOP_FEATURE_2]
+        for feature in features:
+            self._log_if_feature_is_active(vertex, feature)
 
-        for feature in self._settings.FEATURE_ACTIVATION.features:
-            if block.static_metadata.is_feature_active(feature):
-                self._log.info(
-                    'Feature is ACTIVE for block',
-                    feature=feature.value,
-                    block_hash=block.hash_hex,
-                    block_height=block.get_height()
-                )
+    def _log_if_feature_is_active(self, block: Block, feature: Feature) -> None:
+        """Log if a feature is ACTIVE for a block. Used as part of the Feature Activation Phased Testing."""
+        if self._feature_service.is_feature_active(block=block, feature=feature):
+            self._log.info(
+                'Feature is ACTIVE for block',
+                feature=feature.value,
+                block_hash=block.hash_hex,
+                block_height=block.get_height()
+            )

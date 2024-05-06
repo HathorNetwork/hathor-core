@@ -13,19 +13,21 @@
 # limitations under the License.
 
 import base64
+from itertools import starmap, zip_longest
+from operator import add
 from struct import pack
-from typing import TYPE_CHECKING, Any, Optional
-
-from typing_extensions import override
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf.settings import HathorSettings
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import TxOutput, TxVersion
-from hathor.transaction.base_transaction import GenericVertex
+from hathor.transaction import BaseTransaction, TxOutput, TxVersion
+from hathor.transaction.base_transaction import register_vertex_pickler
 from hathor.transaction.exceptions import CheckpointError
-from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.types import VertexId
+from hathor.util import not_none
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
@@ -40,7 +42,7 @@ _FUNDS_FORMAT_STRING = '!BBB'
 _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 
 
-class Block(GenericVertex[BlockStaticMetadata]):
+class Block(BaseTransaction):
     SERIALIZATION_NONCE_SIZE = 16
 
     def __init__(self,
@@ -88,6 +90,76 @@ class Block(GenericVertex[BlockStaticMetadata]):
         blc.storage = storage
 
         return blc
+
+    def calculate_height(self, *, block_height_getter: Callable[[VertexId], int] | None = None) -> int:
+        """Return the height of the block, i.e., the number of blocks since genesis"""
+        if self.is_genesis:
+            return 0
+
+        block_height_getter = block_height_getter or (
+            lambda vertex_id: not_none(self.storage).get_block(vertex_id).get_height()
+        )
+
+        parent_hash = self.get_block_parent_hash()
+        parent_height = block_height_getter(parent_hash)
+        return parent_height + 1
+
+    def calculate_min_height(
+        self,
+        *,
+        vertex_getter: Callable[[VertexId], BaseTransaction] | None = None,
+        block_height_getter: Callable[[VertexId], int] | None = None,
+        min_height_getter: Callable[[VertexId], int] | None = None,
+    ) -> int:
+        """The minimum height the next block needs to have, basically the maximum min-height of this block's parents.
+        """
+        assert vertex_getter is None and block_height_getter is None, 'unused custom getters'
+        min_height_getter = min_height_getter or not_none(self.storage).get_min_height
+
+        # maximum min-height of any parent tx
+        min_height = 0
+        for tx_hash in self.get_tx_parents():
+            tx_min_height = min_height_getter(tx_hash)
+            min_height = max(min_height, tx_min_height)
+
+        return min_height
+
+    def get_feature_activation_bit_counts(self) -> list[int]:
+        """
+        Lazily calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation
+        bit counts. After it's calculated for the first time, it's persisted in block metadata and must not be changed.
+
+        Each list index corresponds to a bit position, and its respective value is the rolling count of active bits
+        from the previous boundary block up to this block, including it. LSB is on the left.
+        """
+        metadata = self.get_metadata()
+
+        if metadata.feature_activation_bit_counts is not None:
+            return metadata.feature_activation_bit_counts
+
+        previous_counts = self._get_previous_feature_activation_bit_counts()
+        bit_list = self._get_feature_activation_bit_list()
+
+        count_and_bit_pairs = zip_longest(previous_counts, bit_list, fillvalue=0)
+        updated_counts = starmap(add, count_and_bit_pairs)
+        metadata.feature_activation_bit_counts = list(updated_counts)
+
+        return metadata.feature_activation_bit_counts
+
+    def _get_previous_feature_activation_bit_counts(self) -> list[int]:
+        """
+        Returns the feature_activation_bit_counts metadata attribute from the parent block,
+        or no previous counts if this is a boundary block.
+        """
+        evaluation_interval = self._settings.FEATURE_ACTIVATION.evaluation_interval
+        is_boundary_block = self.calculate_height() % evaluation_interval == 0
+
+        if is_boundary_block:
+            return []
+
+        parent_block = self.get_block_parent()
+
+        return parent_block.get_feature_activation_bit_counts()
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
         """Return the hash of the next block in the best blockchain. The blockchain is
@@ -281,8 +353,10 @@ class Block(GenericVertex[BlockStaticMetadata]):
         return sha256d_hash(self.get_header_without_nonce())
 
     def get_height(self) -> int:
-        """Return this block's height."""
-        return self.static_metadata.height
+        """Returns the block's height."""
+        meta = self.get_metadata()
+        assert meta.height is not None
+        return meta.height
 
     def _get_feature_activation_bit_list(self) -> list[int]:
         """
@@ -304,13 +378,43 @@ class Block(GenericVertex[BlockStaticMetadata]):
 
         return bitmask
 
+    def get_feature_state(self, *, feature: Feature) -> Optional[FeatureState]:
+        """Returns the state of a feature from metadata."""
+        metadata = self.get_metadata()
+        feature_states = metadata.feature_states or {}
+
+        return feature_states.get(feature)
+
+    def set_feature_state(self, *, feature: Feature, state: FeatureState, save: bool = False) -> None:
+        """
+        Set the state of a feature in metadata, if it's not set. Fails if it's set and the value is different.
+
+        Args:
+            feature: the feature to set the state of.
+            state: the state to set.
+            save: whether to save this block's metadata in storage.
+        """
+        previous_state = self.get_feature_state(feature=feature)
+
+        if state == previous_state:
+            return
+
+        assert previous_state is None
+        assert self.storage is not None
+
+        metadata = self.get_metadata()
+        feature_states = metadata.feature_states or {}
+        feature_states[feature] = state
+        metadata.feature_states = feature_states
+
+        if save:
+            self.storage.save_transaction(self, only_metadata=True)
+
     def get_feature_activation_bit_value(self, bit: int) -> int:
         """Get the feature activation bit value for a specific bit position."""
         bit_list = self._get_feature_activation_bit_list()
 
         return bit_list[bit]
 
-    @override
-    def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
-        static_metadata = BlockStaticMetadata.create_from_storage(self, settings, storage)
-        self.set_static_metadata(static_metadata)
+
+register_vertex_pickler(Block)

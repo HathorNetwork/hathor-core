@@ -37,7 +37,7 @@ class GenesisTest(unittest.TestCase):
         self.storage = TransactionMemoryStorage()
 
     def test_pow(self):
-        verifier = VertexVerifier(settings=self._settings, daa=self._daa)
+        verifier = VertexVerifier(settings=self._settings)
         genesis = self.storage.get_all_genesis()
         for g in genesis:
             self.assertEqual(g.calculate_hash(), g.hash)

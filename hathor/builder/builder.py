@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum, IntEnum
+from enum import Enum
 from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
@@ -29,10 +29,12 @@ from hathor.event.websocket import EventWebsocketFactory
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
@@ -54,34 +56,6 @@ from hathor.wallet import BaseWallet, Wallet
 logger = get_logger()
 
 
-class SyncSupportLevel(IntEnum):
-    UNAVAILABLE = 0  # not possible to enable at runtime
-    DISABLED = 1  # available but disabled by default, possible to enable at runtime
-    ENABLED = 2  # available and enabled by default, possible to disable at runtime
-
-    @classmethod
-    def add_factories(cls,
-                      p2p_manager: ConnectionsManager,
-                      sync_v1_support: 'SyncSupportLevel',
-                      sync_v2_support: 'SyncSupportLevel',
-                      ) -> None:
-        """Adds the sync factory to the manager according to the support level."""
-        from hathor.p2p.sync_v1.factory import SyncV11Factory
-        from hathor.p2p.sync_v2.factory import SyncV2Factory
-        from hathor.p2p.sync_version import SyncVersion
-
-        # sync-v1 support:
-        if sync_v1_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
-        if sync_v1_support is cls.ENABLED:
-            p2p_manager.enable_sync_version(SyncVersion.V1_1)
-        # sync-v2 support:
-        if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
-        if sync_v2_support is cls.ENABLED:
-            p2p_manager.enable_sync_version(SyncVersion.V2)
-
-
 class StorageType(Enum):
     MEMORY = 'memory'
     ROCKSDB = 'rocksdb'
@@ -98,6 +72,7 @@ class BuildArtifacts(NamedTuple):
     pubsub: PubSubManager
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
+    feature_service: FeatureService
     bit_signaling_service: BitSignalingService
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
@@ -105,7 +80,10 @@ class BuildArtifacts(NamedTuple):
     stratum_factory: Optional[StratumFactory]
 
 
-_VertexVerifiersBuilder: TypeAlias = Callable[[HathorSettingsType, DifficultyAdjustmentAlgorithm], VertexVerifiers]
+_VertexVerifiersBuilder: TypeAlias = Callable[
+    [HathorSettingsType, DifficultyAdjustmentAlgorithm],
+    VertexVerifiers
+]
 
 
 class Builder:
@@ -138,6 +116,7 @@ class Builder:
 
         self._support_features: set[Feature] = set()
         self._not_support_features: set[Feature] = set()
+        self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
         self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
@@ -169,8 +148,8 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._sync_v1_support: SyncSupportLevel = SyncSupportLevel.UNAVAILABLE
-        self._sync_v2_support: SyncSupportLevel = SyncSupportLevel.UNAVAILABLE
+        self._enable_sync_v1: bool = True
+        self._enable_sync_v2: bool = False
 
         self._enable_stratum_server: Optional[bool] = None
 
@@ -182,6 +161,7 @@ class Builder:
         self._vertex_handler: VertexHandler | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
+        self._multiprocessor: Multiprocessor | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -189,9 +169,6 @@ class Builder:
 
         if self._network is None:
             raise TypeError('you must set a network')
-
-        if SyncSupportLevel.ENABLED not in {self._sync_v1_support, self._sync_v2_support}:
-            raise TypeError('you must enable at least one sync version')
 
         settings = self._get_or_create_settings()
         reactor = self._get_reactor()
@@ -208,11 +185,13 @@ class Builder:
         event_manager = self._get_or_create_event_manager()
         indexes = self._get_or_create_indexes_manager()
         tx_storage = self._get_or_create_tx_storage()
+        feature_service = self._get_or_create_feature_service()
         bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
         daa = self._get_or_create_daa()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
         vertex_handler = self._get_or_create_vertex_handler()
+        multiprocessor = self._get_or_create_multiprocessor()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -252,6 +231,7 @@ class Builder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            multiprocessor=multiprocessor,
             **kwargs
         )
 
@@ -275,6 +255,7 @@ class Builder:
             wallet=wallet,
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
+            feature_service=feature_service,
             bit_signaling_service=bit_signaling_service
         )
 
@@ -287,6 +268,11 @@ class Builder:
     def set_event_manager(self, event_manager: EventManager) -> 'Builder':
         self.check_if_can_modify()
         self._event_manager = event_manager
+        return self
+
+    def set_feature_service(self, feature_service: FeatureService) -> 'Builder':
+        self.check_if_can_modify()
+        self._feature_service = feature_service
         return self
 
     def set_bit_signaling_service(self, bit_signaling_service: BitSignalingService) -> 'Builder':
@@ -386,6 +372,10 @@ class Builder:
         if self._p2p_manager:
             return self._p2p_manager
 
+        from hathor.p2p.sync_v1.factory import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
+        from hathor.p2p.sync_version import SyncVersion
+
         enable_ssl = True
         reactor = self._get_reactor()
         my_peer = self._get_peer_id()
@@ -401,7 +391,12 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
         )
-        SyncSupportLevel.add_factories(self._p2p_manager, self._sync_v1_support, self._sync_v2_support)
+        self._p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(self._p2p_manager))
+        self._p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(self._p2p_manager))
+        if self._enable_sync_v1:
+            self._p2p_manager.enable_sync_version(SyncVersion.V1_1)
+        if self._enable_sync_v2:
+            self._p2p_manager.enable_sync_version(SyncVersion.V2)
         return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
@@ -422,7 +417,6 @@ class Builder:
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
         indexes = self._get_or_create_indexes_manager()
-        settings = self._get_or_create_settings()
 
         if self._tx_storage is not None:
             # If a tx storage is provided, set the indexes manager to it.
@@ -434,11 +428,11 @@ class Builder:
             store_indexes = None
 
         if self._storage_type == StorageType.MEMORY:
-            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes, settings=settings)
+            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes)
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes, settings=settings)
+            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes)
 
         else:
             raise NotImplementedError
@@ -448,13 +442,7 @@ class Builder:
             kwargs: dict[str, Any] = {}
             if self._tx_storage_cache_capacity is not None:
                 kwargs['capacity'] = self._tx_storage_cache_capacity
-            self._tx_storage = TransactionCacheStorage(
-                self._tx_storage,
-                reactor,
-                indexes=indexes,
-                settings=settings,
-                **kwargs
-            )
+            self._tx_storage = TransactionCacheStorage(self._tx_storage, reactor, indexes=indexes, **kwargs)
 
         return self._tx_storage
 
@@ -493,19 +481,31 @@ class Builder:
 
         return self._event_manager
 
+    def _get_or_create_feature_service(self) -> FeatureService:
+        """Return the FeatureService instance set on this builder, or a new one if not set."""
+        if self._feature_service is None:
+            settings = self._get_or_create_settings()
+            tx_storage = self._get_or_create_tx_storage()
+            self._feature_service = FeatureService(
+                feature_settings=settings.FEATURE_ACTIVATION,
+                tx_storage=tx_storage
+            )
+
+        return self._feature_service
+
     def _get_or_create_bit_signaling_service(self) -> BitSignalingService:
         if self._bit_signaling_service is None:
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
+            feature_service = self._get_or_create_feature_service()
             feature_storage = self._get_or_create_feature_storage()
-            pubsub = self._get_or_create_pubsub()
             self._bit_signaling_service = BitSignalingService(
-                settings=settings,
+                feature_settings=settings.FEATURE_ACTIVATION,
+                feature_service=feature_service,
                 tx_storage=tx_storage,
                 support_features=self._support_features,
                 not_support_features=self._not_support_features,
                 feature_storage=feature_storage,
-                pubsub=pubsub,
             )
 
         return self._bit_signaling_service
@@ -514,14 +514,23 @@ class Builder:
         if self._verification_service is None:
             verifiers = self._get_or_create_vertex_verifiers()
             storage = self._get_or_create_tx_storage()
-            settings = self._get_or_create_settings()
+            daa = self._get_or_create_daa()
+            feature_service = self._get_or_create_feature_service()
+            multiprocessor = self._get_or_create_multiprocessor()
             self._verification_service = VerificationService(
                 verifiers=verifiers,
-                tx_storage=storage,
-                settings=settings,
+                storage=storage,
+                daa=daa,
+                feature_service=feature_service,
+                multiprocessor=multiprocessor,
             )
 
         return self._verification_service
+
+    def _get_or_create_multiprocessor(self) -> Multiprocessor:
+        if self._multiprocessor is None:
+            self._multiprocessor = Multiprocessor()
+        return self._multiprocessor
 
     def _get_or_create_feature_storage(self) -> FeatureActivationStorage | None:
         match self._storage_type:
@@ -566,6 +575,7 @@ class Builder:
                 verification_service=self._get_or_create_verification_service(),
                 consensus=self._get_or_create_consensus(),
                 p2p_manager=self._get_or_create_p2p_manager(),
+                feature_service=self._get_or_create_feature_service(),
                 pubsub=self._get_or_create_pubsub(),
                 wallet=self._get_or_create_wallet(),
             )
@@ -702,34 +712,34 @@ class Builder:
         self._network = network
         return self
 
-    def set_sync_v1_support(self, support_level: SyncSupportLevel) -> 'Builder':
+    def set_enable_sync_v1(self, enable_sync_v1: bool) -> 'Builder':
         self.check_if_can_modify()
-        self._sync_v1_support = support_level
+        self._enable_sync_v1 = enable_sync_v1
         return self
 
-    def set_sync_v2_support(self, support_level: SyncSupportLevel) -> 'Builder':
+    def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
         self.check_if_can_modify()
-        self._sync_v2_support = support_level
+        self._enable_sync_v2 = enable_sync_v2
         return self
 
     def enable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
-        self._sync_v1_support = SyncSupportLevel.ENABLED
+        self._enable_sync_v1 = True
         return self
 
     def disable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
-        self._sync_v1_support = SyncSupportLevel.DISABLED
+        self._enable_sync_v1 = False
         return self
 
     def enable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
-        self._sync_v2_support = SyncSupportLevel.ENABLED
+        self._enable_sync_v2 = True
         return self
 
     def disable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
-        self._sync_v2_support = SyncSupportLevel.DISABLED
+        self._enable_sync_v2 = False
         return self
 
     def set_full_verification(self, full_verification: bool) -> 'Builder':

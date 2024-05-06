@@ -13,21 +13,19 @@
 # limitations under the License.
 
 import hashlib
+from itertools import chain
 from struct import pack
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional
-
-from typing_extensions import override
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf.settings import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import TxInput, TxOutput, TxVersion
-from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
-from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.static_metadata import TransactionStaticMetadata
+from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
+from hathor.transaction.base_transaction import TX_HASH_SIZE, register_vertex_pickler
+from hathor.transaction.exceptions import InexistentInput, InvalidToken
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -52,7 +50,7 @@ class RewardLockedInfo(NamedTuple):
     blocks_needed: int
 
 
-class Transaction(GenericVertex[TransactionStaticMetadata]):
+class Transaction(BaseTransaction):
 
     SERIALIZATION_NONCE_SIZE = 4
 
@@ -105,6 +103,66 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         tx.storage = storage
 
         return tx
+
+    def calculate_height(self, *, block_height_getter: Callable[[VertexId], int] | None = None) -> int:
+        assert block_height_getter is None, 'custom getter is never used'
+        # XXX: transactions don't have height, using 0 as a placeholder
+        return 0
+
+    def calculate_min_height(
+        self,
+        *,
+        vertex_getter: Callable[[VertexId], BaseTransaction] | None = None,
+        block_height_getter: Callable[[VertexId], int] | None = None,
+        min_height_getter: Callable[[VertexId], int] | None = None,
+    ) -> int:
+        """Calculates the min height the first block confirming this tx needs to have for reward lock verification.
+
+        Assumes tx has been fully verified (parents and inputs exist and have complete metadata).
+        """
+        if vertex_getter or block_height_getter or min_height_getter:
+            assert vertex_getter and block_height_getter and min_height_getter, (
+                'either provide all custom getters or none'
+            )
+
+        if self.is_genesis:
+            return 0
+
+        vertex_getter = vertex_getter or not_none(self.storage).get_vertex
+        min_height_getter = min_height_getter or not_none(self.storage).get_min_height
+        block_height_getter = block_height_getter or (
+            lambda vertex_id: not_none(self.storage).get_block(vertex_id).get_height()
+        )
+
+        return max(
+            # 1) don't drop the min height of any parent tx or input tx
+            self._calculate_inherited_min_height(min_height_getter),
+            # 2) include the min height for any reward being spent
+            self._calculate_my_min_height(vertex_getter, block_height_getter),
+        )
+
+    def _calculate_inherited_min_height(self, min_height_getter: Callable[[VertexId], int]) -> int:
+        """ Calculates min height inherited from any input or parent"""
+        min_height = 0
+        iter_parents = self.get_tx_parents()
+        iter_inputs = (tx_input.tx_id for tx_input in self.inputs)
+        for tx_hash in chain(iter_parents, iter_inputs):
+            min_height = max(min_height, min_height_getter(tx_hash))
+        return min_height
+
+    def _calculate_my_min_height(
+        self,
+        vertex_getter: Callable[[VertexId], BaseTransaction],
+        block_height_getter: Callable[[VertexId], int],
+    ) -> int:
+        """ Calculates min height derived from own spent block rewards"""
+        min_height = 0
+        for input_tx in self.inputs:
+            spent_tx = vertex_getter(input_tx.tx_id)
+            if isinstance(spent_tx, Block):
+                height = block_height_getter(input_tx.tx_id)
+                min_height = max(min_height, height + self._settings.REWARD_SPEND_MIN_BLOCKS + 1)
+        return min_height
 
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.
@@ -269,7 +327,12 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
+            try:
+                spent_output = spent_tx.outputs[tx_input.index]
+            except IndexError:
+                raise InexistentInput(
+                    f'Output spent by this input does not exist: {tx_input.tx_id.hex()} index {tx_input.index}'
+                )
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             (amount, can_mint, can_melt) = token_dict.get(token_uid, default_info)
@@ -342,7 +405,5 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 return True
         return False
 
-    @override
-    def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
-        static_metadata = TransactionStaticMetadata.create_from_storage(self, settings, storage)
-        self.set_static_metadata(static_metadata)
+
+register_vertex_pickler(Transaction)

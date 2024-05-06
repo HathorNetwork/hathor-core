@@ -16,7 +16,9 @@ from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
+from twisted.python.failure import Failure
 
+from hathor.exception import HathorError
 from hathor.p2p.sync_v2.exception import (
     BlockNotConnectedToPreviousBlock,
     InvalidVertexError,
@@ -26,8 +28,6 @@ from hathor.p2p.sync_v2.exception import (
 )
 from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import Block
-from hathor.transaction.exceptions import HathorError
-from hathor.types import VertexId
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
@@ -39,7 +39,6 @@ class BlockchainStreamingClient:
     def __init__(self, sync_agent: 'NodeBlockSync', start_block: '_HeightInfo', end_block: '_HeightInfo') -> None:
         self.sync_agent = sync_agent
         self.protocol = self.sync_agent.protocol
-        self.tx_storage = self.sync_agent.tx_storage
         self.manager = self.sync_agent.manager
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
@@ -73,12 +72,8 @@ class BlockchainStreamingClient:
 
     def fails(self, reason: 'StreamingError') -> None:
         """Fail the execution by resolving the deferred with an error."""
-        self._deferred.errback(reason)
-
-    def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
-        """Return true if the vertex exists no matter its validation state."""
-        with self.tx_storage.allow_partially_validated_context():
-            return self.tx_storage.transaction_exists(vertex_id)
+        if not self._deferred.called:
+            self._deferred.errback(reason)
 
     def handle_blocks(self, blk: Block) -> None:
         """This method is called by the sync agent when a BLOCKS message is received."""
@@ -105,7 +100,7 @@ class BlockchainStreamingClient:
 
         # Check for repeated blocks.
         is_duplicated = False
-        if self.partial_vertex_exists(blk.hash):
+        if self.sync_agent.p2p_storage.local_partial_vertex_exists(blk.hash):
             # We reached a block we already have. Skip it.
             self._blk_repeated += 1
             is_duplicated = True
@@ -130,12 +125,13 @@ class BlockchainStreamingClient:
         else:
             self.log.debug('block received', blk_id=blk.hash.hex())
 
-        if blk.can_validate_full():
-            try:
-                self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
-            except HathorError:
-                self.fails(InvalidVertexError(blk.hash.hex()))
-                return
+        if self.sync_agent.p2p_storage.local_can_validate_full(blk):
+            result = self.sync_agent.p2p_vertex_handler.handle_new_vertex(
+                blk,
+                propagate_to_peers=False,
+                fails_silently=False
+            )
+            result.addErrback(self._handle_block_error, blk)
         else:
             self._partial_blocks.append(blk)
 
@@ -144,6 +140,12 @@ class BlockchainStreamingClient:
         # XXX: debugging log, maybe add timing info
         if self._blk_received % 500 == 0:
             self.log.debug('block streaming in progress', blocks_received=self._blk_received)
+
+    def _handle_block_error(self, failure: Failure, block: Block) -> Failure | None:
+        if not isinstance(failure.value, HathorError):
+            return failure
+        self.fails(InvalidVertexError(block.hash.hex()))
+        return None
 
     def handle_blocks_end(self, response_code: StreamEnd) -> None:
         """This method is called by the sync agent when a BLOCKS-END message is received."""

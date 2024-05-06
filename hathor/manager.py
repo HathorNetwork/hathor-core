@@ -44,6 +44,7 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.profiler import get_cpu_profiler
@@ -104,6 +105,7 @@ class HathorManager:
         network: str,
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
+        multiprocessor: Multiprocessor,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -134,6 +136,7 @@ class HathorManager:
         self._settings = settings
         self.daa = daa
         self._cmd_path: Optional[str] = None
+        self.multiprocessor = multiprocessor
 
         self.log = logger.new()
 
@@ -364,6 +367,7 @@ class HathorManager:
             self._event_manager.stop()
 
         self.tx_storage.flush()
+        self.multiprocessor.stop()
 
         return defer.DeferredList(waits)
 
@@ -429,13 +433,15 @@ class HathorManager:
 
         self.log.debug('load blocks and transactions')
         for tx in self.tx_storage._topological_sort_dfs():
+            assert tx.hash is not None
+
             tx_meta = tx.get_metadata()
 
             t2 = time.time()
             dt = LogDuration(t2 - t1)
             dcnt = cnt - cnt2
             tx_rate = '?' if dt == 0 else dcnt / dt
-            h = max(h, (tx.static_metadata.height if isinstance(tx, Block) else 0))
+            h = max(h, tx_meta.height or 0)
             if dt > 30:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
                 if h == 0:
@@ -455,10 +461,12 @@ class HathorManager:
 
             try:
                 # TODO: deal with invalid tx
+                tx.calculate_height()
                 tx._update_parents_children_metadata()
 
-                if tx.can_validate_full():
+                if self.tx_storage.can_validate_full(tx):
                     tx.update_initial_metadata()
+                    tx.calculate_min_height()
                     if tx.is_genesis:
                         assert tx.validate_checkpoint(self.checkpoints)
                     assert self.verification_service.validate_full(
@@ -486,6 +494,7 @@ class HathorManager:
                 block_count += 1
 
                 # this works because blocks on the best chain are iterated from lower to higher height
+                assert tx.hash is not None
                 assert tx_meta.validation.is_at_least_basic()
                 assert isinstance(tx, Block)
                 blk_height = tx.get_height()
@@ -512,8 +521,6 @@ class HathorManager:
         # assert best_block is not None
 
         self.tx_storage.indexes._manually_initialize(self.tx_storage)
-
-        self._bit_signaling_service.start()
 
         self.log.debug('done loading transactions')
 
@@ -560,6 +567,8 @@ class HathorManager:
         self.tx_storage.pre_init()
         assert self.tx_storage.indexes is not None
 
+        self._bit_signaling_service.start()
+
         started_at = int(time.time())
         last_started_at = self.tx_storage.get_last_started_at()
         if last_started_at >= started_at:
@@ -574,8 +583,6 @@ class HathorManager:
         #       method for full-verification to work, if we implement it here we'll reduce a lot of duplicate and
         #       complex code
         self.tx_storage.indexes._manually_initialize(self.tx_storage)
-
-        self._bit_signaling_service.start()
 
         # Verify if all checkpoints that exist in the database are correct
         try:
@@ -650,6 +657,7 @@ class HathorManager:
                 tx = self.tx_storage.get_transaction(checkpoint.hash)
             except TransactionDoesNotExist as e:
                 raise InitializationError(f'Expected checkpoint does not exist in database: {checkpoint}') from e
+            assert tx.hash is not None
             tx_meta = tx.get_metadata()
             if tx_meta.height != checkpoint.height:
                 raise InitializationError(
@@ -778,6 +786,7 @@ class HathorManager:
                              with_weight_decay: bool = False) -> BlockTemplate:
         """ Further implementation of making block template, used by make_block_template and make_custom_block_template
         """
+        assert parent_block.hash is not None
         # the absolute minimum would be the previous timestamp + 1
         timestamp_abs_min = parent_block.timestamp + 1
         # and absolute maximum limited by max time between blocks
@@ -816,7 +825,12 @@ class HathorManager:
             parent_block_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
-        weight = max(self.daa.calculate_next_weight(parent_block, timestamp, self.tx_storage), min_significant_weight)
+        weight = max(
+            self.daa.calculate_next_weight(
+                parent_block, parent_block.get_height(), timestamp, self.tx_storage.get_parent_block
+            ),
+            min_significant_weight
+        )
         height = parent_block.get_height() + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include
@@ -913,6 +927,12 @@ class HathorManager:
         tx_from_lib = lib_tx_or_block_from_bytes(bytes(tx))
         if not tx_from_lib.is_standard(max_output_script_size, not allow_non_standard_script):
             raise NonStandardTxError('Transaction is non standard.')
+
+        # Validate tx.
+        try:
+            self.verification_service.verify(tx)
+        except TxValidationError as e:
+            raise InvalidNewTransaction(str(e))
 
         self.propagate_tx(tx, fails_silently=False)
 
@@ -1022,13 +1042,6 @@ class HathorManager:
     def get_cmd_path(self) -> Optional[str]:
         """Return the cmd path. If no cmd path is set, returns None."""
         return self._cmd_path
-
-    def set_hostname_and_reset_connections(self, new_hostname: str) -> None:
-        """Set the hostname and reset all connections."""
-        old_hostname = self.hostname
-        self.hostname = new_hostname
-        self.connections.update_hostname_entrypoints(old_hostname=old_hostname, new_hostname=self.hostname)
-        self.connections.disconnect_all_peers(force=True)
 
 
 class ParentTxs(NamedTuple):

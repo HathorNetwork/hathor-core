@@ -12,9 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.reward_lock.reward_lock import get_spent_reward_locked_info, is_spent_reward_locked
+from hathor.multiprocessor.multiprocessor import Multiprocessor
 
 __all__ = [
-    'is_spent_reward_locked',
-    'get_spent_reward_locked_info',
+    'Multiprocessor'
 ]

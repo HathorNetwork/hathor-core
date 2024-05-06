@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import getpass
+import json
 import os
 import platform
 import sys
@@ -28,10 +29,12 @@ from hathor.event import EventManager
 from hathor.exception import BuilderError
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
@@ -48,10 +51,9 @@ logger = get_logger()
 
 
 class SyncChoice(Enum):
-    V1_DEFAULT = auto()  # v1 enabled, v2 disabled but can be enabled in runtime
-    V2_DEFAULT = auto()  # v2 enabled, v1 disabled but can be enabled in runtime
-    BRIDGE_DEFAULT = auto()  # both enabled, either can be disabled in runtime
-    V2_ONLY = auto()  # v1 is unavailable, it cannot be enabled in runtime
+    V1_ONLY = auto()
+    V2_ONLY = auto()
+    BRIDGE = auto()
 
 
 class CliBuilder:
@@ -70,13 +72,15 @@ class CliBuilder:
 
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
-        from hathor.builder import SyncSupportLevel
         from hathor.conf.get_settings import get_global_settings, get_settings_source
         from hathor.daa import TestMode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
+        from hathor.p2p.sync_v1.factory import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
+        from hathor.p2p.sync_version import SyncVersion
         from hathor.storage import RocksDBStorage
         from hathor.transaction.storage import (
             TransactionCacheStorage,
@@ -94,7 +98,8 @@ class CliBuilder:
         self.log = logger.new()
         self.reactor = reactor
 
-        peer_id = PeerId.create_from_json_path(self._args.peer) if self._args.peer else PeerId()
+        peer_id = self.create_peer_id()
+
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
         self.log.info(
@@ -144,7 +149,7 @@ class CliBuilder:
             else:
                 indexes = RocksDBIndexesManager(self.rocksdb_storage)
 
-            kwargs: dict[str, Any] = {}
+            kwargs = {}
             if not self._args.cache:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
@@ -175,39 +180,33 @@ class CliBuilder:
 
         sync_choice: SyncChoice
         if self._args.sync_bridge:
-            sync_choice = SyncChoice.BRIDGE_DEFAULT
+            self.log.warn('--sync-bridge is the default, this parameter has no effect')
+            sync_choice = SyncChoice.BRIDGE
         elif self._args.sync_v1_only:
-            sync_choice = SyncChoice.V1_DEFAULT
+            sync_choice = SyncChoice.V1_ONLY
         elif self._args.sync_v2_only:
-            self.log.warn('--sync-v2-only is the default, this parameter has no effect')
-            sync_choice = SyncChoice.V2_DEFAULT
-        elif self._args.x_remove_sync_v1:
             sync_choice = SyncChoice.V2_ONLY
         elif self._args.x_sync_bridge:
             self.log.warn('--x-sync-bridge is deprecated and will be removed, use --sync-bridge instead')
-            sync_choice = SyncChoice.BRIDGE_DEFAULT
+            sync_choice = SyncChoice.BRIDGE
         elif self._args.x_sync_v2_only:
             self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
-            sync_choice = SyncChoice.V2_DEFAULT
+            sync_choice = SyncChoice.V2_ONLY
         else:
-            # XXX: this is the default behavior when no parameter is given
-            sync_choice = SyncChoice.V2_DEFAULT
+            sync_choice = SyncChoice.BRIDGE
 
-        sync_v1_support: SyncSupportLevel
-        sync_v2_support: SyncSupportLevel
+        enable_sync_v1: bool
+        enable_sync_v2: bool
         match sync_choice:
-            case SyncChoice.V1_DEFAULT:
-                sync_v1_support = SyncSupportLevel.ENABLED
-                sync_v2_support = SyncSupportLevel.DISABLED
-            case SyncChoice.V2_DEFAULT:
-                sync_v1_support = SyncSupportLevel.DISABLED
-                sync_v2_support = SyncSupportLevel.ENABLED
-            case SyncChoice.BRIDGE_DEFAULT:
-                sync_v1_support = SyncSupportLevel.ENABLED
-                sync_v2_support = SyncSupportLevel.ENABLED
+            case SyncChoice.V1_ONLY:
+                enable_sync_v1 = True
+                enable_sync_v2 = False
             case SyncChoice.V2_ONLY:
-                sync_v1_support = SyncSupportLevel.UNAVAILABLE
-                sync_v2_support = SyncSupportLevel.ENABLED
+                enable_sync_v1 = False
+                enable_sync_v2 = True
+            case SyncChoice.BRIDGE:
+                enable_sync_v1 = True
+                enable_sync_v2 = True
 
         pubsub = PubSubManager(reactor)
 
@@ -256,13 +255,18 @@ class CliBuilder:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
+        self.feature_service = FeatureService(
+            feature_settings=settings.FEATURE_ACTIVATION,
+            tx_storage=tx_storage
+        )
+
         bit_signaling_service = BitSignalingService(
-            settings=settings,
+            feature_settings=settings.FEATURE_ACTIVATION,
+            feature_service=self.feature_service,
             tx_storage=tx_storage,
             support_features=self._args.signal_support,
             not_support_features=self._args.signal_not_support,
             feature_storage=feature_storage,
-            pubsub=pubsub,
         )
 
         test_mode = TestMode.DISABLED
@@ -272,12 +276,15 @@ class CliBuilder:
                 self.wallet.test_mode = True
 
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
+        multiprocessor = Multiprocessor()
 
         vertex_verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
         verification_service = VerificationService(
             verifiers=vertex_verifiers,
-            tx_storage=tx_storage,
-            settings=settings,
+            storage=tx_storage,
+            daa=daa,
+            feature_service=self.feature_service,
+            multiprocessor=multiprocessor,
         )
 
         cpu_mining_service = CpuMiningService()
@@ -291,7 +298,12 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
         )
-        SyncSupportLevel.add_factories(p2p_manager, sync_v1_support, sync_v2_support)
+        p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+        p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager, use_async=self._args.x_async_sync_v2))
+        if enable_sync_v1:
+            p2p_manager.enable_sync_version(SyncVersion.V1_1)
+        if enable_sync_v2:
+            p2p_manager.enable_sync_version(SyncVersion.V2)
 
         vertex_handler = VertexHandler(
             reactor=reactor,
@@ -300,6 +312,7 @@ class CliBuilder:
             verification_service=verification_service,
             consensus=consensus_algorithm,
             p2p_manager=p2p_manager,
+            feature_service=self.feature_service,
             pubsub=pubsub,
             wallet=self.wallet,
         )
@@ -326,6 +339,7 @@ class CliBuilder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            multiprocessor=multiprocessor,
         )
 
         if self._args.x_ipython_kernel:
@@ -371,7 +385,7 @@ class CliBuilder:
             self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         for description in self._args.listen:
-            p2p_manager.add_listen_address_description(description)
+            p2p_manager.add_listen_address(description)
 
         if self._args.peer_id_blacklist:
             self.log.info('with peer id blacklist', blacklist=self._args.peer_id_blacklist)
@@ -400,6 +414,14 @@ class CliBuilder:
                 sys.exit(-1)
             print('Hostname discovered and set to {}'.format(hostname))
         return hostname
+
+    def create_peer_id(self) -> PeerId:
+        if not self._args.peer:
+            peer_id = PeerId()
+        else:
+            data = json.load(open(self._args.peer, 'r'))
+            peer_id = PeerId.create_from_json(data)
+        return peer_id
 
     def create_wallet(self) -> BaseWallet:
         if self._args.wallet == 'hd':
