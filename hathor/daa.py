@@ -21,19 +21,17 @@ NOTE: This module could use a better name.
 
 from enum import IntFlag
 from math import log
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, Callable, ClassVar, Optional
 
 from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.types import VertexId
-from hathor.util import iwindows, not_none
+from hathor.util import iwindows
 
 if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
-    from hathor.transaction.storage.simple_memory_storage import SimpleMemoryStorage
-    from hathor.transaction.storage.vertex_storage_protocol import VertexStorageProtocol
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -60,7 +58,7 @@ class DifficultyAdjustmentAlgorithm:
         DifficultyAdjustmentAlgorithm.singleton = self
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
-    def calculate_block_difficulty(self, block: 'Block', memory_storage: 'SimpleMemoryStorage') -> float:
+    def calculate_block_difficulty(self, block: 'Block', parent_block_getter: Callable[['Block'], 'Block']) -> float:
         """ Calculate block weight according to the ascendants of `block`, using calculate_next_weight."""
         if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
             return 1.0
@@ -68,27 +66,35 @@ class DifficultyAdjustmentAlgorithm:
         if block.is_genesis:
             return self.MIN_BLOCK_WEIGHT
 
-        parent_block = memory_storage.get_parent_block(block)
-
-        return self.calculate_next_weight(parent_block, block.timestamp, memory_storage)
+        parent_block = parent_block_getter(block)
+        return self.calculate_next_weight(parent_block, block.timestamp, parent_block_getter)
 
     def _calculate_N(self, parent_block: 'Block') -> int:
         """Calculate the N value for the `calculate_next_weight` algorithm."""
         return min(2 * self._settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_height() - 1)
 
-    def get_block_dependencies(self, block: 'Block') -> list[VertexId]:
+    def get_block_dependencies(
+        self,
+        block: 'Block',
+        parent_block_getter: Callable[['Block'], 'Block'],
+    ) -> list[VertexId]:
         """Return the ids of the required blocks to call `calculate_block_difficulty` for the provided block."""
-        parent_block = block.get_block_parent()
+        parent_block = parent_block_getter(block)
         N = self._calculate_N(parent_block)
-        ids: list[VertexId] = [not_none(parent_block.hash)]
+        ids: list[VertexId] = [parent_block.hash]
 
         while len(ids) <= N + 1:
-            parent_block = parent_block.get_block_parent()
-            ids.append(not_none(parent_block.hash))
+            parent_block = parent_block_getter(parent_block)
+            ids.append(parent_block.hash)
 
         return ids
 
-    def calculate_next_weight(self, parent_block: 'Block', timestamp: int, storage: 'VertexStorageProtocol') -> float:
+    def calculate_next_weight(
+        self,
+        parent_block: 'Block',
+        timestamp: int,
+        parent_block_getter: Callable[['Block'], 'Block'],
+    ) -> float:
         """ Calculate the next block weight, aka DAA/difficulty adjustment algorithm.
 
         The algorithm used is described in [RFC 22](https://gitlab.com/HathorNetwork/rfcs/merge_requests/22).
@@ -111,8 +117,7 @@ class DifficultyAdjustmentAlgorithm:
         blocks: list['Block'] = []
         while len(blocks) < N + 1:
             blocks.append(root)
-            root = storage.get_parent_block(root)
-            assert root is not None
+            root = parent_block_getter(root)
 
         # TODO: revise if this assertion can be safely removed
         assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)

@@ -248,6 +248,6 @@ def _build_vertex_verifiers(settings: HathorSettings, daa: DifficultyAdjustmentA
     """
     return VertexVerifiers.create(
         settings=settings,
-        vertex_verifier=SimulatorVertexVerifier(settings=settings, daa=daa),
+        vertex_verifier=SimulatorVertexVerifier(settings=settings),
         daa=daa,
     )
