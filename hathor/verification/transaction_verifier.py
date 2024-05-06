@@ -35,9 +35,8 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
-from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
-from hathor.types import TokenUid, VertexId
+from hathor.types import VertexId
 from hathor.verification.verification_dependencies import TransactionDependencies
 
 cpu = get_cpu_profiler()
@@ -206,7 +205,7 @@ class TransactionVerifier:
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def verify_sum(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verify_sum(self, tx_deps: TransactionDependencies) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
 
@@ -219,7 +218,7 @@ class TransactionVerifier:
         """
         withdraw = 0
         deposit = 0
-        for token_uid, token_info in token_dict.items():
+        for token_uid, token_info in tx_deps.token_info.items():
             if token_uid == self._settings.HATHOR_TOKEN_UID:
                 continue
 
@@ -241,7 +240,7 @@ class TransactionVerifier:
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
+        htr_info = tx_deps.token_info[self._settings.HATHOR_TOKEN_UID]
         if htr_info.amount != htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
                 htr_info.amount,
