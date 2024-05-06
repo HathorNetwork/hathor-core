@@ -457,7 +457,7 @@ class HathorManager:
                 # TODO: deal with invalid tx
                 tx._update_parents_children_metadata()
 
-                if tx.can_validate_full():
+                if self.tx_storage.can_validate_full(tx):
                     tx.update_initial_metadata()
                     if tx.is_genesis:
                         assert tx.validate_checkpoint(self.checkpoints)
@@ -937,7 +937,8 @@ class HathorManager:
         quiet: bool = False,
         fails_silently: bool = True,
         propagate_to_peers: bool = True,
-        reject_locked_reward: bool = True
+        reject_locked_reward: bool = True,
+        is_sync_v2: bool = False,
     ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
@@ -952,6 +953,7 @@ class HathorManager:
             fails_silently=fails_silently,
             propagate_to_peers=propagate_to_peers,
             reject_locked_reward=reject_locked_reward,
+            is_sync_v2=is_sync_v2,
         )
 
     def has_sync_version_capability(self) -> bool:
