@@ -1207,7 +1207,7 @@ class TransactionStorage(ABC):
                 all_valid = False
             if meta.validation.is_invalid():
                 # or any of them is invalid (which would make this one invalid too)
-                return True
+                return True  # TODO: ???
         return all_exist and all_valid
 
 

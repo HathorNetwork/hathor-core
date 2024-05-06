@@ -16,7 +16,9 @@ from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
+from twisted.python.failure import Failure
 
+from hathor.exception import HathorError
 from hathor.p2p.sync_v2.exception import (
     BlockNotConnectedToPreviousBlock,
     InvalidVertexError,
@@ -124,15 +126,13 @@ class BlockchainStreamingClient:
             self.log.debug('block received', blk_id=blk.hash.hex())
 
         if self.sync_agent.p2p_storage.local_can_validate_full(blk):
-            try:
-                self.sync_agent.p2p_vertex_handler.handle_new_vertex(
-                    blk,
-                    propagate_to_peers=False,
-                    fails_silently=False
-                )
-            except HathorError:
-                self.fails(InvalidVertexError(blk.hash.hex()))
-                return
+            result = self.sync_agent.p2p_vertex_handler.handle_new_vertex(
+                blk,
+                propagate_to_peers=False,
+                fails_silently=False
+            )
+            result.addErrback(self._handle_block_error, blk)
+            # TODO: Before there was a return after an error. Maybe we have to create a success callback too
         else:
             self._partial_blocks.append(blk)
 
@@ -141,6 +141,12 @@ class BlockchainStreamingClient:
         # XXX: debugging log, maybe add timing info
         if self._blk_received % 500 == 0:
             self.log.debug('block streaming in progress', blocks_received=self._blk_received)
+
+    def _handle_block_error(self, failure: Failure, block: Block) -> Failure | None:
+        if not isinstance(failure.value, HathorError):
+            return failure
+        self.fails(InvalidVertexError(block.hash.hex()))
+        return None
 
     def handle_blocks_end(self, response_code: StreamEnd) -> None:
         """This method is called by the sync agent when a BLOCKS-END message is received."""

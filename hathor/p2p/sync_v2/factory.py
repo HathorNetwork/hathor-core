@@ -18,8 +18,8 @@ from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_v2.agent import NodeBlockSync
-from hathor.p2p.sync_v2.p2p_storage import P2PStorage
-from hathor.p2p.sync_v2.p2p_vertex_handler import P2PVertexHandler
+from hathor.p2p.sync_v2.p2p_storage import AsyncP2PStorage, P2PStorage
+from hathor.p2p.sync_v2.p2p_vertex_handler import AsyncP2PVertexHandler, P2PVertexHandler
 from hathor.reactor import ReactorProtocol as Reactor
 
 if TYPE_CHECKING:
@@ -27,12 +27,20 @@ if TYPE_CHECKING:
 
 
 class SyncV2Factory(SyncAgentFactory):
-    def __init__(self, connections: ConnectionsManager):
+    def __init__(self, connections: ConnectionsManager, *, use_async: bool = True) -> None:
         self.connections = connections
+        self._use_async = use_async
 
     def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Reactor) -> SyncAgent:
-        p2p_storage = P2PStorage(tx_storage=protocol.node.tx_storage)
-        p2p_vertex_handler = P2PVertexHandler(manager=protocol.node)
+        if not self._use_async:
+            p2p_storage = P2PStorage(protocol=protocol, tx_storage=protocol.node.tx_storage)
+            p2p_vertex_handler = P2PVertexHandler(manager=protocol.node)
+        else:
+            p2p_storage = AsyncP2PStorage(protocol=protocol, tx_storage=protocol.node.tx_storage)
+            p2p_vertex_handler = AsyncP2PVertexHandler(
+                manager=protocol.node,
+                p2p_storage=p2p_storage,
+            )
 
         return NodeBlockSync(
             protocol=protocol,
