@@ -77,17 +77,17 @@ class DifficultyAdjustmentAlgorithm:
         self,
         block: 'Block',
         parent_block_getter: Callable[['Block'], 'Block'],
-    ) -> list[VertexId]:
+    ) -> dict[VertexId, 'Block']:
         """Return the ids of the required blocks to call `calculate_block_difficulty` for the provided block."""
         parent_block = parent_block_getter(block)
         N = self._calculate_N(parent_block)
-        ids: list[VertexId] = [parent_block.hash]
+        deps = {parent_block.hash: parent_block}
 
-        while len(ids) <= N + 1:
+        while len(deps) <= N + 1:
             parent_block = parent_block_getter(parent_block)
-            ids.append(parent_block.hash)
+            deps[parent_block.hash] = parent_block
 
-        return ids
+        return deps
 
     def calculate_next_weight(
         self,

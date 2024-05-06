@@ -515,10 +515,12 @@ class Builder:
             verifiers = self._get_or_create_vertex_verifiers()
             storage = self._get_or_create_tx_storage()
             settings = self._get_or_create_settings()
+            daa = self._get_or_create_daa()
             self._verification_service = VerificationService(
                 verifiers=verifiers,
                 tx_storage=storage,
                 settings=settings,
+                daa=daa,
             )
 
         return self._verification_service

@@ -30,6 +30,7 @@ from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
+from hathor.reward_lock import get_spent_reward_locked_info
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput
 from hathor.transaction.block import Block
 from hathor.transaction.exceptions import RewardLocked
@@ -1119,9 +1120,10 @@ class TransactionStorage(ABC):
         from hathor.transaction.validation_state import ValidationState
         to_remove: list[BaseTransaction] = []
         for tx in self.iter_mempool_from_best_index():
+            info = get_spent_reward_locked_info(tx, self.get_vertex, self.get_best_block_tips)
             try:
                 TransactionVerifier.verify_reward_locked_for_height(
-                    tx, new_best_height, assert_min_height_verification=False
+                    tx, info, new_best_height, assert_min_height_verification=False
                 )
             except RewardLocked:
                 tx.set_validation(ValidationState.INVALID)
