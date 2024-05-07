@@ -374,9 +374,9 @@ class NodeBlockSync(SyncAgent):
         # Not synced but same blockchain?
         if self.peer_best_block.height <= my_best_block.height:
             # Is peer behind me at the same blockchain?
-            common_block_hash = self.p2p_storage.get_local_block_by_height(self.peer_best_block.height)
+            common_block = self.p2p_storage.get_local_block_by_height(self.peer_best_block.height)
 
-            if common_block_hash == self.peer_best_block.id:
+            if common_block and common_block.hash == self.peer_best_block.id:
                 # If yes, nothing to sync from this peer.
                 if not self.is_synced():
                     self.log.info('nothing to sync because peer is behind me at the same best blockchain',
@@ -637,13 +637,12 @@ class NodeBlockSync(SyncAgent):
             return
         data = []
         for h in heights:
-            blk_hash = self.p2p_storage.get_block_by_height(h)
-            if blk_hash is None:
+            blk = self.p2p_storage.get_block_by_height(h)
+            if blk is None:
                 break
-            blk = self.p2p_storage.get_vertex(blk_hash)
             if blk.get_metadata().voided_by:
                 break
-            data.append((h, blk_hash.hex()))
+            data.append((h, blk.hash_hex))
         payload = json.dumps(data)
         self.send_message(ProtocolMessages.PEER_BLOCK_HASHES, payload)
 
