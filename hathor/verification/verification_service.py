@@ -11,14 +11,16 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+from twisted.internet.task import deferLater
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
-from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
+from hathor.reactor import get_global_reactor
+from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion, Vertex
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
@@ -56,7 +58,7 @@ class VerificationService:
         self._daa = daa
         self._tx_storage = tx_storage
 
-    def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
+    def validate_basic(self, vertex: Vertex, *, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `BASIC` and return `True`.
@@ -72,7 +74,7 @@ class VerificationService:
 
     def validate_full(
         self,
-        vertex: BaseTransaction,
+        vertex: Vertex,
         *,
         skip_block_weight_verification: bool = False,
         sync_checkpoints: bool = False,
@@ -112,7 +114,40 @@ class VerificationService:
         vertex.set_validation(validation)
         return True
 
-    def verify_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> None:
+    async def validate_full_async(
+        self,
+        verification_model: VerificationModel,
+        *,
+        skip_block_weight_verification: bool = False,
+        reject_locked_reward: bool = True,
+    ) -> bool:
+        from hathor.transaction.transaction_metadata import ValidationState
+        vertex = verification_model.vertex
+
+        try:
+            meta = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            meta = None
+
+        # skip full validation when it is a checkpoint
+        if meta and meta.validation.is_checkpoint():
+            vertex.set_validation(ValidationState.CHECKPOINT_FULL)
+            return True
+
+        await deferLater(get_global_reactor(), 0, lambda: None)
+
+        # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
+        #      directly into trying a full validation so we should check it here to make sure the validation states
+        #      ends up being CHECKPOINT_FULL instead of FULL
+        if not meta or not meta.validation.is_at_least_basic():
+            # run basic validation if we haven't already
+            self._verify_basic_model(verification_model, skip_block_weight_verification=skip_block_weight_verification)
+
+        self._verify_model(verification_model, reject_locked_reward=reject_locked_reward)
+
+        return True
+
+    def verify_basic(self, vertex: Vertex, *, skip_block_weight_verification: bool = False) -> None:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
         Used by `self.validate_basic`. Should not modify the validation state."""
@@ -185,7 +220,7 @@ class VerificationService:
     def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_basic_tx(tx)
 
-    def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
+    def verify(self, vertex: Vertex, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
 
         Used by `self.validate_full`. Should not modify the validation state."""
@@ -280,7 +315,7 @@ class VerificationService:
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, tx_deps)
         self.verifiers.token_creation_tx.verify_token_info(tx)
 
-    def verify_without_storage(self, vertex: BaseTransaction) -> None:
+    def verify_without_storage(self, vertex: Vertex) -> None:
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
