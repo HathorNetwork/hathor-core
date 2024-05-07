@@ -44,7 +44,7 @@ class VertexVerifiers(NamedTuple):
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
         """
-        vertex_verifier = VertexVerifier(settings=settings, daa=daa)
+        vertex_verifier = VertexVerifier(settings=settings)
 
         return cls.create(
             settings=settings,
