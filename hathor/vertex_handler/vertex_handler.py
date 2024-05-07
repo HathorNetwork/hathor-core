@@ -84,7 +84,7 @@ class VertexHandler:
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
-        self._verifier = ParallelVerifier(
+        self._verifier = ParallelVerifier(  # TODO: Move to builder
             verification_service=self._verification_service,
             tx_storage=tx_storage,
             daa=not_none(DifficultyAdjustmentAlgorithm.singleton),

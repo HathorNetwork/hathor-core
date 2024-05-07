@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from typing_extensions import Self, TypeVar
@@ -32,20 +31,9 @@ T = TypeVar('T', bound=BaseTransaction)
 
 
 @dataclass(frozen=True, slots=True)
-class VertexDependencies(ABC):
+class VertexDependencies:
     """A dataclass of dependencies necessary for vertex verification."""
     parents: dict[VertexId, BaseTransaction]
-
-    @abstractmethod
-    def clone(self) -> Self:
-        raise NotImplementedError
-
-    @staticmethod
-    def _clone_vertices(vertices: dict[VertexId, T]) -> dict[VertexId, T]:
-        return {
-            vertex_id: vertex.clone(include_storage=False, include_metadata=False)
-            for vertex_id, vertex in vertices.items()
-        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,13 +83,6 @@ class BasicBlockDependencies(VertexDependencies):
         parent_hash = block.get_block_parent_hash()
         return self.daa_deps[parent_hash]
 
-    def clone(self) -> 'BasicBlockDependencies':
-        return BasicBlockDependencies(
-            parents=self._clone_vertices(self.parents),
-            daa_deps=self._clone_vertices(self.daa_deps) if self.daa_deps else None,
-            parent_height=self.parent_height,
-        )
-
 
 @dataclass(frozen=True, slots=True)
 class BlockDependencies(VertexDependencies):
@@ -133,15 +114,6 @@ class BlockDependencies(VertexDependencies):
             feature_info=feature_info,
         )
 
-    def clone(self) -> 'BlockDependencies':
-        return BlockDependencies(
-            parents=self._clone_vertices(self.parents),
-            height=self.height,
-            min_height=self.min_height,
-            signaling_state=self.signaling_state,
-            feature_info=self.feature_info,
-        )
-
 
 @dataclass(frozen=True, slots=True)
 class TransactionDependencies(VertexDependencies):
@@ -164,12 +136,4 @@ class TransactionDependencies(VertexDependencies):
             spent_txs=spent_txs,
             token_info=token_info,
             reward_locked_info=reward_locked_info,
-        )
-
-    def clone(self) -> 'TransactionDependencies':
-        return TransactionDependencies(
-            parents=self._clone_vertices(self.parents),
-            spent_txs=self._clone_vertices(self.spent_txs),
-            token_info=self.token_info,
-            reward_locked_info=self.reward_locked_info,
         )

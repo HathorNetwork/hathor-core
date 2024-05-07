@@ -157,14 +157,14 @@ class VerificationService:
             await self._multiprocessor.run(
                 _verify_basic_model,
                 self.verifiers,
-                verification_model.clone(),
+                verification_model,
                 skip_block_weight_verification=skip_block_weight_verification
             )
 
         await self._multiprocessor.run(
             _verify_model,
             self.verifiers,
-            verification_model.clone(),
+            verification_model,
             reject_locked_reward=reject_locked_reward
         )
 

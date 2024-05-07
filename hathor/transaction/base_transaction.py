@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import base64
+import copyreg
 import datetime
 import hashlib
 import time
@@ -22,10 +23,10 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterator, Optional
 
 from structlog import get_logger
-from typing_extensions import Self
+from typing_extensions import Self, TypeVar
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
@@ -235,7 +236,7 @@ class BaseTransaction(ABC):
     @classmethod
     @abstractmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'BaseTransaction':
+                           *, verbose: VerboseCallback = None) -> Self:
         """ Create a transaction from its bytes.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -837,7 +838,7 @@ class BaseTransaction(ABC):
             new_tx._metadata = self._metadata.clone()
         if include_storage:
             new_tx.storage = self.storage
-        return cast(Self, new_tx)
+        return new_tx
 
     @abstractmethod
     def get_token_uid(self, index: int) -> TokenUid:
@@ -1111,3 +1112,13 @@ def tx_or_block_from_bytes(data: bytes,
         return cls.create_from_struct(data, storage=storage)
     except ValueError:
         raise StructError('Invalid bytes to create transaction subclass.')
+
+
+T = TypeVar('T', bound=BaseTransaction)
+
+
+def register_vertex_pickler(type_: type[T]) -> None:
+    def vertex_pickler(vertex: T) -> tuple[Callable[[bytes], T], tuple[bytes]]:
+        return type_.create_from_struct, (bytes(vertex),)
+
+    copyreg.pickle(type_, vertex_pickler)

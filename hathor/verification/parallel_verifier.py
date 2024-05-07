@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import TypeAlias
 
@@ -125,12 +125,18 @@ class ParallelVerifier:
         return result
 
     def _finish(self, vertex_id: VertexId, deferred: Deferred[None]) -> None:
-        deferred.callback(None)
-        for rev_dep in self._rev_deps[vertex_id]:
-            if self._tx_storage.can_validate_full(rev_dep):
-                dep_deferred = self._waiting_vertices.pop(rev_dep.hash)
-                self._finish(rev_dep.hash, dep_deferred)
-        del self._rev_deps[vertex_id]
+        todo = deque([(vertex_id, deferred)])
+        while True:
+            try:
+                vertex_id, deferred = todo.popleft()
+            except IndexError:
+                break
+            deferred.callback(None)
+            for rev_dep in self._rev_deps[vertex_id]:
+                if self._tx_storage.can_validate_full(rev_dep):
+                    dep_deferred = self._waiting_vertices.pop(rev_dep.hash)
+                    todo.append((rev_dep.hash, dep_deferred))
+            del self._rev_deps[vertex_id]
 
     def is_processing(self, vertex_id: VertexId) -> bool:
         return vertex_id in self._processing_vertices
