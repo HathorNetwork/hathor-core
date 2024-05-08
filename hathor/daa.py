@@ -28,13 +28,15 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.types import VertexId
-from hathor.util import iwindows
+from hathor.util import iwindows, MaxSizeOrderedDict
 
 if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
 
 logger = get_logger()
 cpu = get_cpu_profiler()
+
+_BLOCK_CACHE_SIZE = 10_000
 
 
 class TestMode(IntFlag):
@@ -56,6 +58,7 @@ class DifficultyAdjustmentAlgorithm:
         self.MIN_BLOCK_WEIGHT = self._settings.MIN_BLOCK_WEIGHT
         self.TEST_MODE = test_mode
         DifficultyAdjustmentAlgorithm.singleton = self
+        self._block_cache: MaxSizeOrderedDict[VertexId, 'Block'] = MaxSizeOrderedDict(max=_BLOCK_CACHE_SIZE)
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
     def calculate_block_difficulty(self, block: 'Block', parent_block_getter: Callable[['Block'], 'Block']) -> float:
@@ -66,7 +69,7 @@ class DifficultyAdjustmentAlgorithm:
         if block.is_genesis:
             return self.MIN_BLOCK_WEIGHT
 
-        parent_block = parent_block_getter(block)
+        parent_block = self._get_parent_block(block, parent_block_getter)
         return self.calculate_next_weight(parent_block, block.timestamp, parent_block_getter)
 
     def _calculate_N(self, parent_block: 'Block') -> int:
@@ -79,15 +82,24 @@ class DifficultyAdjustmentAlgorithm:
         parent_block_getter: Callable[['Block'], 'Block'],
     ) -> list[VertexId]:
         """Return the ids of the required blocks to call `calculate_block_difficulty` for the provided block."""
-        parent_block = parent_block_getter(block)
+        parent_block = self._get_parent_block(block, parent_block_getter)
         N = self._calculate_N(parent_block)
         ids: list[VertexId] = [parent_block.hash]
 
         while len(ids) <= N + 1:
-            parent_block = parent_block_getter(parent_block)
+            parent_block = self._get_parent_block(parent_block, parent_block_getter)
             ids.append(parent_block.hash)
 
         return ids
+
+    def _get_parent_block(self, block: 'Block', parent_block_getter: Callable[['Block'], 'Block']) -> 'Block':
+        parent_hash = block.get_block_parent_hash()
+        if parent_block := self._block_cache.get(parent_hash):
+            return parent_block
+
+        parent_block = parent_block_getter(block)
+        self._block_cache[parent_block.hash] = parent_block
+        return parent_block
 
     def calculate_next_weight(
         self,
@@ -117,7 +129,7 @@ class DifficultyAdjustmentAlgorithm:
         blocks: list['Block'] = []
         while len(blocks) < N + 1:
             blocks.append(root)
-            root = parent_block_getter(root)
+            root = self._get_parent_block(root, parent_block_getter)
 
         # TODO: revise if this assertion can be safely removed
         assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)
