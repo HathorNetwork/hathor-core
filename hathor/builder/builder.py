@@ -33,6 +33,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
@@ -186,6 +187,7 @@ class Builder:
         self._vertex_handler: VertexHandler | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
+        self._multiprocessor: Multiprocessor | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -217,6 +219,7 @@ class Builder:
         daa = self._get_or_create_daa()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
         vertex_handler = self._get_or_create_vertex_handler()
+        multiprocessor = self._get_or_create_multiprocessor()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -256,6 +259,7 @@ class Builder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            multiprocessor=multiprocessor,
             **kwargs
         )
 
@@ -527,11 +531,13 @@ class Builder:
             storage = self._get_or_create_tx_storage()
             settings = self._get_or_create_settings()
             daa = self._get_or_create_daa()
+            multiprocessor = self._get_or_create_multiprocessor()
             self._verification_service = VerificationService(
                 verifiers=verifiers,
                 tx_storage=storage,
                 settings=settings,
                 daa=daa,
+                multiprocessor=multiprocessor,
             )
 
         return self._verification_service
@@ -584,6 +590,11 @@ class Builder:
             )
 
         return self._vertex_handler
+
+    def _get_or_create_multiprocessor(self) -> Multiprocessor:
+        if self._multiprocessor is None:
+            self._multiprocessor = Multiprocessor()
+        return self._multiprocessor
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
