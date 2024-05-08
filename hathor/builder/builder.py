@@ -60,11 +60,15 @@ class SyncSupportLevel(IntEnum):
     ENABLED = 2  # available and enabled by default, possible to disable at runtime
 
     @classmethod
-    def add_factories(cls,
-                      p2p_manager: ConnectionsManager,
-                      sync_v1_support: 'SyncSupportLevel',
-                      sync_v2_support: 'SyncSupportLevel',
-                      ) -> None:
+    def add_factories(
+        cls,
+        settings: HathorSettingsType,
+        p2p_manager: ConnectionsManager,
+        sync_v1_support: 'SyncSupportLevel',
+        sync_v2_support: 'SyncSupportLevel',
+        *,
+        use_async: bool,
+    ) -> None:
         """Adds the sync factory to the manager according to the support level."""
         from hathor.p2p.sync_v1.factory import SyncV11Factory
         from hathor.p2p.sync_v2.factory import SyncV2Factory
@@ -77,7 +81,7 @@ class SyncSupportLevel(IntEnum):
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(settings, p2p_manager, use_async=use_async))
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
@@ -389,6 +393,7 @@ class Builder:
         enable_ssl = True
         reactor = self._get_reactor()
         my_peer = self._get_peer_id()
+        settings = self._get_or_create_settings()
 
         assert self._network is not None
 
@@ -401,7 +406,13 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
         )
-        SyncSupportLevel.add_factories(self._p2p_manager, self._sync_v1_support, self._sync_v2_support)
+        SyncSupportLevel.add_factories(
+            settings,
+            self._p2p_manager,
+            self._sync_v1_support,
+            self._sync_v2_support,
+            use_async=False,  # TODO: Add a config with True, for tests
+        )
         return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
