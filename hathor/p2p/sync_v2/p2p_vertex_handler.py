@@ -111,7 +111,7 @@ class AsyncP2PVertexHandler(P2PVertexHandler):
             )
         except Exception as e:  # TODO: Maybe this block can be removed
             if not isinstance(e, HathorError):
-                self._log.error('unhandled exception in vertex completion', exception=str(e), exc_info=True)
+                self._log.error('unhandled exception in vertex completion', exception=repr(e), exc_info=True)
             raise
         finally:
             self._p2p_storage.complete_vertex(vertex, result)

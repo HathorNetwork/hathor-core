@@ -39,6 +39,9 @@ class Multiprocessor:
 
     def run(self, fn: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs) -> Deferred[T]:
         """Run a function in a separate process and receive its result asynchronously, as a Deferred."""
+        # from twisted.internet.task import deferLater
+        # from hathor.reactor import get_global_reactor
+        # return deferLater(get_global_reactor(), 0, fn, *args, **kwargs)
         deferred = Deferred[T]()
         self._pool.apply_async(fn, args, kwargs, callback=deferred.callback, error_callback=deferred.errback)
         return deferred

@@ -173,11 +173,7 @@ class AsyncP2PStorage(P2PStorage):
                 del self._transactions[vertex.hash]
             case Block():
                 del self._blocks[vertex.hash]
-                self._blocks_by_height = {
-                    height: vertex_id
-                    for height, vertex_id in self._blocks_by_height.items()
-                    if vertex_id != vertex.hash
-                }
+                del self._blocks_by_height[vertex.static_metadata.height]
 
     def _reset(self) -> None:
         """Reset this storage by cleaning its memory and resetting the connection."""

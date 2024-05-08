@@ -27,6 +27,7 @@ from hathor.transaction.exceptions import (
     TransactionDataError,
     WeightError,
 )
+from hathor.util import not_none
 from hathor.verification.verification_dependencies import BasicBlockDependencies
 
 
@@ -46,7 +47,9 @@ class BlockVerifier:
 
     def verify_weight(self, block: Block, block_deps: BasicBlockDependencies) -> None:
         """Validate minimum block difficulty."""
-        min_block_weight = self._daa.calculate_block_difficulty(block, block_deps.get_parent_block_for_daa)
+        min_block_weight = self._daa.calculate_block_difficulty(
+            block, block_deps.get_parent_block(), not_none(block_deps.daa_deps)
+        )
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
