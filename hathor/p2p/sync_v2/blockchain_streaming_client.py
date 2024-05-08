@@ -72,7 +72,9 @@ class BlockchainStreamingClient:
 
     def fails(self, reason: 'StreamingError') -> None:
         """Fail the execution by resolving the deferred with an error."""
-        self._deferred.errback(reason)
+        # TODO: Keep this if? maybe we should find why multiple calls instead.
+        if not self._deferred.called:
+            self._deferred.errback(reason)
 
     def handle_blocks(self, blk: Block) -> None:
         """This method is called by the sync agent when a BLOCKS message is received."""

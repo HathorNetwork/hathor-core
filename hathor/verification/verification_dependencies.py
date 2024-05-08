@@ -41,7 +41,7 @@ class VertexDependencies:
 @dataclass(frozen=True, slots=True)
 class BasicBlockDependencies(VertexDependencies):
     """A dataclass of dependencies necessary for basic block verification."""
-    daa_deps: dict[VertexId, Block] | None
+    daa_deps: list[Block] | None
 
     @classmethod
     def create_from_storage(
@@ -54,7 +54,7 @@ class BasicBlockDependencies(VertexDependencies):
     ) -> Self:
         """Create a basic block dependencies instance using dependencies from a storage."""
         parents = cls._get_parents_from_storage(block, storage)
-        daa_deps: dict[VertexId, Block] | None = None
+        daa_deps: list[Block] | None = None
 
         if not block.is_genesis and not skip_weight_verification:
             daa_deps = daa.get_block_dependencies(block, storage.get_parent_block)
@@ -69,12 +69,6 @@ class BasicBlockDependencies(VertexDependencies):
         parent_blocks = [vertex for vertex in self.parents.values() if isinstance(vertex, Block)]
         assert len(parent_blocks) == 1
         return parent_blocks[0]
-
-    def get_parent_block_for_daa(self, block: Block) -> Block:
-        """A method for getting parent blocks during DAA-related verification."""
-        assert self.daa_deps is not None
-        parent_hash = block.get_block_parent_hash()
-        return self.daa_deps[parent_hash]
 
 
 @dataclass(frozen=True, slots=True)
