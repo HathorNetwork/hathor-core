@@ -1025,6 +1025,15 @@ class HathorManager:
             # Propagate to our peers.
             self.connections.send_tx_to_peers(tx)
 
+        import os
+        quit_after_n_blocks = os.environ.get('HATHOR_QUIT_AFTER_N_BLOCKS')
+        if (
+            quit_after_n_blocks is not None
+            and isinstance(tx, Block)
+            and tx.get_height() >= int(quit_after_n_blocks)
+        ):
+            os._exit(0)
+
         return True
 
     def log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
