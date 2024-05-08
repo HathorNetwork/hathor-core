@@ -212,6 +212,15 @@ class VertexHandler:
             # Propagate to our peers.
             self._p2p_manager.send_tx_to_peers(vertex)
 
+        import os
+        quit_after_n_blocks = os.environ.get('HATHOR_QUIT_AFTER_N_BLOCKS')
+        if (
+            quit_after_n_blocks is not None
+            and isinstance(vertex, Block)
+            and vertex.get_height() >= int(quit_after_n_blocks)
+        ):
+            os._exit(0)
+
     def _log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
         """ A shortcut for logging additional information for block/txs.
         """
