@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
@@ -53,6 +53,34 @@ from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
+
+
+class SyncSupportLevel(IntEnum):
+    UNAVAILABLE = 0  # not possible to enable at runtime
+    DISABLED = 1  # available but disabled by default, possible to enable at runtime
+    ENABLED = 2  # available and enabled by default, possible to disable at runtime
+
+    @classmethod
+    def add_factories(cls,
+                      p2p_manager: ConnectionsManager,
+                      sync_v1_support: 'SyncSupportLevel',
+                      sync_v2_support: 'SyncSupportLevel',
+                      ) -> None:
+        """Adds the sync factory to the manager according to the support level."""
+        from hathor.p2p.sync_v1.factory import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
+        from hathor.p2p.sync_version import SyncVersion
+
+        # sync-v1 support:
+        if sync_v1_support > cls.UNAVAILABLE:
+            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+        if sync_v1_support is cls.ENABLED:
+            p2p_manager.enable_sync_version(SyncVersion.V1_1)
+        # sync-v2 support:
+        if sync_v2_support > cls.UNAVAILABLE:
+            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+        if sync_v2_support is cls.ENABLED:
+            p2p_manager.enable_sync_version(SyncVersion.V2)
 
 
 class StorageType(Enum):
@@ -147,8 +175,8 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._enable_sync_v1: bool = True
-        self._enable_sync_v2: bool = False
+        self._sync_v1_support: SyncSupportLevel = SyncSupportLevel.UNAVAILABLE
+        self._sync_v2_support: SyncSupportLevel = SyncSupportLevel.UNAVAILABLE
 
         self._enable_stratum_server: Optional[bool] = None
 
@@ -167,6 +195,9 @@ class Builder:
 
         if self._network is None:
             raise TypeError('you must set a network')
+
+        if SyncSupportLevel.ENABLED not in {self._sync_v1_support, self._sync_v2_support}:
+            raise TypeError('you must enable at least one sync version')
 
         settings = self._get_or_create_settings()
         reactor = self._get_reactor()
@@ -368,10 +399,6 @@ class Builder:
         if self._p2p_manager:
             return self._p2p_manager
 
-        from hathor.p2p.sync_v1.factory import SyncV11Factory
-        from hathor.p2p.sync_v2.factory import SyncV2Factory
-        from hathor.p2p.sync_version import SyncVersion
-
         enable_ssl = True
         reactor = self._get_reactor()
         my_peer = self._get_peer_id()
@@ -387,12 +414,7 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
         )
-        self._p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(self._p2p_manager))
-        self._p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(self._p2p_manager))
-        if self._enable_sync_v1:
-            self._p2p_manager.enable_sync_version(SyncVersion.V1_1)
-        if self._enable_sync_v2:
-            self._p2p_manager.enable_sync_version(SyncVersion.V2)
+        SyncSupportLevel.add_factories(self._p2p_manager, self._sync_v1_support, self._sync_v2_support)
         return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
@@ -698,34 +720,34 @@ class Builder:
         self._network = network
         return self
 
-    def set_enable_sync_v1(self, enable_sync_v1: bool) -> 'Builder':
+    def set_sync_v1_support(self, support_level: SyncSupportLevel) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = enable_sync_v1
+        self._sync_v1_support = support_level
         return self
 
-    def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
+    def set_sync_v2_support(self, support_level: SyncSupportLevel) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = enable_sync_v2
+        self._sync_v2_support = support_level
         return self
 
     def enable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = True
+        self._sync_v1_support = SyncSupportLevel.ENABLED
         return self
 
     def disable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = False
+        self._sync_v1_support = SyncSupportLevel.DISABLED
         return self
 
     def enable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = True
+        self._sync_v2_support = SyncSupportLevel.ENABLED
         return self
 
     def disable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = False
+        self._sync_v2_support = SyncSupportLevel.DISABLED
         return self
 
     def set_full_verification(self, full_verification: bool) -> 'Builder':

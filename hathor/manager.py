@@ -816,7 +816,10 @@ class HathorManager:
             parent_block_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
-        weight = max(self.daa.calculate_next_weight(parent_block, timestamp, self.tx_storage), min_significant_weight)
+        weight = max(
+            self.daa.calculate_next_weight(parent_block, timestamp, self.tx_storage.get_parent_block),
+            min_significant_weight
+        )
         height = parent_block.get_height() + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include

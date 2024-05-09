@@ -150,9 +150,9 @@ class VertexHandler:
             return False
 
         if not metadata.validation.is_fully_connected():
-            # TODO: Remove this from here after a refactor in metadata initialization
-            vertex.update_reward_lock_metadata()
             try:
+                # TODO: Remove this from here after a refactor in metadata initialization
+                vertex.update_reward_lock_metadata()
                 self._verification_service.validate_full(vertex, reject_locked_reward=reject_locked_reward)
             except HathorError as e:
                 if not fails_silently:

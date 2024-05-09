@@ -221,3 +221,17 @@ FEATURE_ACTIVATION:
       lock_in_on_timeout: false
       version: 0.59.0
       signal_support_by_default: false
+
+    #### Actual features ####
+
+    INCREASE_MAX_MERKLE_PATH_LENGTH:
+      bit: 0
+      # N = 4_475_520
+      # Expected to be reached around Monday, 2024-05-13 17:31:03 GMT
+      # Right now the best block is 4_463_619 at Thursday, 2024-05-09 14:20:33 GMT
+      start_height: 4_475_520
+      timeout_height: 4_798_080  # N + 16 * 20160 (16 weeks after the start)
+      minimum_activation_height: 4_636_800  # N + 8 * 20160 (8 weeks after the start)
+      lock_in_on_timeout: false
+      version: 0.60.0
+      signal_support_by_default: true

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.builder.builder import BuildArtifacts, Builder
+from hathor.builder.builder import BuildArtifacts, Builder, SyncSupportLevel
 from hathor.builder.cli_builder import CliBuilder
 from hathor.builder.resources_builder import ResourcesBuilder
 
@@ -21,4 +21,5 @@ __all__ = [
     'Builder',
     'CliBuilder',
     'ResourcesBuilder',
+    'SyncSupportLevel',
 ]
