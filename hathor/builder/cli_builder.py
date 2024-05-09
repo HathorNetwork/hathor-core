@@ -309,6 +309,7 @@ class CliBuilder:
             feature_service=self.feature_service,
             pubsub=pubsub,
             wallet=self.wallet,
+            log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
         self.manager = HathorManager(

@@ -151,6 +151,8 @@ class RunNode:
         # XXX: this is temporary, should be added as a sysctl instead before merging
         parser.add_argument('--x-ipython-kernel', action='store_true',
                             help='Launch embedded IPython kernel for remote debugging')
+        parser.add_argument('--log-vertex-bytes', action='store_true',
+                            help='Log tx bytes for debugging')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
