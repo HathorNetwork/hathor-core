@@ -21,8 +21,9 @@ from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
 from hathor.indexes import MemoryIndexesManager
-from hathor.transaction import Block, TransactionMetadata
+from hathor.transaction import Block
 from hathor.transaction.exceptions import BlockMustSignalError
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
@@ -33,7 +34,7 @@ def test_calculate_feature_activation_bit_counts_genesis():
     settings = get_global_settings()
     storage = TransactionMemoryStorage()
     genesis_block = storage.get_block(settings.GENESIS_BLOCK_HASH)
-    result = genesis_block.get_feature_activation_bit_counts()
+    result = genesis_block.static_metadata.feature_activation_bit_counts
 
     assert result == [0, 0, 0, 0]
 
@@ -63,9 +64,8 @@ def storage() -> TransactionStorage:
         parent = not_none(storage.get_block_by_height(height - 1))
         block = Block(signal_bits=bits, parents=[parent.hash], storage=storage)
         block.update_hash()
-        meta = block.get_metadata()
-        meta.validation = ValidationState.FULL
-        meta.height = height
+        block.get_metadata().validation = ValidationState.FULL
+        block.init_static_metadata_from_storage(get_global_settings(), storage)
         storage.save_transaction(block)
         indexes.height.add_new(height, block.hash, block.timestamp)
 
@@ -93,20 +93,20 @@ def test_calculate_feature_activation_bit_counts(
     expected_counts: list[int]
 ) -> None:
     block = not_none(storage.get_block_by_height(block_height))
-    assert block.get_feature_activation_bit_counts() == expected_counts
+    assert block.static_metadata.feature_activation_bit_counts == expected_counts
 
 
-def test_get_height():
-    block_hash = b'some_hash'
-    block_height = 10
-    metadata = TransactionMetadata(hash=block_hash, height=block_height)
+def test_get_height() -> None:
+    static_metadata = BlockStaticMetadata(
+        min_height=0,
+        height=10,
+        feature_activation_bit_counts=[],
+        feature_states={},
+    )
+    block = Block()
+    block.set_static_metadata(static_metadata)
 
-    storage = Mock(spec_set=TransactionStorage)
-    storage.get_metadata = Mock(side_effect=lambda _hash: metadata if _hash == block_hash else None)
-
-    block = Block(hash=block_hash, storage=storage)
-
-    assert block.get_height() == block_height
+    assert block.get_height() == 10
 
 
 @pytest.mark.parametrize(

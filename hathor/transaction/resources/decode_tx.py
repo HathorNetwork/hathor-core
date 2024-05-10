@@ -16,6 +16,7 @@ import struct
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.resources.transaction import get_tx_extra_data
 from hathor.util import json_dumpb
@@ -34,6 +35,7 @@ class DecodeTxResource(Resource):
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        self._settings = get_global_settings()
 
     def render_GET(self, request):
         """ Get request /decode_tx/ that returns the tx decoded, if success
@@ -52,6 +54,7 @@ class DecodeTxResource(Resource):
         try:
             tx_bytes = bytes.fromhex(parsed['args']['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
+            tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)
         except ValueError:

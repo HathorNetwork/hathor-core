@@ -54,7 +54,7 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH
             ]
         )
-        block.update_reward_lock_metadata()
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return block
 
     def _get_valid_merge_mined_block(self) -> MergeMinedBlock:
@@ -70,7 +70,7 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH
             ],
         )
-        block.update_reward_lock_metadata()
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return block
 
     def _get_valid_tx(self) -> Transaction:
@@ -95,7 +95,7 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH,
             ]
         )
-        tx.update_reward_lock_metadata()
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
 
         data_to_sign = tx.get_sighash_all()
         assert self.manager.wallet
@@ -108,7 +108,7 @@ class BaseVerificationTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager)
         assert self.manager.wallet
         tx = create_tokens(self.manager, self.manager.wallet.get_unused_address())
-        tx.update_reward_lock_metadata()
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return tx
 
     def test_block_verify_basic(self) -> None:

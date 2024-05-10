@@ -673,6 +673,7 @@ class StratumProtocol(JSONRPC):
         block = self.manager.generate_mining_block(data=data, address=self.miner_address,
                                                    merge_mined=self.merged_mining)
         self.log.debug('prepared block for mining', block=block)
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return block
 
     def cancel_current_job_timeout(self) -> None:

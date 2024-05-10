@@ -23,6 +23,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.types import VertexId
 
 _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
 
@@ -123,3 +124,9 @@ class TransactionMemoryStorage(BaseTransactionStorage):
 
     def get_value(self, key: str) -> Optional[str]:
         return self.attributes.get(key)
+
+    @override
+    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
+        # This method is only ever used by the `migrate_static_metadata` migration, and therefore it is not necessary
+        # to implement for the memory storage.
+        raise NotImplementedError
