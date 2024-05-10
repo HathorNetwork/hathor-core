@@ -30,18 +30,11 @@ from hathor.transaction.exceptions import (
 
 
 class BlockVerifier:
-    __slots__ = ('_settings', '_daa', '_feature_service')
+    __slots__ = ('_settings', '_daa')
 
-    def __init__(
-        self,
-        *,
-        settings: HathorSettings,
-        daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService,
-    ) -> None:
+    def __init__(self, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm) -> None:
         self._settings = settings
         self._daa = daa
-        self._feature_service = feature_service
 
     def verify_height(self, block: Block) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
@@ -85,7 +78,7 @@ class BlockVerifier:
 
     def verify_mandatory_signaling(self, block: Block) -> None:
         """Verify whether this block is missing mandatory signaling for any feature."""
-        signaling_state = self._feature_service.is_signaling_mandatory_features(block)
+        signaling_state = FeatureService.is_signaling_mandatory_features(block, self._settings)
 
         match signaling_state:
             case BlockIsSignaling():

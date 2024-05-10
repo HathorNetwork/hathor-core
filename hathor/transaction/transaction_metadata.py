@@ -16,8 +16,6 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import practically_equal
@@ -43,10 +41,6 @@ class TransactionMetadata:
     first_block: Optional[bytes]
     validation: ValidationState
 
-    # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
-    # is None otherwise. This is only used for caching, so it can be safely cleared up, as it would be recalculated
-    # when necessary.
-    feature_states: Optional[dict[Feature, FeatureState]] = None
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']
 
@@ -171,8 +165,7 @@ class TransactionMetadata:
         if not isinstance(other, TransactionMetadata):
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by', 'children',
-                      'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
-                      'feature_states']:
+                      'accumulated_weight', 'twins', 'score', 'first_block', 'validation']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -210,11 +203,10 @@ class TransactionMetadata:
         from hathor.transaction import Block
         vertex = self.get_tx()
         if isinstance(vertex, Block):
+            feature_states = vertex.static_metadata.feature_states
             data['height'] = self.height
             data['feature_activation_bit_counts'] = vertex.static_metadata.feature_activation_bit_counts
-
-        if self.feature_states is not None:
-            data['feature_states'] = {feature.value: state.value for feature, state in self.feature_states.items()}
+            data['feature_states'] = {feature.value: state.value for feature, state in feature_states.items()}
 
         if self.first_block is not None:
             data['first_block'] = self.first_block.hex()
@@ -261,13 +253,6 @@ class TransactionMetadata:
 
         meta.accumulated_weight = data['accumulated_weight']
         meta.score = data.get('score', 0)
-
-        feature_states_raw = data.get('feature_states')
-        if feature_states_raw:
-            meta.feature_states = {
-                Feature(feature): FeatureState(feature_state)
-                for feature, feature_state in feature_states_raw.items()
-            }
 
         first_block_raw = data.get('first_block', None)
         if first_block_raw:
