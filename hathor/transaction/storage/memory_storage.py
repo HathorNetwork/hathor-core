@@ -16,6 +16,7 @@ from typing import Any, Iterator, Optional, TypeVar
 
 from typing_extensions import override
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.static_metadata import VertexStaticMetadata
@@ -29,7 +30,13 @@ _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
 
 
 class TransactionMemoryStorage(BaseTransactionStorage):
-    def __init__(self, indexes: Optional[IndexesManager] = None, *, _clone_if_needed: bool = False) -> None:
+    def __init__(
+        self,
+        indexes: Optional[IndexesManager] = None,
+        *,
+        _clone_if_needed: bool = False,
+        settings: HathorSettings | None = None,
+    ) -> None:
         """
         :param _clone_if_needed: *private parameter*, defaults to True, controls whether to clone
                                  transaction/blocks/metadata when returning those objects.
@@ -41,7 +48,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         # Store custom key/value attributes
         self.attributes: dict[str, Any] = {}
         self._clone_if_needed = _clone_if_needed
-        super().__init__(indexes=indexes)
+        super().__init__(indexes=indexes, settings=settings)
 
     def _check_and_set_network(self) -> None:
         # XXX: does not apply to memory storage, can safely be ignored

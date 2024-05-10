@@ -15,10 +15,10 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, TypeAlias
 
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.model.feature_description import FeatureDescription
+from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.feature_activation.settings import Settings as FeatureSettings
 
 if TYPE_CHECKING:
     from hathor.feature_activation.bit_signaling_service import BitSignalingService
@@ -44,8 +44,8 @@ BlockSignalingState: TypeAlias = BlockIsSignaling | BlockIsMissingSignal
 class FeatureService:
     __slots__ = ('_feature_settings', '_tx_storage', 'bit_signaling_service')
 
-    def __init__(self, *, feature_settings: FeatureSettings, tx_storage: 'TransactionStorage') -> None:
-        self._feature_settings = feature_settings
+    def __init__(self, *, settings: HathorSettings, tx_storage: 'TransactionStorage') -> None:
+        self._feature_settings = settings.FEATURE_ACTIVATION
         self._tx_storage = tx_storage
         self.bit_signaling_service: Optional['BitSignalingService'] = None
 
@@ -64,11 +64,11 @@ class FeatureService:
         height = block.static_metadata.height
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         remaining_blocks = self._feature_settings.evaluation_interval - offset_to_boundary - 1
-        descriptions = self.get_bits_description(block=block)
+        feature_infos = self.get_feature_infos(block=block)
 
         must_signal_features = (
-            feature for feature, description in descriptions.items()
-            if description.state is FeatureState.MUST_SIGNAL
+            feature for feature, feature_info in feature_infos.items()
+            if feature_info.state is FeatureState.MUST_SIGNAL
         )
 
         for feature in must_signal_features:
@@ -192,12 +192,12 @@ class FeatureService:
         if previous_state is FeatureState.FAILED:
             return FeatureState.FAILED
 
-        raise ValueError(f'Unknown previous state: {previous_state}')
+        raise NotImplementedError(f'Unknown previous state: {previous_state}')
 
-    def get_bits_description(self, *, block: 'Block') -> dict[Feature, FeatureDescription]:
+    def get_feature_infos(self, *, block: 'Block') -> dict[Feature, FeatureInfo]:
         """Returns the criteria definition and feature state for all features at a certain block."""
         return {
-            feature: FeatureDescription(
+            feature: FeatureInfo(
                 criteria=criteria,
                 state=self.get_state(block=block, feature=feature)
             )
@@ -223,9 +223,11 @@ class FeatureService:
         if parent_block.static_metadata.height == ancestor_height:
             return parent_block
 
-        if not parent_metadata.voided_by and (ancestor := self._tx_storage.get_block_by_height(ancestor_height)):
-            from hathor.transaction import Block
-            assert isinstance(ancestor, Block)
+        if not parent_metadata.voided_by:
+            ancestor = self._tx_storage.get_block_by_height(ancestor_height)
+            assert ancestor is not None, (
+                'it is guaranteed that the ancestor of a fully connected and non-voided block is in the height index'
+            )
             return ancestor
 
         return self._get_ancestor_iteratively(block=parent_block, ancestor_height=ancestor_height)

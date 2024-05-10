@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional
 from structlog import get_logger
 from typing_extensions import override
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
 from hathor.transaction.static_metadata import VertexStaticMetadata
@@ -47,7 +48,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     It uses Protobuf serialization internally.
     """
 
-    def __init__(self, rocksdb_storage: RocksDBStorage, indexes: Optional[IndexesManager] = None):
+    def __init__(
+        self,
+        rocksdb_storage: RocksDBStorage,
+        indexes: Optional[IndexesManager] = None,
+        settings: HathorSettings | None = None
+    ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
         self._cf_static_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_STATIC_META)
@@ -56,7 +62,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
         self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
-        super().__init__(indexes=indexes)
+        super().__init__(indexes=indexes, settings=settings)
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.base_transaction import tx_or_block_from_bytes
@@ -107,7 +113,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     @override
     def _save_static_metadata(self, tx: 'BaseTransaction') -> None:
-        self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.to_bytes())
+        self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.json_dumpb())
 
     @override
     def _get_static_metadata(self, vertex: 'BaseTransaction') -> VertexStaticMetadata | None:

@@ -19,7 +19,6 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
-from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -238,10 +237,10 @@ class VertexHandler:
         if not isinstance(vertex, Block):
             return
 
-        feature_descriptions = self._feature_service.get_bits_description(block=vertex)
+        feature_infos = self._feature_service.get_feature_infos(block=vertex)
         state_by_feature = {
-            feature.value: description.state.value
-            for feature, description in feature_descriptions.items()
+            feature.value: feature_info.state.value
+            for feature, feature_info in feature_infos.items()
         }
 
         self._log.info(
@@ -250,17 +249,19 @@ class VertexHandler:
             block_height=vertex.get_height(),
             features_states=state_by_feature
         )
+        self._log_active_features(vertex)
 
-        features = [Feature.NOP_FEATURE_1, Feature.NOP_FEATURE_2]
-        for feature in features:
-            self._log_if_feature_is_active(vertex, feature)
+    def _log_active_features(self, block: Block) -> None:
+        """Log ACTIVE features for a block. Used as part of the Feature Activation Phased Testing."""
+        if not self._settings.NETWORK_NAME == 'mainnet':
+            # We're currently only performing phased testing on mainnet, so we won't log in other networks.
+            return
 
-    def _log_if_feature_is_active(self, block: Block, feature: Feature) -> None:
-        """Log if a feature is ACTIVE for a block. Used as part of the Feature Activation Phased Testing."""
-        if self._feature_service.is_feature_active(block=block, feature=feature):
-            self._log.info(
-                'Feature is ACTIVE for block',
-                feature=feature.value,
-                block_hash=block.hash_hex,
-                block_height=block.get_height()
-            )
+        for feature in self._settings.FEATURE_ACTIVATION.features:
+            if self._feature_service.is_feature_active(block=block, feature=feature):
+                self._log.info(
+                    'Feature is ACTIVE for block',
+                    feature=feature.value,
+                    block_hash=block.hash_hex,
+                    block_height=block.get_height()
+                )

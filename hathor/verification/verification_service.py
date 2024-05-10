@@ -178,6 +178,7 @@ class VerificationService:
         self.verifiers.block.verify_mandatory_signaling(block)
 
     def _verify_merge_mined_block(self, block: MergeMinedBlock) -> None:
+        self.verifiers.merge_mined_block.verify_aux_pow(block)
         self._verify_block(block)
 
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
@@ -249,7 +250,6 @@ class VerificationService:
         self.verifiers.vertex.verify_sigops_output(block)
 
     def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
-        self.verifiers.merge_mined_block.verify_aux_pow(block)
         self._verify_without_storage_block(block)
 
     def _verify_without_storage_tx(self, tx: Transaction) -> None:
