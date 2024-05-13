@@ -80,3 +80,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_ipython_kernel: bool
     nano_testnet: bool
     x_async_sync_v2: bool
+    x_use_multiprocessor: bool
