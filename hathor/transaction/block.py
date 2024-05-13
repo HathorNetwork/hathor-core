@@ -22,7 +22,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import TxOutput, TxVersion
-from hathor.transaction.base_transaction import GenericVertex
+from hathor.transaction.base_transaction import GenericVertex, register_vertex_pickler
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -314,3 +314,6 @@ class Block(GenericVertex[BlockStaticMetadata]):
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
         static_metadata = BlockStaticMetadata.create_from_storage(self, settings, storage)
         self.set_static_metadata(static_metadata)
+
+
+register_vertex_pickler(Block)
