@@ -15,10 +15,10 @@
 import datetime
 
 from structlog import get_logger
-from twisted.internet.task import deferLater
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.p2p.manager import ConnectionsManager
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -26,6 +26,8 @@ from hathor.reactor import ReactorProtocol
 from hathor.transaction import Block, Vertex
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.util import not_none
+from hathor.verification.parallel_verifier import ParallelVerifier
 from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
@@ -43,6 +45,7 @@ class VertexHandler:
         '_p2p_manager',
         '_pubsub',
         '_wallet',
+        '_verifier',  # TODO: Change name
     )
 
     def __init__(
@@ -66,6 +69,12 @@ class VertexHandler:
         self._p2p_manager = p2p_manager
         self._pubsub = pubsub
         self._wallet = wallet
+        self._verifier = ParallelVerifier(  # TODO: Move to builder
+            verification_service=self._verification_service,
+            tx_storage=tx_storage,
+            daa=not_none(DifficultyAdjustmentAlgorithm.singleton),
+            reactor=reactor,
+        )
 
     def on_new_vertex(
         self,
@@ -130,6 +139,11 @@ class VertexHandler:
         if not is_pre_valid:
             return False
 
+        if self._verifier.is_processing(vertex.hash):
+            # TODO: If False,
+            #  this will close the connection which is not necessary, since it may be a fair and valid vertex
+            return True
+
         is_valid = await self._validate_vertex_async(
             vertex,
             fails_silently=fails_silently,
@@ -165,25 +179,27 @@ class VertexHandler:
 
         vertex.storage = self._tx_storage
 
-        try:
-            metadata = vertex.get_metadata()
-        except TransactionDoesNotExist:
-            if not fails_silently:
-                raise InvalidNewTransaction('cannot get metadata')
-            self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
-            return False
+        # TODO: Check this if, it didn't exist before
+        if already_exists:
+            try:
+                metadata = vertex.get_metadata()
+            except TransactionDoesNotExist:
+                if not fails_silently:
+                    raise InvalidNewTransaction('cannot get metadata')
+                self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
+                return False
 
-        if already_exists and metadata.validation.is_fully_connected():
-            if not fails_silently:
-                raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))
-            self._log.warn('on_new_tx(): Transaction already exists', tx=vertex.hash_hex)
-            return False
+            if metadata.validation.is_fully_connected():
+                if not fails_silently:
+                    raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))
+                self._log.warn('on_new_tx(): Transaction already exists', tx=vertex.hash_hex)
+                return False
 
-        if metadata.validation.is_invalid():
-            if not fails_silently:
-                raise InvalidNewTransaction('previously marked as invalid')
-            self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
-            return False
+            if metadata.validation.is_invalid():
+                if not fails_silently:
+                    raise InvalidNewTransaction('previously marked as invalid')
+                self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
+                return False
 
         return True
 
@@ -208,10 +224,21 @@ class VertexHandler:
         fails_silently: bool,
         reject_locked_reward: bool,
     ) -> bool:
-        # TODO: This method simply calls synchronous verification, but it also releases the reactor loop. This is
-        #  temporary, and soon this method will be changed to call verification on a separate process.
-        await deferLater(self._reactor, 0, lambda: None)
-        return self._validate_vertex(vertex, fails_silently=fails_silently, reject_locked_reward=reject_locked_reward)
+        try:
+            metadata = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            metadata = None
+
+        if not metadata or not metadata.validation.is_fully_connected():
+            try:
+                await self._verifier.validate_full(vertex, reject_locked_reward=reject_locked_reward)
+            except HathorError as e:
+                if not fails_silently:
+                    raise InvalidNewTransaction('full validation failed') from e
+                self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
+                return False
+
+        return True
 
     def _save_and_run_consensus(self, vertex: Vertex) -> None:
         # We call this here even though static metadata has already been set to make sure its value calculated from
