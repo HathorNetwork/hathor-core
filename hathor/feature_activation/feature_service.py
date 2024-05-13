@@ -222,7 +222,7 @@ class FeatureService:
         if parent_block.get_height() == ancestor_height:
             return parent_block
 
-        if not parent_metadata.voided_by and (ancestor := self._tx_storage.get_transaction_by_height(ancestor_height)):
+        if not parent_metadata.voided_by and (ancestor := self._tx_storage.get_block_by_height(ancestor_height)):
             from hathor.transaction import Block
             assert isinstance(ancestor, Block)
             return ancestor
