@@ -523,11 +523,10 @@ class StratumProtocol(JSONRPC):
         else:
             tx.nonce = int(params['nonce'], 16)
         tx.update_hash()
-        assert tx.hash is not None
 
         self.log.debug('share received', block=tx, block_base=block_base.hex(), block_base_hash=block_base_hash.hex())
 
-        verifier = VertexVerifier(settings=self._settings, daa=self.manager.daa)
+        verifier = VertexVerifier(settings=self._settings)
 
         try:
             verifier.verify_pow(tx, override_weight=job.weight)

@@ -5,7 +5,9 @@ from hathor.crypto.util import decode_address
 from hathor.p2p.protocol import PeerIdState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
+from hathor.transaction import Block, Transaction
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
+from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
@@ -13,7 +15,7 @@ from tests.utils import add_blocks_unlock_reward
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         # import sys
@@ -27,49 +29,48 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
-    def _add_new_tx(self, address, value):
-        from hathor.transaction import Transaction
+    def _add_new_tx(self, address: str, value: int) -> Transaction:
         from hathor.wallet.base_wallet import WalletOutputInfo
 
         outputs = []
         outputs.append(
             WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
 
-        tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
+        tx: Transaction = self.manager1.wallet.prepare_transaction_compute_inputs(
+            Transaction, outputs, self.manager1.tx_storage
+        )
         tx.timestamp = int(self.clock.seconds())
         tx.storage = self.manager1.tx_storage
         tx.weight = 10
         tx.parents = self.manager1.get_new_tx_parents()
         self.manager1.cpu_mining_service.resolve(tx)
-        self.manager1.verification_service.verify(tx)
         self.manager1.propagate_tx(tx)
         self.clock.advance(10)
         return tx
 
-    def _add_new_transactions(self, num_txs):
+    def _add_new_transactions(self, num_txs: int) -> list[Transaction]:
         txs = []
         for _ in range(num_txs):
-            address = self.get_address(0)
+            address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 50, 100, 120])
             tx = self._add_new_tx(address, value)
             txs.append(tx)
         return txs
 
-    def _add_new_block(self, propagate=True):
-        block = self.manager1.generate_mining_block()
+    def _add_new_block(self, propagate: bool = True) -> Block:
+        block: Block = self.manager1.generate_mining_block()
         self.assertTrue(self.manager1.cpu_mining_service.resolve(block))
-        self.manager1.verification_service.verify(block)
         self.manager1.on_new_tx(block, propagate_to_peers=propagate)
         self.clock.advance(10)
         return block
 
-    def _add_new_blocks(self, num_blocks, propagate=True):
+    def _add_new_blocks(self, num_blocks: int, propagate: bool = True) -> list[Block]:
         blocks = []
         for _ in range(num_blocks):
             blocks.append(self._add_new_block(propagate=propagate))
         return blocks
 
-    def test_get_blocks_before(self):
+    def test_get_blocks_before(self) -> None:
         genesis_block = self.genesis_blocks[0]
         result = self.manager1.tx_storage.get_blocks_before(genesis_block.hash)
         self.assertEqual(0, len(result))
@@ -88,7 +89,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             expected_result = expected_result[::-1]
             self.assertEqual(result, expected_result)
 
-    def test_block_sync_only_genesis(self):
+    def test_block_sync_only_genesis(self) -> None:
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
 
@@ -102,7 +103,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
 
-    def test_block_sync_new_blocks(self):
+    def test_block_sync_new_blocks(self) -> None:
         self._add_new_blocks(15)
 
         manager2 = self.create_peer(self.network)
@@ -123,7 +124,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_many_new_blocks(self):
+    def test_block_sync_many_new_blocks(self) -> None:
         self._add_new_blocks(150)
 
         manager2 = self.create_peer(self.network)
@@ -143,7 +144,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_new_blocks_and_txs(self):
+    def test_block_sync_new_blocks_and_txs(self) -> None:
         self._add_new_blocks(25)
         self._add_new_transactions(3)
         self._add_new_blocks(4)
@@ -172,7 +173,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_tx_propagation_nat_peers(self):
+    def test_tx_propagation_nat_peers(self) -> None:
         """ manager1 <- manager2 <- manager3
         """
         self._add_new_blocks(25)
@@ -229,7 +230,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager2)
         self.assertConsensusValid(self.manager3)
 
-    def test_check_sync_state(self):
+    def test_check_sync_state(self) -> None:
         """Tests if the LoopingCall to check the sync state works"""
         # Initially it should do nothing, since there is no recent activity
         self.manager1.check_sync_state()
@@ -249,7 +250,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
     __test__ = True
 
-    def test_downloader(self):
+    def test_downloader(self) -> None:
         from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 
         blocks = self._add_new_blocks(3)
@@ -326,7 +327,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         downloader.check_downloading_queue()
         self.assertEqual(len(downloader.downloading_deque), 0)
 
-    def _downloader_bug_setup(self):
+    def _downloader_bug_setup(self) -> None:
         """ This is an auxiliary method to setup a bug scenario."""
         from hathor.p2p.sync_version import SyncVersion
 
@@ -390,7 +391,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         # by this point everything should be set to so we can trigger the bug, any issues that happen before this
         # comment are an issue in setting up the scenario, not related to the problem itself
 
-    def test_downloader_retry_reorder(self):
+    def test_downloader_retry_reorder(self) -> None:
         """ Reproduce the bug that causes a reorder in the downloader queue.
 
         The tracking issue for this bug is #465
@@ -454,7 +455,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         # if the fix is applied, we would see tx_A in storage by this point
         self.assertTrue(self.manager_bug.tx_storage.transaction_exists(self.tx_A.hash))
 
-    def test_downloader_disconnect(self):
+    def test_downloader_disconnect(self) -> None:
         """ This is related to test_downloader_retry_reorder, but it basically tests the change in behavior instead.
 
         When a peer disconnects it should be immediately removed from the tx-detail's connections list.
@@ -474,7 +475,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
 class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
     __test__ = True
 
-    def test_sync_metadata(self):
+    def test_sync_metadata(self) -> None:
         # test if the synced peer will build all tx metadata correctly
 
         height = 0
@@ -519,7 +520,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             self.assertCountEqual(meta1.conflict_with or [], meta2.conflict_with or [])
             self.assertCountEqual(meta1.twins or [], meta2.twins or [])
 
-    def test_tx_propagation_nat_peers(self):
+    def test_tx_propagation_nat_peers(self) -> None:
         super().test_tx_propagation_nat_peers()
 
         node_sync1 = self.conn1.proto1.state.sync_agent
@@ -534,7 +535,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertEqual(node_sync2.peer_best_block.height, self.manager2.tx_storage.get_height_best_block())
         self.assertConsensusEqual(self.manager2, self.manager3)
 
-    def test_block_sync_new_blocks_and_txs(self):
+    def test_block_sync_new_blocks_and_txs(self) -> None:
         self._add_new_blocks(25)
         self._add_new_transactions(3)
         self._add_new_blocks(4)
@@ -563,7 +564,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_many_new_blocks(self):
+    def test_block_sync_many_new_blocks(self) -> None:
         self._add_new_blocks(150)
 
         manager2 = self.create_peer(self.network)
@@ -584,7 +585,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_new_blocks(self):
+    def test_block_sync_new_blocks(self) -> None:
         self._add_new_blocks(15)
 
         manager2 = self.create_peer(self.network)
@@ -605,7 +606,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_full_sync(self):
+    def test_full_sync(self) -> None:
         # 10 blocks
         blocks = self._add_new_blocks(10)
         # N blocks to unlock the reward
@@ -677,7 +678,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertEqual(len(manager2.tx_storage.indexes.mempool_tips.get()), 1)
         self.assertEqual(len(self.manager1.tx_storage.indexes.mempool_tips.get()), 1)
 
-    def test_block_sync_checkpoints(self):
+    def test_block_sync_checkpoints(self) -> None:
         TOTAL_BLOCKS = 30
         LAST_CHECKPOINT = 15
         FIRST_CHECKPOINT = LAST_CHECKPOINT // 2
@@ -718,7 +719,7 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertConsensusValid(self.manager1)
         self.assertConsensusValid(manager2)
 
-    def test_block_sync_only_genesis(self):
+    def test_block_sync_only_genesis(self) -> None:
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
 

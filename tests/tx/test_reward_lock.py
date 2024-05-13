@@ -1,6 +1,7 @@
 import pytest
 
 from hathor.crypto.util import get_address_from_public_key
+from hathor.exception import InvalidNewTransaction
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
@@ -87,15 +88,21 @@ class BaseTransactionTest(unittest.TestCase):
         add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
 
         # add tx bypassing reward-lock verification
-        # XXX: this situation is impossible in practice, but we force it to test that when a block tries to confirms a
+        # XXX: this situation is impossible in practice, but we force it to test that when a block tries to confirm a
         #      transaction before it can the RewardLocked exception is raised
         tx = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.get_metadata().min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False, reject_locked_reward=False))
 
         # new block will try to confirm it and fail
-        with self.assertRaises(RewardLocked):
+        with pytest.raises(InvalidNewTransaction) as e:
             add_new_blocks(self.manager, 1, advance_clock=1)
+
+        assert isinstance(e.value.__cause__, RewardLocked)
+
+        # check that the last block was not added to the storage
+        all_blocks = [vertex for vertex in self.manager.tx_storage.get_all_transactions() if vertex.is_block]
+        assert len(all_blocks) == 2 * self._settings.REWARD_SPEND_MIN_BLOCKS + 1
 
     def test_block_with_enough_height(self):
         # add block with a reward we can spend
@@ -159,7 +166,6 @@ class BaseTransactionTest(unittest.TestCase):
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage)
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
-        self.manager.verification_service.verify(b0)
         self.manager.propagate_tx(b0, fails_silently=False)
 
         # now the new tx should not pass verification considering the reward lock

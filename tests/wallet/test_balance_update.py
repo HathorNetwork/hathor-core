@@ -426,7 +426,6 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
                                   )
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.verification_service.verify(tx2)
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
         # verify balance

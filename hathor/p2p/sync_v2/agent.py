@@ -142,7 +142,8 @@ class NodeBlockSync(SyncAgent):
         # Saves if I am in the middle of a mempool sync
         # we don't execute any sync while in the middle of it
         self.mempool_manager = SyncMempoolManager(self)
-        self._receiving_tips: Optional[list[bytes]] = None
+        self._receiving_tips: Optional[list[VertexId]] = None
+        self.max_receiving_tips: int = self._settings.MAX_MEMPOOL_RECEIVING_TIPS
 
         # Cache for get_tx calls
         self._get_tx_cache: OrderedDict[bytes, BaseTransaction] = OrderedDict()
@@ -336,7 +337,6 @@ class NodeBlockSync(SyncAgent):
     def get_my_best_block(self) -> _HeightInfo:
         """Return my best block info."""
         bestblock = self.tx_storage.get_best_block()
-        assert bestblock.hash is not None
         meta = bestblock.get_metadata()
         assert meta.validation.is_fully_connected()
         return _HeightInfo(height=bestblock.get_height(), id=bestblock.hash)
@@ -476,7 +476,13 @@ class NodeBlockSync(SyncAgent):
         data = json.loads(payload)
         data = [bytes.fromhex(x) for x in data]
         # filter-out txs we already have
-        self._receiving_tips.extend(tx_id for tx_id in data if not self.partial_vertex_exists(tx_id))
+        try:
+            self._receiving_tips.extend(VertexId(tx_id) for tx_id in data if not self.partial_vertex_exists(tx_id))
+        except ValueError:
+            self.protocol.send_error_and_close_connection('Invalid trasaction ID received')
+        # XXX: it's OK to do this *after* the extend because the payload is limited by the line protocol
+        if len(self._receiving_tips) > self.max_receiving_tips:
+            self.protocol.send_error_and_close_connection(f'Too many tips: {len(self._receiving_tips)}')
 
     def handle_tips_end(self, _payload: str) -> None:
         """ Handle a TIPS-END message.
@@ -602,11 +608,11 @@ class NodeBlockSync(SyncAgent):
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         for tx in vertex_list:
-            if not self.tx_storage.transaction_exists(not_none(tx.hash)):
+            if not self.tx_storage.transaction_exists(tx.hash):
                 self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
             yield deferLater(self.reactor, 0, lambda: None)
 
-        if not self.tx_storage.transaction_exists(not_none(blk.hash)):
+        if not self.tx_storage.transaction_exists(blk.hash):
             self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
@@ -767,7 +773,6 @@ class NodeBlockSync(SyncAgent):
             # Not a block. Punish peer?
             return
         blk.storage = self.tx_storage
-        assert blk.hash is not None
 
         assert self._blk_streaming_client is not None
         self._blk_streaming_client.handle_blocks(blk)
@@ -832,7 +837,7 @@ class NodeBlockSync(SyncAgent):
         meta = best_block.get_metadata()
         assert meta.validation.is_fully_connected()
         payload = BestBlockPayload(
-            block=not_none(best_block.hash),
+            block=best_block.hash,
             height=not_none(meta.height),
         )
         self.send_message(ProtocolMessages.BEST_BLOCK, payload.json())
@@ -855,8 +860,8 @@ class NodeBlockSync(SyncAgent):
                                                                limit=self.DEFAULT_STREAMING_LIMIT)
 
         start_from: list[bytes] = []
-        first_block_hash = not_none(partial_blocks[0].hash)
-        last_block_hash = not_none(partial_blocks[-1].hash)
+        first_block_hash = partial_blocks[0].hash
+        last_block_hash = partial_blocks[-1].hash
         self.log.info('requesting transactions streaming',
                       start_from=[x.hex() for x in start_from],
                       first_block=first_block_hash.hex(),
@@ -871,8 +876,8 @@ class NodeBlockSync(SyncAgent):
         partial_blocks = self._tx_streaming_client.partial_blocks[idx:]
         assert partial_blocks
         start_from = list(self._tx_streaming_client._waiting_for)
-        first_block_hash = not_none(partial_blocks[0].hash)
-        last_block_hash = not_none(partial_blocks[-1].hash)
+        first_block_hash = partial_blocks[0].hash
+        last_block_hash = partial_blocks[-1].hash
         self.log.info('requesting transactions streaming',
                       start_from=[x.hex() for x in start_from],
                       first_block=first_block_hash.hex(),
@@ -947,8 +952,6 @@ class NodeBlockSync(SyncAgent):
                 self.log.debug('requested start_from_hash not found', start_from_hash=start_from_hash.hex())
                 self.send_message(ProtocolMessages.NOT_FOUND, start_from_hash.hex())
                 return
-            assert tx.hash is not None
-            assert first_block.hash is not None
             meta = tx.get_metadata()
             if meta.first_block != first_block.hash:
                 self.log.debug('requested start_from not confirmed by first_block',
@@ -1016,7 +1019,6 @@ class NodeBlockSync(SyncAgent):
         # tx_bytes = bytes.fromhex(payload)
         tx_bytes = base64.b64decode(payload)
         tx = tx_or_block_from_bytes(tx_bytes)
-        assert tx.hash is not None
         if not isinstance(tx, Transaction):
             self.log.warn('not a transaction', hash=tx.hash_hex)
             # Not a transaction. Punish peer?
@@ -1063,7 +1065,6 @@ class NodeBlockSync(SyncAgent):
     def _on_get_data(self, tx: BaseTransaction, origin: str) -> None:
         """ Called when a requested tx is received.
         """
-        assert tx.hash is not None
         deferred = self._deferred_txs.pop(tx.hash, None)
         if deferred is None:
             # Peer sent the wrong transaction?!
@@ -1141,14 +1142,12 @@ class NodeBlockSync(SyncAgent):
             return
 
         assert tx is not None
-        assert tx.hash is not None
         if self.protocol.node.tx_storage.get_genesis(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return
 
         tx.storage = self.protocol.node.tx_storage
-        assert tx.hash is not None
 
         if self.partial_vertex_exists(tx.hash):
             # transaction already added to the storage, ignore it

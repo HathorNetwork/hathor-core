@@ -61,7 +61,6 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         pass
 
     def remove_transaction(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
         super().remove_transaction(tx)
         self.transactions.pop(tx.hash, None)
         self.metadata.pop(tx.hash, None)
@@ -71,7 +70,6 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         self._save_transaction(tx, only_metadata=only_metadata)
 
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
-        assert tx.hash is not None
         if not only_metadata:
             self.transactions[tx.hash] = self._clone(tx)
         meta = getattr(tx, '_metadata', None)

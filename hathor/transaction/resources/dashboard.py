@@ -152,7 +152,8 @@ DashboardTransactionResource.openapi = {
                                                 ],
                                                 'inputs': [],
                                                 'outputs': [],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': None,
                                             },
                                             {
                                                 'tx_id': ('00002b3be4e3876e67b5e090d76dcd71'
@@ -166,7 +167,9 @@ DashboardTransactionResource.openapi = {
                                                 ],
                                                 'inputs': [],
                                                 'outputs': [],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': ('000005af290a55b079014a0be3246479'
+                                                                'e84eeb635f02010dbf3e5f3414a85bbb')
                                             }
                                         ],
                                         'blocks': [
@@ -189,7 +192,9 @@ DashboardTransactionResource.openapi = {
                                                         'script': 'dqkUixvdsajkV6vO+9Jjgjbaheqn016IrA=='
                                                     }
                                                 ],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': ('000005af290a55b079014a0be3246479'
+                                                                'e84eeb635f02010dbf3e5f3414a85bbb')
                                             },
                                             {
                                                 'tx_id': ('00035e46a20d0ecbda0dc6fdcaa243e9'
@@ -210,7 +215,9 @@ DashboardTransactionResource.openapi = {
                                                         'script': 'dqkUdNQbj29Md1xsAYinK+RsDJCCB7eIrA=='
                                                     }
                                                 ],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': ('000005af290a55b079014a0be3246479'
+                                                                'e84eeb635f02010dbf3e5f3414a85bbb')
                                             },
                                             {
                                                 'tx_id': ('000133cc80b625b1babbd454edc3474e'
@@ -231,7 +238,8 @@ DashboardTransactionResource.openapi = {
                                                         'script': 'dqkU0AoLEAX+1b36s+VyaMc9bkj/5byIrA=='
                                                     }
                                                 ],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': None
                                             }
                                         ]
                                     }

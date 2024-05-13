@@ -1,4 +1,7 @@
 from hathor.graphviz import GraphvizVisualizer
+from hathor.manager import HathorManager
+from hathor.transaction import Block
+from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import gen_custom_tx
@@ -6,7 +9,14 @@ from tests.utils import gen_custom_tx
 
 class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
-    def create_chain(self, manager, first_parent_block_hash, length, prefix, tx_parents=None):
+    def create_chain(
+        self,
+        manager: HathorManager,
+        first_parent_block_hash: VertexId,
+        length: int,
+        prefix: str,
+        tx_parents: list[VertexId] | None = None
+    ) -> list[Block]:
         current = first_parent_block_hash
         v = []
         for i in range(length):
@@ -23,7 +33,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
             current = blk.hash
         return v
 
-    def test_conflict_with_parent_tx(self):
+    def test_conflict_with_parent_tx(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 

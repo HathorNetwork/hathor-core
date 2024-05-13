@@ -252,8 +252,6 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     def _add_utxo(self, tx: BaseTransaction, index: int) -> None:
         """ Add tx to mint/melt indexes and total amount
         """
-        assert tx.hash is not None
-
         tx_output = tx.outputs[index]
         token_uid = tx.get_token_uid(tx_output.get_token_index())
 
@@ -270,7 +268,6 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     def _remove_utxo(self, tx: BaseTransaction, index: int) -> None:
         """ Remove tx from mint/melt indexes and total amount
         """
-        assert tx.hash is not None
 
         tx_output = tx.outputs[index]
         token_uid = tx.get_token_uid(tx_output.get_token_index())
@@ -291,7 +288,6 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
             from hathor.transaction.token_creation_tx import TokenCreationTransaction
             tx = cast(TokenCreationTransaction, tx)
-            assert tx.hash is not None
             self.log.debug('create_token_info', tx=tx.hash_hex, name=tx.token_name, symb=tx.token_symbol)
             self._create_token_info(tx.hash, tx.token_name, tx.token_symbol)
 
@@ -299,7 +295,6 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             # Adding this tx to the transactions key list
             assert isinstance(tx, Transaction)
             for token_uid in tx.tokens:
-                assert tx.hash is not None
                 self._add_transaction(token_uid, tx.timestamp, tx.hash)
 
         for tx_input in tx.inputs:
@@ -322,12 +317,10 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             # Removing this tx from the transactions key list
             assert isinstance(tx, Transaction)
             for token_uid in tx.tokens:
-                assert tx.hash is not None
                 self._remove_transaction(token_uid, tx.timestamp, tx.hash)
 
         # if it's a TokenCreationTransaction, remove it from index
         if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
-            assert tx.hash is not None
             self._destroy_token(tx.hash)
 
     def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:

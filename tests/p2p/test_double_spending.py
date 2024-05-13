@@ -1,5 +1,10 @@
+from unittest.mock import Mock
+
 from hathor.crypto.util import decode_address
+from hathor.manager import HathorManager
 from hathor.simulator.utils import add_new_blocks
+from hathor.transaction import Transaction
+from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_tx
 
@@ -7,7 +12,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_tx
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         self.network = 'testnet'
@@ -16,16 +21,16 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
-    def _add_new_transactions(self, manager, num_txs):
+    def _add_new_transactions(self, manager: HathorManager, num_txs: int) -> list[Transaction]:
         txs = []
         for _ in range(num_txs):
-            address = self.get_address(0)
+            address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 15, 20])
             tx = add_new_tx(manager, address, value)
             txs.append(tx)
         return txs
 
-    def test_simple_double_spending(self):
+    def test_simple_double_spending(self) -> None:
         add_new_blocks(self.manager1, 5, advance_clock=15)
         add_blocks_unlock_reward(self.manager1)
 
@@ -33,6 +38,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         from hathor.wallet.base_wallet import WalletOutputInfo
 
         address = self.get_address(0)
+        assert address is not None
         value = 500
 
         outputs = []
@@ -125,7 +131,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.assertConsensusValid(self.manager1)
 
-    def test_double_spending_propagation(self):
+    def test_double_spending_propagation(self) -> None:
         blocks = add_new_blocks(self.manager1, 4, advance_clock=15)
         add_blocks_unlock_reward(self.manager1)
 
@@ -165,7 +171,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [WalletOutputInfo(address=address, value=value, timelock=None),
                    WalletOutputInfo(address=address, value=tx_total_value - 500, timelock=None)]
         self.clock.advance(1)
-        inputs = [WalletInputInfo(i.tx_id, i.index, b'') for i in tx1.inputs]
+        inputs = [WalletInputInfo(i.tx_id, i.index, Mock()) for i in tx1.inputs]
         tx4 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs,
                                                                          outputs, self.manager1.tx_storage)
         tx4.weight = 5
@@ -186,7 +192,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 100
-        inputs = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)]
+        inputs = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=Mock())]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
         tx2 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
@@ -236,7 +242,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 500
-        inputs = [WalletInputInfo(tx_id=tx4.hash, index=0, private_key=None)]
+        inputs = [WalletInputInfo(tx_id=tx4.hash, index=0, private_key=Mock())]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
         tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs, force=True,
@@ -273,7 +279,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = blocks[3].outputs[0].value
-        inputs = [WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=None)]
+        inputs = [WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=Mock())]
         outputs = [WalletOutputInfo(address=address, value=value, timelock=None)]
         self.clock.advance(1)
         tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,

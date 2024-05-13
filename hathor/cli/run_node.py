@@ -131,6 +131,8 @@ class RunNode:
                                help='Enable running both sync protocols.')
         sync_args.add_argument('--sync-v1-only', action='store_true', help='Disable support for running sync-v2.')
         sync_args.add_argument('--sync-v2-only', action='store_true', help='Disable support for running sync-v1.')
+        sync_args.add_argument('--x-remove-sync-v1', action='store_true', help='Make sync-v1 unavailable, thus '
+                               'impossible to be enable in runtime.')
         sync_args.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # old argument
         sync_args.add_argument('--x-sync-bridge', action='store_true', help=SUPPRESS)  # old argument
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
@@ -221,7 +223,8 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
-            feature_service=self.manager._feature_service
+            feature_service=self.manager.vertex_handler._feature_service,
+            bit_signaling_service=self.manager._bit_signaling_service,
         )
 
     def start_sentry_if_possible(self) -> None:
@@ -264,9 +267,8 @@ class RunNode:
     def signal_usr1_handler(self, sig: int, frame: Any) -> None:
         """Called when USR1 signal is received."""
         try:
-            self.log.warn('USR1 received. Killing all connections...')
-            if self.manager and self.manager.connections:
-                self.manager.connections.disconnect_all_peers(force=True)
+            self.log.warn('USR1 received.')
+            self.manager.connections.reload_entrypoints_and_connections()
         except Exception:
             # see: https://docs.python.org/3/library/signal.html#note-on-signal-handlers-and-exceptions
             self.log.error('prevented exception from escaping the signal handler', exc_info=True)

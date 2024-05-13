@@ -75,7 +75,6 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         rocksdb_key = self._serialize_key(key)
         assert len(rocksdb_key) == self._KEY_SIZE
         if tx:
-            assert tx.hash is not None
             assert len(tx.hash) == 32
             rocksdb_key += struct.pack('>I', tx.timestamp) + tx.hash
             assert len(rocksdb_key) == self._KEY_SIZE + 4 + 32
@@ -94,23 +93,25 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         return key, timestamp, tx_hash
 
     def add_tx(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
-
         for key in self._extract_keys(tx):
             self.log.debug('put key', key=key)
             self._db.put((self._cf, self._to_rocksdb_key(key, tx)), b'')
 
     def remove_tx(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
-
         for key in self._extract_keys(tx):
             self.log.debug('delete key', key=key)
             self._db.delete((self._cf, self._to_rocksdb_key(key, tx)))
 
     def _get_from_key(self, key: KT) -> Iterable[bytes]:
+        return self._util_get_from_key(key)
+
+    def _get_sorted_from_key(self, key: KT, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
+        return self._util_get_from_key(key, tx_start)
+
+    def _util_get_from_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         self.log.debug('seek to', key=key)
         it = self._db.iterkeys(self._cf)
-        it.seek(self._to_rocksdb_key(key))
+        it.seek(self._to_rocksdb_key(key, tx))
         for _cf, rocksdb_key in it:
             key2, _, tx_hash = self._from_rocksdb_key(rocksdb_key)
             if key2 != key:
@@ -118,9 +119,6 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
             self.log.debug('seek found', tx=tx_hash.hex())
             yield tx_hash
         self.log.debug('seek end')
-
-    def _get_sorted_from_key(self, key: KT) -> Iterable[bytes]:
-        return self._get_from_key(key)
 
     def _is_key_empty(self, key: KT) -> bool:
         self.log.debug('seek to', key=key)

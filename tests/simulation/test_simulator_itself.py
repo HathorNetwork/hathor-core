@@ -1,5 +1,8 @@
 import pytest
 
+from hathor.builder import SyncSupportLevel
+from hathor.manager import HathorManager
+from hathor.p2p.peer_id import PeerId
 from hathor.simulator import FakeConnection, Simulator
 from tests import unittest
 
@@ -11,7 +14,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         seed = None
@@ -29,14 +32,20 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         print('Simulation seed config:', self.simulator1.seed)
         print('-' * 30)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         super().tearDown()
 
         self.simulator1.stop()
         self.simulator2.stop()
         self.simulator3.stop()
 
-    def create_simulator_peer(self, simulator, peer_id_pool, enable_sync_v1=None, enable_sync_v2=None):
+    def create_simulator_peer(
+        self,
+        simulator: Simulator,
+        peer_id_pool: list[PeerId],
+        enable_sync_v1: bool | None = None,
+        enable_sync_v2: bool | None = None
+    ) -> HathorManager:
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -46,15 +55,17 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                                                       'the test class or pass `enable_sync_v2` by argument')
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
+        sync_v1_support = SyncSupportLevel.ENABLED if enable_sync_v1 else SyncSupportLevel.DISABLED
+        sync_v2_support = SyncSupportLevel.ENABLED if enable_sync_v2 else SyncSupportLevel.DISABLED
 
         builder = simulator.get_default_builder() \
             .set_peer_id(self.get_random_peer_id_from_pool()) \
-            .set_enable_sync_v1(enable_sync_v1) \
-            .set_enable_sync_v2(enable_sync_v2)
+            .set_sync_v1_support(sync_v1_support) \
+            .set_sync_v2_support(sync_v2_support)
 
         return simulator.create_peer(builder)
 
-    def _simulate_run(self, run_i, simulator):
+    def _simulate_run(self, run_i: int, simulator: Simulator) -> list[HathorManager]:
         # XXX: the following was adapted from test_new_syncing_peer, it doesn't matter too much, but has good coverage
         #      of different behaviors that can be affected by non-determinism on the fullnode implementation
 
@@ -110,7 +121,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
     # XXX: marked as flaky because of a known random issue
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_determinism_full_runs(self):
+    def test_determinism_full_runs(self) -> None:
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)
         self.assertEqual(self.simulator1.seed, self.simulator3.seed)
@@ -128,7 +139,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
     # XXX: marked as flaky because of a known random issue
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_determinism_interleaved(self):
+    def test_determinism_interleaved(self) -> None:
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)
 

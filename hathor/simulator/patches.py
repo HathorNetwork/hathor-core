@@ -26,7 +26,6 @@ logger = get_logger()
 class SimulatorVertexVerifier(VertexVerifier):
     @classmethod
     def verify_pow(cls, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
-        assert vertex.hash is not None
         logger.new().debug('Skipping VertexVerifier.verify_pow() for simulator')
 
 

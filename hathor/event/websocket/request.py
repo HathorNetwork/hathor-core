@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal, Optional
 
 from pydantic import Field, NonNegativeInt
 
@@ -54,7 +54,7 @@ class StopStreamRequest(BaseModel):
     type: Literal['STOP_STREAM']
 
 
-Request = Annotated[Union[StartStreamRequest, AckRequest, StopStreamRequest], Field(discriminator='type')]
+Request = Annotated[StartStreamRequest | AckRequest | StopStreamRequest, Field(discriminator='type')]
 
 
 class RequestWrapper(BaseModel):

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generator, Iterator, Optional
 from weakref import WeakSet
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred, inlineCallbacks
+from twisted.internet.defer import CancelledError, Deferred, inlineCallbacks
 from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf.get_settings import get_global_settings
@@ -603,7 +603,6 @@ class NodeSyncTimestamp(SyncAgent):
             return
 
         assert tx is not None
-        assert tx.hash is not None
 
         self.log.debug('tx received from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
 
@@ -612,7 +611,6 @@ class NodeSyncTimestamp(SyncAgent):
             # Will it reduce peer reputation score?
             return
         tx.storage = self.protocol.node.tx_storage
-        assert tx.hash is not None
 
         key = self.get_data_key(tx.hash)
         deferred = self.deferred_by_key.pop(key, None)
@@ -630,7 +628,7 @@ class NodeSyncTimestamp(SyncAgent):
             self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=True)
+            result = self.manager.on_new_tx(tx, propagate_to_peers=True)
             self.update_received_stats(tx, result)
 
     def update_received_stats(self, tx: 'BaseTransaction', result: bool) -> None:
@@ -674,7 +672,6 @@ class NodeSyncTimestamp(SyncAgent):
         # the parameter of the second callback is the return of the first
         # so I need to return the same tx to guarantee that all peers will receive it
         if tx:
-            assert tx.hash is not None
             if self.manager.tx_storage.transaction_exists(tx.hash):
                 self.manager.tx_storage.compare_bytes_with_local_tx(tx)
                 success = True
@@ -685,12 +682,13 @@ class NodeSyncTimestamp(SyncAgent):
             self.update_received_stats(tx, success)
         return tx
 
-    def on_get_data_failed(self, reason: 'Failure', hash_bytes: bytes) -> None:
+    def on_get_data_failed(self, failure: 'Failure', hash_bytes: bytes) -> None:
         """ Method called when get_data deferred fails.
             We need this errback because otherwise the sync crashes when the deferred is canceled.
             We should just log a warning because it will continue the sync and will try to get this tx again.
         """
-        self.log.warn('failed to download tx', tx=hash_bytes.hex(), reason=reason)
+        log_func = self.log.debug if isinstance(failure.value, CancelledError) else self.log.warn
+        log_func('failed to download tx', tx=hash_bytes.hex(), reason=failure)
 
     def is_sync_enabled(self) -> bool:
         """Return True if sync is enabled for this connection."""

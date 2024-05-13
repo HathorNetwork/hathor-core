@@ -423,6 +423,10 @@ class HathorSettings(NamedTuple):
     OLD_MAX_MERKLE_PATH_LENGTH: int = 12
     NEW_MAX_MERKLE_PATH_LENGTH: int = 20
 
+    # Maximum number of tx tips to accept in the initial phase of the mempool sync 1000 is arbitrary, but it should be
+    # more than enough for the forseeable future
+    MAX_MEMPOOL_RECEIVING_TIPS: int = 1000
+
     # Used to enable nano contracts.
     #
     # This should NEVER be enabled for mainnet and testnet, since both networks will

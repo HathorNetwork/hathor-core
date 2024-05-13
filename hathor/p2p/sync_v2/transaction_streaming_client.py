@@ -28,7 +28,6 @@ from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import BaseTransaction
 from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.types import VertexId
-from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -117,7 +116,6 @@ class TransactionStreamingClient:
             self.fails(TooManyVerticesReceivedError())
             return
 
-        assert tx.hash is not None
         self.log.debug('tx received', tx_id=tx.hash.hex())
         self._queue.append(tx)
         assert len(self._queue) <= self._tx_max_quantity
@@ -141,7 +139,7 @@ class TransactionStreamingClient:
         self._is_processing = True
         try:
             tx = self._queue.popleft()
-            self.log.debug('processing tx', tx_id=not_none(tx.hash).hex())
+            self.log.debug('processing tx', tx_id=tx.hash.hex())
             yield self._process_transaction(tx)
         finally:
             self._is_processing = False
@@ -151,7 +149,6 @@ class TransactionStreamingClient:
     @inlineCallbacks
     def _process_transaction(self, tx: BaseTransaction) -> Generator[Any, Any, None]:
         """Process transaction."""
-        assert tx.hash is not None
 
         # Run basic verification.
         if not tx.is_genesis:

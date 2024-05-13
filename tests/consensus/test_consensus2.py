@@ -1,12 +1,15 @@
 from hathor.graphviz import GraphvizVisualizer
+from hathor.manager import HathorManager
 from hathor.simulator.utils import gen_new_tx
+from hathor.transaction import Transaction
+from hathor.util import not_none
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx
 
 
 class BaseConsensusSimulatorTestCase(SimulatorTestCase):
-    def checkConflict(self, tx1, tx2):
+    def checkConflict(self, tx1: Transaction, tx2: Transaction) -> None:
         meta1 = tx1.get_metadata()
         meta2 = tx2.get_metadata()
         self.assertIn(tx1.hash, meta2.conflict_with)
@@ -19,7 +22,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
             cnt += 1
         self.assertLessEqual(cnt, 1)
 
-    def do_step(self, i, manager1, tx_base):
+    def do_step(self, i: int, manager1: HathorManager, tx_base: Transaction) -> Transaction:
         txA = add_custom_tx(manager1, [(tx_base, 0)], n_outputs=2)
         self.graphviz.labels[txA.hash] = f'txA-{i}'
 
@@ -52,7 +55,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         return txH
 
-    def test_two_conflicts_intertwined_once(self):
+    def test_two_conflicts_intertwined_once(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -72,6 +75,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         self.graphviz = GraphvizVisualizer(manager1.tx_storage, include_verifications=True, include_funds=True)
 
+        assert manager1.wallet is not None
         address = manager1.wallet.get_unused_address(mark_as_used=False)
         value = 10
         initial = gen_new_tx(manager1, address, value)
@@ -87,7 +91,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         # dot = self.graphviz.dot()
         # dot.render('dot0')
 
-    def test_two_conflicts_intertwined_multiple_times(self):
+    def test_two_conflicts_intertwined_multiple_times(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -107,13 +111,14 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
         self.graphviz = GraphvizVisualizer(manager1.tx_storage, include_verifications=True, include_funds=True)
 
+        assert manager1.wallet is not None
         address = manager1.wallet.get_unused_address(mark_as_used=False)
         value = 10
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()
         manager1.propagate_tx(initial, fails_silently=False)
-        self.graphviz.labels[initial.hash] = 'initial'
+        self.graphviz.labels[not_none(initial.hash)] = 'initial'
 
         x = initial
         x = self.do_step(0, manager1, x)

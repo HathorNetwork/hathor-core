@@ -197,7 +197,6 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': address.encode(),
-                b'paginate': b'true'
             }
         )
 
@@ -217,7 +216,6 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': address.encode(),
-                b'paginate': b'true'
             }
         )
 
@@ -248,7 +246,6 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {
                 b'addresses[]': random_address.encode(),
-                b'paginate': b'true'
             }
         )
 
@@ -261,7 +258,6 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
             'thin_wallet/address_history', {
                 b'addresses[]': random_address.encode(),
                 b'hash': response_data['first_hash'].encode(),
-                b'paginate': b'true'
             }
         )
 

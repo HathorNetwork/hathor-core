@@ -13,21 +13,24 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, TypeAlias
 
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.simulator.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
+from hathor.transaction import Transaction
 from hathor.transaction.exceptions import RewardLocked
+from hathor.types import VertexId
 from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
-    from hathor.transaction import Transaction
 
 logger = get_logger()
+
+GenTxFunction: TypeAlias = Callable[['HathorManager', str, int], Transaction]
 
 
 class RandomTransactionGenerator:
@@ -38,7 +41,8 @@ class RandomTransactionGenerator:
     MAX_LATEST_TRANSACTIONS_LEN = 10
 
     def __init__(self, manager: 'HathorManager', rng: Random, *,
-                 rate: float, hashpower: float, ignore_no_funds: bool = False):
+                 rate: float, hashpower: float, ignore_no_funds: bool = False,
+                 custom_gen_new_tx: GenTxFunction | None = None):
         """
         :param: rate: Number of transactions per second
         :param: hashpower: Number of hashes per second
@@ -58,11 +62,16 @@ class RandomTransactionGenerator:
         self.delayedcall = None
         self.log = logger.new()
         self.rng = rng
+        self.gen_new_tx: GenTxFunction
+        if custom_gen_new_tx is not None:
+            self.gen_new_tx = custom_gen_new_tx
+        else:
+            self.gen_new_tx = gen_new_tx
 
         # Most recent transactions generated here.
         # The lowest index has the most recent transaction.
         self.transactions_found: int = 0
-        self.latest_transactions: deque[Transaction] = deque()
+        self.latest_transactions: deque[VertexId] = deque()
 
         self.double_spending_only = False
 
@@ -115,7 +124,7 @@ class RandomTransactionGenerator:
 
         if not self.double_spending_only:
             try:
-                tx = gen_new_tx(self.manager, address, value)
+                tx = self.gen_new_tx(self.manager, address, value)
             except (InsufficientFunds, RewardLocked):
                 self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
                 return

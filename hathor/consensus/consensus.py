@@ -18,6 +18,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
+from hathor.execution_manager import ExecutionManager
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
@@ -55,13 +56,20 @@ class ConsensusAlgorithm:
     b0 will not be propagated to the voided_by of b1, b2, and b3.
     """
 
-    def __init__(self, soft_voided_tx_ids: set[bytes], pubsub: PubSubManager) -> None:
+    def __init__(
+        self,
+        soft_voided_tx_ids: set[bytes],
+        pubsub: PubSubManager,
+        *,
+        execution_manager: ExecutionManager
+    ) -> None:
         self._settings = get_global_settings()
         self.log = logger.new()
         self._pubsub = pubsub
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
+        self._execution_manager = execution_manager
 
     def create_context(self) -> ConsensusAlgorithmContext:
         """Handy method to create a context that can be used to access block and transaction algorithms."""
@@ -75,11 +83,11 @@ class ConsensusAlgorithm:
         assert meta.validation.is_valid()
         try:
             self._unsafe_update(base)
-        except Exception:
+        except BaseException:
             meta.add_voided_by(self._settings.CONSENSUS_FAIL_ID)
             assert base.storage is not None
             base.storage.save_transaction(base, only_metadata=True)
-            raise
+            self._execution_manager.crash_and_exit(reason=f'Consensus update failed for tx {base.hash_hex}')
 
     def _unsafe_update(self, base: BaseTransaction) -> None:
         """Run a consensus update with its own context, indexes will be updated accordingly."""

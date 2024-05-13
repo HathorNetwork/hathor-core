@@ -2,7 +2,7 @@ from json import JSONDecodeError
 from typing import Optional
 from unittest.mock import Mock, patch
 
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.protocol import Protocol
 from twisted.python.failure import Failure
 
 from hathor.p2p.peer_id import PeerId
@@ -15,7 +15,7 @@ from tests import unittest
 class BaseHathorProtocolTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
         self.peer_id1 = PeerId()
@@ -32,52 +32,49 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertRegex(conn.peek_tr2_value(), regex2)
         conn.run_one_step()
 
-    def assertIsConnected(self, conn=None):
+    def assertIsConnected(self, conn: FakeConnection | None = None) -> None:
         if conn is None:
             conn = self.conn
         self.assertFalse(conn.tr1.disconnecting)
         self.assertFalse(conn.tr2.disconnecting)
 
-    def assertIsNotConnected(self, conn=None):
+    def assertIsNotConnected(self, conn: FakeConnection | None = None) -> None:
         if conn is None:
             conn = self.conn
         self.assertTrue(conn.tr1.disconnecting)
         self.assertTrue(conn.tr2.disconnecting)
 
-    def _send_cmd(self, proto, cmd, payload=None):
+    def _send_cmd(self, proto: Protocol, cmd: str, payload: str | None = None) -> None:
         if not payload:
             line = '{}\r\n'.format(cmd)
         else:
             line = '{} {}\r\n'.format(cmd, payload)
 
-        if isinstance(line, str):
-            line = line.encode('utf-8')
+        proto.dataReceived(line.encode('utf-8'))
 
-        return proto.dataReceived(line)
-
-    def _check_result_only_cmd(self, result, expected_cmd):
+    def _check_result_only_cmd(self, result: bytes, expected_cmd: bytes) -> None:
         cmd_list = []
         for line in result.split(b'\r\n'):
             cmd, _, _ = line.partition(b' ')
             cmd_list.append(cmd)
         self.assertIn(expected_cmd, cmd_list)
 
-    def _check_cmd_and_value(self, result, expected):
+    def _check_cmd_and_value(self, result: bytes, expected: tuple[bytes, bytes]) -> None:
         result_list = []
         for line in result.split(b'\r\n'):
             cmd, _, data = line.partition(b' ')
             result_list.append((cmd, data))
         self.assertIn(expected, result_list)
 
-    def test_on_connect(self):
+    def test_on_connect(self) -> None:
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
 
-    def test_invalid_command(self):
+    def test_invalid_command(self) -> None:
         self._send_cmd(self.conn.proto1, 'INVALID-CMD')
         self.conn.proto1.state.handle_error('')
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_rate_limit(self):
+    def test_rate_limit(self) -> None:
         hits = 1
         window = 60
 
@@ -99,7 +96,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.proto1.connections = None
         self.conn.proto1.on_disconnect(Failure(Exception()))
 
-    def test_invalid_size(self):
+    def test_invalid_size(self) -> None:
         self.conn.tr1.clear()
         cmd = b'HELLO '
         max_payload_bytes = HathorLineReceiver.MAX_LENGTH - len(cmd)
@@ -123,32 +120,32 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         line_length_exceeded_wrapped.assert_called_once()
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_invalid_payload(self):
+    def test_invalid_payload(self) -> None:
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
         with self.assertRaises(JSONDecodeError):
             self._send_cmd(self.conn.proto1, 'PEERS', 'abc')
 
-    def test_invalid_hello1(self):
+    def test_invalid_hello1(self) -> None:
         self.conn.tr1.clear()
         self._send_cmd(self.conn.proto1, 'HELLO')
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_invalid_hello2(self):
+    def test_invalid_hello2(self) -> None:
         self.conn.tr1.clear()
         self._send_cmd(self.conn.proto1, 'HELLO', 'invalid_payload')
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_invalid_hello3(self):
+    def test_invalid_hello3(self) -> None:
         self.conn.tr1.clear()
         self._send_cmd(self.conn.proto1, 'HELLO', '{}')
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_invalid_hello4(self):
+    def test_invalid_hello4(self) -> None:
         self.conn.tr1.clear()
         self._send_cmd(
             self.conn.proto1,
@@ -158,7 +155,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_invalid_hello5(self):
+    def test_invalid_hello5(self) -> None:
         # hello with clocks too far apart
         self.conn.tr1.clear()
         data = self.conn.proto2.state._get_hello_data()
@@ -171,14 +168,14 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_valid_hello(self):
+    def test_valid_hello(self) -> None:
         self.conn.run_one_step()  # HELLO
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEER-ID')
         self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEER-ID')
         self.assertFalse(self.conn.tr1.disconnecting)
         self.assertFalse(self.conn.tr2.disconnecting)
 
-    def test_invalid_same_peer_id(self):
+    def test_invalid_same_peer_id(self) -> None:
         manager3 = self.create_peer(self.network, peer_id=self.peer_id1)
         conn = FakeConnection(self.manager1, manager3)
         conn.run_one_step()  # HELLO
@@ -186,7 +183,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self._check_result_only_cmd(conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(conn.tr1.disconnecting)
 
-    def test_invalid_same_peer_id2(self):
+    def test_invalid_same_peer_id2(self) -> None:
         """
         We connect nodes 1-2 and 1-3. Nodes 2 and 3 have the same peer_id. The connections
         are established simultaneously, so we do not detect a peer id duplication in PEER_ID
@@ -246,7 +243,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         # connection is still up
         self.assertIsConnected(conn_alive)
 
-    def test_invalid_different_network(self):
+    def test_invalid_different_network(self) -> None:
         manager3 = self.create_peer(network='mainnet')
         conn = FakeConnection(self.manager1, manager3)
         conn.run_one_step()  # HELLO
@@ -254,23 +251,23 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertTrue(conn.tr1.disconnecting)
         conn.run_one_step()  # ERROR
 
-    def test_send_invalid_unicode(self):
+    def test_send_invalid_unicode(self) -> None:
         # \xff is an invalid unicode.
         self.conn.proto1.dataReceived(b'\xff\r\n')
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_on_disconnect(self):
+    def test_on_disconnect(self) -> None:
         self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
         self.conn.disconnect(Failure(Exception('testing')))
         self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
 
-    def test_on_disconnect_after_hello(self):
+    def test_on_disconnect_after_hello(self) -> None:
         self.conn.run_one_step()  # HELLO
         self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
         self.conn.disconnect(Failure(Exception('testing')))
         self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
 
-    def test_on_disconnect_after_peer_id(self):
+    def test_on_disconnect_after_peer_id(self) -> None:
         self.conn.run_one_step()  # HELLO
         self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
         # No peer id in the peer_storage (known_peers)
@@ -291,7 +288,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call
         self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
 
-    def test_idle_connection(self):
+    def test_idle_connection(self) -> None:
         self.clock.advance(self._settings.PEER_IDLE_TIMEOUT - 10)
         self.assertIsConnected(self.conn)
         self.clock.advance(15)
@@ -301,7 +298,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
 class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTestCase):
     __test__ = True
 
-    def test_two_connections(self):
+    def test_two_connections(self) -> None:
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
@@ -318,8 +315,7 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEERS')
         self.conn.run_one_step()
 
-    @inlineCallbacks
-    def test_get_data(self):
+    def test_get_data(self) -> None:
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
@@ -329,11 +325,11 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
         self.conn.run_one_step()  # TIPS
         self.assertIsConnected()
         missing_tx = '00000000228dfcd5dec1c9c6263f6430a5b4316bb9e3decb9441a6414bfd8697'
-        yield self._send_cmd(self.conn.proto1, 'GET-DATA', missing_tx)
+        self._send_cmd(self.conn.proto1, 'GET-DATA', missing_tx)
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
         self.conn.run_one_step()
 
-    def test_valid_hello_and_peer_id(self):
+    def test_valid_hello_and_peer_id(self) -> None:
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
         self._check_result_only_cmd(self.conn.peek_tr2_value(), b'HELLO')
         self.conn.run_one_step()  # HELLO
@@ -358,7 +354,7 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
         self.conn.run_one_step()  # TIPS
         self.assertIsConnected()
 
-    def test_send_ping(self):
+    def test_send_ping(self) -> None:
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
@@ -379,8 +375,7 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
             self.conn.run_one_step()
         self.assertEqual(self.clock.seconds(), self.conn.proto1.last_message)
 
-    @inlineCallbacks
-    def test_invalid_peer_id(self):
+    def test_invalid_peer_id(self) -> None:
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
@@ -389,7 +384,7 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
         self.conn.run_one_step()  # PEERS
         self.conn.run_one_step()  # TIPS
         invalid_payload = {'id': '123', 'entrypoints': ['tcp://localhost:1234']}
-        yield self._send_cmd(self.conn.proto1, 'PEER-ID', json_dumps(invalid_payload))
+        self._send_cmd(self.conn.proto1, 'PEER-ID', json_dumps(invalid_payload))
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
 
@@ -397,7 +392,7 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
 class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTestCase):
     __test__ = True
 
-    def test_two_connections(self):
+    def test_two_connections(self) -> None:
         self.assertAndStepConn(self.conn, b'^HELLO')
         self.assertAndStepConn(self.conn, b'^PEER-ID')
         self.assertAndStepConn(self.conn, b'^READY')
@@ -425,8 +420,7 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
 
         self.assertIsConnected()
 
-    @inlineCallbacks
-    def test_get_data(self):
+    def test_get_data(self) -> None:
         self.assertAndStepConn(self.conn, b'^HELLO')
         self.assertAndStepConn(self.conn, b'^PEER-ID')
         self.assertAndStepConn(self.conn, b'^READY')
@@ -442,11 +436,11 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
             'last_block_hash': missing_tx,
             'start_from': [self._settings.GENESIS_BLOCK_HASH.hex()]
         }
-        yield self._send_cmd(self.conn.proto1, 'GET-TRANSACTIONS-BFS', json_dumps(payload))
+        self._send_cmd(self.conn.proto1, 'GET-TRANSACTIONS-BFS', json_dumps(payload))
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
         self.conn.run_one_step()
 
-    def test_valid_hello_and_peer_id(self):
+    def test_valid_hello_and_peer_id(self) -> None:
         self.assertAndStepConn(self.conn, b'^HELLO')
         self.assertAndStepConn(self.conn, b'^PEER-ID')
         self.assertAndStepConn(self.conn, b'^READY')
@@ -477,7 +471,7 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         self.assertAndStepConn(self.conn, b'^BEST-BLOCK')
         self.assertIsConnected()
 
-    def test_send_ping(self):
+    def test_send_ping(self) -> None:
         self.assertAndStepConn(self.conn, b'^HELLO')
         self.assertAndStepConn(self.conn, b'^PEER-ID')
         self.assertAndStepConn(self.conn, b'^READY')

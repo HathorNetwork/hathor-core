@@ -168,7 +168,7 @@ class BaseTransaction(ABC):
         self.outputs = outputs or []
         self.parents = parents or []
         self.storage = storage
-        self.hash = hash  # Stored as bytes.
+        self._hash: VertexId | None = hash  # Stored as bytes.
 
     @classproperty
     def log(cls):
@@ -253,7 +253,7 @@ class BaseTransaction(ABC):
         """
         if not isinstance(other, BaseTransaction):
             return NotImplemented
-        if self.hash and other.hash:
+        if self._hash and other._hash:
             return self.hash == other.hash
         return False
 
@@ -265,7 +265,6 @@ class BaseTransaction(ABC):
         return self.get_struct()
 
     def __hash__(self) -> int:
-        assert self.hash is not None
         return hash(self.hash)
 
     @abstractmethod
@@ -277,9 +276,18 @@ class BaseTransaction(ABC):
         raise NotImplementedError
 
     @property
+    def hash(self) -> VertexId:
+        assert self._hash is not None, 'Vertex hash must be initialized.'
+        return self._hash
+
+    @hash.setter
+    def hash(self, value: VertexId) -> None:
+        self._hash = value
+
+    @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
-        if self.hash is not None:
+        if self._hash is not None:
             return self.hash.hex()
         else:
             return ''
@@ -332,7 +340,7 @@ class BaseTransaction(ABC):
 
         :rtype: bool
         """
-        if self.hash is None:
+        if self._hash is None:
             return False
         from hathor.transaction.genesis import is_genesis
         return is_genesis(self.hash, settings=self._settings)
@@ -451,7 +459,7 @@ class BaseTransaction(ABC):
         """ Check if this transaction is ready to be fully validated, either all deps are full-valid or one is invalid.
         """
         assert self.storage is not None
-        assert self.hash is not None
+        assert self._hash is not None
         if self.is_genesis:
             return True
         deps = self.get_all_dependencies()
@@ -608,7 +616,6 @@ class BaseTransaction(ABC):
         else:
             metadata = getattr(self, '_metadata', None)
         if not metadata and use_storage and self.storage:
-            assert self.hash is not None
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
@@ -617,17 +624,18 @@ class BaseTransaction(ABC):
             #        happens include generating new mining blocks and some tests
             height = self.calculate_height() if self.storage else None
             score = self.weight if self.is_genesis else 0
+            min_height = 0 if self.is_genesis else None
 
             metadata = TransactionMetadata(
-                hash=self.hash,
+                hash=self._hash,
                 accumulated_weight=self.weight,
                 height=height,
                 score=score,
-                min_height=0,
+                min_height=min_height
             )
             self._metadata = metadata
         if not metadata.hash:
-            metadata.hash = self.hash
+            metadata.hash = self._hash
         metadata._tx_ref = weakref.ref(self)
         return metadata
 
@@ -638,7 +646,7 @@ class BaseTransaction(ABC):
         from hathor.transaction.transaction_metadata import ValidationState
         assert self.storage is not None
         score = self.weight if self.is_genesis else 0
-        self._metadata = TransactionMetadata(hash=self.hash,
+        self._metadata = TransactionMetadata(hash=self._hash,
                                              score=score,
                                              accumulated_weight=self.weight)
         if self.is_genesis:
@@ -706,8 +714,9 @@ class BaseTransaction(ABC):
         """
         self._update_height_metadata()
         self._update_parents_children_metadata()
-        self._update_reward_lock_metadata()
+        self.update_reward_lock_metadata()
         self._update_feature_activation_bit_counts()
+        self._update_initial_accumulated_weight()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
@@ -717,14 +726,17 @@ class BaseTransaction(ABC):
         meta = self.get_metadata()
         meta.height = self.calculate_height()
 
-    def _update_reward_lock_metadata(self) -> None:
+    def update_reward_lock_metadata(self) -> None:
         """Update the txs/block min_height metadata."""
         metadata = self.get_metadata()
-        metadata.min_height = self.calculate_min_height()
+        min_height = self.calculate_min_height()
+        if metadata.min_height is not None:
+            assert metadata.min_height == min_height
+        metadata.min_height = min_height
 
     def _update_parents_children_metadata(self) -> None:
         """Update the txs/block parent's children metadata."""
-        assert self.hash is not None
+        assert self._hash is not None
         assert self.storage is not None
 
         for parent in self.get_parents(existing_only=True):
@@ -741,6 +753,11 @@ class BaseTransaction(ABC):
         assert isinstance(self, Block)
         # This method lazily calculates and stores the value in metadata
         self.get_feature_activation_bit_counts()
+
+    def _update_initial_accumulated_weight(self) -> None:
+        """Update the vertex initial accumulated_weight."""
+        metadata = self.get_metadata()
+        metadata.accumulated_weight = self.weight
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
@@ -792,7 +809,6 @@ class BaseTransaction(ABC):
         return data
 
     def to_json_extended(self) -> dict[str, Any]:
-        assert self.hash is not None
         assert self.storage is not None
 
         def serialize_output(tx: BaseTransaction, tx_out: TxOutput) -> dict[str, Any]:
@@ -814,6 +830,13 @@ class BaseTransaction(ABC):
             'parents': [],
         }
 
+        # A nano contract tx must be confirmed by one block at least
+        # to be considered "executed"
+        if meta.first_block is not None:
+            ret['first_block'] = meta.first_block.hex()
+        else:
+            ret['first_block'] = None
+
         for parent in self.parents:
             ret['parents'].append(parent.hex())
 
@@ -824,7 +847,6 @@ class BaseTransaction(ABC):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
             tx2_out = tx2.outputs[tx_in.index]
             output = serialize_output(tx2, tx2_out)
-            assert tx2.hash is not None
             output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index
             ret['inputs'].append(output)
@@ -837,7 +859,7 @@ class BaseTransaction(ABC):
 
         return ret
 
-    def clone(self, *, include_metadata: bool = True) -> 'BaseTransaction':
+    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> 'BaseTransaction':
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
@@ -846,7 +868,8 @@ class BaseTransaction(ABC):
         if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
-        new_tx.storage = self.storage
+        if include_storage:
+            new_tx.storage = self.storage
         return new_tx
 
     @abstractmethod

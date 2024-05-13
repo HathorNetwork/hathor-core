@@ -1,7 +1,11 @@
+from typing import Iterator
+
 from hathor.graphviz import GraphvizVisualizer
-from hathor.simulator import FakeConnection, Simulator
+from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_tx
+from hathor.transaction import Block
+from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx
@@ -10,14 +14,19 @@ from tests.utils import add_custom_tx
 class BaseSoftVoidedTestCase(SimulatorTestCase):
     seed_config = 5988775361793628170
 
-    def assertNoParentsAreSoftVoided(self, tx):
+    def assertNoParentsAreSoftVoided(self, tx: Block) -> None:
+        assert tx.storage is not None
         for h in tx.parents:
             tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
             tx2_voided_by = tx2_meta.voided_by or set()
             self.assertNotIn(self._settings.SOFT_VOIDED_ID, tx2_voided_by)
 
-    def _run_test(self, simulator, soft_voided_tx_ids):
+    def _run_test(
+        self,
+        simulator: Simulator,
+        soft_voided_tx_ids: set[VertexId]
+    ) -> Iterator[RandomTransactionGenerator]:
         manager1 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
         manager1.allow_mining_without_peers()
 
@@ -30,7 +39,6 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         simulator.run(300)
 
         manager2 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
-        manager2.soft_voided_tx_ids = soft_voided_tx_ids
 
         graphviz = GraphvizVisualizer(manager2.tx_storage, include_verifications=True, include_funds=True)
 
@@ -74,6 +82,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         metaD1 = txD1.get_metadata()
         self.assertEqual({txA.hash, txD1.hash}, metaD1.voided_by)
 
+        assert manager2.wallet is not None
         address = manager2.wallet.get_unused_address(mark_as_used=False)
         value = 1
         txC = gen_new_tx(manager2, address, value)
@@ -127,7 +136,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         # dot = graphviz.dot()
         # dot.render('dot0')
 
-    def _get_txA_hash(self):
+    def _get_txA_hash(self) -> VertexId:
         simulator = Simulator(seed=self.simulator.seed)
         simulator.start()
 
@@ -140,7 +149,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         return txA_hash
 
-    def test_soft_voided(self):
+    def test_soft_voided(self) -> None:
         txA_hash = self._get_txA_hash()
         soft_voided_tx_ids = set([
             txA_hash,

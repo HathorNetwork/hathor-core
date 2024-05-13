@@ -25,11 +25,13 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.simulator import FakeConnection
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.exceptions import BlockMustSignalError
+from hathor.util import not_none
 from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB, add_new_blocks
+from tests.utils import HAS_ROCKSDB
 
 
 class BaseFeatureSimulationTest(SimulatorTestCase):
@@ -41,7 +43,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
     def _get_result(web_client: StubSite) -> dict[str, Any]:
         """Returns the feature activation api response."""
         response = web_client.get('feature')
-        result = response.result.json_value()
+        result: dict[str, Any] = response.result.json_value()
 
         del result['block_hash']  # we don't assert the block hash because it's not always the same
 
@@ -226,6 +228,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             non_signaling_block = manager.generate_mining_block()
             manager.cpu_mining_service.resolve(non_signaling_block)
             non_signaling_block.signal_bits = 0b10
+            non_signaling_block.update_reward_lock_metadata()
 
             with pytest.raises(BlockMustSignalError):
                 manager.verification_service.verify(non_signaling_block)
@@ -615,7 +618,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             calculate_new_state_mock.reset_mock()
 
         manager1.stop()
-        artifacts1.rocksdb_storage.close()
+        not_none(artifacts1.rocksdb_storage).close()
 
         # new builder is created with the same storage from the previous manager
         builder2 = self.get_simulator_builder_from_dir(rocksdb_dir).set_settings(settings)
