@@ -16,6 +16,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import (
     BlockIsMissingSignal,
@@ -80,6 +81,7 @@ def storage() -> TransactionStorage:
         block = Block(signal_bits=bits, parents=[parent.hash], storage=storage)
         block.update_hash()
         block.get_metadata().validation = ValidationState.FULL
+        block.init_static_metadata_from_storage(get_global_settings(), storage)
         storage.save_transaction(block)
         indexes.height.add_new(height, block.hash, block.timestamp)
 

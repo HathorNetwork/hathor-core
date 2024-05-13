@@ -47,6 +47,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         self.manager.cpu_mining_service.resolve(tx)
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return tx
 
     def push_tx(self, data=None):

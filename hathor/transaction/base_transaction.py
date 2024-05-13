@@ -22,12 +22,13 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -271,14 +272,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
     def __hash__(self) -> int:
         return hash(self.hash)
-
-    @abstractmethod
-    def calculate_height(self) -> int:
-        raise NotImplementedError
-
-    @abstractmethod
-    def calculate_min_height(self) -> int:
-        raise NotImplementedError
 
     @property
     def hash(self) -> VertexId:
@@ -624,19 +617,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
-            # FIXME: there is code that set use_storage=False but relies on correct height being calculated
-            #        which requires the use of a storage, this is a workaround that should be fixed, places where this
-            #        happens include generating new mining blocks and some tests
-            height = self.calculate_height() if self.storage else None
             score = self.weight if self.is_genesis else 0
-            min_height = 0 if self.is_genesis else None
-
             metadata = TransactionMetadata(
                 hash=self._hash,
                 accumulated_weight=self.weight,
-                height=height,
                 score=score,
-                min_height=min_height
             )
             self._metadata = metadata
         if not metadata.hash:
@@ -661,8 +646,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             self._metadata.validation = ValidationState.INITIAL
             self._metadata.voided_by = {self._settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
-
-        self._update_height_metadata()
 
         self.storage.save_transaction(self, only_metadata=True)
 
@@ -717,27 +700,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         It is called when a new transaction/block is received by HathorManager.
         """
-        self._update_height_metadata()
         self._update_parents_children_metadata()
-        self.update_reward_lock_metadata()
-        self._update_feature_activation_bit_counts()
         self._update_initial_accumulated_weight()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
-
-    def _update_height_metadata(self) -> None:
-        """Update the vertice height metadata."""
-        meta = self.get_metadata()
-        meta.height = self.calculate_height()
-
-    def update_reward_lock_metadata(self) -> None:
-        """Update the txs/block min_height metadata."""
-        metadata = self.get_metadata()
-        min_height = self.calculate_min_height()
-        if metadata.min_height is not None:
-            assert metadata.min_height == min_height
-        metadata.min_height = min_height
 
     def _update_parents_children_metadata(self) -> None:
         """Update the txs/block parent's children metadata."""
@@ -749,15 +716,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             if self.hash not in metadata.children:
                 metadata.children.append(self.hash)
                 self.storage.save_transaction(parent, only_metadata=True)
-
-    def _update_feature_activation_bit_counts(self) -> None:
-        """Update the block's feature_activation_bit_counts."""
-        if not self.is_block:
-            return
-        from hathor.transaction import Block
-        assert isinstance(self, Block)
-        # This method lazily calculates and stores the value in metadata
-        cast(Block, self).get_feature_activation_bit_counts()
 
     def _update_initial_accumulated_weight(self) -> None:
         """Update the vertex initial accumulated_weight."""
@@ -901,7 +859,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         return self._static_metadata
 
     @abstractmethod
-    def init_static_metadata_from_storage(self, storage: 'TransactionStorage') -> None:
+    def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
         """Initialize this vertex's static metadata using dependencies from a storage. This can be called multiple
         times, provided the dependencies didn't change."""
         raise NotImplementedError
@@ -916,7 +874,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
 """
 Type aliases for easily working with `GenericVertex`. A `Vertex` is a superclass that includes all specific
-vertex subclasses, and a `BaseTransaction` is simply an alias to `Vertex` for backwards compatibility.
+vertex subclasses, and a `BaseTransaction` is simply an alias to `Vertex` for backwards compatibility (it can be
+removed in the future).
 """
 Vertex: TypeAlias = GenericVertex[VertexStaticMetadata]
 BaseTransaction: TypeAlias = Vertex
