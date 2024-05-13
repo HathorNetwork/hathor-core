@@ -57,8 +57,7 @@ class BasicBlockDependencies(VertexDependencies):
         daa_deps: dict[VertexId, Block] | None = None
 
         if not block.is_genesis and not skip_weight_verification:
-            daa_dep_ids = daa.get_block_dependencies(block, storage.get_parent_block)
-            daa_deps = {vertex_id: storage.get_block(vertex_id) for vertex_id in daa_dep_ids}
+            daa_deps = daa.get_block_dependencies(block, storage.get_parent_block)
 
         return cls(
             parents=parents,
@@ -103,8 +102,8 @@ class TransactionDependencies(VertexDependencies):
         parents = cls._get_parents_from_storage(tx, storage)
         spent_txs = {input_tx.tx_id: storage.get_vertex(input_tx.tx_id) for input_tx in tx.inputs}
         token_info = tx.get_complete_token_info()
-        reward_locked_info = get_spent_reward_locked_info(tx, storage)
-        best_block_height = get_minimum_best_height(storage)
+        reward_locked_info = get_spent_reward_locked_info(tx, storage.get_vertex, storage.get_best_block_tips)
+        best_block_height = get_minimum_best_height(storage.get_vertex, storage.get_best_block_tips)
 
         return cls(
             parents=parents,

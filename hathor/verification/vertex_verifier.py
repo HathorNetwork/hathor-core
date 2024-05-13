@@ -28,6 +28,7 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
+from hathor.verification.verification_dependencies import VertexDependencies
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -44,7 +45,7 @@ class VertexVerifier:
     def __init__(self, *, settings: HathorSettings) -> None:
         self._settings = settings
 
-    def verify_parents(self, vertex: BaseTransaction) -> None:
+    def verify_parents(self, vertex: BaseTransaction, vertex_deps: VertexDependencies) -> None:
         """All parents must exist and their timestamps must be smaller than ours.
 
         Also, txs should have 2 other txs as parents, while blocks should have 2 txs + 1 block.
@@ -55,10 +56,6 @@ class VertexVerifier:
         :raises ParentDoesNotExist: when at least one of our parents does not exist
         :raises IncorrectParents: when tx does not confirm the correct number/type of parent txs
         """
-        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
-        assert vertex.storage is not None
-
         # check if parents are duplicated
         parents_set = set(vertex.parents)
         if len(vertex.parents) > len(parents_set):
@@ -69,43 +66,42 @@ class VertexVerifier:
         min_timestamp: Optional[int] = None
 
         for parent_hash in vertex.parents:
-            try:
-                parent = vertex.storage.get_transaction(parent_hash)
-                if vertex.timestamp <= parent.timestamp:
-                    raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
+            parent = vertex_deps.parents.get(parent_hash)
+            if parent is None:
+                raise ParentDoesNotExist('tx={} parent={}'.format(vertex.hash_hex, parent_hash.hex()))
+            if vertex.timestamp <= parent.timestamp:
+                raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
+                    vertex.hash_hex,
+                    vertex.timestamp,
+                    parent.hash_hex,
+                    parent.timestamp,
+                ))
+
+            if parent.is_block:
+                if vertex.is_block and not parent.is_genesis:
+                    if vertex.timestamp - parent.timestamp > self._settings.MAX_DISTANCE_BETWEEN_BLOCKS:
+                        raise TimestampError('Distance between blocks is too big'
+                                             ' ({} seconds)'.format(vertex.timestamp - parent.timestamp))
+                if my_parents_txs > 0:
+                    raise IncorrectParents('Parents which are blocks must come before transactions')
+                for pi_hash in parent.parents:
+                    pi = vertex_deps.parents[parent_hash]
+                    if not pi.is_block:
+                        min_timestamp = (
+                            min(min_timestamp, pi.timestamp) if min_timestamp is not None
+                            else pi.timestamp
+                        )
+                my_parents_blocks += 1
+            else:
+                if min_timestamp and parent.timestamp < min_timestamp:
+                    raise TimestampError('tx={} timestamp={}, parent={} timestamp={}, min_timestamp={}'.format(
                         vertex.hash_hex,
                         vertex.timestamp,
                         parent.hash_hex,
                         parent.timestamp,
+                        min_timestamp
                     ))
-
-                if parent.is_block:
-                    if vertex.is_block and not parent.is_genesis:
-                        if vertex.timestamp - parent.timestamp > self._settings.MAX_DISTANCE_BETWEEN_BLOCKS:
-                            raise TimestampError('Distance between blocks is too big'
-                                                 ' ({} seconds)'.format(vertex.timestamp - parent.timestamp))
-                    if my_parents_txs > 0:
-                        raise IncorrectParents('Parents which are blocks must come before transactions')
-                    for pi_hash in parent.parents:
-                        pi = vertex.storage.get_transaction(parent_hash)
-                        if not pi.is_block:
-                            min_timestamp = (
-                                min(min_timestamp, pi.timestamp) if min_timestamp is not None
-                                else pi.timestamp
-                            )
-                    my_parents_blocks += 1
-                else:
-                    if min_timestamp and parent.timestamp < min_timestamp:
-                        raise TimestampError('tx={} timestamp={}, parent={} timestamp={}, min_timestamp={}'.format(
-                            vertex.hash_hex,
-                            vertex.timestamp,
-                            parent.hash_hex,
-                            parent.timestamp,
-                            min_timestamp
-                        ))
-                    my_parents_txs += 1
-            except TransactionDoesNotExist:
-                raise ParentDoesNotExist('tx={} parent={}'.format(vertex.hash_hex, parent_hash.hex()))
+                my_parents_txs += 1
 
         # check for correct number of parents
         if vertex.is_block:
