@@ -12,6 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import functools
+from typing import Any, Callable
+
+from twisted.internet.defer import Deferred
+from twisted.internet.task import deferLater
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
@@ -21,6 +26,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion, Vertex
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
@@ -90,11 +96,14 @@ class VerificationService:
         """
         from hathor.transaction.transaction_metadata import ValidationState
 
-        meta = vertex.get_metadata()
+        try:
+            meta = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            meta = None
         vertex.init_static_metadata_from_storage(self._settings, self._tx_storage)
 
         # skip full validation when it is a checkpoint
-        if meta.validation.is_checkpoint():
+        if meta and meta.validation.is_checkpoint():
             vertex.set_validation(ValidationState.CHECKPOINT_FULL)
             return True
 
@@ -108,7 +117,7 @@ class VerificationService:
         # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
         #      directly into trying a full validation so we should check it here to make sure the validation states
         #      ends up being CHECKPOINT_FULL instead of FULL
-        if not meta.validation.is_at_least_basic():
+        if not meta or not meta.validation.is_at_least_basic():
             # run basic validation if we haven't already
             _verify_basic_model(
                 self.verifiers,
@@ -117,8 +126,58 @@ class VerificationService:
             )
 
         _verify_model(self.verifiers, verification_model, reject_locked_reward=reject_locked_reward)
+
         validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
         vertex.set_validation(validation)
+        return True
+
+    async def validate_full_async(
+        self,
+        verification_model: VerificationModel,
+        *,
+        skip_block_weight_verification: bool = False,
+        reject_locked_reward: bool = True,
+    ) -> bool:
+        """ Run full validations (these need access to all dependencies) and update the validation state.
+
+        If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
+        """
+        from hathor.transaction.transaction_metadata import ValidationState
+        vertex = verification_model.vertex
+
+        try:
+            meta = vertex.get_metadata()
+        except TransactionDoesNotExist:
+            meta = None
+
+        # skip full validation when it is a checkpoint
+        if meta and meta.validation.is_checkpoint():
+            vertex.set_validation(ValidationState.CHECKPOINT_FULL)
+            return True
+
+        executor: Callable[..., Deferred[Any]] = functools.partial(deferLater, self._reactor, 0)
+        if self._multiprocessor:
+            executor = self._multiprocessor.run
+
+        # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
+        #      directly into trying a full validation so we should check it here to make sure the validation states
+        #      ends up being CHECKPOINT_FULL instead of FULL
+        if not meta or not meta.validation.is_at_least_basic():
+            # run basic validation if we haven't already
+            await executor(
+                _verify_basic_model,
+                self.verifiers,
+                verification_model,
+                skip_block_weight_verification=skip_block_weight_verification
+            )
+
+        await executor(
+            _verify_model,
+            self.verifiers,
+            verification_model,
+            reject_locked_reward=reject_locked_reward
+        )
+
         return True
 
     def verify_basic(self, vertex: Vertex, *, skip_block_weight_verification: bool = False) -> None:
