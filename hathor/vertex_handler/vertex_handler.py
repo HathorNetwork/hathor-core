@@ -19,7 +19,6 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
@@ -41,7 +40,6 @@ class VertexHandler:
         '_verification_service',
         '_consensus',
         '_p2p_manager',
-        '_feature_service',
         '_pubsub',
         '_wallet',
     )
@@ -55,7 +53,6 @@ class VertexHandler:
         verification_service: VerificationService,
         consensus: ConsensusAlgorithm,
         p2p_manager: ConnectionsManager,
-        feature_service: FeatureService,
         pubsub: PubSubManager,
         wallet: BaseWallet | None,
     ) -> None:
@@ -66,7 +63,6 @@ class VertexHandler:
         self._verification_service = verification_service
         self._consensus = consensus
         self._p2p_manager = p2p_manager
-        self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
 
@@ -237,7 +233,7 @@ class VertexHandler:
         if not isinstance(vertex, Block):
             return
 
-        feature_infos = self._feature_service.get_feature_infos(block=vertex)
+        feature_infos = vertex.static_metadata.get_feature_infos(self._settings)
         state_by_feature = {
             feature.value: feature_info.state.value
             for feature, feature_info in feature_infos.items()
@@ -258,7 +254,7 @@ class VertexHandler:
             return
 
         for feature in self._settings.FEATURE_ACTIVATION.features:
-            if self._feature_service.is_feature_active(block=block, feature=feature):
+            if block.static_metadata.is_feature_active(feature):
                 self._log.info(
                     'Feature is ACTIVE for block',
                     feature=feature.value,
