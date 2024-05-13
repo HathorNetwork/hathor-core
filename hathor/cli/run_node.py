@@ -55,6 +55,7 @@ class RunNode:
         ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue)),
         ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor)),
         ('--x-ipython-kernel', lambda args: bool(args.x_ipython_kernel)),
+        ('--x-async-sync-v2', lambda args: bool(args.x_async_sync_v2))
     ]
 
     @classmethod
@@ -151,6 +152,8 @@ class RunNode:
         # XXX: this is temporary, should be added as a sysctl instead before merging
         parser.add_argument('--x-ipython-kernel', action='store_true',
                             help='Launch embedded IPython kernel for remote debugging')
+        parser.add_argument('--x-async-sync-v2', action='store_true',
+                            help='Use the asynchronous version of sync-v2.')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
