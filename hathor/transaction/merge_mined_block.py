@@ -15,7 +15,7 @@
 from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.transaction.aux_pow import BitcoinAuxPow
-from hathor.transaction.base_transaction import TxOutput, TxVersion
+from hathor.transaction.base_transaction import TxOutput, TxVersion, register_vertex_pickler
 from hathor.transaction.block import Block
 from hathor.transaction.util import VerboseCallback
 
@@ -74,3 +74,6 @@ class MergeMinedBlock(Block):
         del json['nonce']
         json['aux_pow'] = bytes(self.aux_pow).hex() if self.aux_pow else None
         return json
+
+
+register_vertex_pickler(MergeMinedBlock)

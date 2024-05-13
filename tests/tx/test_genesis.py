@@ -3,7 +3,7 @@ from unittest.mock import Mock
 from hathor.conf import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.verification.verification_service import VerificationService
+from hathor.verification.verification_service import verify_without_storage
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from tests import unittest
@@ -32,8 +32,7 @@ class GenesisTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self._daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
-        verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa)
-        self._verification_service = VerificationService(verifiers=verifiers, settings=self._settings, daa=self._daa)
+        self._verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa)
         self.storage = TransactionMemoryStorage()
 
     def test_pow(self):
@@ -46,7 +45,7 @@ class GenesisTest(unittest.TestCase):
     def test_verify(self):
         genesis = self.storage.get_all_genesis()
         for g in genesis:
-            self._verification_service.verify_without_storage(g)
+            verify_without_storage(self._verifiers, g)
 
     def test_output(self):
         # Test if block output is valid

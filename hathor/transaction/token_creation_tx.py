@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 from typing_extensions import override
 
-from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
+from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion, register_vertex_pickler
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -233,3 +233,6 @@ def decode_string_utf8(encoded: bytes, key: str) -> str:
         return decoded
     except UnicodeDecodeError:
         raise StructError('{} must be a valid utf-8 string.'.format(key))
+
+
+register_vertex_pickler(TokenCreationTransaction)
