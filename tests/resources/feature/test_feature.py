@@ -16,10 +16,11 @@ from unittest.mock import Mock
 
 import pytest
 
+from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.model.feature_description import FeatureDescription
+from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
@@ -63,22 +64,24 @@ def web() -> StubSite:
 
     feature_service = Mock(spec_set=FeatureService)
     feature_service.get_state = Mock(side_effect=get_state)
-    feature_service.get_bits_description = Mock(return_value={
-        Feature.NOP_FEATURE_1: FeatureDescription(state=FeatureState.DEFINED, criteria=nop_feature_1_criteria),
-        Feature.NOP_FEATURE_2: FeatureDescription(state=FeatureState.LOCKED_IN, criteria=nop_feature_2_criteria),
+    feature_service.get_feature_infos = Mock(return_value={
+        Feature.NOP_FEATURE_1: FeatureInfo(state=FeatureState.DEFINED, criteria=nop_feature_1_criteria),
+        Feature.NOP_FEATURE_2: FeatureInfo(state=FeatureState.LOCKED_IN, criteria=nop_feature_2_criteria),
     })
 
-    feature_settings = FeatureSettings(
-        evaluation_interval=4,
-        default_threshold=3,
-        features={
-            Feature.NOP_FEATURE_1: nop_feature_1_criteria,
-            Feature.NOP_FEATURE_2: nop_feature_2_criteria
-        }
+    settings = get_global_settings()._replace(
+        FEATURE_ACTIVATION=FeatureSettings(
+            evaluation_interval=4,
+            default_threshold=3,
+            features={
+                Feature.NOP_FEATURE_1: nop_feature_1_criteria,
+                Feature.NOP_FEATURE_2: nop_feature_2_criteria
+            }
+        )
     )
 
     feature_resource = FeatureResource(
-        feature_settings=feature_settings,
+        settings=settings,
         feature_service=feature_service,
         tx_storage=tx_storage
     )
@@ -95,7 +98,7 @@ def test_get_features(web: StubSite) -> None:
         features=[
             dict(
                 name='NOP_FEATURE_1',
-                state='ACTIVE',
+                state='DEFINED',
                 acceptance=None,
                 threshold=0.75,
                 start_height=0,
@@ -106,8 +109,8 @@ def test_get_features(web: StubSite) -> None:
             ),
             dict(
                 name='NOP_FEATURE_2',
-                state='STARTED',
-                acceptance=0.25,
+                state='LOCKED_IN',
+                acceptance=None,
                 threshold=0.5,
                 start_height=200,
                 minimum_activation_height=0,

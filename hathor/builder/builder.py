@@ -435,6 +435,7 @@ class Builder:
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
         indexes = self._get_or_create_indexes_manager()
+        settings = self._get_or_create_settings()
 
         if self._tx_storage is not None:
             # If a tx storage is provided, set the indexes manager to it.
@@ -446,11 +447,11 @@ class Builder:
             store_indexes = None
 
         if self._storage_type == StorageType.MEMORY:
-            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes)
+            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes, settings=settings)
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes)
+            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes, settings=settings)
 
         else:
             raise NotImplementedError
@@ -460,7 +461,13 @@ class Builder:
             kwargs: dict[str, Any] = {}
             if self._tx_storage_cache_capacity is not None:
                 kwargs['capacity'] = self._tx_storage_cache_capacity
-            self._tx_storage = TransactionCacheStorage(self._tx_storage, reactor, indexes=indexes, **kwargs)
+            self._tx_storage = TransactionCacheStorage(
+                self._tx_storage,
+                reactor,
+                indexes=indexes,
+                settings=settings,
+                **kwargs
+            )
 
         return self._tx_storage
 
@@ -504,10 +511,7 @@ class Builder:
         if self._feature_service is None:
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
-            self._feature_service = FeatureService(
-                feature_settings=settings.FEATURE_ACTIVATION,
-                tx_storage=tx_storage
-            )
+            self._feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
         return self._feature_service
 
@@ -518,7 +522,7 @@ class Builder:
             feature_service = self._get_or_create_feature_service()
             feature_storage = self._get_or_create_feature_storage()
             self._bit_signaling_service = BitSignalingService(
-                feature_settings=settings.FEATURE_ACTIVATION,
+                settings=settings,
                 feature_service=feature_service,
                 tx_storage=tx_storage,
                 support_features=self._support_features,

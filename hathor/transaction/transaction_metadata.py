@@ -208,9 +208,10 @@ class TransactionMetadata:
         data['min_height'] = self.min_height
 
         from hathor.transaction import Block
-        if isinstance(self.get_tx(), Block):
+        vertex = self.get_tx()
+        if isinstance(vertex, Block):
             data['height'] = self.height
-            data['feature_activation_bit_counts'] = self.feature_activation_bit_counts
+            data['feature_activation_bit_counts'] = vertex.static_metadata.feature_activation_bit_counts
 
         if self.feature_states is not None:
             data['feature_states'] = {feature.value: state.value for feature, state in self.feature_states.items()}
@@ -329,13 +330,3 @@ class TransactionMetadata:
         backwards compatibility. It can be removed in the future.
         """
         return self.get_tx().static_metadata.min_height
-
-    @property
-    def feature_activation_bit_counts(self) -> list[int]:
-        """
-        Get the block's `feature_activation_bit_counts`. This property is just a forward from the block's
-        `static_metadata`, for backwards compatibility. It can be removed in the future.
-        """
-        static_metadata = self.get_tx().static_metadata
-        assert isinstance(static_metadata, BlockStaticMetadata)
-        return static_metadata.feature_activation_bit_counts
