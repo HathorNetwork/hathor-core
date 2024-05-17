@@ -7,7 +7,7 @@ import pytest
 
 from hathor.conf import HathorSettings
 from hathor.manager import HathorManager
-from hathor.nanocontracts import Blueprint, Context, NanoContract, public
+from hathor.nanocontracts import Blueprint, Context, NanoContract, NCFail, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
@@ -32,6 +32,10 @@ class MyBlueprint(Blueprint):
     def nop(self, ctx: Context) -> None:
         # Accepts all deposits and withdrawals.
         self.counter += 1
+
+    @public
+    def fail(self, ctx: Context) -> None:
+        raise NCFail('fail')
 
 
 class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
@@ -118,6 +122,82 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
 
         token_info1 = self.manager.tx_storage.indexes.tokens.get_token_info(self._settings.HATHOR_TOKEN_UID)
         self.assertEqual(token_info0.get_total() + 64_00 * new_blocks, token_info1.get_total())
+
+    def test_remove_voided_nano_tx_from_parents_1(self):
+        vertices = self._run_test_remove_voided_nano_tx_from_parents('tx3 < b35')
+        v = [node.name for node, _ in vertices.list]
+        self.assertTrue(v.index('tx3') < v.index('b35'))
+
+    def test_remove_voided_nano_tx_from_parents_2(self):
+        vertices = self._run_test_remove_voided_nano_tx_from_parents('b35 < tx3')
+        v = [node.name for node, _ in vertices.list]
+        self.assertTrue(v.index('b35') < v.index('tx3'))
+
+    def _run_test_remove_voided_nano_tx_from_parents(self, order: str):
+        builder = self.get_dag_builder(self.manager)
+        vertices = builder.build_from_str(f'''
+            blockchain genesis b[0..40]
+            b0.weight = 50
+
+            b30 < dummy
+
+            tx1.nc_id = "{self.myblueprint_id.hex()}"
+            tx1.nc_method = initialize()
+            tx1.nc_deposit = 10 HTR
+            tx1.out[0] <<< tx2
+
+            tx2.nc_id = tx1
+            tx2.nc_method = fail()
+            tx2.out[0] <<< tx3
+
+            tx3.nc_id = tx1
+            tx3.nc_method = nop()
+
+            tx1 <-- tx2 <-- b35
+
+            {order}
+        ''')
+
+        for node, vertex in vertices.list:
+            print()
+            print(node.name)
+            print()
+            self.manager.on_new_tx(vertex, fails_silently=False)
+
+        tx1 = vertices.by_name['tx1'].vertex
+        tx2 = vertices.by_name['tx2'].vertex
+        tx3 = vertices.by_name['tx3'].vertex
+        b35 = vertices.by_name['b35'].vertex
+
+        meta1 = tx1.get_metadata()
+        meta2 = tx2.get_metadata()
+        meta3 = tx3.get_metadata()
+
+        # confirm that b35 belongs to the best blockchain
+        self.assertIsNone(b35.get_metadata().voided_by)
+
+        # only tx1 and tx2 should be confirmed
+        self.assertEqual(meta1.first_block, b35.hash)
+        self.assertEqual(meta2.first_block, b35.hash)
+        self.assertIsNone(meta3.first_block)
+
+        # tx1 succeeded; tx2 failed so tx3 must be voided
+        self.assertIsNone(meta1.voided_by)
+        self.assertEqual(meta2.voided_by, {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(meta3.voided_by, {tx2.hash})
+
+        # check we are not using tx3 as parents for transactions
+        parent_txs = self.manager.generate_parent_txs(timestamp=None)
+        self.assertNotIn(tx3.hash, parent_txs.can_include)
+        self.assertNotIn(tx3.hash, parent_txs.must_include)
+
+        # check we are not using tx3 as parents for blocks
+        block_templates = self.manager.make_block_templates()
+        for template in block_templates:
+            self.assertNotIn(tx3.hash, template.parents)
+            self.assertNotIn(tx3.hash, template.parents_any)
+
+        return vertices
 
 
 class MemoryIndexesTestCase(BaseIndexesTestCase):
