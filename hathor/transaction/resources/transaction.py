@@ -86,7 +86,6 @@ def get_tx_extra_data(tx: BaseTransaction, *, detail_tokens: bool = True) -> dic
             tx2 = tx.storage.get_transaction(tx_in.tx_id)
             tx2_out = tx2.outputs[tx_in.index]
             output = tx2_out.to_json(decode_script=True)
-            assert tx2.hash is not None
             output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index
 
@@ -466,6 +465,7 @@ TransactionResource.openapi = {
                                                 ],
                                                 'tokens': [],
                                                 'height': 12345,
+                                                'first_block': None
                                             },
                                             {
                                                 'tx_id': ('00000b8792cb13e8adb51cc7d866541f'
@@ -497,7 +497,9 @@ TransactionResource.openapi = {
                                                         'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
                                                     }
                                                 ],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'first_block': ('000005af290a55b079014a0be3246479'
+                                                                'e84eeb635f02010dbf3e5f3414a85bbb')
                                             }
                                         ],
                                         'has_more': True

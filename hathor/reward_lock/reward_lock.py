@@ -42,16 +42,16 @@ def get_spent_reward_locked_info(tx: 'Transaction', storage: 'VertexStorageProto
     """Check if any input block reward is locked, returning the locked information if any, or None if they are all
     unlocked."""
     from hathor.transaction.transaction import RewardLockedInfo
+    best_height = get_minimum_best_height(storage)
     for blk in iter_spent_rewards(tx, storage):
-        assert blk.hash is not None
-        needed_height = _spent_reward_needed_height(blk, storage)
+        needed_height = _spent_reward_needed_height(blk, best_height)
         if needed_height > 0:
             return RewardLockedInfo(blk.hash, needed_height)
     return None
 
 
-def _spent_reward_needed_height(block: Block, storage: 'VertexStorageProtocol') -> int:
-    """ Returns height still needed to unlock this `block` reward: 0 means it's unlocked."""
+def get_minimum_best_height(storage: 'VertexStorageProtocol') -> int:
+    """Return the height of the current best block that shall be used for `min_height` verification."""
     import math
 
     # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow
@@ -62,6 +62,11 @@ def _spent_reward_needed_height(block: Block, storage: 'VertexStorageProtocol') 
         blk = storage.get_block(tip)
         best_height = min(best_height, blk.get_height())
     assert isinstance(best_height, int)
+    return best_height
+
+
+def _spent_reward_needed_height(block: Block, best_height: int) -> int:
+    """ Returns height still needed to unlock this `block` reward: 0 means it's unlocked."""
     spent_height = block.get_height()
     spend_blocks = best_height - spent_height
     settings = get_global_settings()

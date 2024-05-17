@@ -12,14 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Callable, Iterator, NamedTuple, Optional
+from typing import Any, Callable, Iterator, NamedTuple, Optional, ParamSpec, TypeVar
 
 from pydantic import validate_arguments
+from structlog import get_logger
 
 from hathor.sysctl.exception import SysctlEntryNotFound, SysctlReadOnlyEntry, SysctlWriteOnlyEntry
 
 Getter = Callable[[], Any]
 Setter = Callable[..., None]
+P = ParamSpec('P')
+T = TypeVar('T')
+
+logger = get_logger()
+
+
+def signal_handler_safe(f: Callable[P, T]) -> Callable[P, T]:
+    """Decorator to mark methods as signal handler safe.
+
+    It should only be used if that method can be executed during a signal handling.
+    Notice that a signal handling can pause the code execution at any point and the execution will resume after."""
+    f._signal_handler_safe = True  # type: ignore[attr-defined]
+    return f
 
 
 class SysctlCommand(NamedTuple):
@@ -33,6 +47,7 @@ class Sysctl:
     def __init__(self) -> None:
         self._children: dict[str, 'Sysctl'] = {}
         self._commands: dict[str, SysctlCommand] = {}
+        self.log = logger.new()
 
     def put_child(self, path: str, sysctl: 'Sysctl') -> None:
         """Add a child to the tree."""
@@ -60,14 +75,14 @@ class Sysctl:
             return child.get_command(tail)
         raise SysctlEntryNotFound(path)
 
-    def _get_getter(self, path: str) -> Getter:
+    def get_getter(self, path: str) -> Getter:
         """Return the getter method of a path."""
         cmd = self.get_command(path)
         if cmd.getter is None:
             raise SysctlWriteOnlyEntry(path)
         return cmd.getter
 
-    def _get_setter(self, path: str) -> Setter:
+    def get_setter(self, path: str) -> Setter:
         """Return the setter method of a path."""
         cmd = self.get_command(path)
         if cmd.setter is None:
@@ -76,12 +91,13 @@ class Sysctl:
 
     def get(self, path: str) -> Any:
         """Run a get in sysctl."""
-        getter = self._get_getter(path)
+        getter = self.get_getter(path)
         return getter()
 
-    def set(self, path: str, value: Any) -> None:
-        """Run a set in sysctl."""
-        setter = self._get_setter(path)
+    def unsafe_set(self, path: str, value: Any) -> None:
+        """Run a set in sysctl. You should use a runner instead of calling this method directly.
+        Should not be called unless you know it's safe."""
+        setter = self.get_setter(path)
         if isinstance(value, tuple):
             setter(*value)
         else:

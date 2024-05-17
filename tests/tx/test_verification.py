@@ -43,7 +43,7 @@ class BaseVerificationTest(unittest.TestCase):
         self.verifiers = self.manager.verification_service.verifiers
 
     def _get_valid_block(self) -> Block:
-        return Block(
+        block = Block(
             hash=b'some_hash',
             storage=self.manager.tx_storage,
             weight=1,
@@ -54,9 +54,11 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH
             ]
         )
+        block.update_reward_lock_metadata()
+        return block
 
     def _get_valid_merge_mined_block(self) -> MergeMinedBlock:
-        return MergeMinedBlock(
+        block = MergeMinedBlock(
             hash=b'some_hash',
             storage=self.manager.tx_storage,
             weight=1,
@@ -68,6 +70,8 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH
             ],
         )
+        block.update_reward_lock_metadata()
+        return block
 
     def _get_valid_tx(self) -> Transaction:
         genesis_private_key = get_genesis_key()
@@ -91,6 +95,7 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH,
             ]
         )
+        tx.update_reward_lock_metadata()
 
         data_to_sign = tx.get_sighash_all()
         assert self.manager.wallet
@@ -102,7 +107,9 @@ class BaseVerificationTest(unittest.TestCase):
     def _get_valid_token_creation_tx(self) -> TokenCreationTransaction:
         add_blocks_unlock_reward(self.manager)
         assert self.manager.wallet
-        return create_tokens(self.manager, self.manager.wallet.get_unused_address())
+        tx = create_tokens(self.manager, self.manager.wallet.get_unused_address())
+        tx.update_reward_lock_metadata()
+        return tx
 
     def test_block_verify_basic(self) -> None:
         block = self._get_valid_block()
@@ -340,7 +347,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped.assert_called_once()
 
         # MergeMinedBlock methods
-        verify_pow_wrapped.assert_called_once()
+        verify_aux_pow_wrapped.assert_called_once()
 
     def test_merge_mined_block_verify(self) -> None:
         block = self._get_valid_merge_mined_block()
@@ -389,7 +396,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_mandatory_signaling_wrapped.assert_called_once()
 
         # MergeMinedBlock methods
-        verify_pow_wrapped.assert_called_once()
+        verify_aux_pow_wrapped.assert_called_once()
 
     def test_merge_mined_block_validate_basic(self) -> None:
         block = self._get_valid_merge_mined_block()
@@ -484,7 +491,7 @@ class BaseVerificationTest(unittest.TestCase):
         verify_mandatory_signaling_wrapped.assert_called_once()
 
         # MergeMinedBlock methods
-        verify_pow_wrapped.assert_called_once()
+        verify_aux_pow_wrapped.assert_called_once()
 
     def test_transaction_verify_basic(self) -> None:
         tx = self._get_valid_tx()

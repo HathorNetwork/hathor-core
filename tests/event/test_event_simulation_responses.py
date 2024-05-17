@@ -282,7 +282,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         # get response
         response = self._get_error_response()
 
-        assert response.type == InvalidRequestType.ACK_TOO_SMALL.value
+        assert str(response.type) == InvalidRequestType.ACK_TOO_SMALL.value
 
     def test_multiple_interactions(self) -> None:
         miner = self.simulator.create_miner(self.manager, hashpower=1e6)
@@ -333,7 +333,8 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         # get response
         response = self._get_error_response()
 
-        assert response.type == InvalidRequestType.ACK_TOO_SMALL.value  # ACK too small because we've already sent it
+        # ACK too small because we've already sent it
+        assert str(response.type) == InvalidRequestType.ACK_TOO_SMALL.value
 
         # new ack
         ack = AckRequest(type='ACK', window_size=4, ack_event_id=5)

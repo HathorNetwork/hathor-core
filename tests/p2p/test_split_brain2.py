@@ -10,7 +10,7 @@ class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
     __test__ = False
 
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_split_brain(self):
+    def test_split_brain(self) -> None:
         debug_pdf = False
 
         manager1 = self.create_peer()

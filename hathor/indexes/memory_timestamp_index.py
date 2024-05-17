@@ -47,7 +47,6 @@ class MemoryTimestampIndex(TimestampIndex):
         self._index = SortedKeyList(key=lambda x: (x.timestamp, x.hash))
 
     def add_tx(self, tx: BaseTransaction) -> bool:
-        assert tx.hash is not None
         # It is safe to use the in operator because it is O(log(n)).
         # http://www.grantjenks.com/docs/sortedcontainers/sortedlist.html#sortedcontainers.SortedList.__contains__
         element = TransactionIndexElement(tx.timestamp, tx.hash)

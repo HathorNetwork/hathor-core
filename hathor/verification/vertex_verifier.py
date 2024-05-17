@@ -15,7 +15,6 @@
 from typing import Optional
 
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.transaction import BaseTransaction
 from hathor.transaction.exceptions import (
     DuplicatedParents,
@@ -40,11 +39,10 @@ _BLOCK_PARENTS_BLOCKS = 1
 
 
 class VertexVerifier:
-    __slots__ = ('_settings', '_daa')
+    __slots__ = ('_settings',)
 
-    def __init__(self, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm):
+    def __init__(self, *, settings: HathorSettings) -> None:
         self._settings = settings
-        self._daa = daa
 
     def verify_parents(self, vertex: BaseTransaction) -> None:
         """All parents must exist and their timestamps must be smaller than ours.
@@ -73,7 +71,6 @@ class VertexVerifier:
         for parent_hash in vertex.parents:
             try:
                 parent = vertex.storage.get_transaction(parent_hash)
-                assert parent.hash is not None
                 if vertex.timestamp <= parent.timestamp:
                     raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
                         vertex.hash_hex,
@@ -129,7 +126,6 @@ class VertexVerifier:
 
         :raises PowError: when the hash is equal or greater than the target
         """
-        assert vertex.hash is not None
         numeric_hash = int(vertex.hash_hex, vertex.HEX_BASE)
         minimum_target = vertex.get_target(override_weight)
         if numeric_hash >= minimum_target:
@@ -160,7 +156,7 @@ class VertexVerifier:
                 ))
 
     def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:
-        """Verify number of outputs does not exceeds the limit"""
+        """Verify number of outputs does not exceed the limit"""
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 

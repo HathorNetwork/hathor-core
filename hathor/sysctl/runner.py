@@ -28,7 +28,7 @@ class SysctlRunner:
     def __init__(self, root: 'Sysctl') -> None:
         self.root = root
 
-    def run(self, line: str) -> bytes:
+    def run(self, line: str, *, require_signal_handler_safe: bool = False) -> bytes:
         """Receives a string line, parses, interprets, acts over the Sysctl,
         and returns an UTF-8 encoding data as feedback.
         """
@@ -37,23 +37,32 @@ class SysctlRunner:
 
         head, separator, tail = self.get_line_parts(line)
         if separator == '=':
-            return self._set(head, tail)
+            return self._set(head, tail, require_signal_handler_safe=require_signal_handler_safe)
         else:
             return self._get(head)
 
-    def _set(self, path: str, value_str: str) -> bytes:
+    def _set(self, path: str, value_str: str, *, require_signal_handler_safe: bool) -> bytes:
         """Run a `set` command in sysctl, and return and empty feedback."""
         try:
             value = self.deserialize(value_str)
         except json.JSONDecodeError:
             raise SysctlRunnerException('value: wrong format')
 
-        self.root.set(path, value)
+        setter = self.root.get_setter(path)
+        if require_signal_handler_safe:
+            if not hasattr(setter, '_signal_handler_safe'):
+                raise SysctlRunnerException('setter: not safe for signal handling')
+
+        if isinstance(value, tuple):
+            setter(*value)
+        else:
+            setter(value)
         return b''
 
     def _get(self, path: str) -> bytes:
         """Run a `get` command in sysctl."""
-        value = self.root.get(path)
+        getter = self.root.get_getter(path)
+        value = getter()
         return self.serialize(value).encode('utf-8')
 
     def get_line_parts(self, line: str) -> tuple[str, ...]:

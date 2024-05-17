@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Optional, Union
 
 from structlog import get_logger
 from twisted.internet import endpoints
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IProtocolFactory, IStreamClientEndpoint, IStreamServerEndpoint
+from twisted.internet.interfaces import IListeningPort, IProtocolFactory, IStreamClientEndpoint
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
@@ -108,8 +109,11 @@ class ConnectionsManager:
 
         self.network = network
 
-        # List of addresses to listen for new connections (eg: [tcp:8000])
-        self.listen_addresses: list[str] = []
+        # List of address descriptions to listen for new connections (eg: [tcp:8000])
+        self.listen_address_descriptions: list[str] = []
+
+        # List of actual IP address instances to listen for new connections
+        self._listen_addresses: list[IPv4Address | IPv6Address] = []
 
         # List of peer discovery methods.
         self.peer_discoveries: list[PeerDiscovery] = []
@@ -239,9 +243,9 @@ class ConnectionsManager:
             self.log.debug('enable sync-v2 indexes')
             indexes.enable_mempool_index()
 
-    def add_listen_address(self, addr: str) -> None:
+    def add_listen_address_description(self, addr: str) -> None:
         """Add address to listen for incoming connections."""
-        self.listen_addresses.append(addr)
+        self.listen_address_descriptions.append(addr)
 
     def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
         """Add a peer discovery method."""
@@ -279,7 +283,7 @@ class ConnectionsManager:
         if self._settings.ENABLE_PEER_WHITELIST:
             self._start_whitelist_reconnect()
 
-        for description in self.listen_addresses:
+        for description in self.listen_address_descriptions:
             self.listen(description)
 
         self.do_discovery()
@@ -635,7 +639,7 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def listen(self, description: str, use_ssl: Optional[bool] = None) -> IStreamServerEndpoint:
+    def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         """ Start to listen for new connection according to the description.
 
         If `ssl` is True, then the connection will be wraped by a TLS.
@@ -661,20 +665,43 @@ class ConnectionsManager:
 
         factory = NetfilterFactory(self, factory)
 
-        self.log.info('listen on', endpoint=description)
-        endpoint.listen(factory)
+        self.log.info('trying to listen on', endpoint=description)
+        deferred: Deferred[IListeningPort] = endpoint.listen(factory)
+        deferred.addCallback(self._on_listen_success, description)
 
-        # XXX: endpoint: IStreamServerEndpoint does not intrinsically have a port, but in practice all concrete cases
-        #      that we have will have a _port attribute
-        port = getattr(endpoint, '_port', None)
+    def _on_listen_success(self, listening_port: IListeningPort, description: str) -> None:
+        """Callback to be called when listening to an endpoint succeeds."""
+        self.log.info('success listening on', endpoint=description)
+        address = listening_port.getHost()
+
+        if not isinstance(address, (IPv4Address, IPv6Address)):
+            self.log.error(f'unhandled address type for endpoint "{description}": {str(type(address))}')
+            return
+
+        self._listen_addresses.append(address)
+
         assert self.manager is not None
-        if self.manager.hostname and port is not None:
-            proto, _, _ = description.partition(':')
-            address = '{}://{}:{}'.format(proto, self.manager.hostname, port)
-            assert self.manager.my_peer is not None
-            self.manager.my_peer.entrypoints.append(address)
+        if self.manager.hostname:
+            self._add_hostname_entrypoint(self.manager.hostname, address)
 
-        return endpoint
+    def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:
+        """Add new hostname entrypoints according to the listen addresses, and remove any old entrypoint."""
+        assert self.manager is not None
+        for address in self._listen_addresses:
+            if old_hostname is not None:
+                old_address_str = self._get_hostname_address_str(old_hostname, address)
+                if old_address_str in self.my_peer.entrypoints:
+                    self.my_peer.entrypoints.remove(old_address_str)
+
+            self._add_hostname_entrypoint(new_hostname, address)
+
+    def _add_hostname_entrypoint(self, hostname: str, address: IPv4Address | IPv6Address) -> None:
+        hostname_address_str = self._get_hostname_address_str(hostname, address)
+        self.my_peer.entrypoints.append(hostname_address_str)
+
+    @staticmethod
+    def _get_hostname_address_str(hostname: str, address: IPv4Address | IPv6Address) -> str:
+        return '{}://{}:{}'.format(address.type, hostname, address.port).lower()
 
     def get_connection_to_drop(self, protocol: HathorProtocol) -> HathorProtocol:
         """ When there are duplicate connections, determine which one should be dropped.
@@ -796,3 +823,9 @@ class ConnectionsManager:
 
         for peer_id in info.to_enable:
             self.connected_peers[peer_id].enable_sync()
+
+    def reload_entrypoints_and_connections(self) -> None:
+        """Kill all connections and reload entrypoints from the original peer config file."""
+        self.log.warn('Killing all connections and resetting entrypoints...')
+        self.disconnect_all_peers(force=True)
+        self.my_peer.reload_entrypoints_from_source_file()

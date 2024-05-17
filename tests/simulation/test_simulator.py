@@ -1,21 +1,22 @@
 import pytest
 
+from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
-from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced
+from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced, Trigger
 from hathor.verification.vertex_verifier import VertexVerifier
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
 
 class BaseRandomSimulatorTestCase(SimulatorTestCase):
-    def test_verify_pow(self):
+    def test_verify_pow(self) -> None:
         manager1 = self.create_peer()
         # just get one of the genesis, we don't really need to create any transaction
         tx = next(iter(manager1.tx_storage.get_all_genesis()))
         # optional argument must be valid, it just has to not raise any exception, there's no assert for that
-        VertexVerifier(settings=self._settings, daa=manager1.daa).verify_pow(tx, override_weight=0.)
+        VertexVerifier(settings=self._settings).verify_pow(tx, override_weight=0.)
 
-    def test_one_node(self):
+    def test_one_node(self) -> None:
         manager1 = self.create_peer()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=100e6)
@@ -29,7 +30,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # FIXME: the setup above produces 0 new blocks and transactions
         # self.assertGreater(manager1.tx_storage.get_vertices_count(), 3)
 
-    def test_two_nodes(self):
+    def test_two_nodes(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
 
@@ -63,10 +64,10 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(conn12.is_connected)
         self.assertTipsEqual(manager1, manager2)
 
-    def test_many_miners_since_beginning(self):
-        nodes = []
+    def test_many_miners_since_beginning(self) -> None:
+        nodes: list[HathorManager] = []
         miners = []
-        stop_triggers = []
+        stop_triggers: list[Trigger] = []
 
         for hashpower in [10e6, 5e6, 1e6, 1e6, 1e6]:
             manager = self.create_peer()
@@ -96,11 +97,11 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             self.assertTipsEqual(nodes[0], node)
 
     @pytest.mark.flaky(max_runs=5, min_passes=1)
-    def test_new_syncing_peer(self):
+    def test_new_syncing_peer(self) -> None:
         nodes = []
         miners = []
         tx_generators = []
-        stop_triggers = []
+        stop_triggers: list[Trigger] = []
 
         manager = self.create_peer()
         nodes.append(manager)
@@ -162,7 +163,7 @@ class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTe
 class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
     __test__ = True
 
-    def test_compare_mempool_implementations(self):
+    def test_compare_mempool_implementations(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()
 
@@ -170,7 +171,7 @@ class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomS
         tx_storage = manager1.tx_storage
         assert tx_storage.indexes is not None
         assert tx_storage.indexes.mempool_tips is not None
-        assert manager1.tx_storage.indexes.tx_tips is not None
+        assert manager1.tx_storage.indexes and manager1.tx_storage.indexes.tx_tips is not None
         mempool_tips = tx_storage.indexes.mempool_tips
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)

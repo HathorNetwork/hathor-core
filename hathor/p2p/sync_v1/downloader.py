@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
+from twisted.python.failure import Failure
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -238,15 +239,14 @@ class Downloader:
         """
         self.retry(tx_id)
 
-    def on_error(self, result: Any) -> None:
+    def on_error(self, failure: Failure) -> None:
         """ Errback for downloading deferred.
         """
-        self.log.error('failed to download tx', err=result)
+        self.log.error('failed to download tx', err=failure, traceback=failure.getTraceback())
 
     def on_new_tx(self, tx: 'BaseTransaction') -> None:
         """ This is called when a new transaction arrives.
         """
-        assert tx.hash is not None
         self.log.debug('new tx/block', tx=tx.hash_hex)
 
         details = self.pending_transactions.get(tx.hash, None)

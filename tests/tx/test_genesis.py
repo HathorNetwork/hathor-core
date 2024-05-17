@@ -37,7 +37,7 @@ class GenesisTest(unittest.TestCase):
         self.storage = TransactionMemoryStorage()
 
     def test_pow(self):
-        verifier = VertexVerifier(settings=self._settings, daa=self._daa)
+        verifier = VertexVerifier(settings=self._settings)
         genesis = self.storage.get_all_genesis()
         for g in genesis:
             self.assertEqual(g.calculate_hash(), g.hash)
@@ -74,9 +74,9 @@ class GenesisTest(unittest.TestCase):
         # Validate the block and tx weight
         # in test mode weight is always 1
         self._daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
-        self.assertEqual(self._daa.calculate_block_difficulty(genesis_block), 1)
+        self.assertEqual(self._daa.calculate_block_difficulty(genesis_block, Mock()), 1)
         self.assertEqual(self._daa.minimum_tx_weight(genesis_tx), 1)
 
         self._daa.TEST_MODE = TestMode.DISABLED
-        self.assertEqual(self._daa.calculate_block_difficulty(genesis_block), genesis_block.weight)
+        self.assertEqual(self._daa.calculate_block_difficulty(genesis_block, Mock()), genesis_block.weight)
         self.assertEqual(self._daa.minimum_tx_weight(genesis_tx), genesis_tx.weight)

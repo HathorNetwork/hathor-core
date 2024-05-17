@@ -1,13 +1,14 @@
+import asyncio
 from unittest.mock import ANY
 
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.healthcheck.resources.healthcheck import HealthcheckResource
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
+from hathor.simulator.utils import add_new_blocks
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks
 
 
 class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
@@ -38,6 +39,56 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
                 }]
             }
         })
+
+    def test_with_running_asyncio_loop(self):
+        """Test with a running asyncio loop.
+
+           This is a simulation of how this endpoint should behave in production when the
+           --x-asyncio-reactor is provided to hathor-core, because this causes the reactor to run
+           an asyncio loop.
+        """
+        # This deferred will be used solely to make sure the test doesn't finish before the async code
+        done = Deferred()
+
+        def set_done(_):
+            done.callback(None)
+
+        def set_done_fail(failure):
+            done.errback(failure)
+
+        # This will be called from inside the async method to perform the web request
+        # while a running asyncio loop is present
+        @inlineCallbacks
+        def get_health():
+            response = yield self.web.get('/health')
+            return response.json_value()
+
+        async def run():
+            data = get_health()
+            # When the request is done, we make sure the response is as expected
+            data.addCallback(self.assertEqual, {
+                'status': 'fail',
+                'description': ANY,
+                'checks': {
+                    'sync': [{
+                        'componentType': 'internal',
+                        'componentName': 'sync',
+                        'status': 'fail',
+                        'output': HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY,
+                        'time': ANY
+                    }]
+                }
+            })
+            # We succeed the "done" deferred if everything is ok
+            data.addCallback(set_done)
+            # We fail the "done" deferred if something goes wrong. This includes the assertion above failing.
+            data.addErrback(set_done_fail)
+
+        # This will make sure we have a running asyncio loop
+        asyncio.get_event_loop().run_until_complete(run())
+
+        # Return the deferred so the test doesn't finish before the async code
+        return done
 
     @inlineCallbacks
     def test_strict_status_code(self):

@@ -338,7 +338,6 @@ class MiningChannelStub(IMiningChannel):
 
     async def submit(self, block: Block) -> Optional[BlockTemplate]:
         if await self.submit(block):
-            assert block.hash is not None
             return self.manager.make_block_template(block.hash)
         else:
             return None
@@ -397,7 +396,6 @@ def create_tx_from_dict(data: dict[str, Any], update_hash: bool = False,
     tx = cls(**data)
     if update_hash:
         tx.update_hash()
-        assert tx.hash is not None
     if hash_bytes:
         assert tx.hash == hash_bytes, f'Hashes differ: {tx.hash!r} != {hash_bytes!r}'
     if metadata:

@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import NonNegativeInt, validator
 
-from hathor.event.model.event_data import EventData
+from hathor.event.model.event_data import BaseEventData, EventData
 from hathor.event.model.event_type import EventType
 from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
@@ -58,7 +58,7 @@ class BaseEvent(BaseModel, use_enum_values=True):
         )
 
     @validator('data')
-    def data_type_must_match_event_type(cls, v, values):
+    def data_type_must_match_event_type(cls, v: BaseEventData, values: dict[str, Any]) -> BaseEventData:
         event_type = EventType(values['type'])
         expected_data_type = event_type.data_type()
 

@@ -4,7 +4,7 @@ from tests import unittest
 
 
 class NetfilterUtilsTest(unittest.TestCase):
-    def test_peer_id_blacklist(self):
+    def test_peer_id_blacklist(self) -> None:
         post_peerid = get_table('filter').get_chain('post_peerid')
 
         # Chain starts empty

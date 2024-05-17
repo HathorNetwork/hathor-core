@@ -1,7 +1,11 @@
+from typing import Iterator
+
 from hathor.graphviz import GraphvizVisualizer
-from hathor.simulator import FakeConnection, Simulator
+from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulator
 from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_double_spending
+from hathor.transaction import Transaction
+from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx
@@ -10,7 +14,11 @@ from tests.utils import add_custom_tx
 class BaseSoftVoidedTestCase(SimulatorTestCase):
     seed_config = 5988775361793628169
 
-    def _run_test(self, simulator, soft_voided_tx_ids):
+    def _run_test(
+        self,
+        simulator: Simulator,
+        soft_voided_tx_ids: list[VertexId]
+    ) -> Iterator[RandomTransactionGenerator]:
         manager1 = self.create_peer(soft_voided_tx_ids=set(soft_voided_tx_ids), simulator=simulator)
         manager1.allow_mining_without_peers()
 
@@ -24,7 +32,6 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         gen_tx1.stop()
 
         manager2 = self.create_peer(soft_voided_tx_ids=set(soft_voided_tx_ids), simulator=simulator)
-        manager2.soft_voided_tx_ids = set(soft_voided_tx_ids)
 
         self.graphviz = GraphvizVisualizer(manager2.tx_storage, include_verifications=True, include_funds=True)
 
@@ -54,6 +61,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         gen_tx2.stop()
 
+        assert isinstance(soft_voided_tx_ids, list)
         self.assertEqual(2, len(soft_voided_tx_ids))
         txA_hash = soft_voided_tx_ids[0]
         txB_hash = soft_voided_tx_ids[1]
@@ -61,9 +69,11 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         self.graphviz.labels[txB_hash] = 'txB'
 
         txB = manager2.tx_storage.get_transaction(txB_hash)
+        assert isinstance(txB, Transaction)
 
         # Get the tx confirmed by the soft voided that will be voided
         tx_base = manager2.tx_storage.get_transaction(txB.parents[0])
+        assert isinstance(tx_base, Transaction)
         txC = gen_new_double_spending(manager2, use_same_parents=False, tx=tx_base)
         self.graphviz.labels[tx_base.hash] = 'tx_base'
         txC.weight = 30
@@ -125,12 +135,12 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         metaD = txD.get_metadata()
         self.assertEqual(metaD.voided_by, {tx_base.hash})
 
-    def _get_txA_hash(self):
+    def _get_txA_hash(self) -> VertexId:
         simulator = Simulator(seed=self.simulator.seed)
         simulator.start()
 
         try:
-            it = self._run_test(simulator, set())
+            it = self._run_test(simulator, [])
             gen_tx = next(it)
             txA_hash = gen_tx.latest_transactions[0]
         finally:
@@ -138,12 +148,12 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         return txA_hash
 
-    def _get_txB_hash(self, txA_hash):
+    def _get_txB_hash(self, txA_hash: VertexId) -> VertexId:
         simulator = Simulator(seed=self.simulator.seed)
         simulator.start()
 
         try:
-            it = self._run_test(simulator, set([txA_hash]))
+            it = self._run_test(simulator, [txA_hash])
             _ = next(it)
             _ = next(it)
             gen_tx = next(it)
@@ -153,7 +163,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         return txB_hash
 
-    def test_soft_voided(self):
+    def test_soft_voided(self) -> None:
         txA_hash = self._get_txA_hash()
         txB_hash = self._get_txB_hash(txA_hash)
         self.assertNotEqual(txA_hash, txB_hash)

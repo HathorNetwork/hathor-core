@@ -49,6 +49,7 @@ class CliManager:
             quick_test,
             replay_logs,
             reset_event_queue,
+            reset_feature_settings,
             run_node,
             shell,
             stratum_mining,
@@ -81,6 +82,8 @@ class CliManager:
         self.add_cmd('oracle', 'oracle-encode-data', oracle_encode_data, 'Encode data and sign it with a private key')
         self.add_cmd('events', 'reset-event-queue', reset_event_queue, 'Delete all events and related data from the '
                                                                        'database')
+        self.add_cmd('features', 'reset-feature-settings', reset_feature_settings, 'Delete existing Feature '
+                     'Activation settings from the database')
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
         self.add_cmd('dev', 'quick_test', quick_test, 'Similar to run_node but will quit after receiving a tx')
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')

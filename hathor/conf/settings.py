@@ -423,6 +423,19 @@ class HathorSettings(NamedTuple):
     OLD_MAX_MERKLE_PATH_LENGTH: int = 12
     NEW_MAX_MERKLE_PATH_LENGTH: int = 20
 
+    # Maximum number of tx tips to accept in the initial phase of the mempool sync 1000 is arbitrary, but it should be
+    # more than enough for the forseeable future
+    MAX_MEMPOOL_RECEIVING_TIPS: int = 1000
+
+    # Used to enable nano contracts.
+    #
+    # This should NEVER be enabled for mainnet and testnet, since both networks will
+    # activate Nano Contracts through the Feature Activation.
+    ENABLE_NANO_CONTRACTS: bool = False
+
+    # List of enabled blueprints.
+    BLUEPRINTS: dict[bytes, 'str'] = {}
+
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""
@@ -447,6 +460,17 @@ def _parse_checkpoints(checkpoints: Union[dict[int, str], list[Checkpoint]]) -> 
         raise TypeError(f'expected \'dict[int, str]\' or \'list[Checkpoint]\', got {checkpoints}')
 
     return checkpoints
+
+
+def _parse_blueprints(blueprints_raw: dict[str, str]) -> dict[bytes, str]:
+    """Parse dict[str, str] into dict[bytes, str]."""
+    blueprints: dict[bytes, str] = {}
+    for _id_str, _name in blueprints_raw.items():
+        _id = bytes.fromhex(_id_str)
+        if _id in blueprints:
+            raise TypeError(f'Duplicate blueprint id: {_id_str}')
+        blueprints[_id] = _name
+    return blueprints
 
 
 def _parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
@@ -480,5 +504,9 @@ _VALIDATORS = dict(
     _parse_checkpoints=pydantic.validator(
         'CHECKPOINTS',
         pre=True
-    )(_parse_checkpoints)
+    )(_parse_checkpoints),
+    _parse_blueprints=pydantic.validator(
+        'BLUEPRINTS',
+        pre=True
+    )(_parse_blueprints)
 )

@@ -22,6 +22,7 @@ from hathor.event.model.event_type import EventType
 from hathor.event.model.node_state import NodeState
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
+from hathor.execution_manager import ExecutionManager
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
@@ -70,6 +71,7 @@ class EventManager:
         event_storage: EventStorage,
         pubsub: PubSubManager,
         reactor: Reactor,
+        execution_manager: ExecutionManager,
         event_ws_factory: Optional[EventWebsocketFactory] = None,
     ) -> None:
         self.log = logger.new()
@@ -78,6 +80,7 @@ class EventManager:
         self._event_storage = event_storage
         self._event_ws_factory = event_ws_factory
         self._pubsub = pubsub
+        self._execution_manager = execution_manager
 
     def start(self, peer_id: str) -> None:
         """Starts the EventManager."""
@@ -85,6 +88,7 @@ class EventManager:
         assert self._event_ws_factory is not None, 'Cannot start, EventWebsocketFactory is not set'
         assert self.get_event_queue_state() is True, 'Cannot start, event queue feature is disabled'
 
+        self._execution_manager.register_on_crash_callback(self.on_full_node_crash)
         self._previous_node_state = self._event_storage.get_node_state()
 
         if self._should_reload_events():
@@ -133,7 +137,7 @@ class EventManager:
         for event in _SUBSCRIBE_EVENTS:
             self._pubsub.subscribe(event, self._handle_hathor_event)
 
-    def load_started(self):
+    def load_started(self) -> None:
         if not self._is_running:
             return
 
@@ -143,7 +147,7 @@ class EventManager:
         )
         self._event_storage.save_node_state(NodeState.LOAD)
 
-    def load_finished(self):
+    def load_finished(self) -> None:
         if not self._is_running:
             return
 
@@ -152,6 +156,15 @@ class EventManager:
             event_args=EventArguments(),
         )
         self._event_storage.save_node_state(NodeState.SYNC)
+
+    def on_full_node_crash(self) -> None:
+        if not self._is_running:
+            return
+
+        self._handle_event(
+            event_type=EventType.FULL_NODE_CRASHED,
+            event_args=EventArguments(),
+        )
 
     def _handle_hathor_event(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
         """Handles a PubSub 'HathorEvents' event."""

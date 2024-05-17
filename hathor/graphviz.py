@@ -63,7 +63,6 @@ class GraphvizVisualizer:
     def get_node_label(self, tx: BaseTransaction) -> str:
         """ Return the node's label for tx.
         """
-        assert tx.hash is not None
         if tx.hash in self.labels:
             parts = [self.labels[tx.hash]]
         else:
@@ -79,7 +78,6 @@ class GraphvizVisualizer:
     def get_node_attrs(self, tx: BaseTransaction) -> dict[str, str]:
         """ Return node's attributes.
         """
-        assert tx.hash is not None
         node_attrs = {'label': self.get_node_label(tx)}
 
         if tx.is_block:
@@ -151,7 +149,6 @@ class GraphvizVisualizer:
                 if self.only_blocks and not tx.is_block:
                     continue
 
-                assert tx.hash is not None
                 name = tx.hash.hex()
 
                 node_attrs = self.get_node_attrs(tx)
@@ -204,7 +201,6 @@ class GraphvizVisualizer:
 
         while to_visit:
             level, tx = to_visit.pop()
-            assert tx.hash is not None
             assert tx.storage is not None
             name = tx.hash.hex()
             node_attrs = self.get_node_attrs(tx)

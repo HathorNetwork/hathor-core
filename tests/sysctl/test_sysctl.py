@@ -13,7 +13,7 @@ from tests import unittest
 
 class SysctlTest(unittest.TestCase):
     # We need this patch because pydantic.validate_arguments fails when it gets a mock function.
-    @patch('hathor.sysctl.sysctl.validate_arguments', new=lambda x: x)
+    @patch('hathor.sysctl.sysctl.validate_arguments', new=lambda x: x)  # type: ignore
     def setUp(self) -> None:
         super().setUp()
 
@@ -97,34 +97,34 @@ class SysctlTest(unittest.TestCase):
     ##############
 
     def test_set_int(self) -> None:
-        self.root.set('net.max_connections', 3)
-        setter = cast(MagicMock, self.root._get_setter('net.max_connections'))
+        self.root.unsafe_set('net.max_connections', 3)
+        setter = cast(MagicMock, self.root.get_setter('net.max_connections'))
         self.assertEqual(1, setter.call_count)
         self.assertEqual((3,), setter.call_args.args)
 
     def test_set_str(self) -> None:
-        self.root.set('core.loglevel', 'debug')
-        setter = cast(MagicMock, self.root._get_setter('core.loglevel'))
+        self.root.unsafe_set('core.loglevel', 'debug')
+        setter = cast(MagicMock, self.root.get_setter('core.loglevel'))
         self.assertEqual(1, setter.call_count)
         self.assertEqual(('debug',), setter.call_args.args)
 
     def test_set_readonly(self) -> None:
         with self.assertRaises(SysctlReadOnlyEntry):
-            self.root.set('net.readonly', 0.50)
+            self.root.unsafe_set('net.readonly', 0.50)
 
     def test_set_tuple(self) -> None:
-        self.root.set('net.rate_limit', (8, 2))
-        setter = cast(MagicMock, self.root._get_setter('net.rate_limit'))
+        self.root.unsafe_set('net.rate_limit', (8, 2))
+        setter = cast(MagicMock, self.root.get_setter('net.rate_limit'))
         self.assertEqual(1, setter.call_count)
         self.assertEqual((8, 2), setter.call_args.args)
 
     def test_set_unknown(self) -> None:
         with self.assertRaises(SysctlEntryNotFound):
-            self.root.set('net.unknown', 1)
+            self.root.unsafe_set('net.unknown', 1)
 
     def test_set_writeonly(self) -> None:
-        self.root.set('core.writeonly', 1)
-        setter = cast(MagicMock, self.root._get_setter('core.writeonly'))
+        self.root.unsafe_set('core.writeonly', 1)
+        setter = cast(MagicMock, self.root.get_setter('core.writeonly'))
         self.assertEqual(1, setter.call_count)
         self.assertEqual((1,), setter.call_args.args)
 
@@ -193,13 +193,13 @@ class SysctlTest(unittest.TestCase):
 
     def test_proto_set_int(self) -> None:
         self.proto.lineReceived(b'net.max_connections=3')
-        setter = cast(MagicMock, self.root._get_setter('net.max_connections'))
+        setter = cast(MagicMock, self.root.get_setter('net.max_connections'))
         self.assertEqual(1, setter.call_count)
         self.assertEqual((3,), setter.call_args.args)
 
     def test_proto_set_str(self) -> None:
         self.proto.lineReceived(b'core.loglevel="debug"')
-        setter = cast(MagicMock, self.root._get_setter('core.loglevel'))
+        setter = cast(MagicMock, self.root.get_setter('core.loglevel'))
         self.assertEqual(1, setter.call_count)
         self.assertEqual(('debug',), setter.call_args.args)
 
@@ -213,13 +213,13 @@ class SysctlTest(unittest.TestCase):
 
     def test_proto_set_tuple(self) -> None:
         self.proto.lineReceived(b'net.rate_limit=8, 2')
-        setter = cast(MagicMock, self.root._get_setter('net.rate_limit'))
+        setter = cast(MagicMock, self.root.get_setter('net.rate_limit'))
         self.assertEqual(1, setter.call_count)
         self.assertEqual((8, 2), setter.call_args.args)
 
     def test_proto_set_writeonly(self) -> None:
         self.proto.lineReceived(b'core.writeonly=1')
-        setter = cast(MagicMock, self.root._get_setter('core.writeonly'))
+        setter = cast(MagicMock, self.root.get_setter('core.writeonly'))
         self.assertEqual(1, setter.call_count)
         self.assertEqual((1,), setter.call_args.args)
 

@@ -99,7 +99,6 @@ def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
 def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
-    from hathor.util import not_none
 
     settings = get_global_settings()
     assert manager.wallet is not None
@@ -132,7 +131,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     block.parents = [
         block.parents[0],
         settings.GENESIS_TX1_HASH,
-        not_none(tx2.hash),
+        tx2.hash,
     ]
     block.update_hash()
     assert manager.propagate_tx(block, fails_silently=False)

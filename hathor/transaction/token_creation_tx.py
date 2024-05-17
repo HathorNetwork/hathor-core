@@ -65,7 +65,6 @@ class TokenCreationTransaction(Transaction):
         """ When we update the hash, we also have to update the tokens uid list
         """
         super().update_hash()
-        assert self.hash is not None
         self.tokens = [self.hash]
 
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
@@ -221,7 +220,6 @@ class TokenCreationTransaction(Transaction):
         token_dict = super()._get_token_info_from_inputs()
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
-        assert self.hash is not None
         token_dict[self.hash] = TokenInfo(0, True, True)
 
         return token_dict

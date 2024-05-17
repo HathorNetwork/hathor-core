@@ -65,7 +65,6 @@ class BaseTipsTestCase(unittest.TestCase):
         new_block = add_new_block(self.manager, propagate=False)
         new_block.parents = [new_block.parents[0], tx1.hash, tx3.hash]
         self.manager.cpu_mining_service.resolve(new_block)
-        self.manager.verification_service.verify(new_block)
         self.manager.propagate_tx(new_block, fails_silently=False)
 
         self.manager.reactor.advance(10)
@@ -167,8 +166,7 @@ class SyncV1TipsTestCase(unittest.SyncV1Params, BaseTipsTestCase):
     __test__ = True
 
     def get_tips(self):
-        from hathor.util import not_none
-        return {not_none(tx.hash) for tx in self.manager.tx_storage.iter_mempool_tips_from_tx_tips()}
+        return {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips_from_tx_tips()}
 
 
 class SyncV2TipsTestCase(unittest.SyncV2Params, BaseTipsTestCase):

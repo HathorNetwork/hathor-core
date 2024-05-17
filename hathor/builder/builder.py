@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
@@ -25,9 +26,11 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
+from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
@@ -44,10 +47,40 @@ from hathor.transaction.storage import (
     TransactionStorage,
 )
 from hathor.util import Random, get_environment_info, not_none
-from hathor.verification.verification_service import VerificationService, VertexVerifiers
+from hathor.verification.verification_service import VerificationService
+from hathor.verification.vertex_verifiers import VertexVerifiers
+from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
+
+
+class SyncSupportLevel(IntEnum):
+    UNAVAILABLE = 0  # not possible to enable at runtime
+    DISABLED = 1  # available but disabled by default, possible to enable at runtime
+    ENABLED = 2  # available and enabled by default, possible to disable at runtime
+
+    @classmethod
+    def add_factories(cls,
+                      p2p_manager: ConnectionsManager,
+                      sync_v1_support: 'SyncSupportLevel',
+                      sync_v2_support: 'SyncSupportLevel',
+                      ) -> None:
+        """Adds the sync factory to the manager according to the support level."""
+        from hathor.p2p.sync_v1.factory import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
+        from hathor.p2p.sync_version import SyncVersion
+
+        # sync-v1 support:
+        if sync_v1_support > cls.UNAVAILABLE:
+            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+        if sync_v1_support is cls.ENABLED:
+            p2p_manager.enable_sync_version(SyncVersion.V1_1)
+        # sync-v2 support:
+        if sync_v2_support > cls.UNAVAILABLE:
+            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+        if sync_v2_support is cls.ENABLED:
+            p2p_manager.enable_sync_version(SyncVersion.V2)
 
 
 class StorageType(Enum):
@@ -67,6 +100,7 @@ class BuildArtifacts(NamedTuple):
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
     feature_service: FeatureService
+    bit_signaling_service: BitSignalingService
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
@@ -141,14 +175,19 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._enable_sync_v1: bool = True
-        self._enable_sync_v2: bool = False
+        self._sync_v1_support: SyncSupportLevel = SyncSupportLevel.UNAVAILABLE
+        self._sync_v2_support: SyncSupportLevel = SyncSupportLevel.UNAVAILABLE
 
         self._enable_stratum_server: Optional[bool] = None
 
         self._full_verification: Optional[bool] = None
 
         self._soft_voided_tx_ids: Optional[set[bytes]] = None
+
+        self._execution_manager: ExecutionManager | None = None
+        self._vertex_handler: VertexHandler | None = None
+        self._consensus: ConsensusAlgorithm | None = None
+        self._p2p_manager: ConnectionsManager | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -157,16 +196,19 @@ class Builder:
         if self._network is None:
             raise TypeError('you must set a network')
 
+        if SyncSupportLevel.ENABLED not in {self._sync_v1_support, self._sync_v2_support}:
+            raise TypeError('you must enable at least one sync version')
+
         settings = self._get_or_create_settings()
         reactor = self._get_reactor()
         pubsub = self._get_or_create_pubsub()
 
         peer_id = self._get_peer_id()
 
-        soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
+        execution_manager = self._get_or_create_execution_manager()
+        consensus_algorithm = self._get_or_create_consensus()
 
-        p2p_manager = self._get_p2p_manager()
+        p2p_manager = self._get_or_create_p2p_manager()
 
         wallet = self._get_or_create_wallet()
         event_manager = self._get_or_create_event_manager()
@@ -177,6 +219,7 @@ class Builder:
         verification_service = self._get_or_create_verification_service()
         daa = self._get_or_create_daa()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
+        vertex_handler = self._get_or_create_vertex_handler()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -211,10 +254,11 @@ class Builder:
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
             environment_info=get_environment_info(self._cmdline, peer_id.id),
-            feature_service=feature_service,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
+            execution_manager=execution_manager,
+            vertex_handler=vertex_handler,
             **kwargs
         )
 
@@ -239,6 +283,7 @@ class Builder:
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
             feature_service=feature_service,
+            bit_signaling_service=bit_signaling_service
         )
 
         return self.artifacts
@@ -306,6 +351,22 @@ class Builder:
             return self._peer_id
         raise ValueError('peer_id not set')
 
+    def _get_or_create_execution_manager(self) -> ExecutionManager:
+        if self._execution_manager is None:
+            reactor = self._get_reactor()
+            self._execution_manager = ExecutionManager(reactor)
+
+        return self._execution_manager
+
+    def _get_or_create_consensus(self) -> ConsensusAlgorithm:
+        if self._consensus is None:
+            soft_voided_tx_ids = self._get_soft_voided_tx_ids()
+            pubsub = self._get_or_create_pubsub()
+            execution_manager = self._get_or_create_execution_manager()
+            self._consensus = ConsensusAlgorithm(soft_voided_tx_ids, pubsub, execution_manager=execution_manager)
+
+        return self._consensus
+
     def _get_or_create_pubsub(self) -> PubSubManager:
         if self._pubsub is None:
             self._pubsub = PubSubManager(self._get_reactor())
@@ -334,10 +395,9 @@ class Builder:
 
         return self._rocksdb_storage
 
-    def _get_p2p_manager(self) -> ConnectionsManager:
-        from hathor.p2p.sync_v1.factory import SyncV11Factory
-        from hathor.p2p.sync_v2.factory import SyncV2Factory
-        from hathor.p2p.sync_version import SyncVersion
+    def _get_or_create_p2p_manager(self) -> ConnectionsManager:
+        if self._p2p_manager:
+            return self._p2p_manager
 
         enable_ssl = True
         reactor = self._get_reactor()
@@ -345,7 +405,7 @@ class Builder:
 
         assert self._network is not None
 
-        p2p_manager = ConnectionsManager(
+        self._p2p_manager = ConnectionsManager(
             reactor,
             network=self._network,
             my_peer=my_peer,
@@ -354,13 +414,8 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
         )
-        p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
-        p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
-        if self._enable_sync_v1:
-            p2p_manager.enable_sync_version(SyncVersion.V1_1)
-        if self._enable_sync_v2:
-            p2p_manager.enable_sync_version(SyncVersion.V2)
-        return p2p_manager
+        SyncSupportLevel.add_factories(self._p2p_manager, self._sync_v1_support, self._sync_v2_support)
+        return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
         if self._indexes_manager is not None:
@@ -438,7 +493,8 @@ class Builder:
                 reactor=reactor,
                 pubsub=self._get_or_create_pubsub(),
                 event_storage=storage,
-                event_ws_factory=factory
+                event_ws_factory=factory,
+                execution_manager=self._get_or_create_execution_manager()
             )
 
         return self._event_manager
@@ -460,12 +516,14 @@ class Builder:
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
             feature_service = self._get_or_create_feature_service()
+            feature_storage = self._get_or_create_feature_storage()
             self._bit_signaling_service = BitSignalingService(
                 feature_settings=settings.FEATURE_ACTIVATION,
                 feature_service=feature_service,
                 tx_storage=tx_storage,
                 support_features=self._support_features,
                 not_support_features=self._not_support_features,
+                feature_storage=feature_storage,
             )
 
         return self._bit_signaling_service
@@ -476,6 +534,15 @@ class Builder:
             self._verification_service = VerificationService(verifiers=verifiers)
 
         return self._verification_service
+
+    def _get_or_create_feature_storage(self) -> FeatureActivationStorage | None:
+        match self._storage_type:
+            case StorageType.MEMORY: return None
+            case StorageType.ROCKSDB: return FeatureActivationStorage(
+                settings=self._get_or_create_settings(),
+                rocksdb_storage=self._get_or_create_rocksdb_storage()
+            )
+            case _: assert_never(self._storage_type)
 
     def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
         if self._vertex_verifiers is None:
@@ -507,6 +574,22 @@ class Builder:
 
         return self._cpu_mining_service
 
+    def _get_or_create_vertex_handler(self) -> VertexHandler:
+        if self._vertex_handler is None:
+            self._vertex_handler = VertexHandler(
+                reactor=self._get_reactor(),
+                settings=self._get_or_create_settings(),
+                tx_storage=self._get_or_create_tx_storage(),
+                verification_service=self._get_or_create_verification_service(),
+                consensus=self._get_or_create_consensus(),
+                p2p_manager=self._get_or_create_p2p_manager(),
+                feature_service=self._get_or_create_feature_service(),
+                pubsub=self._get_or_create_pubsub(),
+                wallet=self._get_or_create_wallet(),
+            )
+
+        return self._vertex_handler
+
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.MEMORY
@@ -536,16 +619,14 @@ class Builder:
 
     def _get_or_create_wallet(self) -> Optional[BaseWallet]:
         if self._wallet is not None:
-            assert self._wallet_directory is None
-            assert self._wallet_unlock is None
             return self._wallet
 
         if self._wallet_directory is None:
             return None
-        wallet = Wallet(directory=self._wallet_directory)
+        self._wallet = Wallet(directory=self._wallet_directory)
         if self._wallet_unlock is not None:
-            wallet.unlock(self._wallet_unlock)
-        return wallet
+            self._wallet.unlock(self._wallet_unlock)
+        return self._wallet
 
     def set_wallet(self, wallet: BaseWallet) -> 'Builder':
         self.check_if_can_modify()
@@ -639,34 +720,34 @@ class Builder:
         self._network = network
         return self
 
-    def set_enable_sync_v1(self, enable_sync_v1: bool) -> 'Builder':
+    def set_sync_v1_support(self, support_level: SyncSupportLevel) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = enable_sync_v1
+        self._sync_v1_support = support_level
         return self
 
-    def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
+    def set_sync_v2_support(self, support_level: SyncSupportLevel) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = enable_sync_v2
+        self._sync_v2_support = support_level
         return self
 
     def enable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = True
+        self._sync_v1_support = SyncSupportLevel.ENABLED
         return self
 
     def disable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v1 = False
+        self._sync_v1_support = SyncSupportLevel.DISABLED
         return self
 
     def enable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = True
+        self._sync_v2_support = SyncSupportLevel.ENABLED
         return self
 
     def disable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_sync_v2 = False
+        self._sync_v2_support = SyncSupportLevel.DISABLED
         return self
 
     def set_full_verification(self, full_verification: bool) -> 'Builder':

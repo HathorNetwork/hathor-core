@@ -65,7 +65,9 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     enable_crash_api: bool
     x_sync_bridge: bool
     x_sync_v2_only: bool
+    x_remove_sync_v1: bool
     sync_bridge: bool
+    sync_v1_only: bool
     sync_v2_only: bool
     x_localhost_only: bool
     x_rocksdb_indexes: bool
@@ -76,3 +78,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     signal_not_support: set[Feature]
     x_asyncio_reactor: bool
     x_ipython_kernel: bool
+    nano_testnet: bool

@@ -8,7 +8,7 @@ from tests.utils import BURN_ADDRESS, get_genesis_key
 class BaseEventReorgTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
         self.event_storage = EventMemoryStorage()
@@ -23,7 +23,7 @@ class BaseEventReorgTest(unittest.TestCase):
         self.genesis_private_key = get_genesis_key()
         self.genesis_public_key = self.genesis_private_key.public_key()
 
-    def test_reorg_events(self):
+    def test_reorg_events(self) -> None:
         assert self._settings.REWARD_SPEND_MIN_BLOCKS == 10, 'this test was made with this hardcoded value in mind'
 
         # add some blocks
@@ -36,7 +36,6 @@ class BaseEventReorgTest(unittest.TestCase):
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage, address=BURN_ADDRESS)
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
-        self.manager.verification_service.verify(b0)
         self.manager.propagate_tx(b0, fails_silently=False)
         self.log.debug('reorg block propagated')
         self.run_to_completion()
@@ -44,7 +43,7 @@ class BaseEventReorgTest(unittest.TestCase):
         # check events
         actual_events = list(self.event_storage.iter_from_event(0))
 
-        expected_events = [
+        expected_events: list[tuple[EventType, dict[str, str | int]]] = [
             (EventType.LOAD_STARTED, {}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': self._settings.GENESIS_BLOCK_HASH.hex()}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': self._settings.GENESIS_TX1_HASH.hex()}),

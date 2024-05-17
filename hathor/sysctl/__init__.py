@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from hathor.sysctl.core.manager import HathorManagerSysctl
+from hathor.sysctl.feature_activation.manager import FeatureActivationSysctl
 from hathor.sysctl.p2p.manager import ConnectionsManagerSysctl
 from hathor.sysctl.sysctl import Sysctl
 from hathor.sysctl.websocket.manager import WebsocketManagerSysctl
@@ -19,5 +21,7 @@ from hathor.sysctl.websocket.manager import WebsocketManagerSysctl
 __all__ = [
     'Sysctl',
     'ConnectionsManagerSysctl',
+    'HathorManagerSysctl',
     'WebsocketManagerSysctl',
+    'FeatureActivationSysctl',
 ]

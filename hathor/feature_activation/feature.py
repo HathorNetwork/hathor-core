@@ -16,7 +16,7 @@ from enum import Enum, unique
 
 
 @unique
-class Feature(Enum):
+class Feature(str, Enum):
     """
     An enum containing all features that participate in the feature activation process, past or future, activated
     or not, for all networks. Features should NOT be removed from this enum, to preserve history. Their values

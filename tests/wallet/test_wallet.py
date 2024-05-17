@@ -206,6 +206,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx2.timestamp = tx.timestamp + 1
         tx2.parents = self.manager.get_new_tx_parents()
         self.manager.cpu_mining_service.resolve(tx2)
+        tx2.update_reward_lock_metadata()
         self.manager.verification_service.verify(tx2)
 
         self.assertNotEqual(len(tx2.inputs), 0)

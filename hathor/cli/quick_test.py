@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from argparse import ArgumentParser
 
 from hathor.cli.run_node import RunNode
@@ -23,9 +24,12 @@ class QuickTest(RunNode):
     def create_parser(cls) -> ArgumentParser:
         parser = super().create_parser()
         parser.add_argument('--no-wait', action='store_true', help='If set will not wait for a new tx before exiting')
+        parser.add_argument('--quit-after-n-blocks', type=int, help='Quit the full node after N blocks have synced. '
+                                                                    'This is useful for sync benchmarks.')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
+        from hathor.transaction import BaseTransaction, Block
         super().prepare(register_resources=False)
         self._no_wait = self._args.no_wait
 
@@ -34,10 +38,26 @@ class QuickTest(RunNode):
 
         def patched_on_new_tx(*args, **kwargs):
             res = orig_on_new_tx(*args, **kwargs)
-            if res:
-                self.log.info('sucessfully added a tx, exit now')
+            msg: str | None = None
+
+            if self._args.quit_after_n_blocks is None:
+                should_quit = res
+                msg = 'added a tx'
+            else:
+                vertex = args[0]
+                should_quit = False
+                assert isinstance(vertex, BaseTransaction)
+
+                if isinstance(vertex, Block):
+                    should_quit = vertex.get_height() >= self._args.quit_after_n_blocks
+                    msg = f'reached height {vertex.get_height()}'
+
+            if should_quit:
+                assert msg is not None
+                self.log.info(f'successfully {msg}, exit now')
                 self.manager.connections.disconnect_all_peers(force=True)
-                self.reactor.stop()
+                self.reactor.fireSystemEvent('shutdown')
+                os._exit(0)
             return res
         self.manager.on_new_tx = patched_on_new_tx
 
@@ -45,12 +65,13 @@ class QuickTest(RunNode):
         self.log.info('exit with error code if it take too long', timeout=timeout)
 
         def exit_with_error():
-            import sys
             self.log.error('took too long to get a tx, exit with error')
             self.manager.connections.disconnect_all_peers(force=True)
             self.reactor.stop()
-            sys.exit(1)
-        self.reactor.callLater(timeout, exit_with_error)
+            os._exit(1)
+
+        if self._args.quit_after_n_blocks is None:
+            self.reactor.callLater(timeout, exit_with_error)
 
     def run(self) -> None:
         if self._no_wait:
