@@ -1,6 +1,30 @@
+import pytest
+
+from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
+from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
+from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Block, Transaction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
+
+
+class MyBlueprint(Blueprint):
+    counter: int
+
+    @public
+    def initialize(self, ctx: Context, initial: int) -> None:
+        self.counter = initial
+
+    @public
+    def add(self, ctx: Context, value: int) -> int:
+        self.counter += value
+        return self.counter
+
+    @public
+    def sub(self, ctx: Context, value: int) -> int:
+        self.counter -= value
+        return self.counter
 
 
 class DAGBuilderTestCase(unittest.TestCase):
@@ -17,7 +41,8 @@ class DAGBuilderTestCase(unittest.TestCase):
             .set_cpu_mining_service(cpu_mining_service)
 
         self.manager = self.create_peer_from_builder(builder)
-        self.dag_builder = self.get_dag_builder(self.manager)
+        self.nc_catalog = self.manager.tx_storage.nc_catalog
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
     def test_one_tx(self) -> None:
         artifacts = self.dag_builder.build_from_str("""
@@ -215,3 +240,180 @@ class DAGBuilderTestCase(unittest.TestCase):
 
         artifacts.propagate_with(self.manager)
         assert len(list(tx_storage.get_all_transactions())) == 16  # 3 genesis + 10 blocks + dummy + tx1 + tx2
+
+    def test_nc_transactions(self) -> None:
+        blueprint_id = b'x' * 32
+        self.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+
+        artifacts = self.dag_builder.build_from_str(f"""
+            blockchain genesis a[0..40]
+            a30 < dummy
+
+            tx1.nc_id = "{blueprint_id.hex()}"
+            tx1.nc_method = initialize(0)
+
+            tx2.nc_id = tx1
+            tx2.nc_method = add(5)
+            tx2.nc_deposit = 10 HTR
+            tx2.nc_deposit = 5 TKA
+
+            tx3.nc_id = tx1
+            tx3.nc_method = sub(3)
+            tx3.nc_deposit = 3 HTR
+            tx3.nc_withdrawal = 2 TKA
+
+            a31 --> tx1
+            a32 --> tx2
+            a33 --> tx3
+        """)
+
+        artifacts.propagate_with(self.manager)
+
+        tx1 = artifacts.by_name['tx1'].vertex
+        self.assertIsInstance(tx1, Transaction)
+        self.assertTrue(tx1.is_nano_contract())
+
+        htr_id = TokenUid(b'\0')
+        tka_id = TokenUid(artifacts.by_name['TKA'].vertex.hash)
+
+        tx2 = artifacts.by_name['tx2'].vertex
+        tx3 = artifacts.by_name['tx3'].vertex
+
+        ctx2 = tx2.get_nano_header().get_context()
+        self.assertEqual(dict(ctx2.actions), {
+            tka_id: (NCDepositAction(token_uid=tka_id, amount=5),),
+            htr_id: (NCDepositAction(token_uid=htr_id, amount=10),),
+        })
+
+        ctx3 = tx3.get_nano_header().get_context()
+        self.assertEqual(dict(ctx3.actions), {
+            htr_id: (NCDepositAction(token_uid=htr_id, amount=3),),
+            tka_id: (NCWithdrawalAction(token_uid=tka_id, amount=2),),
+        })
+
+    def test_multiline_literals(self) -> None:
+        artifacts = self.dag_builder.build_from_str("""
+            tx.attr1 = ```
+                test
+            ```
+            tx.attr2 = ```
+                if foo:
+                    bar
+            ```
+        """)
+        node = artifacts.by_name['tx'].node
+
+        # asserting with raw shifted strings to make sure we get the expected output.
+        assert node.get_required_literal('attr1') == """\
+test"""
+        assert node.get_required_literal('attr2') == """\
+if foo:
+    bar"""
+
+        invalid_start_texts = [
+            """
+                tx.attr1 = a```
+                ```
+            """,
+            """
+                tx.attr1 = ```a
+                ```
+            """,
+            """
+                tx.attr1 = ```a```
+            """,
+        ]
+
+        for text in invalid_start_texts:
+            with pytest.raises(SyntaxError) as e:
+                self.dag_builder.build_from_str(text)
+            assert str(e.value) == 'invalid multiline string start'
+
+        invalid_end_texts = [
+            """
+                tx.attr1 = ```
+                a```
+            """,
+            """
+                tx.attr1 = ```
+                ```a
+            """,
+        ]
+
+        for text in invalid_end_texts:
+            with pytest.raises(SyntaxError) as e:
+                self.dag_builder.build_from_str(text)
+            assert str(e.value) == 'invalid multiline string end'
+
+        with pytest.raises(SyntaxError) as e:
+            self.dag_builder.build_from_str("""
+                tx.attr1 = ```
+                    test
+            """)
+        assert str(e.value) == 'unclosed multiline string'
+
+    def test_on_chain_blueprints(self) -> None:
+        bet_code = load_builtin_blueprint_for_ocb('bet.py', 'Bet')
+        private_key = unittest.OCB_TEST_PRIVKEY.hex()
+        password = unittest.OCB_TEST_PASSWORD.hex()
+        artifacts = self.dag_builder.build_from_str(f"""
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            ocb1.ocb_private_key = "{private_key}"
+            ocb1.ocb_password = "{password}"
+
+            ocb2.ocb_private_key = "{private_key}"
+            ocb2.ocb_password = "{password}"
+
+            ocb3.ocb_private_key = "{private_key}"
+            ocb3.ocb_password = "{password}"
+
+            nc1.nc_id = ocb1
+            nc1.nc_method = initialize("00", "00", 0)
+
+            nc2.nc_id = ocb2
+            nc2.nc_method = initialize(0)
+
+            nc3.nc_id = ocb3
+            nc3.nc_method = initialize()
+
+            ocb1 <-- ocb2 <-- ocb3 <-- b11
+            b11 < nc1 < nc2 < nc3
+
+            ocb1.ocb_code = "{bet_code.encode().hex()}"
+            ocb2.ocb_code = test_blueprint1.py, TestBlueprint1
+            ocb3.ocb_code = ```
+                from hathor.nanocontracts import Blueprint
+                from hathor.nanocontracts.context import Context
+                from hathor.nanocontracts.types import public
+                class MyBlueprint(Blueprint):
+                    @public
+                    def initialize(self, ctx: Context) -> None:
+                        pass
+                __blueprint__ = MyBlueprint
+            ```
+        """)
+
+        artifacts.propagate_with(self.manager)
+        ocb1, ocb2, ocb3 = artifacts.get_typed_vertices(['ocb1', 'ocb2', 'ocb3'], OnChainBlueprint)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+        assert nc3.is_nano_contract()
+
+        assert ocb1.get_blueprint_class().__name__ == 'Bet'
+        assert nc1.get_nano_header().nc_id == ocb1.hash
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb1.hash)
+        assert blueprint_class.__name__ == 'Bet'
+
+        assert ocb2.get_blueprint_class().__name__ == 'TestBlueprint1'
+        assert nc2.get_nano_header().nc_id == ocb2.hash
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb2.hash)
+        assert blueprint_class.__name__ == 'TestBlueprint1'
+
+        assert ocb3.get_blueprint_class().__name__ == 'MyBlueprint'
+        assert nc3.get_nano_header().nc_id == ocb3.hash
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb3.hash)
+        assert blueprint_class.__name__ == 'MyBlueprint'
