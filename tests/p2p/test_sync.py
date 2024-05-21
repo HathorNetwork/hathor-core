@@ -297,7 +297,9 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         self.assertEqual(len(downloader.downloading_deque), 1)
         self.assertEqual(deferred1, deferred2)
 
-        details.downloading_deferred.callback(blocks[0])
+        # blocks[0] belongs do peer1 and peers cannot share vertices. So we need to create a new object for peer2.
+        b0 = Block.create_from_struct(bytes(blocks[0]))
+        details.downloading_deferred.callback(b0)
 
         self.assertEqual(len(downloader.downloading_deque), 0)
         self.assertEqual(len(downloader.pending_transactions), 0)

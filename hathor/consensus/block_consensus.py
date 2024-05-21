@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
@@ -47,6 +48,154 @@ class BlockConsensusAlgorithm:
 
     def update_consensus(self, block: Block) -> None:
         self.update_voided_info(block)
+        if self._settings.ENABLE_NANO_CONTRACTS:
+            self.execute_nano_contracts(block)
+
+    def _nc_initialize_genesis(self, block: Block) -> None:
+        """Initialize the genesis block with an empty contract trie."""
+        assert block.is_genesis
+        meta = block.get_metadata()
+        trie = self.context.consensus.nc_storage_factory.get_trie(root_id=None)
+        trie.commit()
+        if meta.nc_block_root_id is not None:
+            assert meta.nc_block_root_id == trie.root.id
+        else:
+            meta.nc_block_root_id = trie.root.id
+            self.context.save(block)
+
+    def execute_nano_contracts(self, block: Block) -> None:
+        """Execute the method calls for transactions confirmed by this block handling reorgs."""
+        # If we reach this point, Nano Contracts must be enabled.
+        assert self._settings.ENABLE_NANO_CONTRACTS
+
+        meta = block.get_metadata()
+
+        if block.is_genesis:
+            self._nc_initialize_genesis(block)
+            return
+
+        if meta.voided_by:
+            # If the block is voided, skip execution.
+            return
+
+        assert meta.nc_block_root_id is None
+
+        to_be_executed: list[Block] = []
+        is_reorg: bool = False
+        if self.context.reorg_common_block:
+            # handle reorgs
+            is_reorg = True
+            cur = block
+            # XXX We could stop when `cur_meta.nc_block_root_id is not None` but
+            #     first we need to refactor meta.first_block and meta.voided_by to
+            #     have different values per block.
+            while cur != self.context.reorg_common_block:
+                cur_meta = cur.get_metadata()
+                if cur_meta.nc_block_root_id is not None:
+                    # Reset nc_block_root_id to force re-execution.
+                    cur_meta.nc_block_root_id = None
+                to_be_executed.append(cur)
+                cur = cur.get_block_parent()
+        else:
+            # no reorg occured, so simply execute this new block.
+            to_be_executed = [block]
+
+        for current in to_be_executed[::-1]:
+            self._nc_execute_calls(current, is_reorg=is_reorg)
+
+    def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
+        """Internal method to execute the method calls for transactions confirmed by this block.
+        """
+        from hathor.nanocontracts import NanoContract, NCFail
+        from hathor.nanocontracts.sorter import NCBlockSorter
+
+        assert self._settings.ENABLE_NANO_CONTRACTS
+
+        meta = block.get_metadata()
+        assert not meta.voided_by
+        assert meta.nc_block_root_id is None
+
+        parent = block.get_block_parent()
+        if parent.is_genesis:
+            # XXX We can remove this call after the full node initialization is refactored and
+            #     the genesis block goes through the consensus protocol.
+            self._nc_initialize_genesis(parent)
+        parent_meta = parent.get_metadata()
+        block_root_id = parent_meta.nc_block_root_id
+        assert block_root_id is not None
+
+        nc_calls: list[NanoContract] = []
+        for tx in block.iter_transactions_in_this_block():
+            if not isinstance(tx, NanoContract):
+                # Skip other type of transactions.
+                continue
+            tx_meta = tx.get_metadata()
+            if is_reorg:
+                assert self.context.reorg_common_block is not None
+                # Clear the NC_EXECUTION_FAIL_ID flag if this is the only reason the transaction was voided.
+                # This case might only happen when handling reorgs.
+                assert tx.storage is not None
+                if tx_meta.voided_by == {tx.hash, self._settings.NC_EXECUTION_FAIL_ID}:
+                    if tx_meta.conflict_with:
+                        for tx_conflict_id in tx_meta.conflict_with:
+                            tx_conflict = tx.storage.get_transaction(tx_conflict_id)
+                            tx_conflict_meta = tx_conflict.get_metadata()
+                            assert tx_conflict_meta.first_block is None
+                            assert tx_conflict_meta.voided_by
+                    tx_meta.voided_by = None
+                    self.context.save(tx)
+            assert tx_meta.voided_by is None
+            nc_calls.append(tx)
+
+        if not nc_calls:
+            meta.nc_block_root_id = block_root_id
+            self.context.save(block)
+            return
+
+        seed = hashlib.sha256(block.hash).digest()
+        sorter = NCBlockSorter.create_from_block(block, nc_calls)
+        nc_sorted_calls = sorter.get_random_topological_order(seed, nc_calls)
+
+        block_trie = self.context.consensus.nc_storage_factory.get_trie(block_root_id)
+
+        for tx in nc_sorted_calls:
+
+            tx_meta = tx.get_metadata()
+            if tx_meta.voided_by:
+                # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
+                # mark this tx as voided.
+                continue
+
+            from hathor.nanocontracts.runner import Runner
+
+            assert tx.storage is not None
+            storage_factory = self.context.consensus.nc_storage_factory
+            runner = Runner(tx.storage, storage_factory, block_trie)
+            try:
+                tx.execute(runner)
+                # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
+                #      method once per contract per block, just like we do for the block_trie. This ensures we will
+                #      have a clean database with no orphan nodes.
+                runner.commit()
+            except NCFail:
+                self.log.exception('nc execution failed', tx=tx.hash.hex())
+                self.mark_as_nc_fail_execution(tx)
+
+        # Save block state root id. If nothings happens, it should be the same as its block parent.
+        block_trie.commit()
+        assert block_trie.root.id is not None
+        meta.nc_block_root_id = block_trie.root.id
+        self.context.save(block)
+
+    def mark_as_nc_fail_execution(self, tx: Transaction) -> None:
+        """Mark that a transaction failed execution. It also propagates its voidedness through the DAG of funds."""
+        assert tx.storage is not None
+        tx_meta = tx.get_metadata()
+        tx_meta.add_voided_by(self._settings.NC_EXECUTION_FAIL_ID)
+        self.context.save(tx)
+        self.context.transaction_algorithm.add_voided_by(tx,
+                                                         tx.hash,
+                                                         is_dag_verifications=False)
 
     def update_voided_info(self, block: Block) -> None:
         """ This method is called only once when a new block arrives.
@@ -240,7 +389,8 @@ class BlockConsensusAlgorithm:
                     # the blocks themselves.
                     voided_by2 = voided_by2.copy()
                     voided_by2.discard(parent.hash)
-                voided_by.update(self.context.consensus.filter_out_soft_voided_entries(parent, voided_by2))
+                voided_by.update(self.context.consensus.filter_out_voided_by_entries_from_parents(parent, voided_by2))
+                voided_by.discard(self._settings.NC_EXECUTION_FAIL_ID)
         return voided_by
 
     def update_voided_by_from_parents(self, block: Block) -> bool:
