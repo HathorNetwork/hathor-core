@@ -86,6 +86,7 @@ class TxVersion(IntEnum):
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
+    NANO_CONTRACT = 4
 
     @classmethod
     def _missing_(cls, value: Any) -> None:
@@ -106,6 +107,12 @@ class TxVersion(IntEnum):
             TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
             TxVersion.MERGE_MINED_BLOCK: MergeMinedBlock,
         }
+
+        if True:
+            # TODO Use a feature flag to control whether nano contracts are enabled or not.
+            # XXX This code should not run on any network except nano-testnet.
+            from hathor.nanocontracts.nanocontract import NanoContract
+            cls_map[TxVersion.NANO_CONTRACT] = NanoContract
 
         cls = cls_map.get(self)
 
@@ -169,6 +176,9 @@ class BaseTransaction(ABC):
         self.parents = parents or []
         self.storage = storage
         self._hash: VertexId | None = hash  # Stored as bytes.
+
+        self.MAX_NUM_INPUTS = self._settings.MAX_NUM_INPUTS
+        self.MAX_NUM_OUTPUTS = self._settings.MAX_NUM_OUTPUTS
 
     @classproperty
     def log(cls):

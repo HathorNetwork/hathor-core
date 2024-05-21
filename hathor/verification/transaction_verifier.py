@@ -27,10 +27,10 @@ from hathor.transaction.exceptions import (
     InvalidInputData,
     InvalidInputDataSize,
     InvalidToken,
-    NoInputError,
     RewardLocked,
     ScriptError,
     TimestampError,
+    TooFewInputs,
     TooManyInputs,
     TooManySigOps,
     WeightError,
@@ -192,9 +192,10 @@ class TransactionVerifier:
         if len(tx.inputs) > self._settings.MAX_NUM_INPUTS:
             raise TooManyInputs('Maximum number of inputs exceeded')
 
-        if len(tx.inputs) == 0:
+        minimum = tx.get_minimum_number_of_inputs()
+        if len(tx.inputs) < minimum:
             if not tx.is_genesis:
-                raise NoInputError('Transaction must have at least one input')
+                raise TooFewInputs('Transaction must have at least {minimum} input(s)')
 
     def verify_output_token_indexes(self, tx: Transaction) -> None:
         """Verify outputs reference an existing token uid in the tokens list

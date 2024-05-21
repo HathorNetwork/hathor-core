@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from struct import error as StructError, pack
+from struct import pack
 from typing import Any, Optional
 
 from typing_extensions import override
@@ -20,7 +20,7 @@ from typing_extensions import override
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
-from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback, decode_string_utf8, int_to_bytes, unpack, unpack_len
 from hathor.types import TokenUid
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
@@ -126,13 +126,13 @@ class TokenCreationTransaction(Transaction):
 
         return struct_bytes
 
-    def get_sighash_all(self) -> bytes:
+    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
         """ Returns a serialization of the inputs and outputs without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
-        if self._sighash_cache:
+        if not skip_cache and self._sighash_cache:
             return self._sighash_cache
 
         struct_bytes = pack(
@@ -223,13 +223,3 @@ class TokenCreationTransaction(Transaction):
         token_dict[self.hash] = TokenInfo(0, True, True)
 
         return token_dict
-
-
-def decode_string_utf8(encoded: bytes, key: str) -> str:
-    """ Raises StructError in case it's not a valid utf-8 string
-    """
-    try:
-        decoded = encoded.decode('utf-8')
-        return decoded
-    except UnicodeDecodeError:
-        raise StructError('{} must be a valid utf-8 string.'.format(key))

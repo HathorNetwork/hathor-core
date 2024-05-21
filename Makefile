@@ -6,6 +6,7 @@ all: check tests
 # testing:
 
 tests_cli = tests/cli/
+tests_nano = tests/nanocontracts/ tests/tx/test_indexes_nc_history.py tests/resources/nanocontracts/
 tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 tests_ci = extras/github/
 
@@ -23,6 +24,10 @@ pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=x
 
 #--implicit-reexport
 #--no-implicit-reexport
+
+.PHONY: tests-nano
+tests-nano:
+	pytest --durations=10 --cov-report=html --cov=hathor/nanocontracts/ --cov-config=.coveragerc_full -p no:warnings $(tests_nano)
 
 .PHONY: tests-cli
 tests-cli:
