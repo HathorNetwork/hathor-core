@@ -82,3 +82,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     nano_testnet: bool
     log_vertex_bytes: bool
     disable_ws_history_streaming: bool
+    nc_history_index: bool
