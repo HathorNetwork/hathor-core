@@ -37,7 +37,14 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
-from hathor.transaction.scripts.execute import Stack, binary_to_int, decode_opn, get_data_value, get_script_op
+from hathor.transaction.scripts.execute import (
+    Stack,
+    UtxoScriptExtras,
+    binary_to_int,
+    decode_opn,
+    get_data_value,
+    get_script_op,
+)
 from hathor.transaction.scripts.script_context import ScriptContext
 
 
@@ -178,6 +185,7 @@ def op_greaterthan_timestamp(context: ScriptContext) -> None:
     buf = context.stack.pop()
     assert isinstance(buf, bytes)
     (timelock,) = struct.unpack('!I', buf)
+    assert isinstance(context.extras, UtxoScriptExtras)
     if context.extras.tx.timestamp <= timelock:
         raise TimeLocked('The output is locked until {}'.format(
             datetime.datetime.fromtimestamp(timelock).strftime("%m/%d/%Y %I:%M:%S %p")))
@@ -497,6 +505,7 @@ def op_find_p2pkh(context: ScriptContext) -> None:
         raise MissingStackItems('OP_FIND_P2PKH: empty stack')
 
     from hathor.transaction.scripts import P2PKH
+    assert isinstance(context.extras, UtxoScriptExtras)
     spent_tx = context.extras.spent_tx
     txin = context.extras.txin
     tx = context.extras.tx
