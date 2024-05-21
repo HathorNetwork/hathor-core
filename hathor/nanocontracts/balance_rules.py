@@ -1,0 +1,180 @@
+#  Copyright 2025 Hathor Labs
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
+
+from typing_extensions import assert_never, override
+
+from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathor.nanocontracts.exception import NCInvalidAction, NCInvalidActionExecution
+from hathor.nanocontracts.storage import NCChangesTracker
+from hathor.nanocontracts.types import (
+    BaseAction,
+    NCAction,
+    NCDepositAction,
+    NCGrantAuthorityAction,
+    NCInvokeAuthorityAction,
+    NCWithdrawalAction,
+)
+from hathor.transaction.transaction import TokenInfo
+from hathor.types import TokenUid
+
+T = TypeVar('T', bound=BaseAction)
+
+
+class BalanceRules(ABC, Generic[T]):
+    """
+    An abstract base class that unifies balance rules for NCActions.
+
+    Requires definitions for a verification-phase rule and a nano contract execution-phase rule,
+    which are normally complementary.
+    """
+
+    __slots__ = ('settings', 'action')
+
+    def __init__(self, settings: HathorSettings, action: T) -> None:
+        self.settings = settings
+        self.action = action
+
+    @abstractmethod
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        """
+        Define how the respective action interacts with the transaction's
+        token_dict during the verification phase, updating it.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def nc_execution_rule(self, changes_tracker: NCChangesTracker) -> None:
+        """
+        Define how the respective action interacts with the transaction's
+        changes tracker during nano contract execution, updating it.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def get_rules(settings: HathorSettings, action: NCAction) -> BalanceRules:
+        """Get the balance rules instance for the provided action."""
+        match action:
+            case NCDepositAction():
+                return _DepositRules(settings, action)
+            case NCWithdrawalAction():
+                return _WithdrawalRules(settings, action)
+            case NCGrantAuthorityAction():
+                return _GrantAuthorityRules(settings, action)
+            case NCInvokeAuthorityAction():
+                return _InvokeAuthorityRules(settings, action)
+            case _:
+                assert_never(action)
+
+
+class _DepositRules(BalanceRules[NCDepositAction]):
+    """
+    Define balance rules for the DEPOSIT action.
+
+    - In the verification-phase, the amount is removed from the tx inputs/outputs balance.
+    - In the execution-phase, the amount is added to the nano contract balance.
+    """
+
+    @override
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
+        token_info.amount = token_info.amount + self.action.amount
+        token_dict[self.action.token_uid] = token_info
+
+    @override
+    def nc_execution_rule(self, changes_tracker: NCChangesTracker) -> None:
+        changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+
+
+class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
+    """
+    Define balance rules for the WITHDRAWAL action.
+
+    - In the verification-phase, the amount is added to the tx inputs/outputs balance.
+    - In the execution-phase, the amount is removed from the nano contract balance.
+    """
+
+    @override
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
+        token_info.amount = token_info.amount - self.action.amount
+        token_dict[self.action.token_uid] = token_info
+
+    @override
+    def nc_execution_rule(self, changes_tracker: NCChangesTracker) -> None:
+        changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+
+
+class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
+    """
+    Define balance rules for the GRANT_AUTHORITY action.
+
+    - In the verification phase, we check whether the tx inputs can grant the authorities to the nano contract.
+    - In the execution phase, the authorities are granted to the nano contract.
+    """
+
+    @override
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        assert self.action.token_uid != HATHOR_TOKEN_UID
+        token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
+        if self.action.mint and not token_info.can_mint:
+            raise NCInvalidAction(
+                f'{self.action.name} token {self.action.token_uid.hex()} requires mint, but no input has it'
+            )
+
+        if self.action.melt and not token_info.can_melt:
+            raise NCInvalidAction(
+                f'{self.action.name} token {self.action.token_uid.hex()} requires melt, but no input has it'
+            )
+
+    @override
+    def nc_execution_rule(self, changes_tracker: NCChangesTracker) -> None:
+        assert self.action.token_uid != HATHOR_TOKEN_UID
+        changes_tracker.grant_authorities(
+            self.action.token_uid,
+            grant_mint=self.action.mint,
+            grant_melt=self.action.melt,
+        )
+
+
+class _InvokeAuthorityRules(BalanceRules[NCInvokeAuthorityAction]):
+    """
+    Define balance rules for the INVOKE_AUTHORITY action.
+
+    - In the verification phase, we allow the respective authorities in the transaction's token_info.
+    - In the execution phase, we check whether the nano contract balance can invoke those authorities.
+    """
+
+    @override
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        assert self.action.token_uid != HATHOR_TOKEN_UID
+        token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
+        token_info.can_mint = token_info.can_mint or self.action.mint
+        token_info.can_melt = token_info.can_melt or self.action.melt
+        token_dict[self.action.token_uid] = token_info
+
+    @override
+    def nc_execution_rule(self, changes_tracker: NCChangesTracker) -> None:
+        assert self.action.token_uid != HATHOR_TOKEN_UID
+        balance = changes_tracker.get_balance(self.action.token_uid)
+
+        if self.action.mint and not balance.can_mint:
+            raise NCInvalidActionExecution(f'cannot invoke mint authority for token {self.action.token_uid.hex()}')
+
+        if self.action.melt and not balance.can_melt:
+            raise NCInvalidActionExecution(f'cannot invoke melt authority for token {self.action.token_uid.hex()}')

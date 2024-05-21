@@ -1,8 +1,11 @@
+import base64
 import os
+import re
 import secrets
 import shutil
 import tempfile
 import time
+from contextlib import contextmanager
 from typing import Any, Callable, Collection, Iterable, Iterator, Optional
 from unittest import main as ut_main
 
@@ -14,10 +17,10 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
-from hathor.dag_builder import DAGBuilder
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.manager import HathorManager
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.pubsub import PubSubManager
@@ -27,10 +30,10 @@ from hathor.storage import RocksDBStorage
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.types import VertexId
-from hathor.util import Random, not_none
-from hathor.wallet import BaseWallet, HDWallet, Wallet
+from hathor.util import Random, initialize_hd_wallet, not_none
+from hathor.wallet import BaseWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
-from tests.utils import GENESIS_SEED
+from tests.utils import DEFAULT_WORDS
 
 logger = get_logger()
 main = ut_main
@@ -61,6 +64,16 @@ def _get_default_peer_id_pool_filepath() -> str:
 
 
 PEER_ID_POOL = list(_load_peer_pool())
+
+OCB_TEST_PRIVKEY: bytes = base64.b64decode(
+    'MIH0MF8GCSqGSIb3DQEFDTBSMDEGCSqGSIb3DQEFDDAkBBCIdovnmKjK3KU'
+    'c61YGgja0AgIIADAMBggqhkiG9w0CCQUAMB0GCWCGSAFlAwQBKgQQl2CJT4'
+    'I2IUzRNoU9hyOWEwSBkLznN9Nunel+kK0FXpk//z0ZAnIyVacfHklCxFGyO'
+    'j1VSjor0CHzH2Gmblvr+m7lCmRmqSVAwJpplqQYdBUF6sR9djHLY6svPY0o'
+    '//dqQ/xM7QiY2FHlb3JQCTu7DaMflqPcJXlRXAFyoACnmj4/lUJWgrcWala'
+    'rCSI+8rIillg3AU8/2gfoB1BxulVIIG35SQ=='
+)
+OCB_TEST_PASSWORD: bytes = b'OCBtestPW'
 
 
 class TestBuilder(Builder):
@@ -150,18 +163,6 @@ class TestCase(unittest.TestCase):
             wallet.lock()
         return wallet
 
-    def get_dag_builder(self, manager: HathorManager) -> DAGBuilder:
-        genesis_wallet = HDWallet(words=GENESIS_SEED)
-        genesis_wallet._manually_initialize()
-
-        return DAGBuilder(
-            settings=manager._settings,
-            daa=manager.daa,
-            genesis_wallet=genesis_wallet,
-            wallet_factory=self.get_wallet,
-            vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
-        )
-
     def get_builder(self, settings: HathorSettings | None = None) -> TestBuilder:
         builder = TestBuilder(settings)
         builder.set_rng(self.rng) \
@@ -202,6 +203,8 @@ class TestCase(unittest.TestCase):
         enable_event_queue: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
+        nc_indices: bool = False,
+        nc_log_config: NCLogConfig | None = None,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
 
         settings = self._settings._replace(NETWORK_NAME=network)
@@ -254,6 +257,13 @@ class TestCase(unittest.TestCase):
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
+
+        if nc_indices:
+            builder.enable_nc_indices()
+
+        if nc_log_config:
+            builder.set_nc_log_config(nc_log_config)
+
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         return manager
@@ -436,6 +446,24 @@ class TestCase(unittest.TestCase):
     def assertV2SyncedProgress(self, node_sync: NodeBlockSync) -> None:
         self.assertEqual(node_sync.synced_block, node_sync.peer_best_block)
 
+    @contextmanager
+    def assertNCFail(self, class_name: str, pattern: str | re.Pattern[str] | None = None) -> Iterator[BaseException]:
+        """Assert that a NCFail is raised and it has the expected class name and str(exc) format.
+        """
+        from hathor.nanocontracts.exception import NCFail
+
+        with self.assertRaises(NCFail) as cm:
+            yield cm
+
+        self.assertEqual(cm.exception.__class__.__name__, class_name)
+
+        if pattern is not None:
+            actual = str(cm.exception)
+            if isinstance(pattern, re.Pattern):
+                assert pattern.match(actual)
+            else:
+                self.assertEqual(pattern, actual)
+
     def clean_tmpdirs(self) -> None:
         for tmpdir in self.tmpdirs:
             shutil.rmtree(tmpdir)
@@ -481,18 +509,10 @@ class TestCase(unittest.TestCase):
         if required_to_quiesce and active:
             self.fail('Reactor was still active when it was required to be quiescent.')
 
-    def get_wallet(self) -> HDWallet:
-        words = ('bind daring above film health blush during tiny neck slight clown salmon '
-                 'wine brown good setup later omit jaguar tourist rescue flip pet salute')
-
-        hd = HDWallet(words=words)
-        hd._manually_initialize()
-        return hd
-
     def get_address(self, index: int) -> Optional[str]:
         """ Generate a fixed HD Wallet and return an address
         """
-        hd = self.get_wallet()
+        hd = initialize_hd_wallet(DEFAULT_WORDS)
 
         if index >= hd.gap_limit:
             return None

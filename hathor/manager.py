@@ -44,6 +44,10 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.exception import NanoContractDoesNotExist
+from hathor.nanocontracts.runner import Runner
+from hathor.nanocontracts.runner.runner import RunnerFactory
+from hathor.nanocontracts.storage import NCContractStorage
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
@@ -107,6 +111,7 @@ class HathorManager:
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
+        runner_factory: RunnerFactory,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -194,6 +199,7 @@ class HathorManager:
         self.connections = p2p_manager
         self.vertex_handler = vertex_handler
         self.vertex_parser = vertex_parser
+        self.runner_factory = runner_factory
 
         self.websocket_factory = websocket_factory
 
@@ -380,6 +386,32 @@ class HathorManager:
         self.is_profiler_running = False
         if save_to:
             self.profiler.dump_stats(save_to)
+
+    def get_nc_runner(self, block: Block) -> Runner:
+        """Return a contract runner for a given block."""
+        nc_storage_factory = self.consensus_algorithm.nc_storage_factory
+        block_storage = nc_storage_factory.get_block_storage_from_block(block)
+        return self.runner_factory.create(block_storage=block_storage)
+
+    def get_best_block_nc_runner(self) -> Runner:
+        """Return a contract runner for the best block."""
+        best_block = self.tx_storage.get_best_block()
+        return self.get_nc_runner(best_block)
+
+    def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCContractStorage:
+        """Return a contract storage with the contract state at a given block."""
+        from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
+        block_storage = self.consensus_algorithm.nc_storage_factory.get_block_storage_from_block(block)
+        try:
+            contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(nc_id)))
+        except KeyError:
+            raise NanoContractDoesNotExist(nc_id.hex())
+        return contract_storage
+
+    def get_best_block_nc_storage(self, nc_id: VertexId) -> NCContractStorage:
+        """Return a contract storage with the contract state at the best block."""
+        best_block = self.tx_storage.get_best_block()
+        return self.get_nc_storage(best_block, nc_id)
 
     def _initialize_components(self) -> None:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
