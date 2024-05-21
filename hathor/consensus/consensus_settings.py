@@ -72,7 +72,9 @@ class PowSettings(_BaseConsensusSettings):
             TxVersion.REGULAR_BLOCK,
             TxVersion.REGULAR_TRANSACTION,
             TxVersion.TOKEN_CREATION_TRANSACTION,
-            TxVersion.MERGE_MINED_BLOCK
+            TxVersion.MERGE_MINED_BLOCK,
+            TxVersion.NANO_CONTRACT,
+            TxVersion.ON_CHAIN_BLUEPRINT,
         }
 
     @override

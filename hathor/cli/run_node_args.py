@@ -88,3 +88,5 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     disable_ws_history_streaming: bool
     x_enable_ipv6: bool
     x_disable_ipv4: bool
+    nc_history_index: bool
+    nc_indices: bool

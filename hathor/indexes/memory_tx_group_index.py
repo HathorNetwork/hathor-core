@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import abstractmethod
 from collections import defaultdict
-from typing import Iterable, Optional, Sized, TypeVar
+from typing import Iterator, Optional, Sized, TypeVar
 
 from structlog import get_logger
+from typing_extensions import override
 
 from hathor.indexes.tx_group_index import TxGroupIndex
 from hathor.transaction import BaseTransaction
@@ -35,16 +35,15 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
     def __init__(self) -> None:
         self.force_clear()
 
+    @override
+    def get_db_name(self) -> Optional[str]:
+        return None
+
     def force_clear(self) -> None:
         self.index = defaultdict(set)
 
     def _add_tx(self, key: KT, tx: BaseTransaction) -> None:
         self.index[key].add((tx.timestamp, tx.hash))
-
-    @abstractmethod
-    def _extract_keys(self, tx: BaseTransaction) -> Iterable[KT]:
-        """Extract the keys related to a given tx. The transaction will be added to all extracted keys."""
-        raise NotImplementedError
 
     def add_tx(self, tx: BaseTransaction) -> None:
 
@@ -56,12 +55,14 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
         for key in self._extract_keys(tx):
             self.index[key].discard((tx.timestamp, tx.hash))
 
-    def _get_from_key(self, key: KT) -> Iterable[bytes]:
-        for _, h in self.index[key]:
-            yield h
-
-    def _get_sorted_from_key(self, key: KT, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
+    def _get_sorted_from_key(self,
+                             key: KT,
+                             tx_start: Optional[BaseTransaction] = None,
+                             reverse: bool = False) -> Iterator[bytes]:
         sorted_elements = sorted(self.index[key])
+        if reverse:
+            sorted_elements.reverse()
+
         found = False
         for _, h in sorted_elements:
             if tx_start and h == tx_start.hash:
@@ -72,3 +73,12 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
 
     def _is_key_empty(self, key: KT) -> bool:
         return not bool(self.index[key])
+
+    @override
+    def get_latest_tx_timestamp(self, key: KT) -> int | None:
+        elements = self.index.get(key)
+        if elements is None:
+            return None
+        sorted_elements = sorted(self.index[key], reverse=True)
+        timestamp, _ = sorted_elements[0]
+        return timestamp

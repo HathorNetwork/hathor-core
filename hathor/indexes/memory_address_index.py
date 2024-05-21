@@ -36,9 +36,6 @@ class MemoryAddressIndex(MemoryTxGroupIndex[str], AddressIndex):
         if self.pubsub:
             self._subscribe_pubsub_events()
 
-    def get_db_name(self) -> Optional[str]:
-        return None
-
     def _extract_keys(self, tx: BaseTransaction) -> Iterable[str]:
         return tx.get_related_addresses()
 
@@ -47,7 +44,7 @@ class MemoryAddressIndex(MemoryTxGroupIndex[str], AddressIndex):
         self._publish_tx(tx)
 
     def get_from_address(self, address: str) -> list[bytes]:
-        return list(self._get_from_key(address))
+        return list(self._get_sorted_from_key(address))
 
     def get_sorted_from_address(self, address: str, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         return self._get_sorted_from_key(address, tx_start)
