@@ -53,6 +53,7 @@ from hathor.verification.transaction_verifier import TransactionVerifier
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
 
 cpu = get_cpu_profiler()
 
@@ -77,6 +78,7 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
     _latest_n_height_tips: list[HeightInfo]
+    nc_catalog: Optional['NCBlueprintCatalog'] = None
 
     log = get_logger()
 
