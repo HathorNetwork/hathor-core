@@ -52,6 +52,7 @@ class BaseEventReorgTest(unittest.TestCase):
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[0].hash_hex}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': self._settings.GENESIS_TX2_HASH.hex()}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': self._settings.GENESIS_TX1_HASH.hex()}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': self._settings.GENESIS_BLOCK_HASH.hex()}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[0].hash_hex}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[1].hash_hex}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[1].hash_hex}),
