@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from contextlib import AbstractContextManager
 from threading import Lock
-from typing import Any, Iterator, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
@@ -44,6 +46,11 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
 from hathor.verification.transaction_verifier import TransactionVerifier
 
+if TYPE_CHECKING:
+    from hathor.nanocontracts.blueprint import Blueprint
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.types import BlueprintId
+
 cpu = get_cpu_profiler()
 
 # these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be
@@ -67,6 +74,7 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
     _latest_n_height_tips: list[HeightInfo]
+    nc_catalog: Optional['NCBlueprintCatalog'] = None
 
     log = get_logger()
 
@@ -1136,6 +1144,45 @@ class TransactionStorage(ABC):
         """Return true if the vertex exists no matter its validation state."""
         with self.allow_partially_validated_context():
             return self.transaction_exists(vertex_id)
+
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+        """Returns the blueprint class associated with the given blueprint_id.
+
+        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+        """
+        from hathor.nanocontracts.exception import (
+            BlueprintDoesNotExist,
+            OCBBlueprintNotConfirmed,
+            OCBInvalidBlueprintVertexType,
+        )
+        from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
+
+        assert self.nc_catalog is not None
+
+        try:
+            blueprint_class = self.nc_catalog.get_blueprint_class(blueprint_id)
+        except BlueprintDoesNotExist as e:
+            self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
+            if self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
+                self.log.debug('on-chain blueprints enabled, looking for that instead')
+                try:
+                    blueprint_tx = self.get_transaction(blueprint_id)
+                except TransactionDoesNotExist:
+                    self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
+                    # XXX: should be the same exception because we don't know why the id is wrong, and it the exception
+                    #      shouldn't depend on the order that we look for them in the storage or catalog
+                    raise e
+                if not isinstance(blueprint_tx, OnChainBlueprint):
+                    raise OCBInvalidBlueprintVertexType
+                tx_meta = blueprint_tx.get_metadata()
+                if tx_meta.voided_by or not tx_meta.first_block:
+                    raise OCBBlueprintNotConfirmed
+                # XXX: maybe use N blocks confirmation, like reward-locks
+                blueprint_class = blueprint_tx.get_blueprint_class()
+            else:
+                raise e
+
+        return blueprint_class
 
 
 class BaseTransactionStorage(TransactionStorage):

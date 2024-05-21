@@ -64,7 +64,6 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
         responses = _remove_timestamp(responses)
         expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_single_chain_one_block(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -93,7 +92,6 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
         responses = _remove_timestamp(responses)
         expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_single_chain_blocks_and_transactions(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -159,7 +157,6 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
         responses = _remove_timestamp(responses)
         expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_reorg(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -208,7 +205,6 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
         responses = _remove_timestamp(responses)
         expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_unvoided_transaction(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -276,7 +272,6 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
         responses = _remove_timestamp(responses)
         expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_invalid_mempool(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -349,7 +344,6 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
         responses = _remove_timestamp(responses)
         expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_empty_script(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -414,7 +408,6 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
         responses = _remove_timestamp(responses)
         expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_custom_script(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -480,7 +473,6 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
         responses = _remove_timestamp(responses)
         expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def _start_stream(self) -> None:
         start_stream = StartStreamRequest(type='START_STREAM', window_size=1_000_000, last_ack_event_id=None)

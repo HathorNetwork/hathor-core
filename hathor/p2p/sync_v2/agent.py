@@ -232,7 +232,7 @@ class NodeBlockSync(SyncAgent):
         if self._started:
             raise Exception('NodeSyncBlock is already running')
         self._started = True
-        self._lc_run.start(5)
+        self._lc_run.start(1)
 
     def stop(self) -> None:
         if not self._started:
