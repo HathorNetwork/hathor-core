@@ -17,6 +17,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, TypedDict, cast
 
 from structlog import get_logger
+from typing_extensions import assert_never, override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.rocksdb_utils import (
@@ -27,6 +28,12 @@ from hathor.indexes.rocksdb_utils import (
     to_internal_token_uid,
 )
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
+from hathor.nanocontracts.types import (
+    NCDepositAction,
+    NCGrantAuthorityAction,
+    NCInvokeAuthorityAction,
+    NCWithdrawalAction,
+)
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.util import collect_n, json_dumpb, json_loadb
@@ -168,7 +175,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     def _from_value_info(self, value: bytes) -> _InfoDict:
         return cast(_InfoDict, json_loadb(value))
 
-    def _create_token_info(self, token_uid: bytes, name: str, symbol: str, total: int = 0) -> None:
+    def create_token_info(self, token_uid: bytes, name: str, symbol: str, total: int = 0) -> None:
         key = self._to_key_info(token_uid)
         old_value = self._db.get((self._cf, key))
         assert old_value is None
@@ -179,7 +186,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         })
         self._db.put((self._cf, key), value)
 
-    def _destroy_token(self, token_uid: bytes) -> None:
+    def destroy_token(self, token_uid: bytes) -> None:
         import rocksdb
 
         # a writebatch works similar to a "SQL transaction" in that if it fails, either all persist or none
@@ -218,14 +225,15 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         self._db.delete((self._cf, self._to_key_authority(token_uid, TokenUtxoInfo(tx_hash, index), is_mint=is_mint)))
 
     def _create_genesis_info(self) -> None:
-        self._create_token_info(
+        self.create_token_info(
             self._settings.HATHOR_TOKEN_UID,
             self._settings.HATHOR_TOKEN_NAME,
             self._settings.HATHOR_TOKEN_SYMBOL,
             self._settings.GENESIS_TOKENS,
         )
 
-    def _add_to_total(self, token_uid: bytes, amount: int) -> None:
+    @override
+    def add_to_total(self, token_uid: bytes, amount: int) -> None:
         key_info = self._to_key_info(token_uid)
         old_value_info = self._db.get((self._cf, key_info))
         if token_uid == self._settings.HATHOR_TOKEN_UID and old_value_info is None:
@@ -234,18 +242,6 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         assert old_value_info is not None
         dict_info = self._from_value_info(old_value_info)
         dict_info['total'] += amount
-        new_value_info = self._to_value_info(dict_info)
-        self._db.put((self._cf, key_info), new_value_info)
-
-    def _subtract_from_total(self, token_uid: bytes, amount: int) -> None:
-        key_info = self._to_key_info(token_uid)
-        old_value_info = self._db.get((self._cf, key_info))
-        if token_uid == self._settings.HATHOR_TOKEN_UID and old_value_info is None:
-            self._create_genesis_info()
-            old_value_info = self._db.get((self._cf, key_info))
-        assert old_value_info is not None
-        dict_info = self._from_value_info(old_value_info)
-        dict_info['total'] -= amount
         new_value_info = self._to_value_info(dict_info)
         self._db.put((self._cf, key_info), new_value_info)
 
@@ -263,7 +259,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 # add to melt index
                 self._add_authority_utxo(token_uid, tx.hash, index, is_mint=False)
         else:
-            self._add_to_total(token_uid, tx_output.value)
+            self.add_to_total(token_uid, tx_output.value)
 
     def _remove_utxo(self, tx: BaseTransaction, index: int) -> None:
         """ Remove tx from mint/melt indexes and total amount
@@ -280,7 +276,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 # remove from melt index
                 self._remove_authority_utxo(token_uid, tx.hash, index, is_mint=False)
         else:
-            self._subtract_from_total(token_uid, tx_output.value)
+            self.add_to_total(token_uid, -tx_output.value)
 
     def add_tx(self, tx: BaseTransaction) -> None:
         # if it's a TokenCreationTransaction, update name and symbol
@@ -292,7 +288,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             key_info = self._to_key_info(tx.hash)
             token_info = self._db.get((self._cf, key_info))
             if token_info is None:
-                self._create_token_info(tx.hash, tx.token_name, tx.token_symbol)
+                self.create_token_info(tx.hash, tx.token_name, tx.token_symbol)
 
         if tx.is_transaction:
             # Adding this tx to the transactions key list
@@ -307,6 +303,24 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         for index in range(len(tx.outputs)):
             self.log.debug('add utxo', tx=tx.hash_hex, index=index)
             self._add_utxo(tx, index)
+
+        # Handle actions from Nano Contracts.
+        if tx.is_nano_contract():
+            assert isinstance(tx, Transaction)
+            nano_header = tx.get_nano_header()
+            ctx = nano_header.get_context()
+            for action in ctx.__all_actions__:
+                match action:
+                    case NCDepositAction():
+                        self.add_to_total(action.token_uid, action.amount)
+                    case NCWithdrawalAction():
+                        self.add_to_total(action.token_uid, -action.amount)
+                    case NCGrantAuthorityAction() | NCInvokeAuthorityAction():
+                        # These actions don't affect the nc token balance,
+                        # so no need for any special handling on the index.
+                        pass
+                    case _:
+                        assert_never(action)
 
     def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
@@ -324,7 +338,25 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
 
         # if it's a TokenCreationTransaction, remove it from index
         if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
-            self._destroy_token(tx.hash)
+            self.destroy_token(tx.hash)
+
+        # Handle actions from Nano Contracts.
+        if tx.is_nano_contract():
+            assert isinstance(tx, Transaction)
+            nano_header = tx.get_nano_header()
+            ctx = nano_header.get_context()
+            for action in ctx.__all_actions__:
+                match action:
+                    case NCDepositAction():
+                        self.add_to_total(action.token_uid, -action.amount)
+                    case NCWithdrawalAction():
+                        self.add_to_total(action.token_uid, action.amount)
+                    case NCGrantAuthorityAction() | NCInvokeAuthorityAction():
+                        # These actions don't affect the nc token balance,
+                        # so no need for any special handling on the index.
+                        pass
+                    case _:
+                        assert_never(action)
 
     def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:
         self.log.debug('seek to start')

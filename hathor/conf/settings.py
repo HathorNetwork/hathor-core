@@ -442,6 +442,10 @@ class HathorSettings(NamedTuple):
     # activate Nano Contracts through the Feature Activation.
     ENABLE_NANO_CONTRACTS: bool = False
 
+    # This should NEVER be enabled for mainnet and testnet, since both networks will
+    # activate Nano Contracts through the Feature Activation.
+    ENABLE_ON_CHAIN_BLUEPRINTS: bool = False
+
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, 'str'] = {}
 
@@ -451,6 +455,27 @@ class HathorSettings(NamedTuple):
     # The name and symbol of the native token. This is only used in APIs to serve clients.
     NATIVE_TOKEN_NAME: str = 'Hathor'
     NATIVE_TOKEN_SYMBOL: str = 'HTR'
+
+    # Identifier used in metadata's voided_by when a Nano Contract method fails.
+    NC_EXECUTION_FAIL_ID: bytes = b'nc-fail'
+
+    # The pubkeys allowed to create on-chain-blueprints in the network
+    # XXX: in the future this restriction will be lifted, possibly through a feature activation
+    NC_ON_CHAIN_BLUEPRINT_RESTRICTED: bool = True
+    NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES: list[str] = []
+
+    # Max length in bytes allowed for on-chain blueprint code after decompression, 240KB (not KiB)
+    NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_UNCOMPRESSED: int = 240_000
+
+    # Max length in bytes allowed for on-chain blueprint code inside the transaction, 24KB (not KiB)
+    NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_COMPRESSED: int = 24_000
+
+    # TODO: align this with a realistic value later
+    # fuel units are arbitrary but it's roughly the number of opcodes, memory_limit is in bytes
+    NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE: int = 100_000  # 100K opcodes
+    NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE: int = 100 * 1024 * 1024  # 100MiB
+    NC_INITIAL_FUEL_TO_CALL_METHOD: int = 1_000_000  # 1M opcodes
+    NC_MEMORY_LIMIT_TO_CALL_METHOD: int = 1024 * 1024 * 1024  # 1GiB
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
