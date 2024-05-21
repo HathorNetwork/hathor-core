@@ -50,8 +50,8 @@ class InvalidInputDataSize(TxValidationError):
     """Input data is too big"""
 
 
-class NoInputError(TxValidationError):
-    """There is not input"""
+class TooFewInputs(TxValidationError):
+    """There are less inputs than the minimum required"""
 
 
 class InvalidScriptError(TxValidationError):
@@ -64,6 +64,14 @@ class TooManySigOps(TxValidationError):
 
 class TooManyInputs(TxValidationError):
     """More than 256 inputs"""
+
+
+class TooManyHeaders(TxValidationError):
+    """Vertex has more vertex than the maximum allowed."""
+
+
+class HeaderNotSupported(TxValidationError):
+    """Vertex contains a header that is not supported by its type."""
 
 
 class InexistentInput(TxValidationError):
@@ -140,6 +148,10 @@ class RewardLocked(TxValidationError):
 
 class InvalidVersionError(TxValidationError):
     """Vertex version is invalid."""
+
+
+class TokenAuthorityNotAllowed(TxValidationError):
+    """Transaction has at least one authority token and it is not allowed"""
 
 
 class BlockWithInputs(BlockError):

@@ -14,7 +14,9 @@
 
 from __future__ import annotations
 
+import ast
 from collections import defaultdict
+from types import ModuleType
 from typing import Iterator
 
 from structlog import get_logger
@@ -33,9 +35,14 @@ from hathor.dag_builder.types import (
     VertexResolverType,
     WalletFactoryType,
 )
+from hathor.dag_builder.utils import is_literal, parse_amount_token
+from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.wallet import BaseWallet
 
 logger = get_logger()
+
+NC_DEPOSIT_KEY = 'nc_deposit'
+NC_WITHDRAWAL_KEY = 'nc_withdrawal'
 
 
 class DAGBuilder:
@@ -46,6 +53,8 @@ class DAGBuilder:
         genesis_wallet: BaseWallet,
         wallet_factory: WalletFactoryType,
         vertex_resolver: VertexResolverType,
+        nc_catalog: NCBlueprintCatalog,
+        blueprints_module: ModuleType | None = None,
     ) -> None:
         from hathor.dag_builder.default_filler import DefaultFiller
         from hathor.dag_builder.tokenizer import tokenize
@@ -63,6 +72,8 @@ class DAGBuilder:
             genesis_wallet=genesis_wallet,
             wallet_factory=wallet_factory,
             vertex_resolver=vertex_resolver,
+            nc_catalog=nc_catalog,
+            blueprints_module=blueprints_module,
         )
 
     def parse_tokens(self, tokens: Iterator[Token]) -> None:
@@ -115,6 +126,22 @@ class DAGBuilder:
         from_node.deps.add(_to)
         return self
 
+    def set_balance(self, name: str, token: str, value: int) -> Self:
+        """Set the expected balance for a given token, where balance = sum(outputs) - sum(inputs).
+
+        =0 means sum(txouts) = sum(txins)
+        >0 means sum(txouts) > sum(txins), e.g., withdrawal
+        <0 means sum(txouts) < sum(txins), e.g., deposit
+        """
+        node = self._get_or_create_node(name)
+        if token in node.balances:
+            raise SyntaxError(f'{name}: balance set more than once for {token}')
+        node.balances[token] = value
+        if token != 'HTR':
+            self._get_or_create_node(token, default_type=DAGNodeType.Token)
+            self.add_deps(name, token)
+        return self
+
     def add_blockchain(self, prefix: str, first_parent: str | None, first_index: int, last_index: int) -> Self:
         """Add a sequence of nodes representing a chain of blocks."""
         prev = first_parent
@@ -127,7 +154,7 @@ class DAGBuilder:
         return self
 
     def add_parent_edge(self, _from: str, _to: str) -> Self:
-        """Add a parent edge between two nodes. For clarity, `_to` has to be created befre `_from`."""
+        """Add a parent edge between two nodes. For clarity, `_to` has to be created before `_from`."""
         self._get_or_create_node(_to)
         from_node = self._get_or_create_node(_from)
         from_node.parents.add(_to)
@@ -154,13 +181,88 @@ class DAGBuilder:
             node.deps.add(token)
         return self
 
-    def add_attribute(self, name: str, key: str, value: str) -> Self:
-        """Add an attribute to a node."""
+    def _parse_expression(self, value: str) -> ast.AST:
+        try:
+            ret = ast.parse(value, mode='eval').body
+        except SyntaxError as e:
+            raise SyntaxError(f'failed parsing "{value}"') from e
+        return ret
+
+    def _add_nc_attribute(self, name: str, key: str, value: str) -> None:
+        """Handle attributes related to nanocontract transactions."""
         node = self._get_or_create_node(name)
-        if key == 'type':
-            node.type = DAGNodeType(value)
+        if key == 'nc_id':
+            parsed_value = self._parse_expression(value)
+            if isinstance(parsed_value, ast.Name):
+                node.deps.add(parsed_value.id)
+            elif isinstance(parsed_value, ast.Call):
+                for arg in parsed_value.args:
+                    if isinstance(arg, ast.Name):
+                        node.deps.add(arg.id)
+                    elif isinstance(arg, ast.Attribute):
+                        assert isinstance(arg.value, ast.Name)
+                        node.deps.add(arg.value.id)
+            node.attrs[key] = parsed_value
+
+        elif key in (NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY):
+            token, amount, args = parse_amount_token(value)
+            if args:
+                raise SyntaxError(f'unexpected args in `{value}`')
+            if amount < 0:
+                raise SyntaxError(f'unexpected negative action in `{value}`')
+            multiplier = 1 if key == NC_WITHDRAWAL_KEY else -1
+            self.set_balance(name, token, amount * multiplier)
+            actions = node.get_attr_list(key, default=[])
+            actions.append((token, amount))
+            node.attrs[key] = actions
+
         else:
             node.attrs[key] = value
+
+    def _add_ocb_attribute(self, name: str, key: str, value: str) -> None:
+        """Handle attributes related to on-chain blueprint transactions."""
+        node = self._get_or_create_node(name)
+        node.type = DAGNodeType.OnChainBlueprint
+        if key == 'ocb_code':
+            node.attrs[key] = value
+
+        elif key == 'ocb_private_key':
+            if not is_literal(value):
+                raise SyntaxError(f'ocb_private_key must be a bytes literal: {value}')
+            node.attrs[key] = value
+
+        elif key == 'ocb_password':
+            if not is_literal(value):
+                raise SyntaxError(f'ocb_password must be a bytes literal: {value}')
+            node.attrs[key] = value
+
+        else:
+            node.attrs[key] = value
+
+    def add_attribute(self, name: str, key: str, value: str) -> Self:
+        """Add an attribute to a node."""
+        if key.startswith('nc_'):
+            self._add_nc_attribute(name, key, value)
+            return self
+
+        if key.startswith('ocb_'):
+            self._add_ocb_attribute(name, key, value)
+            return self
+
+        if key.startswith('balance_'):
+            token = key[len('balance_'):]
+            self.set_balance(name, token, int(value))
+            return self
+
+        node = self._get_or_create_node(name)
+        if key not in node.attrs:
+            if key == 'type' and value == 'NanoContract':
+                node.type = DAGNodeType.NanoContract
+            else:
+                node.attrs[key] = value
+        else:
+            raise SyntaxError('attribute key duplicated')
+
         return self
 
     def topological_sorting(self) -> Iterator[DAGNode]:
@@ -181,12 +283,14 @@ class DAGBuilder:
 
         for _ in range(len(self._nodes)):
             if len(candidates) == 0:
-                self.log('fail because there is at least one cycle in the dependencies',
-                         direct_deps=direct_deps,
-                         rev_deps=rev_deps,
-                         seen=seen,
-                         not_seen=set(self._nodes.keys()) - seen,
-                         nodes=self._nodes)
+                self.log.error(
+                    'fail because there is at least one cycle in the dependencies',
+                    direct_deps=direct_deps,
+                    rev_deps=rev_deps,
+                    seen=seen,
+                    not_seen=set(self._nodes.keys()) - seen,
+                    nodes=self._nodes,
+                )
                 raise RuntimeError('there is at least one cycle')
             name = candidates.pop()
             assert name not in seen

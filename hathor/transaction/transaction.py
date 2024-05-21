@@ -18,13 +18,15 @@ import hashlib
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
-from typing_extensions import override
+from typing_extensions import Self, assert_never, override
 
 from hathor.checkpoint import Checkpoint
+from hathor.crypto.util import get_address_b58_from_public_key_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
@@ -52,6 +54,8 @@ class RewardLockedInfo(NamedTuple):
 
 
 class Transaction(GenericVertex[TransactionStaticMetadata]):
+
+    __slots__ = ['tokens', '_sighash_cache', '_sighash_data_cache']
 
     SERIALIZATION_NONCE_SIZE = 4
 
@@ -91,6 +95,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
 
+    def clear_sighash_cache(self) -> None:
+        """Clear caches related to sighash calculation."""
+        self._sighash_cache = None
+        self._sighash_data_cache = None
+
     @property
     def is_block(self) -> bool:
         """Returns true if this is a block"""
@@ -101,21 +110,38 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """Returns true if this is a transaction"""
         return True
 
+    def is_nano_contract(self) -> bool:
+        try:
+            self.get_nano_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_nano_header(self) -> NanoHeader:
+        """Return the NanoHeader or raise ValueError."""
+        for header in self.headers:
+            if isinstance(header, NanoHeader):
+                return header
+        raise ValueError('nano header not found')
+
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'Transaction':
-        tx = cls()
+                           *, verbose: VerboseCallback = None) -> Self:
+        tx = cls(storage=storage)
         buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
 
-        if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
+        if len(buf) < cls.SERIALIZATION_NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
 
         [tx.nonce, ], buf = unpack('!I', buf)
         if verbose:
             verbose('nonce', tx.nonce)
 
+        while buf:
+            buf = tx.get_header_from_bytes(buf, verbose=verbose)
+
         tx.update_hash()
-        tx.storage = storage
 
         return tx
 
@@ -184,7 +210,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         return struct_bytes
 
-    def get_sighash_all(self) -> bytes:
+    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
         """Return a serialization of the inputs, outputs and tokens without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
@@ -193,7 +219,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         # This method does not depend on the input itself, however we call it for each one to sign it.
         # For transactions that have many inputs there is a significant decrease on the verify time
         # when using this cache, so we call this method only once.
-        if self._sighash_cache:
+        if not skip_cache and self._sighash_cache:
             return self._sighash_cache
 
         struct_bytes = bytearray(
@@ -215,6 +241,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
+
+        for header in self.headers:
+            struct_bytes += header.get_sighash_bytes()
 
         ret = bytes(struct_bytes)
         self._sighash_cache = ret
@@ -242,10 +271,34 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             return self._settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
+    def get_related_addresses(self) -> set[str]:
+        ret = super().get_related_addresses()
+        if self.is_nano_contract():
+            nano_header = self.get_nano_header()
+            ret.add(get_address_b58_from_public_key_bytes(nano_header.nc_pubkey))
+        return ret
+
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
+
+        if self.is_nano_contract():
+            nano_header = self.get_nano_header()
+            json['nc_id'] = nano_header.get_nanocontract_id().hex()
+            # json['nc_blueprint_id'] = nano_header.get_blueprint_id().hex()
+            json['nc_method'] = nano_header.nc_method
+            json['nc_args'] = nano_header.nc_args_bytes.hex()
+            json['nc_pubkey'] = nano_header.nc_pubkey.hex()
+            json['nc_context'] = nano_header.get_context().to_json()
+
         return json
+
+    def to_json_extended(self) -> dict[str, Any]:
+        json_extended = super().to_json_extended()
+        if self.is_nano_contract():
+            json = self.to_json()
+            return {**json, **json_extended}
+        return json_extended
 
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.storage is not None
@@ -264,9 +317,44 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         Get a complete token info dict, including data from both inputs and outputs.
         """
         token_dict = self._get_token_info_from_inputs()
+        self._update_token_info_from_nano_actions(token_dict=token_dict)
+        # This one must be called last so token_dict already contains all tokens in inputs and nano actions.
         self._update_token_info_from_outputs(token_dict=token_dict)
 
         return token_dict
+
+    def get_minimum_number_of_inputs(self) -> int:
+        """Return the minimum number of inputs for this transaction.
+        This is used by the verification services."""
+        if self.is_nano_contract():
+            return 0
+        return 1
+
+    def _update_token_info_from_nano_actions(self, *, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        """Update token_dict with nano actions."""
+        if not self.is_nano_contract():
+            return
+
+        from hathor.nanocontracts.types import NCActionType
+
+        nano_header = self.get_nano_header()
+        context = nano_header.get_context()
+        for action in context.actions.values():
+            token_info = token_dict.get(action.token_uid)
+            if token_info is None:
+                token_info = TokenInfo(0, False, False)
+
+            # amount = sum(outputs) - sum(inputs)
+            new_amount = token_info.amount
+            match action.type:
+                case NCActionType.DEPOSIT:
+                    new_amount += action.amount
+                case NCActionType.WITHDRAWAL:
+                    new_amount -= action.amount
+                case _:
+                    assert_never(action.type)
+
+            token_dict[action.token_uid] = TokenInfo(new_amount, token_info.can_mint, token_info.can_melt)
 
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
@@ -308,23 +396,23 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             token_info = token_dict.get(token_uid)
             if token_info is None:
                 raise InvalidToken('no inputs for token {}'.format(token_uid.hex()))
-            else:
-                # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
-                if tx_output.can_mint_token() and not token_info.can_mint:
-                    raise InvalidToken('output has mint authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
-                if tx_output.can_melt_token() and not token_info.can_melt:
-                    raise InvalidToken('output has melt authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
 
-                if tx_output.is_token_authority():
-                    # make sure we only have authorities that we know of
-                    if tx_output.value > TxOutput.ALL_AUTHORITIES:
-                        raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
-                else:
-                    # for regular outputs, just subtract from the total amount
-                    sum_tokens = token_info.amount + tx_output.value
-                    token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
+            # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
+            if tx_output.can_mint_token() and not token_info.can_mint:
+                raise InvalidToken('output has mint authority, but no input has it: {}'.format(
+                    tx_output.to_human_readable()))
+            if tx_output.can_melt_token() and not token_info.can_melt:
+                raise InvalidToken('output has melt authority, but no input has it: {}'.format(
+                    tx_output.to_human_readable()))
+
+            if tx_output.is_token_authority():
+                # make sure we only have authorities that we know of
+                if tx_output.value > TxOutput.ALL_AUTHORITIES:
+                    raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
+            else:
+                # for regular outputs, just subtract from the total amount
+                sum_tokens = token_info.amount + tx_output.value
+                token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent
