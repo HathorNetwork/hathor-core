@@ -60,7 +60,53 @@ class VertexData:
 
     @classmethod
     def create_from_vertex(cls, vertex: BaseTransaction) -> Self:
-        raise NotImplementedError('temporarily removed during nano merge')
+        from hathor.transaction import Transaction
+        from hathor.transaction.headers.nano_header import NanoHeader
+
+        inputs = tuple(
+            TxInputData.create_from_txin(txin, _get_txin_output(vertex, txin))
+            for txin in vertex.inputs
+        )
+        outputs = tuple(TxOutputData.create_from_txout(txout) for txout in vertex.outputs)
+        parents = tuple(vertex.parents)
+        tokens: tuple[TokenUid, ...] = tuple()
+        vertex_meta = vertex.get_metadata()
+        if vertex_meta.first_block is not None:
+            assert vertex.storage is not None
+            assert vertex_meta.first_block is not None
+            block = vertex.storage.get_block(vertex_meta.first_block)
+            block_data = BlockData.create_from_block(block)
+        else:
+            # XXX: use dummy data instead
+            block_data = BlockData(hash=VertexId(b''), timestamp=0, height=0)
+
+        assert isinstance(vertex, Transaction)
+        headers_data: list[HeaderData] = []
+        has_nano_header = False
+        for header in vertex.headers:
+            if isinstance(header, NanoHeader):
+                assert not has_nano_header, 'code should guarantee NanoHeader only appears once'
+                headers_data.append(NanoHeaderData.create_from_nano_header(header))
+                has_nano_header = True
+
+        original_tokens = getattr(vertex, 'tokens', None)
+        if original_tokens is not None:
+            # XXX Should we add HTR_TOKEN_ID as first token?
+            tokens = tuple(original_tokens)
+
+        return cls(
+            version=vertex.version,
+            hash=vertex.hash,
+            nonce=vertex.nonce,
+            signal_bits=vertex.signal_bits,
+            weight=vertex.weight,
+            inputs=inputs,
+            outputs=outputs,
+            tokens=tokens,
+            parents=parents,
+            block=block_data,
+            headers=tuple(headers_data),
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -116,6 +162,7 @@ class HeaderData:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NanoHeaderData(HeaderData):
+    nc_seqnum: int
     nc_id: VertexId
     nc_method: str
     nc_args_bytes: bytes
@@ -123,6 +170,7 @@ class NanoHeaderData(HeaderData):
     @classmethod
     def create_from_nano_header(cls, nc_header: NanoHeader) -> Self:
         return cls(
+            nc_seqnum=nc_header.nc_seqnum,
             nc_id=nc_header.nc_id,
             nc_method=nc_header.nc_method,
             nc_args_bytes=nc_header.nc_args_bytes,

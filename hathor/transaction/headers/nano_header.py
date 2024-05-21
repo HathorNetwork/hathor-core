@@ -16,17 +16,25 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Type
 
 from typing_extensions import assert_never
 
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
-from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import (
+    VerboseCallback,
+    bytes_to_output_value,
+    int_to_bytes,
+    output_value_to_bytes,
+    unpack,
+    unpack_len,
+)
 from hathor.types import VertexId
 from hathor.utils import leb128
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.context import Context
     from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid
     from hathor.transaction import Transaction
@@ -34,6 +42,7 @@ if TYPE_CHECKING:
     from hathor.transaction.block import Block
 
 ADDRESS_LEN_BYTES: int = 25
+ADDRESS_SEQNUM_SIZE: int = 8  # bytes
 _NC_SCRIPT_LEN_MAX_BYTES: int = 2
 
 
@@ -93,6 +102,9 @@ class NanoHeaderAction:
 class NanoHeader(VertexBaseHeader):
     tx: Transaction
 
+    # Sequence number for the caller.
+    nc_seqnum: int
+
     # nc_id equals to the blueprint_id when a Nano Contract is being created.
     # nc_id equals to the contract_id when a method is being called.
     nc_id: VertexId
@@ -109,9 +121,20 @@ class NanoHeader(VertexBaseHeader):
     nc_address: bytes
     nc_script: bytes
 
+    _blueprint_class: Optional[Type[Blueprint]] = None
+
     @classmethod
     def _deserialize_action(cls, buf: bytes) -> tuple[NanoHeaderAction, bytes]:
-        raise NotImplementedError('temporarily removed during nano merge')
+        from hathor.nanocontracts.types import NCActionType
+        type_bytes, buf = buf[:1], buf[1:]
+        action_type = NCActionType.from_bytes(type_bytes)
+        (token_index,), buf = unpack('!B', buf)
+        amount, buf = bytes_to_output_value(buf)
+        return NanoHeaderAction(
+            type=action_type,
+            token_index=token_index,
+            amount=amount,
+        ), buf
 
     @classmethod
     def deserialize(
@@ -133,6 +156,9 @@ class NanoHeader(VertexBaseHeader):
         nc_id, buf = unpack_len(32, buf)
         if verbose:
             verbose('nc_id', nc_id)
+        nc_seqnum, buf = leb128.decode_unsigned(buf, max_bytes=ADDRESS_SEQNUM_SIZE)
+        if verbose:
+            verbose('nc_seqnum', nc_seqnum)
         (nc_method_len,), buf = unpack('!B', buf)
         if verbose:
             verbose('nc_method_len', nc_method_len)
@@ -168,6 +194,7 @@ class NanoHeader(VertexBaseHeader):
 
         return cls(
             tx=tx,
+            nc_seqnum=nc_seqnum,
             nc_id=nc_id,
             nc_method=decoded_nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -177,7 +204,12 @@ class NanoHeader(VertexBaseHeader):
         ), bytes(buf)
 
     def _serialize_action(self, action: NanoHeaderAction) -> bytes:
-        raise NotImplementedError('temporarily removed during nano merge')
+        ret = [
+            action.type.to_bytes(),
+            int_to_bytes(action.token_index, 1),
+            output_value_to_bytes(action.amount),
+        ]
+        return b''.join(ret)
 
     def _serialize_without_header_id(self, *, skip_signature: bool) -> deque[bytes]:
         """Serialize the header with the option to skip the signature."""
@@ -185,6 +217,7 @@ class NanoHeader(VertexBaseHeader):
 
         ret: deque[bytes] = deque()
         ret.append(self.nc_id)
+        ret.append(leb128.encode_unsigned(self.nc_seqnum, max_bytes=ADDRESS_SEQNUM_SIZE))
         ret.append(int_to_bytes(len(encoded_method), 1))
         ret.append(encoded_method)
         ret.append(int_to_bytes(len(self.nc_args_bytes), 2))
@@ -225,7 +258,46 @@ class NanoHeader(VertexBaseHeader):
 
     def get_blueprint_id(self, block: Block | None = None) -> BlueprintId:
         """Return the blueprint id."""
-        raise NotImplementedError('temporarily removed during nano merge')
+        from hathor.nanocontracts.exception import NanoContractDoesNotExist, NCContractCreationNotFound
+        from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId as NCVertexId
+        from hathor.nanocontracts.utils import get_nano_contract_creation
+
+        assert self.tx.storage is not None
+
+        if self.is_creating_a_new_contract():
+            blueprint_id = BlueprintId(NCVertexId(self.nc_id))
+            return blueprint_id
+
+        if block is None:
+            block = self.tx.storage.get_best_block()
+
+        try:
+            nc_storage = self.tx.storage.get_nc_storage(block, ContractId(NCVertexId(self.nc_id)))
+            blueprint_id = nc_storage.get_blueprint_id()
+            return blueprint_id
+        except NanoContractDoesNotExist:
+            pass
+
+        try:
+            nc_creation = get_nano_contract_creation(
+                self.tx.storage,
+                NCVertexId(self.nc_id),
+                allow_mempool=True,
+                allow_voided=True,
+            )
+        except NCContractCreationNotFound as e:
+            raise NanoContractDoesNotExist from e
+
+        # must be in the mempool
+        nc_creation_meta = nc_creation.get_metadata()
+        if nc_creation_meta.first_block is not None:
+            # otherwise, it failed or skipped execution
+            from hathor.transaction.nc_execution_state import NCExecutionState
+            assert nc_creation_meta.nc_execution in (NCExecutionState.FAILURE, NCExecutionState.SKIPPED)
+            raise NanoContractDoesNotExist
+
+        blueprint_id = BlueprintId(NCVertexId(nc_creation.get_nano_header().nc_id))
+        return blueprint_id
 
     def get_actions(self) -> list[NCAction]:
         """Get a list of NCActions from the header actions."""

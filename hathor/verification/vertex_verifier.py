@@ -14,10 +14,13 @@
 
 from typing import Optional
 
+from typing_extensions import assert_never
+
 from hathor.conf.settings import HathorSettings
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, TxVersion
 from hathor.transaction.exceptions import (
     DuplicatedParents,
+    HeaderNotSupported,
     IncorrectParents,
     InvalidOutputScriptSize,
     InvalidOutputValue,
@@ -26,9 +29,11 @@ from hathor.transaction.exceptions import (
     ParentDoesNotExist,
     PowError,
     TimestampError,
+    TooManyHeaders,
     TooManyOutputs,
     TooManySigOps,
 )
+from hathor.transaction.headers import NanoHeader, VertexBaseHeader
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -179,3 +184,34 @@ class VertexVerifier:
         if n_txops > self._settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
+
+    def get_allowed_headers(self, vertex: BaseTransaction) -> set[type[VertexBaseHeader]]:
+        """Return a set of allowed headers for the vertex."""
+        allowed_headers: set[type[VertexBaseHeader]] = set()
+        match vertex.version:
+            case TxVersion.REGULAR_BLOCK:
+                pass
+            case TxVersion.MERGE_MINED_BLOCK:
+                pass
+            case TxVersion.POA_BLOCK:
+                pass
+            case TxVersion.ON_CHAIN_BLUEPRINT:
+                pass
+            case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
+                if self._settings.ENABLE_NANO_CONTRACTS:
+                    allowed_headers.add(NanoHeader)
+            case _:
+                assert_never(vertex.version)
+        return allowed_headers
+
+    def verify_headers(self, vertex: BaseTransaction) -> None:
+        """Verify the headers."""
+        if len(vertex.headers) > vertex.get_maximum_number_of_headers():
+            raise TooManyHeaders('Maximum number of headers exceeded')
+
+        allowed_headers = self.get_allowed_headers(vertex)
+        for header in vertex.headers:
+            if type(header) not in allowed_headers:
+                raise HeaderNotSupported(
+                    f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
+                )

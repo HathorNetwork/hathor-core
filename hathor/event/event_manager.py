@@ -47,6 +47,7 @@ _SUBSCRIBE_EVENTS = [
     HathorEvents.REORG_FINISHED,
     HathorEvents.CONSENSUS_TX_UPDATE,
     HathorEvents.CONSENSUS_TX_REMOVED,
+    HathorEvents.NC_EVENT,
 ]
 
 
