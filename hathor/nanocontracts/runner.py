@@ -1,0 +1,555 @@
+# Copyright 2023 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from collections import defaultdict
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Type
+
+from typing_extensions import assert_never
+
+from hathor.conf.get_settings import get_global_settings
+from hathor.nanocontracts.blueprint import Blueprint
+from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.exception import (
+    NCAlreadyInitializedContractError,
+    NCError,
+    NCFail,
+    NCInvalidContext,
+    NCInvalidContractId,
+    NCInvalidMethodCall,
+    NCMethodNotFound,
+    NCNumberOfCallsExceeded,
+    NCPrivateMethodError,
+    NCRecursionError,
+    NCUninitializedContractError,
+)
+from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
+from hathor.nanocontracts.storage import NCChangesTracker, NCStorage, NCStorageFactory
+from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
+from hathor.nanocontracts.types import ContractId, NCAction, NCActionType
+from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
+from hathor.transaction.storage import TransactionStorage
+from hathor.types import Amount, TokenUid
+
+
+class CallType(Enum):
+    PUBLIC = 'public'
+    VIEW = 'view'
+
+
+@dataclass
+class CallRecord:
+    """This object keeps information about a single call between contracts."""
+
+    # The type of the method being called (public or private).
+    type: CallType
+
+    # The depth in the call stack.
+    depth: int
+
+    # The contract being invoked.
+    nanocontract_id: ContractId
+
+    # The method being invoked.
+    method_name: str
+
+    # The context passed in this call.
+    ctx: Context | None
+
+    # The args and kwargs provided to the method.
+    args: tuple[Any]
+    kwargs: dict[str, Any]
+
+    # Keep track of all changes made by this call.
+    changes_tracker: NCChangesTracker
+
+    def print_dump(self):
+        prefix = '    ' * self.depth
+        print(prefix, self.nanocontract_id.hex(), self.method_name, self.args, self.kwargs)
+
+
+@dataclass(kw_only=True)
+class CallInfo:
+    """This object keeps information about a method call and its subsequence calls."""
+    MAX_RECURSION_DEPTH: int
+    MAX_CALL_COUNTER: int
+
+    # The execution stack. This stack is dynamic and changes as the execution progresses.
+    stack: list[CallRecord] = field(default_factory=list)
+
+    # Change trackers grouped by contract.
+    change_trackers: defaultdict[ContractId, list[NCChangesTracker]] = field(default_factory=lambda: defaultdict(list))
+
+    # Flag to enable/disable keeping record of all calls.
+    enable_call_trace: bool
+
+    # A trace of the calls that happened. This will only be filled if `enable_call_trace` is true.
+    calls: list[CallRecord] = field(default_factory=list)
+
+    # Current depth of execution. This is a dynamic value that changes as the execution progresses.
+    depth: int = 0
+
+    # Counter of the number of calls performed so far. This is a dynamic value that changes as the
+    # execution progresses.
+    call_counter: int = 0
+
+    def print_dump(self):
+        """Print the call trace in stdout."""
+        for item in self.calls:
+            item.print_dump()
+
+    def pre_call(self, call_record: CallRecord) -> None:
+        """Called before a new call is executed."""
+        if self.depth >= self.MAX_RECURSION_DEPTH:
+            raise NCRecursionError
+
+        if self.call_counter >= self.MAX_CALL_COUNTER:
+            raise NCNumberOfCallsExceeded
+
+        if self.enable_call_trace:
+            self.calls.append(call_record)
+
+        self.change_trackers[call_record.nanocontract_id].append(call_record.changes_tracker)
+
+        assert self.depth == len(self.stack)
+        self.call_counter += 1
+        self.depth += 1
+        self.stack.append(call_record)
+
+    def post_call(self, call_record: CallRecord) -> None:
+        """Called after a call is finished."""
+        assert call_record == self.stack.pop()
+        assert call_record.changes_tracker == self.change_trackers[call_record.nanocontract_id][-1]
+        assert call_record.changes_tracker.nc_id == call_record.changes_tracker.storage.nc_id
+        self.depth -= 1
+
+        change_trackers = self.change_trackers[call_record.nanocontract_id]
+        if len(change_trackers) > 1:
+            assert call_record.changes_tracker.storage == change_trackers[-2]
+            assert call_record.changes_tracker == change_trackers.pop()
+        else:
+            assert not isinstance(call_record.changes_tracker.storage, NCChangesTracker)
+
+
+class _SingleCallRunner:
+    """This class is used to run a single method in a blueprint.
+
+    You should not use this class unless you know what you are doing.
+    """
+
+    def __init__(
+        self,
+        blueprint_class: Type[Blueprint],
+        nanocontract_id: bytes,
+        changes_tracker: NCChangesTracker,
+        metered_executor: MeteredExecutor,
+    ) -> None:
+        self.blueprint_class = blueprint_class
+        self.nanocontract_id = nanocontract_id
+        self.changes_tracker = changes_tracker
+        self.metered_executor = metered_executor
+        self._has_been_called = False
+        self._settings = get_global_settings()
+
+    def get_nc_balance(self, token_id: bytes) -> int:
+        """Return a Nano Contract balance for a given token."""
+        return self.changes_tracker.get_balance(token_id)
+
+    def add_nc_balance(self, token_uid: bytes, amount: int) -> None:
+        """Add balance to a token. Notice that the amount might be negative."""
+        self.changes_tracker.add_balance(token_uid, amount)
+
+    def validate_context(self, ctx: Context) -> None:
+        """Validate if the context is valid."""
+        for token_uid, action in ctx.actions.items():
+            if token_uid != action.token_uid:
+                raise NCInvalidContext('token_uid mismatch')
+            if action.amount < 0:
+                raise NCInvalidContext('amount must be positive')
+
+    def update_deposits_and_withdrawals(self, ctx: Context) -> None:
+        """Update the contract balance according to deposits and withdrawals."""
+        for action in ctx.actions.values():
+            self.update_balance(action)
+
+    def update_balance(self, action: NCAction) -> None:
+        """Update the contract balance according to the given action."""
+        if action.type == NCActionType.WITHDRAWAL:
+            self.add_nc_balance(action.token_uid, -action.amount)
+        else:
+            assert action.type == NCActionType.DEPOSIT
+            self.add_nc_balance(action.token_uid, action.amount)
+
+    def call_public_method(self, method_name: str, ctx: Context, *args: Any, **kwargs: Any) -> Any:
+        """Call a contract public method. If it fails, no change is saved."""
+
+        if self._has_been_called:
+            raise RuntimeError('only one call to a public method per instance')
+        self._has_been_called = True
+
+        self.validate_context(ctx)
+
+        blueprint = self.blueprint_class(self.changes_tracker)
+        method = getattr(blueprint, method_name)
+        if method is None:
+            raise NCMethodNotFound(method_name)
+        if not is_nc_public_method(method):
+            raise NCError('not a public method')
+
+        try:
+            # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
+            # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
+            # impact the original context. Since the runner relies on the context for other critical checks, any
+            # unauthorized modification would pose a serious security risk.
+            ret = self.metered_executor.call(method, ctx.copy(), *args, **kwargs)
+        except NCFail:
+            raise
+        except OutOfFuelError as e:
+            raise NCFail from e
+        except OutOfMemoryError as e:
+            raise NCFail from e
+        except Exception as e:
+            # Convert any other exception to NCFail.
+            raise NCFail from e
+
+        self.update_deposits_and_withdrawals(ctx)
+        return ret
+
+    def call_view_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
+        """Call a contract view method. It cannot change the state."""
+        blueprint = self.blueprint_class(self.changes_tracker)
+        method = getattr(blueprint, method_name)
+        if method is None:
+            raise NCMethodNotFound(method_name)
+        if not is_nc_view_method(method):
+            raise NCError('not a view method')
+
+        ret = self.metered_executor.call(method, *args, **kwargs)
+
+        if not self.changes_tracker.is_empty():
+            raise NCPrivateMethodError('private methods cannot change the state')
+
+        return ret
+
+
+class Runner:
+    """Runner with support for call between contracts.
+    """
+    MAX_RECURSION_DEPTH: int = 100
+    MAX_CALL_COUNTER: int = 250
+
+    def __init__(
+        self,
+        tx_storage: TransactionStorage,
+        storage_factory: NCStorageFactory,
+        block_trie: PatriciaTrie,
+    ) -> None:
+        self.tx_storage = tx_storage
+        self.storage_factory = storage_factory
+        self.block_trie = block_trie
+        self._storages: dict[ContractId, NCStorage] = {}
+        self._settings = get_global_settings()
+
+        # For tracking fuel and memory usage
+        self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
+        self._memory_limit = self._settings.NC_MEMORY_LIMIT_TO_CALL_METHOD
+        self._metered_executor: MeteredExecutor | None = None
+
+        # Flag indicating to keep record of all calls.
+        self._enable_call_trace = False
+
+        # Information about the last call.
+        self._last_call_info: CallInfo | None = None
+
+        # Information about the current call.
+        self._call_info: CallInfo | None = None
+
+    def enable_call_trace(self) -> None:
+        """Enable call trace for debugging."""
+        self._enable_call_trace = True
+
+    def disable_call_trace(self) -> None:
+        """Disable call trace."""
+        self._enable_call_trace = False
+        self._last_call_info = None
+
+    def get_last_call_info(self) -> CallInfo | None:
+        """Get last call information."""
+        return self._last_call_info
+
+    def has_contract_been_initialized(self, nanocontract_id: ContractId) -> bool:
+        """Check whether a contract has been initialized or not."""
+        try:
+            self.block_trie.get(nanocontract_id)
+        except KeyError:
+            return False
+        else:
+            return True
+
+    def get_storage(self, nanocontract_id: ContractId) -> NCStorage:
+        """Return the storage for a contract.
+
+        If no storage has been created, then one will be created."""
+        storage = self._storages.get(nanocontract_id)
+        if storage is None:
+            try:
+                nc_root_id = self.block_trie.get(nanocontract_id)
+            except KeyError:
+                nc_root_id = None
+            storage = self.storage_factory(nanocontract_id, nc_root_id)
+            storage.lock()
+            self._storages[nanocontract_id] = storage
+        return storage
+
+    def _create_changes_tracker(self, nanocontract_id: ContractId) -> NCChangesTracker:
+        """Return the latest change tracker for a contract."""
+        assert self._call_info is not None
+        change_trackers = self._call_info.change_trackers[nanocontract_id]
+        storage: NCStorage
+        if len(change_trackers) > 0:
+            storage = change_trackers[-1]
+        else:
+            storage = self.get_storage(nanocontract_id)
+        change_tracker = NCChangesTracker(nanocontract_id, storage)
+        return change_tracker
+
+    def get_blueprint_class(self, nanocontract_id: ContractId) -> Type[Blueprint]:
+        """Return the blueprint class of a contract."""
+        from hathor.nanocontracts.utils import get_nano_contract_creation
+        nc = get_nano_contract_creation(self.tx_storage, nanocontract_id, allow_mempool=True)
+        return nc.get_blueprint_class()
+
+    def _create_single_runer(self, nanocontract_id: ContractId, change_tracker: NCChangesTracker) -> _SingleCallRunner:
+        """Return a single runner for a contract."""
+        assert self._metered_executor is not None
+        blueprint_class = self.get_blueprint_class(nanocontract_id)
+        metered_executor = self._metered_executor
+        return _SingleCallRunner(blueprint_class, nanocontract_id, change_tracker, metered_executor)
+
+    def _build_call_info(self) -> CallInfo:
+        return CallInfo(
+            MAX_RECURSION_DEPTH=self.MAX_RECURSION_DEPTH,
+            MAX_CALL_COUNTER=self.MAX_CALL_COUNTER,
+            enable_call_trace=self._enable_call_trace,
+        )
+
+    def call_public_method(self,
+                           nanocontract_id: ContractId,
+                           method_name: str,
+                           ctx: Context,
+                           *args: Any,
+                           **kwargs: Any) -> Any:
+        """Call a contract public method."""
+        from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD
+        if method_name == NC_INITIALIZE_METHOD:
+            if self.has_contract_been_initialized(nanocontract_id):
+                raise NCAlreadyInitializedContractError(nanocontract_id)
+        else:
+            if not self.has_contract_been_initialized(nanocontract_id):
+                raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
+
+        assert self._call_info is None
+        self._call_info = self._build_call_info()
+        self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+        try:
+            ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
+        except NCFail:
+            self._reset_all_change_trackers()
+            raise
+
+        self._validate_balances()
+        self._commit_all_changes_to_storage()
+        return ret
+
+    def call_another_contract_public_method(self,
+                                            nanocontract_id: ContractId,
+                                            method_name: str,
+                                            actions: list[NCAction],
+                                            *args: Any,
+                                            **kwargs: Any) -> Any:
+        assert self._call_info is not None
+        first_ctx = self._call_info.stack[0].ctx
+        assert first_ctx is not None
+
+        # The caller is always the last element in the stack. So we need to use it as the `address` in the subsequent
+        # call.
+        last_call_record = self._call_info.stack[-1]
+
+        if last_call_record.nanocontract_id == nanocontract_id:
+            raise NCInvalidContractId('a contract cannot call itself')
+
+        from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD
+        if method_name == NC_INITIALIZE_METHOD:
+            raise NCInvalidMethodCall('cannot call initialize from another contract')
+
+        if not self.has_contract_been_initialized(nanocontract_id):
+            raise NCUninitializedContractError('cannot call a method from an uninitialized contract')
+
+        # Validate actions.
+        for action in actions:
+            if action.amount < 0:
+                raise NCInvalidContext('amount must be positive')
+
+        # Call the other contract method.
+        ctx = Context(
+            actions=actions,
+            vertex=first_ctx.vertex,
+            address=last_call_record.nanocontract_id,
+            timestamp=first_ctx.timestamp,
+        )
+        ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
+
+        # Execute the transfer on the caller side. The callee side is executed by the `_internal_call_public_method()`
+        # if it succeeds.
+        previous_changes_tracker = last_call_record.changes_tracker
+        for action in actions:
+            match action.type:
+                case NCActionType.DEPOSIT:
+                    previous_changes_tracker.add_balance(action.token_uid, -action.amount)
+                case NCActionType.WITHDRAWAL:
+                    previous_changes_tracker.add_balance(action.token_uid, action.amount)
+                case _:
+                    assert_never(action.type)
+
+        return ret
+
+    def _reset_all_change_trackers(self) -> None:
+        """Reset all changes and prepare for next call."""
+        assert self._call_info is not None
+        for change_trackers in self._call_info.change_trackers.values():
+            for change_tracker in change_trackers:
+                if not change_tracker.has_been_commited:
+                    change_tracker.block()
+        self._last_call_info = self._call_info
+        self._call_info = None
+
+    def _validate_balances(self) -> None:
+        """Validate that all balances are non-negative."""
+        assert self._call_info is not None
+        for (change_tracker,) in self._call_info.change_trackers.values():
+            change_tracker.validate_balances()
+
+    def _commit_all_changes_to_storage(self) -> None:
+        """Commit all change trackers."""
+        assert self._call_info is not None
+        for nc_id, (change_tracker,) in self._call_info.change_trackers.items():
+            nc_storage = self._storages[nc_id]
+            assert change_tracker.storage == nc_storage
+            nc_storage.unlock()
+            change_tracker.commit()
+            nc_storage.lock()
+            self.block_trie.update(nc_id, nc_storage.get_root_id())
+        self._reset_all_change_trackers()
+
+    def commit(self) -> None:
+        """Commit all storages and update block trie."""
+        for nc_id, nc_storage in self._storages.items():
+            nc_storage.unlock()
+            nc_storage.commit()
+            nc_storage.lock()
+
+    def _internal_call_public_method(self,
+                                     nanocontract_id: ContractId,
+                                     method_name: str,
+                                     ctx: Context,
+                                     *args: Any,
+                                     **kwargs: Any) -> Any:
+        """An internal method that actually execute the public method call.
+        It is also used when a contract calls another contract.
+        """
+        assert self._call_info is not None
+        assert ctx._runner is None
+
+        changes_tracker = self._create_changes_tracker(nanocontract_id)
+
+        call_record = CallRecord(
+            type=CallType.PUBLIC,
+            depth=self._call_info.depth,
+            nanocontract_id=nanocontract_id,
+            method_name=method_name,
+            ctx=ctx,
+            args=args,
+            kwargs=kwargs,
+            changes_tracker=changes_tracker,
+        )
+
+        ctx._runner = self
+        self._call_info.pre_call(call_record)
+        single_runner = self._create_single_runer(nanocontract_id, changes_tracker)
+        ret = single_runner.call_public_method(method_name, ctx, *args, **kwargs)
+        if len(self._call_info.change_trackers[nanocontract_id]) > 1:
+            call_record.changes_tracker.commit()
+        self._call_info.post_call(call_record)
+        ctx._runner = None
+
+        return ret
+
+    def call_view_method(self, nanocontract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
+        """Call a contract view method."""
+        if self._call_info is None:
+            self._call_info = self._build_call_info()
+        if self._metered_executor is None:
+            self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+
+        assert self._call_info is not None
+        assert self._metered_executor is not None
+
+        changes_tracker = self._create_changes_tracker(nanocontract_id)
+
+        call_record = CallRecord(
+            type=CallType.VIEW,
+            depth=self._call_info.depth,
+            nanocontract_id=nanocontract_id,
+            method_name=method_name,
+            ctx=None,
+            args=args,
+            kwargs=kwargs,
+            changes_tracker=changes_tracker,
+        )
+
+        self._call_info.pre_call(call_record)
+        single_runner = self._create_single_runer(nanocontract_id, changes_tracker)
+        ret = single_runner.call_view_method(method_name, *args, **kwargs)
+        self._call_info.post_call(call_record)
+
+        assert changes_tracker.is_empty()
+
+        if not self._call_info.stack:
+            self._call_info = None
+
+        return ret
+
+    def get_balance(self, nanocontract_id: ContractId | None, token_uid: TokenUid | None) -> Amount:
+        """Return a contract balance for a given token."""
+        if nanocontract_id is None:
+            assert self._call_info is not None
+            nanocontract_id = self.get_current_nanocontract_id()
+        if token_uid is None:
+            token_uid = self._settings.HATHOR_TOKEN_UID
+
+        storage: NCStorage
+        if self._call_info is None:
+            storage = self.get_storage(nanocontract_id)
+        else:
+            change_trackers = self._call_info.change_trackers[nanocontract_id]
+            assert len(change_trackers) > 0
+            storage = change_trackers[-1]
+
+        return storage.get_balance(token_uid)
+
+    def get_current_nanocontract_id(self) -> ContractId:
+        """Return the contract id for the current method being executed."""
+        assert self._call_info is not None
+        return self._call_info.stack[-1].nanocontract_id

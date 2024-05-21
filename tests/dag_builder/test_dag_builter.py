@@ -1,5 +1,25 @@
+from hathor.nanocontracts import Blueprint, Context, NanoContract, public
+from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
+
+
+class MyBlueprint(Blueprint):
+    counter: int
+
+    @public
+    def initialize(self, ctx: Context, initial: int) -> None:
+        self.counter = initial
+
+    @public
+    def add(self, ctx: Context, value: int) -> int:
+        self.counter += value
+        return self.counter
+
+    @public
+    def sub(self, ctx: Context, value: int) -> int:
+        self.counter -= value
+        return self.counter
 
 
 class DAGCreatorTestCase(unittest.TestCase):
@@ -19,6 +39,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             .set_cpu_mining_service(cpu_mining_service)
 
         self.manager = self.create_peer_from_builder(builder)
+        self.nc_catalog = self.manager.tx_storage.nc_catalog
         self.dag_builder = self.get_dag_builder(self.manager)
 
     def test_one_tx(self) -> None:
@@ -206,3 +227,53 @@ class DAGCreatorTestCase(unittest.TestCase):
 
         for node, vertex in artifacts.list:
             self.manager.on_new_tx(vertex, fails_silently=False)
+
+    def test_nc_transactions(self) -> None:
+        blueprint_id = b'x' * 32
+        self.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+
+        artifacts = self.dag_builder.build_from_str(f"""
+            blockchain genesis a[0..40]
+            a30 < dummy
+
+            tx1.nc_id = "{blueprint_id.hex()}"
+            tx1.nc_method = initialize(0)
+
+            tx2.nc_id = tx1
+            tx2.nc_method = add(5)
+            tx2.nc_deposit = 10 HTR
+            tx2.nc_deposit = 5 TKA
+
+            tx3.nc_id = tx1
+            tx3.nc_method = sub(3)
+            tx3.nc_deposit = 3 HTR
+            tx3.nc_withdrawal = 2 TKA
+
+            a31 --> tx1
+            a32 --> tx2
+            a33 --> tx3
+        """)
+
+        for node, vertex in artifacts.list:
+            self.manager.on_new_tx(vertex, fails_silently=False)
+
+        tx1 = artifacts.by_name['tx1'].vertex
+        self.assertIsInstance(tx1, NanoContract)
+
+        htr_id = TokenUid(b'\0')
+        tka_id = TokenUid(artifacts.by_name['TKA'].vertex.hash)
+
+        tx2 = artifacts.by_name['tx2'].vertex
+        tx3 = artifacts.by_name['tx3'].vertex
+
+        ctx2 = tx2.get_context()
+        self.assertEqual(ctx2.actions, {
+            tka_id: NCAction(NCActionType.DEPOSIT, tka_id, 5),
+            htr_id: NCAction(NCActionType.DEPOSIT, htr_id, 10),
+        })
+
+        ctx3 = tx3.get_context()
+        self.assertEqual(ctx3.actions, {
+            htr_id: NCAction(NCActionType.DEPOSIT, htr_id, 3),
+            tka_id: NCAction(NCActionType.WITHDRAWAL, tka_id, 2),
+        })

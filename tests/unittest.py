@@ -1,3 +1,4 @@
+import base64
 import os
 import secrets
 import shutil
@@ -63,6 +64,16 @@ def _get_default_peer_id_pool_filepath() -> str:
 
 
 PEER_ID_POOL = list(_load_peer_pool())
+
+OCB_TEST_PRIVKEY: bytes = base64.b64decode(
+    'MIH0MF8GCSqGSIb3DQEFDTBSMDEGCSqGSIb3DQEFDDAkBBCIdovnmKjK3KU'
+    'c61YGgja0AgIIADAMBggqhkiG9w0CCQUAMB0GCWCGSAFlAwQBKgQQl2CJT4'
+    'I2IUzRNoU9hyOWEwSBkLznN9Nunel+kK0FXpk//z0ZAnIyVacfHklCxFGyO'
+    'j1VSjor0CHzH2Gmblvr+m7lCmRmqSVAwJpplqQYdBUF6sR9djHLY6svPY0o'
+    '//dqQ/xM7QiY2FHlb3JQCTu7DaMflqPcJXlRXAFyoACnmj4/lUJWgrcWala'
+    'rCSI+8rIillg3AU8/2gfoB1BxulVIIG35SQ=='
+)
+OCB_TEST_PASSWORD: bytes = b'OCBtestPW'
 
 # XXX: Sync*Params classes should be inherited before the TestCase class when a sync version is needed
 
@@ -176,12 +187,15 @@ class TestCase(unittest.TestCase):
         genesis_wallet = HDWallet(words=GENESIS_SEED)
         genesis_wallet._manually_initialize()
 
+        assert manager.tx_storage.nc_catalog
+
         return DAGBuilder(
             settings=manager._settings,
             daa=manager.daa,
             genesis_wallet=genesis_wallet,
             wallet_factory=self.get_wallet,
             vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
+            nc_catalog=manager.tx_storage.nc_catalog,
         )
 
     def get_builder(self) -> TestBuilder:
@@ -229,6 +243,7 @@ class TestCase(unittest.TestCase):
         use_memory_storage: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
+        nc_history_index: bool = False,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
@@ -303,6 +318,10 @@ class TestCase(unittest.TestCase):
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
+
+        if nc_history_index:
+            builder.enable_nc_history_index()
+
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         # XXX: just making sure that tests set this up correctly

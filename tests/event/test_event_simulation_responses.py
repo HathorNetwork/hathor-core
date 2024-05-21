@@ -142,10 +142,10 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         responses = self._get_success_responses()
 
         # genesis events (5)
-        # + VERTEX_METADATA_CHANGED, one for each genesis tx (2)
+        # + VERTEX_METADATA_CHANGED, one for each genesis tx (2) and for the genesis block (1)
         # + one NEW_VERTEX_ACCEPTED and one VERTEX_METADATA_CHANGED for each new block (2*10)
         # there are free slots in window_size
-        assert len(responses) == 5 + 2 + 2 * 10  # = 27
+        assert len(responses) == 5 + 3 + 2 * 10  # = 28
         assert responses[0].event.id == 0  # no ack, so we get from the first event
 
         # stop the event stream
@@ -171,9 +171,9 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         # get responses
         responses = self._get_success_responses()
 
-        # events from before (27)
+        # events from before (28)
         # + one NEW_VERTEX_ACCEPTED and one VERTEX_METADATA_CHANGED for each new block (2*10)
-        assert len(responses) == 27 + 2 * 10
+        assert len(responses) == 28 + 2 * 10
         assert responses[0].event.id == 0  # no ack, so we get from the first event
 
     def test_restart_with_ack(self) -> None:
@@ -193,10 +193,10 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         responses = self._get_success_responses()
 
         # genesis events (5)
-        # + VERTEX_METADATA_CHANGED, one for each genesis tx (2)
+        # + VERTEX_METADATA_CHANGED, one for each genesis tx (2) and for the genesis block (1)
         # + one NEW_VERTEX_ACCEPTED and one VERTEX_METADATA_CHANGED for each new block (2*10)
         # there are free slots in window_size
-        assert len(responses) == 5 + 2 + 2 * 10  # = 27
+        assert len(responses) == 5 + 3 + 2 * 10  # = 28
         assert responses[0].event.id == 0  # no ack, so we get from the first event
 
         # stop the event stream
@@ -216,7 +216,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         miner.stop()
 
         # restart event stream from last event
-        start_stream = StartStreamRequest(type='START_STREAM', window_size=100, last_ack_event_id=26)
+        start_stream = StartStreamRequest(type='START_STREAM', window_size=100, last_ack_event_id=27)
         self._send_request(start_stream)
         self.simulator.run(36000)
 
@@ -225,7 +225,7 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
 
         # one NEW_VERTEX_ACCEPTED and one VERTEX_METADATA_CHANGED for each new block (2*10)
         assert len(responses) == 2 * 10
-        assert responses[0].event.id == 27  # ack=26, so we get from event 27
+        assert responses[0].event.id == 28  # ack=27, so we get from event 28
 
     def test_restart_with_ack_too_small(self) -> None:
         # start the event stream
@@ -245,14 +245,14 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
         responses = self._get_success_responses()
 
         # genesis events (5)
-        # + VERTEX_METADATA_CHANGED, one for each genesis tx (2)
+        # + VERTEX_METADATA_CHANGED, one for each genesis tx (2) and for the genesis block (1)
         # + one NEW_VERTEX_ACCEPTED and one VERTEX_METADATA_CHANGED for each new block (2*10)
         # there are free slots in window_size
-        assert len(responses) == 5 + 2 + 2 * 10  # = 27
+        assert len(responses) == 5 + 3 + 2 * 10  # = 28
         assert responses[0].event.id == 0  # no ack, so we get from the first event
 
         # ack all received events
-        ack = AckRequest(type='ACK', window_size=100, ack_event_id=26)
+        ack = AckRequest(type='ACK', window_size=100, ack_event_id=27)
         self._send_request(ack)
         self.simulator.run(36000)
 
