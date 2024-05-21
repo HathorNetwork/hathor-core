@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterator, NamedTuple, TypeAlias
 
+from hathor.dag_builder.utils import get_literal
 from hathor.transaction import BaseTransaction
 from hathor.wallet import BaseWallet
 
@@ -30,9 +31,11 @@ WalletFactoryType: TypeAlias = Callable[[], BaseWallet]
 class DAGNodeType(Enum):
     Unknown = 'unknown'
     Block = 'block'
+    NanoContract = 'nanocontract'
     Transaction = 'transaction'
     Token = 'token'
     Genesis = 'genesis'
+    OnChainBlueprint = 'on_chain_blueprint'
 
 
 @dataclass
@@ -46,10 +49,27 @@ class DAGNode:
     parents: set[str] = field(default_factory=set)
     deps: set[str] = field(default_factory=set)
 
+    # expected balance of inputs and outputs per token
+    #   =0 means sum(txouts) = sum(txins)
+    #   >0 means sum(txouts) > sum(txins), e.g., withdrawal
+    #   <0 means sum(txouts) < sum(txins), e.g., deposit
+    balances: dict[str, int] = field(default_factory=dict)
+
     def get_all_dependencies(self) -> Iterator[str]:
         yield from self.parents
         yield from (name for name, _ in self.inputs)
         yield from self.deps
+
+    def get_required_attr(self, attr: str) -> str:
+        """Return the value of a required attribute or raise a SyntaxError if it doesn't exist."""
+        if value := self.attrs.get(attr):
+            return value
+        raise SyntaxError(f'missing required attribute: {self.name}.{attr}')
+
+    def get_required_literal(self, attr: str) -> str:
+        """Return the value of a required attribute as a literal or raise a SyntaxError if it doesn't exist."""
+        value = self.get_required_attr(attr)
+        return get_literal(value)
 
 
 class DAGInput(NamedTuple):
