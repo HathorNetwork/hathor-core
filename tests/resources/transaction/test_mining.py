@@ -40,7 +40,8 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
                 'height': 1,
                 'min_height': None,
                 'first_block': None,
-                'feature_activation_bit_counts': None
+                'feature_activation_bit_counts': None,
+                'nc_block_root_id': None,
             },
             'tokens': [],
             'data': '',
@@ -73,7 +74,8 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
                 'height': 1,
                 'min_height': None,
                 'first_block': None,
-                'feature_activation_bit_counts': None
+                'feature_activation_bit_counts': None,
+                'nc_block_root_id': None,
             },
             'tokens': [],
             'data': '',

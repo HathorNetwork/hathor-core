@@ -5,7 +5,7 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, TypeVar
 
 import requests
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -35,6 +35,8 @@ else:
 
 settings = HathorSettings()
 
+T = TypeVar('T', bound='BaseTransaction')
+
 # useful for adding blocks to a different wallet
 BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
 
@@ -53,17 +55,19 @@ def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningServ
 
 def add_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
                   base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0,
+                  cls: type[T] = Transaction) -> T:
     """Add a custom tx based on the gen_custom_tx(...) method."""
     tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight,
-                       resolve=resolve, address=address, inc_timestamp=inc_timestamp)
+                       resolve=resolve, address=address, inc_timestamp=inc_timestamp, cls=cls)
     manager.propagate_tx(tx, fails_silently=False)
     return tx
 
 
 def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
                   base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0,
+                  cls: type[T] = Transaction) -> T:
     """Generate a custom tx based on the inputs and outputs. It gives full control to the
     inputs and can be used to generate conflicts and specific patterns in the DAG."""
     wallet = manager.wallet
@@ -101,7 +105,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     else:
         raise NotImplementedError
 
-    tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
+    tx2 = wallet.prepare_transaction(cls, inputs, outputs)
     tx2.storage = manager.tx_storage
     tx2.timestamp = max(tx_base.timestamp + 1, int(manager.reactor.seconds()))
 
