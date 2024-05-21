@@ -91,6 +91,7 @@ class TxVersion(IntEnum):
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
     POA_BLOCK = 5
+    NANO_CONTRACT = 4
 
     @classmethod
     def _missing_(cls, value: Any) -> None:
@@ -113,6 +114,12 @@ class TxVersion(IntEnum):
             TxVersion.MERGE_MINED_BLOCK: MergeMinedBlock,
             TxVersion.POA_BLOCK: PoaBlock
         }
+
+        if True:
+            # TODO Use a feature flag to control whether nano contracts are enabled or not.
+            # XXX This code should not run on any network except nano-testnet.
+            from hathor.nanocontracts.nanocontract import NanoContract
+            cls_map[TxVersion.NANO_CONTRACT] = NanoContract
 
         cls = cls_map.get(self)
 
@@ -183,6 +190,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self.storage = storage
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
+
+        self.MAX_NUM_INPUTS = self._settings.MAX_NUM_INPUTS
+        self.MAX_NUM_OUTPUTS = self._settings.MAX_NUM_OUTPUTS
 
     @classproperty
     def log(cls):
