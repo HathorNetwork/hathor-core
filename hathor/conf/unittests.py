@@ -41,4 +41,7 @@ SETTINGS = HathorSettings(
         default_threshold=3
     ),
     ENABLE_NANO_CONTRACTS=True,
+    BLUEPRINTS={
+        bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'): 'Bet'
+    },
 )

@@ -205,6 +205,7 @@ class TestCase(unittest.TestCase):
         use_memory_storage: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
+        nc_history_index: bool = False,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
 
         settings = self._settings._replace(NETWORK_NAME=network)
@@ -267,6 +268,10 @@ class TestCase(unittest.TestCase):
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
+
+        if nc_history_index:
+            builder.enable_nc_history_index()
+
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         return manager
