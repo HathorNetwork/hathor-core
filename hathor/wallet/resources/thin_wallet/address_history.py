@@ -71,7 +71,7 @@ class AddressHistoryResource(Resource):
         addresses = post_data['addresses']
         assert isinstance(addresses, list)
 
-        return self.get_address_history(addresses, post_data.get('hash'))
+        return self.get_address_history(addresses, post_data.get('hash'), post_data.get('tx_version'))
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_history/
@@ -135,7 +135,17 @@ class AddressHistoryResource(Resource):
             # If hash parameter is in the request, it must be a valid hex
             ref_hash = raw_args[b'hash'][0].decode('utf-8')
 
-        return self.get_address_history([address.decode('utf-8') for address in addresses], ref_hash)
+        allowed_tx_versions_arg = raw_args.get(b'tx_version[]', None)
+        allowed_tx_versions = (
+            set([int(tx_version.decode('utf-8')) for tx_version in allowed_tx_versions_arg])
+            if allowed_tx_versions_arg is not None
+            else None
+        )
+        return self.get_address_history(
+            [address.decode('utf-8') for address in addresses],
+            ref_hash,
+            allowed_tx_versions
+        )
 
     def _validate_index(self, request: Request) -> bytes | None:
         """Return None if validation is successful (addresses index is enabled), and an error message otherwise."""
@@ -149,7 +159,10 @@ class AddressHistoryResource(Resource):
         request.setResponseCode(503)
         return json_dumpb({'success': False, 'message': 'wallet index is disabled'})
 
-    def get_address_history(self, addresses: list[str], ref_hash: Optional[str]) -> bytes:
+    def get_address_history(self,
+                            addresses: list[str],
+                            ref_hash: Optional[str],
+                            allowed_tx_versions: Optional[set[int]]) -> bytes:
         ref_hash_bytes = None
         if ref_hash:
             try:
@@ -209,6 +222,10 @@ class AddressHistoryResource(Resource):
 
                 if tx_hash not in seen:
                     tx = self.manager.tx_storage.get_transaction(tx_hash)
+                    if allowed_tx_versions and tx.version not in allowed_tx_versions:
+                        # Transaction version is not in the version filter
+                        continue
+
                     tx_elements = len(tx.inputs) + len(tx.outputs)
                     if total_elements + tx_elements > self.max_inputs_outputs_address_history:
                         # If the adition of this tx overcomes the maximum number of inputs and outputs, then break
@@ -275,6 +292,22 @@ AddressHistoryResource.openapi = {
                     'required': True,
                     'schema': {
                         'type': 'string'
+                    }
+                },
+                {
+                    'name': 'hash',
+                    'in': 'query',
+                    'description': 'Hash used to paginate the request.',
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'tx_version[]',
+                    'in': 'query',
+                    'description': 'List of versions to filter the transactions.',
+                    'schema': {
+                        'type': 'int'
                     }
                 },
             ],

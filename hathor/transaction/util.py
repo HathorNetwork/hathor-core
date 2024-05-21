@@ -17,12 +17,17 @@ from __future__ import annotations
 import re
 import struct
 from math import ceil, floor
+from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
+
+from hathor.transaction.exceptions import InvalidOutputValue
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
 
 VerboseCallback = Optional[Callable[[str, Any], None]]
+
+MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
 
 
 def int_to_bytes(number: int, size: int, signed: bool = False) -> bytes:
@@ -42,13 +47,14 @@ def bytes_to_int(data: bytes, *, signed: bool = False) -> int:
     return int.from_bytes(data, byteorder='big', signed=signed)
 
 
-def unpack(fmt: str, buf: bytes) -> Any:
+def unpack(fmt: str, buf: bytes | memoryview) -> tuple[Any, bytes | memoryview]:
     size = struct.calcsize(fmt)
     return struct.unpack(fmt, buf[:size]), buf[size:]
 
 
-def unpack_len(n: int, buf: bytes) -> tuple[bytes, bytes]:
-    return buf[:n], buf[n:]
+def unpack_len(n: int, buf: bytes | memoryview) -> tuple[bytes, bytes | memoryview]:
+    ret = buf[:n] if isinstance(buf, bytes) else bytes(buf[:n])
+    return ret, buf[n:]
 
 
 def get_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
@@ -64,3 +70,34 @@ def clean_token_string(string: str) -> str:
         It sets to uppercase, removes double spaces and spaces at the beginning and end.
     """
     return re.sub(r'\s\s+', ' ', string).strip().upper()
+
+
+def decode_string_utf8(encoded: bytes, key: str) -> str:
+    """ Raises StructError in case it's not a valid utf-8 string
+    """
+    try:
+        decoded = encoded.decode('utf-8')
+        return decoded
+    except UnicodeDecodeError:
+        raise StructError('{} must be a valid utf-8 string.'.format(key))
+
+
+def bytes_to_output_value(data: bytes) -> tuple[int, bytes]:
+    from hathor.serialization import BadDataError, BytesDeserializer
+    deserializer = BytesDeserializer(data)
+    try:
+        output_value = deserializer.read_output_value()
+    except BadDataError as e:
+        raise InvalidOutputValue(*e.args)
+    remaining_data = deserializer.read_all()
+    return (output_value, remaining_data)
+
+
+def output_value_to_bytes(number: int) -> bytes:
+    from hathor.serialization import BytesSerializer
+    serializer = BytesSerializer()
+    try:
+        serializer.write_output_value(number)
+    except ValueError as e:
+        raise InvalidOutputValue(*e.args)
+    return bytes(serializer.finalize())

@@ -18,17 +18,10 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
-from hathor.transaction.scripts import (
-    P2PKH,
-    HathorScript,
-    MultiSig,
-    Opcode,
-    ScriptExtras,
-    create_base_script,
-    create_output_script,
-)
+from hathor.transaction.scripts import P2PKH, HathorScript, MultiSig, Opcode, create_base_script, create_output_script
 from hathor.transaction.scripts.construct import count_sigops, get_pushdata, get_sigops_count, re_compile
 from hathor.transaction.scripts.execute import (
+    UtxoScriptExtras,
     binary_to_int,
     decode_opn,
     evaluate_final_stack,
@@ -252,7 +245,7 @@ class TestScripts(unittest.TestCase):
         signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
 
         # wrong signature puts False (0) on stack
         stack = [b'aaaaaaaaa', pubkey_bytes]
@@ -277,7 +270,7 @@ class TestScripts(unittest.TestCase):
         signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
 
         stack = [signature, pubkey_bytes]
         self.assertIsNone(tx._sighash_data_cache)
@@ -507,28 +500,28 @@ class TestScripts(unittest.TestCase):
         # try with just 1 output
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out_genesis)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
         op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs and correct output among them
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out_genesis), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
         op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs without correct amount output
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(2, out_genesis), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
 
         # several outputs without correct address output
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out3)])
-        extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
 
@@ -542,7 +535,7 @@ class TestScripts(unittest.TestCase):
         tx = Transaction()
 
         stack = [struct.pack('!I', timestamp)]
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
 
         with self.assertRaises(TimeLocked):
             tx.timestamp = timestamp - 1
@@ -568,7 +561,7 @@ class TestScripts(unittest.TestCase):
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         data_to_sign = tx.get_sighash_all()
-        extras = ScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
 
         wallet = HDWallet()
         wallet._manually_initialize()
