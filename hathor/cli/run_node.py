@@ -113,6 +113,8 @@ class RunNode:
                             help='Create an index of transactions by address and allow searching queries')
         parser.add_argument('--utxo-index', action='store_true',
                             help='Create an index of UTXOs by token/address/amount and allow searching queries')
+        parser.add_argument('--nc-history-index', action='store_true',
+                            help='Enable the index of a nano contract tx history')
         parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
         parser.add_argument('--prometheus-prefix', default='',
                             help='A prefix that will be added in all Prometheus metrics')

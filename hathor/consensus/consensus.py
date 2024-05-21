@@ -30,6 +30,7 @@ from hathor.transaction import BaseTransaction
 from hathor.util import not_none
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts import NCStorageFactory
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -66,6 +67,7 @@ class ConsensusAlgorithm:
 
     def __init__(
         self,
+        nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
         *,
@@ -74,6 +76,7 @@ class ConsensusAlgorithm:
         self._settings = get_global_settings()
         self.log = logger.new()
         self._pubsub = pubsub
+        self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
