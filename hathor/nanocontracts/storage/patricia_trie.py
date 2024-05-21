@@ -15,10 +15,11 @@
 import hashlib
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import Iterable, NamedTuple, NewType, Optional, TypeAlias
+from typing import Iterable, NamedTuple, NewType, Optional
+
+from hathor.nanocontracts.storage.backends import NodeTrieStore
 
 NodeId = NewType('NodeId', bytes)
-NodeTrieStore: TypeAlias = dict[bytes, 'Node']
 
 
 class DictChildren(dict[bytes, NodeId]):
@@ -100,9 +101,9 @@ class PatriciaTrie:
 
     __slots__ = ('_local_changes', '_db', 'root')
 
-    def __init__(self, *, db: Optional[NodeTrieStore] = None, root_id: Optional[bytes] = None) -> None:
+    def __init__(self, store: NodeTrieStore, *, root_id: Optional[NodeId] = None) -> None:
         self._local_changes: dict[NodeId, Node] = {}
-        self._db: NodeTrieStore = db if db is not None else {}
+        self._db = store
         if root_id is None:
             self.root: Node = Node(key=b'', length=0)
             self.root.update_id()

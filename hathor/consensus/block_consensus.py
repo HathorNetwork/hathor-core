@@ -86,7 +86,7 @@ class BlockConsensusAlgorithm:
             self.context.save(block)
             return
 
-        block_trie = self.context.consensus.nc_storage_factory.get_block_trie(block_root_id)
+        block_trie = self.context.consensus.nc_storage_factory.get_trie(block_root_id)
 
         # TODO Bad ordering because tx.timestamp can be cherry picked. It's here just for testing.
         nc_calls.sort(key=lambda tx: (tx.timestamp, tx.hash))

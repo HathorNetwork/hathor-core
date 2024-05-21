@@ -1,8 +1,8 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import NCFail, NCInsufficientFunds, NCPrivateMethodError, UnknownFieldType
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.storage import NCMemoryStorage, NCMemoryStorageFactory
-from hathor.nanocontracts.storage.base_storage import BalanceKey
+from hathor.nanocontracts.storage import NCMemoryStorageFactory, NCStorage
+from hathor.nanocontracts.storage.storage import BalanceKey
 from hathor.nanocontracts.types import Context, NCAction, NCActionType, public
 from tests import unittest
 
@@ -80,7 +80,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     _enable_sync_v1 = True
     _enable_sync_v2 = True
 
-    def get_nc_storage(self) -> NCMemoryStorage:
+    def get_nc_storage(self) -> NCStorage:
         factory = NCMemoryStorageFactory()
         return factory(b'', None)
 

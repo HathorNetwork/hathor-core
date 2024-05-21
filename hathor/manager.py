@@ -46,7 +46,7 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
-from hathor.nanocontracts.storage import NCBaseStorage
+from hathor.nanocontracts.storage import NCStorage
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import Peer
 from hathor.p2p.peer_id import PeerId
@@ -406,17 +406,17 @@ class HathorManager:
         if save_to:
             self.profiler.dump_stats(save_to)
 
-    def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCBaseStorage:
+    def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCStorage:
         """Return a contract storage with the contract state at a given block."""
         meta = block.get_metadata()
-        block_trie = self.consensus_algorithm.nc_storage_factory.get_block_trie(meta.nc_block_root_id)
+        block_trie = self.consensus_algorithm.nc_storage_factory.get_trie(meta.nc_block_root_id)
         try:
             nc_root_id = block_trie.get(nc_id)
         except KeyError:
             raise NanoContractDoesNotExist(nc_id.hex())
         return self.consensus_algorithm.nc_storage_factory(nc_id, nc_root_id)
 
-    def get_best_block_nc_storage(self, nc_id: VertexId) -> NCBaseStorage:
+    def get_best_block_nc_storage(self, nc_id: VertexId) -> NCStorage:
         """Return a contract storage with the contract state at the best block."""
         best_block = self.tx_storage.get_best_block()
         return self.get_nc_storage(best_block, nc_id)

@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.nanocontracts.storage.base_storage import NCBaseStorage, NCStorageFactory
 from hathor.nanocontracts.storage.changes_tracker import NCChangesTracker
-from hathor.nanocontracts.storage.memory_storage import NCMemoryStorage, NCMemoryStorageFactory
+from hathor.nanocontracts.storage.factory import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
+from hathor.nanocontracts.storage.storage import NCStorage
 from hathor.nanocontracts.storage.types import DeletedKey
 
 __all__ = [
-    'NCBaseStorage',
+    'NCStorage',
     'NCChangesTracker',
-    'NCMemoryStorage',
     'NCMemoryStorageFactory',
+    'NCRocksDBStorageFactory',
     'NCStorageFactory',
     'DeletedKey',
 ]

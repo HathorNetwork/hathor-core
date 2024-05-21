@@ -33,7 +33,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.nanocontracts import NCMemoryStorageFactory
+from hathor.nanocontracts import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import Peer
@@ -202,6 +202,8 @@ class Builder:
         self._p2p_manager: ConnectionsManager | None = None
         self._poa_signer: PoaSigner | None = None
         self._poa_block_producer: PoaBlockProducer | None = None
+
+        self._nc_storage_factory: NCStorageFactory | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -384,11 +386,27 @@ class Builder:
 
         return self._execution_manager
 
+    def _get_or_create_nc_storage_factory(self) -> NCStorageFactory:
+        if self._nc_storage_factory is not None:
+            return self._nc_storage_factory
+
+        if self._storage_type == StorageType.MEMORY:
+            self._nc_storage_factory = NCMemoryStorageFactory()
+
+        elif self._storage_type == StorageType.ROCKSDB:
+            rocksdb_storage = self._get_or_create_rocksdb_storage()
+            self._nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
+
+        else:
+            raise NotImplementedError
+
+        return self._nc_storage_factory
+
     def _get_or_create_consensus(self) -> ConsensusAlgorithm:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             pubsub = self._get_or_create_pubsub()
-            nc_storage_factory = NCMemoryStorageFactory()
+            nc_storage_factory = self._get_or_create_nc_storage_factory()
             execution_manager = self._get_or_create_execution_manager()
             self._consensus = ConsensusAlgorithm(nc_storage_factory,
                                                  soft_voided_tx_ids,

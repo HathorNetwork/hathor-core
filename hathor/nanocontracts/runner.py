@@ -23,7 +23,7 @@ from hathor.nanocontracts.exception import (
     NCMethodNotFound,
     NCPrivateMethodError,
 )
-from hathor.nanocontracts.storage import NCBaseStorage, NCChangesTracker
+from hathor.nanocontracts.storage import NCChangesTracker, NCStorage
 from hathor.nanocontracts.types import Context, NCAction, NCActionType
 
 
@@ -31,7 +31,7 @@ class Runner:
     """This class is used to run a method in a blueprint.
     """
 
-    def __init__(self, blueprint_class: Type[Blueprint], nanocontract_id: bytes, storage: NCBaseStorage) -> None:
+    def __init__(self, blueprint_class: Type[Blueprint], nanocontract_id: bytes, storage: NCStorage) -> None:
         self.blueprint_class = blueprint_class
         self.nanocontract_id = nanocontract_id
         self.storage = storage

@@ -28,7 +28,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
-    from hathor.nanocontracts.storage import NCBaseStorage  # noqa: F401
+    from hathor.nanocontracts.storage import NCStorage  # noqa: F401
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()
@@ -123,7 +123,7 @@ class NanoContract(Transaction):
             assert nanocontract.nc_method == NC_INITIALIZE_METHOD
             return nanocontract.nc_id
 
-    def execute(self, nc_storage: 'NCBaseStorage') -> None:
+    def execute(self, nc_storage: 'NCStorage') -> None:
         """Execute the contract's method call."""
         blueprint_class = self.get_blueprint_class()
         method = getattr(blueprint_class, self.nc_method)
@@ -133,18 +133,18 @@ class NanoContract(Transaction):
         context = self.get_context()
         self.call_public_method(nc_storage, self.nc_method, context, *args)
 
-    def get_runner(self, nc_storage: 'NCBaseStorage') -> Runner:
+    def get_runner(self, nc_storage: 'NCStorage') -> Runner:
         """Return a Runner object."""
         blueprint_class = self.get_blueprint_class()
         nc_id = self.get_nanocontract_id()
         return Runner(blueprint_class, nc_id, nc_storage)
 
-    def call_private_method(self, nc_storage: 'NCBaseStorage', method_name: str, *args: Any) -> Any:
+    def call_private_method(self, nc_storage: 'NCStorage', method_name: str, *args: Any) -> Any:
         """Utility method to call the blueprint's method."""
         runner = self.get_runner(nc_storage)
         return runner.call_private_method(method_name, *args)
 
-    def call_public_method(self, nc_storage: 'NCBaseStorage', method_name: str, ctx: Context, *args: Any) -> None:
+    def call_public_method(self, nc_storage: 'NCStorage', method_name: str, ctx: Context, *args: Any) -> None:
         """Utility method to call the blueprint's method."""
         runner = self.get_runner(nc_storage)
         runner.call_public_method(method_name, ctx, *args)

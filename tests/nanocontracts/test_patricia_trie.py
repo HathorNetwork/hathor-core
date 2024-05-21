@@ -1,9 +1,15 @@
 import hashlib
+import tempfile
 from math import log
 from typing import Optional
 
+import pytest
+
+from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore, RocksDBNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import Node, PatriciaTrie
+from hathor.storage.rocksdb_storage import RocksDBStorage
 from tests import unittest
+from tests.utils import HAS_ROCKSDB
 
 
 def export_trie_outline(trie: PatriciaTrie, *, node: Optional[Node] = None) -> tuple[bytes, Optional[bytes], dict]:
@@ -22,19 +28,23 @@ def export_trie_outline(trie: PatriciaTrie, *, node: Optional[Node] = None) -> t
 
 
 class PatriciaTrieTestCase(unittest.TestCase):
+    __test__ = False
+
+    def create_trie(self) -> PatriciaTrie:
+        raise NotImplementedError
 
     def test_empty_key(self) -> None:
-        trie = PatriciaTrie()
+        trie = self.create_trie()
         with self.assertRaises(KeyError):
             trie.get(b'')
 
     def test_empty_trie(self) -> None:
-        trie = PatriciaTrie()
+        trie = self.create_trie()
         with self.assertRaises(KeyError):
             trie.get(b'my-key')
 
     def test_single_key(self) -> None:
-        trie = PatriciaTrie()
+        trie = self.create_trie()
         key = b'my-key'
 
         with self.assertRaises(KeyError):
@@ -74,7 +84,7 @@ class PatriciaTrieTestCase(unittest.TestCase):
         )
 
     def test_independent_keys(self) -> None:
-        trie = PatriciaTrie()
+        trie = self.create_trie()
 
         key1 = b'\x00abcde'
         key2 = b'\x10fghijklmn'
@@ -99,7 +109,7 @@ class PatriciaTrieTestCase(unittest.TestCase):
         )
 
     def test_simple_chain(self) -> None:
-        trie = PatriciaTrie()
+        trie = self.create_trie()
 
         data = {
             b'a': b'1',
@@ -139,7 +149,7 @@ class PatriciaTrieTestCase(unittest.TestCase):
         )
 
     def test_random_data(self) -> None:
-        trie = PatriciaTrie()
+        trie = self.create_trie()
 
         data = {}
         for v_int in range(20_000):
@@ -163,7 +173,7 @@ class PatriciaTrieTestCase(unittest.TestCase):
         self.assertLessEqual(max_height, 2*log(len(data), 16))
 
     def test_commit(self) -> None:
-        trie = PatriciaTrie()
+        trie = self.create_trie()
 
         data = {}
         for v_int in range(20_000):
@@ -186,7 +196,7 @@ class PatriciaTrieTestCase(unittest.TestCase):
         self.assertEqual(trie.get(key1, root_id=root2_id), value1 + b'1')
 
     def test_multiple_keys_same_value(self) -> None:
-        trie = PatriciaTrie()
+        trie = self.create_trie()
         data = {
             b'a': b'1',
             b'abcd': b'1',
@@ -201,3 +211,26 @@ class PatriciaTrieTestCase(unittest.TestCase):
 
         for k, v in data.items():
             self.assertEqual(trie.get(k), v)
+
+
+class MemoryPatriciaTrieTest(PatriciaTrieTestCase):
+    __test__ = True
+
+    def create_trie(self) -> PatriciaTrie:
+        store = MemoryNodeTrieStore()
+        return PatriciaTrie(store)
+
+
+@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
+class RocksDBPatriciaTrieTest(PatriciaTrieTestCase):
+    __test__ = True
+
+    def setUp(self) -> None:
+        super().setUp()
+        directory = tempfile.mkdtemp()
+        self.tmpdirs.append(directory)
+        self.rocksdb_storage = RocksDBStorage(path=directory)
+
+    def create_trie(self) -> PatriciaTrie:
+        store = RocksDBNodeTrieStore(self.rocksdb_storage)
+        return PatriciaTrie(store)

@@ -79,7 +79,7 @@ class CliBuilder:
         from hathor.daa import TestMode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
-        from hathor.nanocontracts import NCMemoryStorageFactory, NCStorageFactory
+        from hathor.nanocontracts import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
@@ -126,7 +126,7 @@ class CliBuilder:
         indexes: IndexesManager
         feature_storage: FeatureActivationStorage | None = None
         self.rocksdb_storage: Optional[RocksDBStorage] = None
-        self.nc_storage_factory: NCStorageFactory = NCMemoryStorageFactory()
+        self.nc_storage_factory: Optional[NCStorageFactory] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
         if self._args.memory_storage:
@@ -135,6 +135,7 @@ class CliBuilder:
             indexes = MemoryIndexesManager()
             tx_storage = TransactionMemoryStorage(indexes, settings=settings)
             event_storage = EventMemoryStorage()
+            self.nc_storage_factory = NCMemoryStorageFactory()
             self.check_or_raise(not self._args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         else:
@@ -144,6 +145,8 @@ class CliBuilder:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = self._args.rocksdb_cache
             self.rocksdb_storage = RocksDBStorage(path=self._args.data, cache_capacity=cache_capacity)
+
+            self.nc_storage_factory = NCRocksDBStorageFactory(self.rocksdb_storage)
 
             # Initialize indexes manager.
             if self._args.memory_indexes:
@@ -267,6 +270,7 @@ class CliBuilder:
             self.log.debug('enable nano history index')
             tx_storage.indexes.enable_nc_history_index()
 
+        assert self.nc_storage_factory is not None
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
             self.nc_storage_factory,

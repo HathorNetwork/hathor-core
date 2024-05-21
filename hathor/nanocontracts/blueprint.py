@@ -18,7 +18,7 @@ from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.nanocontracts.fields import get_field_for_attr
-from hathor.nanocontracts.storage import NCBaseStorage
+from hathor.nanocontracts.storage import NCStorage
 
 logger = get_logger()
 settings = HathorSettings()
@@ -73,7 +73,7 @@ class Blueprint(metaclass=_BlueprintBase):
             age: int
     """
 
-    def __init__(self, storage: NCBaseStorage):
+    def __init__(self, storage: NCStorage):
         self.log = logger.new()
         self._storage = storage
         self._cache: dict[str, Any] = {}

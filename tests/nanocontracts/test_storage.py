@@ -1,5 +1,4 @@
 from hathor.nanocontracts.storage import NCChangesTracker
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from tests import unittest
 
 
@@ -80,7 +79,7 @@ class NCMemoryStorageTestCase(BaseNCStorageTestCase):
     __test__ = True
 
     def setUp(self):
-        from hathor.nanocontracts.storage import NCMemoryStorage
-        trie = PatriciaTrie()
-        self.storage = NCMemoryStorage(trie=trie, nc_id=b'')
+        from hathor.nanocontracts.storage import NCMemoryStorageFactory
+        factory = NCMemoryStorageFactory()
+        self.storage = factory(b'', None)
         super().setUp()

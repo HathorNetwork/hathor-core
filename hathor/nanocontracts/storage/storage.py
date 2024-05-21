@@ -12,17 +12,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 import pickle
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, NamedTuple
 
-from hathor.nanocontracts.storage.base_storage import AttrKey, BalanceKey, NCBaseStorage, NCStorageFactory, _Tag
-from hathor.nanocontracts.storage.patricia_trie import Node, PatriciaTrie
+from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathor.types import VertexId
 
 
-class NCMemoryStorage(NCBaseStorage):
-    """Memory implementation of the storage."""
+class _Tag(Enum):
+    ATTR = b'\0'
+    BALANCE = b'\1'
+
+
+class AttrKey(NamedTuple):
+    nc_id: bytes
+    key: str
+
+    def __bytes__(self):
+        base = self.key.encode('ascii')
+        return _Tag.ATTR.value + hashlib.sha1(base).digest()
+
+
+class BalanceKey(NamedTuple):
+    nc_id: bytes
+    token_uid: bytes
+
+    def __bytes__(self):
+        return _Tag.BALANCE.value + self.token_uid
+
+
+class NCStorage:
+    """This is the storage used by NanoContracts.
+
+    This implementation works for both memory and rocksdb backends."""
 
     def __init__(self, *, trie: PatriciaTrie, nc_id: VertexId) -> None:
         # State (balances and attributes)
@@ -63,6 +88,10 @@ class NCMemoryStorage(NCBaseStorage):
         return AttrKey(self.nc_id, key)
 
     def get(self, key: str, *, default: Any = _NOT_PROVIDED) -> Any:
+        """Return the value of the provided `key`.
+
+        It raises KeyError if key is not found and a default value is not provided.
+        """
         internal_key = self._to_attr_key(key)
         internal_key_bytes = bytes(internal_key)
         try:
@@ -74,18 +103,24 @@ class NCMemoryStorage(NCBaseStorage):
         return value
 
     def put(self, key: str, value: Any) -> None:
+        """Store the `value` for the provided `key`.
+        """
         internal_key = self._to_attr_key(key)
         self._trie_update(bytes(internal_key), value)
 
     def delete(self, key: str) -> None:
+        """Delete `key` from storage.
+        """
         internal_key = self._to_attr_key(key)
         self._trie_update(bytes(internal_key), DeletedKey)
 
     def get_balance(self, token_uid: bytes) -> int:
+        """Return the contract balance for a token."""
         key = BalanceKey(self.nc_id, token_uid)
         return self._trie_get(bytes(key), default=0)
 
     def get_all_balances(self) -> dict[BalanceKey, int]:
+        """Return the contract balances of all tokens."""
         balances: dict[BalanceKey, int] = {}
         balance_tag = self._trie._encode_key(_Tag.BALANCE.value)
 
@@ -116,6 +151,9 @@ class NCMemoryStorage(NCBaseStorage):
         return balances
 
     def add_balance(self, token_uid: bytes, amount: int) -> None:
+        """Change the contract balance for a token. The amount will be added to the previous balance.
+
+        Note that the amount might be negative."""
         key = BalanceKey(self.nc_id, token_uid)
         key_bytes = bytes(key)
         old = self._trie_get(key_bytes, default=0)
@@ -124,28 +162,10 @@ class NCMemoryStorage(NCBaseStorage):
         self._trie_update(key_bytes, new)
 
     def commit(self) -> None:
+        """Flush all local changes to the storage."""
         self._trie.commit()
 
     def get_root_id(self) -> bytes:
+        """Return the current merkle root id of the trie."""
         assert self._trie.root.id is not None
         return self._trie.root.id
-
-
-class NCMemoryStorageFactory(NCStorageFactory):
-    """Factory to create a memory storage for a contract.
-
-    As it is a memory storage, the factory keeps all contract stored data on
-    its attribute `self.data`.
-    """
-
-    def __init__(self) -> None:
-        # As it is a memory storage, the factory uses this attribute to store all contract-related data.
-        self._db: dict[bytes, Node] = {}
-
-    def get_block_trie(self, root_id: Optional[bytes]) -> PatriciaTrie:
-        trie = PatriciaTrie(db=self._db, root_id=root_id)
-        return trie
-
-    def __call__(self, nano_contract_id: bytes, nc_root_id: Optional[bytes]) -> NCMemoryStorage:
-        trie = self.get_block_trie(nc_root_id)
-        return NCMemoryStorage(trie=trie, nc_id=nano_contract_id)
