@@ -30,6 +30,7 @@ from hathor.transaction import BaseTransaction
 from hathor.util import not_none
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts import NCStorageFactory
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -66,6 +67,7 @@ class ConsensusAlgorithm:
 
     def __init__(
         self,
+        nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
         *,
@@ -74,6 +76,7 @@ class ConsensusAlgorithm:
         self._settings = get_global_settings()
         self.log = logger.new()
         self._pubsub = pubsub
+        self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
@@ -165,7 +168,15 @@ class ConsensusAlgorithm:
         if context.reorg_common_block is not None:
             context.pubsub.publish(HathorEvents.REORG_FINISHED)
 
-    def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+    def filter_out_voided_by_entries_from_parents(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+        """Filter out voided_by entries that should be inherited from parents."""
+        voided_by = set(voided_by)
+        voided_by = self._filter_out_nc_fail_entries(tx, voided_by)
+        voided_by = self._filter_out_soft_voided_entries(tx, voided_by)
+        return voided_by
+
+    def _filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+        """Remove voided_by entries of soft voided transactions."""
         if not (self.soft_voided_tx_ids & voided_by):
             return voided_by
         ret = set()
@@ -173,6 +184,8 @@ class ConsensusAlgorithm:
             if h == self._settings.SOFT_VOIDED_ID:
                 continue
             if h == self._settings.CONSENSUS_FAIL_ID:
+                continue
+            if h == self._settings.NC_EXECUTION_FAIL_ID:
                 continue
             if h == tx.hash:
                 continue
@@ -184,6 +197,31 @@ class ConsensusAlgorithm:
             tx3_voided_by: set[bytes] = tx3_meta.voided_by or set()
             if not (self.soft_voided_tx_ids & tx3_voided_by):
                 ret.add(h)
+        return ret
+
+    def _filter_out_nc_fail_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+        """Remove NC_EXECUTION_FAIL_ID flag from voided_by inherited by parents."""
+        ret = set(voided_by)
+        if self._settings.NC_EXECUTION_FAIL_ID in ret:
+            # If NC_EXECUTION_FAIL_ID is in voided_by, then tx.hash must be in voided_by too.
+            # So we remove both of them.
+            ret.remove(self._settings.NC_EXECUTION_FAIL_ID)
+            ret.remove(tx.hash)
+        # Then we remove all hashes from transactions that also have the NC_EXECUTION_FAIL_ID flag.
+        for h in voided_by:
+            if h == self._settings.SOFT_VOIDED_ID:
+                continue
+            if h == self._settings.NC_EXECUTION_FAIL_ID:
+                continue
+            if h == tx.hash:
+                continue
+            assert tx.storage is not None
+            tx2 = tx.storage.get_transaction(h)
+            tx2_meta = tx2.get_metadata()
+            tx2_voided_by: set[bytes] = tx2_meta.voided_by or set()
+            if self._settings.NC_EXECUTION_FAIL_ID in tx2_voided_by:
+                ret.discard(h)
+        assert self._settings.NC_EXECUTION_FAIL_ID not in ret
         return ret
 
     def _remove_transactions(

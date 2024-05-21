@@ -45,6 +45,9 @@ class TransactionMetadata:
     first_block: Optional[bytes]
     validation: ValidationState
 
+    # Used to store the root node id of the contract tree related to this block.
+    nc_block_root_id: Optional[bytes]
+
     # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
     # is None otherwise. This is only used for caching, so it can be safely cleared up, as it would be recalculated
     # when necessary.
@@ -62,6 +65,7 @@ class TransactionMetadata:
         hash: Optional[bytes] = None,
         accumulated_weight: float = 0,
         score: float = 0,
+        nc_block_root_id: Optional[bytes] = None,
         settings: HathorSettings | None = None,
     ) -> None:
         from hathor.transaction.genesis import is_genesis
@@ -69,6 +73,8 @@ class TransactionMetadata:
         # Hash of the transaction.
         self.hash = hash
         self._tx_ref = None
+
+        self.nc_block_root_id = nc_block_root_id
 
         # Tx outputs that have been spent.
         # The key is the output index, while the value is a set of the transactions which spend the output.
@@ -175,7 +181,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by', 'children',
                       'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
-                      'feature_states']:
+                      'feature_states', 'nc_block_root_id']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -230,6 +236,7 @@ class TransactionMetadata:
         else:
             data['first_block'] = None
         data['validation'] = self.validation.name.lower()
+        data['nc_block_root_id'] = self.nc_block_root_id.hex() if self.nc_block_root_id else None
         return data
 
     def to_json_extended(self, tx_storage: 'TransactionStorage') -> dict[str, Any]:
@@ -284,6 +291,12 @@ class TransactionMetadata:
 
         _val_name = data.get('validation', None)
         meta.validation = ValidationState.from_name(_val_name) if _val_name is not None else ValidationState.INITIAL
+
+        nc_block_root_id_raw = data.get('nc_block_root_id')
+        if nc_block_root_id_raw is not None:
+            meta.nc_block_root_id = bytes.fromhex(nc_block_root_id_raw)
+        else:
+            meta.nc_block_root_id = None
 
         return meta
 

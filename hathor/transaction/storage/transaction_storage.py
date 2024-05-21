@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from contextlib import AbstractContextManager
 from threading import Lock
-from typing import Any, Iterator, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
@@ -54,6 +54,9 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
 from hathor.verification.transaction_verifier import TransactionVerifier
 
+if TYPE_CHECKING:
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+
 cpu = get_cpu_profiler()
 
 # these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be
@@ -77,6 +80,7 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
     _latest_n_height_tips: list[HeightInfo]
+    nc_catalog: Optional['NCBlueprintCatalog'] = None
 
     log = get_logger()
 

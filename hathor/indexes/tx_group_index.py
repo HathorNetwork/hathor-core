@@ -49,11 +49,16 @@ class TxGroupIndex(BaseIndex, Generic[KT]):
         raise NotImplementedError
 
     @abstractmethod
-    def _get_sorted_from_key(self, key: KT, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
+    def _get_sorted_from_key(self,
+                             key: KT,
+                             tx_start: Optional[BaseTransaction] = None,
+                             reverse: bool = False) -> Iterable[bytes]:
         """Get all transactions that have a given key, sorted by timestamp.
 
         `tx_start` serves as a pagination marker, indicating the starting position for the iteration.
         When tx_start is None, the iteration begins from the initial element.
+
+        `reverse` is used to get the list in the reverse order
         """
         raise NotImplementedError
 

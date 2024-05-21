@@ -9,6 +9,9 @@ from tests.simulation.base import SimulatorTestCase
 
 
 class BaseRandomSimulatorTestCase(SimulatorTestCase):
+
+    seed_config = 1
+
     def test_verify_pow(self) -> None:
         manager1 = self.create_peer()
         # just get one of the genesis, we don't really need to create any transaction
