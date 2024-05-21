@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 import struct
 from math import ceil, floor
+from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
@@ -64,3 +65,13 @@ def clean_token_string(string: str) -> str:
         It sets to uppercase, removes double spaces and spaces at the beginning and end.
     """
     return re.sub(r'\s\s+', ' ', string).strip().upper()
+
+
+def decode_string_utf8(encoded: bytes, key: str) -> str:
+    """ Raises StructError in case it's not a valid utf-8 string
+    """
+    try:
+        decoded = encoded.decode('utf-8')
+        return decoded
+    except UnicodeDecodeError:
+        raise StructError('{} must be a valid utf-8 string.'.format(key))

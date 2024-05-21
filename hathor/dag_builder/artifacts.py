@@ -14,12 +14,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, NamedTuple
+from typing import TYPE_CHECKING, Iterator, NamedTuple, TypeVar
 
 from hathor.dag_builder.types import DAGNode
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
+
+T = TypeVar('T', bound='BaseTransaction')
 
 
 class _Pair(NamedTuple):
@@ -38,3 +40,13 @@ class DAGArtifacts:
             self.by_name[node.name] = p
 
         self.list: tuple[_Pair, ...] = tuple(v)
+
+    def get_typed_vertex(self, name: str, type_: type[T]) -> T:
+        """Get a vertex by name, asserting it is of the provided type."""
+        _, vertex = self.by_name[name]
+        assert isinstance(vertex, type_)
+        return vertex
+
+    def get_typed_vertices(self, names: list[str], type_: type[T]) -> list[T]:
+        """Get a list of vertices by name, asserting they are of the provided type."""
+        return [self.get_typed_vertex(name, type_) for name in names]

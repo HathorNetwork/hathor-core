@@ -64,7 +64,7 @@ class DefaultFiller:
         outputs.append(None)
         return len(outputs) - 1
 
-    def fill_parents(self, node: DAGNode, *, target: int = 2, candidates: list[str] | None = []) -> None:
+    def fill_parents(self, node: DAGNode, *, target: int = 2, candidates: list[str] | None = None) -> None:
         """Fill parents of a vertex.
 
         Note: We shouldn't use the DAG transactions because it would confirm them, violating the DAG description."""
@@ -117,7 +117,7 @@ class DefaultFiller:
             assert txout is not None
             outs[txout.token] += txout.amount
 
-        keys = set(ins.keys()) | set(outs.keys())
+        keys = set(ins.keys()) | set(outs.keys()) | set(node.balances.keys())
         balance = {}
         for key in keys:
             balance[key] = outs.get(key, 0) - ins.get(key, 0)
@@ -129,9 +129,8 @@ class DefaultFiller:
         balance = self.calculate_balance(node)
 
         for key, diff in balance.items():
-            # =0 balance
-            # <0 need output
-            # >0 need input
+            target = node.balances.get(key, 0)
+            diff -= target
             if diff < 0:
                 index = self.get_next_index(node.outputs)
                 node.outputs[index] = DAGOutput(abs(diff), key, {'_origin': 'f3'})
@@ -218,6 +217,10 @@ class DefaultFiller:
                     if node.name == 'dummy':
                         continue
 
+                    self.fill_parents(node)
+                    self.balance_node_inputs_and_outputs(node)
+
+                case DAGNodeType.NanoContract | DAGNodeType.OnChainBlueprint:
                     self.fill_parents(node)
                     self.balance_node_inputs_and_outputs(node)
 

@@ -114,6 +114,7 @@ class MetricsTest(unittest.TestCase):
             b'event': 0.0,
             b'event-metadata': 0.0,
             b'feature-activation-metadata': 0.0,
+            b'nc-state': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -168,6 +169,7 @@ class MetricsTest(unittest.TestCase):
             b'event': 0.0,
             b'event-metadata': 0.0,
             b'feature-activation-metadata': 0.0,
+            b'nc-state': 0.0,
         })
 
         manager.tx_storage.pre_init()
