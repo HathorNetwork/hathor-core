@@ -116,6 +116,7 @@ class MetricsTest(unittest.TestCase):
             b'timestamp-sorted-all': 0.0,
             b'timestamp-sorted-blocks': 0.0,
             b'timestamp-sorted-txs': 0.0,
+            b'nc-state': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -175,6 +176,7 @@ class MetricsTest(unittest.TestCase):
             b'timestamp-sorted-all': 0.0,
             b'timestamp-sorted-blocks': 0.0,
             b'timestamp-sorted-txs': 0.0,
+            b'nc-state': 0.0,
         })
 
         manager.tx_storage.pre_init()

@@ -78,6 +78,7 @@ class CliBuilder:
         from hathor.daa import TestMode
         from hathor.event.storage import EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
+        from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
@@ -134,6 +135,8 @@ class CliBuilder:
             if self._args.data else RocksDBStorage.create_temp(cache_capacity)
         )
 
+        self.nc_storage_factory: NCStorageFactory = NCRocksDBStorageFactory(self.rocksdb_storage)
+
         # Initialize indexes manager.
         indexes = RocksDBIndexesManager(self.rocksdb_storage, settings=settings)
 
@@ -166,6 +169,10 @@ class CliBuilder:
 
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
+
+        if settings.ENABLE_NANO_CONTRACTS:
+            from hathor.nanocontracts.catalog import generate_catalog_from_settings
+            self.tx_storage.nc_catalog = generate_catalog_from_settings(settings)
 
         self.wallet = None
         if self._args.wallet:
@@ -213,8 +220,18 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
+        self.check_or_raise(
+            not self._args.nc_history_index,
+            '--nc-history-index has been deprecated, use --nc-indices instead',
+        )
+        if self._args.nc_indices and tx_storage.indexes is not None:
+            self.log.debug('enable nano indices')
+            tx_storage.indexes.enable_nc_indices()
+
+        assert self.nc_storage_factory is not None
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
+            self.nc_storage_factory,
             soft_voided_tx_ids,
             pubsub=pubsub,
         )
