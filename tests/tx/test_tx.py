@@ -23,10 +23,10 @@ from hathor.transaction.exceptions import (
     InvalidInputDataSize,
     InvalidOutputScriptSize,
     InvalidOutputValue,
-    NoInputError,
     ParentDoesNotExist,
     PowError,
     TimestampError,
+    TooFewInputs,
     TooManyInputs,
     TooManyOutputs,
     TooManySigOps,
@@ -135,7 +135,7 @@ class TransactionTest(unittest.TestCase):
     def test_no_inputs(self):
         tx = Transaction(inputs=[], storage=self.tx_storage)
 
-        with self.assertRaises(NoInputError):
+        with self.assertRaises(TooFewInputs):
             self._verifiers.tx.verify_number_of_inputs(tx)
 
     def test_too_many_outputs(self):

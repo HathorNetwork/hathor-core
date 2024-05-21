@@ -50,8 +50,8 @@ class InvalidInputDataSize(TxValidationError):
     """Input data is too big"""
 
 
-class NoInputError(TxValidationError):
-    """There is not input"""
+class TooFewInputs(TxValidationError):
+    """There are less inputs than the minimum required"""
 
 
 class InvalidScriptError(TxValidationError):
@@ -140,6 +140,10 @@ class RewardLocked(TxValidationError):
 
 class InvalidVersionError(TxValidationError):
     """Vertex version is invalid."""
+
+
+class TokenAuthorityNotAllowed(TxValidationError):
+    """Transaction has at least one authority token and it is not allowed"""
 
 
 class BlockWithInputs(BlockError):

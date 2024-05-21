@@ -42,6 +42,7 @@ from hathor.transaction.storage.migrations import (
     BaseMigration,
     MigrationState,
     add_closest_ancestor_block,
+    add_nc_history_stats,
     change_score_acc_weight_metadata,
     include_funds_for_first_block,
 )
@@ -53,6 +54,10 @@ from hathor.verification.transaction_verifier import TransactionVerifier
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts import OnChainBlueprint
+    from hathor.nanocontracts.blueprint import Blueprint
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.types import BlueprintId
 
 cpu = get_cpu_profiler()
 
@@ -77,6 +82,7 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
     _latest_n_height_tips: list[HeightInfo]
+    nc_catalog: Optional['NCBlueprintCatalog'] = None
 
     log = get_logger()
 
@@ -97,6 +103,7 @@ class TransactionStorage(ABC):
         change_score_acc_weight_metadata.Migration,
         add_closest_ancestor_block.Migration,
         include_funds_for_first_block.Migration,
+        add_nc_history_stats.Migration,
     ]
 
     _migrations: list[BaseMigration]
@@ -1130,6 +1137,73 @@ class TransactionStorage(ABC):
         """Return true if the vertex exists no matter its validation state."""
         with self.allow_partially_validated_context():
             return self.transaction_exists(vertex_id)
+
+    def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
+        from hathor.nanocontracts.exception import BlueprintDoesNotExist
+        assert self.nc_catalog is not None
+
+        try:
+            return self.nc_catalog.get_blueprint_class(blueprint_id)
+        except BlueprintDoesNotExist as e:
+            self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
+            if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
+                raise e
+            self.log.debug('on-chain blueprints enabled, looking for that instead')
+            return self.get_on_chain_blueprint(blueprint_id)
+
+    def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
+        """Returns the source code associated with the given blueprint_id.
+
+        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+
+        A point of difference is that an OCB will have a `__blueprint__ = BlueprintName` line, where a built-in
+        blueprint will not.
+        """
+        import inspect
+
+        from hathor.nanocontracts import OnChainBlueprint
+
+        blueprint = self._get_blueprint(blueprint_id)
+        if isinstance(blueprint, OnChainBlueprint):
+            return self.get_on_chain_blueprint(blueprint_id).code.text
+        else:
+            module = inspect.getmodule(blueprint)
+            assert module is not None
+            return inspect.getsource(module)
+
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+        """Returns the blueprint class associated with the given blueprint_id.
+
+        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+        """
+        from hathor.nanocontracts import OnChainBlueprint
+        blueprint = self._get_blueprint(blueprint_id)
+        if isinstance(blueprint, OnChainBlueprint):
+            return blueprint.get_blueprint_class()
+        else:
+            return blueprint
+
+    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
+        """Return an on-chain blueprint transaction."""
+        assert self._settings.ENABLE_ON_CHAIN_BLUEPRINTS
+        from hathor.nanocontracts import OnChainBlueprint
+        from hathor.nanocontracts.exception import (
+            BlueprintDoesNotExist,
+            OCBBlueprintNotConfirmed,
+            OCBInvalidBlueprintVertexType,
+        )
+        try:
+            blueprint_tx = self.get_transaction(blueprint_id)
+        except TransactionDoesNotExist:
+            self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
+            raise BlueprintDoesNotExist(blueprint_id.hex())
+        if not isinstance(blueprint_tx, OnChainBlueprint):
+            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())
+        tx_meta = blueprint_tx.get_metadata()
+        if tx_meta.voided_by or not tx_meta.first_block:
+            raise OCBBlueprintNotConfirmed(blueprint_id.hex())
+        # XXX: maybe use N blocks confirmation, like reward-locks
+        return blueprint_tx
 
 
 class BaseTransactionStorage(TransactionStorage):
