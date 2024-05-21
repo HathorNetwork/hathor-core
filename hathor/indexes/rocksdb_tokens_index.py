@@ -17,6 +17,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, TypedDict, cast
 
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.indexes.rocksdb_utils import (
@@ -27,6 +28,8 @@ from hathor.indexes.rocksdb_utils import (
     to_internal_token_uid,
 )
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
+from hathor.nanocontracts import NanoContract
+from hathor.nanocontracts.types import NCActionType
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.util import collect_n, json_dumpb, json_loadb
@@ -304,6 +307,18 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         for index in range(len(tx.outputs)):
             self.log.debug('add utxo', tx=tx.hash_hex, index=index)
             self._add_utxo(tx, index)
+
+        # Handle deposits and withdrawals from Nano Contracts.
+        if isinstance(tx, NanoContract):
+            ctx = tx.get_context()
+            for action in ctx.actions.values():
+                match action.type:
+                    case NCActionType.DEPOSIT:
+                        self._add_to_total(action.token_uid, action.amount)
+                    case NCActionType.WITHDRAWAL:
+                        self._subtract_from_total(action.token_uid, action.amount)
+                    case _:
+                        assert_never(action.type)
 
     def del_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:

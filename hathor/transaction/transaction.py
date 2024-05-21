@@ -91,6 +91,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
 
+    def clear_sighash_cache(self) -> None:
+        """Clear caches related to sighash calculation."""
+        self._sighash_cache = None
+        self._sighash_data_cache = None
+
     @property
     def is_block(self) -> bool:
         """Returns true if this is a block"""
@@ -184,7 +189,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         return struct_bytes
 
-    def get_sighash_all(self) -> bytes:
+    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
         """Return a serialization of the inputs, outputs and tokens without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
@@ -193,7 +198,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         # This method does not depend on the input itself, however we call it for each one to sign it.
         # For transactions that have many inputs there is a significant decrease on the verify time
         # when using this cache, so we call this method only once.
-        if self._sighash_cache:
+        if not skip_cache and self._sighash_cache:
             return self._sighash_cache
 
         struct_bytes = bytearray(
@@ -268,10 +273,18 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         return token_dict
 
+    def get_minimum_number_of_inputs(self) -> int:
+        """Return the minimum number of inputs for this transaction.
+        This is used by the verification services."""
+        return 1
+
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
         token_dict: dict[TokenUid, TokenInfo] = {}
+
+        for token_uid in self.tokens:
+            token_dict[token_uid] = TokenInfo(0, False, False)
 
         default_info: TokenInfo = TokenInfo(0, False, False)
 

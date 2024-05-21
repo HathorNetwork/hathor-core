@@ -17,6 +17,7 @@ from typing import Iterator, Optional, cast
 
 from sortedcontainers import SortedKeyList
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
 from hathor.indexes.utils import (
@@ -25,6 +26,8 @@ from hathor.indexes.utils import (
     get_newest_sorted_key_list,
     get_older_sorted_key_list,
 )
+from hathor.nanocontracts import NanoContract
+from hathor.nanocontracts.types import NCActionType
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.util import is_token_uid_valid
@@ -49,6 +52,17 @@ class MemoryTokenIndexInfo(TokenIndexInfo):
         self._melt = melt or set()
         # Saves the (timestamp, hash) of the transactions that include this token
         self._transactions = SortedKeyList(key=lambda x: (x.timestamp, x.hash))
+
+    def copy(self) -> 'MemoryTokenIndexInfo':
+        copy = MemoryTokenIndexInfo(
+            name=self._name,
+            symbol=self._symbol,
+            total=self._total,
+            mint=self._mint,
+            melt=self._melt,
+        )
+        copy._transactions.update(self._transactions)
+        return copy
 
     def get_name(self) -> Optional[str]:
         return self._name
@@ -127,6 +141,18 @@ class MemoryTokensIndex(TokensIndex):
             status._name = tx.token_name
             status._symbol = tx.token_symbol
 
+        # Handle deposits and withdrawals from Nano Contracts.
+        if isinstance(tx, NanoContract):
+            ctx = tx.get_context()
+            for action in ctx.actions.values():
+                match action.type:
+                    case NCActionType.DEPOSIT:
+                        self._tokens[action.token_uid]._total += action.amount
+                    case NCActionType.WITHDRAWAL:
+                        self._tokens[action.token_uid]._total -= action.amount
+                    case _:
+                        assert_never(action.type)
+
         if tx.is_transaction:
             # Adding this tx to the transactions key list
             assert isinstance(tx, Transaction)
@@ -168,7 +194,7 @@ class MemoryTokensIndex(TokensIndex):
         if token_uid not in self._tokens:
             raise KeyError('unknown token')
         info = self._tokens[token_uid]
-        return info
+        return info.copy()
 
     def get_transactions_count(self, token_uid: bytes) -> int:
         assert is_token_uid_valid(token_uid)
