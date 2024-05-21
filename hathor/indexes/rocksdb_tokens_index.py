@@ -17,6 +17,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, TypedDict, cast
 
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.rocksdb_utils import (
@@ -27,6 +28,7 @@ from hathor.indexes.rocksdb_utils import (
     to_internal_token_uid,
 )
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
+from hathor.nanocontracts.types import NCActionType
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.util import collect_n, json_dumpb, json_loadb
@@ -308,6 +310,20 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self.log.debug('add utxo', tx=tx.hash_hex, index=index)
             self._add_utxo(tx, index)
 
+        # Handle deposits and withdrawals from Nano Contracts.
+        if tx.is_nano_contract():
+            assert isinstance(tx, Transaction)
+            nano_header = tx.get_nano_header()
+            ctx = nano_header.get_context()
+            for action in ctx.actions.values():
+                match action.type:
+                    case NCActionType.DEPOSIT:
+                        self._add_to_total(action.token_uid, action.amount)
+                    case NCActionType.WITHDRAWAL:
+                        self._subtract_from_total(action.token_uid, action.amount)
+                    case _:
+                        assert_never(action.type)
+
     def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
@@ -325,6 +341,20 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         # if it's a TokenCreationTransaction, remove it from index
         if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
             self._destroy_token(tx.hash)
+
+        # Handle deposits and withdrawals from Nano Contracts.
+        if tx.is_nano_contract():
+            assert isinstance(tx, Transaction)
+            nano_header = tx.get_nano_header()
+            ctx = nano_header.get_context()
+            for action in ctx.actions.values():
+                match action.type:
+                    case NCActionType.DEPOSIT:
+                        self._subtract_from_total(action.token_uid, action.amount)
+                    case NCActionType.WITHDRAWAL:
+                        self._add_to_total(action.token_uid, action.amount)
+                    case _:
+                        assert_never(action.type)
 
     def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:
         self.log.debug('seek to start')

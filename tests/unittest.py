@@ -1,8 +1,11 @@
+import base64
 import os
+import re
 import secrets
 import shutil
 import tempfile
 import time
+from contextlib import contextmanager
 from typing import Any, Callable, Collection, Iterable, Iterator, Optional
 from unittest import main as ut_main
 
@@ -61,6 +64,16 @@ def _get_default_peer_id_pool_filepath() -> str:
 
 
 PEER_ID_POOL = list(_load_peer_pool())
+
+OCB_TEST_PRIVKEY: bytes = base64.b64decode(
+    'MIH0MF8GCSqGSIb3DQEFDTBSMDEGCSqGSIb3DQEFDDAkBBCIdovnmKjK3KU'
+    'c61YGgja0AgIIADAMBggqhkiG9w0CCQUAMB0GCWCGSAFlAwQBKgQQl2CJT4'
+    'I2IUzRNoU9hyOWEwSBkLznN9Nunel+kK0FXpk//z0ZAnIyVacfHklCxFGyO'
+    'j1VSjor0CHzH2Gmblvr+m7lCmRmqSVAwJpplqQYdBUF6sR9djHLY6svPY0o'
+    '//dqQ/xM7QiY2FHlb3JQCTu7DaMflqPcJXlRXAFyoACnmj4/lUJWgrcWala'
+    'rCSI+8rIillg3AU8/2gfoB1BxulVIIG35SQ=='
+)
+OCB_TEST_PASSWORD: bytes = b'OCBtestPW'
 
 
 class TestBuilder(Builder):
@@ -154,12 +167,17 @@ class TestCase(unittest.TestCase):
         genesis_wallet = HDWallet(words=GENESIS_SEED)
         genesis_wallet._manually_initialize()
 
+        assert manager.tx_storage.nc_catalog
+        from tests.nanocontracts import test_blueprints
+
         return DAGBuilder(
             settings=manager._settings,
             daa=manager.daa,
             genesis_wallet=genesis_wallet,
             wallet_factory=self.get_wallet,
             vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
+            nc_catalog=manager.tx_storage.nc_catalog,
+            blueprints_module=test_blueprints,
         )
 
     def get_builder(self, settings: HathorSettings | None = None) -> TestBuilder:
@@ -202,6 +220,7 @@ class TestCase(unittest.TestCase):
         enable_event_queue: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
+        nc_indices: bool = False,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
 
         settings = self._settings._replace(NETWORK_NAME=network)
@@ -254,6 +273,10 @@ class TestCase(unittest.TestCase):
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
+
+        if nc_indices:
+            builder.enable_nc_indices()
+
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         return manager
@@ -435,6 +458,24 @@ class TestCase(unittest.TestCase):
 
     def assertV2SyncedProgress(self, node_sync: NodeBlockSync) -> None:
         self.assertEqual(node_sync.synced_block, node_sync.peer_best_block)
+
+    @contextmanager
+    def assertNCFail(self, class_name: str, pattern: str | re.Pattern[str] | None = None) -> Iterator[BaseException]:
+        """Assert that a NCFail is raised and it has the expected class name and str(exc) format.
+        """
+        from hathor.nanocontracts.exception import NCFail
+
+        with self.assertRaises(NCFail) as cm:
+            yield cm
+
+        self.assertEqual(cm.exception.__class__.__name__, class_name)
+
+        if pattern is not None:
+            actual = str(cm.exception)
+            if isinstance(pattern, re.Pattern):
+                assert pattern.match(actual)
+            else:
+                self.assertEqual(pattern, actual)
 
     def clean_tmpdirs(self) -> None:
         for tmpdir in self.tmpdirs:
