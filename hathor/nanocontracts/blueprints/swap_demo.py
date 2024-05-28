@@ -15,8 +15,7 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import NCActionType, public, view
-from hathor.types import TokenUid
+from hathor.nanocontracts.types import NCActionType, TokenUid, public, view
 
 
 class SwapDemo(Blueprint):

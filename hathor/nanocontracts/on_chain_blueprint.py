@@ -22,7 +22,7 @@ from typing_extensions import Self, override
 from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.method_parser import NCMethodParser
-from hathor.nanocontracts.types import BlueprintId
+from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -304,7 +304,7 @@ class OnChainBlueprint(Transaction):
 
     def blueprint_id(self) -> BlueprintId:
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
-        return BlueprintId(self.hash)
+        return BlueprintId(VertexId(self.hash))
 
     def _load_blueprint_code_exec(self) -> tuple[type[Blueprint], dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""

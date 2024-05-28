@@ -30,7 +30,7 @@ from hathor.nanocontracts.exception import (
 )
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.nanocontract import NanoContract
-from hathor.nanocontracts.types import ContractId
+from hathor.nanocontracts.types import ContractId, VertexId
 from hathor.nanocontracts.utils import get_nano_contract_creation
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 from hathor.wallet.exceptions import InvalidAddress
@@ -68,7 +68,7 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         try:
-            nc_id_bytes = ContractId(bytes.fromhex(params.id))
+            nc_id_bytes = ContractId(VertexId(bytes.fromhex(params.id)))
         except ValueError:
             request.setResponseCode(400)
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.id}')

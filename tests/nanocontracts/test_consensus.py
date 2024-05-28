@@ -15,7 +15,7 @@ from hathor.nanocontracts.exception import (
     NCSerializationError,
 )
 from hathor.nanocontracts.method_parser import NCMethodParser
-from hathor.nanocontracts.types import NCAction, NCActionType
+from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from hathor.transaction import Block, Transaction, TxOutput
 from hathor.types import VertexId
@@ -28,11 +28,11 @@ settings = HathorSettings()
 
 class MyBlueprint(Blueprint):
     total: int
-    token_uid: bytes
+    token_uid: TokenUid
     counter: int
 
     @public
-    def initialize(self, ctx: Context, token_uid: bytes) -> None:
+    def initialize(self, ctx: Context, token_uid: TokenUid) -> None:
         self.total = 0
         self.counter = 0
         self.token_uid = token_uid
@@ -88,7 +88,7 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.miner = self.simulator.create_miner(self.manager, hashpower=100e6)
         self.miner.start()
 
-        self.token_uid = b'\0'
+        self.token_uid = TokenUid(b'\0')
         trigger = StopAfterMinimumBalance(self.wallet, self.token_uid, 1)
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
 

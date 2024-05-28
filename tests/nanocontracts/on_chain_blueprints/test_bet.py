@@ -11,7 +11,7 @@ from hathor.nanocontracts import NanoContract, OnChainBlueprint
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import ContractId, NCAction, NCActionType, SignedData
+from hathor.nanocontracts.types import Address, ContractId, NCAction, NCActionType, SignedData
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
@@ -49,7 +49,7 @@ class OnChainBet(NamedTuple):
 
 class BetInfo(NamedTuple):
     key: KeyPair
-    address: bytes
+    address: Address
     amount: int
     score: str
 
@@ -101,11 +101,11 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         signed_result.script_input = oracle_key.p2pkh_create_input_data(b'123', signed_result.get_data_bytes())
 
         tx = self._get_any_tx()
-        context = Context([], tx, b'', timestamp=self.get_current_timestamp())
+        context = Context([], tx, Address(b''), timestamp=self.get_current_timestamp())
         self.runner.call_public_method(self.nc_id, 'set_result', context, signed_result)
         self.assertEqual(self.nc_storage.get('final_result'), '2x2')
 
-    def _withdraw(self, address: bytes, amount: int) -> None:
+    def _withdraw(self, address: Address, amount: int) -> None:
         tx = self._get_any_tx()
         action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
         context = Context([action], tx, address, timestamp=self.get_current_timestamp())
@@ -177,7 +177,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
     def initialize_contract(self):
         # create on-chain Bet nanocontract
         blueprint = self._create_on_chain_blueprint(ON_CHAIN_BET_NC_CODE)
-        assert self.manager.vertex_handler.on_new_vertex(blueprint)
+        assert self.manager.vertex_handler.on_new_vertex(blueprint, fails_silently=False)
         add_new_blocks(self.manager, 1, advance_clock=30)  # confirm the on-chain blueprint vertex
         assert blueprint.get_metadata().first_block is not None
 

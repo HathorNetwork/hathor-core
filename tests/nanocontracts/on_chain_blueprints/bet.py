@@ -1,13 +1,37 @@
+# Copyright 2023 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from math import floor
-from typing import Optional
+from typing import Optional, TypeAlias
 
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import NCAction, NCActionType, SignedData, public, view
-from hathor.types import Address, Amount, Timestamp, TokenUid, TxOutputScript
+from hathor.nanocontracts.types import (
+    Address,
+    NCAction,
+    NCActionType,
+    SignedData,
+    Timestamp,
+    TokenUid,
+    TxOutputScript,
+    public,
+    view,
+)
 
-Result = str
+Result: TypeAlias = str
+Amount: TypeAlias = int
 
 
 class InvalidToken(NCFail):
@@ -98,7 +122,7 @@ class Bet(Blueprint):
         self.token_uid = token_uid
         self.date_last_bet = date_last_bet
         self.final_result = None
-        self.total = 0
+        self.total = Amount(0)
 
     @view
     def has_result(self) -> bool:
@@ -140,8 +164,8 @@ class Bet(Blueprint):
         self.fail_if_invalid_token(action)
         if ctx.timestamp > self.date_last_bet:
             raise TooLate(f'cannot place bets after {self.date_last_bet}')
-        amount = action.amount
-        self.total += amount
+        amount = Amount(action.amount)
+        self.total = Amount(self.total + amount)
         if score not in self.bets_total:
             self.bets_total[score] = amount
         else:
@@ -176,19 +200,20 @@ class Bet(Blueprint):
             raise DepositNotAllowed('action must be withdrawal')
         self.fail_if_result_is_not_available()
         self.fail_if_invalid_token(action)
-        allowed = self.get_max_withdrawal(ctx.address)
+        address = Address(ctx.address)
+        allowed = self.get_max_withdrawal(address)
         if action.amount > allowed:
             raise InsufficientBalance(f'withdrawal amount is greater than available (max: {allowed})')
-        if ctx.address not in self.withdrawals:
-            self.withdrawals[ctx.address] = action.amount
+        if address not in self.withdrawals:
+            self.withdrawals[address] = action.amount
         else:
-            self.withdrawals[ctx.address] += action.amount
+            self.withdrawals[address] += action.amount
 
     @view
-    def get_max_withdrawal(self, address: Address) -> int:
+    def get_max_withdrawal(self, address: Address) -> Amount:
         """Return the maximum amount available for withdrawal."""
         total = self.get_winner_amount(address)
-        withdrawals = self.withdrawals.get(address, 0)
+        withdrawals = self.withdrawals.get(address, Amount(0))
         return total - withdrawals
 
     @view
@@ -196,13 +221,13 @@ class Bet(Blueprint):
         """Return how much an address has won."""
         self.fail_if_result_is_not_available()
         if self.final_result not in self.bets_total:
-            return 0
+            return Amount(0)
         result_total = self.bets_total[self.final_result]
         if result_total == 0:
-            return 0
+            return Amount(0)
         address_total = self.bets_address.get((self.final_result, address), 0)
         percentage = address_total / result_total
-        return floor(percentage * self.total)
+        return Amount(floor(percentage * self.total))
 
 
 __blueprint__ = Bet
