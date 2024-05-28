@@ -18,7 +18,7 @@ from hathor.nanocontracts.blueprints.bet import (
 from hathor.nanocontracts.storage import NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import Context, ContractId, NCAction, NCActionType, SignedData
+from hathor.nanocontracts.types import Address, Amount, Context, ContractId, NCAction, NCActionType, SignedData
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
@@ -30,8 +30,8 @@ settings = HathorSettings()
 
 class BetInfo(NamedTuple):
     key: KeyPair
-    address: bytes
-    amount: int
+    address: Address
+    amount: Amount
     score: str
 
 
@@ -75,7 +75,7 @@ class NCBetBlueprintTestCase(unittest.TestCase):
             timestamp = self.get_current_timestamp()
         context = Context([action], tx, address_bytes, timestamp=timestamp)
         self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
-        return BetInfo(key=key, address=address_bytes, amount=amount, score=score)
+        return BetInfo(key=key, address=Address(address_bytes), amount=Amount(amount), score=score)
 
     def _set_result(self, result: Result, oracle_key: Optional[KeyPair] = None) -> None:
         signed_result: SignedData[Result] = SignedData(result, b'')
@@ -86,11 +86,11 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         signed_result.script_input = oracle_key.p2pkh_create_input_data(b'123', signed_result.get_data_bytes())
 
         tx = self._get_any_tx()
-        context = Context([], tx, b'', timestamp=self.get_current_timestamp())
+        context = Context([], tx, Address(b''), timestamp=self.get_current_timestamp())
         self.runner.call_public_method(self.nc_id, 'set_result', context, signed_result)
         self.assertEqual(self.nc_storage.get('final_result'), '2x2')
 
-    def _withdraw(self, address: bytes, amount: int) -> None:
+    def _withdraw(self, address: Address, amount: int) -> None:
         tx = self._get_any_tx()
         action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
         context = Context([action], tx, address, timestamp=self.get_current_timestamp())

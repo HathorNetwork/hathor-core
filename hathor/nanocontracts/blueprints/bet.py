@@ -17,8 +17,18 @@ from typing import Optional
 
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import Context, NCAction, NCActionType, SignedData, public
-from hathor.types import Address, Amount, Timestamp, TokenUid, TxOutputScript
+from hathor.nanocontracts.types import (
+    Address,
+    Amount,
+    Context,
+    NCAction,
+    NCActionType,
+    SignedData,
+    Timestamp,
+    TokenUid,
+    TxOutputScript,
+    public,
+)
 
 Result = str
 
@@ -111,7 +121,7 @@ class Bet(Blueprint):
         self.token_uid = token_uid
         self.date_last_bet = date_last_bet
         self.final_result = None
-        self.total = 0
+        self.total = Amount(0)
 
     def has_result(self) -> bool:
         """Return True if the final result has already been set."""
@@ -196,20 +206,20 @@ class Bet(Blueprint):
         else:
             self.withdrawals[ctx.address] += action.amount
 
-    def get_max_withdrawal(self, address: Address) -> int:
+    def get_max_withdrawal(self, address: Address) -> Amount:
         """Return the maximum amount available for withdrawal."""
         total = self.get_winner_amount(address)
-        withdrawals = self.withdrawals.get(address, 0)
+        withdrawals = self.withdrawals.get(address, Amount(0))
         return total - withdrawals
 
     def get_winner_amount(self, address: Address) -> Amount:
         """Return how much an address has won."""
         self.fail_if_result_is_not_available()
         if self.final_result not in self.bets_total:
-            return 0
+            return Amount(0)
         result_total = self.bets_total[self.final_result]
         if result_total == 0:
-            return 0
+            return Amount(0)
         address_total = self.bets_address.get((self.final_result, address), 0)
         percentage = address_total / result_total
-        return floor(percentage * self.total)
+        return Amount(floor(percentage * self.total))

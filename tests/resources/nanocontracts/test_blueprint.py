@@ -5,8 +5,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.resources import BlueprintInfoResource
-from hathor.nanocontracts.types import SignedData
-from hathor.types import Address, Amount, Timestamp, TokenUid, TxOutputScript
+from hathor.nanocontracts.types import Address, Amount, SignedData, Timestamp, TokenUid, TxOutputScript
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
@@ -17,10 +16,10 @@ class MyBlueprint(Blueprint):
     a_bool: bool
     a_address: Address
     a_amount: Amount
-    a_token: TokenUid
     a_timestamp: Timestamp
     a_token_uid: TokenUid
     a_script: TxOutputScript
+    a_signed_data: SignedData[str]
     a_dict: dict[str, int]
     a_tuple: tuple[str, int, bool]
     a_dict_dict_tuple: dict[str, tuple[str, int, float]]
@@ -114,12 +113,12 @@ class BlueprintInfoTest(_BaseResourceTest._ResourceTest):
             'a_str': 'str',
             'a_float': 'float',
             'a_bool': 'bool',
-            'a_address': 'bytes',
-            'a_amount': 'int',
-            'a_token': 'bytes',
-            'a_timestamp': 'int',
-            'a_token_uid': 'bytes',
-            'a_script': 'bytes',
+            'a_address': 'Address',
+            'a_amount': 'Amount',
+            'a_timestamp': 'Timestamp',
+            'a_token_uid': 'TokenUid',
+            'a_script': 'TxOutputScript',
+            'a_signed_data': 'SignedData[str]',
             'a_dict': 'dict[str, int]',
             'a_tuple': 'tuple[str, int, bool]',
             'a_dict_dict_tuple': 'dict[str, tuple[str, int, float]]',

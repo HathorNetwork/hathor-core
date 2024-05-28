@@ -20,14 +20,17 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, NamedTuple, NewType, O
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCInvalidContext
 from hathor.transaction import BaseTransaction
-from hathor.types import Address, Amount, TokenUid, VertexId
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.runner import Runner
 
 # Types to be used by blueprints.
-TxOutputScript = bytes
-Timestamp = int
+VertexId = NewType('VertexId', bytes)
+Amount = NewType('Amount', int)
+Address = NewType('Address', bytes)
+TxOutputScript = NewType('TxOutputScript', bytes)
+TokenUid = NewType('TokenUid', bytes)
+Timestamp = NewType('Timestamp', int)
 ContractId = NewType('ContractId', VertexId)
 
 T = TypeVar('T')
