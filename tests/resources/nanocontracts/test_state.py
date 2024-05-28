@@ -12,11 +12,11 @@ from hathor.nanocontracts import Blueprint, Context, NanoContract, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractStateResource
+from hathor.nanocontracts.types import Address, Amount, Timestamp, TokenUid
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import TxInput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.types import Address, Amount, Timestamp, TokenUid
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
 

@@ -15,6 +15,7 @@
 from typing import TYPE_CHECKING, Any, Type
 
 from hathor.nanocontracts.fields import Field
+from hathor.nanocontracts.types import Address, Amount, Timestamp, TokenUid, TxOutputScript, VertexId
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.blueprint import Blueprint
@@ -26,7 +27,16 @@ class DictField(Field):
     Note that this field is not the dict itself. A dict-like object will be returned
     when one tries to access the dict.
     """
-    VALID_KEY_TYPES = set([str, bytes, int, tuple])
+    VALID_KEY_TYPES = set([str,
+                           bytes,
+                           int,
+                           tuple,
+                           Address,
+                           Amount,
+                           Timestamp,
+                           TokenUid,
+                           TxOutputScript,
+                           VertexId])
 
     def __init__(self, name: str, key_field: Field, value_field: Field) -> None:
         self.name = name

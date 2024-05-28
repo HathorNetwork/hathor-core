@@ -13,14 +13,21 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Any, Callable, Generic, NamedTuple, TypeVar
+from typing import Any, Callable, Generic, NamedTuple, NewType, TypeVar
 
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCInvalidContext
 from hathor.transaction import BaseTransaction
-from hathor.types import Address
 
 T = TypeVar('T')
+
+
+VertexId = NewType('VertexId', bytes)
+Amount = NewType('Amount', int)
+Address = NewType('Address', bytes)
+TxOutputScript = NewType('TxOutputScript', bytes)
+TokenUid = NewType('TokenUid', bytes)
+Timestamp = NewType('Timestamp', int)
 
 
 class SignedData(Generic[T]):
@@ -79,8 +86,8 @@ class NCActionType(Enum):
 
 class NCAction(NamedTuple):
     type: NCActionType
-    token_uid: bytes
-    amount: int
+    token_uid: TokenUid
+    amount: Amount
 
 
 class Context:
