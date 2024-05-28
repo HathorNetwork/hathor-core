@@ -1,6 +1,6 @@
 import hashlib
 import math
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional, TypeAlias
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -12,21 +12,23 @@ from hathor.nanocontracts import Blueprint, Context, NanoContract, public, view
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractStateResource
+from hathor.nanocontracts.types import Address, Timestamp, TokenUid
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import TxInput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.types import Address, Amount, Timestamp, TokenUid
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
 
 settings = HathorSettings()
 
+Amount: TypeAlias = int
+
 
 class MyNamedTuple(NamedTuple):
     amount1: int
     amount2: int
-    address: Optional[bytes]
+    address: Optional[Address]
 
 
 class MyBlueprint(Blueprint):

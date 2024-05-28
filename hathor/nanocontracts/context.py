@@ -19,10 +19,9 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCInvalidContext
-from hathor.nanocontracts.types import ContractId, NCAction
+from hathor.nanocontracts.types import Address, ContractId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import VertexData
 from hathor.transaction import BaseTransaction
-from hathor.types import Address, Amount, TokenUid
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.runner import Runner
@@ -98,7 +97,7 @@ class Context:
     def get_balance(self,
                     token_uid: Optional[TokenUid] = None,
                     *,
-                    nanocontract_id: Optional[ContractId] = None) -> Amount:
+                    nanocontract_id: Optional[ContractId] = None) -> int:
         """Return the balance for a given token without considering the current transaction.
 
         For instance, if a contract has 50 HTR and a transaction is requesting to withdraw 3 HTR,

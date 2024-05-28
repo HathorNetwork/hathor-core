@@ -1,7 +1,6 @@
 from hathor.nanocontracts.blueprints.swap_demo import InvalidActions, InvalidRatio, InvalidTokens, SwapDemo
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import NCAction, NCActionType
-from hathor.types import TokenUid
+from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 

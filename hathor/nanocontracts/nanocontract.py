@@ -24,7 +24,7 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid, VertexId
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -96,8 +96,8 @@ class NanoContract(Transaction):
         """Return the contract id."""
         if self.nc_method == NC_INITIALIZE_METHOD:
             assert self.hash is not None
-            return ContractId(self.hash)
-        return ContractId(self.nc_id)
+            return ContractId(VertexId(self.hash))
+        return ContractId(VertexId(self.nc_id))
 
     def get_blueprint_class(self) -> Type[Blueprint]:
         """Return the blueprint class of the contract."""
@@ -114,13 +114,13 @@ class NanoContract(Transaction):
         assert self.storage is not None
         assert self.storage.nc_catalog is not None
         if self.nc_method == NC_INITIALIZE_METHOD:
-            return BlueprintId(self.nc_id)
+            return BlueprintId(VertexId(self.nc_id))
         else:
             nanocontract_id = self.nc_id
             nanocontract = self.storage.get_transaction(nanocontract_id)
             assert isinstance(nanocontract, NanoContract)
             assert nanocontract.nc_method == NC_INITIALIZE_METHOD
-            return BlueprintId(nanocontract.nc_id)
+            return BlueprintId(VertexId(nanocontract.nc_id))
 
     def execute(self, runner: 'Runner') -> None:
         """Execute the contract's method call."""
@@ -134,20 +134,20 @@ class NanoContract(Transaction):
 
     def get_context(self) -> Context:
         """Return a context to be used in a method call."""
-        diff_by_token: defaultdict[bytes, int] = defaultdict(int)
+        diff_by_token: defaultdict[TokenUid, int] = defaultdict(int)
 
         for txin in self.inputs:
             assert self.storage is not None
             spent_tx = self.storage.get_transaction(txin.tx_id)
             spent_txout = spent_tx.outputs[txin.index]
-            token_uid = spent_tx.get_token_uid(spent_txout.get_token_index())
+            token_uid = TokenUid(spent_tx.get_token_uid(spent_txout.get_token_index()))
             diff_by_token[token_uid] += spent_txout.value
 
         for txout in self.outputs:
-            token_uid = self.get_token_uid(txout.get_token_index())
+            token_uid = TokenUid(self.get_token_uid(txout.get_token_index()))
             diff_by_token[token_uid] -= txout.value
 
-        tokens = set(diff_by_token.keys())
+        tokens: set[TokenUid] = set(diff_by_token.keys())
 
         action_list = []
         for token_uid in tokens:

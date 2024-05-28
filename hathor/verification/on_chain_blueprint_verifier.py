@@ -27,14 +27,14 @@ from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
 ALLOWED_IMPORTS = {
     # globals
     'math': {'ceil', 'floor'},
-    'typing': {'Optional', 'NamedTuple'},
+    'typing': {'Optional', 'NamedTuple', 'TypeAlias'},
     # hathor
     'hathor.nanocontracts': {'Blueprint'},
     'hathor.nanocontracts.blueprint': {'Blueprint'},
     'hathor.nanocontracts.context': {'Context'},
     'hathor.nanocontracts.exception': {'NCFail'},
-    'hathor.nanocontracts.types': {'NCAction', 'NCActionType', 'SignedData', 'public', 'view'},
-    'hathor.types': {'Address', 'Amount', 'Timestamp', 'TokenUid', 'TxOutputScript'},
+    'hathor.nanocontracts.types': {'NCAction', 'NCActionType', 'SignedData', 'public', 'view', 'Address', 'Amount',
+                                   'Timestamp', 'TokenUid', 'TxOutputScript', 'BlueprintId', 'ContractId', 'VertexId'},
 }
 
 NAME_BLACKLIST = {
