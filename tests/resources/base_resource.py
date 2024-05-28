@@ -53,8 +53,17 @@ class TestDummyRequest(DummyRequest):
 
         # Set request args
         args = args or {}
-        for k, v in args.items():
-            self.addArg(k, v)
+        if isinstance(args, dict):
+            for k, v in args.items():
+                self.addArg(k, v)
+        elif isinstance(args, list):
+            for k, v in args:
+                if k not in self.args:
+                    self.args[k] = [v]
+                else:
+                    self.args[k].append(v)
+        else:
+            raise TypeError(f'unsupported type {type(args)} for args')
 
     def json_value(self):
         return json_loadb(self.written[0])

@@ -1,23 +1,25 @@
-# Summary
+# Feature: RocksDB indexes
+
+## Introduction
 
 This design describes basically how to add a new indexes backend in-disk using rocksdb besides our current in-memory backend.
 
-# Motivation
+## Motivation
 
 The network is growing rapidly and the large number of transactions is increasing the memory usage of a full-node. It usually was enough to run a full-node with 8GB RAM, lately there have been cases with out-of-memory crashes with 8GB, so our recommendation increased to 16GB.
 
 Secondarily, a full-node with an existing database will take a while (usually 10~50min) to start because no index is persisted and they have to be rebuilt on every start. Persisting the indexes across reboots will solve this really annoying behavior.
 
-# Acceptance Criteria
+## Acceptance Criteria
 
 - Have all indexes (except for the interval-tree ones, that will be removed with sync-v1) using the rocksdb backend by default
 - Initially make RocksDB indexes opt-in
 - Make sure the tests cover the new backend
 - Persist the indexes across restarts (this can, and probably will, be implemented and released separately)
 
-# Detailed explanation
+## Detailed explanation
 
-## How to use rocksdb to persist indexes
+### How to use rocksdb to persist indexes
 
 Last July @msbrogli made a proof-of-concept implementation on #254 using rocksdb to persist the address-index(previously called wallet-index).
 
@@ -46,7 +48,7 @@ And then we iterate by `[address]` prefix and the keys will be sorted by (timest
         self.log.debug('seek end')
 ```
 
-## How to load persistent-indexes
+### How to load persistent-indexes
 
 The first implementation will simply reset all indexes when initializing (this is implemented by dropping the relevant column-families on rocksdb, which is an operation that has constant time `O(1)`), it's important to really make sure the index was successfully reset or fail initializing otherwise. This will still have the down-side of slow loading times but will significantly simplify the implementation and avoid introducing issues related to a change to the index initialization implementation.
 

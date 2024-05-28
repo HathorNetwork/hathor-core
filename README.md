@@ -1,201 +1,41 @@
-# Hathor Network
+# Hathor core (full node)
 
-[![Mainnet](https://img.shields.io/badge/mainnet-live-success)](https://explorer.hathor.network/)
-[![Version](https://img.shields.io/github/v/release/HathorNetwork/hathor-core)](https://github.com/HathorNetwork/hathor-core/releases/latest)
-[![Testing](https://img.shields.io/github/actions/workflow/status/HathorNetwork/hathor-core/main.yml?branch=master&label=tests&logo=github)](https://github.com/HathorNetwork/hathor-core/actions?query=workflow%3Atests+branch%3Amaster)
-[![Docker](https://img.shields.io/github/actions/workflow/status/HathorNetwork/hathor-core/docker.yml?branch=master&label=build&logo=docker)](https://hub.docker.com/repository/docker/hathornetwork/hathor-core)
 [![Codecov](https://img.shields.io/codecov/c/github/HathorNetwork/hathor-core?logo=codecov)](https://codecov.io/gh/hathornetwork/hathor-core)
-[![Discord](https://img.shields.io/discord/566500848570466316?logo=discord)](https://discord.com/invite/35mFEhk)
-[![License](https://img.shields.io/github/license/HathorNetwork/hathor-core)](./LICENSE.txt)
 
-## Running a full-node
+## Description
 
-**Disclaimer**
+**Hathor core** is the official and reference client for operating a full node in Hathor Network.
 
-At the moment, our mainnet is running on a whitelist basis. This means only authorized nodes will be able to connect. For testing purposes, you can connect to the testnet (using the `--testnet` parameter). If you want to connect to the mainnet, you have to [use a peer-id](#using-a-peer-id) and send this id to a team member. You can get in touch with us through [our channels](https://hathor.network/community/), preferrably Discord.
+## Operation and usage
 
-### Using Docker
+To know how to operate and use Hathor core, see [Hathor full node at Hathor docs — official technical documentation of Hathor](https://docs.hathor.network/pathways/components/full-node).
 
-The easiest way to run a full-node is to use our Docker image. If you don't have Docker installed, check out [this
-link](https://docs.docker.com/install/). So, just run:
+## Support
 
-```
-docker run -ti -p 8080:8080 -p 8081:8081 hathornetwork/hathor-core run_node --cache --status 8080 --stratum 8081
-```
+If after consulting the documentation, you still need **help to operate and use Hathor core**, [send a message to the `#development` channel on Hathor Discord server for assistance from Hathor team and community members](https://discord.com/channels/566500848570466316/663785995082268713).
 
-The `--status 8080` will run our HTTP API on port 8080, while the `--stratum 8081` will run a stratum server on port
-8081. You can check your full-node status accessing `http://localhost:8080/v1a/status/`. Use `--help` for more
-parameters.
+If you observe an incorrect behavior while using Hathor core, see [the "Issues" subsection in "Contributing"](#issues).
 
-For more information about our HTTP API, check out our [API Documentation](https://docs.hathor.network/).
+## Contributing
 
+### Issues
 
-## From source-code
+If you observe an incorrect behavior while using Hathor core, we encourage you to [open an issue to report this failure](https://github.com/HathorNetwork/hathor-core/issues/new).
 
-First, you need to have Python >=3.8 installed. If you don't, we recommend you to install using `pyenv` (check this
-[link](https://github.com/pyenv/pyenv#installation)).
+You can also [open an issue to request a new feature you wish to see](https://github.com/HathorNetwork/hathor-core/issues/new).
 
-### System dependencies
+### Pull requests
 
-- on Ubuntu 20.04 (without using `pyenv`):
+To contribute to the development of Hathor core, we encourage you to fork the `master` branch, implement your code, and then [submit a pull request to merge it into `master`, selecting the "feature branch template"](https://github.com/HathorNetwork/hathor-core/compare).
 
-  ```
-  sudo add-apt-repository ppa:deadsnakes/ppa
-  sudo apt update
-  sudo apt install python3 python3-dev python3-pip build-essential liblz4-dev libbz2-dev libsnappy-dev
-  pip install -U poetry
-  ```
+### Security
 
-  optionally install RocksDB lib:
+Please do not open an issue to report a security breach nor submit a pull request to fix it. Instead, follow the guidelines described in [SECURITY](SECURITY.md) for safely reporting, fixing, and disclosing security issues.
 
-  ```
-  sudo apt install librocksdb-dev
-  ```
-- on macOS:
+## Miscellaneous
 
-  first intall `pyenv`, keep in mind that you might need to restart your shell or init `pyenv` after installing:
-
-  ```
-  brew install pyenv
-  ```
-
-  then Python 3.11 (you could check the latest 3.11.x version with `pyenv install --list`):
-
-  ```
-  pyenv install 3.11.0
-  pyenv local 3.11.0
-  pip install -U poetry
-  ```
-
-  optionally install RocksDB lib:
-
-  ```
-  brew install rocksdb
-  ```
-- on Windows 10 (using [winget](https://github.com/microsoft/winget-cli)):
-
-  ```
-  winget install python-3.11
-  pip install -U poetry
-  ```
-
-  currently it isn't possible to use RocksDB, if you're interested, [please open an issue][open-issue] or if you were
-  able to do this [please create a pull-request with the required steps][create-pr].
-
-### Clone the project and install poetry dependencies
-
-```
-git clone git@github.com:HathorNetwork/hathor-core.git && cd hathor-core
-```
-
-```
-poetry install
-```
-
-### Running the full-node
-
-```
-poetry run hathor-cli run_node --status 8080
-```
-
-It may take a considerable amount of time for it to sync all the transactions in the network. To speed things up, read below.
-
-#### Speeding up the sync
-You can use database snapshots to speed things up.
-
-We provide both testnet and mainnet snapshots. You can get the link to the latest snapshots this way:
-- Testnet: `curl https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-latest`
-- Mainnet: `curl https://hathor-public-files.s3.amazonaws.com/temp/mainnet-data-latest`
-
-You should download and unpack one of them into your `data` directory before starting the full-node:
-
-```
-wget $(curl https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-latest)
-
-tar xzf testnet-data-*.tar.gz
-```
-
-
-## Additional considerations
-
-(Assume `poetry shell`, otherwise prefix commands with `poetry run`)
-
-### Data persistence
-
-By default, the full node uses RocksDB as storage. You need to pass a parameter --data to configure where data will be stored. You can use a memory storage instead by using --memory-storage parameter. In this case, if the node is restarted, it will have to sync all blocks and transactions again.
-
-Example passing --data:
-```
-hathor-cli run_node --status 8080 --data /data
-```
-
-Example with --memory-storage:
-```
-hathor-cli run_node --status 8080 --memory-storage
-```
-
-
-#### With Docker
-
-When running the full node with Docker and using a persistent storage, it's best to bind a Docker volume to a host
-directory. This way, the container may be restarted or even destroyed and the data will be safe.
-
-To bind the volume, use parameter `-v host-dir:conatiner-dir:options` ([Docker
-documentarion](https://docs.docker.com/engine/reference/run/#volume-shared-filesystems)).
-
-```
-docker run -v ~/hathor-data:/data:consistent ... run_node ... --data /data
-```
-
-### Using a peer-id
-
-It's optional, but generally recommended, first generate a peer-id file:
-
-```
-hathor-cli gen_peer_id > peer_id.json
-```
-
-Then, you can use this id in any server or client through the `--peer` parameter. For instance:
-
-```
-hathor-cli run_node --listen tcp:8000 --peer peer_id.json
-```
-
-The ID of your peer will be in the key `id` inside the generated json (`peer_id.json`), e.g. `"id": "6357b155b0867790bd92d1afe3a9afe3f91312d1ea985f908cac0f64cbc9d5b2"`.
-
-## Common development commands
-
-Assuming virtualenv is active, otherwise prefix `make` commands with `poetry run`.
-
-Check if code seems alright:
-
-```
-make check
-```
-
-Test and coverage:
-
-```
-make tests
-```
-
-Generate Sphinx docs:
-
-```
-cd docs
-make html
-make latexpdf
-```
-
-The output will be written to `docs/_build/html/`.
-
-
-Generate API docs:
-
-```
-hathor-cli generate_openapi_json
-redoc-cli bundle hathor/cli/openapi_files/openapi.json --output index.html
-```
-
-[open-issue]: https://github.com/HathorNetwork/hathor-core/issues/new
-[create-pr]: https://github.com/HathorNetwork/hathor-core/compare
+A miscellany with additional documentation and resources:
+- [Subdirectory docs](docs/README.md): supplementary documentation of Hathor core.
+- [Docker images at Docker Hub](https://hub.docker.com/r/hathornetwork/hathor-core)
+- To know more about Hathor from a general or from a business perspective, see [https://hathor.network](https://hathor.network).
+- To know more about Hathor from a technical perspective, see [https://docs.hathor.network](https://docs.hathor.network).

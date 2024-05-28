@@ -1,4 +1,6 @@
-# Debugging tips and tools
+# Debugging
+
+## Purpose
 
 Here are some useful tips and tools for debugging.
 
