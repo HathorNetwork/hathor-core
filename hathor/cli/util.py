@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import sys
+import traceback
 from argparse import ArgumentParser
 from collections import OrderedDict
 from datetime import datetime
@@ -230,7 +232,12 @@ def setup_logging(
 
     def kwargs_formatter(_, __, event_dict):
         if event_dict and event_dict.get('event') and isinstance(event_dict['event'], str):
-            event_dict['event'] = event_dict['event'].format(**event_dict)
+            try:
+                event_dict['event'] = event_dict['event'].format(**event_dict)
+            except KeyError:
+                # The event string may contain '{}'s that are not used for formatting, resulting in a KeyError in the
+                # event_dict. In this case, we don't format it.
+                pass
         return event_dict
 
     processors: list[Any] = [
@@ -275,10 +282,14 @@ def setup_logging(
             if failure is not None:
                 kwargs['exc_info'] = (failure.type, failure.value, failure.getTracebackObject())
             twisted_logger.log(level, msg, **kwargs)
-        except Exception as e:
-            print('error when logging event', e)
-            for k, v in event.items():
-                print(k, v)
+        except Exception:
+            new_event = dict(
+                event='error when logging event',
+                original_event=event,
+                traceback=traceback.format_exc()
+            )
+            new_event_json = json.dumps(new_event, default=str)
+            print(new_event_json, file=sys.stderr)
 
     # start logging to std logger so structlog can catch it
     twisted.python.log.startLoggingWithObserver(twisted_structlog_observer, setStdout=capture_stdout)
