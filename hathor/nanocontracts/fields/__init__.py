@@ -26,7 +26,17 @@ from hathor.nanocontracts.fields.singles import (
     SingleValueField,
     StrField,
 )
-from hathor.nanocontracts.types import ContractId, SignedData
+from hathor.nanocontracts.types import (
+    Address,
+    Amount,
+    BlueprintId,
+    ContractId,
+    SignedData,
+    Timestamp,
+    TokenUid,
+    TxOutputScript,
+    VertexId,
+)
 
 # Mapping between types and field classes.
 _field_mapping: dict[Any, Type[Field]] = {
@@ -36,7 +46,14 @@ _field_mapping: dict[Any, Type[Field]] = {
     bool: BooleanField,
     float: FloatField,
     dict: DictField,
+    BlueprintId: BytesField,
     ContractId: BytesField,
+    Address: BytesField,
+    Amount: IntegerField,
+    TokenUid: BytesField,
+    Timestamp: IntegerField,
+    TxOutputScript: BytesField,
+    VertexId: BytesField,
 }
 
 
@@ -46,6 +63,13 @@ def get_special_field_class_for_attr(_type: Type[Any]) -> Type[Field]:
     if origin is Union:
         if len(args) == 2 and type(None) in args:
             return OptionalField
+        else:
+            # all args must map to the same field
+            args_fields: set[Type[Field] | None] = set(_field_mapping.get(x) for x in args)
+            if len(args_fields) == 1:
+                field_class = list(args_fields)[0]
+                if field_class is not None:
+                    return field_class
     elif origin is SignedData:
         return SignedDataField
     elif origin is tuple:

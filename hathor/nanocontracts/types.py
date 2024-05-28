@@ -17,11 +17,13 @@ from __future__ import annotations
 from enum import Enum
 from typing import Callable, Generic, NamedTuple, NewType, TypeVar
 
-from hathor.types import Amount, TokenUid, VertexId
-
 # Types to be used by blueprints.
-TxOutputScript = bytes
-Timestamp = int
+VertexId = NewType('VertexId', bytes)
+Amount = NewType('Amount', int)
+Address = NewType('Address', bytes)
+TxOutputScript = NewType('TxOutputScript', bytes)
+TokenUid = NewType('TokenUid', bytes)
+Timestamp = NewType('Timestamp', int)
 ContractId = NewType('ContractId', VertexId)
 BlueprintId = NewType('BlueprintId', VertexId)
 
@@ -93,4 +95,4 @@ class NCActionType(Enum):
 class NCAction(NamedTuple):
     type: NCActionType
     token_uid: TokenUid
-    amount: Amount
+    amount: int

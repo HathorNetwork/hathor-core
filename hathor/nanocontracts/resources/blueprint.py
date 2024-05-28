@@ -23,7 +23,7 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts import types as nc_types
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
-from hathor.nanocontracts.types import BlueprintId
+from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
@@ -80,7 +80,7 @@ class BlueprintInfoResource(Resource):
             return params.json_dumpb()
 
         try:
-            blueprint_id = BlueprintId(bytes.fromhex(params.blueprint_id))
+            blueprint_id = BlueprintId(VertexId(bytes.fromhex(params.blueprint_id)))
         except ValueError:
             request.setResponseCode(400)
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.blueprint_id}')

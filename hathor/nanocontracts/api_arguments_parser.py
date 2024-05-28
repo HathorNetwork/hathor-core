@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 from types import GenericAlias
-from typing import Any, NamedTuple, Optional, TypeVar, Union, get_args, get_origin
+from typing import Any, NamedTuple, Optional, Type, TypeVar, Union, get_args, get_origin
 
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.types import SignedData
@@ -25,7 +26,15 @@ X = TypeVar('X')
 UnionGenericAlias = type(Optional[X])
 
 
-def parse_arg(arg: Any, expected_type: Any) -> Any:
+def get_supertype(_type: Type) -> Type:
+    """Return the supertype of a NewType. If it's not a NewType, return the same type.
+    """
+    if hasattr(_type, '__supertype__'):
+        return _type.__supertype__
+    return _type
+
+
+def parse_arg(arg: Any, expected_type: Type) -> Any:
     """Return the parsed argument for a method call.
     This method is used when calling a private method in the state API
 
@@ -33,7 +42,8 @@ def parse_arg(arg: Any, expected_type: Any) -> Any:
 
     We support int, float, str, bytes, address, list, tuple, namedtuple, and optional
     """
-    if expected_type == bytes:
+    supertype = get_supertype(expected_type)
+    if inspect.isclass(supertype) and issubclass(supertype, bytes):
         # It can be an address, or it comes as an hexadecimal value
         if arg.startswith("a'") and arg.endswith("'"):
             # It's an address
@@ -102,7 +112,7 @@ def parse_arg(arg: Any, expected_type: Any) -> Any:
     return arg
 
 
-def handle_tuple_arg_parse(arg: Any, types: Any) -> tuple:
+def handle_tuple_arg_parse(arg: Any, types: list[Type]) -> tuple:
     """Helper method to handle tuple parse."""
     parsed_elements = []
     # We must call this same method recursively for each element of the iterator

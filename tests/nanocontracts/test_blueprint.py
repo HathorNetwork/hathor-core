@@ -5,7 +5,7 @@ from hathor.nanocontracts.storage import NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.storage.storage import BalanceKey
-from hathor.nanocontracts.types import ContractId, NCAction, NCActionType, public, view
+from hathor.nanocontracts.types import ContractId, NCAction, NCActionType, VertexId, public, view
 from tests import unittest
 from tests.nanocontracts.utils import TestRunner
 
@@ -87,9 +87,9 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.simple_fields_id = ContractId(b'1' * 32)
-        self.container_fields_id = ContractId(b'2' * 32)
-        self.my_blueprint_id = ContractId(b'3' * 32)
+        self.simple_fields_id = ContractId(VertexId(b'1' * 32))
+        self.container_fields_id = ContractId(VertexId(b'2' * 32))
+        self.my_blueprint_id = ContractId(VertexId(b'3' * 32))
 
         nc_storage_factory = NCMemoryStorageFactory()
         store = MemoryNodeTrieStore()
