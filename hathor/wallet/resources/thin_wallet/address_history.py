@@ -35,8 +35,11 @@ class AddressHistoryResource(Resource):
     isLeaf = True
 
     def __init__(self, manager):
-        self._settings = get_global_settings()
         self.manager = manager
+        settings = get_global_settings()
+        # XXX: copy the parameters that are needed so tests can more easily tweak them
+        self.max_tx_addresses_history = settings.MAX_TX_ADDRESSES_HISTORY
+        self.max_inputs_outputs_address_history = settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY
 
     # TODO add openapi docs for this API
     def render_POST(self, request: Request) -> bytes:
@@ -166,21 +169,23 @@ class AddressHistoryResource(Resource):
                     'message': 'The address {} is invalid'.format(address)
                 })
 
-            tx = None
-            if ref_hash_bytes:
-                try:
-                    tx = self.manager.tx_storage.get_transaction(ref_hash_bytes)
-                except TransactionDoesNotExist:
-                    return json_dumpb({
-                        'success': False,
-                        'message': 'Hash {} is not a transaction hash.'.format(ref_hash)
-                    })
-
             # The address index returns an iterable that starts at `tx`.
-            hashes = addresses_index.get_sorted_from_address(address, tx)
+            if idx == 0:
+                ref_tx = None
+                if ref_hash_bytes:
+                    try:
+                        ref_tx = self.manager.tx_storage.get_transaction(ref_hash_bytes)
+                    except TransactionDoesNotExist:
+                        return json_dumpb({
+                            'success': False,
+                            'message': 'Hash {} is not a transaction hash.'.format(ref_hash)
+                        })
+                hashes = addresses_index.get_sorted_from_address(address, ref_tx)
+            else:
+                hashes = addresses_index.get_sorted_from_address(address)
             did_break = False
             for tx_hash in hashes:
-                if total_added == self._settings.MAX_TX_ADDRESSES_HISTORY:
+                if total_added == self.max_tx_addresses_history:
                     # If already added the max number of elements possible, then break
                     # I need to add this if at the beginning of the loop to handle the case
                     # when the first tx of the address exceeds the limit, so we must return
@@ -193,7 +198,7 @@ class AddressHistoryResource(Resource):
                 if tx_hash not in seen:
                     tx = self.manager.tx_storage.get_transaction(tx_hash)
                     tx_elements = len(tx.inputs) + len(tx.outputs)
-                    if total_elements + tx_elements > self._settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY:
+                    if total_elements + tx_elements > self.max_inputs_outputs_address_history:
                         # If the adition of this tx overcomes the maximum number of inputs and outputs, then break
                         # It's important to validate also the maximum number of inputs and outputs because some txs
                         # are really big and the response payload becomes too big
