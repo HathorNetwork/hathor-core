@@ -5,7 +5,7 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import requests
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -51,19 +51,60 @@ def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningServ
     return block.get_struct()
 
 
-def add_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+def add_custom_tx(manager: HathorManager,
+                  tx_inputs: list[tuple[BaseTransaction, int]],
+                  *,
+                  n_outputs: int = 1,
+                  base_parent: Optional[Transaction] = None,
+                  weight: Optional[float] = None,
+                  resolve: bool = False,
+                  address: Optional[str] = None,
+                  inc_timestamp: int = 0) -> Transaction:
     """Add a custom tx based on the gen_custom_tx(...) method."""
-    tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight,
-                       resolve=resolve, address=address, inc_timestamp=inc_timestamp)
+    tx = gen_custom_tx(manager,
+                       tx_inputs,
+                       n_outputs=n_outputs,
+                       base_parent=base_parent,
+                       weight=weight,
+                       resolve=resolve,
+                       address=address,
+                       inc_timestamp=inc_timestamp)
     manager.propagate_tx(tx, fails_silently=False)
     return tx
 
 
-def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+def gen_custom_tx(manager: HathorManager,
+                  tx_inputs: list[tuple[BaseTransaction, int]],
+                  *,
+                  n_outputs: int = 1,
+                  base_parent: Optional[Transaction] = None,
+                  weight: Optional[float] = None,
+                  resolve: bool = False,
+                  address: Optional[str] = None,
+                  inc_timestamp: int = 0) -> Transaction:
+    """Generate a custom tx based on the inputs and outputs. It gives full control to the
+    inputs and can be used to generate conflicts and specific patterns in the DAG."""
+    tx = gen_custom_base_tx(manager,
+                            tx_inputs,
+                            n_outputs=n_outputs,
+                            base_parent=base_parent,
+                            weight=weight,
+                            resolve=resolve,
+                            address=address,
+                            inc_timestamp=inc_timestamp)
+    return cast(Transaction, tx)
+
+
+def gen_custom_base_tx(manager: HathorManager,
+                       tx_inputs: list[tuple[BaseTransaction, int]],
+                       *,
+                       n_outputs: int = 1,
+                       base_parent: Optional[Transaction] = None,
+                       weight: Optional[float] = None,
+                       resolve: bool = False,
+                       address: Optional[str] = None,
+                       inc_timestamp: int = 0,
+                       cls: type[BaseTransaction] = Transaction) -> BaseTransaction:
     """Generate a custom tx based on the inputs and outputs. It gives full control to the
     inputs and can be used to generate conflicts and specific patterns in the DAG."""
     wallet = manager.wallet
@@ -101,7 +142,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     else:
         raise NotImplementedError
 
-    tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
+    tx2 = wallet.prepare_transaction(cls, inputs, outputs)
     tx2.storage = manager.tx_storage
     tx2.timestamp = max(tx_base.timestamp + 1, int(manager.reactor.seconds()))
 
