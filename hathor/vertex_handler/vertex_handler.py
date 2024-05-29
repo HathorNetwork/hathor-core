@@ -45,6 +45,7 @@ class VertexHandler:
         '_feature_service',
         '_pubsub',
         '_wallet',
+        '_log_vertex_bytes',
     )
 
     def __init__(
@@ -59,6 +60,7 @@ class VertexHandler:
         feature_service: FeatureService,
         pubsub: PubSubManager,
         wallet: BaseWallet | None,
+        log_vertex_bytes: bool = False,
     ) -> None:
         self._log = logger.new()
         self._reactor = reactor
@@ -70,6 +72,7 @@ class VertexHandler:
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
+        self._log_vertex_bytes = log_vertex_bytes
 
     def on_new_vertex(
         self,
@@ -223,6 +226,8 @@ class VertexHandler:
             'time_from_now': tx.get_time_from_now(now),
             'validation': metadata.validation.name,
         }
+        if self._log_vertex_bytes:
+            kwargs['bytes'] = bytes(tx).hex()
         if tx.is_block:
             message = message_fmt.format('block')
             if isinstance(tx, Block):

@@ -266,6 +266,55 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         # The last big tx
         self.assertEqual(len(response_data['history']), 1)
 
+    @inlineCallbacks
+    def test_address_history_optimization_regression(self):
+        # setup phase1: create 3 addresses with 2 transactions each in a certain order
+        self.manager.wallet.unlock(b'MYPASS')
+        address1 = self.get_address(0)
+        address2 = self.get_address(1)
+        address3 = self.get_address(2)
+        baddress1 = decode_address(address1)
+        baddress2 = decode_address(address2)
+        baddress3 = decode_address(address3)
+        [b1] = add_new_blocks(self.manager, 1, advance_clock=1, address=baddress1)
+        [b2] = add_new_blocks(self.manager, 1, advance_clock=1, address=baddress3)
+        [b3] = add_new_blocks(self.manager, 1, advance_clock=1, address=baddress2)
+        [b4] = add_new_blocks(self.manager, 1, advance_clock=1, address=baddress1)
+        [b5] = add_new_blocks(self.manager, 1, advance_clock=1, address=baddress2)
+        [b6] = add_new_blocks(self.manager, 1, advance_clock=1, address=baddress3)
+        add_blocks_unlock_reward(self.manager)
+
+        # setup phase2: make the first request without a `hash` argument
+        self.web_address_history.resource.max_tx_addresses_history = 3
+        res = (yield self.web_address_history.get(
+            'thin_wallet/address_history', [
+                (b'paginate', True),  # this isn't needed, but used to ensure compatibility is not removed
+                (b'addresses[]', address1.encode()),
+                (b'addresses[]', address3.encode()),
+                (b'addresses[]', address2.encode()),
+            ]
+        )).json_value()
+        self.assertTrue(res['success'])
+        self.assertEqual(len(res['history']), 3)
+        self.assertTrue(res['has_more'])
+        self.assertEqual(res['first_address'], address3)
+        self.assertEqual(res['first_hash'], b6.hash_hex)
+        self.assertEqual([t['tx_id'] for t in res['history']], [b1.hash_hex, b4.hash_hex, b2.hash_hex])
+
+        # actual test, this request will miss transactions when the regression is present
+        res = (yield self.web_address_history.get(
+            'thin_wallet/address_history', [
+                (b'paginate', True),  # this isn't needed, but used to ensure compatibility is not removed
+                (b'addresses[]', address3.encode()),
+                (b'addresses[]', address2.encode()),
+                (b'hash', res['first_hash'].encode()),
+            ]
+        )).json_value()
+        self.assertTrue(res['success'])
+        self.assertEqual(len(res['history']), 3)
+        self.assertFalse(res['has_more'])
+        self.assertEqual([t['tx_id'] for t in res['history']], [b6.hash_hex, b3.hash_hex, b5.hash_hex])
+
     def test_error_request(self):
         from hathor.wallet.resources.thin_wallet.send_tokens import _Context
 
