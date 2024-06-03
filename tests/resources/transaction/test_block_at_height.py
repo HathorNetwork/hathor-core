@@ -1,9 +1,10 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.simulator.utils import add_new_blocks
+from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.transaction.resources import BlockAtHeightResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
+from tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
 class BaseBlockAtHeightTest(_BaseResourceTest._ResourceTest):
@@ -13,6 +14,62 @@ class BaseBlockAtHeightTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(BlockAtHeightResource(self.manager))
         self.manager.wallet.unlock(b'MYPASS')
+
+    @inlineCallbacks
+    def test_include_full(self):
+        add_new_block(self.manager, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+        address = self.manager.wallet.get_unused_address()
+
+        confirmed_tx_list = []
+        for _ in range(15):
+            confirmed_tx_list.append(add_new_tx(self.manager, address, 1))
+
+        block = add_new_block(self.manager, advance_clock=1)
+        height = block.get_height()
+
+        # non-confirmed transactions
+        for _ in range(15):
+            add_new_tx(self.manager, address, 1)
+
+        response = yield self.web.get("block_at_height", {
+            b'height': str(height).encode('ascii'),
+            b'include_transactions': b'full',
+        })
+        data = response.json_value()
+
+        self.assertTrue(data['success'])
+        response_tx_ids = set(x['tx_id'] for x in data['transactions'])
+        expected_tx_ids = set(tx.hash.hex() for tx in confirmed_tx_list)
+        self.assertTrue(response_tx_ids.issubset(expected_tx_ids))
+
+    @inlineCallbacks
+    def test_include_txids(self):
+        add_new_block(self.manager, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+        address = self.manager.wallet.get_unused_address()
+
+        confirmed_tx_list = []
+        for _ in range(15):
+            confirmed_tx_list.append(add_new_tx(self.manager, address, 1))
+
+        block = add_new_block(self.manager, advance_clock=1)
+        height = block.get_height()
+
+        # non-confirmed transactions
+        for _ in range(15):
+            add_new_tx(self.manager, address, 1)
+
+        response = yield self.web.get("block_at_height", {
+            b'height': str(height).encode('ascii'),
+            b'include_transactions': b'txid',
+        })
+        data = response.json_value()
+
+        self.assertTrue(data['success'])
+        response_tx_ids = set(data['tx_ids'])
+        expected_tx_ids = set(tx.hash.hex() for tx in confirmed_tx_list)
+        self.assertTrue(response_tx_ids.issubset(expected_tx_ids))
 
     @inlineCallbacks
     def test_get(self):
