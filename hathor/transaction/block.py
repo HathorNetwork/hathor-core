@@ -16,7 +16,7 @@ import base64
 from itertools import starmap, zip_longest
 from operator import add
 from struct import pack
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
@@ -401,3 +401,14 @@ class Block(BaseTransaction):
         bit_list = self._get_feature_activation_bit_list()
 
         return bit_list[bit]
+
+    def iter_transactions_in_this_block(self) -> Iterator[BaseTransaction]:
+        """Return an iterator of the transactions that have this block as meta.first_block."""
+        from hathor.transaction.storage.traversal import BFSOrderWalk
+        bfs = BFSOrderWalk(self.storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
+        for tx in bfs.run(self, skip_root=True):
+            tx_meta = tx.get_metadata()
+            if tx_meta.first_block != self.hash:
+                bfs.skip_neighbors(tx)
+                continue
+            yield tx
