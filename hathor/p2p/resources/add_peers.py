@@ -14,8 +14,12 @@
 
 from json import JSONDecodeError
 
+from twisted.internet.defer import Deferred
+from twisted.web.http import Request
+
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.manager import HathorManager
 from hathor.p2p.peer_discovery import BootstrapPeerDiscovery
 from hathor.util import json_dumpb, json_loadb
 
@@ -28,16 +32,17 @@ class AddPeersResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager) -> None:
         self.manager = manager
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ Add p2p peers
             It expects a list of peers, in the format protocol://host:port (tcp://172.121.212.12:40403)
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
+        assert request.content is not None
         raw_data = request.content.read()
         if raw_data is None:
             return json_dumpb({'success': False, 'message': 'No post data'})
@@ -73,12 +78,14 @@ class AddPeersResource(Resource):
         filtered_peers = [connection_string for connection_string in peers if not already_connected(connection_string)]
 
         pd = BootstrapPeerDiscovery(filtered_peers)
-        pd.discover_and_connect(self.manager.connections.connect_to)
+        # this fires and forget the coroutine, which is compatible with the original behavior
+        coro = pd.discover_and_connect(self.manager.connections.connect_to)
+        Deferred.fromCoroutine(coro)
 
         ret = {'success': True, 'peers': filtered_peers}
         return json_dumpb(ret)
 
-    def render_OPTIONS(self, request):
+    def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)
 
 
