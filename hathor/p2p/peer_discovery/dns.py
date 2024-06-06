@@ -1,4 +1,4 @@
-# Copyright 2021 Hathor Labs
+# Copyright 2024 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import socket
-from abc import ABC, abstractmethod
 from typing import Callable
 
 from structlog import get_logger
@@ -22,39 +21,9 @@ from twisted.names.client import lookupAddress, lookupText
 from twisted.names.dns import Record_A, Record_TXT, RRHeader
 from typing_extensions import override
 
+from .peer_discovery import PeerDiscovery
+
 logger = get_logger()
-
-
-class PeerDiscovery(ABC):
-    """ Base class to implement peer discovery strategies.
-    """
-
-    @abstractmethod
-    async def discover_and_connect(self, connect_to: Callable[[str], None]) -> None:
-        """ This method must discover the peers and call `connect_to` for each of them.
-
-        :param connect_to: Function which will be called for each discovered peer.
-        :type connect_to: function
-        """
-        raise NotImplementedError
-
-
-class BootstrapPeerDiscovery(PeerDiscovery):
-    """ It implements a bootstrap peer discovery, which receives a static list of peers.
-    """
-
-    def __init__(self, descriptions: list[str]):
-        """
-        :param descriptions: Descriptions of peers to connect to.
-        """
-        super().__init__()
-        self.log = logger.new()
-        self.descriptions = descriptions
-
-    @override
-    async def discover_and_connect(self, connect_to: Callable[[str], None]) -> None:
-        for description in self.descriptions:
-            connect_to(description)
 
 
 class DNSPeerDiscovery(PeerDiscovery):
