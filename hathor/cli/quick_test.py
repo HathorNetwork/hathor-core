@@ -14,6 +14,7 @@
 
 import os
 from argparse import ArgumentParser
+from typing import Any
 
 from hathor.cli.run_node import RunNode
 
@@ -36,7 +37,7 @@ class QuickTest(RunNode):
         self.log.info('patching on_new_tx to quit on success')
         orig_on_new_tx = self.manager.on_new_tx
 
-        def patched_on_new_tx(*args, **kwargs):
+        def patched_on_new_tx(*args: Any, **kwargs: Any) -> bool:
             res = orig_on_new_tx(*args, **kwargs)
             msg: str | None = None
 
