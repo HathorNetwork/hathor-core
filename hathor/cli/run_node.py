@@ -57,6 +57,8 @@ class RunNode:
         ('--x-ipython-kernel', lambda args: bool(args.x_ipython_kernel)),
     ]
 
+    env_vars_prefix: str | None = None
+
     @classmethod
     def create_parser(cls) -> ArgumentParser:
         """
@@ -65,7 +67,7 @@ class RunNode:
         """
         from hathor.cli.util import create_parser
         from hathor.feature_activation.feature import Feature
-        parser = create_parser()
+        parser = create_parser(prefix=cls.env_vars_prefix)
 
         parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
         parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')

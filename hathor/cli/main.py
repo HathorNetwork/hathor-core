@@ -53,6 +53,7 @@ class CliManager:
             reset_feature_settings,
             run_node,
             shell,
+            side_dag,
             stratum_mining,
             twin_tx,
             tx_generator,
@@ -69,6 +70,7 @@ class CliManager:
         if sys.platform != 'win32':
             from . import top
             self.add_cmd('hathor', 'top', top, 'CPU profiler viewer')
+        self.add_cmd('side-dag', 'run_node_with_side_dag', side_dag, 'Run a side-dag')
         self.add_cmd('docs', 'generate_openapi_json', openapi_json, 'Generate OpenAPI json for API docs')
         self.add_cmd('multisig', 'gen_multisig_address', multisig_address, 'Generate a new multisig address')
         self.add_cmd('multisig', 'spend_multisig_output', multisig_spend, 'Generate tx that spends a multisig output')
@@ -119,7 +121,7 @@ class CliManager:
             print()
 
     def execute_from_command_line(self):
-        from hathor.cli.util import setup_logging
+        from hathor.cli.util import process_logging_options, process_logging_output, setup_logging
 
         if len(sys.argv) < 2:
             self.help()
@@ -138,9 +140,6 @@ class CliManager:
         sys.argv[0] = '{} {}'.format(sys.argv[0], cmd)
         module = self.command_list[cmd]
 
-        debug = '--debug' in sys.argv
-        if debug:
-            sys.argv.remove('--debug')
         if '--help' in sys.argv:
             capture_stdout = False
         else:
@@ -154,14 +153,14 @@ class CliManager:
             pudb.set_trace(paused=False)
             capture_stdout = False
 
-        json_logs = '--json-logs' in sys.argv
-        if json_logs:
-            sys.argv.remove('--json-logs')
-
-        sentry = '--sentry-dsn' in sys.argv
-
-        setup_logging(debug, capture_stdout, json_logs, sentry=sentry)
-        module.main()
+        pre_setup_logging = getattr(module, 'PRE_SETUP_LOGGING', True)
+        if pre_setup_logging:
+            output = process_logging_output(sys.argv)
+            options = process_logging_options(sys.argv)
+            setup_logging(logging_output=output, logging_options=options, capture_stdout=capture_stdout)
+            module.main()
+        else:
+            module.main(capture_stdout=capture_stdout)
 
 
 def main():

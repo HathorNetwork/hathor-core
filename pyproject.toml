@@ -130,6 +130,7 @@ module = [
     'sortedcontainers',
     'structlog_sentry',
     'structlog_sentry',
+    'psutil',
 ]
 ignore_missing_imports = true
 
