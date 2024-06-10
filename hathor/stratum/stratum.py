@@ -418,11 +418,13 @@ class StratumProtocol(JSONRPC):
             if not self.manager.can_start_mining():
                 return self.send_error(NODE_SYNCING, msgid)
 
-        if method in ['mining.subscribe', 'subscribe']:
+        if not isinstance(params, dict):
+            self.log.error(f'expected dict params, received: {params}')
             params = cast(dict, params)
+
+        if method in ['mining.subscribe', 'subscribe']:
             return self.handle_subscribe(params, msgid)
         if method in ['mining.submit', 'submit']:
-            params = cast(dict, params)
             return self.handle_submit(params, msgid)
 
         self.send_error(METHOD_NOT_FOUND, msgid, data={'method': method, 'supported_methods': ['submit', 'subscribe']})
