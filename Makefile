@@ -134,10 +134,6 @@ endif
 docker: $(docker_dir)/Dockerfile
 	docker build$(docker_build_flags) -t $(docker_tag) $(docker_dir)
 
-.PHONY: docker-pypy
-docker-pypy: $(docker_dir)/Dockerfile.pypy
-	docker build$(docker_build_flags) -f Dockerfile.pypy -t $(docker_tag) $(docker_dir)
-
 .PHONY: docker-push
 docker-push: docker
 	docker tag $(docker_tag) hathornetwork/hathor-core:$(docker_subtag)
