@@ -14,8 +14,10 @@
 
 from typing_extensions import assert_never
 
+from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
+from hathor.transaction.poa import PoaBlock
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.validation_state import ValidationState
@@ -26,9 +28,10 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('verifiers', )
+    __slots__ = ('_settings', 'verifiers')
 
-    def __init__(self, *, verifiers: VertexVerifiers) -> None:
+    def __init__(self, *, settings: HathorSettings, verifiers: VertexVerifiers) -> None:
+        self._settings = settings
         self.verifiers = verifiers
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
@@ -82,6 +85,8 @@ class VerificationService:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
         Used by `self.validate_basic`. Should not modify the validation state."""
+        self.verifiers.vertex.verify_version(vertex)
+
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
@@ -90,6 +95,9 @@ class VerificationService:
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
                 self._verify_basic_merge_mined_block(vertex, skip_weight_verification=skip_block_weight_verification)
+            case TxVersion.POA_BLOCK:
+                assert type(vertex) is PoaBlock
+                self._verify_basic_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
                 self._verify_basic_tx(vertex)
@@ -108,13 +116,18 @@ class VerificationService:
     def _verify_basic_merge_mined_block(self, block: MergeMinedBlock, *, skip_weight_verification: bool) -> None:
         self._verify_basic_block(block, skip_weight_verification=skip_weight_verification)
 
+    def _verify_basic_poa_block(self, block: PoaBlock) -> None:
+        self.verifiers.poa_block.verify_poa(block)
+        self.verifiers.block.verify_reward(block)
+
     def _verify_basic_tx(self, tx: Transaction) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
         if tx.is_genesis:
             # TODO do genesis validation?
             return
         self.verifiers.tx.verify_parents_basic(tx)
-        self.verifiers.tx.verify_weight(tx)
+        if self._settings.CONSENSUS_ALGORITHM.is_pow():
+            self.verifiers.tx.verify_weight(tx)
         self.verify_without_storage(tx)
 
     def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
@@ -132,6 +145,9 @@ class VerificationService:
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
                 self._verify_merge_mined_block(vertex)
+            case TxVersion.POA_BLOCK:
+                assert type(vertex) is PoaBlock
+                self._verify_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
                 self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
@@ -166,6 +182,9 @@ class VerificationService:
         self.verifiers.block.verify_mandatory_signaling(block)
 
     def _verify_merge_mined_block(self, block: MergeMinedBlock) -> None:
+        self._verify_block(block)
+
+    def _verify_poa_block(self, block: PoaBlock) -> None:
         self._verify_block(block)
 
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
@@ -217,6 +236,9 @@ class VerificationService:
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
                 self._verify_without_storage_merge_mined_block(vertex)
+            case TxVersion.POA_BLOCK:
+                assert type(vertex) is PoaBlock
+                self._verify_without_storage_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
                 self._verify_without_storage_tx(vertex)
@@ -226,24 +248,31 @@ class VerificationService:
             case _:
                 assert_never(vertex.version)
 
-    def _verify_without_storage_block(self, block: Block) -> None:
-        """ Run all verifications that do not need a storage.
-        """
-        self.verifiers.vertex.verify_pow(block)
+    def _verify_without_storage_base_block(self, block: Block) -> None:
         self.verifiers.block.verify_no_inputs(block)
         self.verifiers.vertex.verify_outputs(block)
         self.verifiers.block.verify_output_token_indexes(block)
         self.verifiers.block.verify_data(block)
         self.verifiers.vertex.verify_sigops_output(block)
 
+    def _verify_without_storage_block(self, block: Block) -> None:
+        """ Run all verifications that do not need a storage.
+        """
+        self.verifiers.vertex.verify_pow(block)
+        self._verify_without_storage_base_block(block)
+
     def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
         self.verifiers.merge_mined_block.verify_aux_pow(block)
         self._verify_without_storage_block(block)
 
+    def _verify_without_storage_poa_block(self, block: PoaBlock) -> None:
+        self._verify_without_storage_base_block(block)
+
     def _verify_without_storage_tx(self, tx: Transaction) -> None:
         """ Run all verifications that do not need a storage.
         """
-        self.verifiers.vertex.verify_pow(tx)
+        if self._settings.CONSENSUS_ALGORITHM.is_pow():
+            self.verifiers.vertex.verify_pow(tx)
         self.verifiers.tx.verify_number_of_inputs(tx)
         self.verifiers.vertex.verify_outputs(tx)
         self.verifiers.tx.verify_output_token_indexes(tx)

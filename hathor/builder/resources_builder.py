@@ -266,9 +266,10 @@ class ResourcesBuilder:
         ws_factory.start()
         root.putChild(b'ws', WebSocketResource(ws_factory))
 
-        # Mining websocket resource
-        mining_ws_factory = MiningWebsocketFactory(self.manager)
-        root.putChild(b'mining_ws', WebSocketResource(mining_ws_factory))
+        if settings.CONSENSUS_ALGORITHM.is_pow():
+            # Mining websocket resource
+            mining_ws_factory = MiningWebsocketFactory(self.manager)
+            root.putChild(b'mining_ws', WebSocketResource(mining_ws_factory))
 
         ws_factory.subscribe(self.manager.pubsub)
 
