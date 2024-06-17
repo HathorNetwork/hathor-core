@@ -43,7 +43,7 @@ from hathor.cli.run_node import RunNode
 logger = get_logger()
 
 PRE_SETUP_LOGGING: bool = False
-HATHOR_NODE_INIT_TIMEOUT: int = 10
+HATHOR_NODE_INIT_WAIT_PERIOD: int = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,12 +186,8 @@ def _partition_argv(argv: list[str]) -> tuple[list[str], list[str]]:
 def _run_side_dag_node(argv: list[str], *, hathor_node_process: Process, conn: 'Connection') -> None:
     """Function to be called by the main process to run the side-dag full node."""
     logger.info('waiting for hathor node to initialize...')
-    if not conn.poll(HATHOR_NODE_INIT_TIMEOUT):
-        logger.critical(
-            f'side-dag node not started because hathor node failed to initialize before {HATHOR_NODE_INIT_TIMEOUT} '
-            f'seconds timeout'
-        )
-        return
+    while not conn.poll(HATHOR_NODE_INIT_WAIT_PERIOD):
+        logger.info('still waiting for hathor node to initialize...')
 
     message = conn.recv()
     if isinstance(message, HathorProcessInitFail):
