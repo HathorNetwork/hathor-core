@@ -313,6 +313,18 @@ class CliBuilder:
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
+        from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
+        poa_block_producer: PoaBlockProducer | None = None
+        if settings.CONSENSUS_ALGORITHM.is_poa():
+            assert isinstance(self._args, SideDagArgs)
+            if self._args.poa_signer_file:
+                poa_signer_file = PoaSignerFile.parse_file(self._args.poa_signer_file)
+                poa_block_producer = PoaBlockProducer(
+                    settings=settings,
+                    reactor=reactor,
+                    poa_signer=poa_signer_file.get_signer(),
+                )
+
         self.manager = HathorManager(
             reactor,
             settings=settings,
@@ -335,19 +347,8 @@ class CliBuilder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            poa_block_producer=poa_block_producer,
         )
-
-        if settings.CONSENSUS_ALGORITHM.is_poa():
-            assert isinstance(self._args, SideDagArgs)
-            if self._args.poa_signer_file:
-                from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
-                poa_signer_file = PoaSignerFile.parse_file(self._args.poa_signer_file)
-                self.manager.poa_block_producer = PoaBlockProducer(
-                    settings=settings,
-                    reactor=reactor,
-                    manager=self.manager,
-                    poa_signer=poa_signer_file.get_signer(),
-                )
 
         if self._args.x_ipython_kernel:
             self.check_or_raise(self._args.x_asyncio_reactor,
@@ -355,6 +356,8 @@ class CliBuilder:
             self._start_ipykernel()
 
         p2p_manager.set_manager(self.manager)
+        if poa_block_producer:
+            poa_block_producer.manager = self.manager
 
         if self._args.stratum:
             stratum_factory = StratumFactory(self.manager, reactor=reactor)

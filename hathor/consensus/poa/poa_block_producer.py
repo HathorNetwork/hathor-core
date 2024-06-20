@@ -59,20 +59,13 @@ class PoaBlockProducer:
         '_last_seen_best_block',
     )
 
-    def __init__(
-        self,
-        *,
-        settings: HathorSettings,
-        reactor: ReactorProtocol,
-        manager: 'HathorManager',
-        poa_signer: PoaSigner,
-    ) -> None:
+    def __init__(self, *, settings: HathorSettings, reactor: ReactorProtocol, poa_signer: PoaSigner) -> None:
         assert isinstance(settings.CONSENSUS_ALGORITHM, PoaSettings)
         self._log = logger.new()
         self._settings = settings
         self._poa_settings = settings.CONSENSUS_ALGORITHM
         self._reactor = reactor
-        self._manager = manager
+        self._manager: HathorManager | None = None
         self._poa_signer = poa_signer
         self._signer_index = self._calculate_signer_index(self._poa_settings, self._poa_signer)
         self._last_seen_best_block: Block | None = None
@@ -83,6 +76,15 @@ class PoaBlockProducer:
 
         self._schedule_block_lc = LoopingCall(self._schedule_block)
         self._schedule_block_lc.clock = self._reactor
+
+    @property
+    def manager(self) -> HathorManager:
+        assert self._manager is not None
+        return self._manager
+
+    @manager.setter
+    def manager(self, manager: HathorManager) -> None:
+        self._manager = manager
 
     def start(self) -> None:
         self._start_producing_lc.start(_WAIT_SYNC_DELAY)
@@ -108,7 +110,7 @@ class PoaBlockProducer:
 
     def _start_producing(self) -> None:
         """Start producing new blocks."""
-        if not self._manager.can_start_mining():
+        if not self.manager.can_start_mining():
             # We're syncing, so we'll try again later
             self._log.warn('cannot start producing new blocks, node not synced')
             return
@@ -119,7 +121,7 @@ class PoaBlockProducer:
 
     def _schedule_block(self) -> None:
         """Schedule propagation of a new block."""
-        previous_block = self._manager.tx_storage.get_best_block()
+        previous_block = self.manager.tx_storage.get_best_block()
         if not self._started_producing or previous_block == self._last_seen_best_block:
             return
 
@@ -139,16 +141,16 @@ class PoaBlockProducer:
     def _produce_block(self, previous_block: PoaBlock) -> None:
         """Create and propagate a new block."""
         from hathor.transaction.poa import PoaBlock
-        block_templates = self._manager.get_block_templates(parent_block_hash=previous_block.hash)
-        block = block_templates.generate_mining_block(self._manager.rng, cls=PoaBlock)
+        block_templates = self.manager.get_block_templates(parent_block_hash=previous_block.hash)
+        block = block_templates.generate_mining_block(self.manager.rng, cls=PoaBlock)
         assert isinstance(block, PoaBlock)
         block.weight = poa.calculate_weight(self._poa_settings, block, self._signer_index)
         self._poa_signer.sign_block(block)
         block.update_hash()
 
-        self._manager.on_new_tx(block, propagate_to_peers=False, fails_silently=False)
+        self.manager.on_new_tx(block, propagate_to_peers=False, fails_silently=False)
         if not block.get_metadata().voided_by:
-            self._manager.connections.send_tx_to_peers(block)
+            self.manager.connections.send_tx_to_peers(block)
 
         self._log.debug(
             'produced new block',
@@ -169,5 +171,5 @@ class PoaBlockProducer:
 
         signer_count = len(self._poa_settings.signers)
         assert signer_count >= 1
-        random_offset = self._manager.rng.choice(range(signer_count * _RANDOM_DELAY_MULTIPLIER)) + 1
+        random_offset = self.manager.rng.choice(range(signer_count * _RANDOM_DELAY_MULTIPLIER)) + 1
         return timestamp + random_offset
