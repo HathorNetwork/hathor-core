@@ -97,18 +97,18 @@ def main(capture_stdout: bool) -> None:
     to the non-side-dag full node, which runs in a background process and is commonly just a Hathor full node.
     Whenever one of the full nodes fail, the other is automatically terminated.
 
-    By default, both full nodes output logs to stdout, but logs can be configured independently. Here's an example:
+    The only exception is log configuration, which is set using a single option. By default, both full nodes output
+    logs to stdout. Here's an example changing both logs to json:
 
     ```bash
-    $ python -m hathor side_dag
+    $ python -m hathor run_node_with_side_dag
         --testnet
         --procname-prefix testnet-
         --memory-storage
-        --disable-logs
         --side-dag-config-yaml ./my-side-dag.yml
         --side-dag-procname-prefix my-side-dag-
         --side-dag-memory-storage
-        --side-dag-json-logs
+        --json-logs both
     ```
 
     In this example, Hathor testnet logs would be disabled, while side-dag logs would be outputted to stdout as json.
