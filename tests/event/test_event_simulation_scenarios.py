@@ -32,6 +32,7 @@ from tests.event.event_simulation_tester import (
     MemoryEventSimulationTester,
     RocksDBEventSimulationTester,
 )
+from tests.poa import utils as poa_utils
 
 
 class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
@@ -43,6 +44,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
     seed_config = 6946502462188444706
 
     def test_only_load(self) -> None:
+        self._create_artifacts()
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
         Scenario.ONLY_LOAD.simulate(self.simulator, self.manager)
@@ -66,6 +68,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_single_chain_one_block(self) -> None:
+        self._create_artifacts()
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
         Scenario.SINGLE_CHAIN_ONE_BLOCK.simulate(self.simulator, self.manager)
@@ -95,6 +98,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_single_chain_blocks_and_transactions(self) -> None:
+        self._create_artifacts()
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
         Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS.simulate(self.simulator, self.manager)
@@ -161,6 +165,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_reorg(self) -> None:
+        self._create_artifacts()
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
         Scenario.REORG.simulate(self.simulator, self.manager)
@@ -210,6 +215,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
         assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
 
     def test_unvoided_transaction(self) -> None:
+        self._create_artifacts()
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
         Scenario.UNVOIDED_TRANSACTION.simulate(self.simulator, self.manager)
@@ -271,6 +277,26 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=38, type=EventType.VERTEX_METADATA_CHANGED, timestamp=0, data=TxData(hash='0639e93ff22647ed06af3ac3a3bc7dd2ca8db18c67fdd9a039318b4d6bf51a88', nonce=0, timestamp=1578879030, signal_bits=0, version=1, weight=19.0, inputs=[TxInput(tx_id='9b83e5dbc7145a5a161c34da4bec4e1a64dc02a3f2495a2db78457426c9ee6bf', index=0, spent_output=TxOutput(value=6400, token_data=0, script='dqkUPXOcGnrN0ZB2WrnPVcjdCCcacL+IrA==', decoded=DecodedTxOutput(type='P2PKH', address='HC846khX278aM1utqAgPzkKAxBTfftaRDm', timelock=None)))], outputs=[TxOutput(value=5400, token_data=0, script='dqkUutgaVG8W5OnzgAEVUqB4XgmDgm2IrA==', decoded=DecodedTxOutput(type='P2PKH', address='HPZ4x7a2NXdrMa5ksPfeGMZmjhJHTjDZ9Q', timelock=None)), TxOutput(value=1000, token_data=0, script='dqkUPXOcGnrN0ZB2WrnPVcjdCCcacL+IrA==', decoded=DecodedTxOutput(type='P2PKH', address='HC846khX278aM1utqAgPzkKAxBTfftaRDm', timelock=None))], parents=['16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952', '33e14cb555a96967841dcbe0f95e9eab5810481d01de8f4f73afb8cce365e869'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='0639e93ff22647ed06af3ac3a3bc7dd2ca8db18c67fdd9a039318b4d6bf51a88', spent_outputs=[], conflict_with=['cba55aadc9fd8d5bdb6f394d8f5eb00cc775db12c2512c9e37df8e31ca3841f4'], voided_by=[], received_by=[], children=['24707288e7c72c5e74c68241ee32d64239902533e64946de6e6cddb66ef3432a'], twins=['cba55aadc9fd8d5bdb6f394d8f5eb00cc775db12c2512c9e37df8e31ca3841f4'], accumulated_weight=19.000704269011248, score=0.0, first_block='24707288e7c72c5e74c68241ee32d64239902533e64946de6e6cddb66ef3432a', height=0, validation='full'), aux_pow=None), group_id=None), latest_event_id=39, stream_id=stream_id),  # noqa: E501
             # One NEW_VERTEX_ACCEPTED for a new block
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=39, type=EventType.NEW_VERTEX_ACCEPTED, timestamp=0, data=TxData(hash='24707288e7c72c5e74c68241ee32d64239902533e64946de6e6cddb66ef3432a', nonce=0, timestamp=1578879090, signal_bits=0, version=0, weight=8.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUFgE9a6rVMusN303z18sYfjdpYGqIrA==', decoded=DecodedTxOutput(type='P2PKH', address='H8XUjiUx24WLXUN63da34hX6bEs29GJjSs', timelock=None))], parents=['f349fc0f570a636a440ed3853cc533faa2c4616160e1d9eb6f5d656a90da30fb', '16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952', '0639e93ff22647ed06af3ac3a3bc7dd2ca8db18c67fdd9a039318b4d6bf51a88'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='24707288e7c72c5e74c68241ee32d64239902533e64946de6e6cddb66ef3432a', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=8.0, score=19.000858282039708, first_block=None, height=12, validation='full'), aux_pow=None), group_id=None), latest_event_id=39, stream_id=stream_id),  # noqa: E501
+        ]
+
+        responses = _remove_timestamp(responses)
+        expected = _remove_timestamp(expected)
+        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+
+    def test_poa_with_transactions_and_reorg(self) -> None:
+        signer1, signer2 = poa_utils.get_signer(), poa_utils.get_signer()
+        settings = poa_utils.get_settings(signer1, signer2)
+        self.simulator.settings = settings
+        self._create_artifacts(signer1)
+
+        stream_id = self.manager._event_manager._stream_id
+        assert stream_id is not None
+        Scenario.POA_WITH_TRANSACTIONS_AND_REORG.simulate(self.simulator, self.manager)
+        self._start_stream()
+
+        responses = self._get_success_responses()
+
+        expected = [
         ]
 
         responses = _remove_timestamp(responses)

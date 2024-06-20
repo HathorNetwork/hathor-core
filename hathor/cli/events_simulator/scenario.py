@@ -13,9 +13,11 @@
 #  limitations under the License.
 
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.manager import HathorManager
     from hathor.simulator import Simulator
 
@@ -26,6 +28,19 @@ class Scenario(Enum):
     SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS = 'SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS'
     REORG = 'REORG'
     UNVOIDED_TRANSACTION = 'UNVOIDED_TRANSACTION'
+    POA_WITH_TRANSACTIONS_AND_REORG = 'POA_WITH_TRANSACTIONS_AND_REORG'
+
+    def get_settings(self) -> Optional['HathorSettings']:
+        if self is not Scenario.POA_WITH_TRANSACTIONS_AND_REORG:
+            return None
+
+        from hathor.conf.get_settings import get_global_settings
+        from hathor.consensus.consensus_settings import PoaSettings
+        return get_global_settings()._replace(
+            CONSENSUS_ALGORITHM=PoaSettings(
+                signers=(b'',)
+            )
+        )
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
         simulate_fns = {
@@ -34,6 +49,7 @@ class Scenario(Enum):
             Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS: simulate_single_chain_blocks_and_transactions,
             Scenario.REORG: simulate_reorg,
             Scenario.UNVOIDED_TRANSACTION: simulate_unvoided_transaction,
+            Scenario.POA_WITH_TRANSACTIONS_AND_REORG: simulate_poa,
         }
 
         simulate_fn = simulate_fns[self]
@@ -140,3 +156,17 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     # The first tx gets voided and the second gets unvoided
     assert tx.get_metadata().voided_by
     assert not tx2.get_metadata().voided_by
+
+
+def simulate_poa(simulator: 'Simulator', manager: 'HathorManager') -> None:
+    from hathor.simulator import FakeConnection
+
+    # builder = simulator.get_default_builder()
+    # manager2 = simulator.create_peer(builder)
+    # manager2.allow_mining_without_peers()
+    manager.allow_mining_without_peers()
+    simulator.run(120)
+
+    # connection = FakeConnection(manager, manager2)
+    # simulator.add_connection(connection)
+    # simulator.run(120)
