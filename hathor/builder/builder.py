@@ -63,6 +63,7 @@ class SyncSupportLevel(IntEnum):
 
     @classmethod
     def add_factories(cls,
+                      settings: HathorSettingsType,
                       p2p_manager: ConnectionsManager,
                       sync_v1_support: 'SyncSupportLevel',
                       sync_v2_support: 'SyncSupportLevel',
@@ -79,7 +80,7 @@ class SyncSupportLevel(IntEnum):
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(settings, p2p_manager))
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
@@ -421,7 +422,9 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
         )
-        SyncSupportLevel.add_factories(self._p2p_manager, self._sync_v1_support, self._sync_v2_support)
+        SyncSupportLevel.add_factories(
+            self._get_or_create_settings(), self._p2p_manager, self._sync_v1_support, self._sync_v2_support
+        )
         return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:

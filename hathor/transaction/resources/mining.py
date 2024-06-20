@@ -114,7 +114,9 @@ class SubmitBlockResource(Resource):
 
         data = json_loadb(request.content.read())
 
-        tx = tx_or_block_from_bytes(bytes.fromhex(data['hexdata']), storage=self.manager.tx_storage)
+        tx = tx_or_block_from_bytes(
+            self.manager._settings, bytes.fromhex(data['hexdata']), storage=self.manager.tx_storage
+        )
 
         if not tx.is_block:
             self.log.debug('expected Block, received Transaction', data=data)

@@ -73,7 +73,9 @@ class DbImport(RunNode):
         self.log.info('imported', tx_count=tx_count, block_count=block_count)
 
     def _import_txs(self) -> Iterator['BaseTransaction']:
+        from hathor.conf.get_settings import get_global_settings
         from hathor.transaction.base_transaction import tx_or_block_from_bytes
+        settings = get_global_settings()
         while True:
             # read tx
             tx_len_bytes = self.in_file.read(4)
@@ -84,7 +86,7 @@ class DbImport(RunNode):
             if len(tx_bytes) != tx_len:
                 self.log.error('unexpected end of file', expected=tx_len, got=len(tx_bytes))
                 sys.exit(2)
-            tx = tx_or_block_from_bytes(tx_bytes)
+            tx = tx_or_block_from_bytes(settings, tx_bytes)
             assert tx is not None
             tx.storage = self.tx_storage
             self.manager.on_new_tx(tx, quiet=True, fails_silently=False)

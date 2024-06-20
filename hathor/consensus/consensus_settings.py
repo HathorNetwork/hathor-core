@@ -41,20 +41,20 @@ class _BaseConsensusSettings(ABC, BaseModel):
         return self.type is ConsensusType.PROOF_OF_AUTHORITY
 
     @abstractmethod
-    def _get_valid_vertex_versions(self) -> set[TxVersion]:
+    def _get_valid_vertex_versions(self, include_genesis: bool) -> set[TxVersion]:
         """Return a set of `TxVersion`s that are valid in for this consensus type."""
         raise NotImplementedError
 
-    def is_vertex_version_valid(self, version: TxVersion) -> bool:
+    def is_vertex_version_valid(self, version: TxVersion, include_genesis: bool = False) -> bool:
         """Return whether a `TxVersion` is valid for this consensus type."""
-        return version in self._get_valid_vertex_versions()
+        return version in self._get_valid_vertex_versions(include_genesis)
 
 
 class PowSettings(_BaseConsensusSettings):
     type: Literal[ConsensusType.PROOF_OF_WORK] = ConsensusType.PROOF_OF_WORK
 
     @override
-    def _get_valid_vertex_versions(self) -> set[TxVersion]:
+    def _get_valid_vertex_versions(self, include_genesis: bool) -> set[TxVersion]:
         return {
             TxVersion.REGULAR_BLOCK,
             TxVersion.REGULAR_TRANSACTION,
@@ -81,12 +81,19 @@ class PoaSettings(_BaseConsensusSettings):
         return signers
 
     @override
-    def _get_valid_vertex_versions(self) -> set[TxVersion]:
-        return {
+    def _get_valid_vertex_versions(self, include_genesis: bool) -> set[TxVersion]:
+        versions = {
             TxVersion.POA_BLOCK,
             TxVersion.REGULAR_TRANSACTION,
             TxVersion.TOKEN_CREATION_TRANSACTION,
         }
+
+        if include_genesis:
+            # TODO: We have to add REGULAR_BLOCK to allow genesis deserialization.
+            #  This may be removed if we refactor the way genesis is constructed.
+            versions.add(TxVersion.REGULAR_BLOCK)
+
+        return versions
 
 
 ConsensusSettings: TypeAlias = Annotated[PowSettings | PoaSettings, Field(discriminator='type')]

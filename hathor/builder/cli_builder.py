@@ -298,7 +298,7 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
         )
-        SyncSupportLevel.add_factories(p2p_manager, sync_v1_support, sync_v2_support)
+        SyncSupportLevel.add_factories(settings, p2p_manager, sync_v1_support, sync_v2_support)
 
         vertex_handler = VertexHandler(
             reactor=reactor,

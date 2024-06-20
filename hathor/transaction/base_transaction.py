@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import base64
 import datetime
 import hashlib
@@ -38,6 +40,7 @@ from hathor.util import classproperty
 if TYPE_CHECKING:
     from _hashlib import HASH
 
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()
@@ -1135,16 +1138,18 @@ def output_value_to_bytes(number: int) -> bytes:
         return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well
 
 
-def tx_or_block_from_bytes(data: bytes,
-                           storage: Optional['TransactionStorage'] = None) -> BaseTransaction:
+def tx_or_block_from_bytes(
+    settings: HathorSettings,
+    data: bytes,
+    storage: Optional['TransactionStorage'] = None,
+) -> BaseTransaction:
     """ Creates the correct tx subclass from a sequence of bytes
     """
     # version field takes up the second byte only
-    settings = get_global_settings()  # TODO: Remove this from here and receive by argument.
     version = data[1]
     try:
         tx_version = TxVersion(version)
-        if not settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(tx_version):
+        if not settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(tx_version, include_genesis=True):
             raise StructError(f"invalid vertex version: {tx_version}")
         cls = tx_version.get_cls()
         return cls.create_from_struct(data, storage=storage)

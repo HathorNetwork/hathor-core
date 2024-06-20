@@ -15,6 +15,7 @@
 from json import JSONDecodeError
 from typing import Any, Optional
 
+from structlog import get_logger
 from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
@@ -24,6 +25,8 @@ from hathor.crypto.util import decode_address
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
+
+logger = get_logger()
 
 
 @register_resource
@@ -36,6 +39,7 @@ class AddressHistoryResource(Resource):
 
     def __init__(self, manager):
         self.manager = manager
+        self._log = logger.new()
         settings = get_global_settings()
         # XXX: copy the parameters that are needed so tests can more easily tweak them
         self.max_tx_addresses_history = settings.MAX_TX_ADDRESSES_HISTORY
@@ -52,9 +56,8 @@ class AddressHistoryResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        if not self.manager.tx_storage.indexes.addresses:
-            request.setResponseCode(503)
-            return json_dumpb({'success': False})
+        if error_message := self._validate_index(request):
+            return error_message
 
         assert request.content is not None
         raw_body = request.content.read() or b''
@@ -117,11 +120,8 @@ class AddressHistoryResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        addresses_index = self.manager.tx_storage.indexes.addresses
-
-        if not addresses_index:
-            request.setResponseCode(503)
-            return json_dumpb({'success': False})
+        if error_message := self._validate_index(request):
+            return error_message
 
         raw_args = get_args(request)
 
@@ -136,6 +136,18 @@ class AddressHistoryResource(Resource):
             ref_hash = raw_args[b'hash'][0].decode('utf-8')
 
         return self.get_address_history([address.decode('utf-8') for address in addresses], ref_hash)
+
+    def _validate_index(self, request: Request) -> bytes | None:
+        """Return an error message if the addresses index is disabled, and None otherwise."""
+        if self.manager.tx_storage.indexes.addresses:
+            return None
+
+        self._log.warn(
+            'trying to reach address history endpoint, but addresses index is disabled.\n'
+            'use `--wallet-index` to enable it'
+        )
+        request.setResponseCode(503)
+        return json_dumpb({'success': False, 'message': 'wallet index is disabled'})
 
     def get_address_history(self, addresses: list[str], ref_hash: Optional[str]) -> bytes:
         ref_hash_bytes = None

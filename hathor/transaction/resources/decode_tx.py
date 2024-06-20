@@ -51,7 +51,7 @@ class DecodeTxResource(Resource):
 
         try:
             tx_bytes = bytes.fromhex(parsed['args']['hex_tx'])
-            tx = tx_or_block_from_bytes(tx_bytes)
+            tx = tx_or_block_from_bytes(self.manager._settings, tx_bytes)
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)
         except ValueError:

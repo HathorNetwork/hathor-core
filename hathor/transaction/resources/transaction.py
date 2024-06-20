@@ -14,6 +14,9 @@
 
 from typing import Any
 
+from structlog import get_logger
+from twisted.web.http import Request
+
 from hathor.api_util import (
     Resource,
     get_args,
@@ -30,6 +33,8 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import json_dumpb
 
 GET_LIST_ARGS = ['count', 'type']
+
+logger = get_logger()
 
 
 def update_serialized_tokens_array(tx: BaseTransaction, serialized: dict[str, Any]) -> None:
@@ -146,9 +151,10 @@ class TransactionResource(Resource):
 
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
+        self._log = logger.new()
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ Get request /transaction/ that returns list of tx or a single one
 
             If receive 'id' (hash) as GET parameter we return the tx with this hash
@@ -174,13 +180,12 @@ class TransactionResource(Resource):
 
         return data
 
-    def get_one_tx(self, request):
+    def get_one_tx(self, request: Request) -> bytes:
         """ Get 'id' (hash) from request.args
             Returns the tx with this hash or {'success': False} if hash is invalid or tx does not exist
         """
-        if not self.manager.tx_storage.indexes.tokens:
-            request.setResponseCode(503)
-            return json_dumpb({'success': False})
+        if error_message := self._validate_index(request):
+            return error_message
 
         raw_args = get_args(request)
         requested_hash = raw_args[b'id'][0].decode('utf-8')
@@ -194,6 +199,18 @@ class TransactionResource(Resource):
             data = get_tx_extra_data(tx)
 
         return json_dumpb(data)
+
+    def _validate_index(self, request: Request) -> bytes | None:
+        """Return an error message if the tokens index is disabled, and None otherwise."""
+        if self.manager.tx_storage.indexes.tokens:
+            return None
+
+        self._log.warn(
+            'trying to reach transaction endpoint, but tokens index is disabled.\n'
+            'use `--wallet-index` to enable it'
+        )
+        request.setResponseCode(503)
+        return json_dumpb({'success': False, 'message': 'wallet index is disabled'})
 
     def get_list_tx(self, request):
         """ Get parameter from request.args and return list of blocks/txs

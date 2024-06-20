@@ -24,7 +24,7 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall, deferLater
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
@@ -84,7 +84,7 @@ class NodeBlockSync(SyncAgent):
     """
     name: str = 'node-block-sync'
 
-    def __init__(self, protocol: 'HathorProtocol', reactor: Reactor) -> None:
+    def __init__(self, settings: HathorSettings, protocol: 'HathorProtocol', reactor: Reactor) -> None:
         """
         :param protocol: Protocol of the connection.
         :type protocol: HathorProtocol
@@ -92,7 +92,7 @@ class NodeBlockSync(SyncAgent):
         :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
         :type reactor: Reactor
         """
-        self._settings = get_global_settings()
+        self._settings = settings
         self.protocol = protocol
         self.manager = protocol.node
         self.tx_storage: 'TransactionStorage' = protocol.node.tx_storage
@@ -768,7 +768,7 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.connections is not None
 
         blk_bytes = base64.b64decode(payload)
-        blk = tx_or_block_from_bytes(blk_bytes)
+        blk = tx_or_block_from_bytes(self._settings, blk_bytes)
         if not isinstance(blk, Block):
             # Not a block. Punish peer?
             return
@@ -1018,7 +1018,7 @@ class NodeBlockSync(SyncAgent):
 
         # tx_bytes = bytes.fromhex(payload)
         tx_bytes = base64.b64decode(payload)
-        tx = tx_or_block_from_bytes(tx_bytes)
+        tx = tx_or_block_from_bytes(self._settings, tx_bytes)
         if not isinstance(tx, Transaction):
             self.log.warn('not a transaction', hash=tx.hash_hex)
             # Not a transaction. Punish peer?
@@ -1127,7 +1127,7 @@ class NodeBlockSync(SyncAgent):
             data = base64.b64decode(part2)
 
         try:
-            tx = tx_or_block_from_bytes(data)
+            tx = tx_or_block_from_bytes(self._settings, data)
         except struct.error:
             # Invalid data for tx decode
             return

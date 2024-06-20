@@ -597,7 +597,7 @@ class NodeSyncTimestamp(SyncAgent):
         data = base64.b64decode(payload)
 
         try:
-            tx = tx_or_block_from_bytes(data)
+            tx = tx_or_block_from_bytes(self._settings, data)
         except struct.error:
             # Invalid data for tx decode
             return

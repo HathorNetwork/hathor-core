@@ -57,7 +57,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         from hathor.transaction.base_transaction import tx_or_block_from_bytes
         from hathor.transaction.transaction_metadata import TransactionMetadata
 
-        tx = tx_or_block_from_bytes(tx_data)
+        tx = tx_or_block_from_bytes(self._settings, tx_data)
         tx._metadata = TransactionMetadata.create_from_json(json_loadb(meta_data))
         tx.storage = self
         return tx

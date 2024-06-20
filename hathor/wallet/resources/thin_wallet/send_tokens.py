@@ -110,7 +110,7 @@ class SendTokensResource(Resource):
             )
 
         try:
-            tx = tx_or_block_from_bytes(bytes.fromhex(tx_hex))
+            tx = tx_or_block_from_bytes(self._settings, bytes.fromhex(tx_hex))
         except (ValueError, struct.error):
             # ValueError: invalid hex
             # struct.error: invalid transaction data

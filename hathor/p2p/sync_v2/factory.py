@@ -14,6 +14,7 @@
 
 from typing import TYPE_CHECKING
 
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_factory import SyncAgentFactory
@@ -25,8 +26,9 @@ if TYPE_CHECKING:
 
 
 class SyncV2Factory(SyncAgentFactory):
-    def __init__(self, connections: ConnectionsManager):
+    def __init__(self, settings: HathorSettings, connections: ConnectionsManager):
+        self._settings = settings
         self.connections = connections
 
     def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Reactor) -> SyncAgent:
-        return NodeBlockSync(protocol, reactor=reactor)
+        return NodeBlockSync(self._settings, protocol, reactor=reactor)

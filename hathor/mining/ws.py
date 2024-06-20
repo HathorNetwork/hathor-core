@@ -163,7 +163,8 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
         if not self.factory.manager.can_start_mining():
             self.log.warn('node syncing')
             return False
-        tx = tx_or_block_from_bytes(bytes.fromhex(hexdata), storage=self.factory.manager.tx_storage)
+        settings = self.factory.manager._settings
+        tx = tx_or_block_from_bytes(settings, bytes.fromhex(hexdata), storage=self.factory.manager.tx_storage)
         if not tx.is_block:
             self.log.warn('expected Block, received Transaction', data=hexdata)
             return False
