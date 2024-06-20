@@ -70,7 +70,7 @@ class PushTxResource(Resource):
     def handle_push_tx(self, params: dict[str, Any], client_addr: str) -> dict[str, Any]:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
-            tx = tx_or_block_from_bytes(tx_bytes)
+            tx = tx_or_block_from_bytes(self._settings, tx_bytes)
         except ValueError:
             return {'success': False, 'message': 'Invalid hexadecimal data', 'can_force': False}
         except struct.error:

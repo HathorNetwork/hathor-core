@@ -14,7 +14,12 @@
 
 from typing import TYPE_CHECKING
 
+import base58
+
 from hathor.conf.settings import HathorSettings
+from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.transaction import Block, Transaction, TxOutput
+from hathor.transaction.scripts import P2PKH
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -41,3 +46,40 @@ def get_representation_for_all_genesis(settings: HathorSettings) -> bytes:
 def is_genesis(hash_bytes: bytes, *, settings: HathorSettings) -> bool:
     """Check whether hash is from a genesis transaction."""
     return hash_bytes in get_all_genesis_hashes(settings)
+
+
+def generate_new_genesis(
+    *,
+    tokens: int,
+    address: str,
+    block_timestamp: int,
+    min_block_weight: float,
+    min_tx_weight: float,
+) -> tuple[Block, Transaction, Transaction]:
+    """Crate new genesis block and transactions."""
+    output_script = P2PKH.create_output_script(address=base58.b58decode(address))
+    mining_service = CpuMiningService()
+
+    block = Block(
+        timestamp=block_timestamp,
+        weight=min_block_weight,
+        outputs=[TxOutput(tokens, output_script)],
+    )
+    mining_service.start_mining(block)
+    block.update_hash()
+
+    tx1 = Transaction(
+        timestamp=block_timestamp + 1,
+        weight=min_tx_weight,
+    )
+    mining_service.start_mining(tx1)
+    tx1.update_hash()
+
+    tx2 = Transaction(
+        timestamp=block_timestamp + 2,
+        weight=min_tx_weight,
+    )
+    mining_service.start_mining(tx2)
+    tx2.update_hash()
+
+    return block, tx1, tx2

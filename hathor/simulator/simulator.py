@@ -120,6 +120,9 @@ class Simulator:
             .set_cpu_mining_service(cpu_mining_service) \
             .build()
 
+        # TODO: This should be removed after storages are refactored to use injected settings.
+        artifacts.tx_storage._settings = self.settings
+
         artifacts.manager.start()
         self._clock.run()
         self.run_to_completion()

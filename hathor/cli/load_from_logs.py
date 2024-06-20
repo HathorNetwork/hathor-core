@@ -37,7 +37,9 @@ class LoadFromLogs(RunNode):
         super().prepare(register_resources=False)
 
     def run(self) -> None:
+        from hathor.conf.get_settings import get_global_settings
         from hathor.transaction.base_transaction import tx_or_block_from_bytes
+        settings = get_global_settings()
 
         pattern = r'new (tx|block)    .*bytes=([^ ]*) '
         pattern = r'new (tx|block)    .*bytes=([^ ]*) '
@@ -57,7 +59,7 @@ class LoadFromLogs(RunNode):
             _, vertex_bytes_hex = matches[0]
 
             vertex_bytes = bytes.fromhex(vertex_bytes_hex)
-            vertex = tx_or_block_from_bytes(vertex_bytes)
+            vertex = tx_or_block_from_bytes(settings, vertex_bytes)
             self.manager.on_new_tx(vertex)
 
 
