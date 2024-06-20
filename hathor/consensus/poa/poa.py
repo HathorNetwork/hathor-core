@@ -46,3 +46,15 @@ def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) 
     """Return the weight for the given block and signer."""
     is_in_turn_flag = is_in_turn(settings=settings, height=block.get_height(), signer_index=signer_index)
     return BLOCK_WEIGHT_IN_TURN if is_in_turn_flag else BLOCK_WEIGHT_OUT_OF_TURN
+
+
+def get_signer_index_and_public_key(settings: PoaSettings, signer_id: bytes) -> tuple[int, bytes] | None:
+    """Given a `signer_id`, return its signer index and public key bytes. Return `None` if not found."""
+    from hathor.consensus.poa import PoaSigner
+    sorted_signers = sorted(settings.signers)
+
+    for i, public_key_bytes in enumerate(sorted_signers):
+        if signer_id == PoaSigner.get_poa_signer_id(public_key_bytes):
+            return i, public_key_bytes
+
+    return None

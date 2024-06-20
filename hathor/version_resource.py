@@ -51,6 +51,11 @@ class VersionResource(Resource):
             'reward_spend_min_blocks': self._settings.REWARD_SPEND_MIN_BLOCKS,
             'max_number_inputs': self._settings.MAX_NUM_INPUTS,
             'max_number_outputs': self._settings.MAX_NUM_OUTPUTS,
+            'decimal_places': self._settings.DECIMAL_PLACES,
+            'native_token': dict(
+                name=self._settings.NATIVE_TOKEN_NAME,
+                symbol=self._settings.NATIVE_TOKEN_SYMBOL,
+            ),
         }
         return json_dumpb(data)
 
