@@ -19,12 +19,15 @@ import os
 import signal
 import sys
 import traceback
+from argparse import ArgumentParser
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing import Pipe, Process
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from typing_extensions import assert_never
+from typing_extensions import assert_never, override
+
+from hathor.cli.run_node_args import RunNodeArgs  # skip-cli-import-custom-check
 
 if TYPE_CHECKING:
     from hathor.cli.util import LoggingOutput
@@ -44,6 +47,10 @@ logger = get_logger()
 
 PRE_SETUP_LOGGING: bool = False
 HATHOR_NODE_INIT_TIMEOUT: int = 10
+
+
+class SideDagArgs(RunNodeArgs):
+    poa_signer_file: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +75,17 @@ class SideDagProcessTerminated:
 
 class SideDagRunNode(RunNode):
     env_vars_prefix = 'hathor_side_dag_'
+
+    @override
+    def _parse_args_obj(self, args: dict[str, Any]) -> RunNodeArgs:
+        return SideDagArgs.parse_obj(args)
+
+    @classmethod
+    @override
+    def create_parser(cls) -> ArgumentParser:
+        parser = super().create_parser()
+        parser.add_argument('--poa-signer-file', help='File containing the Proof-of-Authority signer private key.')
+        return parser
 
 
 def main(capture_stdout: bool) -> None:
@@ -205,7 +223,7 @@ def _run_side_dag_node(argv: list[str], *, hathor_node_process: Process, conn: '
     try:
         side_dag = SideDagRunNode(argv=argv)
     except (BaseException, Exception):
-        logger.critical('terminating hathor node...')
+        logger.exception('terminating hathor node due to exception in side-dag node...')
         conn.send(SideDagProcessTerminated())
         hathor_node_process.terminate()
         return
@@ -256,6 +274,7 @@ def _run_hathor_node(
         setup_logging(logging_output=logging_output, logging_options=log_options, capture_stdout=capture_stdout)
         hathor_node = run_node_cmd(argv=argv)
     except (BaseException, Exception):
+        logger.exception('hathor process terminated due to exception in initialization')
         conn.send(HathorProcessInitFail(traceback.format_exc()))
         return
 

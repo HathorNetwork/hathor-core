@@ -457,7 +457,6 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
-        from hathor.cli.run_node_args import RunNodeArgs
         from hathor.conf import NANO_TESTNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH
         from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
@@ -469,7 +468,7 @@ class RunNode:
         self.parser = self.create_parser()
         raw_args = self.parse_args(argv)
 
-        self._args = RunNodeArgs.parse_obj(vars(raw_args))
+        self._args = self._parse_args_obj(vars(raw_args))
 
         if self._args.config_yaml:
             os.environ['HATHOR_CONFIG_YAML'] = self._args.config_yaml
@@ -530,6 +529,10 @@ class RunNode:
 
     def parse_args(self, argv: list[str]) -> Namespace:
         return self.parser.parse_args(argv)
+
+    def _parse_args_obj(self, args: dict[str, Any]) -> 'RunNodeArgs':
+        from hathor.cli.run_node_args import RunNodeArgs
+        return RunNodeArgs.parse_obj(args)
 
     def run(self) -> None:
         self.reactor.run()

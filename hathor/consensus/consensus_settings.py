@@ -67,12 +67,18 @@ class PoaSettings(_BaseConsensusSettings):
     type: Literal[ConsensusType.PROOF_OF_AUTHORITY] = ConsensusType.PROOF_OF_AUTHORITY
 
     # A list of Proof-of-Authority signer public keys that have permission to produce blocks.
-    signers: tuple[bytes, ...] = ()
+    signers: tuple[bytes, ...]
 
-    @validator('signers', each_item=True)
-    def parse_hex_str(cls, hex_str: str | bytes) -> bytes:
+    @validator('signers', each_item=True, pre=True)
+    def _parse_hex_str(cls, hex_str: str | bytes) -> bytes:
         from hathor.conf.settings import parse_hex_str
         return parse_hex_str(hex_str)
+
+    @validator('signers')
+    def _validate_signers(cls, signers: tuple[bytes, ...]) -> tuple[bytes, ...]:
+        if len(signers) == 0:
+            raise ValueError('At least one signer must be provided in PoA networks')
+        return signers
 
     @override
     def _get_valid_vertex_versions(self) -> set[TxVersion]:

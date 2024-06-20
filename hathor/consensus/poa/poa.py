@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from hathor.consensus.consensus_settings import PoaSettings
 from hathor.transaction import Block
 
 if TYPE_CHECKING:
@@ -34,3 +35,14 @@ def get_hashed_poa_data(block: PoaBlock) -> bytes:
     poa_data += block.get_struct_nonce()
     hashed_poa_data = hashlib.sha256(poa_data).digest()
     return hashed_poa_data
+
+
+def is_in_turn(*, settings: PoaSettings, height: int, signer_index: int) -> bool:
+    """Return whether the given signer is in turn for the given height."""
+    return height % len(settings.signers) == signer_index
+
+
+def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) -> float:
+    """Return the weight for the given block and signer."""
+    is_in_turn_flag = is_in_turn(settings=settings, height=block.get_height(), signer_index=signer_index)
+    return BLOCK_WEIGHT_IN_TURN if is_in_turn_flag else BLOCK_WEIGHT_OUT_OF_TURN

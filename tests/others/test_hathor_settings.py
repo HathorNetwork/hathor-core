@@ -31,7 +31,6 @@ from hathor.conf.nano_testnet import SETTINGS as NANO_TESTNET_SETTINGS
 from hathor.conf.settings import HathorSettings
 from hathor.conf.testnet import SETTINGS as TESTNET_SETTINGS
 from hathor.conf.unittests import SETTINGS as UNITTESTS_SETTINGS
-from hathor.consensus.consensus_settings import PoaSettings, PowSettings
 
 
 @pytest.mark.parametrize('filepath', ['fixtures/valid_hathor_settings_fixture.yml'])
@@ -119,11 +118,11 @@ def test_consensus_algorithm() -> None:
 
     with patch('hathor.conf.settings.yaml', yaml_mock):
         # Test passes when PoA is disabled with default settings
-        mock_settings(dict(CONSENSUS_ALGORITHM=PowSettings()))
+        mock_settings(dict())
         HathorSettings.from_yaml(filepath='some_path')
 
         # Test fails when PoA is enabled with default settings
-        mock_settings(dict(CONSENSUS_ALGORITHM=PoaSettings(signers=(b'some_signer',))))
+        mock_settings(dict(CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',))))
         with pytest.raises(ValidationError) as e:
             HathorSettings.from_yaml(filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
@@ -133,16 +132,27 @@ def test_consensus_algorithm() -> None:
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_UNITS_PER_BLOCK=0,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-            CONSENSUS_ALGORITHM=PoaSettings(signers=(b'some_signer',)),
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',)),
         ))
         HathorSettings.from_yaml(filepath='some_path')
+
+        # Test fails when no signer is provided
+        mock_settings(dict(
+            BLOCKS_PER_HALVING=None,
+            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=()),
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert 'At least one signer must be provided in PoA networks' in str(e.value)
 
         # Test fails when PoA is enabled with BLOCKS_PER_HALVING
         mock_settings(dict(
             BLOCKS_PER_HALVING=123,
             INITIAL_TOKEN_UNITS_PER_BLOCK=0,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-            CONSENSUS_ALGORITHM=PoaSettings(signers=(b'some_signer',)),
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',)),
         ))
         with pytest.raises(ValidationError) as e:
             HathorSettings.from_yaml(filepath='some_path')
@@ -153,7 +163,7 @@ def test_consensus_algorithm() -> None:
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_UNITS_PER_BLOCK=123,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-            CONSENSUS_ALGORITHM=PoaSettings(signers=(b'some_signer',)),
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',)),
         ))
         with pytest.raises(ValidationError) as e:
             HathorSettings.from_yaml(filepath='some_path')
@@ -164,7 +174,7 @@ def test_consensus_algorithm() -> None:
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_UNITS_PER_BLOCK=0,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=123,
-            CONSENSUS_ALGORITHM=PoaSettings(signers=(b'some_signer',)),
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',)),
         ))
         with pytest.raises(ValidationError) as e:
             HathorSettings.from_yaml(filepath='some_path')

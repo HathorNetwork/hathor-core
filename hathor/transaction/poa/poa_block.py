@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from hathor.consensus import poa
-from hathor.transaction import Block, TxVersion
+from hathor.transaction import Block, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -29,6 +29,7 @@ class PoaBlock(Block):
         timestamp: int | None = None,
         signal_bits: int = 0,
         weight: float = 0,
+        outputs: list[TxOutput] | None = None,
         parents: list[bytes] | None = None,
         hash: bytes | None = None,
         data: bytes = b'',
@@ -36,6 +37,7 @@ class PoaBlock(Block):
         signer_id: bytes = b'',
         signature: bytes = b'',
     ) -> None:
+        assert not outputs, 'PoaBlocks must not have outputs'
         super().__init__(
             nonce=0,
             timestamp=timestamp,

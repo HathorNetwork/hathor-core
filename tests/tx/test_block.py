@@ -227,15 +227,15 @@ def test_verify_poa() -> None:
         public_key_bytes = get_public_key_bytes_compressed(public_key)
         address = get_address_b58_from_public_key(public_key)
         file = PoaSignerFile.parse_obj(dict(
-            private_key=private_key_bytes.hex(),
-            public_key=public_key_bytes.hex(),
+            private_key_hex=private_key_bytes.hex(),
+            public_key_hex=public_key_bytes.hex(),
             address=address
         ))
         return file.get_signer(), public_key_bytes
 
     poa_signer, public_key_bytes = get_signer()
     settings = Mock(spec_set=HathorSettings)
-    settings.CONSENSUS_ALGORITHM = PoaSettings()
+    settings.CONSENSUS_ALGORITHM = PoaSettings.construct(signers=())
     block_verifier = PoaBlockVerifier(settings=settings)
     block = PoaBlock(
         timestamp=123,
@@ -254,7 +254,7 @@ def test_verify_poa() -> None:
     block.outputs = []
 
     # Test no signers
-    settings.CONSENSUS_ALGORITHM = PoaSettings(signers=())
+    settings.CONSENSUS_ALGORITHM = PoaSettings.construct(signers=())
     with pytest.raises(PoaValidationError) as e:
         block_verifier.verify_poa(block)
     assert str(e.value) == 'invalid PoA signature'
