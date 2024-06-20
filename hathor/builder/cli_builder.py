@@ -22,6 +22,7 @@ from typing import Any, Optional
 from structlog import get_logger
 
 from hathor.cli.run_node_args import RunNodeArgs
+from hathor.cli.side_dag import SideDagArgs
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
@@ -335,6 +336,18 @@ class CliBuilder:
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
         )
+
+        if settings.CONSENSUS_ALGORITHM.is_poa():
+            assert isinstance(self._args, SideDagArgs)
+            if self._args.poa_signer_file:
+                from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
+                poa_signer_file = PoaSignerFile.parse_file(self._args.poa_signer_file)
+                self.manager.poa_block_producer = PoaBlockProducer(
+                    settings=settings,
+                    reactor=reactor,
+                    manager=self.manager,
+                    poa_signer=poa_signer_file.get_signer(),
+                )
 
         if self._args.x_ipython_kernel:
             self.check_or_raise(self._args.x_asyncio_reactor,

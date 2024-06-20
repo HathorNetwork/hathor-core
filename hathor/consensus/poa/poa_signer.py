@@ -15,11 +15,11 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any, NewType
+from typing import TYPE_CHECKING, Any, NewType
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from pydantic import validator
+from pydantic import Field, validator
 
 from hathor.consensus import poa
 from hathor.crypto.util import (
@@ -27,14 +27,16 @@ from hathor.crypto.util import (
     get_private_key_from_bytes,
     get_public_key_bytes_compressed,
 )
-from hathor.transaction.poa import PoaBlock
 from hathor.utils.pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from hathor.transaction.poa import PoaBlock
 
 
 class PoaSignerFile(BaseModel, arbitrary_types_allowed=True):
     """Class that represents a Proof-of-Authority signer configuration file."""
-    private_key: ec.EllipticCurvePrivateKeyWithSerialization
-    public_key: ec.EllipticCurvePublicKey
+    private_key: ec.EllipticCurvePrivateKeyWithSerialization = Field(alias='private_key_hex')
+    public_key: ec.EllipticCurvePublicKey = Field(alias='public_key_hex')
     address: str
 
     @validator('private_key', pre=True)
@@ -100,6 +102,10 @@ class PoaSigner:
         signature = self._private_key.sign(hashed_poa_data, ec.ECDSA(hashes.SHA256()))
         block.signer_id = self._signer_id
         block.signature = signature
+
+    def get_public_key(self) -> ec.EllipticCurvePublicKey:
+        """Return this signer's public key."""
+        return self._private_key.public_key()
 
     @staticmethod
     def get_poa_signer_id(compressed_public_key_bytes: bytes) -> PoaSignerId:

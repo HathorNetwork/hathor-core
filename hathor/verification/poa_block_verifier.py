@@ -33,14 +33,15 @@ class PoaBlockVerifier:
 
     def verify_poa(self, block: PoaBlock) -> None:
         """Validate the Proof-of-Authority."""
-        assert isinstance(self._settings.CONSENSUS_ALGORITHM, PoaSettings)
+        poa_settings = self._settings.CONSENSUS_ALGORITHM
+        assert isinstance(poa_settings, PoaSettings)
 
         # validate block rewards
         if block.outputs:
             raise PoaValidationError('blocks must not have rewards in a PoA network')
 
         # validate that the signature is valid
-        sorted_signers = sorted(self._settings.CONSENSUS_ALGORITHM.signers)
+        sorted_signers = sorted(poa_settings.signers)
         signer_index: int | None = None
 
         for i, public_key_bytes in enumerate(sorted_signers):
@@ -52,9 +53,7 @@ class PoaBlockVerifier:
             raise PoaValidationError('invalid PoA signature')
 
         # validate block weight is in turn
-        is_in_turn = block.get_height() % len(sorted_signers) == signer_index
-        expected_weight = poa.BLOCK_WEIGHT_IN_TURN if is_in_turn else poa.BLOCK_WEIGHT_OUT_OF_TURN
-
+        expected_weight = poa.calculate_weight(poa_settings, block, signer_index)
         if block.weight != expected_weight:
             raise PoaValidationError(f'block weight is {block.weight}, expected {expected_weight}')
 
