@@ -20,6 +20,7 @@ import pytest
 from twisted.internet.testing import StringTransport
 
 from hathor.builder import Builder
+from hathor.consensus.poa import PoaSigner
 from hathor.event.websocket import EventWebsocketProtocol
 from hathor.event.websocket.request import Request
 from hathor.event.websocket.response import EventResponse, InvalidRequestResponse
@@ -33,11 +34,15 @@ from tests.utils import HAS_ROCKSDB
 class BaseEventSimulationTester(SimulatorTestCase):
     builder: Builder
 
-    def _create_artifacts(self) -> None:
+    def _create_artifacts(self, signer: PoaSigner | None = None) -> None:
         peer_id = PeerId()
         builder = self.builder.set_peer_id(peer_id) \
             .disable_full_verification() \
             .enable_event_queue()
+
+        if signer:
+            builder.set_poa_signer(signer)
+
         artifacts = self.simulator.create_artifacts(builder)
 
         assert peer_id.id is not None
@@ -99,7 +104,6 @@ class MemoryEventSimulationTester(BaseEventSimulationTester):
     def setUp(self) -> None:
         super().setUp()
         self.builder = self.simulator.get_default_builder()
-        self._create_artifacts()
 
 
 @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
@@ -112,4 +116,3 @@ class RocksDBEventSimulationTester(BaseEventSimulationTester):
         self.tmpdirs.append(directory)
 
         self.builder = self.simulator.get_default_builder().use_rocksdb(path=directory)
-        self._create_artifacts()

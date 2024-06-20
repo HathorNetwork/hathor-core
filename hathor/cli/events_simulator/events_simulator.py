@@ -58,6 +58,10 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
 
     log = logger.new()
     simulator = Simulator(args.seed)
+
+    if settings := scenario.get_settings():
+        simulator.settings = settings
+
     simulator.start()
     builder = simulator.get_default_builder() \
         .disable_full_verification() \

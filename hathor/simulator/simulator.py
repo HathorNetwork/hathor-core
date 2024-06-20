@@ -86,8 +86,7 @@ class Simulator:
             .enable_full_verification() \
             .enable_sync_v1() \
             .enable_sync_v2() \
-            .use_memory() \
-            .set_settings(self.settings)
+            .use_memory()
 
     def create_peer(self, builder: Optional[Builder] = None) -> HathorManager:
         """
@@ -112,6 +111,7 @@ class Simulator:
         daa = DifficultyAdjustmentAlgorithm(settings=self.settings)
 
         artifacts = builder \
+            .set_settings(self.settings) \
             .set_reactor(self._clock) \
             .set_rng(Random(self.rng.getrandbits(64))) \
             .set_wallet(wallet) \
