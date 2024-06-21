@@ -19,6 +19,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
+from hathor.verification.poa_block_verifier import PoaBlockVerifier
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
 from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
@@ -29,6 +30,7 @@ class VertexVerifiers(NamedTuple):
     vertex: VertexVerifier
     block: BlockVerifier
     merge_mined_block: MergeMinedBlockVerifier
+    poa_block: PoaBlockVerifier
     tx: TransactionVerifier
     token_creation_tx: TokenCreationTransactionVerifier
 
@@ -67,6 +69,7 @@ class VertexVerifiers(NamedTuple):
         """
         block_verifier = BlockVerifier(settings=settings, daa=daa, feature_service=feature_service)
         merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
+        poa_block_verifier = PoaBlockVerifier(settings=settings)
         tx_verifier = TransactionVerifier(settings=settings, daa=daa)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
 
@@ -74,6 +77,7 @@ class VertexVerifiers(NamedTuple):
             vertex=vertex_verifier,
             block=block_verifier,
             merge_mined_block=merge_mined_block_verifier,
+            poa_block=poa_block_verifier,
             tx=tx_verifier,
             token_creation_tx=token_creation_tx_verifier,
         )

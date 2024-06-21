@@ -29,11 +29,11 @@ def get_genesis_output():
 
 
 class GenesisTest(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self._daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
         verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa, feature_service=Mock())
-        self._verification_service = VerificationService(verifiers=verifiers)
+        self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
         self.storage = TransactionMemoryStorage()
 
     def test_pow(self):

@@ -18,6 +18,8 @@ from operator import add
 from struct import pack
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
+from typing_extensions import Self
+
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
@@ -76,7 +78,7 @@ class Block(BaseTransaction):
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'Block':
+                           *, verbose: VerboseCallback = None) -> Self:
         blc = cls()
         buf = blc.get_fields_from_struct(struct_bytes, verbose=verbose)
 

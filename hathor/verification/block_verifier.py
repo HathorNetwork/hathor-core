@@ -51,6 +51,7 @@ class BlockVerifier:
 
     def verify_weight(self, block: Block) -> None:
         """Validate minimum block difficulty."""
+        assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         assert block.storage is not None
         min_block_weight = self._daa.calculate_block_difficulty(block, block.storage.get_parent_block)
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:

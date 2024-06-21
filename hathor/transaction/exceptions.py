@@ -110,6 +110,10 @@ class WeightError(TxValidationError):
     """Transaction not using correct weight"""
 
 
+class PoaValidationError(TxValidationError):
+    """Block using invalid PoA signature"""
+
+
 class InvalidBlockReward(TxValidationError):
     """Wrong amount of issued tokens"""
 
@@ -132,6 +136,10 @@ class TransactionDataError(TxValidationError):
 
 class RewardLocked(TxValidationError):
     """Block reward cannot be spent yet, needs more confirmations"""
+
+
+class InvalidVersionError(TxValidationError):
+    """Vertex version is invalid."""
 
 
 class BlockWithInputs(BlockError):
