@@ -120,7 +120,7 @@ def _process_logging_output(argv: list[str]) -> tuple[LoggingOutput, LoggingOutp
         SIDE_DAG = 'side-dag'
         BOTH = 'both'
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(add_help=False)
     log_args = parser.add_mutually_exclusive_group()
     log_args.add_argument('--json-logs', nargs='?', const='both', type=LogOutputConfig)
     log_args.add_argument('--disable-logs', nargs='?', const='both', type=LogOutputConfig)
