@@ -14,8 +14,11 @@
 
 from unittest.mock import Mock
 
+import pytest
+
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
+from hathor.consensus.consensus_settings import PoaSettings
 from hathor.consensus.poa import PoaBlockProducer
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.manager import HathorManager
@@ -145,13 +148,46 @@ def test_poa_block_producer_two_signers() -> None:
     reactor.advance(9)
 
     # we produce our third block
-    reactor.advance(1 + 2)  # TODO: We have to consider the random factor, but it'll be removed.
+    reactor.advance(2)
     manager.on_new_tx.assert_called_once()
     block3 = manager.on_new_tx.call_args.args[0]
     assert isinstance(block3, PoaBlock)
-    # TODO: We have to consider the random factor, but it'll be removed.
-    assert block3.timestamp in (block2.timestamp + 10, block2.timestamp + 11, block2.timestamp + 12)
+    assert block3.timestamp == block2.timestamp + 11
     assert block3.weight == poa.BLOCK_WEIGHT_OUT_OF_TURN
     assert block3.outputs == []
     assert block3.get_block_parent_hash() == block2.hash
     manager.on_new_tx.reset_mock()
+
+
+@pytest.mark.parametrize(
+    ['previous_height', 'signer_index', 'expected_delay'],
+    [
+        (0, 0, 33),
+        (0, 1, 30),
+        (0, 2, 31),
+        (0, 3, 32),
+
+        (1, 0, 32),
+        (1, 1, 33),
+        (1, 2, 30),
+        (1, 3, 31),
+    ]
+)
+def test_expected_block_timestamp(previous_height: int, signer_index: int, expected_delay: int) -> None:
+    signers = [get_signer(), get_signer(), get_signer(), get_signer()]
+    keys_and_signers = sorted(
+        (get_public_key_bytes_compressed(signer.get_public_key()), signer)
+        for signer in signers
+    )
+    signer = keys_and_signers[signer_index][1]
+    settings = Mock()
+    settings.CONSENSUS_ALGORITHM = PoaSettings(signers=tuple([x[0] for x in keys_and_signers]))
+    settings.AVG_TIME_BETWEEN_BLOCKS = 30
+    producer = PoaBlockProducer(settings=settings, reactor=Mock(), poa_signer=signer)
+    previous_block = Mock()
+    previous_block.timestamp = 100
+    previous_block.get_height = Mock(return_value=previous_height)
+
+    result = producer._expected_block_timestamp(previous_block)
+
+    assert result == previous_block.timestamp + expected_delay

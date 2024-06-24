@@ -5,7 +5,7 @@ from .poa import (
     calculate_weight,
     get_hashed_poa_data,
     get_signer_index_and_public_key,
-    is_in_turn,
+    in_turn_signer_index,
 )
 from .poa_block_producer import PoaBlockProducer
 from .poa_signer import PoaSigner, PoaSignerFile
@@ -15,7 +15,7 @@ __all__ = [
     'BLOCK_WEIGHT_OUT_OF_TURN',
     'SIGNER_ID_LEN',
     'get_hashed_poa_data',
-    'is_in_turn',
+    'in_turn_signer_index',
     'calculate_weight',
     'PoaBlockProducer',
     'PoaSigner',
