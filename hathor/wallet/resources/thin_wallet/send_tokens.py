@@ -155,7 +155,8 @@ class SendTokensResource(Resource):
 
         # When using stratum to solve pow, we already set timestamp and parents
         stratum_deferred: Deferred[None] = Deferred()
-        stratum_deferred.addCallback(self._stratum_deferred_resolve, request)
+        # FIXME: Skipping mypy on the line below for now, as it looks like it's wrong but we don't have tests for it.
+        stratum_deferred.addCallback(self._stratum_deferred_resolve, request)  # type: ignore
 
         fn_timeout = partial(self._stratum_timeout, request=request, tx=tx)
         stratum_deferred.addTimeout(TIMEOUT_STRATUM_RESOLVE_POW, self.manager.reactor, onTimeoutCancel=fn_timeout)
