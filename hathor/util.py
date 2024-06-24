@@ -78,7 +78,7 @@ def deprecated(msg: str) -> Callable[..., Any]:
             #               category=DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
 
-        wrapper.__deprecated = func  # type: ignore
+        wrapper.__deprecated = func  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
@@ -682,7 +682,7 @@ class sorted_merger(Iterator[T]):
             raise StopIteration
         cmp = max if self._reverse else min
         # XXX: this line bellow is correct, but it's just really hard to convince mypy of that, ignoring for now
-        best_it = cmp(self._iterators, key=lambda it: self._key(it.peek()))  # type: ignore
+        best_it = cmp(self._iterators, key=lambda it: self._key(it.peek()))  # type: ignore[arg-type, return-value]
         return next(best_it)
 
 
