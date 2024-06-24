@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
-from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import iter_spent_rewards
 from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
@@ -30,8 +29,6 @@ from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
-
-cpu = get_cpu_profiler()
 
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
 _FUNDS_FORMAT_STRING = '!BBBBB'
