@@ -26,7 +26,7 @@ from twisted.web.client import Agent
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.netfilter.factory import NetfilterFactory
-from hathor.p2p.peer_discovery import PeerDiscovery
+from hathor.p2p.peer_discovery import PeerDiscovery, StoragePeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
@@ -153,6 +153,9 @@ class ConnectionsManager:
         # List of known peers.
         self.peer_storage = PeerStorage()  # dict[string (peer.id), PeerId]
 
+        # List of known peers that persist across reboot
+        self.persistent_peer_storage: StoragePeerDiscovery | None = None
+
         # Maximum unseen time before removing a peer (seconds).
         self.max_peer_unseen_dt: float = 30 * 60   # 30-minutes
 
@@ -250,6 +253,13 @@ class ConnectionsManager:
     def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
         """Add a peer discovery method."""
         self.peer_discoveries.append(peer_discovery)
+
+    def set_persistent_peer_storage(self, persistent_peer_storage: StoragePeerDiscovery) -> None:
+        """Set the persistent peer storage instance, cannot be set twice."""
+        if self.persistent_peer_storage is not None:
+            raise ValueError('persistent_peer_storage is already set')
+        self.persistent_peer_storage = persistent_peer_storage
+        self.peer_discoveries.append(self.persistent_peer_storage)
 
     def do_discovery(self) -> None:
         """
@@ -390,6 +400,9 @@ class ConnectionsManager:
         assert protocol.peer is not None
         protocol.peer = self.peer_storage.add_or_merge(protocol.peer)
         assert protocol.peer.id is not None
+
+        if self.persistent_peer_storage is not None:
+            self.persistent_peer_storage.add_connected(protocol.peer, int(self.reactor.seconds()))
 
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
@@ -605,6 +618,9 @@ class ConnectionsManager:
                 self.log.debug('skipping because we are already connecting to this endpoint', endpoint=description)
                 return
 
+        if peer is not None and self.persistent_peer_storage is not None:
+            self.persistent_peer_storage.mark_try_to_connect(peer, int(self.reactor.seconds()))
+
         if use_ssl is None:
             use_ssl = self.use_ssl
         connection_string, peer_id = description_to_connection_string(description)
@@ -748,6 +764,11 @@ class ConnectionsManager:
             self._sync_rotate_if_needed()
         except Exception:
             self.log.error('_sync_rotate_if_needed failed', exc_info=True)
+        if self.persistent_peer_storage is not None:
+            try:
+                self.persistent_peer_storage.run_cleanup(int(self.reactor.seconds()))
+            except Exception:
+                self.log.error('persistent peer storage cleanup failed', exc_info=True)
 
     def set_always_enable_sync(self, values: list[str]) -> None:
         """Set a new list of peers to always enable sync. This operation completely replaces the previous list."""

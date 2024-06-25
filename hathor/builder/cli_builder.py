@@ -77,7 +77,7 @@ class CliBuilder:
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
-        from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
+        from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery, StoragePeerDiscovery
         from hathor.storage import RocksDBStorage
         from hathor.transaction.storage import (
             TransactionCacheStorage,
@@ -298,6 +298,10 @@ class CliBuilder:
             rng=Random(),
         )
         SyncSupportLevel.add_factories(p2p_manager, sync_v1_support, sync_v2_support)
+
+        if not self._args.memory_storage:
+            assert self.rocksdb_storage is not None
+            p2p_manager.set_persistent_peer_storage(StoragePeerDiscovery(self.rocksdb_storage))
 
         vertex_handler = VertexHandler(
             reactor=reactor,
