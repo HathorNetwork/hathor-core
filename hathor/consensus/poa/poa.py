@@ -37,9 +37,23 @@ def get_hashed_poa_data(block: PoaBlock) -> bytes:
     return hashed_poa_data
 
 
+def get_active_signers(settings: PoaSettings, height: int) -> list[bytes]:
+    """Return a list of signers that are currently active considering the given block height."""
+    active_signers = []
+    for signer_settings in settings.signers:
+        start_height = float('-inf') if signer_settings.start_height is None else signer_settings.start_height
+        end_height = float('inf') if signer_settings.end_height is None else signer_settings.end_height
+
+        if start_height <= height <= end_height:
+            active_signers.append(signer_settings.public_key)
+
+    return active_signers
+
+
 def in_turn_signer_index(settings: PoaSettings, height: int) -> int:
     """Return the signer index that is in turn for the given height."""
-    return height % len(settings.signers)
+    active_signers = get_active_signers(settings, height)
+    return height % len(active_signers)
 
 
 def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) -> float:
@@ -48,13 +62,14 @@ def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) 
     return BLOCK_WEIGHT_IN_TURN if expected_index == signer_index else BLOCK_WEIGHT_OUT_OF_TURN
 
 
-def get_signer_index_and_public_key(settings: PoaSettings, signer_id: bytes) -> tuple[int, bytes] | None:
+def get_signer_index_and_public_key(settings: PoaSettings, block: PoaBlock) -> tuple[int, bytes] | None:
     """Given a `signer_id`, return its signer index and public key bytes. Return `None` if not found."""
     from hathor.consensus.poa import PoaSigner
-    sorted_signers = sorted(settings.signers)
+    active_signers = get_active_signers(settings, block.get_height())
+    sorted_signers = sorted(active_signers)
 
     for i, public_key_bytes in enumerate(sorted_signers):
-        if signer_id == PoaSigner.get_poa_signer_id(public_key_bytes):
+        if block.signer_id == PoaSigner.get_poa_signer_id(public_key_bytes):
             return i, public_key_bytes
 
     return None

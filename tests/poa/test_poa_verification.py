@@ -16,7 +16,7 @@ from unittest.mock import Mock, patch
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.consensus.consensus_settings import ConsensusType, PoaSettings
+from hathor.consensus.consensus_settings import ConsensusType, PoaSettings, PoaSignerSettings
 from hathor.consensus.poa import PoaSigner
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.transaction.poa import PoaBlock
@@ -43,7 +43,7 @@ class BasePoaVerificationTest(unittest.TestCase):
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
             CONSENSUS_ALGORITHM=PoaSettings(
                 type=ConsensusType.PROOF_OF_AUTHORITY,
-                signers=(public_key_bytes,),
+                signers=(PoaSignerSettings(public_key=public_key_bytes),),
             ),
         )
 
