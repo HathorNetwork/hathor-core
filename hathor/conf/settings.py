@@ -436,6 +436,12 @@ class HathorSettings(NamedTuple):
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, 'str'] = {}
 
+    # Nano Contract: Maximum length when serializing each argument (in bytes)
+    NC_MAX_LENGTH_SERIALIZED_ARG: int = 1000
+
+    # Identifier used in metadata's voided_by when a Nano Contract method fails.
+    NC_EXECUTION_FAIL_ID: bytes = b'nc-fail'
+
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""

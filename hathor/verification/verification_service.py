@@ -14,6 +14,7 @@
 
 from typing_extensions import assert_never
 
+from hathor.nanocontracts import NanoContract
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -96,6 +97,9 @@ class VerificationService:
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_basic_token_creation_tx(vertex)
+            case TxVersion.NANO_CONTRACT:
+                assert type(vertex) is NanoContract
+                self._verify_basic_nano_contract(vertex)
             case _:
                 assert_never(vertex.version)
 
@@ -120,6 +124,9 @@ class VerificationService:
     def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_basic_tx(tx)
 
+    def _verify_basic_nano_contract(self, tx: NanoContract) -> None:
+        self._verify_basic_tx(tx)
+
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
 
@@ -138,6 +145,9 @@ class VerificationService:
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_token_creation_tx(vertex, reject_locked_reward=reject_locked_reward)
+            case TxVersion.NANO_CONTRACT:
+                assert type(vertex) is NanoContract
+                self._verify_nano_contract(vertex, reject_locked_reward=reject_locked_reward)
             case _:
                 assert_never(vertex.version)
 
@@ -168,6 +178,14 @@ class VerificationService:
     def _verify_merge_mined_block(self, block: MergeMinedBlock) -> None:
         self._verify_block(block)
 
+    def _verify_common_tx(self, tx: Transaction) -> None:
+        """Common verifications for `Transaction` class and its subclasses, except the verify_reward_locked().
+        """
+        self.verify_without_storage(tx)
+        self.verifiers.tx.verify_sigops_input(tx)
+        self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
+        self.verifiers.vertex.verify_parents(tx)
+
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
     def _verify_tx(
         self,
@@ -190,10 +208,7 @@ class VerificationService:
         if tx.is_genesis:
             # TODO do genesis validation
             return
-        self.verify_without_storage(tx)
-        self.verifiers.tx.verify_sigops_input(tx)
-        self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
-        self.verifiers.vertex.verify_parents(tx)
+        self._verify_common_tx(tx)
         self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
@@ -207,6 +222,15 @@ class VerificationService:
         self._verify_tx(tx, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
         self.verifiers.token_creation_tx.verify_token_info(tx)
+
+    def _verify_nano_contract(self, tx: NanoContract, *, reject_locked_reward: bool) -> None:
+        """Add `verify_no_authorities()` to the transaction verification."""
+        self._verify_common_tx(tx)
+        self.verifiers.nano_contract.verify_nc_id(tx)
+        self.verifiers.nano_contract.verify_nc_method_and_args(tx)
+        self.verifiers.nano_contract.verify_no_authorities(tx)
+        if reject_locked_reward:
+            self.verifiers.tx.verify_reward_locked(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
@@ -223,6 +247,9 @@ class VerificationService:
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_without_storage_token_creation_tx(vertex)
+            case TxVersion.NANO_CONTRACT:
+                assert type(vertex) is NanoContract
+                self._verify_without_storage_nano_contract(vertex)
             case _:
                 assert_never(vertex.version)
 
@@ -251,3 +278,7 @@ class VerificationService:
 
     def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_without_storage_tx(tx)
+
+    def _verify_without_storage_nano_contract(self, tx: NanoContract) -> None:
+        self._verify_without_storage_tx(tx)
+        self.verifiers.nano_contract.verify_nc_signature(tx)
