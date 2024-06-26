@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.consensus import poa
-from hathor.consensus.consensus_settings import ConsensusType, PoaSettings
+from hathor.consensus.consensus_settings import ConsensusType, PoaSettings, PoaSignerSettings
 from hathor.consensus.poa import PoaSigner
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_bytes_compressed
 from hathor.manager import HathorManager
@@ -215,7 +215,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         self.simulator.run(30)
 
         assert manager1.tx_storage.get_block_count() == 23
-        assert manager2.tx_storage.get_block_count() == 24
+        assert manager2.tx_storage.get_block_count() == 23
         assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()
 
         _assert_height_weight_signer_id(
@@ -303,12 +303,17 @@ class BasePoaSimulationTest(SimulatorTestCase):
             ]
         )
 
-    @pytest.mark.xfail(strict=True, reason='adding a new signer is currently unimplemented')
     def test_new_signer_added(self) -> None:
         signers = get_signer(), get_signer()
-        signer1, signer2 = sorted(signers, key=lambda signer: get_public_key_bytes_compressed(signer.get_public_key()))
+        key_and_signer1, key_and_signer2 = sorted(
+            (get_public_key_bytes_compressed(signer.get_public_key()), signer) for signer in signers
+        )
+        key1, signer1 = key_and_signer1
+        key2, signer2 = key_and_signer2
+        signer_settings1 = PoaSignerSettings(public_key=key1)
+        signer_settings2 = PoaSignerSettings(public_key=key2, start_height=6, end_height=13)
         signer_id1 = signer1._signer_id
-        self.simulator.settings = get_settings(signer1, time_between_blocks=10)
+        self.simulator.settings = get_settings(signer_settings1, time_between_blocks=10)
 
         builder_1a = self.simulator.get_default_builder() \
             .set_poa_signer(signer1)
@@ -333,7 +338,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
         # we stop the network and add a new signer to the settings
         manager_1a.stop()
-        self.simulator.settings = get_settings(signer1, signer2, time_between_blocks=10)
+        self.simulator.settings = get_settings(signer_settings1, signer_settings2, time_between_blocks=10)
 
         builder_1b = self.simulator.get_default_builder() \
             .set_tx_storage(storage_1a) \
@@ -344,7 +349,6 @@ class BasePoaSimulationTest(SimulatorTestCase):
         manager_1b.allow_mining_without_peers()
 
         self.simulator.run(80)
-        manager_1b.stop()
         assert manager_1b.tx_storage.get_block_count() == 11
 
         # after we restart it, new blocks are alternating
@@ -365,11 +369,11 @@ class BasePoaSimulationTest(SimulatorTestCase):
         )
 
         # we add a non-producer
-        manager_2 = self._get_manager(signer2)
+        manager_2 = self._get_manager()
 
         connection = FakeConnection(manager_1b, manager_2)
         self.simulator.add_connection(connection)
-        self.simulator.run(60)
+        self.simulator.run(40)
 
         # it should sync to the same blockchain
         _assert_height_weight_signer_id(
@@ -385,6 +389,11 @@ class BasePoaSimulationTest(SimulatorTestCase):
                 (8, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
                 (9, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
                 (10, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+                (11, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
+                (12, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+                (13, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
+                (14, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+                (15, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
             ]
         )
 
@@ -410,7 +419,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
             CONSENSUS_ALGORITHM=PoaSettings(
                 type=ConsensusType.PROOF_OF_AUTHORITY,
-                signers=(public_key_bytes,),
+                signers=(PoaSignerSettings(public_key=public_key_bytes),),
             ),
         )
 

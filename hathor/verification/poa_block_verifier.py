@@ -46,7 +46,7 @@ class PoaBlockVerifier:
             raise PoaValidationError('blocks must not have rewards in a PoA network')
 
         # validate that the signature is valid
-        signer = poa.get_signer_index_and_public_key(poa_settings, block.signer_id)
+        signer = poa.get_signer_index_and_public_key(poa_settings, block)
         if signer is None:
             raise PoaValidationError('invalid PoA signature')
 

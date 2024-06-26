@@ -3,6 +3,7 @@ from .poa import (
     BLOCK_WEIGHT_OUT_OF_TURN,
     SIGNER_ID_LEN,
     calculate_weight,
+    get_active_signers,
     get_hashed_poa_data,
     get_signer_index_and_public_key,
     in_turn_signer_index,
@@ -21,4 +22,5 @@ __all__ = [
     'PoaSigner',
     'PoaSignerFile',
     'get_signer_index_and_public_key',
+    'get_active_signers',
 ]

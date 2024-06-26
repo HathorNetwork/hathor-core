@@ -91,7 +91,7 @@ class PoaBlock(Block):
         poa_settings = self._settings.CONSENSUS_ALGORITHM
         assert isinstance(poa_settings, PoaSettings)
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
-        index_and_key = poa.get_signer_index_and_public_key(poa_settings, self.signer_id)
+        index_and_key = poa.get_signer_index_and_public_key(poa_settings, self)
 
         if index_and_key is not None:
             _, signer = index_and_key

@@ -173,7 +173,12 @@ def test_consensus_algorithm() -> None:
         HathorSettings.from_yaml(filepath='some_path')
 
         # Test fails when PoA is enabled with default settings
-        mock_settings(dict(CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',))))
+        mock_settings(dict(
+            CONSENSUS_ALGORITHM=dict(
+                type='PROOF_OF_AUTHORITY',
+                signers=(dict(public_key=b'some_signer'),)
+            )
+        ))
         with pytest.raises(ValidationError) as e:
             HathorSettings.from_yaml(filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
@@ -183,7 +188,7 @@ def test_consensus_algorithm() -> None:
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_UNITS_PER_BLOCK=0,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',)),
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         HathorSettings.from_yaml(filepath='some_path')
 
@@ -203,7 +208,7 @@ def test_consensus_algorithm() -> None:
             BLOCKS_PER_HALVING=123,
             INITIAL_TOKEN_UNITS_PER_BLOCK=0,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',)),
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
             HathorSettings.from_yaml(filepath='some_path')
@@ -214,7 +219,7 @@ def test_consensus_algorithm() -> None:
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_UNITS_PER_BLOCK=123,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',)),
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
             HathorSettings.from_yaml(filepath='some_path')
@@ -225,7 +230,7 @@ def test_consensus_algorithm() -> None:
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_UNITS_PER_BLOCK=0,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=123,
-            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(b'some_signer',)),
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
             HathorSettings.from_yaml(filepath='some_path')
