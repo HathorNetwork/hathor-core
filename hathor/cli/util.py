@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import json
 import sys
 import traceback
@@ -138,7 +137,7 @@ class LoggingOptions(NamedTuple):
 
 def process_logging_output(argv: list[str]) -> LoggingOutput:
     """Extract logging output before argv parsing."""
-    parser = argparse.ArgumentParser()
+    parser = create_parser()
 
     log_args = parser.add_mutually_exclusive_group()
     log_args.add_argument('--json-logs', action='store_true')
@@ -159,7 +158,7 @@ def process_logging_output(argv: list[str]) -> LoggingOutput:
 
 def process_logging_options(argv: list[str]) -> LoggingOptions:
     """Extract logging-specific options that are processed before argv parsing."""
-    parser = argparse.ArgumentParser()
+    parser = create_parser()
     parser.add_argument('--debug', action='store_true')
 
     args, remaining_argv = parser.parse_known_args(argv)

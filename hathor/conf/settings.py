@@ -440,6 +440,10 @@ class HathorSettings(NamedTuple):
     # The consensus algorithm protocol settings.
     CONSENSUS_ALGORITHM: ConsensusSettings = PowSettings()
 
+    # The name and symbol of the native token. This is only used in APIs to serve clients.
+    NATIVE_TOKEN_NAME: str = 'Hathor'
+    NATIVE_TOKEN_SYMBOL: str = 'HTR'
+
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""
