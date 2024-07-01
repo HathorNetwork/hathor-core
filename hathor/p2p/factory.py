@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Optional
 from twisted.internet import protocol
 from twisted.internet.interfaces import IAddress
 
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorLineReceiver
@@ -36,14 +37,16 @@ class HathorServerFactory(protocol.ServerFactory):
     protocol: type[MyServerProtocol] = MyServerProtocol
 
     def __init__(
-            self,
-            network: str,
-            my_peer: PeerId,
-            p2p_manager: ConnectionsManager,
-            *,
-            use_ssl: bool,
+        self,
+        network: str,
+        my_peer: PeerId,
+        p2p_manager: ConnectionsManager,
+        *,
+        settings: HathorSettings,
+        use_ssl: bool,
     ):
         super().__init__()
+        self._settings = settings
         self.network = network
         self.my_peer = my_peer
         self.p2p_manager = p2p_manager
@@ -57,6 +60,7 @@ class HathorServerFactory(protocol.ServerFactory):
             p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
             inbound=True,
+            settings=self._settings
         )
         p.factory = self
         return p
@@ -69,14 +73,16 @@ class HathorClientFactory(protocol.ClientFactory):
     protocol: type[MyClientProtocol] = MyClientProtocol
 
     def __init__(
-            self,
-            network: str,
-            my_peer: PeerId,
-            p2p_manager: ConnectionsManager,
-            *,
-            use_ssl: bool,
+        self,
+        network: str,
+        my_peer: PeerId,
+        p2p_manager: ConnectionsManager,
+        *,
+        settings: HathorSettings,
+        use_ssl: bool,
     ):
         super().__init__()
+        self._settings = settings
         self.network = network
         self.my_peer = my_peer
         self.p2p_manager = p2p_manager
@@ -90,6 +96,7 @@ class HathorClientFactory(protocol.ClientFactory):
             p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
             inbound=False,
+            settings=self._settings
         )
         p.factory = self
         return p

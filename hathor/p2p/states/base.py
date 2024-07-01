@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred
 
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 
 if TYPE_CHECKING:
@@ -33,8 +34,9 @@ class BaseState:
         Callable[[str], None] | Callable[[str], Deferred[None]] | Callable[[str], Coroutine[Deferred[None], Any, None]]
     ]
 
-    def __init__(self, protocol: 'HathorProtocol'):
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings):
         self.log = logger.new(**protocol.get_logger_context())
+        self._settings = settings
         self.protocol = protocol
         self.cmd_map = {
             ProtocolMessages.ERROR: self.handle_error,
