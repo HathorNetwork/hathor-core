@@ -94,6 +94,20 @@ class BasePoaSimulationTest(SimulatorTestCase):
         assert manager1.tx_storage.get_block_count() == 1
         assert manager2.tx_storage.get_block_count() == 1
 
+    def test_different_signer_settings(self) -> None:
+        signer1, signer2 = get_signer(), get_signer()
+        self.simulator.settings = get_settings(signer1)
+        manager1 = self._get_manager()
+        self.simulator.settings = get_settings(signer2)
+        manager2 = self._get_manager()
+
+        connection = FakeConnection(manager1, manager2)
+        self.simulator.add_connection(connection)
+
+        connection.run_one_step()
+        assert b'ERROR Settings values are different' in connection.peek_tr1_value()
+        assert connection.tr1.disconnecting
+
     def test_one_producer_allowed(self) -> None:
         signer = get_signer()
         signer_id = signer._signer_id
