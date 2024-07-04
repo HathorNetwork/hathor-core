@@ -24,6 +24,7 @@ from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
@@ -82,8 +83,7 @@ class HathorProtocol:
     state: Optional[BaseState]
     connection_time: float
     _state_instances: dict[PeerState, BaseState]
-    connection_string: Optional[str]
-    expected_peer_id: Optional[str]
+    entrypoint: Optional[Entrypoint]
     warning_flags: set[str]
     aborting: bool
     diff_timestamp: Optional[int]
@@ -138,7 +138,7 @@ class HathorProtocol:
 
         # Connection string of the peer
         # Used to validate if entrypoints has this string
-        self.connection_string: Optional[str] = None
+        self.entrypoint: Optional[Entrypoint] = None
 
         # Peer id sent in the connection url that is expected to connect (optional)
         self.expected_peer_id: Optional[str] = None
@@ -243,17 +243,10 @@ class HathorProtocol:
         if self.connections:
             self.connections.on_peer_connect(self)
 
-    def on_outbound_connect(self, url_peer_id: Optional[str], connection_string: str) -> None:
+    def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
-        if url_peer_id:
-            # Set in protocol the peer id extracted from the URL that must be validated
-            self.expected_peer_id = url_peer_id
-        else:
-            # Add warning flag
-            self.warning_flags.add(self.WarningFlags.NO_PEER_ID_URL)
-
-        # Setting connection string in protocol, so we can validate it matches the entrypoints data
-        self.connection_string = connection_string
+        # Save the used entrypoint in protocol so we can validate that it matches the entrypoints data
+        self.entrypoint = entrypoint
 
     def on_peer_ready(self) -> None:
         assert self.connections is not None
