@@ -70,7 +70,9 @@ def initialize_global_reactor(*, use_asyncio_reactor: bool = False) -> ReactorPr
             msg = (
                 "There's a Twisted reactor installed already. It's probably the default one, installed indirectly by "
                 "one of our imports. This can happen, for example, if we import from the hathor module in "
-                "entrypoint-level, like in CLI tools other than `RunNode`."
+                "entrypoint-level, like in CLI tools other than `RunNode`. Debug it by setting a breakpoint in "
+                "`installReactor()` in the `twisted/internet/main.py` file."
+
             )
             raise Exception(msg) from e
 

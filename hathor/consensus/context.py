@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
-from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction import BaseTransaction, Block
 
@@ -26,7 +25,6 @@ if TYPE_CHECKING:
     from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithm
 
 logger = get_logger()
-cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()
 

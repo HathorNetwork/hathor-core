@@ -73,7 +73,7 @@ class SimpleCPUProfiler:
         self.proc_list: list[tuple[Key, ProcItem]] = []
 
         # Timer to call `self.update()` periodically.
-        self.lc_update = LoopingCall(self.update)
+        self.lc_update: LoopingCall | None = None
 
         # Interval to update the list of processes.
         self.update_interval = update_interval
@@ -102,6 +102,7 @@ class SimpleCPUProfiler:
             return
         self.reset()
         self.enabled = True
+        self.lc_update = LoopingCall(self.update)
         self.lc_update.start(self.update_interval)
 
     def stop(self) -> None:
@@ -109,6 +110,7 @@ class SimpleCPUProfiler:
         if not self.enabled:
             return
         self.enabled = False
+        assert self.lc_update is not None
         self.lc_update.stop()
 
     def get_proc_list(self) -> list[tuple[Key, ProcItem]]:
