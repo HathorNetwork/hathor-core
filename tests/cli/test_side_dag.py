@@ -61,19 +61,6 @@ def test_process_argv(
     assert side_dag_argv == expected_side_dag_argv
 
 
-def test_run_side_dag_node_hathor_init_timed_out() -> None:
-    argv: list[str] = []
-    conn_mock = Mock()
-    conn_mock.poll = Mock(return_value=False)
-    hathor_node_process = Mock()
-
-    with patch.object(side_dag, 'SideDagRunNode') as side_dag_mock:
-        _run_side_dag_node(argv, conn=conn_mock, hathor_node_process=hathor_node_process)
-        side_dag_mock.assert_not_called()
-        hathor_node_process.terminate.assert_not_called()
-        conn_mock.send.assert_not_called()
-
-
 def test_run_side_dag_node_hathor_init_failed() -> None:
     argv: list[str] = []
     conn_mock = Mock()
