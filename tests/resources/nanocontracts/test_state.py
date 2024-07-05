@@ -12,6 +12,7 @@ from hathor.nanocontracts import Blueprint, Context, NanoContract, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractStateResource
+from hathor.simulator.utils import add_new_block
 from hathor.transaction import TxInput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -179,7 +180,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(self.manager.on_new_tx(nc, fails_silently=False))
         nc_storage = self.manager.consensus_algorithm.nc_storage_factory(nc.hash)
         # Execute the nano contract
-        nc.execute(nc_storage)
+        add_new_block(self.manager)
 
         response1 = yield self.web.get(
             'state', [

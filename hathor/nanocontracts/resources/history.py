@@ -18,7 +18,11 @@ from pydantic import Field
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.nanocontracts.exception import NCContractCreationNotFound
+from hathor.nanocontracts.exception import (
+    NCContractCreationAtMempool,
+    NCContractCreationNotFound,
+    NCContractCreationVoided,
+)
 from hathor.nanocontracts.utils import get_nano_contract_creation
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -73,6 +77,14 @@ class NanoContractHistoryResource(Resource):
         except NCContractCreationNotFound:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')
+            return error_response.json_dumpb()
+        except NCContractCreationAtMempool:
+            request.setResponseCode(404)
+            error_response = ErrorResponse(success=False, error=f'Nano contract at mempool: {params.id}')
+            return error_response.json_dumpb()
+        except NCContractCreationVoided:
+            request.setResponseCode(204)
+            error_response = ErrorResponse(success=False, error=f'Nano contract failed execution: {params.id}')
             return error_response.json_dumpb()
 
         if params.after:

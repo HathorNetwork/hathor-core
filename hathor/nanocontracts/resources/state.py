@@ -21,7 +21,12 @@ from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_arg
-from hathor.nanocontracts.exception import NCContractCreationNotFound, NCMethodNotFound
+from hathor.nanocontracts.exception import (
+    NCContractCreationAtMempool,
+    NCContractCreationNotFound,
+    NCContractCreationVoided,
+    NCMethodNotFound,
+)
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.nanocontract import NanoContract
 from hathor.nanocontracts.utils import get_nano_contract_creation
@@ -66,6 +71,14 @@ class NanoContractStateResource(Resource):
         except NCContractCreationNotFound:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')
+            return error_response.json_dumpb()
+        except NCContractCreationAtMempool:
+            request.setResponseCode(204)
+            error_response = ErrorResponse(success=False, error=f'Nano contract at mempool: {params.id}')
+            return error_response.json_dumpb()
+        except NCContractCreationVoided:
+            request.setResponseCode(204)
+            error_response = ErrorResponse(success=False, error=f'Nano contract failed execution: {params.id}')
             return error_response.json_dumpb()
 
         nc_storage = self.manager.consensus_algorithm.nc_storage_factory(nc_id_bytes)

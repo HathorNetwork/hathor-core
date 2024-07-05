@@ -87,4 +87,21 @@ class UnknownFieldType(NCError):
 
 
 class NCContractCreationNotFound(NCError):
+    """Raised when a nano contract creation transaction is not found.
+
+    This error might also happen when the transaction is at the mempool or when it fails execution."""
+    pass
+
+
+class NCContractCreationAtMempool(NCContractCreationNotFound):
+    """Raised when a nano contract creation transaction is at the mempool, so it has not been
+    executed yet."""
+    pass
+
+
+class NCContractCreationVoided(NCContractCreationNotFound):
+    """Raised when a nano contract creation transaction is voided.
+
+    The two most common reasons to have a voided transaction is because it was voided by
+    another transaction (e.g., double spending) or it has failed execution."""
     pass

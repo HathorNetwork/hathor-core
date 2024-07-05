@@ -10,6 +10,7 @@ from hathor.nanocontracts import Blueprint, Context, NanoContract, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractHistoryResource
+from hathor.simulator.utils import add_new_block
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
@@ -129,6 +130,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         )
         self._fill_nc(nc, self.blueprint_id, 'initialize', [0], self.genesis_private_key)
         self.assertTrue(self.manager.on_new_tx(nc, fails_silently=False))
+        add_new_block(self.manager)
         return nc
 
     @inlineCallbacks
@@ -163,6 +165,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         )
         self._fill_nc(tx1, nc1.hash, 'set_a', [1], self.genesis_private_key)
         self.assertTrue(self.manager.on_new_tx(tx1, fails_silently=False))
+        add_new_block(self.manager)
 
         # Check both transactions belongs to nc1 history.
         response2 = yield self.web.get(
