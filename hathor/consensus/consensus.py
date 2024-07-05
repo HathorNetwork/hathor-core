@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import TYPE_CHECKING
+
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
@@ -23,6 +25,9 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 from hathor.util import not_none
+
+if TYPE_CHECKING:
+    from hathor.nanocontracts import NCStorageFactory
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -58,6 +63,7 @@ class ConsensusAlgorithm:
 
     def __init__(
         self,
+        nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
         *,
@@ -66,6 +72,7 @@ class ConsensusAlgorithm:
         self._settings = get_global_settings()
         self.log = logger.new()
         self._pubsub = pubsub
+        self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
@@ -155,6 +162,8 @@ class ConsensusAlgorithm:
             context.pubsub.publish(HathorEvents.REORG_FINISHED)
 
     def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+        voided_by = self._filter_out_nc_fail_entries(tx, voided_by)
+
         if not (self.soft_voided_tx_ids & voided_by):
             return voided_by
         ret = set()
@@ -162,6 +171,8 @@ class ConsensusAlgorithm:
             if h == self._settings.SOFT_VOIDED_ID:
                 continue
             if h == self._settings.CONSENSUS_FAIL_ID:
+                continue
+            if h == self._settings.NC_EXECUTION_FAIL_ID:
                 continue
             if h == tx.hash:
                 continue
@@ -173,6 +184,28 @@ class ConsensusAlgorithm:
             tx3_voided_by: set[bytes] = tx3_meta.voided_by or set()
             if not (self.soft_voided_tx_ids & tx3_voided_by):
                 ret.add(h)
+        return ret
+
+    def _filter_out_nc_fail_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+        ret = set(voided_by)
+        if self._settings.NC_EXECUTION_FAIL_ID in ret:
+            # If CONSENSUS_FAIL_ID is in voided_by, then tx.hash must be in voided_by.
+            ret.remove(self._settings.NC_EXECUTION_FAIL_ID)
+            ret.remove(tx.hash)
+        for h in voided_by:
+            if h == self._settings.SOFT_VOIDED_ID:
+                continue
+            if h == self._settings.NC_EXECUTION_FAIL_ID:
+                continue
+            if h == tx.hash:
+                continue
+            assert tx.storage is not None
+            tx3 = tx.storage.get_transaction(h)
+            tx3_meta = tx3.get_metadata()
+            tx3_voided_by: set[bytes] = tx3_meta.voided_by or set()
+            if self._settings.NC_EXECUTION_FAIL_ID in tx3_voided_by:
+                ret.discard(h)
+        assert self._settings.NC_EXECUTION_FAIL_ID not in ret
         return ret
 
 

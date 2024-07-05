@@ -15,7 +15,7 @@
 import cgi
 from typing import Type, TypeVar, Union
 
-from pydantic import Field, ValidationError, validator
+from pydantic import Field, ValidationError
 from twisted.web.http import Request
 
 from hathor.api_util import get_args
@@ -31,7 +31,6 @@ class QueryParams(BaseModel):
     Subclass this class defining your query parameters as attributes and their respective types, then call the
     from_request() class method to instantiate your class from the provided request.
     """
-    _list_to_single_item_validator = validator('*', pre=True, allow_reuse=True)(single_or_none)
 
     @classmethod
     def from_request(cls: Type[T], request: Request) -> Union[T, 'ErrorResponse']:
@@ -43,10 +42,17 @@ class QueryParams(BaseModel):
             encoding = options.get('charset', encoding)
 
         raw_args = get_args(request).items()
-        args = {
-            key.decode(encoding): [value.decode(encoding) for value in values]
-            for key, values in raw_args
-        }
+        args: dict[str, str | None | list[str]] = {}
+        for key, values in raw_args:
+            decoded_key = key.decode(encoding)
+            decoded_values: list[str] = [value.decode(encoding) for value in values]
+            if not decoded_key.endswith('[]'):
+                try:
+                    args[decoded_key] = single_or_none(decoded_values)
+                except Exception as error:
+                    return ErrorResponse(error=str(error))
+            else:
+                args[decoded_key] = decoded_values
 
         try:
             return cls.parse_obj(args)
