@@ -35,7 +35,7 @@ from hathor.verification.poa_block_verifier import PoaBlockVerifier
 
 def test_calculate_feature_activation_bit_counts_genesis():
     settings = get_global_settings()
-    storage = TransactionMemoryStorage()
+    storage = TransactionMemoryStorage(settings=settings)
     genesis_block = storage.get_transaction(settings.GENESIS_BLOCK_HASH)
     assert isinstance(genesis_block, Block)
     result = genesis_block.get_feature_activation_bit_counts()

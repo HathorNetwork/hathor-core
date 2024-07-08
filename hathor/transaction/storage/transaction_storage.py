@@ -23,7 +23,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
@@ -104,8 +104,8 @@ class TransactionStorage(ABC):
 
     _migrations: list[BaseMigration]
 
-    def __init__(self) -> None:
-        self._settings = get_global_settings()
+    def __init__(self, *, settings: HathorSettings) -> None:
+        self._settings = settings
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -1165,8 +1165,14 @@ class TransactionStorage(ABC):
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]
 
-    def __init__(self, indexes: Optional[IndexesManager] = None, pubsub: Optional[Any] = None) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        indexes: Optional[IndexesManager] = None,
+        pubsub: Optional[Any] = None,
+        *,
+        settings: HathorSettings,
+    ) -> None:
+        super().__init__(settings=settings)
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub

@@ -253,7 +253,7 @@ class BaseStratumClientTest(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        storage = TransactionMemoryStorage()
+        storage = TransactionMemoryStorage(settings=self._settings)
         self.block = storage.get_transaction(self._settings.GENESIS_BLOCK_HASH)
         self.transport = StringTransportWithDisconnection()
         self.protocol = StratumClient(reactor=self.clock)

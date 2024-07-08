@@ -34,7 +34,7 @@ class GenesisTest(unittest.TestCase):
         self._daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
         verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa, feature_service=Mock())
         self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
-        self.storage = TransactionMemoryStorage()
+        self.storage = TransactionMemoryStorage(settings=settings)
 
     def test_pow(self):
         verifier = VertexVerifier(settings=self._settings)
