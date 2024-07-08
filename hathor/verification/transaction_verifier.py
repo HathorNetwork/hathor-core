@@ -63,6 +63,7 @@ class TransactionVerifier:
 
     def verify_weight(self, tx: Transaction) -> None:
         """Validate minimum tx difficulty."""
+        assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         min_tx_weight = self._daa.minimum_tx_weight(tx)
         max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
         if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:

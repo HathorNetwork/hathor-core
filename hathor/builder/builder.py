@@ -530,8 +530,9 @@ class Builder:
 
     def _get_or_create_verification_service(self) -> VerificationService:
         if self._verification_service is None:
+            settings = self._get_or_create_settings()
             verifiers = self._get_or_create_vertex_verifiers()
-            self._verification_service = VerificationService(verifiers=verifiers)
+            self._verification_service = VerificationService(settings=settings, verifiers=verifiers)
 
         return self._verification_service
 
