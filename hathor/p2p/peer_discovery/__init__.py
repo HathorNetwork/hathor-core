@@ -15,9 +15,11 @@
 from .bootstrap import BootstrapPeerDiscovery
 from .dns import DNSPeerDiscovery
 from .peer_discovery import PeerDiscovery
+from .storage import StoragePeerDiscovery
 
 __all__ = [
     'PeerDiscovery',
     'BootstrapPeerDiscovery',
     'DNSPeerDiscovery',
+    'StoragePeerDiscovery',
 ]
