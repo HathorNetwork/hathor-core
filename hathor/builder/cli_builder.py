@@ -127,7 +127,7 @@ class CliBuilder:
             self.check_or_raise(not self._args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             indexes = MemoryIndexesManager()
-            tx_storage = TransactionMemoryStorage(indexes)
+            tx_storage = TransactionMemoryStorage(indexes, settings=settings)
             event_storage = EventMemoryStorage()
             self.check_or_raise(not self._args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
@@ -150,14 +150,14 @@ class CliBuilder:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
                 kwargs['indexes'] = indexes
-            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage, **kwargs)
+            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage, settings=settings, **kwargs)
             event_storage = EventRocksDBStorage(self.rocksdb_storage)
             feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
         if self._args.cache:
             self.check_or_raise(not self._args.memory_storage, '--cache should not be used with --memory-storage')
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes)
+            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
             if self._args.cache_size:
                 tx_storage.capacity = self._args.cache_size
             if self._args.cache_interval:

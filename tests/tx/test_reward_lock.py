@@ -24,7 +24,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # this makes sure we can spend the genesis outputs
-        self.tx_storage = TransactionMemoryStorage()
+        self.tx_storage = TransactionMemoryStorage(settings=self._settings)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

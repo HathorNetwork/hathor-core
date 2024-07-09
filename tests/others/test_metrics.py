@@ -53,7 +53,7 @@ class BaseMetricsTest(unittest.TestCase):
            to update the Metrics class with info from ConnectionsManager class
         """
         # Preparation
-        tx_storage = TransactionMemoryStorage()
+        tx_storage = TransactionMemoryStorage(settings=self._settings)
         tmpdir = tempfile.mkdtemp()
         self.tmpdirs.append(tmpdir)
         wallet = Wallet(directory=tmpdir)
@@ -191,7 +191,7 @@ class BaseMetricsTest(unittest.TestCase):
            The expected result is that nothing is done, because we currently only collect
            data for RocksDB storage
         """
-        tx_storage = TransactionMemoryStorage()
+        tx_storage = TransactionMemoryStorage(settings=self._settings)
 
         # All
         manager = self.create_peer('testnet', tx_storage=tx_storage)
@@ -260,8 +260,8 @@ class BaseMetricsTest(unittest.TestCase):
             TransactionCacheStorage
         """
         # Preparation
-        base_storage = TransactionMemoryStorage()
-        tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None)
+        base_storage = TransactionMemoryStorage(settings=self._settings)
+        tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None, settings=self._settings)
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)
 

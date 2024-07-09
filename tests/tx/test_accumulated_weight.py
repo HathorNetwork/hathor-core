@@ -10,7 +10,7 @@ class BaseAccumulatedWeightTestCase(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.tx_storage = TransactionMemoryStorage()
+        self.tx_storage = TransactionMemoryStorage(settings=self._settings)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

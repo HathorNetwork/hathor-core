@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -43,7 +44,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     It uses Protobuf serialization internally.
     """
 
-    def __init__(self, rocksdb_storage: RocksDBStorage, indexes: Optional[IndexesManager] = None):
+    def __init__(
+        self,
+        rocksdb_storage: RocksDBStorage,
+        indexes: Optional[IndexesManager] = None,
+        *,
+        settings: HathorSettings,
+    ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
         self._cf_attr = rocksdb_storage.get_or_create_column_family(_CF_NAME_ATTR)
@@ -51,7 +58,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
         self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
-        super().__init__(indexes=indexes)
+        super().__init__(indexes=indexes, settings=settings)
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.base_transaction import tx_or_block_from_bytes

@@ -694,7 +694,7 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
 
         super().setUp()
         self.wallet = Wallet()
-        self.tx_storage = TransactionMemoryStorage()
+        self.tx_storage = TransactionMemoryStorage(settings=self._settings)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
@@ -724,7 +724,7 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         directory = tempfile.mkdtemp()
         self.tmpdirs.append(directory)
         rocksdb_storage = RocksDBStorage(path=directory)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage)
+        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage, settings=self._settings)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
