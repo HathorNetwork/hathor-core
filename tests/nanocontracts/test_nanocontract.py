@@ -273,6 +273,22 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.assertEqual(action2.type, NCActionType.DEPOSIT)
         self.assertEqual(action2.amount, 90)
 
+        def _to_frozenset(x: list[dict]) -> set[frozenset]:
+            return {frozenset(d.items()) for d in x}
+
+        expected_json_actions = [{
+            'type': 'withdrawal',
+            'token_uid': b'token-a'.hex(),
+            'amount': 50,
+        }, {
+            'type': 'deposit',
+            'token_uid': b'\0'.hex(),
+            'amount': 90,
+        }]
+        data = context.to_json()
+        json_actions = data['actions']
+        self.assertEqual(_to_frozenset(json_actions), _to_frozenset(expected_json_actions))
+
     def test_no_authorities(self):
         tx_storage = self.peer.tx_storage
 

@@ -310,6 +310,7 @@ class NanoContract(Transaction):
         json['nc_method'] = self.nc_method
         json['nc_args'] = self.nc_args_bytes.hex()
         json['nc_pubkey'] = self.nc_pubkey.hex()
+        json['nc_context'] = self.get_context().to_json()
         return json
 
     def to_json_extended(self) -> dict[str, Any]:

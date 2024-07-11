@@ -13,8 +13,9 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Callable, Generic, NamedTuple, TypeVar
+from typing import Any, Callable, Generic, NamedTuple, TypeVar
 
+from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCInvalidContext
 from hathor.transaction import BaseTransaction
 from hathor.types import Address
@@ -106,3 +107,15 @@ class Context:
 
         # Timestamp of the first block confirming tx.
         self.timestamp = timestamp
+
+    def to_json(self) -> dict[str, Any]:
+        """Return a JSON representation of the context."""
+        return {
+            'actions': [{
+                'type': action.type.value,
+                'token_uid': action.token_uid.hex(),
+                'amount': action.amount,
+            } for token_uid, action in self.actions.items()],
+            'address': get_address_b58_from_bytes(self.address),
+            'timestamp': self.timestamp,
+        }
