@@ -261,8 +261,11 @@ class ResourcesBuilder:
 
         # Websocket resource
         assert self.manager.tx_storage.indexes is not None
-        ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics,
+        ws_factory = HathorAdminWebsocketFactory(manager=self.manager,
+                                                 metrics=self.manager.metrics,
                                                  address_index=self.manager.tx_storage.indexes.addresses)
+        if self._args.disable_ws_history_streaming:
+            ws_factory.disable_history_streaming()
         ws_factory.start()
         root.putChild(b'ws', WebSocketResource(ws_factory))
 

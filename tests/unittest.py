@@ -118,6 +118,7 @@ class TestCase(unittest.TestCase):
         self.tmpdirs: list[str] = []
         self.clock = TestMemoryReactorClock()
         self.clock.advance(time.time())
+        self.reactor = self.clock
         self.log = logger.new()
         self.reset_peer_id_pool()
         self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config

@@ -22,7 +22,7 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, wallet_index=True)
 
-        self.factory = HathorAdminWebsocketFactory(self.manager.metrics)
+        self.factory = HathorAdminWebsocketFactory(self.manager, self.manager.metrics)
         self.factory.subscribe(self.manager.pubsub)
         self.factory._setup_rate_limit()
         self.factory.openHandshakeTimeout = 0

@@ -80,3 +80,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_ipython_kernel: bool
     nano_testnet: bool
     log_vertex_bytes: bool
+    disable_ws_history_streaming: bool

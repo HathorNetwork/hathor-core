@@ -155,6 +155,8 @@ class RunNode:
                             help='Launch embedded IPython kernel for remote debugging')
         parser.add_argument('--log-vertex-bytes', action='store_true',
                             help='Log tx bytes for debugging')
+        parser.add_argument('--disable-ws-history-streaming', action='store_true',
+                            help='Disable websocket history streaming API')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
