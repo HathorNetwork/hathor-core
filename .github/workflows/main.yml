@@ -63,26 +63,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Install Poetry
-        run: pipx install poetry
-      - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v4
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
         with:
-          python-version: ${{ matrix.python }}
-          cache: 'poetry'
-      - name: Install Ubuntu dependencies
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get -qy update
-          sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev
-      - name: Install macOS dependencies
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          brew cleanup -q
-          # brew update -q
-          brew install -q graphviz rocksdb pkg-config
-      - name: Install Poetry dependencies
-        run: poetry install -n --no-root
+          python: ${{ matrix.python }}
+          os: ${{ matrix.os }}
       - name: Cache mypy
         uses: actions/cache@v3
         with:
