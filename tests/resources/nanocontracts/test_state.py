@@ -115,7 +115,6 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
     def test_fail_invalid_id(self):
         response1 = yield self.web.get('state', {
             b'id': b'xxx',
-            b'fields[]': [],
         })
         self.assertEqual(400, response1.responseCode)
 
@@ -123,7 +122,6 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
     def test_fail_unknown_id(self):
         response1 = yield self.web.get('history', {
             b'id': b'0' * 32,
-            b'fields[]': [],
         })
         self.assertEqual(404, response1.responseCode)
 
@@ -131,7 +129,6 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
     def test_fail_not_contract_id(self):
         response1 = yield self.web.get('history', {
             b'id': self.genesis_txs[0].hash.hex().encode('ascii'),
-            b'fields[]': [],
         })
         self.assertEqual(404, response1.responseCode)
 
@@ -185,22 +182,21 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         nc.execute(nc_storage)
 
         response1 = yield self.web.get(
-            'state',
-            {
-                b'id': nc.hash.hex().encode('ascii'),
-                b'fields[]': [b'token_uid', b'total', b'date_last_bet'],
-                b'balances[]': [settings.HATHOR_TOKEN_UID.hex().encode('ascii')],
-                b'calls[]': [
-                    b'has_result()',
-                    b'unknown_method()',
-                    b'add(5, 12)',
-                    b'conditional_add([2, 4, null])',
-                    b'conditional_add([2, 4, "a\'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN\'"])',
-                    b'multiply([2, 5, 8, 10])',
-                    b'conditional_multiply_bytes([5, "01"])',
-                    b'conditional_multiply_bytes([3, null])',
-                ],
-            }
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'fields[]', b'total'),
+                (b'fields[]', b'date_last_bet'),
+                (b'balances[]', settings.HATHOR_TOKEN_UID.hex().encode('ascii')),
+                (b'calls[]', b'has_result()'),
+                (b'calls[]', b'unknown_method()'),
+                (b'calls[]', b'add(5, 12)'),
+                (b'calls[]', b'conditional_add([2, 4, null])'),
+                (b'calls[]', b'conditional_add([2, 4, "a\'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN\'"])'),
+                (b'calls[]', b'multiply([2, 5, 8, 10])'),
+                (b'calls[]', b'conditional_multiply_bytes([5, "01"])'),
+                (b'calls[]', b'conditional_multiply_bytes([3, null])'),
+             ]
         )
         data1 = response1.json_value()
         fields1 = data1['fields']
@@ -255,12 +251,14 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
 
         address_param = "address_details.a'{}'".format(address_b58)
         response2 = yield self.web.get(
-            'state',
-            {
-                b'id': nc.hash.hex().encode('ascii'),
-                b'fields[]': [b'token_uid', b'total', b'date_last_bet', address_param.encode()],
-                b'balances[]': [settings.HATHOR_TOKEN_UID.hex().encode('ascii')],
-            }
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'fields[]', b'total'),
+                (b'fields[]', b'date_last_bet'),
+                (b'fields[]', address_param.encode()),
+                (b'balances[]', settings.HATHOR_TOKEN_UID.hex().encode('ascii')),
+            ]
         )
         data2 = response2.json_value()
         fields2 = data2['fields']
@@ -278,7 +276,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             'state',
             {
                 b'id': nc.hash.hex().encode('ascii'),
-                b'balances[]': ['__all__'.encode('ascii')],
+                b'balances[]': '__all__'.encode('ascii'),
             }
         )
         data3 = response3.json_value()

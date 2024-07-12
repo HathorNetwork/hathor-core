@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.nanocontracts import NanoContract, NCFail
 from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
 from hathor.util import classproperty
 
@@ -51,6 +50,7 @@ class BlockConsensusAlgorithm:
 
     def execute_nano_contracts(self, block: Block) -> None:
         """Execute the method calls for transactions confirmed by this block."""
+        from hathor.nanocontracts import NanoContract, NCFail
         meta = block.get_metadata()
         if meta.voided_by:
             # Nothing to execute!

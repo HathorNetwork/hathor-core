@@ -13,13 +13,12 @@
 # limitations under the License.
 
 from enum import Enum, IntEnum
-from typing import Any, Callable, NamedTuple, Optional, TypeAlias
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
 from typing_extensions import assert_never
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
 from hathor.consensus.poa import PoaBlockProducer, PoaSigner
 from hathor.daa import DifficultyAdjustmentAlgorithm
@@ -55,6 +54,9 @@ from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, Wallet
 
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings as HathorSettingsType
+
 logger = get_logger()
 
 
@@ -66,7 +68,7 @@ class SyncSupportLevel(IntEnum):
     @classmethod
     def add_factories(
         cls,
-        settings: HathorSettingsType,
+        settings: 'HathorSettingsType',
         p2p_manager: ConnectionsManager,
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
@@ -116,7 +118,7 @@ class BuildArtifacts(NamedTuple):
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
-    [HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService],
+    ['HathorSettingsType', DifficultyAdjustmentAlgorithm, FeatureService],
     VertexVerifiers
 ]
 
@@ -134,7 +136,7 @@ class Builder:
         self.log = logger.new()
         self.artifacts: Optional[BuildArtifacts] = None
 
-        self._settings: Optional[HathorSettingsType] = None
+        self._settings: Optional['HathorSettingsType'] = None
         self._rng: Random = Random()
         self._checkpoints: Optional[list[Checkpoint]] = None
         self._capabilities: Optional[list[str]] = None
@@ -351,7 +353,7 @@ class Builder:
         self._peer = peer
         return self
 
-    def _get_or_create_settings(self) -> HathorSettingsType:
+    def _get_or_create_settings(self) -> 'HathorSettingsType':
         """Return the HathorSettings instance set on this builder, or a new one if not set."""
         if self._settings is None:
             raise ValueError('settings not set')
@@ -859,7 +861,7 @@ class Builder:
         self._not_support_features = not_support_features or set()
         return self
 
-    def set_settings(self, settings: HathorSettingsType) -> 'Builder':
+    def set_settings(self, settings: 'HathorSettingsType') -> 'Builder':
         self.check_if_can_modify()
         self._settings = settings
         return self
