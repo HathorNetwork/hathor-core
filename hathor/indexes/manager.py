@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.height_index import HeightIndex
@@ -259,7 +260,7 @@ class IndexesManager(ABC):
 
 
 class MemoryIndexesManager(IndexesManager):
-    def __init__(self) -> None:
+    def __init__(self, *, settings: HathorSettings | None = None) -> None:
         from hathor.indexes.memory_height_index import MemoryHeightIndex
         from hathor.indexes.memory_info_index import MemoryInfoIndex
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
@@ -277,7 +278,7 @@ class MemoryIndexesManager(IndexesManager):
         self.addresses = None
         self.tokens = None
         self.utxo = None
-        self.height = MemoryHeightIndex()
+        self.height = MemoryHeightIndex(settings=settings)
         self.mempool_tips = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized

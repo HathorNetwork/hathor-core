@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import base64
 from itertools import starmap, zip_longest
 from operator import add
@@ -30,6 +32,7 @@ from hathor.util import not_none
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 # Signal bits (B), version (B), outputs len (B)
@@ -42,19 +45,32 @@ _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 class Block(BaseTransaction):
     SERIALIZATION_NONCE_SIZE = 16
 
-    def __init__(self,
-                 nonce: int = 0,
-                 timestamp: Optional[int] = None,
-                 signal_bits: int = 0,
-                 version: TxVersion = TxVersion.REGULAR_BLOCK,
-                 weight: float = 0,
-                 outputs: Optional[list[TxOutput]] = None,
-                 parents: Optional[list[bytes]] = None,
-                 hash: Optional[bytes] = None,
-                 data: bytes = b'',
-                 storage: Optional['TransactionStorage'] = None) -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
-                         outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+    def __init__(
+        self,
+        nonce: int = 0,
+        timestamp: Optional[int] = None,
+        signal_bits: int = 0,
+        version: TxVersion = TxVersion.REGULAR_BLOCK,
+        weight: float = 0,
+        outputs: Optional[list[TxOutput]] = None,
+        parents: Optional[list[bytes]] = None,
+        hash: Optional[bytes] = None,
+        data: bytes = b'',
+        storage: Optional['TransactionStorage'] = None,
+        settings: HathorSettings | None = None,
+    ) -> None:
+        super().__init__(
+            nonce=nonce,
+            timestamp=timestamp,
+            signal_bits=signal_bits,
+            version=version,
+            weight=weight,
+            outputs=outputs or [],
+            parents=parents or [],
+            hash=hash,
+            storage=storage,
+            settings=settings,
+        )
         self.data = data
 
     def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:

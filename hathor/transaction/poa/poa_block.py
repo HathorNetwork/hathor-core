@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
 from hathor.transaction import Block, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage
@@ -36,6 +37,7 @@ class PoaBlock(Block):
         storage: TransactionStorage | None = None,
         signer_id: bytes = b'',
         signature: bytes = b'',
+        settings: HathorSettings | None = None,
     ) -> None:
         assert not outputs, 'PoaBlocks must not have outputs'
         super().__init__(
@@ -48,7 +50,8 @@ class PoaBlock(Block):
             parents=parents or [],
             hash=hash,
             data=data,
-            storage=storage
+            storage=storage,
+            settings=settings,
         )
         self.signer_id = signer_id
         self.signature = signature

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
 from itertools import chain
 from struct import pack
@@ -28,6 +30,7 @@ from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
@@ -52,24 +55,38 @@ class Transaction(BaseTransaction):
 
     SERIALIZATION_NONCE_SIZE = 4
 
-    def __init__(self,
-                 nonce: int = 0,
-                 timestamp: Optional[int] = None,
-                 signal_bits: int = 0,
-                 version: TxVersion = TxVersion.REGULAR_TRANSACTION,
-                 weight: float = 0,
-                 inputs: Optional[list[TxInput]] = None,
-                 outputs: Optional[list[TxOutput]] = None,
-                 parents: Optional[list[VertexId]] = None,
-                 tokens: Optional[list[TokenUid]] = None,
-                 hash: Optional[VertexId] = None,
-                 storage: Optional['TransactionStorage'] = None) -> None:
+    def __init__(
+        self,
+        nonce: int = 0,
+        timestamp: Optional[int] = None,
+        signal_bits: int = 0,
+        version: TxVersion = TxVersion.REGULAR_TRANSACTION,
+        weight: float = 0,
+        inputs: Optional[list[TxInput]] = None,
+        outputs: Optional[list[TxOutput]] = None,
+        parents: Optional[list[VertexId]] = None,
+        tokens: Optional[list[TokenUid]] = None,
+        hash: Optional[VertexId] = None,
+        storage: Optional['TransactionStorage'] = None,
+        settings: HathorSettings | None = None,
+    ) -> None:
         """
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
         """
-        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
-                         inputs=inputs or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+        super().__init__(
+            nonce=nonce,
+            timestamp=timestamp,
+            signal_bits=signal_bits,
+            version=version,
+            weight=weight,
+            inputs=inputs or [],
+            outputs=outputs or [],
+            parents=parents or [],
+            hash=hash,
+            storage=storage,
+            settings=settings
+        )
         self.tokens = tokens or []
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None

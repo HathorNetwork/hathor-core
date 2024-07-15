@@ -14,6 +14,7 @@
 
 from typing import Optional
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightIndex, HeightInfo, IndexEntry
 
 
@@ -23,8 +24,8 @@ class MemoryHeightIndex(HeightIndex):
 
     _index: list[IndexEntry]
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, *, settings: HathorSettings | None = None) -> None:
+        super().__init__(settings=settings)
         self.force_clear()
 
     def get_db_name(self) -> Optional[str]:

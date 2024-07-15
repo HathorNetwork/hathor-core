@@ -422,7 +422,7 @@ class Builder:
             return self._indexes_manager
 
         if self._force_memory_index or self._storage_type == StorageType.MEMORY:
-            self._indexes_manager = MemoryIndexesManager()
+            self._indexes_manager = MemoryIndexesManager(settings=self._get_or_create_settings())
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
