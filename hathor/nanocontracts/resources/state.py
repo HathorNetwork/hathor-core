@@ -125,6 +125,7 @@ class NanoContractStateResource(Resource):
         response = NCStateResponse(
             success=True,
             nc_id=params.id,
+            blueprint_id=nanocontract.get_blueprint_id().hex(),
             blueprint_name=nanocontract.get_blueprint_class().__name__,
             fields=fields,
             balances=balances,
@@ -198,6 +199,7 @@ class NCValueErrorResponse(Response):
 class NCStateResponse(Response):
     success: bool
     nc_id: str
+    blueprint_id: str
     blueprint_name: str
     fields: dict[str, NCValueSuccessResponse | NCValueErrorResponse]
     balances: dict[str, NCValueSuccessResponse | NCValueErrorResponse]
@@ -206,7 +208,8 @@ class NCStateResponse(Response):
 
 _openapi_success_value = {
     'success': True,
-    'nc_id': '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
+    'nc_id': '00007f246f6d645ef3174f2eddf53f4b6bd41e8be0c0b7fbea9827cf53e12d9e',
+    'blueprint_id': '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
     'blueprint_name': 'Bet',
     'fields': {
         'token_uid': {'value': '00'},

@@ -200,6 +200,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         )
         data1 = response1.json_value()
         fields1 = data1['fields']
+        self.assertEqual(data1['blueprint_id'], self.bet_id.hex())
         self.assertEqual(data1['blueprint_name'], 'MyBlueprint')
         self.assertEqual(fields1['token_uid'], {'value': settings.HATHOR_TOKEN_UID.hex()})
         self.assertEqual(fields1['total'], {'value': 0})
@@ -262,6 +263,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         )
         data2 = response2.json_value()
         fields2 = data2['fields']
+        self.assertEqual(data2['blueprint_id'], self.bet_id.hex())
         self.assertEqual(data2['blueprint_name'], 'MyBlueprint')
         self.assertEqual(fields2['token_uid'], {'value': settings.HATHOR_TOKEN_UID.hex()})
         self.assertEqual(fields2['total'], {'value': 10**11})
@@ -280,6 +282,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             }
         )
         data3 = response3.json_value()
+        self.assertEqual(data3['blueprint_id'], self.bet_id.hex())
         self.assertEqual(data3['blueprint_name'], 'MyBlueprint')
         balances3 = data3['balances']
         self.assertEqual(balances3, {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000'}})
