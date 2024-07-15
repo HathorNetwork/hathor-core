@@ -115,6 +115,7 @@ class HathorManager:
         environment_info: Optional[EnvironmentInfo] = None,
         full_verification: bool = False,
         enable_event_queue: bool = False,
+        poa_block_producer: PoaBlockProducer | None = None,
     ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
@@ -235,7 +236,7 @@ class HathorManager:
         # This is included in some logs to provide more context
         self.environment_info = environment_info
 
-        self.poa_block_producer: PoaBlockProducer | None = None
+        self.poa_block_producer = poa_block_producer
 
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)

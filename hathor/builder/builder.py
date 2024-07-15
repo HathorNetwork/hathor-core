@@ -22,6 +22,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
+from hathor.consensus.poa import PoaBlockProducer, PoaSigner
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
@@ -195,6 +196,8 @@ class Builder:
         self._vertex_parser: VertexParser | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
+        self._poa_signer: PoaSigner | None = None
+        self._poa_block_producer: PoaBlockProducer | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -228,6 +231,7 @@ class Builder:
         cpu_mining_service = self._get_or_create_cpu_mining_service()
         vertex_handler = self._get_or_create_vertex_handler()
         vertex_parser = self._get_or_create_vertex_parser()
+        poa_block_producer = self._get_or_create_poa_block_producer()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -268,10 +272,13 @@ class Builder:
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
+            poa_block_producer=poa_block_producer,
             **kwargs
         )
 
         p2p_manager.set_manager(manager)
+        if poa_block_producer:
+            poa_block_producer.manager = manager
 
         stratum_factory: Optional[StratumFactory] = None
         if self._enable_stratum_server:
@@ -623,6 +630,19 @@ class Builder:
 
         return self._vertex_parser
 
+    def _get_or_create_poa_block_producer(self) -> PoaBlockProducer | None:
+        if not self._poa_signer:
+            return None
+
+        if self._poa_block_producer is None:
+            self._poa_block_producer = PoaBlockProducer(
+                settings=self._get_or_create_settings(),
+                reactor=self._get_reactor(),
+                poa_signer=self._poa_signer,
+            )
+
+        return self._poa_block_producer
+
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.MEMORY
@@ -817,4 +837,9 @@ class Builder:
     def set_settings(self, settings: HathorSettingsType) -> 'Builder':
         self.check_if_can_modify()
         self._settings = settings
+        return self
+
+    def set_poa_signer(self, signer: PoaSigner) -> 'Builder':
+        self.check_if_can_modify()
+        self._poa_signer = signer
         return self
