@@ -29,6 +29,7 @@ from twisted.python.threadpool import ThreadPool
 from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.consensus.poa import PoaBlockProducer
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
@@ -231,6 +232,8 @@ class HathorManager:
         # This is included in some logs to provide more context
         self.environment_info = environment_info
 
+        self.poa_block_producer: PoaBlockProducer | None = None
+
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
@@ -329,6 +332,9 @@ class HathorManager:
         if self.stratum_factory:
             self.stratum_factory.start()
 
+        if self.poa_block_producer:
+            self.poa_block_producer.start()
+
         # Start running
         self.tx_storage.start_running_manager(self._execution_manager)
 
@@ -362,6 +368,9 @@ class HathorManager:
 
         if self._enable_event_queue:
             self._event_manager.stop()
+
+        if self.poa_block_producer:
+            self.poa_block_producer.stop()
 
         self.tx_storage.flush()
 
@@ -862,7 +871,7 @@ class HathorManager:
         assert address is not None
         block = self.get_block_templates(parent_block_hash, timestamp).generate_mining_block(
             rng=self.rng,
-            merge_mined=merge_mined,
+            cls=MergeMinedBlock if merge_mined else Block,
             address=address or None,  # XXX: because we allow b'' for explicit empty output script
             data=data,
         )

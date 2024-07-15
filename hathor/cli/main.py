@@ -34,6 +34,7 @@ class CliManager:
         from . import (
             db_export,
             db_import,
+            generate_genesis,
             generate_poa_keys,
             generate_valid_words,
             load_from_logs,
@@ -74,6 +75,7 @@ class CliManager:
         self.add_cmd('side-dag', 'run_node_with_side_dag', side_dag, 'Run a side-dag')
         self.add_cmd('side-dag', 'gen_poa_keys', generate_poa_keys, 'Generate a private/public key pair and its '
                                                                     'address to be used in Proof-of-Authority')
+        self.add_cmd('side-dag', 'gen_genesis', generate_genesis, 'Generate a new genesis')
         self.add_cmd('docs', 'generate_openapi_json', openapi_json, 'Generate OpenAPI json for API docs')
         self.add_cmd('multisig', 'gen_multisig_address', multisig_address, 'Generate a new multisig address')
         self.add_cmd('multisig', 'spend_multisig_output', multisig_spend, 'Generate tx that spends a multisig output')
