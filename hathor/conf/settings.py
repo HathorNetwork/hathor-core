@@ -506,6 +506,22 @@ def _validate_consensus_algorithm(consensus_algorithm: ConsensusSettings, values
     return consensus_algorithm
 
 
+def _validate_tokens(genesis_tokens: int, values: dict[str, Any]) -> int:
+    """Validate genesis tokens."""
+    genesis_token_units = values.get('GENESIS_TOKEN_UNITS')
+    decimal_places = values.get('DECIMAL_PLACES')
+    assert genesis_token_units is not None, 'GENESIS_TOKEN_UNITS must be set'
+    assert decimal_places is not None, 'DECIMAL_PLACES must be set'
+
+    if genesis_tokens != genesis_token_units * (10**decimal_places):
+        raise ValueError(
+            f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, GENESIS_TOKEN_UNITS={genesis_token_units}, '
+            f'DECIMAL_PLACES={decimal_places}',
+        )
+
+    return genesis_tokens
+
+
 _VALIDATORS = dict(
     _parse_hex_str=pydantic.validator(
         'P2PKH_VERSION_BYTE',
@@ -534,4 +550,7 @@ _VALIDATORS = dict(
     _validate_consensus_algorithm=pydantic.validator(
         'CONSENSUS_ALGORITHM'
     )(_validate_consensus_algorithm),
+    _validate_tokens=pydantic.validator(
+        'GENESIS_TOKENS'
+    )(_validate_tokens),
 )

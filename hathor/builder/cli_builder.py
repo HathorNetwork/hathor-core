@@ -40,6 +40,7 @@ from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -117,6 +118,7 @@ class CliBuilder:
             self.check_or_raise(not settings.ENABLE_NANO_CONTRACTS,
                                 'configuration error: NanoContracts can only be enabled on localnets for now')
 
+        vertex_parser = VertexParser(settings=settings)
         tx_storage: TransactionStorage
         event_storage: EventStorage
         indexes: IndexesManager
@@ -151,7 +153,9 @@ class CliBuilder:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
                 kwargs['indexes'] = indexes
-            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage, settings=settings, **kwargs)
+            tx_storage = TransactionRocksDBStorage(
+                self.rocksdb_storage, settings=settings, vertex_parser=vertex_parser, **kwargs
+            )
             event_storage = EventRocksDBStorage(self.rocksdb_storage)
             feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
@@ -298,7 +302,7 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
         )
-        SyncSupportLevel.add_factories(p2p_manager, sync_v1_support, sync_v2_support)
+        SyncSupportLevel.add_factories(settings, p2p_manager, sync_v1_support, sync_v2_support, vertex_parser)
 
         vertex_handler = VertexHandler(
             reactor=reactor,
@@ -335,6 +339,7 @@ class CliBuilder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            vertex_parser=vertex_parser,
         )
 
         if settings.CONSENSUS_ALGORITHM.is_poa():

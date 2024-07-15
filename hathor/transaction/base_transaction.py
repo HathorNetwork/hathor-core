@@ -1140,20 +1140,3 @@ def output_value_to_bytes(number: int) -> bytes:
         return (-number).to_bytes(8, byteorder='big', signed=True)
     else:
         return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well
-
-
-def tx_or_block_from_bytes(data: bytes,
-                           storage: Optional['TransactionStorage'] = None) -> BaseTransaction:
-    """ Creates the correct tx subclass from a sequence of bytes
-    """
-    # version field takes up the second byte only
-    settings = get_global_settings()  # TODO: Remove this from here and receive by argument.
-    version = data[1]
-    try:
-        tx_version = TxVersion(version)
-        if not settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(tx_version):
-            raise StructError(f"invalid vertex version: {tx_version}")
-        cls = tx_version.get_cls()
-        return cls.create_from_struct(data, storage=storage)
-    except ValueError:
-        raise StructError('Invalid bytes to create transaction subclass.')

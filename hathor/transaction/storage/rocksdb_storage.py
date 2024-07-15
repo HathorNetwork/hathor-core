@@ -22,6 +22,7 @@ from hathor.storage import RocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
@@ -50,6 +51,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         indexes: Optional[IndexesManager] = None,
         *,
         settings: HathorSettings,
+        vertex_parser: VertexParser,
     ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
@@ -58,13 +60,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
         self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
+        self.vertex_parser = vertex_parser
         super().__init__(indexes=indexes, settings=settings)
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
-        from hathor.transaction.base_transaction import tx_or_block_from_bytes
         from hathor.transaction.transaction_metadata import TransactionMetadata
 
-        tx = tx_or_block_from_bytes(tx_data)
+        tx = self.vertex_parser.deserialize(tx_data)
         tx._metadata = TransactionMetadata.create_from_json(json_loadb(meta_data))
         tx.storage = self
         return tx

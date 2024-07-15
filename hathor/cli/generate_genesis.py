@@ -12,68 +12,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
 
-import base58
+from hathor.utils.pydantic import BaseModel  # skip-cli-import-custom-check
 
 
-def main():
+class GenerateGenesisArgs(BaseModel):
+    tokens: int
+    address: str
+    block_timestamp: int
+    min_block_weight: int
+    min_tx_weight: int
+
+
+def main() -> None:
     from hathor.cli.util import create_parser
-    from hathor.conf.get_settings import get_global_settings
-    from hathor.mining.cpu_mining_service import CpuMiningService
-    from hathor.transaction import Block, Transaction, TxOutput
-    from hathor.transaction.scripts import P2PKH
+    from hathor.transaction.genesis import generate_new_genesis
 
     parser = create_parser()
-    parser.add_argument('--config-yaml', type=str, help='Configuration yaml filepath')
-    parser.add_argument('--genesis-address', type=str, help='Address for genesis tokens')
-    parser.add_argument('--genesis-block-timestamp', type=int, help='Timestamp for the genesis block')
+    parser.add_argument('--tokens', type=int, help='Amount of genesis tokens, including decimals', required=True)
+    parser.add_argument('--address', type=str, help='Address for genesis tokens', required=True)
+    parser.add_argument('--block-timestamp', type=int, help='Timestamp for the genesis block', required=True)
+    parser.add_argument('--min-block-weight', type=float, help='The MIN_BLOCK_WEIGHT', required=True)
+    parser.add_argument('--min-tx-weight', type=float, help='The MIN_TX_WEIGHT', required=True)
 
-    args = parser.parse_args(sys.argv[1:])
-    if not args.config_yaml:
-        raise Exception('`--config-yaml` is required')
-    if not args.genesis_address:
-        raise Exception('`--genesis-address` is required')
-    if not args.genesis_block_timestamp:
-        raise Exception('`--genesis-block-timestamp` is required')
+    raw_args = parser.parse_args(sys.argv[1:])
+    args = GenerateGenesisArgs.parse_obj((vars(raw_args)))
 
-    os.environ['HATHOR_CONFIG_YAML'] = args.config_yaml
-    settings = get_global_settings()
-    output_script = P2PKH.create_output_script(address=base58.b58decode(args.genesis_address))
-    block_timestamp = int(args.genesis_block_timestamp)
-    mining_service = CpuMiningService()
-
-    block = Block(
-        timestamp=block_timestamp,
-        weight=settings.MIN_BLOCK_WEIGHT,
-        outputs=[
-            TxOutput(settings.GENESIS_TOKENS, output_script),
-        ],
+    block, tx1, tx2 = generate_new_genesis(
+        tokens=args.tokens,
+        address=args.address,
+        block_timestamp=args.block_timestamp,
+        min_block_weight=args.min_block_weight,
+        min_tx_weight=args.min_tx_weight,
     )
-    mining_service.start_mining(block)
-    block.update_hash()
 
-    tx1 = Transaction(
-        timestamp=settings.GENESIS_TX1_TIMESTAMP,
-        weight=settings.MIN_TX_WEIGHT,
-    )
-    mining_service.start_mining(tx1)
-    tx1.update_hash()
-
-    tx2 = Transaction(
-        timestamp=settings.GENESIS_TX2_TIMESTAMP,
-        weight=settings.MIN_TX_WEIGHT,
-    )
-    mining_service.start_mining(tx2)
-    tx2.update_hash()
-
-    # The output format is compatible with the yaml config file
-    print('GENESIS_OUTPUT_SCRIPT:', output_script.hex())
-    print('GENESIS_BLOCK_TIMESTAMP:', block.timestamp)
+    print('# Paste this output into your network\'s yaml configuration file')
+    print()
     print('GENESIS_BLOCK_HASH:', block.hash_hex)
-    print('GENESIS_BLOCK_NONCE:', block.nonce)
     print('GENESIS_TX1_HASH:', tx1.hash_hex)
-    print('GENESIS_TX1_NONCE:', tx1.nonce)
     print('GENESIS_TX2_HASH:', tx2.hash_hex)
+    print()
+    print('GENESIS_OUTPUT_SCRIPT:', block.outputs[0].script.hex())
+    print('GENESIS_BLOCK_TIMESTAMP:', block.timestamp)
+    print('GENESIS_BLOCK_NONCE:', block.nonce)
+    print('GENESIS_TX1_NONCE:', tx1.nonce)
     print('GENESIS_TX2_NONCE:', tx2.nonce)
+    print()
+    print('MIN_BLOCK_WEIGHT:', args.min_block_weight)
+    print('MIN_TX_WEIGHT:', args.min_tx_weight)

@@ -46,6 +46,7 @@ from hathor.transaction.storage import (
     TransactionRocksDBStorage,
     TransactionStorage,
 )
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, get_environment_info, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -61,11 +62,14 @@ class SyncSupportLevel(IntEnum):
     ENABLED = 2  # available and enabled by default, possible to disable at runtime
 
     @classmethod
-    def add_factories(cls,
-                      p2p_manager: ConnectionsManager,
-                      sync_v1_support: 'SyncSupportLevel',
-                      sync_v2_support: 'SyncSupportLevel',
-                      ) -> None:
+    def add_factories(
+        cls,
+        settings: HathorSettingsType,
+        p2p_manager: ConnectionsManager,
+        sync_v1_support: 'SyncSupportLevel',
+        sync_v2_support: 'SyncSupportLevel',
+        vertex_parser: VertexParser,
+    ) -> None:
         """Adds the sync factory to the manager according to the support level."""
         from hathor.p2p.sync_v1.factory import SyncV11Factory
         from hathor.p2p.sync_v2.factory import SyncV2Factory
@@ -73,12 +77,14 @@ class SyncSupportLevel(IntEnum):
 
         # sync-v1 support:
         if sync_v1_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager, vertex_parser=vertex_parser))
         if sync_v1_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+            p2p_manager.add_sync_factory(
+                SyncVersion.V2, SyncV2Factory(settings, p2p_manager, vertex_parser=vertex_parser)
+            )
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
@@ -186,6 +192,7 @@ class Builder:
 
         self._execution_manager: ExecutionManager | None = None
         self._vertex_handler: VertexHandler | None = None
+        self._vertex_parser: VertexParser | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
 
@@ -220,6 +227,7 @@ class Builder:
         daa = self._get_or_create_daa()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
         vertex_handler = self._get_or_create_vertex_handler()
+        vertex_parser = self._get_or_create_vertex_parser()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -259,6 +267,7 @@ class Builder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            vertex_parser=vertex_parser,
             **kwargs
         )
 
@@ -414,7 +423,13 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
         )
-        SyncSupportLevel.add_factories(self._p2p_manager, self._sync_v1_support, self._sync_v2_support)
+        SyncSupportLevel.add_factories(
+            self._get_or_create_settings(),
+            self._p2p_manager,
+            self._sync_v1_support,
+            self._sync_v2_support,
+            self._get_or_create_vertex_parser(),
+        )
         return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
@@ -451,7 +466,13 @@ class Builder:
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes, settings=settings)
+            vertex_parser = self._get_or_create_vertex_parser()
+            self._tx_storage = TransactionRocksDBStorage(
+                rocksdb_storage,
+                indexes=store_indexes,
+                settings=settings,
+                vertex_parser=vertex_parser,
+            )
 
         else:
             raise NotImplementedError
@@ -593,6 +614,14 @@ class Builder:
             )
 
         return self._vertex_handler
+
+    def _get_or_create_vertex_parser(self) -> VertexParser:
+        if self._vertex_parser is None:
+            self._vertex_parser = VertexParser(
+                settings=self._get_or_create_settings()
+            )
+
+        return self._vertex_parser
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()

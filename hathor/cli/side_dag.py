@@ -123,7 +123,12 @@ def main(capture_stdout: bool) -> None:
     )
 
     log_options = process_logging_options(side_dag_argv)
-    setup_logging(logging_output=side_dag_logging_output, logging_options=log_options, capture_stdout=capture_stdout)
+    setup_logging(
+        logging_output=side_dag_logging_output,
+        logging_options=log_options,
+        capture_stdout=capture_stdout,
+        extra_log_info=_get_extra_log_info('side-dag')
+    )
     logger.info('starting nodes', hathor_node_pid=hathor_node_process.pid, side_dag_pid=os.getpid())
 
     _run_side_dag_node(side_dag_argv, hathor_node_process=hathor_node_process, conn=conn2)
@@ -267,7 +272,12 @@ def _run_hathor_node(
     signal.signal(signal.SIGINT, lambda _, __: None)
     try:
         log_options = process_logging_options(argv)
-        setup_logging(logging_output=logging_output, logging_options=log_options, capture_stdout=capture_stdout)
+        setup_logging(
+            logging_output=logging_output,
+            logging_options=log_options,
+            capture_stdout=capture_stdout,
+            extra_log_info=_get_extra_log_info('hathor')
+        )
         hathor_node = run_node_cmd(argv=argv)
     except (BaseException, Exception):
         logger.exception('hathor process terminated due to exception in initialization')
@@ -290,3 +300,8 @@ def _run_hathor_node(
     parent_pid = os.getppid()
     parent_process = psutil.Process(parent_pid)
     parent_process.terminate()
+
+
+def _get_extra_log_info(process_name: str) -> dict[str, str]:
+    """Return a dict to be used as extra log info for each process."""
+    return dict(_source_process=process_name)

@@ -20,7 +20,6 @@ from hathor.api_util import Resource, get_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.exception import HathorError
-from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
 
 logger = get_logger()
@@ -114,7 +113,7 @@ class SubmitBlockResource(Resource):
 
         data = json_loadb(request.content.read())
 
-        tx = tx_or_block_from_bytes(bytes.fromhex(data['hexdata']), storage=self.manager.tx_storage)
+        tx = self.manager.vertex_parser.deserialize(bytes.fromhex(data['hexdata']), storage=self.manager.tx_storage)
 
         if not tx.is_block:
             self.log.debug('expected Block, received Transaction', data=data)

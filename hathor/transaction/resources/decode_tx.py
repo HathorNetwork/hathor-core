@@ -16,7 +16,6 @@ import struct
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.resources.transaction import get_tx_extra_data
 from hathor.util import json_dumpb
 
@@ -51,7 +50,7 @@ class DecodeTxResource(Resource):
 
         try:
             tx_bytes = bytes.fromhex(parsed['args']['hex_tx'])
-            tx = tx_or_block_from_bytes(tx_bytes)
+            tx = self.manager.vertex_parser.deserialize(tx_bytes)
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)
         except ValueError:
