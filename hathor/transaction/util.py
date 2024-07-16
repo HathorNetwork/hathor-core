@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import re
 import struct
 from math import ceil, floor
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from hathor.conf.get_settings import get_global_settings
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
 
 VerboseCallback = Optional[Callable[[str, Any], None]]
 
@@ -48,13 +51,11 @@ def unpack_len(n: int, buf: bytes) -> tuple[bytes, bytes]:
     return buf[:n], buf[n:]
 
 
-def get_deposit_amount(mint_amount: int) -> int:
-    settings = get_global_settings()
+def get_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
     return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
 
 
-def get_withdraw_amount(melt_amount: int) -> int:
-    settings = get_global_settings()
+def get_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
     return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
 
 

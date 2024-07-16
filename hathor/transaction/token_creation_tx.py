@@ -17,6 +17,7 @@ from typing import Any, Optional
 
 from typing_extensions import override
 
+from hathor.conf.settings import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
@@ -35,21 +36,35 @@ TOKEN_INFO_VERSION = 1
 
 
 class TokenCreationTransaction(Transaction):
-    def __init__(self,
-                 nonce: int = 0,
-                 timestamp: Optional[int] = None,
-                 signal_bits: int = 0,
-                 version: TxVersion = TxVersion.TOKEN_CREATION_TRANSACTION,
-                 weight: float = 0,
-                 inputs: Optional[list[TxInput]] = None,
-                 outputs: Optional[list[TxOutput]] = None,
-                 parents: Optional[list[bytes]] = None,
-                 hash: Optional[bytes] = None,
-                 token_name: str = '',
-                 token_symbol: str = '',
-                 storage: Optional['TransactionStorage'] = None) -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
-                         inputs=inputs, outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+    def __init__(
+        self,
+        nonce: int = 0,
+        timestamp: Optional[int] = None,
+        signal_bits: int = 0,
+        version: TxVersion = TxVersion.TOKEN_CREATION_TRANSACTION,
+        weight: float = 0,
+        inputs: Optional[list[TxInput]] = None,
+        outputs: Optional[list[TxOutput]] = None,
+        parents: Optional[list[bytes]] = None,
+        hash: Optional[bytes] = None,
+        token_name: str = '',
+        token_symbol: str = '',
+        storage: Optional['TransactionStorage'] = None,
+        settings: HathorSettings | None = None,
+    ) -> None:
+        super().__init__(
+            nonce=nonce,
+            timestamp=timestamp,
+            signal_bits=signal_bits,
+            version=version,
+            weight=weight,
+            inputs=inputs,
+            outputs=outputs or [],
+            parents=parents or [],
+            hash=hash,
+            storage=storage,
+            settings=settings,
+        )
         self.token_name = token_name
         self.token_symbol = token_symbol
         # for this special tx, its own hash is used as the created token uid. We're artificially

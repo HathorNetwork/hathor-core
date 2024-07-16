@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -24,6 +26,7 @@ from hathor.util import practically_equal
 if TYPE_CHECKING:
     from weakref import ReferenceType  # noqa: F401
 
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction import BaseTransaction
     from hathor.transaction.storage import TransactionStorage
 
@@ -71,7 +74,8 @@ class TransactionMetadata:
         score: float = 0,
         height: Optional[int] = None,
         min_height: Optional[int] = None,
-        feature_activation_bit_counts: Optional[list[int]] = None
+        feature_activation_bit_counts: Optional[list[int]] = None,
+        settings: HathorSettings | None = None,
     ) -> None:
         from hathor.transaction.genesis import is_genesis
 
@@ -129,7 +133,7 @@ class TransactionMetadata:
 
         self.feature_activation_bit_counts = feature_activation_bit_counts
 
-        settings = get_global_settings()
+        settings = settings or get_global_settings()
 
         # Genesis specific:
         if hash is not None and is_genesis(hash, settings=settings):

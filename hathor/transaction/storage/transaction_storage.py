@@ -1111,6 +1111,7 @@ class TransactionStorage(ABC):
     def _construct_genesis_block(self) -> Block:
         """Return the genesis block."""
         block = Block(
+            settings=self._settings,
             storage=self,
             nonce=self._settings.GENESIS_BLOCK_NONCE,
             timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
@@ -1127,6 +1128,7 @@ class TransactionStorage(ABC):
     def _construct_genesis_tx1(self) -> Transaction:
         """Return the genesis tx1."""
         tx1 = Transaction(
+            settings=self._settings,
             storage=self,
             nonce=self._settings.GENESIS_TX1_NONCE,
             timestamp=self._settings.GENESIS_TX1_TIMESTAMP,
@@ -1140,6 +1142,7 @@ class TransactionStorage(ABC):
     def _construct_genesis_tx2(self) -> Transaction:
         """Return the genesis tx2."""
         tx2 = Transaction(
+            settings=self._settings,
             storage=self,
             nonce=self._settings.GENESIS_TX2_NONCE,
             timestamp=self._settings.GENESIS_TX2_TIMESTAMP,

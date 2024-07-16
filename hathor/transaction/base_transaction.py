@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import base64
 import datetime
 import hashlib
@@ -38,6 +40,7 @@ from hathor.util import classproperty
 if TYPE_CHECKING:
     from _hashlib import HASH
 
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()
@@ -138,17 +141,20 @@ class BaseTransaction(ABC):
     # bits reserved for future use, depending on the configuration.
     signal_bits: int
 
-    def __init__(self,
-                 nonce: int = 0,
-                 timestamp: Optional[int] = None,
-                 signal_bits: int = 0,
-                 version: TxVersion = TxVersion.REGULAR_BLOCK,
-                 weight: float = 0,
-                 inputs: Optional[list['TxInput']] = None,
-                 outputs: Optional[list['TxOutput']] = None,
-                 parents: Optional[list[VertexId]] = None,
-                 hash: Optional[VertexId] = None,
-                 storage: Optional['TransactionStorage'] = None) -> None:
+    def __init__(
+        self,
+        nonce: int = 0,
+        timestamp: Optional[int] = None,
+        signal_bits: int = 0,
+        version: TxVersion = TxVersion.REGULAR_BLOCK,
+        weight: float = 0,
+        inputs: Optional[list['TxInput']] = None,
+        outputs: Optional[list['TxOutput']] = None,
+        parents: Optional[list[VertexId]] = None,
+        hash: Optional[VertexId] = None,
+        storage: Optional['TransactionStorage'] = None,
+        settings: HathorSettings | None = None,
+    ) -> None:
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
@@ -161,7 +167,7 @@ class BaseTransaction(ABC):
         assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
-        self._settings = get_global_settings()
+        self._settings = settings or get_global_settings()
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
         self.signal_bits = signal_bits
@@ -630,6 +636,7 @@ class BaseTransaction(ABC):
             min_height = 0 if self.is_genesis else None
 
             metadata = TransactionMetadata(
+                settings=self._settings,
                 hash=self._hash,
                 accumulated_weight=self.weight,
                 height=height,
