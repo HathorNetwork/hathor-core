@@ -24,6 +24,7 @@ from typing import Any, NamedTuple
 
 import configargparse
 import structlog
+from structlog.typing import EventDict
 from typing_extensions import assert_never
 
 
@@ -175,6 +176,7 @@ def setup_logging(
     logging_options: LoggingOptions,
     capture_stdout: bool = False,
     _test_logging: bool = False,
+    extra_log_info: dict[str, str] | None = None,
 ) -> None:
     import logging
     import logging.config
@@ -295,10 +297,19 @@ def setup_logging(
                 pass
         return event_dict
 
+    extra_log_info = extra_log_info or {}
+
+    def add_extra_log_info(_logger: logging.Logger, _method_name: str, event_dict: EventDict) -> EventDict:
+        for key, value in extra_log_info.items():
+            assert key not in event_dict, 'extra log info conflicting with existing log key'
+            event_dict[key] = value
+        return event_dict
+
     processors: list[Any] = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
+        add_extra_log_info,
     ]
 
     if logging_options.sentry:

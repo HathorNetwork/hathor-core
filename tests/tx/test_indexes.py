@@ -5,6 +5,7 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import iwindows
 from hathor.wallet import Wallet
 from tests import unittest
@@ -724,7 +725,8 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         directory = tempfile.mkdtemp()
         self.tmpdirs.append(directory)
         rocksdb_storage = RocksDBStorage(path=directory)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage, settings=self._settings)
+        parser = VertexParser(settings=self._settings)
+        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage, settings=self._settings, vertex_parser=parser)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

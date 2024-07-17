@@ -57,6 +57,7 @@ from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none
 from hathor.verification.verification_service import VerificationService
@@ -105,6 +106,7 @@ class HathorManager:
         network: str,
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
+        vertex_parser: VertexParser,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -193,6 +195,7 @@ class HathorManager:
 
         self.connections = p2p_manager
         self.vertex_handler = vertex_handler
+        self.vertex_parser = vertex_parser
 
         self.metrics = Metrics(
             pubsub=self.pubsub,

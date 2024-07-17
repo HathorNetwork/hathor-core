@@ -14,19 +14,23 @@
 
 from typing import TYPE_CHECKING
 
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.reactor import ReactorProtocol as Reactor
+from hathor.transaction.vertex_parser import VertexParser
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
 
 
 class SyncV2Factory(SyncAgentFactory):
-    def __init__(self, connections: ConnectionsManager):
+    def __init__(self, settings: HathorSettings, connections: ConnectionsManager, *, vertex_parser: VertexParser):
+        self._settings = settings
         self.connections = connections
+        self.vertex_parser = vertex_parser
 
     def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Reactor) -> SyncAgent:
-        return NodeBlockSync(protocol, reactor=reactor)
+        return NodeBlockSync(self._settings, protocol, reactor=reactor, vertex_parser=self.vertex_parser)
