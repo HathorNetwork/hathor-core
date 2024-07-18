@@ -22,7 +22,7 @@ from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings
 from hathor.consensus.poa.poa_signer import PoaSigner, PoaSignerFile
 from hathor.crypto.util import get_address_b58_from_public_key, get_private_key_bytes, get_public_key_bytes_compressed
-from hathor.transaction import TxOutput
+from hathor.transaction import Block, TxOutput
 from hathor.transaction.exceptions import PoaValidationError
 from hathor.transaction.poa import PoaBlock
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
@@ -94,9 +94,14 @@ def test_verify_poa() -> None:
     poa_signer, public_key_bytes = get_signer()
     settings = Mock(spec_set=HathorSettings)
     settings.CONSENSUS_ALGORITHM = PoaSettings.construct(signers=())
+    settings.AVG_TIME_BETWEEN_BLOCKS = 30
     block_verifier = PoaBlockVerifier(settings=settings)
+    storage = Mock()
+    storage.get_transaction = Mock(return_value=Block(timestamp=123))
+
     block = PoaBlock(
-        timestamp=123,
+        storage=storage,
+        timestamp=153,
         signal_bits=0b1010,
         weight=poa.BLOCK_WEIGHT_IN_TURN,
         parents=[b'parent1', b'parent2'],
@@ -110,6 +115,13 @@ def test_verify_poa() -> None:
         block_verifier.verify_poa(block)
     assert str(e.value) == 'blocks must not have rewards in a PoA network'
     block.outputs = []
+
+    # Test timestamp
+    block.timestamp = 152
+    with pytest.raises(PoaValidationError) as e:
+        block_verifier.verify_poa(block)
+    assert str(e.value) == 'blocks must have at least 30 seconds between them'
+    block.timestamp = 153
 
     # Test no signers
     settings.CONSENSUS_ALGORITHM = PoaSettings.construct(signers=())
@@ -131,6 +143,7 @@ def test_verify_poa() -> None:
 
     # Test incorrect private key
     PoaSigner(ec.generate_private_key(ec.SECP256K1())).sign_block(block)
+    block.signer_id = poa_signer._signer_id  # we set the correct signer id to test only the signature
     with pytest.raises(PoaValidationError) as e:
         block_verifier.verify_poa(block)
     assert str(e.value) == 'invalid PoA signature'

@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import argparse
 import os
 import signal
 import sys
@@ -136,14 +135,14 @@ def main(capture_stdout: bool) -> None:
 
 def _process_logging_output(argv: list[str]) -> tuple[LoggingOutput, LoggingOutput]:
     """Extract logging output before argv parsing."""
-    from hathor.cli.util import LoggingOutput
+    from hathor.cli.util import LoggingOutput, create_parser
 
     class LogOutputConfig(str, Enum):
         HATHOR = 'hathor'
         SIDE_DAG = 'side-dag'
         BOTH = 'both'
 
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = create_parser(add_help=False)
     log_args = parser.add_mutually_exclusive_group()
     log_args.add_argument('--json-logs', nargs='?', const='both', type=LogOutputConfig)
     log_args.add_argument('--disable-logs', nargs='?', const='both', type=LogOutputConfig)
