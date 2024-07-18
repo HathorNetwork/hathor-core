@@ -15,9 +15,15 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from cryptography.exceptions import InvalidSignature as CryptographyInvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+
 from hathor.consensus.consensus_settings import PoaSettings
+from hathor.crypto.util import get_public_key_from_bytes_compressed
 from hathor.transaction import Block
 
 if TYPE_CHECKING:
@@ -46,3 +52,38 @@ def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) 
     """Return the weight for the given block and signer."""
     is_in_turn_flag = is_in_turn(settings=settings, height=block.get_height(), signer_index=signer_index)
     return BLOCK_WEIGHT_IN_TURN if is_in_turn_flag else BLOCK_WEIGHT_OUT_OF_TURN
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidSignature:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class ValidSignature:
+    signer_index: int
+    public_key: bytes
+
+
+def verify_poa_signature(settings: PoaSettings, block: PoaBlock) -> InvalidSignature | ValidSignature:
+    """Return whether the provided public key was used to sign the block Proof-of-Authority."""
+    from hathor.consensus.poa import PoaSigner
+    sorted_signers = sorted(settings.signers)
+    hashed_poa_data = get_hashed_poa_data(block)
+
+    for signer_index, public_key_bytes in enumerate(sorted_signers):
+        signer_id = PoaSigner.get_poa_signer_id(public_key_bytes)
+        if block.signer_id != signer_id:
+            # this is not our signer
+            continue
+
+        public_key = get_public_key_from_bytes_compressed(public_key_bytes)
+        try:
+            public_key.verify(block.signature, hashed_poa_data, ec.ECDSA(hashes.SHA256()))
+        except CryptographyInvalidSignature:
+            # the signer_id is correct, but not the signature
+            continue
+        # the signer and signature are valid!
+        return ValidSignature(signer_index, public_key_bytes)
+
+    return InvalidSignature()
