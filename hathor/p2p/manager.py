@@ -645,7 +645,7 @@ class ConnectionsManager:
 
         deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
-        self.log.info('connect to', entrypoint=entrypoint, peer=str(peer))
+        self.log.info('connect to', entrypoint=str(entrypoint), peer=str(peer))
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTING,
             peer=peer,

@@ -14,10 +14,11 @@
 
 import socket
 from collections.abc import Iterator
-from typing import Callable
+from itertools import chain
+from typing import Callable, TypeAlias, cast
 
 from structlog import get_logger
-from twisted.internet import defer
+from twisted.internet.defer import Deferred, gatherResults
 from twisted.names.client import lookupAddress, lookupText
 from twisted.names.dns import Record_A, Record_TXT, RRHeader
 from typing_extensions import override
@@ -27,6 +28,8 @@ from hathor.p2p.entrypoint import Entrypoint, Protocol
 from .peer_discovery import PeerDiscovery
 
 logger = get_logger()
+
+LookupResult: TypeAlias = tuple[list[RRHeader], list[RRHeader], list[RRHeader]]
 
 
 class DNSPeerDiscovery(PeerDiscovery):
@@ -42,6 +45,12 @@ class DNSPeerDiscovery(PeerDiscovery):
         self.hosts = hosts
         self.default_port = default_port
         self.test_mode = test_mode
+
+    def do_lookup_address(self, host: str) -> Deferred[LookupResult]:
+        return lookupAddress(host)
+
+    def do_lookup_text(self, host: str) -> Deferred[LookupResult]:
+        return lookupText(host)
 
     @override
     async def discover_and_connect(self, connect_to: Callable[[Entrypoint], None]) -> None:
@@ -59,15 +68,20 @@ class DNSPeerDiscovery(PeerDiscovery):
             # Useful for testing purposes, so we don't need to execute a DNS query
             return {Entrypoint.parse('tcp://127.0.0.1:40403')}
 
-        d1 = lookupText(host)
+        deferreds = []
+
+        d1 = self.do_lookup_text(host)
         d1.addCallback(self.dns_seed_lookup_text)
-        d1.addErrback(self.errback),
+        d1.addErrback(self.errback)
+        deferreds.append(cast(Deferred[Iterator[Entrypoint]], d1))  # mypy doesn't know how addCallback affects d1
 
-        d2 = lookupAddress(host)
+        d2 = self.do_lookup_address(host)
         d2.addCallback(self.dns_seed_lookup_address)
-        d2.addErrback(self.errback),
+        d2.addErrback(self.errback)
+        deferreds.append(cast(Deferred[Iterator[Entrypoint]], d2))  # mypy doesn't know how addCallback affects d2
 
-        return set(await defer.gatherResults([d1, d2]))
+        results: list[Iterator[Entrypoint]] = await gatherResults(deferreds)
+        return set(chain(*results))
 
     def errback(self, result):
         """ Return an empty list if any error occur.
@@ -75,9 +89,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         self.log.error('errback', result=result)
         return []
 
-    def dns_seed_lookup_text(
-        self, results: tuple[list[RRHeader], list[RRHeader], list[RRHeader]]
-    ) -> Iterator[Entrypoint]:
+    def dns_seed_lookup_text(self, results: LookupResult) -> Iterator[Entrypoint]:
         """ Run a DNS lookup for TXT records to discover new peers.
 
         The `results` has three lists that contain answer records, authority records, and additional records.
@@ -92,12 +104,10 @@ class DNSPeerDiscovery(PeerDiscovery):
                 except ValueError:
                     self.log.warning('could not parse entrypoint, skipping it', raw_entrypoint=raw_entrypoint)
                     continue
-                self.log.info('seed DNS TXT found', entrypoint=entrypoint)
+                self.log.info('seed DNS TXT found', entrypoint=str(entrypoint))
                 yield entrypoint
 
-    def dns_seed_lookup_address(
-        self, results: tuple[list[RRHeader], list[RRHeader], list[RRHeader]]
-    ) -> Iterator[Entrypoint]:
+    def dns_seed_lookup_address(self, results: LookupResult) -> Iterator[Entrypoint]:
         """ Run a DNS lookup for A records to discover new peers.
 
         The `results` has three lists that contain answer records, authority records, and additional records.
@@ -109,5 +119,5 @@ class DNSPeerDiscovery(PeerDiscovery):
             assert address is not None
             host = socket.inet_ntoa(address)
             entrypoint = Entrypoint(Protocol.TCP, host, self.default_port)
-            self.log.info('seed DNS A found', entrypoint=entrypoint)
+            self.log.info('seed DNS A found', entrypoint=str(entrypoint))
             yield entrypoint
