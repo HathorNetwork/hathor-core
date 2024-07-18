@@ -20,6 +20,7 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer_discovery import BootstrapPeerDiscovery
 from hathor.util import json_dumpb, json_loadb
 
@@ -48,41 +49,46 @@ class AddPeersResource(Resource):
             return json_dumpb({'success': False, 'message': 'No post data'})
 
         try:
-            peers = json_loadb(raw_data)
+            raw_entrypoints = json_loadb(raw_data)
         except (JSONDecodeError, AttributeError):
             return json_dumpb({'success': False, 'message': 'Invalid format for post data'})
 
-        if not isinstance(peers, list):
+        if not isinstance(raw_entrypoints, list):
             return json_dumpb({
                 'success': False,
                 'message': 'Invalid format for post data. It was expected a list of strings.'
             })
 
+        try:
+            entrypoints = list(map(Entrypoint.parse, raw_entrypoints))
+        except ValueError:
+            return json_dumpb({
+                'success': False,
+                'message': 'Malformed entrypoint found.'
+            })
+
         known_peers = self.manager.connections.peer_storage.values()
 
-        def already_connected(connection_string: str) -> bool:
-            # determines if given connection string is already among connected or connecting peers
-            endpoint_url = connection_string.replace('//', '')
-
+        def already_connected(entrypoint: Entrypoint) -> bool:
             # ignore peers that we're already trying to connect
-            if endpoint_url in self.manager.connections.iter_not_ready_endpoints():
+            if entrypoint in self.manager.connections.iter_not_ready_endpoints():
                 return True
 
             # remove peers we already know about
             for peer in known_peers:
-                if connection_string in peer.entrypoints:
+                if entrypoint in peer.entrypoints:
                     return True
 
             return False
 
-        filtered_peers = [connection_string for connection_string in peers if not already_connected(connection_string)]
+        filtered_peers = [entrypoint for entrypoint in entrypoints if not already_connected(entrypoint)]
 
         pd = BootstrapPeerDiscovery(filtered_peers)
         # this fires and forget the coroutine, which is compatible with the original behavior
         coro = pd.discover_and_connect(self.manager.connections.connect_to)
         Deferred.fromCoroutine(coro)
 
-        ret = {'success': True, 'peers': filtered_peers}
+        ret = {'success': True, 'peers': [str(p) for p in filtered_peers]}
         return json_dumpb(ret)
 
     def render_OPTIONS(self, request: Request) -> int:

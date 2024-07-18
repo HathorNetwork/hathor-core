@@ -252,7 +252,7 @@ class Metrics:
                 continue
 
             metric = PeerConnectionMetrics(
-                connection_string=connection.connection_string if connection.connection_string else "",
+                connection_string=str(connection.entrypoint) if connection.entrypoint else "",
                 peer_id=connection.peer.id,
                 network=connection.network,
                 received_messages=connection.metrics.received_messages,

@@ -25,6 +25,7 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -34,7 +35,7 @@ from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
-from hathor.p2p.utils import description_to_connection_string, parse_whitelist
+from hathor.p2p.utils import parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
@@ -59,7 +60,7 @@ class _SyncRotateInfo(NamedTuple):
 
 
 class _ConnectingPeer(NamedTuple):
-    connection_string: str
+    entrypoint: Entrypoint
     endpoint_deferred: Deferred
 
 
@@ -360,8 +361,8 @@ class ConnectionsManager:
 
     def on_connection_failure(self, failure: Failure, peer: Optional[PeerId], endpoint: IStreamClientEndpoint) -> None:
         connecting_peer = self.connecting_peers[endpoint]
-        connection_string = connecting_peer.connection_string
-        self.log.warn('connection failure', endpoint=connection_string, failure=failure.getErrorMessage())
+        entrypoint = connecting_peer.entrypoint
+        self.log.warn('connection failure', entrypoint=entrypoint, failure=failure.getErrorMessage())
         self.connecting_peers.pop(endpoint)
 
         self.pubsub.publish(
@@ -467,13 +468,13 @@ class ConnectionsManager:
         for conn in self.connected_peers.values():
             yield conn
 
-    def iter_not_ready_endpoints(self) -> Iterable[str]:
+    def iter_not_ready_endpoints(self) -> Iterable[Entrypoint]:
         """Iterate over not-ready connections."""
         for connecting_peer in self.connecting_peers.values():
-            yield connecting_peer.connection_string
+            yield connecting_peer.entrypoint
         for protocol in self.handshaking_peers:
-            if protocol.connection_string is not None:
-                yield protocol.connection_string
+            if protocol.entrypoint is not None:
+                yield protocol.entrypoint
             else:
                 self.log.warn('handshaking protocol has empty connection string', protocol=protocol)
 
@@ -583,38 +584,50 @@ class ConnectionsManager:
         if peer.can_retry(now):
             self.connect_to(self.rng.choice(peer.entrypoints), peer)
 
-    def _connect_to_callback(self, protocol: Union[HathorProtocol, TLSMemoryBIOProtocol], peer: Optional[PeerId],
-                             endpoint: IStreamClientEndpoint, connection_string: str,
-                             url_peer_id: Optional[str]) -> None:
+    def _connect_to_callback(
+        self,
+        protocol: Union[HathorProtocol, TLSMemoryBIOProtocol],
+        peer: Optional[PeerId],
+        endpoint: IStreamClientEndpoint,
+        entrypoint: Entrypoint,
+    ) -> None:
         """Called when we successfully connect to a peer."""
         if isinstance(protocol, HathorProtocol):
-            protocol.on_outbound_connect(url_peer_id, connection_string)
+            protocol.on_outbound_connect(entrypoint)
         else:
             assert isinstance(protocol.wrappedProtocol, HathorProtocol)
-            protocol.wrappedProtocol.on_outbound_connect(url_peer_id, connection_string)
+            protocol.wrappedProtocol.on_outbound_connect(entrypoint)
         self.connecting_peers.pop(endpoint)
 
-    def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: Optional[bool] = None) -> None:
+    def connect_to(
+        self,
+        entrypoint: Entrypoint,
+        peer: Optional[PeerId] = None,
+        use_ssl: Optional[bool] = None,
+    ) -> None:
         """ Attempt to connect to a peer, even if a connection already exists.
         Usually you should call `connect_to_if_not_connected`.
 
         If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
+        if entrypoint.peer_id is not None and peer is not None and str(entrypoint.peer_id) != peer.id:
+            self.log.debug('skipping because the entrypoint peer_id does not match the actual peer_id',
+                           entrypoint=entrypoint)
+            return
+
         for connecting_peer in self.connecting_peers.values():
-            if connecting_peer.connection_string == description:
-                self.log.debug('skipping because we are already connecting to this endpoint', endpoint=description)
+            if connecting_peer.entrypoint.equals_ignore_peer_id(entrypoint):
+                self.log.debug('skipping because we are already connecting to this endpoint', entrypoint=entrypoint)
                 return
+
+        if self.localhost_only and not entrypoint.is_localhost():
+            self.log.debug('skip because of simple localhost check', entrypoint=entrypoint)
+            return
 
         if use_ssl is None:
             use_ssl = self.use_ssl
-        connection_string, peer_id = description_to_connection_string(description)
-        # When using twisted endpoints we can't have // in the connection string
-        endpoint_url = connection_string.replace('//', '')
-        endpoint = endpoints.clientFromString(self.reactor, endpoint_url)
 
-        if self.localhost_only:
-            if ('127.0.0.1' not in endpoint_url) and ('localhost' not in endpoint_url):
-                return
+        endpoint = entrypoint.to_client_endpoint(self.reactor)
 
         factory: IProtocolFactory
         if use_ssl:
@@ -628,11 +641,11 @@ class ConnectionsManager:
             peer.increment_retry_attempt(now)
 
         deferred = endpoint.connect(factory)
-        self.connecting_peers[endpoint] = _ConnectingPeer(connection_string, deferred)
+        self.connecting_peers[endpoint] = _ConnectingPeer(entrypoint, deferred)
 
-        deferred.addCallback(self._connect_to_callback, peer, endpoint, connection_string, peer_id)
+        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
-        self.log.info('connect to ', endpoint=description, peer=str(peer))
+        self.log.info('connect to', entrypoint=entrypoint, peer=str(peer))
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTING,
             peer=peer,
@@ -689,19 +702,14 @@ class ConnectionsManager:
         assert self.manager is not None
         for address in self._listen_addresses:
             if old_hostname is not None:
-                old_address_str = self._get_hostname_address_str(old_hostname, address)
-                if old_address_str in self.my_peer.entrypoints:
-                    self.my_peer.entrypoints.remove(old_address_str)
-
+                old_entrypoint = Entrypoint.from_hostname_address(old_hostname, address)
+                if old_entrypoint in self.my_peer.entrypoints:
+                    self.my_peer.entrypoints.remove(old_entrypoint)
             self._add_hostname_entrypoint(new_hostname, address)
 
     def _add_hostname_entrypoint(self, hostname: str, address: IPv4Address | IPv6Address) -> None:
-        hostname_address_str = self._get_hostname_address_str(hostname, address)
-        self.my_peer.entrypoints.append(hostname_address_str)
-
-    @staticmethod
-    def _get_hostname_address_str(hostname: str, address: IPv4Address | IPv6Address) -> str:
-        return '{}://{}:{}'.format(address.type, hostname, address.port).lower()
+        hostname_entrypoint = Entrypoint.from_hostname_address(hostname, address)
+        self.my_peer.entrypoints.append(hostname_entrypoint)
 
     def get_connection_to_drop(self, protocol: HathorProtocol) -> HathorProtocol:
         """ When there are duplicate connections, determine which one should be dropped.

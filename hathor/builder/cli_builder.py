@@ -34,6 +34,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
@@ -389,7 +390,8 @@ class CliBuilder:
             p2p_manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
 
         if self._args.bootstrap:
-            p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(self._args.bootstrap))
+            entrypoints = [Entrypoint.parse(desc) for desc in self._args.bootstrap]
+            p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(entrypoints))
 
         if self._args.x_rocksdb_indexes:
             self.log.warn('--x-rocksdb-indexes is now the default, no need to specify it')

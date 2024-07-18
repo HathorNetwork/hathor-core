@@ -17,6 +17,8 @@ from typing import Callable
 from structlog import get_logger
 from typing_extensions import override
 
+from hathor.p2p.entrypoint import Entrypoint
+
 from .peer_discovery import PeerDiscovery
 
 logger = get_logger()
@@ -26,15 +28,15 @@ class BootstrapPeerDiscovery(PeerDiscovery):
     """ It implements a bootstrap peer discovery, which receives a static list of peers.
     """
 
-    def __init__(self, descriptions: list[str]):
+    def __init__(self, entrypoints: list[Entrypoint]):
         """
         :param descriptions: Descriptions of peers to connect to.
         """
         super().__init__()
         self.log = logger.new()
-        self.descriptions = descriptions
+        self.entrypoints = entrypoints
 
     @override
-    async def discover_and_connect(self, connect_to: Callable[[str], None]) -> None:
-        for description in self.descriptions:
-            connect_to(description)
+    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], None]) -> None:
+        for entrypoint in self.entrypoints:
+            connect_to(entrypoint)

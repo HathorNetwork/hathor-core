@@ -15,13 +15,15 @@
 from abc import ABC, abstractmethod
 from typing import Callable
 
+from hathor.p2p.entrypoint import Entrypoint
+
 
 class PeerDiscovery(ABC):
     """ Base class to implement peer discovery strategies.
     """
 
     @abstractmethod
-    async def discover_and_connect(self, connect_to: Callable[[str], None]) -> None:
+    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], None]) -> None:
         """ This method must discover the peers and call `connect_to` for each of them.
 
         :param connect_to: Function which will be called for each discovered peer.
