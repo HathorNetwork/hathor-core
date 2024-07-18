@@ -36,8 +36,8 @@ logger = get_logger()
 # Number of seconds to wait for a sync to finish before trying to produce blocks
 _WAIT_SYNC_DELAY: int = 30
 
-# Number of seconds used in random delay calculation
-_RANDOM_DELAY_MULTIPLIER: int = 1
+# Number of seconds used between each signer depending on its distance to the expected signer
+_SIGNER_TURN_INTERVAL: int = 1
 
 
 class PoaBlockProducer:
@@ -164,12 +164,8 @@ class PoaBlockProducer:
     def _expected_block_timestamp(self, previous_block: Block) -> int:
         """Calculate the expected timestamp for a new block."""
         height = previous_block.get_height() + 1
-        is_in_turn = poa.is_in_turn(settings=self._poa_settings, height=height, signer_index=self._signer_index)
-        timestamp = previous_block.timestamp + self._settings.AVG_TIME_BETWEEN_BLOCKS
-        if is_in_turn:
-            return timestamp
-
-        signer_count = len(self._poa_settings.signers)
-        assert signer_count >= 1
-        random_offset = self.manager.rng.choice(range(signer_count * _RANDOM_DELAY_MULTIPLIER)) + 1
-        return timestamp + random_offset
+        expected_index = poa.in_turn_signer_index(settings=self._poa_settings, height=height)
+        index_distance = (self._signer_index - expected_index) % len(self._poa_settings.signers)
+        assert 0 <= index_distance < len(self._poa_settings.signers)
+        delay = _SIGNER_TURN_INTERVAL * index_distance
+        return previous_block.timestamp + self._settings.AVG_TIME_BETWEEN_BLOCKS + delay
