@@ -130,7 +130,10 @@ class HelloState(BaseState):
         protocol.sync_version = max(common_sync_versions)
 
         if data['app'] != self._app():
-            self.log.warn('different versions', theirs=data['app'], ours=self._app())
+            remote_app = data['app'].encode().hex()
+            our_app = self._app().encode().hex()
+            # XXX: this used to be a warning, but it shouldn't be since it's perfectly normal
+            self.log.debug('different versions', theirs=remote_app, ours=our_app)
 
         if data['network'] != protocol.network:
             protocol.send_error_and_close_connection('Wrong network.')
