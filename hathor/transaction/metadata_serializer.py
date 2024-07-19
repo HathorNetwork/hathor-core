@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Collection, Self
 
 import msgpack
@@ -53,7 +54,7 @@ class MetadataSerializer(ABC, BaseModel):
     def _to_metadata(self) -> TransactionMetadata:
         from hathor.transaction import TransactionMetadata
         meta = TransactionMetadata(
-            spent_outputs=self.spent_outputs,
+            spent_outputs=defaultdict(list, self.spent_outputs) if self.spent_outputs else None,
             accumulated_weight=self.accumulated_weight,
             score=self.score,
             min_height=self.min_height,

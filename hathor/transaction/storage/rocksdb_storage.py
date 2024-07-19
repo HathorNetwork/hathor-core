@@ -37,6 +37,7 @@ logger = get_logger()
 _DB_NAME = 'data_v2.db'
 _CF_NAME_TX = b'tx'
 _CF_NAME_META = b'meta'
+_CF_NAME_NEW_META = b'new-meta'
 _CF_NAME_ATTR = b'attr'
 _CF_NAME_MIGRATIONS = b'migrations'
 
@@ -57,6 +58,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
+        self._cf_new_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_NEW_META)
         self._cf_attr = rocksdb_storage.get_or_create_column_family(_CF_NAME_ATTR)
         self._cf_migrations = rocksdb_storage.get_or_create_column_family(_CF_NAME_MIGRATIONS)
 
@@ -76,12 +78,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     def _meta_from_bytes(self, tx: 'BaseTransaction', data: bytes) -> 'TransactionMetadata':
         from hathor.transaction.transaction_metadata import TransactionMetadata
-        if self.is_migrate_metadata_serialization_completed():
+        if self._is_migrate_metadata_serialization_completed():
             return MetadataSerializer.metadata_from_bytes(data, target=type(tx))
         return TransactionMetadata.create_from_json(json_loadb(data))
 
     def _meta_to_bytes(self, tx: 'BaseTransaction', meta: 'TransactionMetadata') -> bytes:
-        if self.is_migrate_metadata_serialization_completed():
+        if self._is_migrate_metadata_serialization_completed():
             return MetadataSerializer.metadata_to_bytes(meta, source=type(tx))
         return json_dumpb(meta.to_json())
 
@@ -100,7 +102,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
         super().remove_transaction(tx)
         self._db.delete((self._cf_tx, tx.hash))
-        self._db.delete((self._cf_meta, tx.hash))
+        self._db.delete((self._get_cf_meta(), tx.hash))
         self._remove_from_weakref(tx)
 
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
@@ -114,7 +116,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             tx_data = self._tx_to_bytes(tx)
             self._db.put((self._cf_tx, key), tx_data)
         meta_data = self._meta_to_bytes(tx, tx.get_metadata(use_storage=False))
-        self._db.put((self._cf_meta, key), meta_data)
+        self._db.put((self._get_cf_meta(), key), meta_data)
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         may_exist, _ = self._db.key_may_exist((self._cf_tx, hash_bytes))
@@ -141,7 +143,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     def _get_transaction_from_db(self, hash_bytes: bytes) -> Optional['BaseTransaction']:
         key = hash_bytes
         tx_data = self._db.get((self._cf_tx, key))
-        meta_data = self._db.get((self._cf_meta, key))
+        meta_data = self._db.get((self._get_cf_meta(), key))
         if tx_data is None:
             return None
         assert meta_data is not None, 'expected metadata to exist when tx exists'
@@ -151,7 +153,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     def _get_tx(self, hash_bytes: bytes, tx_data: bytes) -> 'BaseTransaction':
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is None:
-            meta_data = self._db.get((self._cf_meta, hash_bytes))
+            meta_data = self._db.get((self._get_cf_meta(), hash_bytes))
             tx = self._load_from_bytes(tx_data, meta_data)
             assert tx.hash == hash_bytes
             self._save_to_weakref(tx)
@@ -222,16 +224,22 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         else:
             return data.decode()
 
-    def is_migrate_metadata_serialization_completed(self) -> bool:
+    def _is_migrate_metadata_serialization_completed(self) -> bool:
         migration = migrate_metadata_serialization.Migration()
         name = migration.get_db_name()
         state = self.get_migration_state(name)
         return state is MigrationState.COMPLETED
 
+    def _get_cf_meta(self) -> 'rocksdb.ColumnFamilyHandle':
+        # TODO: simply reassing self._cf_meta instead of doing this
+        if self._is_migrate_metadata_serialization_completed():
+            return self._cf_new_meta
+        return self._cf_meta
+
     @override
     def migrate_metadata_serialization(self) -> Iterator[None]:
         from hathor.transaction import TransactionMetadata
-        assert not self.is_migrate_metadata_serialization_completed()
+        assert not self._is_migrate_metadata_serialization_completed()
         items = self._db.iteritems(self._cf_meta)
         items.seek_to_first()
 
@@ -239,5 +247,8 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             vertex = self.get_vertex(vertex_id)
             meta = TransactionMetadata.create_from_json(json_loadb(meta_bytes))
             new_bytes = MetadataSerializer.metadata_to_bytes(meta, source=type(vertex))
-            self._db.put((self._cf_meta, vertex_id), new_bytes)
+            self._db.delete((self._cf_meta, vertex_id))
+            self._db.put((self._cf_new_meta, vertex_id), new_bytes)
             yield
+
+        self._db.drop_column_family(self._cf_meta)
