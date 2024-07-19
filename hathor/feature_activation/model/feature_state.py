@@ -15,7 +15,7 @@
 from enum import Enum
 
 
-class FeatureState(Enum):
+class FeatureState(str, Enum):
     """
     Possible states a feature can be in, for each block.
 

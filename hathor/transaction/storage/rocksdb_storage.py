@@ -15,12 +15,14 @@
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
+from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
+from hathor.transaction.metadata_serializer import MetadataSerializer
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.storage.migrations import MigrationState
+from hathor.transaction.storage.migrations import MigrationState, migrate_metadata_serialization
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import json_dumpb, json_loadb
@@ -64,17 +66,23 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         super().__init__(indexes=indexes, settings=settings)
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
-        from hathor.transaction.transaction_metadata import TransactionMetadata
-
         tx = self.vertex_parser.deserialize(tx_data)
-        tx._metadata = TransactionMetadata.create_from_json(json_loadb(meta_data))
+        tx._metadata = self._meta_from_bytes(tx, meta_data)
         tx.storage = self
         return tx
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)
 
-    def _meta_to_bytes(self, meta: 'TransactionMetadata') -> bytes:
+    def _meta_from_bytes(self, tx: 'BaseTransaction', data: bytes) -> 'TransactionMetadata':
+        from hathor.transaction.transaction_metadata import TransactionMetadata
+        if self.is_migrate_metadata_serialization_completed():
+            return MetadataSerializer.metadata_from_bytes(data, target=type(tx))
+        return TransactionMetadata.create_from_json(json_loadb(data))
+
+    def _meta_to_bytes(self, tx: 'BaseTransaction', meta: 'TransactionMetadata') -> bytes:
+        if self.is_migrate_metadata_serialization_completed():
+            return MetadataSerializer.metadata_to_bytes(meta, source=type(tx))
         return json_dumpb(meta.to_json())
 
     def get_migration_state(self, migration_name: str) -> MigrationState:
@@ -105,7 +113,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if not only_metadata:
             tx_data = self._tx_to_bytes(tx)
             self._db.put((self._cf_tx, key), tx_data)
-        meta_data = self._meta_to_bytes(tx.get_metadata(use_storage=False))
+        meta_data = self._meta_to_bytes(tx, tx.get_metadata(use_storage=False))
         self._db.put((self._cf_meta, key), meta_data)
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
@@ -213,3 +221,23 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         else:
             return data.decode()
+
+    def is_migrate_metadata_serialization_completed(self) -> bool:
+        migration = migrate_metadata_serialization.Migration()
+        name = migration.get_db_name()
+        state = self.get_migration_state(name)
+        return state is MigrationState.COMPLETED
+
+    @override
+    def migrate_metadata_serialization(self) -> Iterator[None]:
+        from hathor.transaction import TransactionMetadata
+        assert not self.is_migrate_metadata_serialization_completed()
+        items = self._db.iteritems(self._cf_meta)
+        items.seek_to_first()
+
+        for (_, vertex_id), meta_bytes in items:
+            vertex = self.get_vertex(vertex_id)
+            meta = TransactionMetadata.create_from_json(json_loadb(meta_bytes))
+            new_bytes = MetadataSerializer.metadata_to_bytes(meta, source=type(vertex))
+            self._db.put((self._cf_meta, vertex_id), new_bytes)
+            yield

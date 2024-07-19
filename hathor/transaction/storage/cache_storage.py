@@ -16,6 +16,7 @@ from collections import OrderedDict
 from typing import Any, Iterator, Optional
 
 from twisted.internet import threads
+from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
@@ -245,3 +246,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def flush(self):
         self._flush_to_storage(self.dirty_txs.copy())
+
+    @override
+    def migrate_metadata_serialization(self) -> Iterator[None]:
+        return self.store.migrate_metadata_serialization()

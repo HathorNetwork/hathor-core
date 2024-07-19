@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.transaction.metadata_serializer import MetadataSerializer
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import practically_equal
 
@@ -307,8 +308,9 @@ class TransactionMetadata:
         :return: TransactionMetadata
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
-        # XXX: using json serialization for simplicity, should it use pickle? manual fields? other alternative?
-        return self.create_from_json(self.to_json())
+        vertex_type = type(self.get_tx())
+        meta_bytes = MetadataSerializer.metadata_to_bytes(self, source=vertex_type)
+        return MetadataSerializer.metadata_from_bytes(meta_bytes, target=vertex_type)
 
     def add_voided_by(self, item: bytes) -> None:
         """Add `item` to `self.voided_by`. Note that this method does not save the change."""

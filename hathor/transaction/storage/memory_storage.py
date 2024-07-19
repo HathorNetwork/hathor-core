@@ -14,6 +14,8 @@
 
 from typing import Any, Iterator, Optional, TypeVar
 
+from typing_extensions import override
+
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -117,3 +119,8 @@ class TransactionMemoryStorage(BaseTransactionStorage):
 
     def get_value(self, key: str) -> Optional[str]:
         return self.attributes.get(key)
+
+    @override
+    def migrate_metadata_serialization(self) -> Iterator[None]:
+        # This method is only ever used by migrations, so it shouldn't be implemented for the memory storage.
+        raise NotImplementedError

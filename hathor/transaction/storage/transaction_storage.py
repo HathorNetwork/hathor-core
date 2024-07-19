@@ -43,6 +43,7 @@ from hathor.transaction.storage.migrations import (
     add_feature_activation_bit_counts_metadata,
     add_feature_activation_bit_counts_metadata2,
     add_min_height_metadata,
+    migrate_metadata_serialization,
     remove_first_nop_features,
     remove_second_nop_features,
 )
@@ -100,6 +101,7 @@ class TransactionStorage(ABC):
         remove_first_nop_features.Migration,
         add_feature_activation_bit_counts_metadata2.Migration,
         remove_second_nop_features.Migration,
+        migrate_metadata_serialization.Migration,
     ]
 
     _migrations: list[BaseMigration]
@@ -1163,6 +1165,11 @@ class TransactionStorage(ABC):
         block = self.get_vertex(block_id)
         assert isinstance(block, Block)
         return block
+
+    @abstractmethod
+    def migrate_metadata_serialization(self) -> Iterator[None]:
+        """Perform metadata serialization migration"""
+        raise NotImplementedError
 
 
 class BaseTransactionStorage(TransactionStorage):
