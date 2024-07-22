@@ -43,9 +43,22 @@ def get_hashed_poa_data(block: PoaBlock) -> bytes:
     return hashed_poa_data
 
 
+def get_active_signers(settings: PoaSettings, height: int) -> list[bytes]:
+    """Return a list of signers that are currently active considering the given block height."""
+    active_signers = []
+    for signer_settings in settings.signers:
+        end_height = float('inf') if signer_settings.end_height is None else signer_settings.end_height
+
+        if signer_settings.start_height <= height <= end_height:
+            active_signers.append(signer_settings.public_key)
+
+    return active_signers
+
+
 def in_turn_signer_index(settings: PoaSettings, height: int) -> int:
     """Return the signer index that is in turn for the given height."""
-    return height % len(settings.signers)
+    active_signers = get_active_signers(settings, height)
+    return height % len(active_signers)
 
 
 def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) -> float:
@@ -68,7 +81,8 @@ class ValidSignature:
 def verify_poa_signature(settings: PoaSettings, block: PoaBlock) -> InvalidSignature | ValidSignature:
     """Return whether the provided public key was used to sign the block Proof-of-Authority."""
     from hathor.consensus.poa import PoaSigner
-    sorted_signers = sorted(settings.signers)
+    active_signers = get_active_signers(settings, block.get_height())
+    sorted_signers = sorted(active_signers)
     hashed_poa_data = get_hashed_poa_data(block)
 
     for signer_index, public_key_bytes in enumerate(sorted_signers):

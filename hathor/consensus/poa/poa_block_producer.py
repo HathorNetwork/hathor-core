@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from structlog import get_logger
+from twisted.internet.interfaces import IDelayedCall
 from twisted.internet.task import LoopingCall
 
 from hathor.conf.settings import HathorSettings
@@ -24,6 +25,7 @@ from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.reactor import ReactorProtocol
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.consensus.poa import PoaSigner
@@ -52,11 +54,11 @@ class PoaBlockProducer:
         '_reactor',
         '_manager',
         '_poa_signer',
-        '_signer_index',
         '_started_producing',
         '_start_producing_lc',
         '_schedule_block_lc',
         '_last_seen_best_block',
+        '_delayed_call',
     )
 
     def __init__(self, *, settings: HathorSettings, reactor: ReactorProtocol, poa_signer: PoaSigner) -> None:
@@ -67,7 +69,6 @@ class PoaBlockProducer:
         self._reactor = reactor
         self._manager: HathorManager | None = None
         self._poa_signer = poa_signer
-        self._signer_index = self._calculate_signer_index(self._poa_settings, self._poa_signer)
         self._last_seen_best_block: Block | None = None
 
         self._started_producing = False
@@ -76,6 +77,7 @@ class PoaBlockProducer:
 
         self._schedule_block_lc = LoopingCall(self._schedule_block)
         self._schedule_block_lc.clock = self._reactor
+        self._delayed_call: IDelayedCall | None = None
 
     @property
     def manager(self) -> HathorManager:
@@ -97,16 +99,20 @@ class PoaBlockProducer:
         if self._schedule_block_lc.running:
             self._schedule_block_lc.stop()
 
-    @staticmethod
-    def _calculate_signer_index(settings: PoaSettings, poa_signer: PoaSigner) -> int:
-        """Return the signer index for the given private key."""
-        public_key = poa_signer.get_public_key()
+        if self._delayed_call and self._delayed_call.active():
+            self._delayed_call.cancel()
+
+    def _get_signer_index(self, previous_block: Block) -> int | None:
+        """Return our signer index considering the active signers."""
+        height = previous_block.get_height() + 1
+        public_key = self._poa_signer.get_public_key()
         public_key_bytes = get_public_key_bytes_compressed(public_key)
-        sorted_signers = sorted(settings.signers)
+        active_signers = poa.get_active_signers(self._poa_settings, height)
+        sorted_signers = sorted(active_signers)
         try:
             return sorted_signers.index(public_key_bytes)
         except ValueError:
-            raise ValueError(f'Public key "{public_key_bytes.hex()}" not in list of PoA signers')
+            return None
 
     def _start_producing(self) -> None:
         """Start producing new blocks."""
@@ -126,11 +132,15 @@ class PoaBlockProducer:
             return
 
         self._last_seen_best_block = previous_block
+        signer_index = self._get_signer_index(previous_block)
+        if signer_index is None:
+            return
+
         now = self._reactor.seconds()
-        expected_timestamp = self._expected_block_timestamp(previous_block)
+        expected_timestamp = self._expected_block_timestamp(previous_block, signer_index)
         propagation_delay = 0 if expected_timestamp < now else expected_timestamp - now
 
-        self._reactor.callLater(propagation_delay, self._produce_block, previous_block)
+        self._delayed_call = self._reactor.callLater(propagation_delay, self._produce_block, previous_block)
         self._log.debug(
             'scheduling block production',
             previous_block=previous_block.hash_hex,
@@ -144,7 +154,8 @@ class PoaBlockProducer:
         block_templates = self.manager.get_block_templates(parent_block_hash=previous_block.hash)
         block = block_templates.generate_mining_block(self.manager.rng, cls=PoaBlock)
         assert isinstance(block, PoaBlock)
-        block.weight = poa.calculate_weight(self._poa_settings, block, self._signer_index)
+        signer_index = self._get_signer_index(previous_block)
+        block.weight = poa.calculate_weight(self._poa_settings, block, not_none(signer_index))
         self._poa_signer.sign_block(block)
         block.update_hash()
 
@@ -161,11 +172,12 @@ class PoaBlockProducer:
             voided=bool(block.get_metadata().voided_by),
         )
 
-    def _expected_block_timestamp(self, previous_block: Block) -> int:
+    def _expected_block_timestamp(self, previous_block: Block, signer_index: int) -> int:
         """Calculate the expected timestamp for a new block."""
         height = previous_block.get_height() + 1
         expected_index = poa.in_turn_signer_index(settings=self._poa_settings, height=height)
-        index_distance = (self._signer_index - expected_index) % len(self._poa_settings.signers)
-        assert 0 <= index_distance < len(self._poa_settings.signers)
+        signers = poa.get_active_signers(self._poa_settings, height)
+        index_distance = (signer_index - expected_index) % len(signers)
+        assert 0 <= index_distance < len(signers)
         delay = _SIGNER_TURN_INTERVAL * index_distance
         return previous_block.timestamp + self._settings.AVG_TIME_BETWEEN_BLOCKS + delay

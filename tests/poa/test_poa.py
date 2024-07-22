@@ -16,10 +16,11 @@ from unittest.mock import Mock
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
+from pydantic import ValidationError
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
-from hathor.consensus.consensus_settings import PoaSettings
+from hathor.consensus.consensus_settings import PoaSettings, PoaSignerSettings
 from hathor.consensus.poa.poa_signer import PoaSigner, PoaSignerFile
 from hathor.crypto.util import get_address_b58_from_public_key, get_private_key_bytes, get_public_key_bytes_compressed
 from hathor.transaction import Block, TxOutput
@@ -130,7 +131,7 @@ def test_verify_poa() -> None:
     assert str(e.value) == 'invalid PoA signature'
 
     # Test no data
-    settings.CONSENSUS_ALGORITHM = PoaSettings(signers=(public_key_bytes,))
+    settings.CONSENSUS_ALGORITHM = PoaSettings(signers=(PoaSignerSettings(public_key=public_key_bytes),))
     with pytest.raises(PoaValidationError) as e:
         block_verifier.verify_poa(block)
     assert str(e.value) == 'invalid PoA signature'
@@ -162,7 +163,9 @@ def test_verify_poa() -> None:
     # For this part we use two signers, so the ordering matters
     signer_and_keys: list[tuple[PoaSigner, bytes]] = [get_signer(), get_signer()]
     sorted_keys = sorted(signer_and_keys, key=lambda key_pair: key_pair[1])  # sort by public key
-    settings.CONSENSUS_ALGORITHM = PoaSettings(signers=tuple([key_pair[1] for key_pair in signer_and_keys]))
+    settings.CONSENSUS_ALGORITHM = PoaSettings(signers=tuple(
+        [PoaSignerSettings(public_key=key_pair[1]) for key_pair in signer_and_keys]
+    ))
     first_poa_signer, second_poa_signer = [key_pair[0] for key_pair in sorted_keys]
 
     # Test valid signature with two signers, in turn
@@ -230,7 +233,7 @@ def test_verify_poa() -> None:
     ]
 )
 def test_in_turn_signer_index(n_signers: int, height: int, signer_index: int, expected: bool) -> None:
-    settings = PoaSettings.construct(signers=tuple(b'' for _ in range(n_signers)))
+    settings = PoaSettings.construct(signers=tuple(PoaSignerSettings(public_key=b'') for _ in range(n_signers)))
 
     result = poa.in_turn_signer_index(settings=settings, height=height) == signer_index
     assert result == expected
@@ -253,9 +256,81 @@ def test_in_turn_signer_index(n_signers: int, height: int, signer_index: int, ex
     ]
 )
 def test_calculate_weight(n_signers: int, height: int, signer_index: int, expected: float) -> None:
-    settings = PoaSettings.construct(signers=tuple(b'' for _ in range(n_signers)))
+    settings = PoaSettings.construct(signers=tuple(PoaSignerSettings(public_key=b'') for _ in range(n_signers)))
     block = Mock()
     block.get_height = Mock(return_value=height)
 
     result = poa.calculate_weight(settings, block, signer_index)
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    ['signers', 'heights_and_expected'],
+    [
+        (
+            (PoaSignerSettings(public_key=b'a'),),
+            [
+                (0, [b'a']),
+                (10, [b'a']),
+                (100, [b'a']),
+            ],
+        ),
+        (
+            (PoaSignerSettings(public_key=b'a', start_height=0, end_height=10),),
+            [
+                (0, [b'a']),
+                (10, [b'a']),
+                (100, []),
+            ],
+        ),
+        (
+            (PoaSignerSettings(public_key=b'a', start_height=10, end_height=None),),
+            [
+                (0, []),
+                (10, [b'a']),
+                (100, [b'a']),
+            ],
+        ),
+        (
+            (
+                PoaSignerSettings(public_key=b'a', start_height=0, end_height=10),
+                PoaSignerSettings(public_key=b'b', start_height=5, end_height=20),
+                PoaSignerSettings(public_key=b'c', start_height=10, end_height=30),
+            ),
+            [
+                (0, [b'a']),
+                (5, [b'a', b'b']),
+                (10, [b'a', b'b', b'c']),
+                (15, [b'b', b'c']),
+                (20, [b'b', b'c']),
+                (30, [b'c']),
+                (100, []),
+            ]
+        ),
+    ]
+)
+def test_get_active_signers(
+    signers: tuple[PoaSignerSettings, ...],
+    heights_and_expected: list[tuple[int, list[bytes]]],
+) -> None:
+    settings = PoaSettings(signers=signers)
+
+    for height, expected in heights_and_expected:
+        result = poa.get_active_signers(settings, height)
+        assert result == expected, f'height={height}'
+
+
+def test_poa_signer_settings() -> None:
+    # Test passes
+    _ = PoaSignerSettings(public_key=b'some_key')
+    _ = PoaSignerSettings(public_key=b'some_key', start_height=0, end_height=10)
+    _ = PoaSignerSettings(public_key=b'some_key', start_height=0, end_height=None)
+
+    # Test fails
+    with pytest.raises(ValidationError) as e:
+        _ = PoaSignerSettings(public_key=b'some_key', start_height=10, end_height=10)
+    assert 'end_height (10) must be greater than start_height (10)' in str(e.value)
+
+    with pytest.raises(ValidationError) as e:
+        _ = PoaSignerSettings(public_key=b'some_key', start_height=10, end_height=5)
+    assert 'end_height (5) must be greater than start_height (10)' in str(e.value)
