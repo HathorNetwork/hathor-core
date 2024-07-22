@@ -167,7 +167,7 @@ class ReadyState(BaseState):
             if peer.entrypoints:
                 data.append({
                     'id': peer.id,
-                    'entrypoints': peer.entrypoints,
+                    'entrypoints': [str(entrypoint) for entrypoint in peer.entrypoints],
                 })
         self.send_message(ProtocolMessages.PEERS, json_dumps(data))
         self.log.debug('send peers', peers=data)

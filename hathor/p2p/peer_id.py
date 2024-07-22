@@ -91,8 +91,11 @@ class PeerId:
             self.generate_keys()
 
     def __str__(self):
-        return ('PeerId(id=%s, entrypoints=%s, retry_timestamp=%d, retry_interval=%d)' % (self.id, self.entrypoints,
-                self.retry_timestamp, self.retry_interval))
+        entrypoints = [str(entrypoint) for entrypoint in self.entrypoints]
+        return (
+            f'PeerId(id={self.id}, entrypoints={entrypoints}, retry_timestamp={self.retry_timestamp}, '
+            f'retry_interval={self.retry_interval})'
+        )
 
     def merge(self, other: 'PeerId') -> None:
         """ Merge two PeerId objects, checking that they have the same

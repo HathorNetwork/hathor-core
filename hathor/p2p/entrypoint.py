@@ -40,7 +40,7 @@ class Entrypoint:
     protocol: Protocol
     host: str
     port: int
-    peer_id: PeerId | None
+    peer_id: PeerId | None = None
 
     def __str__(self):
         if self.peer_id is None:
