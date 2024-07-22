@@ -229,10 +229,10 @@ def test_verify_poa() -> None:
         (2, 3, 1, True),
     ]
 )
-def test_is_in_turn(n_signers: int, height: int, signer_index: int, expected: bool) -> None:
+def test_in_turn_signer_index(n_signers: int, height: int, signer_index: int, expected: bool) -> None:
     settings = PoaSettings.construct(signers=tuple(b'' for _ in range(n_signers)))
 
-    result = poa.is_in_turn(settings=settings, height=height, signer_index=signer_index)
+    result = poa.in_turn_signer_index(settings=settings, height=height) == signer_index
     assert result == expected
 
 

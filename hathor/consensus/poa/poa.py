@@ -43,15 +43,15 @@ def get_hashed_poa_data(block: PoaBlock) -> bytes:
     return hashed_poa_data
 
 
-def is_in_turn(*, settings: PoaSettings, height: int, signer_index: int) -> bool:
-    """Return whether the given signer is in turn for the given height."""
-    return height % len(settings.signers) == signer_index
+def in_turn_signer_index(settings: PoaSettings, height: int) -> int:
+    """Return the signer index that is in turn for the given height."""
+    return height % len(settings.signers)
 
 
 def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) -> float:
     """Return the weight for the given block and signer."""
-    is_in_turn_flag = is_in_turn(settings=settings, height=block.get_height(), signer_index=signer_index)
-    return BLOCK_WEIGHT_IN_TURN if is_in_turn_flag else BLOCK_WEIGHT_OUT_OF_TURN
+    expected_index = in_turn_signer_index(settings, block.get_height())
+    return BLOCK_WEIGHT_IN_TURN if expected_index == signer_index else BLOCK_WEIGHT_OUT_OF_TURN
 
 
 @dataclass(frozen=True, slots=True)
