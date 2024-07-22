@@ -12,13 +12,11 @@ from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from tests import unittest
 
-settings = get_global_settings()
-
 
 class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
-    @patch('hathor.p2p.states.peer_id.settings', new=settings._replace(ENABLE_PEER_WHITELIST=True))
     def test_sync_v11_whitelist_no_no(self) -> None:
         network = 'testnet'
+        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
@@ -38,9 +36,9 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         self.assertTrue(conn.tr1.disconnecting)
         self.assertTrue(conn.tr2.disconnecting)
 
-    @patch('hathor.p2p.states.peer_id.settings', new=settings._replace(ENABLE_PEER_WHITELIST=True))
     def test_sync_v11_whitelist_yes_no(self) -> None:
         network = 'testnet'
+        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
@@ -62,9 +60,9 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         self.assertFalse(conn.tr1.disconnecting)
         self.assertTrue(conn.tr2.disconnecting)
 
-    @patch('hathor.p2p.states.peer_id.settings', new=settings._replace(ENABLE_PEER_WHITELIST=True))
     def test_sync_v11_whitelist_yes_yes(self) -> None:
         network = 'testnet'
+        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})

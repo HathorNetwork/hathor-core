@@ -24,7 +24,7 @@ from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -45,7 +45,6 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 logger = get_logger()
-settings = get_global_settings()
 
 # The timeout in seconds for the whitelist GET request
 WHITELIST_REQUEST_TIMEOUT = 45
@@ -74,9 +73,6 @@ class PeerConnectionsMetrics(NamedTuple):
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
-    MAX_ENABLED_SYNC = settings.MAX_ENABLED_SYNC
-    SYNC_UPDATE_INTERVAL = settings.SYNC_UPDATE_INTERVAL
-    PEER_DISCOVERY_INTERVAL = settings.PEER_DISCOVERY_INTERVAL
 
     class GlobalRateLimiter:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
@@ -92,18 +88,25 @@ class ConnectionsManager:
 
     rate_limiter: RateLimiter
 
-    def __init__(self,
-                 reactor: Reactor,
-                 network: str,
-                 my_peer: PeerId,
-                 pubsub: PubSubManager,
-                 ssl: bool,
-                 rng: Random,
-                 whitelist_only: bool) -> None:
+    def __init__(
+        self,
+        settings: HathorSettings,
+        reactor: Reactor,
+        network: str,
+        my_peer: PeerId,
+        pubsub: PubSubManager,
+        ssl: bool,
+        rng: Random,
+        whitelist_only: bool,
+    ) -> None:
         self.log = logger.new()
+        self._settings = settings
         self.rng = rng
         self.manager = None
-        self._settings = get_global_settings()
+
+        self.MAX_ENABLED_SYNC = settings.MAX_ENABLED_SYNC
+        self.SYNC_UPDATE_INTERVAL = settings.SYNC_UPDATE_INTERVAL
+        self.PEER_DISCOVERY_INTERVAL = settings.PEER_DISCOVERY_INTERVAL
 
         self.reactor = reactor
         self.my_peer = my_peer
@@ -125,8 +128,12 @@ class ConnectionsManager:
         # Factories.
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
         self.use_ssl = ssl
-        self.server_factory = HathorServerFactory(self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl)
-        self.client_factory = HathorClientFactory(self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl)
+        self.server_factory = HathorServerFactory(
+            self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+        )
+        self.client_factory = HathorClientFactory(
+            self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+        )
 
         # Global maximum number of connections.
         self.max_connections: int = self._settings.PEER_MAX_CONNECTIONS

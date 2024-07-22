@@ -295,7 +295,8 @@ class CliBuilder:
         cpu_mining_service = CpuMiningService()
 
         p2p_manager = ConnectionsManager(
-            reactor,
+            settings=settings,
+            reactor=reactor,
             network=network,
             my_peer=peer_id,
             pubsub=pubsub,

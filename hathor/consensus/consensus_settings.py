@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 from abc import ABC, abstractmethod
 from enum import Enum, unique
 from typing import Annotated, Any, Literal, TypeAlias
 
-from pydantic import Field, NonNegativeInt, validator
+from pydantic import Field, NonNegativeInt, PrivateAttr, validator
 from typing_extensions import override
 
 from hathor.transaction import TxVersion
+from hathor.util import json_dumpb
 from hathor.utils.pydantic import BaseModel
 
 
@@ -31,6 +33,7 @@ class ConsensusType(str, Enum):
 
 class _BaseConsensusSettings(ABC, BaseModel):
     type: ConsensusType
+    _peer_hello_hash: str | None = PrivateAttr(default=None)
 
     def is_pow(self) -> bool:
         """Return whether this is a Proof-of-Work consensus."""
@@ -49,6 +52,16 @@ class _BaseConsensusSettings(ABC, BaseModel):
         """Return whether a `TxVersion` is valid for this consensus type."""
         return version in self._get_valid_vertex_versions(include_genesis)
 
+    def get_peer_hello_hash(self) -> str | None:
+        """Return a hash of consensus settings to be used in peer hello validation."""
+        if self._peer_hello_hash is None:
+            self._peer_hello_hash = self._calculate_peer_hello_hash()
+        return self._peer_hello_hash
+
+    def _calculate_peer_hello_hash(self) -> str | None:
+        """Calculate a hash of consensus settings to be used in peer hello validation."""
+        return None
+
 
 class PowSettings(_BaseConsensusSettings):
     type: Literal[ConsensusType.PROOF_OF_WORK] = ConsensusType.PROOF_OF_WORK
@@ -61,6 +74,10 @@ class PowSettings(_BaseConsensusSettings):
             TxVersion.TOKEN_CREATION_TRANSACTION,
             TxVersion.MERGE_MINED_BLOCK
         }
+
+    @override
+    def get_peer_hello_hash(self) -> str | None:
+        return None
 
 
 class PoaSignerSettings(BaseModel):
@@ -85,6 +102,13 @@ class PoaSignerSettings(BaseModel):
             raise ValueError(f'end_height ({end_height}) must be greater than start_height ({start_height})')
 
         return end_height
+
+    def to_json_dict(self) -> dict[str, Any]:
+        """Return this signer settings instance as a json dict."""
+        json_dict = self.dict()
+        # TODO: We can use a custom serializer to convert bytes to hex when we update to Pydantic V2.
+        json_dict['public_key'] = self.public_key.hex()
+        return json_dict
 
 
 class PoaSettings(_BaseConsensusSettings):
@@ -113,6 +137,13 @@ class PoaSettings(_BaseConsensusSettings):
             versions.add(TxVersion.REGULAR_BLOCK)
 
         return versions
+
+    @override
+    def _calculate_peer_hello_hash(self) -> str | None:
+        data = b''
+        for signer in self.signers:
+            data += json_dumpb(signer.to_json_dict())
+        return hashlib.sha256(data).digest().hex()
 
 
 ConsensusSettings: TypeAlias = Annotated[PowSettings | PoaSettings, Field(discriminator='type')]

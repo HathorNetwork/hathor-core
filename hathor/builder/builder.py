@@ -19,7 +19,6 @@ from structlog import get_logger
 from typing_extensions import assert_never
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
 from hathor.consensus.poa import PoaBlockProducer, PoaSigner
@@ -346,7 +345,7 @@ class Builder:
     def _get_or_create_settings(self) -> HathorSettingsType:
         """Return the HathorSettings instance set on this builder, or a new one if not set."""
         if self._settings is None:
-            self._settings = get_global_settings()
+            raise ValueError('settings not set')
         return self._settings
 
     def _get_reactor(self) -> Reactor:
@@ -422,7 +421,8 @@ class Builder:
         assert self._network is not None
 
         self._p2p_manager = ConnectionsManager(
-            reactor,
+            settings=self._get_or_create_settings(),
+            reactor=reactor,
             network=self._network,
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),

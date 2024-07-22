@@ -95,6 +95,20 @@ class BasePoaSimulationTest(SimulatorTestCase):
         assert manager1.tx_storage.get_block_count() == 1
         assert manager2.tx_storage.get_block_count() == 1
 
+    def test_different_signer_settings(self) -> None:
+        signer1, signer2 = get_signer(), get_signer()
+        self.simulator.settings = get_settings(signer1)
+        manager1 = self._get_manager()
+        self.simulator.settings = get_settings(signer2)
+        manager2 = self._get_manager()
+
+        connection = FakeConnection(manager1, manager2)
+        self.simulator.add_connection(connection)
+
+        connection.run_one_step()
+        assert b'ERROR Settings values are different' in connection.peek_tr1_value()
+        assert connection.tr1.disconnecting
+
     def test_one_producer_allowed(self) -> None:
         signer = get_signer()
         signer_id = signer._signer_id
@@ -131,8 +145,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         assert manager.tx_storage.get_block_count() == 1
 
     def test_two_producers(self) -> None:
-        signers = get_signer(), get_signer()
-        signer1, signer2 = sorted(signers, key=lambda signer: get_public_key_bytes_compressed(signer.get_public_key()))
+        signer1, signer2 = get_signer(), get_signer()
         signer_id1, signer_id2 = signer1._signer_id, signer2._signer_id
         self.simulator.settings = get_settings(signer1, signer2, time_between_blocks=10)
         manager1 = self._get_manager(signer1)
@@ -193,8 +206,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
                 _assert_block_in_turn(blocks_manager2[0], signer2)
 
     def test_producer_leave_and_comeback(self) -> None:
-        signers = get_signer(), get_signer()
-        signer1, signer2 = sorted(signers, key=lambda signer: get_public_key_bytes_compressed(signer.get_public_key()))
+        signer1, signer2 = get_signer(), get_signer()
         signer_id1, signer_id2 = signer1._signer_id, signer2._signer_id
         self.simulator.settings = get_settings(signer1, signer2, time_between_blocks=10)
 
@@ -305,12 +317,9 @@ class BasePoaSimulationTest(SimulatorTestCase):
         )
 
     def test_new_signer_added(self) -> None:
-        signers = get_signer(), get_signer()
-        key_and_signer1, key_and_signer2 = sorted(
-            (get_public_key_bytes_compressed(signer.get_public_key()), signer) for signer in signers
-        )
-        key1, signer1 = key_and_signer1
-        key2, signer2 = key_and_signer2
+        signer1, signer2 = get_signer(), get_signer()
+        key1 = get_public_key_bytes_compressed(signer1.get_public_key())
+        key2 = get_public_key_bytes_compressed(signer2.get_public_key())
         signer_settings1 = PoaSignerSettings(public_key=key1)
         signer_settings2 = PoaSignerSettings(public_key=key2, start_height=6, end_height=13)
         signer_id1 = signer1._signer_id

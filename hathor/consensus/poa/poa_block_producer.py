@@ -108,9 +108,8 @@ class PoaBlockProducer:
         public_key = self._poa_signer.get_public_key()
         public_key_bytes = get_public_key_bytes_compressed(public_key)
         active_signers = poa.get_active_signers(self._poa_settings, height)
-        sorted_signers = sorted(active_signers)
         try:
-            return sorted_signers.index(public_key_bytes)
+            return active_signers.index(public_key_bytes)
         except ValueError:
             return None
 

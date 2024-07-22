@@ -218,7 +218,8 @@ class BaseMetricsTest(unittest.TestCase):
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
-                inbound=False
+                inbound=False,
+                settings=self._settings
             )
             protocol.peer = PeerId()
 
