@@ -100,8 +100,7 @@ def test_poa_block_producer_one_signer() -> None:
 
 
 def test_poa_block_producer_two_signers() -> None:
-    signers = [get_signer(), get_signer()]
-    signer1, signer2 = sorted(signers, key=lambda signer: get_public_key_bytes_compressed(signer.get_public_key()))
+    signer1, signer2 = get_signer(), get_signer()
     settings = get_settings(signer1, signer2, time_between_blocks=10)
     manager = _get_manager(settings)
     reactor = manager.reactor
@@ -175,10 +174,10 @@ def test_poa_block_producer_two_signers() -> None:
 )
 def test_expected_block_timestamp(previous_height: int, signer_index: int, expected_delay: int) -> None:
     signers = [get_signer(), get_signer(), get_signer(), get_signer()]
-    keys_and_signers = sorted(
+    keys_and_signers = [
         (get_public_key_bytes_compressed(signer.get_public_key()), signer)
         for signer in signers
-    )
+    ]
     signer = keys_and_signers[signer_index][1]
     settings = Mock()
     settings.CONSENSUS_ALGORITHM = PoaSettings(signers=tuple(

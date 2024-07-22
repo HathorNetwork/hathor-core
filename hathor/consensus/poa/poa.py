@@ -82,10 +82,9 @@ def verify_poa_signature(settings: PoaSettings, block: PoaBlock) -> InvalidSigna
     """Return whether the provided public key was used to sign the block Proof-of-Authority."""
     from hathor.consensus.poa import PoaSigner
     active_signers = get_active_signers(settings, block.get_height())
-    sorted_signers = sorted(active_signers)
     hashed_poa_data = get_hashed_poa_data(block)
 
-    for signer_index, public_key_bytes in enumerate(sorted_signers):
+    for signer_index, public_key_bytes in enumerate(active_signers):
         signer_id = PoaSigner.get_poa_signer_id(public_key_bytes)
         if block.signer_id != signer_id:
             # this is not our signer

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
@@ -27,12 +27,10 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-settings = HathorSettings()
-
 
 class PeerIdState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol') -> None:
-        super().__init__(protocol)
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
+        super().__init__(protocol, settings)
         self.log = logger.new(remote=protocol.get_short_remote())
         self.cmd_map.update({
             ProtocolMessages.PEER_ID: self.handle_peer_id,
@@ -100,7 +98,7 @@ class PeerIdState(BaseState):
 
         # is it on the whitelist?
         if peer.id and self._should_block_peer(peer.id):
-            if settings.WHITELIST_WARN_BLOCKED_PEERS:
+            if self._settings.WHITELIST_WARN_BLOCKED_PEERS:
                 protocol.send_error_and_close_connection(f'Blocked (by {peer.id}). Get in touch with Hathor team.')
             else:
                 protocol.send_error_and_close_connection('Connection rejected.')
@@ -152,12 +150,12 @@ class PeerIdState(BaseState):
             return False
 
         # when ENABLE_PEER_WHITELIST is set, we check if we're on sync-v1 to block non-whitelisted peers
-        if settings.ENABLE_PEER_WHITELIST:
+        if self._settings.ENABLE_PEER_WHITELIST:
             assert self.protocol.sync_version is not None
             if not peer_is_whitelisted:
                 if self.protocol.sync_version.is_v1():
                     return True
-                elif settings.USE_PEER_WHITELIST_ON_SYNC_V2:
+                elif self._settings.USE_PEER_WHITELIST_ON_SYNC_V2:
                     return True
 
         # otherwise we block non-whitelisted peers when on "whitelist-only mode"

@@ -27,6 +27,7 @@ from cryptography.x509.oid import NameOID
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
@@ -59,10 +60,9 @@ def get_genesis_short_hash() -> str:
     return get_representation_for_all_genesis(settings).hex()[:7]
 
 
-def get_settings_hello_dict() -> dict[str, Any]:
+def get_settings_hello_dict(settings: HathorSettings) -> dict[str, Any]:
     """ Return a dict of settings values that must be validated in the hello state
     """
-    settings = get_global_settings()
     settings_dict = {}
     for key in settings.P2P_SETTINGS_HASH_FIELDS:
         value = getattr(settings, key)
@@ -70,6 +70,10 @@ def get_settings_hello_dict() -> dict[str, Any]:
         if type(value) is bytes:
             value = value.hex()
         settings_dict[key] = value
+
+    if consensus_hash := settings.CONSENSUS_ALGORITHM.get_peer_hello_hash():
+        settings_dict['CONSENSUS_ALGORITHM'] = consensus_hash
+
     return settings_dict
 
 

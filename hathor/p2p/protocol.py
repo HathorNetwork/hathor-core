@@ -23,7 +23,7 @@ from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
@@ -91,9 +91,17 @@ class HathorProtocol:
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
     capabilities: set[str]  # capabilities received from the peer in HelloState
 
-    def __init__(self, network: str, my_peer: PeerId, p2p_manager: 'ConnectionsManager',
-                 *, use_ssl: bool, inbound: bool) -> None:
-        self._settings = get_global_settings()
+    def __init__(
+        self,
+        network: str,
+        my_peer: PeerId,
+        p2p_manager: 'ConnectionsManager',
+        *,
+        settings: HathorSettings,
+        use_ssl: bool,
+        inbound: bool,
+    ) -> None:
+        self._settings = settings
         self.network = network
         self.my_peer = my_peer
         self.connections = p2p_manager
@@ -164,7 +172,7 @@ class HathorProtocol:
         """Called to change the state of the connection."""
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
-            instance = state_cls(self)
+            instance = state_cls(self, self._settings)
             instance.state_name = state_enum.name
             self._state_instances[state_enum] = instance
         new_state = self._state_instances[state_enum]

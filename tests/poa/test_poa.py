@@ -162,11 +162,10 @@ def test_verify_poa() -> None:
 
     # For this part we use two signers, so the ordering matters
     signer_and_keys: list[tuple[PoaSigner, bytes]] = [get_signer(), get_signer()]
-    sorted_keys = sorted(signer_and_keys, key=lambda key_pair: key_pair[1])  # sort by public key
     settings.CONSENSUS_ALGORITHM = PoaSettings(signers=tuple(
         [PoaSignerSettings(public_key=key_pair[1]) for key_pair in signer_and_keys]
     ))
-    first_poa_signer, second_poa_signer = [key_pair[0] for key_pair in sorted_keys]
+    first_poa_signer, second_poa_signer = [key_pair[0] for key_pair in signer_and_keys]
 
     # Test valid signature with two signers, in turn
     block.weight = poa.BLOCK_WEIGHT_IN_TURN
