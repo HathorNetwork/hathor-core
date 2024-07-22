@@ -17,13 +17,14 @@ from __future__ import annotations
 import os
 import signal
 import sys
-import traceback
+import time
 from argparse import ArgumentParser
 from dataclasses import dataclass
 from enum import Enum
-from multiprocessing import Pipe, Process
+from multiprocessing import Process
 from typing import TYPE_CHECKING, Any
 
+from setproctitle import setproctitle
 from typing_extensions import assert_never, override
 
 from hathor.cli.run_node_args import RunNodeArgs  # skip-cli-import-custom-check
@@ -31,13 +32,6 @@ from hathor.cli.run_node_args import RunNodeArgs  # skip-cli-import-custom-check
 if TYPE_CHECKING:
     from hathor.cli.util import LoggingOutput
 
-    # Workaround for a typing issue in Windows
-    if sys.platform == 'win32':
-        from multiprocessing.connection import _ConnectionBase as Connection
-    else:
-        from multiprocessing.connection import Connection
-
-import psutil
 from structlog import get_logger
 
 from hathor.cli.run_node import RunNode
@@ -45,31 +39,16 @@ from hathor.cli.run_node import RunNode
 logger = get_logger()
 
 PRE_SETUP_LOGGING: bool = False
-HATHOR_NODE_INIT_WAIT_PERIOD: int = 10
+
+# Period in seconds for polling subprocesses' state.
+MONITOR_WAIT_PERIOD: int = 10
+
+# Delay in seconds before killing a subprocess after trying to terminate it.
+KILL_WAIT_DELAY = 300
 
 
 class SideDagArgs(RunNodeArgs):
     poa_signer_file: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class HathorProcessInitFail:
-    reason: str
-
-
-@dataclass(frozen=True, slots=True)
-class HathorProcessInitSuccess:
-    pass
-
-
-@dataclass(frozen=True, slots=True)
-class HathorProcessTerminated:
-    pass
-
-
-@dataclass(frozen=True, slots=True)
-class SideDagProcessTerminated:
-    pass
 
 
 class SideDagRunNode(RunNode):
@@ -116,21 +95,39 @@ def main(capture_stdout: bool) -> None:
     argv = sys.argv[1:]
     hathor_logging_output, side_dag_logging_output = _process_logging_output(argv)
     hathor_node_argv, side_dag_argv = _partition_argv(argv)
-    conn1, conn2 = Pipe()
-    hathor_node_process = _start_hathor_node_process(
-        hathor_node_argv, logging_output=hathor_logging_output, capture_stdout=capture_stdout, conn=conn1
-    )
 
-    log_options = process_logging_options(side_dag_argv)
+    # the main process uses the same configuration as the hathor process
+    log_options = process_logging_options(hathor_node_argv.copy())
     setup_logging(
-        logging_output=side_dag_logging_output,
+        logging_output=hathor_logging_output,
         logging_options=log_options,
         capture_stdout=capture_stdout,
-        extra_log_info=_get_extra_log_info('side-dag')
+        extra_log_info=_get_extra_log_info('monitor')
     )
-    logger.info('starting nodes', hathor_node_pid=hathor_node_process.pid, side_dag_pid=os.getpid())
 
-    _run_side_dag_node(side_dag_argv, hathor_node_process=hathor_node_process, conn=conn2)
+    hathor_node_process = _start_node_process(
+        argv=hathor_node_argv,
+        runner=RunNode,
+        logging_output=hathor_logging_output,
+        capture_stdout=capture_stdout,
+        name='hathor',
+    )
+    side_dag_node_process = _start_node_process(
+        argv=side_dag_argv,
+        runner=SideDagRunNode,
+        logging_output=side_dag_logging_output,
+        capture_stdout=capture_stdout,
+        name='side-dag',
+    )
+
+    logger.info(
+        'starting nodes',
+        monitor_pid=os.getpid(),
+        hathor_node_pid=hathor_node_process.pid,
+        side_dag_node_pid=side_dag_node_process.pid
+    )
+
+    _run_monitor_process(hathor_node_process, side_dag_node_process)
 
 
 def _process_logging_output(argv: list[str]) -> tuple[LoggingOutput, LoggingOutput]:
@@ -205,100 +202,106 @@ def _partition_argv(argv: list[str]) -> tuple[list[str], list[str]]:
     return hathor_node_argv, side_dag_argv
 
 
-def _run_side_dag_node(argv: list[str], *, hathor_node_process: Process, conn: 'Connection') -> None:
+def _run_monitor_process(*processes: Process) -> None:
     """Function to be called by the main process to run the side-dag full node."""
-    logger.info('waiting for hathor node to initialize...')
-    while not conn.poll(HATHOR_NODE_INIT_WAIT_PERIOD):
-        logger.info('still waiting for hathor node to initialize...')
+    setproctitle('hathor-core: monitor')
+    signal.signal(signal.SIGINT, lambda _, __: _terminate_and_exit(processes, reason='received SIGINT'))
+    signal.signal(signal.SIGTERM, lambda _, __: _terminate_and_exit(processes, reason='received SIGTERM'))
 
-    message = conn.recv()
-    if isinstance(message, HathorProcessInitFail):
-        logger.critical(f'side-dag node not started because hathor node initialization failed:\n{message.reason}')
-        return
-
-    assert isinstance(message, HathorProcessInitSuccess)
-    logger.info('hathor node initialized')
-    logger.info('starting side-dag node...')
-
-    try:
-        side_dag = SideDagRunNode(argv=argv)
-    except (BaseException, Exception):
-        logger.exception('terminating hathor node due to exception in side-dag node...')
-        conn.send(SideDagProcessTerminated())
-        hathor_node_process.terminate()
-        return
-
-    side_dag.run()
-
-    # If `run()` returns, either the hathor node exited and terminated us, leaving the message below, or the side-dag
-    # node exited and we will terminate the hathor node.
-    if conn.poll():
-        message = conn.recv()
-        assert isinstance(message, HathorProcessTerminated)
-        logger.critical('side-dag node terminated because hathor node exited')
-        return
-
-    conn.send(SideDagProcessTerminated())
-    logger.critical('terminating hathor node...')
-    hathor_node_process.terminate()
+    while True:
+        time.sleep(MONITOR_WAIT_PERIOD)
+        for process in processes:
+            if not process.is_alive():
+                _terminate_and_exit(
+                    processes,
+                    reason=f'process "{process.name}" (pid: {process.pid}) exited'
+                )
 
 
-def _start_hathor_node_process(
-    argv: list[str],
+def _terminate_and_exit(processes: tuple[Process, ...], *, reason: str) -> None:
+    """Terminate all processes that are alive. Kills them if they're not terminated after a while.
+    Then, exits the program."""
+    logger.critical(f'terminating all nodes. reason: {reason}')
+
+    for process in processes:
+        if process.is_alive():
+            logger.critical(f'terminating process "{process.name}" (pid: {process.pid})...')
+            process.terminate()
+
+    now = time.time()
+    while True:
+        time.sleep(MONITOR_WAIT_PERIOD)
+        if time.time() >= now + KILL_WAIT_DELAY:
+            _kill_all(processes)
+            break
+
+        all_are_dead = all(not process.is_alive() for process in processes)
+        if all_are_dead:
+            break
+
+    logger.critical('all nodes terminated.')
+    sys.exit(0)
+
+
+def _kill_all(processes: tuple[Process, ...]) -> None:
+    """Kill all processes that are alive."""
+    for process in processes:
+        if process.is_alive():
+            logger.critical(f'process "{process.name}" (pid: {process.pid}) still alive, killing it...')
+            process.kill()
+
+
+def _start_node_process(
     *,
+    argv: list[str],
+    runner: type[RunNode],
     logging_output: LoggingOutput,
     capture_stdout: bool,
-    conn: 'Connection',
+    name: str,
 ) -> Process:
     """Create and start a Hathor node process."""
-    run_hathor_node_args = (argv, RunNode, logging_output, capture_stdout, conn)
-    hathor_node_process = Process(target=_run_hathor_node, args=run_hathor_node_args)
-    hathor_node_process.start()
-    return hathor_node_process
+    args = _RunNodeArgs(
+        argv=argv,
+        runner=runner,
+        logging_output=logging_output,
+        capture_stdout=capture_stdout,
+        name=name
+    )
+    process = Process(target=_run_node, args=(args,), name=name)
+    process.start()
+    return process
 
 
-def _run_hathor_node(
-    argv: list[str],
-    run_node_cmd: type[RunNode],
-    logging_output: LoggingOutput,
-    capture_stdout: bool,
-    conn: 'Connection',
-) -> None:
-    """Function to be called by a background process to run the Hathor full node."""
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _RunNodeArgs:
+    argv: list[str]
+    runner: type[RunNode]
+    logging_output: LoggingOutput
+    capture_stdout: bool
+    name: str
+
+
+def _run_node(args: _RunNodeArgs) -> None:
     from hathor.cli.util import process_logging_options, setup_logging
-
-    # We don't terminate via SIGINT directly, instead the side-dag process will terminate us.
-    signal.signal(signal.SIGINT, lambda _, __: None)
     try:
-        log_options = process_logging_options(argv)
+        log_options = process_logging_options(args.argv)
         setup_logging(
-            logging_output=logging_output,
+            logging_output=args.logging_output,
             logging_options=log_options,
-            capture_stdout=capture_stdout,
-            extra_log_info=_get_extra_log_info('hathor')
+            capture_stdout=args.capture_stdout,
+            extra_log_info=_get_extra_log_info(args.name)
         )
-        hathor_node = run_node_cmd(argv=argv)
+        logger.info(f'initializing node "{args.name}"')
+        node = args.runner(argv=args.argv)
+    except KeyboardInterrupt:
+        logger.warn(f'{args.name} node interrupted by user')
+        return
     except (BaseException, Exception):
-        logger.exception('hathor process terminated due to exception in initialization')
-        conn.send(HathorProcessInitFail(traceback.format_exc()))
+        logger.exception(f'process "{args.name}" terminated due to exception in initialization')
         return
 
-    conn.send(HathorProcessInitSuccess())
-    hathor_node.run()
-
-    # If `run()` returns, either the side-dag node exited and terminated us, leaving the message below, or the hathor
-    # node exited and we will terminate the side-dag node.
-    if conn.poll():
-        message = conn.recv()
-        assert isinstance(message, SideDagProcessTerminated)
-        logger.critical('hathor node terminated because side-dag process was terminated')
-        return
-
-    conn.send(HathorProcessTerminated())
-    logger.critical('terminating side-dag node...')
-    parent_pid = os.getppid()
-    parent_process = psutil.Process(parent_pid)
-    parent_process.terminate()
+    node.run()
+    logger.critical(f'node "{args.name}" gracefully terminated')
 
 
 def _get_extra_log_info(process_name: str) -> dict[str, str]:
