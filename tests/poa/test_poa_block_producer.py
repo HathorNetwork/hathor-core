@@ -18,7 +18,7 @@ import pytest
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
-from hathor.consensus.consensus_settings import PoaSettings
+from hathor.consensus.consensus_settings import PoaSettings, PoaSignerSettings
 from hathor.consensus.poa import PoaBlockProducer
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.manager import HathorManager
@@ -181,13 +181,15 @@ def test_expected_block_timestamp(previous_height: int, signer_index: int, expec
     )
     signer = keys_and_signers[signer_index][1]
     settings = Mock()
-    settings.CONSENSUS_ALGORITHM = PoaSettings(signers=tuple([x[0] for x in keys_and_signers]))
+    settings.CONSENSUS_ALGORITHM = PoaSettings(signers=tuple(
+        [PoaSignerSettings(public_key=key_and_signer[0]) for key_and_signer in keys_and_signers]
+    ))
     settings.AVG_TIME_BETWEEN_BLOCKS = 30
     producer = PoaBlockProducer(settings=settings, reactor=Mock(), poa_signer=signer)
     previous_block = Mock()
     previous_block.timestamp = 100
     previous_block.get_height = Mock(return_value=previous_height)
 
-    result = producer._expected_block_timestamp(previous_block)
+    result = producer._expected_block_timestamp(previous_block, signer_index)
 
     assert result == previous_block.timestamp + expected_delay

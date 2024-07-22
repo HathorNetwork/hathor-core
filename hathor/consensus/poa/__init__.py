@@ -5,6 +5,7 @@ from .poa import (
     InvalidSignature,
     ValidSignature,
     calculate_weight,
+    get_active_signers,
     get_hashed_poa_data,
     in_turn_signer_index,
     verify_poa_signature,
@@ -24,5 +25,6 @@ __all__ = [
     'PoaSignerFile',
     'verify_poa_signature',
     'InvalidSignature',
-    'ValidSignature'
+    'ValidSignature',
+    'get_active_signers',
 ]

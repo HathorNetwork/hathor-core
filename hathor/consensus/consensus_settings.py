@@ -14,9 +14,9 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum, unique
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Any, Literal, TypeAlias
 
-from pydantic import Field, validator
+from pydantic import Field, NonNegativeInt, validator
 from typing_extensions import override
 
 from hathor.transaction import TxVersion
@@ -63,19 +63,38 @@ class PowSettings(_BaseConsensusSettings):
         }
 
 
-class PoaSettings(_BaseConsensusSettings):
-    type: Literal[ConsensusType.PROOF_OF_AUTHORITY] = ConsensusType.PROOF_OF_AUTHORITY
+class PoaSignerSettings(BaseModel):
+    public_key: bytes
+    start_height: NonNegativeInt = 0
+    end_height: NonNegativeInt | None = None
 
-    # A list of Proof-of-Authority signer public keys that have permission to produce blocks.
-    signers: tuple[bytes, ...]
-
-    @validator('signers', each_item=True, pre=True)
+    @validator('public_key', pre=True)
     def _parse_hex_str(cls, hex_str: str | bytes) -> bytes:
         from hathor.conf.settings import parse_hex_str
         return parse_hex_str(hex_str)
 
+    @validator('end_height')
+    def _validate_end_height(cls, end_height: int | None, values: dict[str, Any]) -> int | None:
+        start_height = values.get('start_height')
+        assert start_height is not None, 'start_height must be set'
+
+        if end_height is None:
+            return None
+
+        if end_height <= start_height:
+            raise ValueError(f'end_height ({end_height}) must be greater than start_height ({start_height})')
+
+        return end_height
+
+
+class PoaSettings(_BaseConsensusSettings):
+    type: Literal[ConsensusType.PROOF_OF_AUTHORITY] = ConsensusType.PROOF_OF_AUTHORITY
+
+    # A list of Proof-of-Authority signer public keys that have permission to produce blocks.
+    signers: tuple[PoaSignerSettings, ...]
+
     @validator('signers')
-    def _validate_signers(cls, signers: tuple[bytes, ...]) -> tuple[bytes, ...]:
+    def _validate_signers(cls, signers: tuple[PoaSignerSettings, ...]) -> tuple[PoaSignerSettings, ...]:
         if len(signers) == 0:
             raise ValueError('At least one signer must be provided in PoA networks')
         return signers

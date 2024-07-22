@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
-from hathor.consensus.consensus_settings import ConsensusType, PoaSettings
+from hathor.consensus.consensus_settings import ConsensusType, PoaSettings, PoaSignerSettings
 from hathor.consensus.poa import PoaSigner
 from hathor.crypto.util import get_public_key_bytes_compressed
 
@@ -25,12 +25,19 @@ def get_signer() -> PoaSigner:
     return PoaSigner(ec.generate_private_key(ec.SECP256K1()))
 
 
-def get_settings(*poa_signers: PoaSigner, time_between_blocks: int | None = None) -> HathorSettings:
+def get_settings(
+    *poa_signers: PoaSigner | PoaSignerSettings,
+    time_between_blocks: int | None = None
+) -> HathorSettings:
     signers = []
     for signer in poa_signers:
-        public_key = signer.get_public_key()
-        public_key_bytes = get_public_key_bytes_compressed(public_key)
-        signers.append(public_key_bytes)
+        if isinstance(signer, PoaSignerSettings):
+            poa_settings = signer
+        else:
+            public_key = signer.get_public_key()
+            public_key_bytes = get_public_key_bytes_compressed(public_key)
+            poa_settings = PoaSignerSettings(public_key=public_key_bytes)
+        signers.append(poa_settings)
 
     settings = get_global_settings()
     settings = settings._replace(
