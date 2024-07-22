@@ -19,7 +19,7 @@ from structlog import get_logger
 logger = get_logger()
 
 
-MAX_MERKLE_PATH_LENGTH: int = 12
+MAX_MERKLE_PATH_LENGTH: int = 20
 
 
 class BitcoinAuxPow(NamedTuple):
