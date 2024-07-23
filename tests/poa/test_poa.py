@@ -218,40 +218,55 @@ def test_verify_poa() -> None:
 @pytest.mark.parametrize(
     ['n_signers', 'height', 'signer_index', 'expected'],
     [
-        (1, 1, 0, True),
-        (1, 2, 0, True),
-        (1, 3, 0, True),
+        (1, 1, 0, 0),
+        (1, 2, 0, 0),
+        (1, 3, 0, 0),
 
-        (2, 1, 0, False),
-        (2, 2, 0, True),
-        (2, 3, 0, False),
+        (2, 1, 0, 1),
+        (2, 2, 0, 0),
+        (2, 3, 0, 1),
 
-        (2, 1, 1, True),
-        (2, 2, 1, False),
-        (2, 3, 1, True),
+        (2, 1, 1, 0),
+        (2, 2, 1, 1),
+        (2, 3, 1, 0),
+
+        (5, 1, 0, 4),
+        (5, 2, 0, 3),
+        (5, 3, 0, 2),
+        (5, 4, 0, 1),
+        (5, 5, 0, 0),
     ]
 )
-def test_in_turn_signer_index(n_signers: int, height: int, signer_index: int, expected: bool) -> None:
+def test_get_signer_index_distance(n_signers: int, height: int, signer_index: int, expected: int) -> None:
     settings = PoaSettings.construct(signers=tuple(PoaSignerSettings(public_key=b'') for _ in range(n_signers)))
 
-    result = poa.in_turn_signer_index(settings=settings, height=height) == signer_index
+    result = poa.get_signer_index_distance(settings=settings, signer_index=signer_index, height=height)
     assert result == expected
 
 
 @pytest.mark.parametrize(
     ['n_signers', 'height', 'signer_index', 'expected'],
     [
+        (1, 0, 0, poa.BLOCK_WEIGHT_IN_TURN),
         (1, 1, 0, poa.BLOCK_WEIGHT_IN_TURN),
         (1, 2, 0, poa.BLOCK_WEIGHT_IN_TURN),
         (1, 3, 0, poa.BLOCK_WEIGHT_IN_TURN),
 
+        (2, 0, 0, poa.BLOCK_WEIGHT_IN_TURN),
         (2, 1, 0, poa.BLOCK_WEIGHT_OUT_OF_TURN),
         (2, 2, 0, poa.BLOCK_WEIGHT_IN_TURN),
         (2, 3, 0, poa.BLOCK_WEIGHT_OUT_OF_TURN),
 
+        (2, 0, 1, poa.BLOCK_WEIGHT_OUT_OF_TURN),
         (2, 1, 1, poa.BLOCK_WEIGHT_IN_TURN),
         (2, 2, 1, poa.BLOCK_WEIGHT_OUT_OF_TURN),
         (2, 3, 1, poa.BLOCK_WEIGHT_IN_TURN),
+
+        (5, 0, 0, poa.BLOCK_WEIGHT_IN_TURN),
+        (5, 1, 0, poa.BLOCK_WEIGHT_OUT_OF_TURN / 4),
+        (5, 2, 0, poa.BLOCK_WEIGHT_OUT_OF_TURN / 3),
+        (5, 3, 0, poa.BLOCK_WEIGHT_OUT_OF_TURN / 2),
+        (5, 4, 0, poa.BLOCK_WEIGHT_OUT_OF_TURN / 1),
     ]
 )
 def test_calculate_weight(n_signers: int, height: int, signer_index: int, expected: float) -> None:
