@@ -3,6 +3,7 @@ from twisted.internet.defer import inlineCallbacks
 
 import hathor
 from hathor.conf.unittests import SETTINGS
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.resources import StatusResource
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -15,8 +16,11 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(StatusResource(self.manager))
+        self.entrypoint = Entrypoint.parse('tcp://192.168.1.1:54321')
+        self.manager.connections.my_peer.entrypoints.append(self.entrypoint)
 
         self.manager2 = self.create_peer('testnet')
+        self.manager2.connections.my_peer.entrypoints.append(self.entrypoint)
         self.conn1 = FakeConnection(self.manager, self.manager2)
 
     @inlineCallbacks

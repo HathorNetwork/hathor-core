@@ -70,7 +70,7 @@ class PeerIdState(BaseState):
         hello = {
             'id': my_peer.id,
             'pubKey': my_peer.get_public_key(),
-            'entrypoints': my_peer.entrypoints,
+            'entrypoints': my_peer.entrypoints_as_str(),
         }
         self.send_message(ProtocolMessages.PEER_ID, json_dumps(hello))
 
