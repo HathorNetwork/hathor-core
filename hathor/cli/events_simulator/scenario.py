@@ -26,6 +26,7 @@ class Scenario(Enum):
     SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS = 'SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS'
     REORG = 'REORG'
     UNVOIDED_TRANSACTION = 'UNVOIDED_TRANSACTION'
+    INVALID_MEMPOOL_TRANSACTION = 'INVALID_MEMPOOL_TRANSACTION'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
         simulate_fns = {
@@ -34,6 +35,7 @@ class Scenario(Enum):
             Scenario.SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS: simulate_single_chain_blocks_and_transactions,
             Scenario.REORG: simulate_reorg,
             Scenario.UNVOIDED_TRANSACTION: simulate_unvoided_transaction,
+            Scenario.INVALID_MEMPOOL_TRANSACTION: simulate_invalid_mempool_transaction,
         }
 
         simulate_fn = simulate_fns[self]
@@ -140,3 +142,38 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     # The first tx gets voided and the second gets unvoided
     assert tx.get_metadata().voided_by
     assert not tx2.get_metadata().voided_by
+
+
+def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
+    from hathor.conf.get_settings import get_global_settings
+    from hathor.simulator.utils import add_new_blocks, gen_new_tx
+    from hathor.transaction import Block
+
+    settings = get_global_settings()
+    assert manager.wallet is not None
+    address = manager.wallet.get_unused_address(mark_as_used=False)
+
+    blocks = add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    simulator.run(60)
+
+    tx = gen_new_tx(manager, address, 1000)
+    tx.weight = manager.daa.minimum_tx_weight(tx)
+    tx.update_hash()
+    assert manager.propagate_tx(tx, fails_silently=False)
+    simulator.run(60)
+
+    # re-org: replace last two blocks with one block, new height will be just one short of enough
+    block_to_replace = blocks[-2]
+    tb0 = manager.make_custom_block_template(block_to_replace.parents[0], block_to_replace.parents[1:])
+    b0: Block = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
+    b0.weight = 10
+    manager.cpu_mining_service.resolve(b0)
+    assert manager.propagate_tx(b0, fails_silently=False)
+    simulator.run(60)
+
+    # the transaction should have been removed from the mempool
+    assert tx not in manager.tx_storage.iter_mempool_from_best_index()
+
+    # additionally the transaction should have been marked as invalid and removed from the storage after the re-org
+    assert tx.get_metadata().validation.is_invalid()
+    assert not manager.tx_storage.transaction_exists(tx.hash)
