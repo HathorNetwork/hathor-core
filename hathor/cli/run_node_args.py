@@ -64,6 +64,7 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     enable_debug_api: bool
     enable_crash_api: bool
     x_sync_bridge: bool
+    x_sync_v1_only: bool
     x_sync_v2_only: bool
     x_remove_sync_v1: bool
     sync_bridge: bool
