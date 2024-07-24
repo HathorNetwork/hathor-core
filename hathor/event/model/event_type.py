@@ -14,7 +14,7 @@
 
 from enum import Enum
 
-from hathor.event.model.event_data import BaseEventData, EmptyData, ReorgData, TxData
+from hathor.event.model.event_data import BaseEventData, EmptyData, ReorgData, TxData, VertexIdData
 from hathor.pubsub import HathorEvents
 
 
@@ -25,6 +25,7 @@ class EventType(Enum):
     REORG_STARTED = 'REORG_STARTED'
     REORG_FINISHED = 'REORG_FINISHED'
     VERTEX_METADATA_CHANGED = 'VERTEX_METADATA_CHANGED'
+    VERTEX_REMOVED = 'VERTEX_REMOVED'
     FULL_NODE_CRASHED = 'FULL_NODE_CRASHED'
 
     @classmethod
@@ -44,7 +45,8 @@ _HATHOR_EVENT_TO_EVENT_TYPE = {
     HathorEvents.NETWORK_NEW_TX_ACCEPTED: EventType.NEW_VERTEX_ACCEPTED,
     HathorEvents.REORG_STARTED: EventType.REORG_STARTED,
     HathorEvents.REORG_FINISHED: EventType.REORG_FINISHED,
-    HathorEvents.CONSENSUS_TX_UPDATE: EventType.VERTEX_METADATA_CHANGED
+    HathorEvents.CONSENSUS_TX_UPDATE: EventType.VERTEX_METADATA_CHANGED,
+    HathorEvents.CONSENSUS_TX_REMOVED: EventType.VERTEX_REMOVED
 }
 
 _EVENT_TYPE_TO_EVENT_DATA: dict[EventType, type[BaseEventData]] = {
@@ -54,5 +56,6 @@ _EVENT_TYPE_TO_EVENT_DATA: dict[EventType, type[BaseEventData]] = {
     EventType.REORG_STARTED: ReorgData,
     EventType.REORG_FINISHED: EmptyData,
     EventType.VERTEX_METADATA_CHANGED: TxData,
+    EventType.VERTEX_REMOVED: VertexIdData,
     EventType.FULL_NODE_CRASHED: EmptyData,
 }
