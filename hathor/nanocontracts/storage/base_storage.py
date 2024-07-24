@@ -113,6 +113,19 @@ class NCStorageFactory(ABC):
         trie = PatriciaTrie(self._store, root_id=self.bytes_to_node_id(root_id))
         return trie
 
+    def get_mempool_trie(self) -> 'PatriciaTrie':
+        root_id = self.get_mempool_root_id()
+        return self.get_trie(root_id)
+
+    def get_mempool_root_id(self) -> bytes | None:
+        try:
+            return self._store[b'mempool']
+        except KeyError:
+            return None
+
+    def save_mempool_root_id(self, root_id: bytes) -> None:
+        self._store[b'mempool'] = root_id
+
     @abstractmethod
     def __call__(self, nano_contract_id: VertexId, nc_root_id: Optional[bytes]) -> NCBaseStorage:
         """Return a storage object for a given nano contract."""

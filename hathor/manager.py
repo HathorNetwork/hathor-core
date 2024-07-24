@@ -415,6 +415,14 @@ class HathorManager:
             raise NanoContractDoesNotExist(nc_id.hex())
         return self.consensus_algorithm.nc_storage_factory(nc_id, nc_root_id)
 
+    def get_mempool_nc_storage(self, nc_id: VertexId) -> NCBaseStorage:
+        block_trie = self.consensus_algorithm.nc_storage_factory.get_mempool_trie()
+        try:
+            nc_root_id = block_trie.get(nc_id)
+        except KeyError:
+            raise NanoContractDoesNotExist(nc_id.hex())
+        return self.consensus_algorithm.nc_storage_factory(nc_id, nc_root_id)
+
     def get_best_block_nc_storage(self, nc_id: VertexId) -> NCBaseStorage:
         """Return a contract storage with the contract state at the best block."""
         best_block = self.tx_storage.get_best_block()

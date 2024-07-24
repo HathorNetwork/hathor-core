@@ -140,6 +140,7 @@ class NCMemoryStorageFactory(NCStorageFactory):
     def __init__(self) -> None:
         # This attribute stores data from all contracts.
         self._store = MemoryNodeTrieStore()
+        self._mempool_root_id = None
 
     def __call__(self, nano_contract_id: bytes, nc_root_id: Optional[bytes]) -> NCMemoryStorage:
         trie = self.get_trie(nc_root_id)

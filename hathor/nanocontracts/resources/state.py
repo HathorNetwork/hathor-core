@@ -67,21 +67,17 @@ class NanoContractStateResource(Resource):
 
         # Check if the contract exists.
         try:
-            nanocontract = get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes)
+            nanocontract = get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes, allow_mempool=True)
         except NCContractCreationNotFound:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')
-            return error_response.json_dumpb()
-        except NCContractCreationAtMempool:
-            request.setResponseCode(204)
-            error_response = ErrorResponse(success=False, error=f'Nano contract at mempool: {params.id}')
             return error_response.json_dumpb()
         except NCContractCreationVoided:
             request.setResponseCode(204)
             error_response = ErrorResponse(success=False, error=f'Nano contract failed execution: {params.id}')
             return error_response.json_dumpb()
 
-        nc_storage = self.manager.get_best_block_nc_storage(nc_id_bytes)
+        nc_storage = self.manager.get_mempool_nc_storage(nc_id_bytes)
         value: Any
 
         # Get balances.

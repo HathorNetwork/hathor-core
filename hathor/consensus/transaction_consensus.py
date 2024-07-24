@@ -55,7 +55,60 @@ class TransactionConsensusAlgorithm:
         The method is currently only executed when the transaction is confirmed by a block.
         Hence, we do nothing here.
         """
-        pass
+        from hathor.nanocontracts import NanoContract, NCFail
+
+        assert self._settings.ENABLE_NANO_CONTRACTS
+
+        if not isinstance(tx, NanoContract):
+            # Skip other type of transactions.
+            return
+
+        mempool_trie = self.context.consensus.nc_storage_factory.get_mempool_trie()
+
+        nc_id = tx.get_nanocontract_id()
+
+        tx_meta = tx.get_metadata()
+        if tx_meta.voided_by:
+            # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
+            # mark this tx as voided.
+            return
+
+        if tx.is_creating_a_new_contract():
+            # A contract tree cannot exist before the contract is created.
+            assert not mempool_trie.has_key(nc_id)
+            nc_root_id = None
+        else:
+            try:
+                # A contract tree must always exist after the contract is created.
+                nc_root_id = mempool_trie.get(nc_id)
+            except KeyError:
+                # This case might only happen if the contract creation tx is voided.
+                # So this transaction cannot be executed and it will be marked as if its execution has failed.
+                self.mark_as_nc_fail_execution(tx)
+                return
+
+        nc_storage = self.context.consensus.nc_storage_factory(nc_id, nc_root_id)
+        try:
+            tx.execute(nc_storage)
+            nc_storage.commit()
+            mempool_trie.update(nc_id, nc_storage.get_root_id())
+        except NCFail:
+            self.log.exception('nc execution failed', tx=tx.hash.hex())
+            self.mark_as_nc_fail_execution(tx)
+
+        # Save block state root id. If nothings happens, it should be the same as its block parent.
+        mempool_trie.commit()
+        assert mempool_trie.root.id is not None
+        self.context.consensus.nc_storage_factory.save_mempool_root_id(mempool_trie.root.id)
+
+    def mark_as_nc_fail_execution(self, tx: BaseTransaction) -> None:
+        assert tx.storage is not None
+        tx_meta = tx.get_metadata()
+        tx_meta.add_voided_by(self._settings.NC_EXECUTION_FAIL_ID)
+        self.context.save(tx)
+        self.add_voided_by(tx,
+                           tx.hash,
+                           is_dag_verifications=False)
 
     def mark_inputs_as_used(self, tx: Transaction) -> None:
         """ Mark all its inputs as used

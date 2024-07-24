@@ -125,7 +125,7 @@ class BlockConsensusAlgorithm:
                     tx_meta.voided_by = None
                     self.context.save(tx)
                 else:
-                    raise NotImplementedError
+                    continue
             if tx_meta.voided_by:
                 # Skip voided transactions.
                 continue
