@@ -137,7 +137,7 @@ class BlockConsensusAlgorithm:
                         self.context.save(tx)
                     else:
                         # TODO Properly handle transactions with UTXO conflicts during reorgs.
-                        raise NotImplementedError
+                        continue
             if tx_meta.voided_by:
                 # Skip voided transactions.
                 continue

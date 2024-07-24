@@ -419,6 +419,11 @@ class HathorManager:
         best_block = self.tx_storage.get_best_block()
         return self.get_nc_runner(best_block)
 
+    def get_mempool_nc_runner(self) -> Runner:
+        nc_storage_factory = self.consensus_algorithm.nc_storage_factory
+        block_trie = self.consensus_algorithm.nc_storage_factory.get_mempool_trie()
+        return Runner(self.tx_storage, nc_storage_factory, block_trie)
+
     def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCStorage:
         """Return a contract storage with the contract state at a given block."""
         meta = block.get_metadata()

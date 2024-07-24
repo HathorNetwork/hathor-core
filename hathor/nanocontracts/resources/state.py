@@ -76,7 +76,7 @@ class NanoContractStateResource(Resource):
 
         # Check if the contract exists.
         try:
-            nanocontract = get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes)
+            nanocontract = get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes, allow_mempool=True)
         except NCContractCreationNotFound:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')
@@ -91,7 +91,7 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         nc_storage: NCStorage
-        block: Block
+        block: Optional[Block]
         block_hash: Optional[bytes]
         try:
             block_hash = bytes.fromhex(params.block_hash) if params.block_hash else None
@@ -131,10 +131,13 @@ class NanoContractStateResource(Resource):
                 error_response = ErrorResponse(success=False, error=f'Invalid block_hash {params.block_hash}.')
                 return error_response.json_dumpb()
         else:
-            block = self.manager.tx_storage.get_best_block()
+            block = None
 
         try:
-            runner = self.manager.get_nc_runner(block)
+            if block is None:
+                runner = self.manager.get_mempool_nc_runner()
+            else:
+                runner = self.manager.get_nc_runner(block)
             nc_storage = runner.get_storage(nc_id_bytes)
         except NanoContractDoesNotExist:
             # Nano contract does not exist at this block

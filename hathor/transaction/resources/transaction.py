@@ -28,6 +28,7 @@ from hathor.api_util import (
 )
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
+from hathor.nanocontracts import NanoContract
 from hathor.transaction import Block
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -139,10 +140,12 @@ def get_tx_extra_data(
 
         serialized['tokens'] = detailed_tokens
 
+    meta_serialized = meta.to_json_extended(tx.storage)
+
     return {
         'success': True,
         'tx': serialized,
-        'meta': meta.to_json_extended(tx.storage),
+        'meta': meta_serialized,
         'spent_outputs': spent_outputs,
     }
 
@@ -203,6 +206,10 @@ class TransactionResource(Resource):
             tx = self.manager.tx_storage.get_transaction(hash_bytes)
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)
+
+            if isinstance(tx, NanoContract):
+                if tx.get_metadata().first_block is None:
+                    data['meta']['first_block'] = 'mempool'
 
         return json_dumpb(data)
 

@@ -73,7 +73,7 @@ class NanoContractHistoryResource(Resource):
 
         # Check if the contract exists.
         try:
-            get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes)
+            get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes, allow_mempool=True)
         except NCContractCreationNotFound:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')
@@ -116,7 +116,10 @@ class NanoContractHistoryResource(Resource):
         has_more = False
         history_list = []
         for idx, tx_id in enumerate(iter_history):
-            history_list.append(tx_storage.get_transaction(tx_id).to_json_extended())
+            item = tx_storage.get_transaction(tx_id).to_json_extended()
+            if item['first_block'] is None:
+                item['first_block'] = 'mempool'
+            history_list.append(item)
             if idx >= count - 1:
                 # Check if iterator still has more elements
                 try:
