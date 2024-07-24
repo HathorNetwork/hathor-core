@@ -908,6 +908,9 @@ class HathorManager:
                 max_output_script_size: int | None = None) -> None:
         """Used by all APIs that accept a new transaction (like push_tx)
         """
+        if self.tx_storage.transaction_exists(tx.hash):
+            raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
+
         if max_output_script_size is None:
             max_output_script_size = self._settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
 
