@@ -91,11 +91,14 @@ class PeerId:
             self.generate_keys()
 
     def __str__(self):
-        entrypoints = [str(entrypoint) for entrypoint in self.entrypoints]
         return (
-            f'PeerId(id={self.id}, entrypoints={entrypoints}, retry_timestamp={self.retry_timestamp}, '
+            f'PeerId(id={self.id}, entrypoints={self.entrypoints_as_str()}, retry_timestamp={self.retry_timestamp}, '
             f'retry_interval={self.retry_interval})'
         )
+
+    def entrypoints_as_str(self) -> list[str]:
+        """Return a list of entrypoints serialized as str"""
+        return list(map(str, self.entrypoints))
 
     def merge(self, other: 'PeerId') -> None:
         """ Merge two PeerId objects, checking that they have the same
@@ -251,7 +254,7 @@ class PeerId:
         result = {
             'id': self.id,
             'pubKey': base64.b64encode(public_der).decode('utf-8'),
-            'entrypoints': [str(ep) for ep in self.entrypoints],
+            'entrypoints': self.entrypoints_as_str(),
         }
         if include_private_key:
             assert self.private_key is not None

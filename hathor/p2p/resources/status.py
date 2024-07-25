@@ -83,7 +83,7 @@ class StatusResource(Resource):
         for peer in self.manager.connections.peer_storage.values():
             known_peers.append({
                 'id': peer.id,
-                'entrypoints': peer.entrypoints,
+                'entrypoints': peer.entrypoints_as_str(),
                 'last_seen': now - peer.last_seen,
                 'flags': [flag.value for flag in peer.flags],
             })
@@ -107,7 +107,7 @@ class StatusResource(Resource):
                 'state': self.manager.state.value,
                 'network': self.manager.network,
                 'uptime': now - self.manager.start_time,
-                'entrypoints': self.manager.connections.my_peer.entrypoints,
+                'entrypoints': self.manager.connections.my_peer.entrypoints_as_str(),
             },
             'peers_whitelist': self.manager.peers_whitelist,
             'known_peers': known_peers,
