@@ -24,6 +24,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings
 from hathor.crypto.util import get_public_key_bytes_compressed
+from hathor.pubsub import EventArguments, HathorEvents
 from hathor.reactor import ReactorProtocol
 from hathor.util import not_none
 
@@ -35,11 +36,8 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-# Number of seconds to wait for a sync to finish before trying to produce blocks
-_WAIT_SYNC_DELAY: int = 30
-
 # Number of seconds used between each signer depending on its distance to the expected signer
-_SIGNER_TURN_INTERVAL: int = 1
+_SIGNER_TURN_INTERVAL: int = 10
 
 
 class PoaBlockProducer:
@@ -54,11 +52,9 @@ class PoaBlockProducer:
         '_reactor',
         '_manager',
         '_poa_signer',
-        '_started_producing',
-        '_start_producing_lc',
-        '_schedule_block_lc',
         '_last_seen_best_block',
         '_delayed_call',
+        '_start_producing_lc',
     )
 
     def __init__(self, *, settings: HathorSettings, reactor: ReactorProtocol, poa_signer: PoaSigner) -> None:
@@ -70,14 +66,9 @@ class PoaBlockProducer:
         self._manager: HathorManager | None = None
         self._poa_signer = poa_signer
         self._last_seen_best_block: Block | None = None
-
-        self._started_producing = False
-        self._start_producing_lc = LoopingCall(self._start_producing)
-        self._start_producing_lc.clock = self._reactor
-
-        self._schedule_block_lc = LoopingCall(self._schedule_block)
-        self._schedule_block_lc.clock = self._reactor
         self._delayed_call: IDelayedCall | None = None
+        self._start_producing_lc: LoopingCall = LoopingCall(self._safe_start_producing)
+        self._start_producing_lc.clock = self._reactor
 
     @property
     def manager(self) -> HathorManager:
@@ -89,18 +80,17 @@ class PoaBlockProducer:
         self._manager = manager
 
     def start(self) -> None:
-        self._start_producing_lc.start(_WAIT_SYNC_DELAY)
-        self._schedule_block_lc.start(self._settings.AVG_TIME_BETWEEN_BLOCKS)
+        self.manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self._on_new_vertex)
+        self._start_producing_lc.start(self._settings.AVG_TIME_BETWEEN_BLOCKS)
 
     def stop(self) -> None:
-        if self._start_producing_lc.running:
-            self._start_producing_lc.stop()
-
-        if self._schedule_block_lc.running:
-            self._schedule_block_lc.stop()
+        self.manager.pubsub.unsubscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self._on_new_vertex)
 
         if self._delayed_call and self._delayed_call.active():
             self._delayed_call.cancel()
+
+        if self._start_producing_lc.running:
+            self._start_producing_lc.stop()
 
     def _get_signer_index(self, previous_block: Block) -> int | None:
         """Return our signer index considering the active signers."""
@@ -113,7 +103,13 @@ class PoaBlockProducer:
         except ValueError:
             return None
 
-    def _start_producing(self) -> None:
+    def _safe_start_producing(self) -> None:
+        try:
+            return self._unsafe_start_producing()
+        except Exception:
+            self._log.exception('error while trying to start block production')
+
+    def _unsafe_start_producing(self) -> None:
         """Start producing new blocks."""
         if not self.manager.can_start_mining():
             # We're syncing, so we'll try again later
@@ -121,13 +117,35 @@ class PoaBlockProducer:
             return
 
         self._log.info('started producing new blocks')
-        self._started_producing = True
-        self._start_producing_lc.stop()
+        self._schedule_block()
+
+    def _on_new_vertex(self, event: HathorEvents, args: EventArguments) -> None:
+        """Handle propagation of new blocks after a vertex is received."""
+        assert event is HathorEvents.NETWORK_NEW_TX_ACCEPTED
+        block = args.tx
+
+        from hathor.transaction import Block
+        if not isinstance(block, Block):
+            return
+
+        from hathor.transaction.poa import PoaBlock
+        if isinstance(block, PoaBlock) and not block.weight == poa.BLOCK_WEIGHT_IN_TURN:
+            self._log.info('received out of turn block', block=block.hash_hex, signer_id=block.signer_id)
+
+        self._schedule_block()
 
     def _schedule_block(self) -> None:
         """Schedule propagation of a new block."""
+        if not self.manager.can_start_mining():
+            # We're syncing, so we'll try again later
+            self._log.info('cannot produce new block, node not synced')
+            return
+
+        if self._start_producing_lc.running:
+            self._start_producing_lc.stop()
+
         previous_block = self.manager.tx_storage.get_best_block()
-        if not self._started_producing or previous_block == self._last_seen_best_block:
+        if previous_block == self._last_seen_best_block:
             return
 
         self._last_seen_best_block = previous_block
@@ -139,7 +157,11 @@ class PoaBlockProducer:
         expected_timestamp = self._expected_block_timestamp(previous_block, signer_index)
         propagation_delay = 0 if expected_timestamp < now else expected_timestamp - now
 
+        if self._delayed_call and self._delayed_call.active():
+            self._delayed_call.cancel()
+
         self._delayed_call = self._reactor.callLater(propagation_delay, self._produce_block, previous_block)
+
         self._log.debug(
             'scheduling block production',
             previous_block=previous_block.hash_hex,
@@ -153,16 +175,16 @@ class PoaBlockProducer:
         block_templates = self.manager.get_block_templates(parent_block_hash=previous_block.hash)
         block = block_templates.generate_mining_block(self.manager.rng, cls=PoaBlock)
         assert isinstance(block, PoaBlock)
+
+        if block.get_height() <= self.manager.tx_storage.get_height_best_block():
+            return
+
         signer_index = self._get_signer_index(previous_block)
         block.weight = poa.calculate_weight(self._poa_settings, block, not_none(signer_index))
         self._poa_signer.sign_block(block)
         block.update_hash()
 
-        self.manager.on_new_tx(block, propagate_to_peers=False, fails_silently=False)
-        if not block.get_metadata().voided_by:
-            self.manager.connections.send_tx_to_peers(block)
-
-        self._log.debug(
+        self._log.info(
             'produced new block',
             block=block.hash_hex,
             height=block.get_height(),
@@ -170,13 +192,18 @@ class PoaBlockProducer:
             parent=block.get_block_parent_hash().hex(),
             voided=bool(block.get_metadata().voided_by),
         )
+        self.manager.on_new_tx(block, propagate_to_peers=True, fails_silently=False)
 
     def _expected_block_timestamp(self, previous_block: Block, signer_index: int) -> int:
         """Calculate the expected timestamp for a new block."""
         height = previous_block.get_height() + 1
-        expected_index = poa.in_turn_signer_index(settings=self._poa_settings, height=height)
-        signers = poa.get_active_signers(self._poa_settings, height)
-        index_distance = (signer_index - expected_index) % len(signers)
-        assert 0 <= index_distance < len(signers)
+        index_distance = poa.get_signer_index_distance(
+            settings=self._poa_settings,
+            signer_index=signer_index,
+            height=height,
+        )
         delay = _SIGNER_TURN_INTERVAL * index_distance
+        if index_distance > 0:
+            # if it's not our turn, we add a constant offset to the delay
+            delay += self._settings.AVG_TIME_BETWEEN_BLOCKS
         return previous_block.timestamp + self._settings.AVG_TIME_BETWEEN_BLOCKS + delay

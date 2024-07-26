@@ -55,16 +55,21 @@ def get_active_signers(settings: PoaSettings, height: int) -> list[bytes]:
     return active_signers
 
 
-def in_turn_signer_index(settings: PoaSettings, height: int) -> int:
-    """Return the signer index that is in turn for the given height."""
+def get_signer_index_distance(*, settings: PoaSettings, signer_index: int, height: int) -> int:
+    """Considering a block height, return the signer index distance to that block. When the distance is 0, it means it
+    is the signer's turn."""
     active_signers = get_active_signers(settings, height)
-    return height % len(active_signers)
+    expected_index = height % len(active_signers)
+    signers = get_active_signers(settings, height)
+    index_distance = (signer_index - expected_index) % len(signers)
+    assert 0 <= index_distance < len(signers)
+    return index_distance
 
 
 def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) -> float:
     """Return the weight for the given block and signer."""
-    expected_index = in_turn_signer_index(settings, block.get_height())
-    return BLOCK_WEIGHT_IN_TURN if expected_index == signer_index else BLOCK_WEIGHT_OUT_OF_TURN
+    index_distance = get_signer_index_distance(settings=settings, signer_index=signer_index, height=block.get_height())
+    return BLOCK_WEIGHT_IN_TURN if index_distance == 0 else BLOCK_WEIGHT_OUT_OF_TURN / index_distance
 
 
 @dataclass(frozen=True, slots=True)

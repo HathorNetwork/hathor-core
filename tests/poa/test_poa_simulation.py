@@ -20,6 +20,7 @@ import base58
 import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
+from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
@@ -117,7 +118,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
         # manager is allowed to produce blocks, so it does
         manager.allow_mining_without_peers()
-        self.simulator.run(120)
+        self.simulator.run(90)
         assert manager.tx_storage.get_block_count() == 10
 
         _assert_height_weight_signer_id(
@@ -155,9 +156,9 @@ class BasePoaSimulationTest(SimulatorTestCase):
         self.simulator.add_connection(connection)
 
         # both managers are producing blocks
-        self.simulator.run(125)
-        assert manager1.tx_storage.get_block_count() == 16
-        assert manager2.tx_storage.get_block_count() == 17
+        self.simulator.run(100)
+        assert manager1.tx_storage.get_block_count() == 12
+        assert manager2.tx_storage.get_block_count() == 12
         assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()
 
         _assert_height_weight_signer_id(
@@ -195,15 +196,52 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
             if height % 2 == 0:
                 # if the height is even, it's manager1's turn.
-                # manager2 will produce its block too, but it'll be voided and not propagated.
                 assert len(blocks_manager1) == 1
-                assert len(blocks_manager2) == 2
                 _assert_block_in_turn(blocks_manager1[0], signer1)
             else:
                 # if the height is odd, the opposite happens
-                assert len(blocks_manager1) == 2
                 assert len(blocks_manager2) == 1
                 _assert_block_in_turn(blocks_manager2[0], signer2)
+
+    def test_four_signers(self) -> None:
+        signer1, signer2, signer3, signer4 = get_signer(), get_signer(), get_signer(), get_signer()
+        signer_id1, signer_id2, signer_id3 = signer1._signer_id, signer2._signer_id, signer3._signer_id
+        self.simulator.settings = get_settings(signer1, signer2, signer3, signer4, time_between_blocks=10)
+        manager1 = self._get_manager(signer1)
+        manager2 = self._get_manager(signer2)
+        manager3 = self._get_manager(signer3)
+
+        connection12 = FakeConnection(manager1, manager2)
+        connection13 = FakeConnection(manager1, manager3)
+        self.simulator.add_connection(connection12)
+        self.simulator.add_connection(connection13)
+
+        # all managers are producing blocks
+        self.simulator.run(110)
+
+        # manager2 and manager3 leave
+        manager2.stop()
+        manager3.stop()
+        self.simulator.run(160)
+
+        # manager1 produces out of turn blocks with decreasing weights
+        _assert_height_weight_signer_id(
+            manager1.tx_storage.get_all_transactions(),
+            [
+                (1, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
+                (2, poa.BLOCK_WEIGHT_IN_TURN, signer_id3),
+                (3, poa.BLOCK_WEIGHT_OUT_OF_TURN / 1, signer_id1),
+                (4, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+                (5, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
+                (6, poa.BLOCK_WEIGHT_IN_TURN, signer_id3),
+                (7, poa.BLOCK_WEIGHT_OUT_OF_TURN / 1, signer_id1),
+                (8, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+                (9, poa.BLOCK_WEIGHT_OUT_OF_TURN / 3, signer_id1),
+                (10, poa.BLOCK_WEIGHT_OUT_OF_TURN / 2, signer_id1),
+                (11, poa.BLOCK_WEIGHT_OUT_OF_TURN / 1, signer_id1),
+                (12, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            ]
+        )
 
     def test_producer_leave_and_comeback(self) -> None:
         signer1, signer2 = get_signer(), get_signer()
@@ -214,7 +252,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         # out of turn
         manager1 = self._get_manager(signer1)
         manager1.allow_mining_without_peers()
-        self.simulator.run(60)
+        self.simulator.run(50)
 
         manager2 = self._get_manager(signer2)
         connection = FakeConnection(manager1, manager2)
@@ -222,33 +260,42 @@ class BasePoaSimulationTest(SimulatorTestCase):
         self.simulator.run(80)
 
         manager2.stop()
-        self.simulator.run(40)
+        connection.disconnect(Failure(Exception('testing')))
+        self.simulator.remove_connection(connection)
+        self.simulator.run(70)
 
+        assert not manager2.can_start_mining()
+        self.simulator.add_connection(connection)
+        connection.reconnect()
         manager2.start()
         self.simulator.run(30)
 
-        assert manager1.tx_storage.get_block_count() == 23
-        assert manager2.tx_storage.get_block_count() == 23
+        assert manager1.tx_storage.get_block_count() == 19
+        assert manager2.tx_storage.get_block_count() == 19
         assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()
 
         _assert_height_weight_signer_id(
             manager1.tx_storage.get_all_transactions(),
             [
+                # Before manager2 joins, only manager1 produces blocks
                 (1, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
                 (2, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
                 (3, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
                 (4, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
                 (5, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
                 (6, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+                # When manager2 joins, both of them start taking turns
                 (7, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
                 (8, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
                 (9, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
                 (10, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
                 (11, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
                 (12, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+                # manager2 leaves so manager1 produces all the next blocks
                 (13, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
                 (14, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
                 (15, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
+                # manager2 comes back again, so both of them take turns again
                 (16, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
                 (17, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
                 (18, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
@@ -272,7 +319,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         manager1 = artifacts1.manager
         manager1.allow_mining_without_peers()
 
-        self.simulator.run(80)
+        self.simulator.run(50)
         assert manager1.tx_storage.get_block_count() == 6
 
         _assert_height_weight_signer_id(
@@ -296,7 +343,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         manager2 = artifacts.manager
         manager2.allow_mining_without_peers()
 
-        self.simulator.run(80)
+        self.simulator.run(60)
         assert manager2.tx_storage.get_block_count() == 12
 
         _assert_height_weight_signer_id(
@@ -332,7 +379,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         manager_1a = artifacts_1a.manager
         manager_1a.allow_mining_without_peers()
 
-        self.simulator.run(80)
+        self.simulator.run(50)
         assert manager_1a.tx_storage.get_block_count() == 6
 
         _assert_height_weight_signer_id(
@@ -358,7 +405,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         manager_1b = artifacts_1b.manager
         manager_1b.allow_mining_without_peers()
 
-        self.simulator.run(80)
+        self.simulator.run(90)
         assert manager_1b.tx_storage.get_block_count() == 11
 
         # after we restart it, new blocks are alternating
@@ -383,7 +430,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
         connection = FakeConnection(manager_1b, manager_2)
         self.simulator.add_connection(connection)
-        self.simulator.run(40)
+        self.simulator.run(60)
 
         # it should sync to the same blockchain
         _assert_height_weight_signer_id(
@@ -463,7 +510,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
         manager = self._get_manager(signer)
         manager.allow_mining_without_peers()
-        self.simulator.run(130)
+        self.simulator.run(100)
         assert manager.tx_storage.get_block_count() == 11
 
         _assert_height_weight_signer_id(

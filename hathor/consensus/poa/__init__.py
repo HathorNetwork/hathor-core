@@ -7,7 +7,7 @@ from .poa import (
     calculate_weight,
     get_active_signers,
     get_hashed_poa_data,
-    in_turn_signer_index,
+    get_signer_index_distance,
     verify_poa_signature,
 )
 from .poa_block_producer import PoaBlockProducer
@@ -18,7 +18,6 @@ __all__ = [
     'BLOCK_WEIGHT_OUT_OF_TURN',
     'SIGNER_ID_LEN',
     'get_hashed_poa_data',
-    'in_turn_signer_index',
     'calculate_weight',
     'PoaBlockProducer',
     'PoaSigner',
@@ -27,4 +26,5 @@ __all__ = [
     'InvalidSignature',
     'ValidSignature',
     'get_active_signers',
+    'get_signer_index_distance',
 ]

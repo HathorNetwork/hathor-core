@@ -57,7 +57,6 @@ def test_poa_block_producer_one_signer() -> None:
 
     # when we can start mining, we start producing blocks
     manager.can_start_mining = Mock(return_value=True)
-    reactor.advance(20)
 
     # we produce our first block
     reactor.advance(10)
@@ -116,7 +115,6 @@ def test_poa_block_producer_two_signers() -> None:
 
     # when we can start mining, we start producing blocks
     manager.can_start_mining = Mock(return_value=True)
-    reactor.advance(20)
 
     # we produce our first block
     reactor.advance(10)
@@ -144,14 +142,14 @@ def test_poa_block_producer_two_signers() -> None:
     manager.on_new_tx.reset_mock()
 
     # haven't produced the third block yet
-    reactor.advance(9)
+    reactor.advance(29)
 
     # we produce our third block
-    reactor.advance(2)
+    reactor.advance(1)
     manager.on_new_tx.assert_called_once()
     block3 = manager.on_new_tx.call_args.args[0]
     assert isinstance(block3, PoaBlock)
-    assert block3.timestamp == block2.timestamp + 11
+    assert block3.timestamp == block2.timestamp + 30
     assert block3.weight == poa.BLOCK_WEIGHT_OUT_OF_TURN
     assert block3.outputs == []
     assert block3.get_block_parent_hash() == block2.hash
@@ -161,15 +159,15 @@ def test_poa_block_producer_two_signers() -> None:
 @pytest.mark.parametrize(
     ['previous_height', 'signer_index', 'expected_delay'],
     [
-        (0, 0, 33),
+        (0, 0, 90),
         (0, 1, 30),
-        (0, 2, 31),
-        (0, 3, 32),
+        (0, 2, 70),
+        (0, 3, 80),
 
-        (1, 0, 32),
-        (1, 1, 33),
+        (1, 0, 80),
+        (1, 1, 90),
         (1, 2, 30),
-        (1, 3, 31),
+        (1, 3, 70),
     ]
 )
 def test_expected_block_timestamp(previous_height: int, signer_index: int, expected_delay: int) -> None:
