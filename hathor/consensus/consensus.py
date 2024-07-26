@@ -122,21 +122,20 @@ class ConsensusAlgorithm:
             raise NotImplementedError
 
         new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
+        txs_to_remove: list[BaseTransaction] = []
         if new_best_height < best_height:
             self.log.warn('height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
                           prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
             # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
             #      reward lock
-            to_remove = storage.compute_transactions_that_became_invalid(new_best_height)
-            if to_remove:
+            txs_to_remove = storage.compute_transactions_that_became_invalid(new_best_height)
+            if txs_to_remove:
                 self.log.warn('some transactions on the mempool became invalid and will be removed',
-                              count=len(to_remove))
-                # XXX: because transactions in `to_remove` are marked as invalid, we need this context to be able to
-                #      remove them
+                              count=len(txs_to_remove))
+                # XXX: because transactions in `txs_to_remove` are marked as invalid, we need this context to be
+                # able to remove them
                 with storage.allow_invalid_context():
-                    self._remove_transactions(to_remove, storage, context)
-                for tx_removed in to_remove:
-                    context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx_hash=tx_removed.hash)
+                    self._remove_transactions(txs_to_remove, storage, context)
 
         # emit the reorg started event if needed
         if context.reorg_common_block is not None:
@@ -157,6 +156,10 @@ class ConsensusAlgorithm:
             assert tx_affected.storage.indexes is not None
             tx_affected.storage.indexes.update(tx_affected)
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
+
+        # And emit events for txs that were removed
+        for tx_removed in txs_to_remove:
+            context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, vertex_id=tx_removed.hash)
 
         # and also emit the reorg finished event if needed
         if context.reorg_common_block is not None:
