@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import TYPE_CHECKING
+
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
@@ -23,6 +28,9 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 from hathor.util import not_none
+
+if TYPE_CHECKING:
+    from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -126,7 +134,7 @@ class ConsensusAlgorithm:
                 # XXX: because transactions in `to_remove` are marked as invalid, we need this context to be able to
                 #      remove them
                 with storage.allow_invalid_context():
-                    storage.remove_transactions(to_remove)
+                    self._remove_transactions(to_remove, storage, context)
                 for tx_removed in to_remove:
                     context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx_hash=tx_removed.hash)
 
@@ -174,6 +182,52 @@ class ConsensusAlgorithm:
             if not (self.soft_voided_tx_ids & tx3_voided_by):
                 ret.add(h)
         return ret
+
+    def _remove_transactions(
+        self,
+        txs: list[BaseTransaction],
+        storage: TransactionStorage,
+        context: ConsensusAlgorithmContext,
+    ) -> None:
+        """Will remove all the transactions on the list from the database.
+
+        Special notes:
+
+        - will refuse and raise an error when removing all transactions would leave dangling transactions, that is,
+          transactions without existing parent. That is, it expects the `txs` list to include all children of deleted
+          txs, from both the confirmation and funds DAGs
+        - inputs's spent_outputs should not have any of the transactions being removed as spending transactions,
+          this method will update and save those transaction's metadata
+        - parent's children metadata will be updated to reflect the removals
+        - all indexes will be updated
+        """
+        parents_to_update: dict[bytes, list[bytes]] = defaultdict(list)
+        dangling_children: set[bytes] = set()
+        txset = {tx.hash for tx in txs}
+        for tx in txs:
+            tx_meta = tx.get_metadata()
+            assert not tx_meta.validation.is_checkpoint()
+            for parent in set(tx.parents) - txset:
+                parents_to_update[parent].append(tx.hash)
+            dangling_children.update(set(tx_meta.children) - txset)
+            for spending_txs in tx_meta.spent_outputs.values():
+                dangling_children.update(set(spending_txs) - txset)
+            for tx_input in tx.inputs:
+                spent_tx = tx.get_spent_tx(tx_input)
+                spent_tx_meta = spent_tx.get_metadata()
+                if tx.hash in spent_tx_meta.spent_outputs[tx_input.index]:
+                    spent_tx_meta.spent_outputs[tx_input.index].remove(tx.hash)
+                    context.save(spent_tx)
+        assert not dangling_children, 'It is an error to try to remove transactions that would leave a gap in the DAG'
+        for parent_hash, children_to_remove in parents_to_update.items():
+            parent_tx = storage.get_transaction(parent_hash)
+            parent_meta = parent_tx.get_metadata()
+            for child in children_to_remove:
+                parent_meta.children.remove(child)
+            context.save(parent_tx)
+        for tx in txs:
+            self.log.debug('remove transaction', tx=tx.hash_hex)
+            storage.remove_transaction(tx)
 
 
 def _sorted_affected_txs(affected_txs: set[BaseTransaction]) -> list[BaseTransaction]:

@@ -179,6 +179,17 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertTrue(tx.get_metadata().validation.is_invalid())
         self.assertFalse(self.manager.tx_storage.transaction_exists(tx.hash))
 
+        # assert that the tx has been removed from its dependencies' metadata
+        for parent_id in tx.parents:
+            parent = self.manager.tx_storage.get_transaction(parent_id)
+            assert tx.hash not in parent.get_metadata().children
+
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            spent_outputs = spent_tx.get_metadata().spent_outputs
+            assert len(spent_outputs) == 1
+            assert tx.hash not in spent_outputs[0]
+
     @pytest.mark.xfail(reason='this is no longer the case, timestamp will not matter', strict=True)
     def test_classic_reward_lock_timestamp_expected_to_fail(self):
         # add block with a reward we can spend
