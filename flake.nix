@@ -16,9 +16,6 @@
           };
         in
           pkgs.mkShell {
-            NIX_CFLAGS_COMPILE = pkgs.lib.optionals pkgs.stdenv.isDarwin [
-              "-I${pkgs.lib.getDev pkgs.libcxx}/include/c++/v1"
-            ];
             buildInputs = [
               pkgs.python310
               pkgs.poetry
