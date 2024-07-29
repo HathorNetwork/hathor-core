@@ -24,7 +24,6 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
-from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
 
@@ -70,7 +69,7 @@ class PushTxResource(Resource):
     def handle_push_tx(self, params: dict[str, Any], client_addr: str) -> dict[str, Any]:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
-            tx = tx_or_block_from_bytes(tx_bytes)
+            tx = self.manager.vertex_parser.deserialize(tx_bytes)
         except ValueError:
             return {'success': False, 'message': 'Invalid hexadecimal data', 'can_force': False}
         except struct.error:

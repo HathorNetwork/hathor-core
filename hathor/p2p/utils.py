@@ -15,7 +15,6 @@
 import datetime
 import re
 from typing import Any, Optional
-from urllib.parse import parse_qs, urlparse
 
 import requests
 from cryptography import x509
@@ -28,7 +27,9 @@ from cryptography.x509.oid import NameOID
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import get_representation_for_all_genesis
 
@@ -52,25 +53,6 @@ def discover_ip_ipify(timeout: float | None = None) -> Optional[str]:
     return None
 
 
-def description_to_connection_string(description: str) -> tuple[str, Optional[str]]:
-    """ The description returned from DNS query may contain a peer-id parameter
-        This method splits this description into the connection URL and the peer-id (in case it exists)
-        Expected description is something like: tcp://127.0.0.1:40403/?id=123
-        The expected returned tuple in this case would be ('tcp://127.0.0.1:40403', '123')
-    """
-    result = urlparse(description)
-
-    url = "{}://{}".format(result.scheme, result.netloc)
-    peer_id = None
-
-    if result.query:
-        query_result = parse_qs(result.query)
-        if 'id' in query_result:
-            peer_id = query_result['id'][0]
-
-    return url, peer_id
-
-
 def get_genesis_short_hash() -> str:
     """ Return the first 7 chars of the GENESIS_HASH used for validation that the genesis are the same
     """
@@ -78,10 +60,9 @@ def get_genesis_short_hash() -> str:
     return get_representation_for_all_genesis(settings).hex()[:7]
 
 
-def get_settings_hello_dict() -> dict[str, Any]:
+def get_settings_hello_dict(settings: HathorSettings) -> dict[str, Any]:
     """ Return a dict of settings values that must be validated in the hello state
     """
-    settings = get_global_settings()
     settings_dict = {}
     for key in settings.P2P_SETTINGS_HASH_FIELDS:
         value = getattr(settings, key)
@@ -89,17 +70,14 @@ def get_settings_hello_dict() -> dict[str, Any]:
         if type(value) is bytes:
             value = value.hex()
         settings_dict[key] = value
+
+    if consensus_hash := settings.CONSENSUS_ALGORITHM.get_peer_hello_hash():
+        settings_dict['CONSENSUS_ALGORITHM'] = consensus_hash
+
     return settings_dict
 
 
-def connection_string_to_host(connection_string: str) -> str:
-    """ From a connection string I return the host
-        tcp://127.0.0.1:40403 -> 127.0.0.1
-    """
-    return urlparse(connection_string).netloc.split(':')[0]
-
-
-async def discover_dns(host: str, test_mode: int = 0) -> list[str]:
+async def discover_dns(host: str, test_mode: int = 0) -> list[Entrypoint]:
     """ Start a DNS peer discovery object and execute a search for the host
 
         Returns the DNS string from the requested host
@@ -107,7 +85,7 @@ async def discover_dns(host: str, test_mode: int = 0) -> list[str]:
     """
     discovery = DNSPeerDiscovery([], test_mode=test_mode)
     result = await discovery.dns_seed_lookup(host)
-    return result
+    return list(result)
 
 
 def generate_certificate(private_key: RSAPrivateKey, ca_file: str, ca_pkey_file: str) -> Certificate:

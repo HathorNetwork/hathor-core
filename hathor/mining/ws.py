@@ -24,7 +24,6 @@ from structlog import get_logger
 
 from hathor.manager import HathorManager
 from hathor.pubsub import EventArguments, HathorEvents
-from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.util import json_dumpb, json_loadb
 
 logger = get_logger()
@@ -163,7 +162,10 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
         if not self.factory.manager.can_start_mining():
             self.log.warn('node syncing')
             return False
-        tx = tx_or_block_from_bytes(bytes.fromhex(hexdata), storage=self.factory.manager.tx_storage)
+        tx = self.factory.manager.vertex_parser.deserialize(
+            bytes.fromhex(hexdata),
+            storage=self.factory.manager.tx_storage
+        )
         if not tx.is_block:
             self.log.warn('expected Block, received Transaction', data=hexdata)
             return False

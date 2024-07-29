@@ -28,8 +28,8 @@ from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
-from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import json_dumps, json_loads
 
 logger = get_logger()
@@ -60,7 +60,14 @@ class NodeSyncTimestamp(SyncAgent):
 
     MAX_HASHES: int = 40
 
-    def __init__(self, protocol: 'HathorProtocol', downloader: Downloader, reactor: Reactor) -> None:
+    def __init__(
+        self,
+        protocol: 'HathorProtocol',
+        downloader: Downloader,
+        reactor: Reactor,
+        *,
+        vertex_parser: VertexParser,
+    ) -> None:
         """
         :param protocol: Protocol of the connection.
         :type protocol: HathorProtocol
@@ -69,6 +76,7 @@ class NodeSyncTimestamp(SyncAgent):
         :type reactor: Reactor
         """
         self._settings = get_global_settings()
+        self.vertex_parser = vertex_parser
         self.protocol = protocol
         self.manager = protocol.node
         self.downloader = downloader
@@ -597,7 +605,7 @@ class NodeSyncTimestamp(SyncAgent):
         data = base64.b64decode(payload)
 
         try:
-            tx = tx_or_block_from_bytes(data)
+            tx = self.vertex_parser.deserialize(data)
         except struct.error:
             # Invalid data for tx decode
             return

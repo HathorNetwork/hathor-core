@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
@@ -35,9 +35,8 @@ logger = get_logger()
 
 
 class ReadyState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol') -> None:
-        super().__init__(protocol)
-        self._settings = get_global_settings()
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
+        super().__init__(protocol, settings)
 
         self.log = logger.new(**self.protocol.get_logger_context())
 
@@ -167,7 +166,7 @@ class ReadyState(BaseState):
             if peer.entrypoints:
                 data.append({
                     'id': peer.id,
-                    'entrypoints': peer.entrypoints,
+                    'entrypoints': peer.entrypoints_as_str(),
                 })
         self.send_message(ProtocolMessages.PEERS, json_dumps(data))
         self.log.debug('send peers', peers=data)

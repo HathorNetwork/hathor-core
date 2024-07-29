@@ -30,7 +30,7 @@ class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):
 class SimpleManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.tx_storage = ModifiedTransactionMemoryStorage()
+        self.tx_storage = ModifiedTransactionMemoryStorage(settings=self._settings)
         self.pubsub = PubSubManager(self.clock)
 
     def test_invalid_arguments(self):
@@ -87,7 +87,7 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.tx_storage = ModifiedTransactionMemoryStorage()
+        self.tx_storage = ModifiedTransactionMemoryStorage(settings=self._settings)
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, tx_storage=self.tx_storage)
 

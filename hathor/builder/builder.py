@@ -19,9 +19,9 @@ from structlog import get_logger
 from typing_extensions import assert_never
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
+from hathor.consensus.poa import PoaBlockProducer, PoaSigner
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
@@ -46,6 +46,7 @@ from hathor.transaction.storage import (
     TransactionRocksDBStorage,
     TransactionStorage,
 )
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, get_environment_info, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -61,11 +62,14 @@ class SyncSupportLevel(IntEnum):
     ENABLED = 2  # available and enabled by default, possible to disable at runtime
 
     @classmethod
-    def add_factories(cls,
-                      p2p_manager: ConnectionsManager,
-                      sync_v1_support: 'SyncSupportLevel',
-                      sync_v2_support: 'SyncSupportLevel',
-                      ) -> None:
+    def add_factories(
+        cls,
+        settings: HathorSettingsType,
+        p2p_manager: ConnectionsManager,
+        sync_v1_support: 'SyncSupportLevel',
+        sync_v2_support: 'SyncSupportLevel',
+        vertex_parser: VertexParser,
+    ) -> None:
         """Adds the sync factory to the manager according to the support level."""
         from hathor.p2p.sync_v1.factory import SyncV11Factory
         from hathor.p2p.sync_v2.factory import SyncV2Factory
@@ -73,12 +77,14 @@ class SyncSupportLevel(IntEnum):
 
         # sync-v1 support:
         if sync_v1_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager))
+            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager, vertex_parser=vertex_parser))
         if sync_v1_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(p2p_manager))
+            p2p_manager.add_sync_factory(
+                SyncVersion.V2, SyncV2Factory(settings, p2p_manager, vertex_parser=vertex_parser)
+            )
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
@@ -186,8 +192,11 @@ class Builder:
 
         self._execution_manager: ExecutionManager | None = None
         self._vertex_handler: VertexHandler | None = None
+        self._vertex_parser: VertexParser | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
+        self._poa_signer: PoaSigner | None = None
+        self._poa_block_producer: PoaBlockProducer | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -220,6 +229,8 @@ class Builder:
         daa = self._get_or_create_daa()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
         vertex_handler = self._get_or_create_vertex_handler()
+        vertex_parser = self._get_or_create_vertex_parser()
+        poa_block_producer = self._get_or_create_poa_block_producer()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -259,10 +270,14 @@ class Builder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            vertex_parser=vertex_parser,
+            poa_block_producer=poa_block_producer,
             **kwargs
         )
 
         p2p_manager.set_manager(manager)
+        if poa_block_producer:
+            poa_block_producer.manager = manager
 
         stratum_factory: Optional[StratumFactory] = None
         if self._enable_stratum_server:
@@ -330,7 +345,7 @@ class Builder:
     def _get_or_create_settings(self) -> HathorSettingsType:
         """Return the HathorSettings instance set on this builder, or a new one if not set."""
         if self._settings is None:
-            self._settings = get_global_settings()
+            raise ValueError('settings not set')
         return self._settings
 
     def _get_reactor(self) -> Reactor:
@@ -406,7 +421,8 @@ class Builder:
         assert self._network is not None
 
         self._p2p_manager = ConnectionsManager(
-            reactor,
+            settings=self._get_or_create_settings(),
+            reactor=reactor,
             network=self._network,
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
@@ -414,7 +430,13 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
         )
-        SyncSupportLevel.add_factories(self._p2p_manager, self._sync_v1_support, self._sync_v2_support)
+        SyncSupportLevel.add_factories(
+            self._get_or_create_settings(),
+            self._p2p_manager,
+            self._sync_v1_support,
+            self._sync_v2_support,
+            self._get_or_create_vertex_parser(),
+        )
         return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
@@ -422,7 +444,7 @@ class Builder:
             return self._indexes_manager
 
         if self._force_memory_index or self._storage_type == StorageType.MEMORY:
-            self._indexes_manager = MemoryIndexesManager()
+            self._indexes_manager = MemoryIndexesManager(settings=self._get_or_create_settings())
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
@@ -435,6 +457,7 @@ class Builder:
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
         indexes = self._get_or_create_indexes_manager()
+        settings = self._get_or_create_settings()
 
         if self._tx_storage is not None:
             # If a tx storage is provided, set the indexes manager to it.
@@ -446,11 +469,17 @@ class Builder:
             store_indexes = None
 
         if self._storage_type == StorageType.MEMORY:
-            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes)
+            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes, settings=settings)
 
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes)
+            vertex_parser = self._get_or_create_vertex_parser()
+            self._tx_storage = TransactionRocksDBStorage(
+                rocksdb_storage,
+                indexes=store_indexes,
+                settings=settings,
+                vertex_parser=vertex_parser,
+            )
 
         else:
             raise NotImplementedError
@@ -460,7 +489,9 @@ class Builder:
             kwargs: dict[str, Any] = {}
             if self._tx_storage_cache_capacity is not None:
                 kwargs['capacity'] = self._tx_storage_cache_capacity
-            self._tx_storage = TransactionCacheStorage(self._tx_storage, reactor, indexes=indexes, **kwargs)
+            self._tx_storage = TransactionCacheStorage(
+                self._tx_storage, reactor, indexes=indexes, settings=settings, **kwargs
+            )
 
         return self._tx_storage
 
@@ -530,8 +561,9 @@ class Builder:
 
     def _get_or_create_verification_service(self) -> VerificationService:
         if self._verification_service is None:
+            settings = self._get_or_create_settings()
             verifiers = self._get_or_create_vertex_verifiers()
-            self._verification_service = VerificationService(verifiers=verifiers)
+            self._verification_service = VerificationService(settings=settings, verifiers=verifiers)
 
         return self._verification_service
 
@@ -589,6 +621,27 @@ class Builder:
             )
 
         return self._vertex_handler
+
+    def _get_or_create_vertex_parser(self) -> VertexParser:
+        if self._vertex_parser is None:
+            self._vertex_parser = VertexParser(
+                settings=self._get_or_create_settings()
+            )
+
+        return self._vertex_parser
+
+    def _get_or_create_poa_block_producer(self) -> PoaBlockProducer | None:
+        if not self._poa_signer:
+            return None
+
+        if self._poa_block_producer is None:
+            self._poa_block_producer = PoaBlockProducer(
+                settings=self._get_or_create_settings(),
+                reactor=self._get_reactor(),
+                poa_signer=self._poa_signer,
+            )
+
+        return self._poa_block_producer
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
@@ -784,4 +837,9 @@ class Builder:
     def set_settings(self, settings: HathorSettingsType) -> 'Builder':
         self.check_if_can_modify()
         self._settings = settings
+        return self
+
+    def set_poa_signer(self, signer: PoaSigner) -> 'Builder':
+        self.check_if_can_modify()
+        self._poa_signer = signer
         return self

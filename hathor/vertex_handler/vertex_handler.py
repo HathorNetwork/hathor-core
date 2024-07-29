@@ -19,7 +19,6 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
-from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -209,7 +208,6 @@ class VertexHandler:
             self._wallet.on_new_tx(vertex)
 
         self._log_new_object(vertex, 'new {}', quiet=quiet)
-        self._log_feature_states(vertex)
 
         if propagate_to_peers:
             # Propagate to our peers.
@@ -231,7 +229,13 @@ class VertexHandler:
         if tx.is_block:
             message = message_fmt.format('block')
             if isinstance(tx, Block):
-                kwargs['height'] = tx.get_height()
+                feature_descriptions = self._feature_service.get_bits_description(block=tx)
+                feature_states = {
+                    feature.value: description.state.value
+                    for feature, description in feature_descriptions.items()
+                }
+                kwargs['_height'] = tx.get_height()
+                kwargs['feature_states'] = feature_states
         else:
             message = message_fmt.format('tx')
         if not quiet:
@@ -239,35 +243,3 @@ class VertexHandler:
         else:
             log_func = self._log.debug
         log_func(message, **kwargs)
-
-    def _log_feature_states(self, vertex: BaseTransaction) -> None:
-        """Log features states for a block. Used as part of the Feature Activation Phased Testing."""
-        if not isinstance(vertex, Block):
-            return
-
-        feature_descriptions = self._feature_service.get_bits_description(block=vertex)
-        state_by_feature = {
-            feature.value: description.state.value
-            for feature, description in feature_descriptions.items()
-        }
-
-        self._log.info(
-            'New block accepted with feature activation states',
-            block_hash=vertex.hash_hex,
-            block_height=vertex.get_height(),
-            features_states=state_by_feature
-        )
-
-        features = [Feature.NOP_FEATURE_1, Feature.NOP_FEATURE_2]
-        for feature in features:
-            self._log_if_feature_is_active(vertex, feature)
-
-    def _log_if_feature_is_active(self, block: Block, feature: Feature) -> None:
-        """Log if a feature is ACTIVE for a block. Used as part of the Feature Activation Phased Testing."""
-        if self._feature_service.is_feature_active(block=block, feature=feature):
-            self._log.info(
-                'Feature is ACTIVE for block',
-                feature=feature.value,
-                block_hash=block.hash_hex,
-                block_height=block.get_height()
-            )

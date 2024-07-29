@@ -63,6 +63,7 @@ class TransactionVerifier:
 
     def verify_weight(self, tx: Transaction) -> None:
         """Validate minimum tx difficulty."""
+        assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         min_tx_weight = self._daa.minimum_tx_weight(tx)
         max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
         if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:
@@ -231,13 +232,13 @@ class TransactionVerifier:
                 if not token_info.can_melt:
                     raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
                         token_info.amount, token_uid.hex()))
-                withdraw += get_withdraw_amount(token_info.amount)
+                withdraw += get_withdraw_amount(self._settings, token_info.amount)
             else:
                 # tokens have been minted
                 if not token_info.can_mint:
                     raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
                         (-1) * token_info.amount, token_uid.hex()))
-                deposit += get_deposit_amount(token_info.amount)
+                deposit += get_deposit_amount(self._settings, token_info.amount)
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit

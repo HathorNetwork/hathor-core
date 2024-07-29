@@ -11,7 +11,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
     __test__ = False
 
     def _build_randomized_blockchain(self, *, utxo_index=False):
-        tx_storage = TransactionMemoryStorage()
+        tx_storage = TransactionMemoryStorage(settings=self._settings)
         manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True,
                                    use_memory_index=True, utxo_index=utxo_index)
 

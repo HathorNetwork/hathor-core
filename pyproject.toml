@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.60.1"
+version = "0.62.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -130,6 +130,7 @@ module = [
     'sortedcontainers',
     'structlog_sentry',
     'structlog_sentry',
+    'psutil',
 ]
 ignore_missing_imports = true
 

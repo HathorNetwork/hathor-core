@@ -17,6 +17,7 @@ from typing import Any, Iterator, Optional
 
 from twisted.internet import threads
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
@@ -32,8 +33,17 @@ class TransactionCacheStorage(BaseTransactionStorage):
     cache: OrderedDict[bytes, BaseTransaction]
     dirty_txs: set[bytes]
 
-    def __init__(self, store: 'BaseTransactionStorage', reactor: Reactor, interval: int = 5,
-                 capacity: int = 10000, *, indexes: Optional[IndexesManager], _clone_if_needed: bool = False):
+    def __init__(
+        self,
+        store: 'BaseTransactionStorage',
+        reactor: Reactor,
+        interval: int = 5,
+        capacity: int = 10000,
+        *,
+        settings: HathorSettings,
+        indexes: Optional[IndexesManager],
+        _clone_if_needed: bool = False,
+    ) -> None:
         """
         :param store: a subclass of BaseTransactionStorage
         :type store: :py:class:`hathor.transaction.storage.BaseTransactionStorage`
@@ -68,7 +78,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         # we need to use only one weakref dict, so we must first initialize super, and then
         # attribute the same weakref for both.
-        super().__init__(indexes=indexes)
+        super().__init__(indexes=indexes, settings=settings)
         self._tx_weakref = store._tx_weakref
         # XXX: just to make sure this isn't being used anywhere, setters/getters should be used instead
         del self._allow_scope

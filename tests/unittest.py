@@ -11,8 +11,8 @@ from twisted.trial import unittest
 
 from hathor.builder import BuildArtifacts, Builder
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
@@ -33,7 +33,6 @@ from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
 logger = get_logger()
 main = ut_main
-settings = HathorSettings()
 USE_MEMORY_STORAGE = os.environ.get('HATHOR_TEST_MEMORY_STORAGE', 'false').lower() == 'true'
 
 
@@ -84,11 +83,12 @@ class SyncBridgeParams:
 class TestBuilder(Builder):
     __test__ = False
 
-    def __init__(self) -> None:
+    def __init__(self, settings: HathorSettings | None = None) -> None:
         super().__init__()
         self.set_network('testnet')
         # default builder has sync-v2 enabled for tests
         self.enable_sync_v2()
+        self.set_settings(settings or get_global_settings())
 
     def build(self) -> BuildArtifacts:
         artifacts = super().build()
@@ -118,6 +118,7 @@ class TestCase(unittest.TestCase):
         self.tmpdirs: list[str] = []
         self.clock = TestMemoryReactorClock()
         self.clock.advance(time.time())
+        self.reactor = self.clock
         self.log = logger.new()
         self.reset_peer_id_pool()
         self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config
@@ -215,7 +216,8 @@ class TestCase(unittest.TestCase):
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
         builder = self.get_builder(network) \
-            .set_full_verification(full_verification)
+            .set_full_verification(full_verification) \
+            .set_settings(self._settings)
 
         if checkpoints is not None:
             builder.set_checkpoints(checkpoints)

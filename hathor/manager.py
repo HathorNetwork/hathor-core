@@ -29,6 +29,7 @@ from twisted.python.threadpool import ThreadPool
 from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.consensus.poa import PoaBlockProducer
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
@@ -56,6 +57,7 @@ from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none
 from hathor.verification.verification_service import VerificationService
@@ -104,6 +106,7 @@ class HathorManager:
         network: str,
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
+        vertex_parser: VertexParser,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -112,6 +115,7 @@ class HathorManager:
         environment_info: Optional[EnvironmentInfo] = None,
         full_verification: bool = False,
         enable_event_queue: bool = False,
+        poa_block_producer: PoaBlockProducer | None = None,
     ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
@@ -192,6 +196,7 @@ class HathorManager:
 
         self.connections = p2p_manager
         self.vertex_handler = vertex_handler
+        self.vertex_parser = vertex_parser
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -230,6 +235,8 @@ class HathorManager:
 
         # This is included in some logs to provide more context
         self.environment_info = environment_info
+
+        self.poa_block_producer = poa_block_producer
 
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
@@ -329,6 +336,9 @@ class HathorManager:
         if self.stratum_factory:
             self.stratum_factory.start()
 
+        if self.poa_block_producer:
+            self.poa_block_producer.start()
+
         # Start running
         self.tx_storage.start_running_manager(self._execution_manager)
 
@@ -362,6 +372,9 @@ class HathorManager:
 
         if self._enable_event_queue:
             self._event_manager.stop()
+
+        if self.poa_block_producer:
+            self.poa_block_producer.stop()
 
         self.tx_storage.flush()
 
@@ -862,7 +875,7 @@ class HathorManager:
         assert address is not None
         block = self.get_block_templates(parent_block_hash, timestamp).generate_mining_block(
             rng=self.rng,
-            merge_mined=merge_mined,
+            cls=MergeMinedBlock if merge_mined else Block,
             address=address or None,  # XXX: because we allow b'' for explicit empty output script
             data=data,
         )
@@ -895,6 +908,9 @@ class HathorManager:
                 max_output_script_size: int | None = None) -> None:
         """Used by all APIs that accept a new transaction (like push_tx)
         """
+        if self.tx_storage.transaction_exists(tx.hash):
+            raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
+
         if max_output_script_size is None:
             max_output_script_size = self._settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
 

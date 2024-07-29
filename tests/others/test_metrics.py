@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -53,7 +54,7 @@ class BaseMetricsTest(unittest.TestCase):
            to update the Metrics class with info from ConnectionsManager class
         """
         # Preparation
-        tx_storage = TransactionMemoryStorage()
+        tx_storage = TransactionMemoryStorage(settings=self._settings)
         tmpdir = tempfile.mkdtemp()
         self.tmpdirs.append(tmpdir)
         wallet = Wallet(directory=tmpdir)
@@ -65,7 +66,7 @@ class BaseMetricsTest(unittest.TestCase):
         manager.connections.handshaking_peers.update({Mock()})
 
         # Execution
-        endpoint = 'tcp://127.0.0.1:8005'
+        endpoint = Entrypoint.parse('tcp://127.0.0.1:8005')
         # This will trigger sending to the pubsub one of the network events
         manager.connections.connect_to(endpoint, use_ssl=True)
 
@@ -191,7 +192,7 @@ class BaseMetricsTest(unittest.TestCase):
            The expected result is that nothing is done, because we currently only collect
            data for RocksDB storage
         """
-        tx_storage = TransactionMemoryStorage()
+        tx_storage = TransactionMemoryStorage(settings=self._settings)
 
         # All
         manager = self.create_peer('testnet', tx_storage=tx_storage)
@@ -217,7 +218,8 @@ class BaseMetricsTest(unittest.TestCase):
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
-                inbound=False
+                inbound=False,
+                settings=self._settings
             )
             protocol.peer = PeerId()
 
@@ -260,8 +262,8 @@ class BaseMetricsTest(unittest.TestCase):
             TransactionCacheStorage
         """
         # Preparation
-        base_storage = TransactionMemoryStorage()
-        tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None)
+        base_storage = TransactionMemoryStorage(settings=self._settings)
+        tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None, settings=self._settings)
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)
 

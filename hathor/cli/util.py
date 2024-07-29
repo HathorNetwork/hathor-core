@@ -12,18 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import sys
+import traceback
 from argparse import ArgumentParser
 from collections import OrderedDict
 from datetime import datetime
-from typing import Any
+from enum import IntEnum, auto
+from typing import Any, NamedTuple
 
 import configargparse
 import structlog
+from structlog.typing import EventDict
+from typing_extensions import assert_never
 
 
-def create_parser() -> ArgumentParser:
-    return configargparse.ArgumentParser(auto_env_var_prefix='hathor_')
+def create_parser(*, prefix: str | None = None, add_help: bool = True) -> ArgumentParser:
+    return configargparse.ArgumentParser(auto_env_var_prefix=prefix or 'hathor_', add_help=add_help)
 
 
 # docs at http://www.structlog.org/en/stable/api.html#structlog.dev.ConsoleRenderer
@@ -119,14 +124,59 @@ class ConsoleRenderer(structlog.dev.ConsoleRenderer):
             return super()._repr(val)
 
 
+class LoggingOutput(IntEnum):
+    NULL = auto()
+    PRETTY = auto()
+    JSON = auto()
+
+
+class LoggingOptions(NamedTuple):
+    debug: bool
+    sentry: bool
+
+
+def process_logging_output(argv: list[str]) -> LoggingOutput:
+    """Extract logging output before argv parsing."""
+    parser = create_parser(add_help=False)
+
+    log_args = parser.add_mutually_exclusive_group()
+    log_args.add_argument('--json-logs', action='store_true')
+    log_args.add_argument('--disable-logs', action='store_true')
+
+    args, remaining_argv = parser.parse_known_args(argv)
+    argv.clear()
+    argv.extend(remaining_argv)
+
+    if args.json_logs:
+        return LoggingOutput.JSON
+
+    if args.disable_logs:
+        return LoggingOutput.NULL
+
+    return LoggingOutput.PRETTY
+
+
+def process_logging_options(argv: list[str]) -> LoggingOptions:
+    """Extract logging-specific options that are processed before argv parsing."""
+    parser = create_parser(add_help=False)
+    parser.add_argument('--debug', action='store_true')
+
+    args, remaining_argv = parser.parse_known_args(argv)
+    argv.clear()
+    argv.extend(remaining_argv)
+
+    sentry = '--sentry-dsn' in argv
+    return LoggingOptions(debug=args.debug, sentry=sentry)
+
+
 def setup_logging(
-            debug: bool = False,
-            capture_stdout: bool = False,
-            json_logging: bool = False,
-            *,
-            sentry: bool = False,
-            _test_logging: bool = False,
-        ) -> None:
+    *,
+    logging_output: LoggingOutput,
+    logging_options: LoggingOptions,
+    capture_stdout: bool = False,
+    _test_logging: bool = False,
+    extra_log_info: dict[str, str] | None = None,
+) -> None:
     import logging
     import logging.config
 
@@ -152,13 +202,18 @@ def setup_logging(
         timestamper,
     ]
 
-    if json_logging:
-        handlers = ['json']
-    else:
-        handlers = ['pretty']
+    match logging_output:
+        case LoggingOutput.NULL:
+            handlers = ['null']
+        case LoggingOutput.PRETTY:
+            handlers = ['pretty']
+        case LoggingOutput.JSON:
+            handlers = ['json']
+        case _:
+            assert_never(logging_output)
 
     # Flag to enable debug level for both sync-v1 and sync-v2.
-    debug_sync = False and debug
+    debug_sync = False and logging_options.debug
 
     # See: https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema
     logging.config.dictConfig({
@@ -192,6 +247,9 @@ def setup_logging(
                     'class': 'logging.StreamHandler',
                     'formatter': 'json',
                 },
+                'null': {
+                    'class': 'logging.NullHandler',
+                },
                 # 'file': {
                 #     'level': 'DEBUG',
                 #     'class': 'logging.handlers.WatchedFileHandler',
@@ -203,12 +261,12 @@ def setup_logging(
                 # set twisted verbosity one level lower than hathor's
                 'twisted': {
                     'handlers': handlers,
-                    'level': 'INFO' if debug else 'WARN',
+                    'level': 'INFO' if logging_options.debug else 'WARN',
                     'propagate': False,
                 },
                 'tornado': {  # used by ipykernel's zmq
                     'handlers': handlers,
-                    'level': 'INFO' if debug else 'WARN',
+                    'level': 'INFO' if logging_options.debug else 'WARN',
                     'propagate': False,
                 },
                 'hathor.p2p.sync_v1': {
@@ -223,23 +281,37 @@ def setup_logging(
                 },
                 '': {
                     'handlers': handlers,
-                    'level': 'DEBUG' if debug else 'INFO',
+                    'level': 'DEBUG' if logging_options.debug else 'INFO',
                 },
             }
     })
 
     def kwargs_formatter(_, __, event_dict):
         if event_dict and event_dict.get('event') and isinstance(event_dict['event'], str):
-            event_dict['event'] = event_dict['event'].format(**event_dict)
+            try:
+                event_dict['event'] = event_dict['event'].format(**event_dict)
+            except KeyError:
+                # The event string may contain '{}'s that are not used for formatting, resulting in a KeyError in the
+                # event_dict. In this case, we don't format it.
+                pass
+        return event_dict
+
+    extra_log_info = extra_log_info or {}
+
+    def add_extra_log_info(_logger: logging.Logger, _method_name: str, event_dict: EventDict) -> EventDict:
+        for key, value in extra_log_info.items():
+            assert key not in event_dict, 'extra log info conflicting with existing log key'
+            event_dict[key] = value
         return event_dict
 
     processors: list[Any] = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
+        add_extra_log_info,
     ]
 
-    if sentry:
+    if logging_options.sentry:
         from structlog_sentry import SentryProcessor
         processors.append(SentryProcessor(level=logging.ERROR))
 
@@ -275,10 +347,14 @@ def setup_logging(
             if failure is not None:
                 kwargs['exc_info'] = (failure.type, failure.value, failure.getTracebackObject())
             twisted_logger.log(level, msg, **kwargs)
-        except Exception as e:
-            print('error when logging event', e)
-            for k, v in event.items():
-                print(k, v)
+        except Exception:
+            new_event = dict(
+                event='error when logging event',
+                original_event=event,
+                traceback=traceback.format_exc()
+            )
+            new_event_json = json.dumps(new_event, default=str)
+            print(new_event_json, file=sys.stderr)
 
     # start logging to std logger so structlog can catch it
     twisted.python.log.startLoggingWithObserver(twisted_structlog_observer, setStdout=capture_stdout)

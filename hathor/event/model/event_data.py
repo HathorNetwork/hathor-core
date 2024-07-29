@@ -12,9 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Optional, Union, cast
+from typing import Optional, TypeAlias, Union, cast
 
 from pydantic import Extra, validator
+from typing_extensions import Self
 
 from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
@@ -137,6 +138,14 @@ class TxData(BaseEventData, extra=Extra.ignore):
         return cls(**tx_json)
 
 
+class VertexIdData(BaseEventData):
+    vertex_id: str
+
+    @classmethod
+    def from_event_arguments(cls, args: EventArguments) -> Self:
+        return cls(vertex_id=args.vertex_id.hex())
+
+
 class ReorgData(BaseEventData):
     """Class that represents reorg data on an event."""
     reorg_size: int
@@ -155,4 +164,4 @@ class ReorgData(BaseEventData):
 
 
 # Union type to encompass BaseEventData polymorphism
-EventData = Union[EmptyData, TxData, ReorgData]
+EventData: TypeAlias = EmptyData | TxData | ReorgData | VertexIdData

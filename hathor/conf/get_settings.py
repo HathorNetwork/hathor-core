@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import importlib
 import os
-from typing import NamedTuple, Optional
+from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from structlog import get_logger
 
-from hathor import conf
-from hathor.conf.settings import HathorSettings as Settings
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings as Settings
 
 logger = get_logger()
 
@@ -51,6 +53,7 @@ def HathorSettings() -> Settings:
     if settings_module_filepath is not None:
         return _load_settings_singleton(settings_module_filepath, is_yaml=False)
 
+    from hathor import conf
     settings_yaml_filepath = os.environ.get('HATHOR_CONFIG_YAML', conf.MAINNET_SETTINGS_FILEPATH)
     return _load_settings_singleton(settings_yaml_filepath, is_yaml=True)
 
@@ -94,9 +97,11 @@ def _load_module_settings(module_path: str) -> Settings:
     )
     settings_module = importlib.import_module(module_path)
     settings = getattr(settings_module, 'SETTINGS')
+    from hathor.conf.settings import HathorSettings as Settings
     assert isinstance(settings, Settings)
     return settings
 
 
 def _load_yaml_settings(filepath: str) -> Settings:
+    from hathor.conf.settings import HathorSettings as Settings
     return Settings.from_yaml(filepath=filepath)

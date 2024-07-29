@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.util import json_dumpb
+from hathor.utils.api import ErrorResponse, QueryParams
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -48,36 +49,50 @@ class BlockAtHeightResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        # Height parameter is required
-        parsed = parse_args(get_args(request), ['height'])
-        if not parsed['success']:
-            return get_missing_params_msg(parsed['missing'])
-
-        args = parsed['args']
-
-        # Height parameter must be an integer
-        try:
-            height = parse_int(args['height'])
-        except ValueError as e:
-            return json_dumpb({
-                'success': False,
-                'message': f'Failed to parse \'height\': {e}'
-            })
+        params = BlockAtHeightParams.from_request(request)
+        if isinstance(params, ErrorResponse):
+            return params.json_dumpb()
 
         # Get hash of the block with the height
-        block_hash = self.manager.tx_storage.indexes.height.get(height)
+        block_hash = self.manager.tx_storage.indexes.height.get(params.height)
 
         # If there is no block in the index with this height, block_hash will be None
         if block_hash is None:
             return json_dumpb({
                 'success': False,
-                'message': 'No block with height {}.'.format(height)
+                'message': 'No block with height {}.'.format(params.height)
             })
 
-        block = self.manager.tx_storage.get_transaction(block_hash)
-
+        block = self.manager.tx_storage.get_block(block_hash)
         data = {'success': True, 'block': block.to_json_extended()}
+
+        if params.include_transactions is None:
+            pass
+
+        elif params.include_transactions == 'txid':
+            tx_ids: list[str] = []
+            for tx in block.iter_transactions_in_this_block():
+                tx_ids.append(tx.hash.hex())
+            data['tx_ids'] = tx_ids
+
+        elif params.include_transactions == 'full':
+            tx_list: list[Any] = []
+            for tx in block.iter_transactions_in_this_block():
+                tx_list.append(tx.to_json_extended())
+            data['transactions'] = tx_list
+
+        else:
+            return json_dumpb({
+                'success': False,
+                'message': 'Invalid include_transactions. Choices are: txid or full.'
+            })
+
         return json_dumpb(data)
+
+
+class BlockAtHeightParams(QueryParams):
+    height: int
+    include_transactions: str | None
 
 
 BlockAtHeightResource.openapi = {
@@ -112,6 +127,19 @@ BlockAtHeightResource.openapi = {
                     'required': True,
                     'schema': {
                         'type': 'int'
+                    }
+                },
+                {
+                    'name': 'include_transactions',
+                    'in': 'query',
+                    'description': 'Add transactions confirmed by this block.',
+                    'required': False,
+                    'schema': {
+                        'type': 'string',
+                        'enum': [
+                            'txid',
+                            'full',
+                        ],
                     }
                 },
             ],

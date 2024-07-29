@@ -12,16 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import base64
 from itertools import starmap, zip_longest
 from operator import add
 from struct import pack
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
+
+from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -29,9 +32,8 @@ from hathor.util import not_none
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
-
-cpu = get_cpu_profiler()
 
 # Signal bits (B), version (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBB'
@@ -43,19 +45,32 @@ _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 class Block(BaseTransaction):
     SERIALIZATION_NONCE_SIZE = 16
 
-    def __init__(self,
-                 nonce: int = 0,
-                 timestamp: Optional[int] = None,
-                 signal_bits: int = 0,
-                 version: TxVersion = TxVersion.REGULAR_BLOCK,
-                 weight: float = 0,
-                 outputs: Optional[list[TxOutput]] = None,
-                 parents: Optional[list[bytes]] = None,
-                 hash: Optional[bytes] = None,
-                 data: bytes = b'',
-                 storage: Optional['TransactionStorage'] = None) -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
-                         outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+    def __init__(
+        self,
+        nonce: int = 0,
+        timestamp: Optional[int] = None,
+        signal_bits: int = 0,
+        version: TxVersion = TxVersion.REGULAR_BLOCK,
+        weight: float = 0,
+        outputs: Optional[list[TxOutput]] = None,
+        parents: Optional[list[bytes]] = None,
+        hash: Optional[bytes] = None,
+        data: bytes = b'',
+        storage: Optional['TransactionStorage'] = None,
+        settings: HathorSettings | None = None,
+    ) -> None:
+        super().__init__(
+            nonce=nonce,
+            timestamp=timestamp,
+            signal_bits=signal_bits,
+            version=version,
+            weight=weight,
+            outputs=outputs or [],
+            parents=parents or [],
+            hash=hash,
+            storage=storage,
+            settings=settings,
+        )
         self.data = data
 
     def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
@@ -76,7 +91,7 @@ class Block(BaseTransaction):
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'Block':
+                           *, verbose: VerboseCallback = None) -> Self:
         blc = cls()
         buf = blc.get_fields_from_struct(struct_bytes, verbose=verbose)
 
@@ -401,3 +416,14 @@ class Block(BaseTransaction):
         bit_list = self._get_feature_activation_bit_list()
 
         return bit_list[bit]
+
+    def iter_transactions_in_this_block(self) -> Iterator[BaseTransaction]:
+        """Return an iterator of the transactions that have this block as meta.first_block."""
+        from hathor.transaction.storage.traversal import BFSOrderWalk
+        bfs = BFSOrderWalk(self.storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
+        for tx in bfs.run(self, skip_root=True):
+            tx_meta = tx.get_metadata()
+            if tx_meta.first_block != self.hash:
+                bfs.skip_neighbors(tx)
+                continue
+            yield tx

@@ -13,6 +13,8 @@
 #  limitations under the License.
 
 from pathlib import Path
+from typing import Any
+from unittest.mock import Mock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -26,7 +28,7 @@ from hathor.conf import (
 )
 from hathor.conf.mainnet import SETTINGS as MAINNET_SETTINGS
 from hathor.conf.nano_testnet import SETTINGS as NANO_TESTNET_SETTINGS
-from hathor.conf.settings import HathorSettings
+from hathor.conf.settings import DECIMAL_PLACES, GENESIS_TOKEN_UNITS, GENESIS_TOKENS, HathorSettings
 from hathor.conf.testnet import SETTINGS as TESTNET_SETTINGS
 from hathor.conf.unittests import SETTINGS as UNITTESTS_SETTINGS
 
@@ -105,6 +107,134 @@ def test_missing_hathor_settings_from_yaml(filepath):
         HathorSettings.from_yaml(filepath=settings_filepath)
 
     assert "missing 1 required positional argument: 'NETWORK_NAME'" in str(e.value)
+
+
+def test_tokens() -> None:
+    yaml_mock = Mock()
+    required_settings = dict(P2PKH_VERSION_BYTE='x01', MULTISIG_VERSION_BYTE='x02', NETWORK_NAME='test')
+
+    def mock_settings(settings_: dict[str, Any]) -> None:
+        yaml_mock.dict_from_extended_yaml = Mock(return_value=required_settings | settings_)
+
+    with patch('hathor.conf.settings.yaml', yaml_mock):
+        # Test default values passes
+        mock_settings(dict(
+            GENESIS_TOKENS=GENESIS_TOKENS,
+            GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS,
+            DECIMAL_PLACES=DECIMAL_PLACES,
+        ))
+        HathorSettings.from_yaml(filepath='some_path')
+
+        # Test failures
+        mock_settings(dict(
+            GENESIS_TOKENS=GENESIS_TOKENS + 1,
+            GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS,
+            DECIMAL_PLACES=DECIMAL_PLACES,
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert (
+            'invalid tokens: GENESIS_TOKENS=100000000001, GENESIS_TOKEN_UNITS=1000000000, DECIMAL_PLACES=2'
+        ) in str(e.value)
+
+        mock_settings(dict(
+            GENESIS_TOKENS=GENESIS_TOKENS,
+            GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS + 1,
+            DECIMAL_PLACES=DECIMAL_PLACES,
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert (
+            'invalid tokens: GENESIS_TOKENS=100000000000, GENESIS_TOKEN_UNITS=1000000001, DECIMAL_PLACES=2'
+        ) in str(e.value)
+
+        mock_settings(dict(
+            GENESIS_TOKENS=GENESIS_TOKENS,
+            GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS,
+            DECIMAL_PLACES=DECIMAL_PLACES + 1,
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert (
+            'invalid tokens: GENESIS_TOKENS=100000000000, GENESIS_TOKEN_UNITS=1000000000, DECIMAL_PLACES=3'
+        ) in str(e.value)
+
+
+def test_consensus_algorithm() -> None:
+    yaml_mock = Mock()
+    required_settings = dict(P2PKH_VERSION_BYTE='x01', MULTISIG_VERSION_BYTE='x02', NETWORK_NAME='test')
+
+    def mock_settings(settings_: dict[str, Any]) -> None:
+        yaml_mock.dict_from_extended_yaml = Mock(return_value=required_settings | settings_)
+
+    with patch('hathor.conf.settings.yaml', yaml_mock):
+        # Test passes when PoA is disabled with default settings
+        mock_settings(dict())
+        HathorSettings.from_yaml(filepath='some_path')
+
+        # Test fails when PoA is enabled with default settings
+        mock_settings(dict(
+            CONSENSUS_ALGORITHM=dict(
+                type='PROOF_OF_AUTHORITY',
+                signers=(dict(public_key=b'some_signer'),)
+            )
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert 'PoA networks do not support block rewards' in str(e.value)
+
+        # Test passes when PoA is enabled without block rewards
+        mock_settings(dict(
+            BLOCKS_PER_HALVING=None,
+            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
+        ))
+        HathorSettings.from_yaml(filepath='some_path')
+
+        # Test fails when no signer is provided
+        mock_settings(dict(
+            BLOCKS_PER_HALVING=None,
+            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=()),
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert 'At least one signer must be provided in PoA networks' in str(e.value)
+
+        # Test fails when PoA is enabled with BLOCKS_PER_HALVING
+        mock_settings(dict(
+            BLOCKS_PER_HALVING=123,
+            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert 'PoA networks do not support block rewards' in str(e.value)
+
+        # Test fails when PoA is enabled with INITIAL_TOKEN_UNITS_PER_BLOCK
+        mock_settings(dict(
+            BLOCKS_PER_HALVING=None,
+            INITIAL_TOKEN_UNITS_PER_BLOCK=123,
+            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert 'PoA networks do not support block rewards' in str(e.value)
+
+        # Test fails when PoA is enabled with MINIMUM_TOKEN_UNITS_PER_BLOCK
+        mock_settings(dict(
+            BLOCKS_PER_HALVING=None,
+            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_UNITS_PER_BLOCK=123,
+            CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
+        ))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert 'PoA networks do not support block rewards' in str(e.value)
 
 
 # TODO: Tests below are temporary while settings via python coexist with settings via yaml, just to make sure

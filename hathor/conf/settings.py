@@ -15,11 +15,12 @@
 import os
 from math import log
 from pathlib import Path
-from typing import NamedTuple, Optional, Union
+from typing import Any, NamedTuple, Optional, Union
 
 import pydantic
 
 from hathor.checkpoint import Checkpoint
+from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathor.utils import yaml
 from hathor.utils.named_tuple import validated_named_tuple_from_dict
@@ -436,6 +437,13 @@ class HathorSettings(NamedTuple):
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, 'str'] = {}
 
+    # The consensus algorithm protocol settings.
+    CONSENSUS_ALGORITHM: ConsensusSettings = PowSettings()
+
+    # The name and symbol of the native token. This is only used in APIs to serve clients.
+    NATIVE_TOKEN_NAME: str = 'Hathor'
+    NATIVE_TOKEN_SYMBOL: str = 'HTR'
+
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""
@@ -473,7 +481,7 @@ def _parse_blueprints(blueprints_raw: dict[str, str]) -> dict[bytes, str]:
     return blueprints
 
 
-def _parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
+def parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
     """Parse a raw hex string into bytes."""
     if isinstance(hex_str, str):
         return bytes.fromhex(hex_str.lstrip('x'))
@@ -482,6 +490,40 @@ def _parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
         raise TypeError(f'expected \'str\' or \'bytes\', got {hex_str}')
 
     return hex_str
+
+
+def _validate_consensus_algorithm(consensus_algorithm: ConsensusSettings, values: dict[str, Any]) -> ConsensusSettings:
+    """Validate that if Proof-of-Authority is enabled, block rewards must not be set."""
+    if consensus_algorithm.is_pow():
+        return consensus_algorithm
+
+    assert consensus_algorithm.is_poa()
+    blocks_per_halving = values.get('BLOCKS_PER_HALVING')
+    initial_token_units_per_block = values.get('INITIAL_TOKEN_UNITS_PER_BLOCK')
+    minimum_token_units_per_block = values.get('MINIMUM_TOKEN_UNITS_PER_BLOCK')
+    assert initial_token_units_per_block is not None, 'INITIAL_TOKEN_UNITS_PER_BLOCK must be set'
+    assert minimum_token_units_per_block is not None, 'MINIMUM_TOKEN_UNITS_PER_BLOCK must be set'
+
+    if blocks_per_halving is not None or initial_token_units_per_block != 0 or minimum_token_units_per_block != 0:
+        raise ValueError('PoA networks do not support block rewards')
+
+    return consensus_algorithm
+
+
+def _validate_tokens(genesis_tokens: int, values: dict[str, Any]) -> int:
+    """Validate genesis tokens."""
+    genesis_token_units = values.get('GENESIS_TOKEN_UNITS')
+    decimal_places = values.get('DECIMAL_PLACES')
+    assert genesis_token_units is not None, 'GENESIS_TOKEN_UNITS must be set'
+    assert decimal_places is not None, 'DECIMAL_PLACES must be set'
+
+    if genesis_tokens != genesis_token_units * (10**decimal_places):
+        raise ValueError(
+            f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, GENESIS_TOKEN_UNITS={genesis_token_units}, '
+            f'DECIMAL_PLACES={decimal_places}',
+        )
+
+    return genesis_tokens
 
 
 _VALIDATORS = dict(
@@ -494,13 +536,13 @@ _VALIDATORS = dict(
         'GENESIS_TX2_HASH',
         pre=True,
         allow_reuse=True
-    )(_parse_hex_str),
+    )(parse_hex_str),
     _parse_soft_voided_tx_id=pydantic.validator(
         'SOFT_VOIDED_TX_IDS',
         pre=True,
         allow_reuse=True,
         each_item=True
-    )(_parse_hex_str),
+    )(parse_hex_str),
     _parse_checkpoints=pydantic.validator(
         'CHECKPOINTS',
         pre=True
@@ -508,5 +550,11 @@ _VALIDATORS = dict(
     _parse_blueprints=pydantic.validator(
         'BLUEPRINTS',
         pre=True
-    )(_parse_blueprints)
+    )(_parse_blueprints),
+    _validate_consensus_algorithm=pydantic.validator(
+        'CONSENSUS_ALGORITHM'
+    )(_validate_consensus_algorithm),
+    _validate_tokens=pydantic.validator(
+        'GENESIS_TOKENS'
+    )(_validate_tokens),
 )

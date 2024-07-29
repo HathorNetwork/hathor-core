@@ -23,7 +23,8 @@ from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
@@ -82,8 +83,7 @@ class HathorProtocol:
     state: Optional[BaseState]
     connection_time: float
     _state_instances: dict[PeerState, BaseState]
-    connection_string: Optional[str]
-    expected_peer_id: Optional[str]
+    entrypoint: Optional[Entrypoint]
     warning_flags: set[str]
     aborting: bool
     diff_timestamp: Optional[int]
@@ -91,9 +91,17 @@ class HathorProtocol:
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
     capabilities: set[str]  # capabilities received from the peer in HelloState
 
-    def __init__(self, network: str, my_peer: PeerId, p2p_manager: 'ConnectionsManager',
-                 *, use_ssl: bool, inbound: bool) -> None:
-        self._settings = get_global_settings()
+    def __init__(
+        self,
+        network: str,
+        my_peer: PeerId,
+        p2p_manager: 'ConnectionsManager',
+        *,
+        settings: HathorSettings,
+        use_ssl: bool,
+        inbound: bool,
+    ) -> None:
+        self._settings = settings
         self.network = network
         self.my_peer = my_peer
         self.connections = p2p_manager
@@ -138,7 +146,7 @@ class HathorProtocol:
 
         # Connection string of the peer
         # Used to validate if entrypoints has this string
-        self.connection_string: Optional[str] = None
+        self.entrypoint: Optional[Entrypoint] = None
 
         # Peer id sent in the connection url that is expected to connect (optional)
         self.expected_peer_id: Optional[str] = None
@@ -164,7 +172,7 @@ class HathorProtocol:
         """Called to change the state of the connection."""
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
-            instance = state_cls(self)
+            instance = state_cls(self, self._settings)
             instance.state_name = state_enum.name
             self._state_instances[state_enum] = instance
         new_state = self._state_instances[state_enum]
@@ -243,17 +251,10 @@ class HathorProtocol:
         if self.connections:
             self.connections.on_peer_connect(self)
 
-    def on_outbound_connect(self, url_peer_id: Optional[str], connection_string: str) -> None:
+    def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
-        if url_peer_id:
-            # Set in protocol the peer id extracted from the URL that must be validated
-            self.expected_peer_id = url_peer_id
-        else:
-            # Add warning flag
-            self.warning_flags.add(self.WarningFlags.NO_PEER_ID_URL)
-
-        # Setting connection string in protocol, so we can validate it matches the entrypoints data
-        self.connection_string = connection_string
+        # Save the used entrypoint in protocol so we can validate that it matches the entrypoints data
+        self.entrypoint = entrypoint
 
     def on_peer_ready(self) -> None:
         assert self.connections is not None

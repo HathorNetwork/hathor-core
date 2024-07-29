@@ -24,7 +24,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # this makes sure we can spend the genesis outputs
-        self.tx_storage = TransactionMemoryStorage()
+        self.tx_storage = TransactionMemoryStorage(settings=self._settings)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
@@ -178,6 +178,17 @@ class BaseTransactionTest(unittest.TestCase):
         # additionally the transaction should have been marked as invalid and removed from the storage after the re-org
         self.assertTrue(tx.get_metadata().validation.is_invalid())
         self.assertFalse(self.manager.tx_storage.transaction_exists(tx.hash))
+
+        # assert that the tx has been removed from its dependencies' metadata
+        for parent_id in tx.parents:
+            parent = self.manager.tx_storage.get_transaction(parent_id)
+            assert tx.hash not in parent.get_metadata().children
+
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            spent_outputs = spent_tx.get_metadata().spent_outputs
+            assert len(spent_outputs) == 1
+            assert tx.hash not in spent_outputs[0]
 
     @pytest.mark.xfail(reason='this is no longer the case, timestamp will not matter', strict=True)
     def test_classic_reward_lock_timestamp_expected_to_fail(self):

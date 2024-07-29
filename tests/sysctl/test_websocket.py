@@ -5,8 +5,15 @@ from tests import unittest
 
 
 class WebsocketSysctlTestCase(unittest.TestCase):
+    _enable_sync_v1 = True
+    _enable_sync_v2 = True
+
+    def setUp(self):
+        super().setUp()
+        self.manager = self.create_peer('testnet')
+
     def test_max_subs_addrs_conn(self):
-        ws_factory = HathorAdminWebsocketFactory()
+        ws_factory = HathorAdminWebsocketFactory(self.manager)
         sysctl = WebsocketManagerSysctl(ws_factory)
 
         sysctl.unsafe_set('max_subs_addrs_conn', 10)
@@ -25,7 +32,7 @@ class WebsocketSysctlTestCase(unittest.TestCase):
             sysctl.unsafe_set('max_subs_addrs_conn', -2)
 
     def test_max_subs_addrs_empty(self):
-        ws_factory = HathorAdminWebsocketFactory()
+        ws_factory = HathorAdminWebsocketFactory(self.manager)
         sysctl = WebsocketManagerSysctl(ws_factory)
 
         sysctl.unsafe_set('max_subs_addrs_empty', 10)

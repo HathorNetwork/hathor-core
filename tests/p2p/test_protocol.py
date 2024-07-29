@@ -5,10 +5,11 @@ from unittest.mock import Mock, patch
 from twisted.internet.protocol import Protocol
 from twisted.python.failure import Failure
 
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
 from hathor.simulator import FakeConnection
-from hathor.util import json_dumps
+from hathor.util import json_dumps, json_loadb
 from tests import unittest
 
 
@@ -68,6 +69,25 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
 
     def test_on_connect(self) -> None:
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
+
+    def test_peer_id_with_entrypoint(self) -> None:
+        entrypoint_str = 'tcp://192.168.1.1:54321'
+        entrypoint = Entrypoint.parse(entrypoint_str)
+        self.peer_id1.entrypoints.append(entrypoint)
+        self.peer_id2.entrypoints.append(entrypoint)
+        self.conn.run_one_step()  # HELLO
+
+        msg1 = self.conn.peek_tr1_value()
+        cmd1, val1 = msg1.split(b' ', 1)
+        data1 = json_loadb(val1)
+        self.assertEqual(cmd1, b'PEER-ID')
+        self.assertEqual(data1['entrypoints'], [entrypoint_str])
+
+        msg2 = self.conn.peek_tr2_value()
+        cmd2, val2 = msg2.split(b' ', 1)
+        data2 = json_loadb(val2)
+        self.assertEqual(cmd2, b'PEER-ID')
+        self.assertEqual(data2['entrypoints'], [entrypoint_str])
 
     def test_invalid_command(self) -> None:
         self._send_cmd(self.conn.proto1, 'INVALID-CMD')

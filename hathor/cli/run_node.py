@@ -50,12 +50,17 @@ class RunNode:
     UNSAFE_ARGUMENTS: list[tuple[str, Callable[['RunNodeArgs'], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
+        ('--sync-bridge', lambda args: bool(args.sync_bridge)),
+        ('--sync-v1-only', lambda args: bool(args.sync_v1_only)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
+        ('--x-sync-v1-only', lambda args: bool(args.x_sync_v1_only)),
         ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
         ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue)),
         ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor)),
         ('--x-ipython-kernel', lambda args: bool(args.x_ipython_kernel)),
     ]
+
+    env_vars_prefix: str | None = None
 
     @classmethod
     def create_parser(cls) -> ArgumentParser:
@@ -65,7 +70,7 @@ class RunNode:
         """
         from hathor.cli.util import create_parser
         from hathor.feature_activation.feature import Feature
-        parser = create_parser()
+        parser = create_parser(prefix=cls.env_vars_prefix)
 
         parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
         parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
@@ -127,14 +132,14 @@ class RunNode:
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
         sync_args = parser.add_mutually_exclusive_group()
-        sync_args.add_argument('--sync-bridge', action='store_true',
-                               help='Enable running both sync protocols.')
-        sync_args.add_argument('--sync-v1-only', action='store_true', help='Disable support for running sync-v2.')
-        sync_args.add_argument('--sync-v2-only', action='store_true', help='Disable support for running sync-v1.')
+        sync_args.add_argument('--sync-bridge', action='store_true', help=SUPPRESS)  # moved to --x-sync-bridge
+        sync_args.add_argument('--sync-v1-only', action='store_true', help=SUPPRESS)  # moved to --x-sync-v1-only
+        sync_args.add_argument('--sync-v2-only', action='store_true', help=SUPPRESS)  # already default
         sync_args.add_argument('--x-remove-sync-v1', action='store_true', help='Make sync-v1 unavailable, thus '
-                               'impossible to be enable in runtime.')
+                               'impossible to be enabled in runtime.')
+        sync_args.add_argument('--x-sync-v1-only', action='store_true', help='Disable support for running sync-v2.')
         sync_args.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # old argument
-        sync_args.add_argument('--x-sync-bridge', action='store_true', help=SUPPRESS)  # old argument
+        sync_args.add_argument('--x-sync-bridge', action='store_true', help='Enable running both sync protocols.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
@@ -153,6 +158,8 @@ class RunNode:
                             help='Launch embedded IPython kernel for remote debugging')
         parser.add_argument('--log-vertex-bytes', action='store_true',
                             help='Log tx bytes for debugging')
+        parser.add_argument('--disable-ws-history-streaming', action='store_true',
+                            help='Disable websocket history streaming API')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -455,7 +462,6 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
-        from hathor.cli.run_node_args import RunNodeArgs
         from hathor.conf import NANO_TESTNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH
         from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
@@ -467,7 +473,7 @@ class RunNode:
         self.parser = self.create_parser()
         raw_args = self.parse_args(argv)
 
-        self._args = RunNodeArgs.parse_obj(vars(raw_args))
+        self._args = self._parse_args_obj(vars(raw_args))
 
         if self._args.config_yaml:
             os.environ['HATHOR_CONFIG_YAML'] = self._args.config_yaml
@@ -528,6 +534,10 @@ class RunNode:
 
     def parse_args(self, argv: list[str]) -> Namespace:
         return self.parser.parse_args(argv)
+
+    def _parse_args_obj(self, args: dict[str, Any]) -> 'RunNodeArgs':
+        from hathor.cli.run_node_args import RunNodeArgs
+        return RunNodeArgs.parse_obj(args)
 
     def run(self) -> None:
         self.reactor.run()
