@@ -1,6 +1,6 @@
 PRECISION = 10**20
 import os
-
+import random
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.nanocontracts.blueprints.dozer_pool import Dozer_Pool
@@ -50,7 +50,7 @@ class MVP_PoolBlueprintTestCase(unittest.TestCase):
     def get_current_timestamp(self):
         return int(self.clock.seconds())
 
-    def _initialize_contract(self, reserve_a, reserve_b, fee=0):
+    def _initialize_contract(self, reserve_a, reserve_b, fee=0, protocol_fee=50):
         tx = self._get_any_tx()
         actions = [
             NCAction(NCActionType.DEPOSIT, self.token_a, reserve_a),
@@ -60,10 +60,16 @@ class MVP_PoolBlueprintTestCase(unittest.TestCase):
             actions, tx, self._get_any_address()[0], timestamp=self.get_current_timestamp()  # type: ignore
         )
         self.runner.call_public_method(
-            "initialize", context, self.token_a, self.token_b, fee
+            "initialize",
+            context,
+            self.token_a,
+            self.token_b,
+            fee,
+            protocol_fee,
         )
 
         storage = self.nc_storage
+        self.admin_address = context.address
         self.assertEqual(storage.get("token_a"), self.token_a)
         self.assertEqual(storage.get("token_b"), self.token_b)
         self.assertEqual(storage.get("fee_numerator"), fee)
@@ -698,7 +704,7 @@ class MVP_PoolBlueprintTestCase(unittest.TestCase):
             liquidity_decrease = (total_liquidity / PRECISION) * amount_a / reserve_a
             user_liquidity = users_liquidity[i] - int(PRECISION * liquidity_decrease)
             print(
-                f"user_liquidity_befor:{users_liquidity[i]}\n user_liquidity_after: {user_liquidity} \n \
+                f"user_liquidity_before:{users_liquidity[i]}\n user_liquidity_after: {user_liquidity} \n \
                       total_liquidity: {total_liquidity}, amounts_a[i]: {amounts_a[i]}"
             )
             self.assertEqual(
@@ -745,8 +751,12 @@ class MVP_PoolBlueprintTestCase(unittest.TestCase):
         ]
         users_liquidity = []
         self._initialize_contract(1_000_00, 500_000, fee=5)
+        dev_liquidity = self.runner.call_private_method(
+            "liquidity_of", self.admin_address
+        )
         fee_numerator = storage.get("fee_numerator")
         fee_denominator = storage.get("fee_denominator")
+        protocol_fee = storage.get("protocol_fee")
         total_liquidity = storage.get("total_liquidity")
         reserve_a = storage.get("reserve_a")
         reserve_b = storage.get("reserve_b")
@@ -795,13 +805,36 @@ class MVP_PoolBlueprintTestCase(unittest.TestCase):
 
             self.assertEqual(amount_b, amount_out)
 
+            fee_amount = int(amount_a * fee_numerator / fee_denominator)
+            fee_accumulated += fee_amount
+            protocol_fee_amount = int(fee_amount * protocol_fee / 100)
+            liquidity_increase = int(
+                ((total_liquidity / PRECISION) * (protocol_fee_amount / 2) / reserve_a)
+                * PRECISION
+            )
+            self.assertEqual(
+                liquidity_increase,
+                self.runner.call_private_method(
+                    "_get_protocol_liquidity_increase",
+                    protocol_fee_amount,
+                    self.token_a,
+                ),
+            )
+
             ctx, result = self._swap1(self.token_a, amount_a, self.token_b, amount_b)
-            fee_accumulated += amount_a * fee_numerator // fee_denominator
+
+            dev_liquidity += liquidity_increase
+            self.assertEqual(
+                dev_liquidity,
+                self.runner.call_private_method("liquidity_of", self.admin_address),
+            )
+
             self.assertEqual(
                 fee_accumulated,
                 self.runner.call_private_method("accumulated_fee_of", self.token_a),
             )
 
+            total_liquidity += liquidity_increase
             reserve_a += amount_a
             reserve_b -= amount_b
 
@@ -857,3 +890,336 @@ class MVP_PoolBlueprintTestCase(unittest.TestCase):
                 user_liquidity - liquidity_decrease,
             )
             ## failing in decimal cases, need to think in a better way to store liquidity
+
+    def test_front_end_api_pool(self) -> None:
+        storage = self.nc_storage
+        self._initialize_contract(1_000_00, 500_000, fee=5)
+
+        # Perform a swap to generate some volume and fees
+        amount_in = 50_00
+        amount_out = self.runner.call_private_method(
+            "get_amount_out", amount_in, 1_000_00, 500_000
+        )
+        self._swap1(self.token_a, amount_in, self.token_b, amount_out)
+
+        # Call the front_end_api_pool method
+        pool_info = self.runner.call_private_method("front_end_api_pool")
+
+        # Assert the returned values
+        self.assertIn("reserve0", pool_info)
+        self.assertIn("reserve1", pool_info)
+        self.assertIn("fee", pool_info)
+        self.assertIn("volume", pool_info)
+        self.assertIn("fee0", pool_info)
+        self.assertIn("fee1", pool_info)
+        self.assertIn("dzr_rewards", pool_info)
+        self.assertIn("transactions", pool_info)
+
+        # Check specific values
+        self.assertEqual(
+            pool_info["reserve0"], 1_050_00
+        )  # Initial 1_000_00 + 50_00 swapped in
+        self.assertEqual(pool_info["reserve1"], 500_000 - amount_out)
+        self.assertEqual(pool_info["fee"], 0.005)  # 5/1000
+        self.assertEqual(pool_info["volume"], 50_00)
+        self.assertGreater(pool_info["fee0"], 0)  # Should have collected some fees
+        self.assertEqual(pool_info["fee1"], 0)  # No fees collected for token B
+        self.assertEqual(pool_info["dzr_rewards"], 1000)
+        self.assertEqual(pool_info["transactions"], 1)
+
+        # Perform another swap
+        amount_in = 30_00
+        amount_out = self.runner.call_private_method(
+            "get_amount_out", amount_in, pool_info["reserve0"], pool_info["reserve1"]
+        )
+        self._swap1(self.token_a, amount_in, self.token_b, amount_out)
+
+        # Call the front_end_api_pool method again
+        updated_pool_info = self.runner.call_private_method("front_end_api_pool")
+
+        # Check that values have updated correctly
+        self.assertEqual(updated_pool_info["reserve0"], 1_080_00)
+        self.assertEqual(
+            updated_pool_info["reserve1"], pool_info["reserve1"] - amount_out
+        )
+        self.assertEqual(updated_pool_info["volume"], 80_00)
+        self.assertGreater(updated_pool_info["fee0"], pool_info["fee0"])
+        self.assertEqual(updated_pool_info["transactions"], 2)
+
+    def test_add_swap_remove_liquidity_random(self) -> None:
+        storage = self.nc_storage
+        self._initialize_contract(1_000_00, 500_000, fee=5)
+
+        # Helper function to get current reserves
+        def get_reserves():
+            return self.runner.call_private_method("get_reserves")
+
+        # Helper function to calculate expected amount out
+        def get_amount_out(amount_in, reserve_in, reserve_out):
+            return self.runner.call_private_method(
+                "get_amount_out", amount_in, reserve_in, reserve_out
+            )
+
+        # Add liquidity
+        add_amount_a = random.randint(100_00, 500_00)
+        reserve_a, reserve_b = get_reserves()
+        add_amount_b = self.runner.call_private_method(
+            "quote", add_amount_a, reserve_a, reserve_b
+        )
+
+        ctx_add = self._prepare_add_liquidity_context(add_amount_a, add_amount_b)
+        self.runner.call_public_method("add_liquidity", ctx_add)
+
+        new_reserve_a, new_reserve_b = get_reserves()
+        self.assertEqual(new_reserve_a, reserve_a + add_amount_a)
+        self.assertEqual(new_reserve_b, reserve_b + add_amount_b)
+
+        # Perform swaps
+        num_swaps = random.randint(1, 5)
+        total_amount_a_swapped = 0
+        total_amount_b_swapped = 0
+
+        for _ in range(num_swaps):
+            swap_amount_a = random.randint(10_00, 50_00)
+            reserve_a, reserve_b = get_reserves()
+            expected_amount_b = get_amount_out(swap_amount_a, reserve_a, reserve_b)
+
+            ctx_swap, result_swap = self._swap1(
+                self.token_a, swap_amount_a, self.token_b, expected_amount_b
+            )
+
+            total_amount_a_swapped += swap_amount_a
+            total_amount_b_swapped += expected_amount_b
+
+            new_reserve_a, new_reserve_b = get_reserves()
+            self.assertEqual(new_reserve_a, reserve_a + swap_amount_a)
+            self.assertEqual(new_reserve_b, reserve_b - expected_amount_b)
+
+        # Check pool info after swaps
+        pool_info = self.runner.call_private_method("front_end_api_pool")
+        self.assertEqual(pool_info["volume"], total_amount_a_swapped)
+        self.assertEqual(pool_info["transactions"], num_swaps)
+
+        # Remove liquidity
+        reserve_a, reserve_b = get_reserves()
+        user_liquidity = self.runner.call_private_method(
+            "liquidity_of", ctx_add.address
+        )
+        total_liquidity = storage.get("total_liquidity")
+
+        remove_amount_a = int(
+            (user_liquidity / PRECISION) * reserve_a / (total_liquidity / PRECISION)
+        )
+        remove_amount_b = self.runner.call_private_method(
+            "quote", remove_amount_a, reserve_a, reserve_b
+        )
+
+        ctx_remove = self._prepare_remove_liquidity_context(
+            remove_amount_a, remove_amount_b
+        )
+        ctx_remove.address = ctx_add.address
+        self.runner.call_public_method("remove_liquidity", ctx_remove)
+
+        final_reserve_a, final_reserve_b = get_reserves()
+        self.assertEqual(final_reserve_a, reserve_a - remove_amount_a)
+        self.assertEqual(final_reserve_b, reserve_b - remove_amount_b)
+
+        # Check final user liquidity
+        final_user_liquidity = self.runner.call_private_method(
+            "liquidity_of", ctx_add.address
+        )
+        # self.assertEqual(
+        #     final_user_liquidity // PRECISION, user_liquidity // PRECISION
+        # )
+        self.assertEqual(final_user_liquidity // PRECISION, 0)
+
+        # Check final pool info
+        final_pool_info = self.runner.call_private_method("front_end_api_pool")
+        self.assertEqual(final_pool_info["reserve0"], final_reserve_a)
+        self.assertEqual(final_pool_info["reserve1"], final_reserve_b)
+        self.assertEqual(final_pool_info["volume"], total_amount_a_swapped)
+        self.assertEqual(final_pool_info["transactions"], num_swaps)
+
+    def test_random_user_interactions(self):
+        storage = self.nc_storage
+        self._initialize_contract(1_000_00, 500_000, fee=5)
+
+        # Helper functions
+        def get_reserves():
+            return self.runner.call_private_method("get_reserves")
+
+        def get_amount_out(amount_in, reserve_in, reserve_out):
+            return self.runner.call_private_method(
+                "get_amount_out", amount_in, reserve_in, reserve_out
+            )
+
+        users_with_liquidity = set()
+        all_users = set()
+
+        # Define possible actions
+        actions = ["add_liquidity", "remove_liquidity", "swap_a_to_b", "swap_b_to_a"]
+
+        # Perform random actions
+        num_actions = random.randint(20, 40)
+        total_volume = 0
+        transactions = 0
+
+        # total_liquidity = storage.get("total_liquidity")
+
+        for _ in range(num_actions):
+            action = random.choice(actions)
+            reserve_a, reserve_b = get_reserves()
+            total_liquidity = storage.get("total_liquidity")
+
+            if action == "add_liquidity":
+                add_amount_a = random.randint(10_00, 100_00)
+                add_amount_b = self.runner.call_private_method(
+                    "quote", add_amount_a, reserve_a, reserve_b
+                )
+
+                ctx_add = self._prepare_add_liquidity_context(
+                    add_amount_a, add_amount_b
+                )
+                users_with_liquidity.add(ctx_add.address)
+                all_users.add(ctx_add.address)
+                self.runner.call_public_method("add_liquidity", ctx_add)
+
+                # Assert reserves after adding liquidity
+                new_reserve_a, new_reserve_b = get_reserves()
+                self.assertEqual(new_reserve_a, reserve_a + add_amount_a)
+                self.assertEqual(new_reserve_b, reserve_b + add_amount_b)
+
+                # Check liquidity increase
+                new_total_liquidity = storage.get("total_liquidity")
+                self.assertGreater(new_total_liquidity, total_liquidity)
+                user_liquidity = self.runner.call_private_method(
+                    "liquidity_of", ctx_add.address
+                )
+                self.assertGreater(user_liquidity, 0)
+
+                # transactions += 1
+
+            elif action == "remove_liquidity" and users_with_liquidity:
+                user = random.choice(list(users_with_liquidity))
+                user_liquidity = self.runner.call_private_method("liquidity_of", user)
+                percentage_to_remove = random.randint(1, 100) / 100
+                if user_liquidity > 0:
+                    total_liquidity = storage.get("total_liquidity")
+
+                    remove_amount_a = int(
+                        percentage_to_remove
+                        * (user_liquidity / PRECISION)
+                        * new_reserve_a
+                        / (total_liquidity / PRECISION)
+                    )
+                    remove_amount_b = self.runner.call_private_method(
+                        "quote", remove_amount_a, reserve_a, reserve_b
+                    )
+
+                    ctx_remove = self._prepare_remove_liquidity_context(
+                        remove_amount_a, remove_amount_b
+                    )
+                    ctx_remove.address = user
+                    self.runner.call_public_method("remove_liquidity", ctx_remove)
+
+                    # Assert reserves after removing liquidity
+                    new_reserve_a, new_reserve_b = get_reserves()
+                    self.assertEqual(new_reserve_a, reserve_a - remove_amount_a)
+                    self.assertEqual(new_reserve_b, reserve_b - remove_amount_b)
+
+                    # Check liquidity decrease
+                    new_total_liquidity = storage.get("total_liquidity")
+                    self.assertLess(new_total_liquidity, total_liquidity)
+                    new_user_liquidity = self.runner.call_private_method(
+                        "liquidity_of", user
+                    )
+                    self.assertLess(new_user_liquidity, user_liquidity)
+
+                    # remove user from user_with_liquidity
+                    users_with_liquidity.remove(user)
+                    # transactions += 1
+
+            elif action == "swap_a_to_b":
+                swap_amount_a = random.randint(1_00, 50_00)
+                expected_amount_b = get_amount_out(swap_amount_a, reserve_a, reserve_b)
+
+                _, ctx = self._swap1(
+                    self.token_a, swap_amount_a, self.token_b, expected_amount_b
+                )
+                all_users.add(ctx.address)
+                total_volume += swap_amount_a
+                transactions += 1
+
+                # Assert reserves after swapping A to B
+                new_reserve_a, new_reserve_b = get_reserves()
+                self.assertEqual(new_reserve_a, reserve_a + swap_amount_a)
+                self.assertEqual(new_reserve_b, reserve_b - expected_amount_b)
+
+                # calculate liquidity change after swap protocol fee
+                new_total_liquidity = storage.get("total_liquidity")
+                # self.assertEqual(new_total_liquidity, total_liquidity)
+
+            elif action == "swap_b_to_a":
+                swap_amount_b = random.randint(1_00, 50_00)
+                expected_amount_a = get_amount_out(swap_amount_b, reserve_b, reserve_a)
+
+                _, ctx = self._swap1(
+                    self.token_b, swap_amount_b, self.token_a, expected_amount_a
+                )
+                all_users.add(ctx.address)
+                # total_volume += swap_amount_b
+                transactions += 1
+
+                # Assert reserves after swapping B to A
+                new_reserve_a, new_reserve_b = get_reserves()
+                self.assertEqual(new_reserve_a, reserve_a - expected_amount_a)
+                self.assertEqual(new_reserve_b, reserve_b + swap_amount_b)
+
+                # Check total liquidity change for protocol fee
+                new_total_liquidity = storage.get("total_liquidity")
+                # self.assertEqual(new_total_liquidity, total_liquidity)
+
+            # Assert that reserves are always positive after each action
+            current_reserve_a, current_reserve_b = get_reserves()
+            self.assertGreater(current_reserve_a, 0)
+            self.assertGreater(current_reserve_b, 0)
+
+        # Final assertions
+        final_reserve_a, final_reserve_b = get_reserves()
+        final_total_liquidity = storage.get("total_liquidity")
+        pool_info = self.runner.call_private_method("front_end_api_pool")
+
+        self.assertEqual(pool_info["reserve0"], final_reserve_a)
+        self.assertEqual(pool_info["reserve1"], final_reserve_b)
+        self.assertEqual(pool_info["volume"], total_volume)
+        self.assertEqual(pool_info["transactions"], transactions)
+
+        # Check that reserves are still positive
+        self.assertGreater(final_reserve_a, 0)
+        self.assertGreater(final_reserve_b, 0)
+
+        # Check that some fees were collected
+        self.assertGreater(pool_info["fee0"], 0)
+        self.assertGreater(pool_info["fee1"], 0)
+
+        # Check final total liquidity
+
+        # Check that all users have zero or positive liquidity
+        for user in all_users:
+            user_liquidity = self.runner.call_private_method("liquidity_of", user)
+            self.assertGreaterEqual(user_liquidity, 0)
+
+        # Check that the sum of all user liquidities plus admin liquidity equals total liquidity
+        total_user_liquidity = sum(
+            self.runner.call_private_method("liquidity_of", user) for user in all_users
+        )
+        admin_liquidity = self.runner.call_private_method(
+            "liquidity_of", self.admin_address
+        )
+        print("total_user_liquidity:", int(total_user_liquidity / PRECISION))
+        print("admin_liquidity:", int(admin_liquidity / PRECISION))
+        print("final_total_liquidity:", int(final_total_liquidity / PRECISION))
+        self.assertEqual(
+            (total_user_liquidity + admin_liquidity) / PRECISION,
+            final_total_liquidity / PRECISION,
+        )

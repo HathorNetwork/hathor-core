@@ -42,8 +42,6 @@ class Dozer_Pool(Blueprint):
     - `storage.get_balance(token_b) == reserve_b + total_balance_b`
 
     Features still to be implemented:
-    - User balance withdrawals
-    - Fectx.address, 0) + action_a.amountu
     - Events
 
     Note: Multiple swaps can be executed through multiple calls.
@@ -76,25 +74,21 @@ class Dozer_Pool(Blueprint):
     reserve_a: Amount
     reserve_b: Amount
 
-    user_liquidity: dict[Address, int]
-    total_liquidity: int
+    user_liquidity: dict[Address, Amount]
+    total_liquidity: Amount
 
-    # Balance of users. These are the amounts available for users to withdrawal.
+    # Balance of users. These are the cashback amounts available for users to withdrawal.
     balance_a: dict[Address, Amount]
     balance_b: dict[Address, Amount]
 
-    # Slippage acummulate in the contract
-    # slippage_a: dict[Address, Amount]
-    # slippage_b: dict[Address, Amount]
+    # Developer Address
+    dev_address: Address
 
     # Sum of all user balances.
     # total_balance_a = sum(amount for amount in balance_a.items())
     # total_balance_b = sum(amount for amount in balance_b.items())
     total_balance_a: Amount
     total_balance_b: Amount
-
-    # LP Token (not implemented yet)
-    # lp_token: TokenUid
 
     # Fee rate to all trades.
     #
@@ -103,6 +97,8 @@ class Dozer_Pool(Blueprint):
     # For example, a fee of 0.3% would be 3/1000.
     fee_numerator: int
     fee_denominator: int
+
+    protocol_fee: Amount
 
     accumulated_fee: dict[TokenUid, Amount]
     transactions: int
@@ -116,8 +112,8 @@ class Dozer_Pool(Blueprint):
         ctx: Context,
         token_a: TokenUid,
         token_b: TokenUid,
-        # lp_token: TokenUid,
         fee: Amount,
+        protocol_fee: Amount,
     ) -> None:
         """Initialize the liquidity pool for the pair token_a/token_b.
 
@@ -128,34 +124,33 @@ class Dozer_Pool(Blueprint):
         if token_a > token_b:
             raise NCFail("token_a must be smaller than token_b by sort order")
 
-        # self.volume = 0
-        self.transactions = 0
-        # self.accumulated_fee = 0
+        self.token_a = token_a
+        self.token_b = token_b
+
+        self.dev_address = ctx.address
 
         # LP Fees.
-        if fee > 20:
+        if fee > 50:
             raise NCFail("fee too high")
         if fee < 0:
             raise NCFail("invalid fee")
 
         self.fee_numerator = fee
         self.fee_denominator = 1000
+
+        # Protocol Fees. This is a percentage of the fees that goes to the protocol.
+        if protocol_fee > 50:
+            raise NCFail("protocol fee too high")
+        if protocol_fee < 0:
+            raise NCFail("invalid protocol fee")
+
+        self.protocol_fee = protocol_fee
+
         self.accumulated_fee[token_a] = 0
         self.accumulated_fee[token_b] = 0
-
-        # self.user_liquidity = {}
-
-        self.token_a = token_a
-        self.token_b = token_b
-        # self.lp_token = lp_token
-        # self.fee = fee
-
-        # self.balance_a = {}
-        # self.balance_b = {}
-
+        self.transactions = 0
         self.volume_a = 0
         self.volume_b = 0
-
         self.total_balance_a = 0
         self.total_balance_b = 0
 
@@ -163,6 +158,7 @@ class Dozer_Pool(Blueprint):
         self.reserve_a = action_a.amount
         self.reserve_b = action_b.amount
         self.total_liquidity = PRECISION * action_a.amount
+        self.user_liquidity[ctx.address] = self.total_liquidity
 
     def get_reserves(self) -> tuple[Amount, Amount]:
         """Return the current reserves."""
@@ -249,6 +245,68 @@ class Dozer_Pool(Blueprint):
             raise NCFail("should never happen")
 
     @public
+    def change_dev_address(self, ctx: Context, new_address: Address) -> None:
+        """Change the dev address"""
+        if ctx.address != self.dev_address:
+            raise NCFail("only dev can change dev address")
+        self.dev_address = new_address
+
+    @public
+    def change_protocol_fee(self, ctx: Context, new_fee: int) -> None:
+        """Change the protocol fee"""
+        if ctx.address != self.dev_address:
+            raise NCFail("only dev can change protocol fee")
+        if new_fee > 50:
+            raise NCFail("protocol fee too high")
+        if new_fee < 0:
+            raise NCFail("invalid protocol fee")
+        self.protocol_fee = new_fee
+
+    @public
+    def change_fee(self, ctx: Context, new_fee: int) -> None:
+        """Change the fee"""
+        if ctx.address != self.dev_address:
+            raise NCFail("only dev can change fee")
+        if new_fee > 50:
+            raise NCFail("fee too high")
+        if new_fee < 0:
+            raise NCFail("invalid fee")
+        self.fee_numerator = new_fee
+        self.fee_denominator = 1000
+
+    @public
+    def withdraw_cashback(self, ctx: Context) -> None:
+        """Withdraw cashback"""
+        action_a, action_b = self._get_actions_out_out(ctx)
+        if action_a.amount > self.balance_a[ctx.address]:
+            raise NCFail("not enough cashback")
+        if action_b.amount > self.balance_b[ctx.address]:
+            raise NCFail("not enough cashback")
+        self.balance_a[ctx.address] -= action_a.amount
+        self.balance_b[ctx.address] -= action_b.amount
+
+    def _get_protocol_liquidity_increase(
+        self, protocol_fee_amount: Amount, token: TokenUid
+    ) -> int:
+        """Calculate the liquidity increase equivalent to a defined percentage of the collected fee to be minted to the dev address."""
+        if token == self.token_a:
+            liquidity_increase = int(
+                (
+                    (self.total_liquidity / PRECISION)
+                    * (protocol_fee_amount / 2)
+                    / self.reserve_a
+                )
+                * PRECISION
+            )
+        else:
+            optimal_a = self.quote(protocol_fee_amount, self.reserve_b, self.reserve_a)
+            liquidity_increase = int(
+                ((self.total_liquidity / PRECISION) * (optimal_a / 2) / self.reserve_a)
+                * PRECISION
+            )
+        return liquidity_increase
+
+    @public
     def swap_exact_tokens_for_tokens(self, ctx: Context) -> SwapResult:
         """Swaps an exact amount of input tokens for as many output tokens as possible."""
         action_in, action_out = self._get_actions_in_out(ctx)
@@ -256,9 +314,16 @@ class Dozer_Pool(Blueprint):
         reserve_out = self._get_reserve(action_out.token_uid)
 
         amount_in = action_in.amount
-        self.accumulated_fee[action_in.token_uid] += (
-            amount_in * self.fee_numerator // self.fee_denominator
+        fee_amount = int(amount_in * self.fee_numerator / self.fee_denominator)
+        self.accumulated_fee[action_in.token_uid] += fee_amount
+        protocol_fee_amount = int(fee_amount * self.protocol_fee / 100)
+        liquidity_increase = self._get_protocol_liquidity_increase(
+            protocol_fee_amount, action_in.token_uid
         )
+        self.user_liquidity[self.dev_address] = (
+            self.user_liquidity.get(self.dev_address, 0) + liquidity_increase
+        )
+        self.total_liquidity += liquidity_increase
         amount_out = self.get_amount_out(action_in.amount, reserve_in, reserve_out)
         if reserve_out < amount_out:  # type: ignore
             raise NCFail("insufficient funds")
@@ -275,6 +340,8 @@ class Dozer_Pool(Blueprint):
             self.volume_a += amount_in
         if action_in.token_uid == self.token_b:
             self.volume_b += amount_in
+
+        # Mint Protocol fees for dev address
 
         return SwapResult(
             action_in.amount,
@@ -296,9 +363,16 @@ class Dozer_Pool(Blueprint):
             raise NCFail("insufficient funds")
 
         amount_in = self.get_amount_in(action_out.amount, reserve_in, reserve_out)
-        self.accumulated_fee[action_in.token_uid] += (
-            amount_in * self.fee_numerator // self.fee_denominator
+        fee_amount = int(amount_in * self.fee_numerator / self.fee_denominator)
+        self.accumulated_fee[action_in.token_uid] += fee_amount
+        protocol_fee_amount = int(fee_amount * self.protocol_fee / 100)
+        liquidity_increase = self._get_protocol_liquidity_increase(
+            protocol_fee_amount, action_in.token_uid
         )
+        self.user_liquidity[self.dev_address] = (
+            self.user_liquidity.get(self.dev_address, 0) + liquidity_increase
+        )
+        self.total_liquidity += liquidity_increase
         if action_in.amount < amount_in:
             raise NCFail("amount in is too low")
 
