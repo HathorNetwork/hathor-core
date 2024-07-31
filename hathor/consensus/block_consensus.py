@@ -32,13 +32,13 @@ _base_transaction_log = logger.new()
 class BlockConsensusAlgorithm:
     """Implement the consensus algorithm for blocks."""
 
-    def __init__(self, context: 'ConsensusAlgorithmContext') -> None:
+    def __init__(self, context: "ConsensusAlgorithmContext") -> None:
         self._settings = get_global_settings()
         self.context = context
 
     @classproperty
     def log(cls) -> Any:
-        """ This is a workaround because of a bug on structlog (or abc).
+        """This is a workaround because of a bug on structlog (or abc).
 
         See: https://github.com/hynek/structlog/issues/229
         """
@@ -46,9 +46,156 @@ class BlockConsensusAlgorithm:
 
     def update_consensus(self, block: Block) -> None:
         self.update_voided_info(block)
+        if self._settings.ENABLE_NANO_CONTRACTS:
+            self.execute_nano_contracts(block)
+
+    def execute_nano_contracts(self, block: Block) -> None:
+        """Execute the method calls for transactions confirmed by this block."""
+        # If we reach this point, Nano Contracts must be enabled.
+        assert self._settings.ENABLE_NANO_CONTRACTS
+
+        meta = block.get_metadata()
+
+        if block.is_genesis:
+            block_trie = self.context.consensus.nc_storage_factory.get_trie(
+                root_id=None
+            )
+            block_trie.commit()
+            meta.nc_block_root_id = block_trie.root.id
+            self.context.save(block)
+            return
+
+        if meta.voided_by:
+            # If the block is voided, skip execution.
+            return
+
+        assert meta.nc_block_root_id is None
+
+        to_be_executed: list[Block] = []
+        if self.context.reorg_common_block:
+            # handle reorgs
+            cur = block
+            # XXX We could stop when `cur_meta.nc_block_root_id is not None` but
+            #     first we need to refactor meta.first_block and meta.voided_by to
+            #     have different values per block.
+            while cur != self.context.reorg_common_block:
+                cur_meta = cur.get_metadata()
+                if cur_meta.nc_block_root_id is not None:
+                    # Reset nc_block_root_id to force re-execution.
+                    cur_meta.nc_block_root_id = None
+                to_be_executed.append(cur)
+                cur = cur.get_block_parent()
+
+        else:
+            # no reorg occured
+            parent = block.get_block_parent()
+            parent_meta = parent.get_metadata()
+            if parent.is_genesis:
+                block_trie = self.context.consensus.nc_storage_factory.get_trie(
+                    root_id=None
+                )
+                block_trie.commit()
+                parent_meta.nc_block_root_id = block_trie.root.id
+                self.context.save(parent)
+            block_root_id = parent_meta.nc_block_root_id
+            assert block_root_id is not None
+            to_be_executed = [block]
+
+        for current in to_be_executed[::-1]:
+            self._execute_nc_calls(current)
+
+    def _execute_nc_calls(self, block: Block) -> None:
+        from hathor.nanocontracts import NanoContract, NCFail
+
+        assert self._settings.ENABLE_NANO_CONTRACTS
+
+        meta = block.get_metadata()
+        assert not meta.voided_by
+        assert meta.nc_block_root_id is None
+
+        parent = block.get_block_parent()
+        parent_meta = parent.get_metadata()
+        block_root_id = parent_meta.nc_block_root_id
+        assert block_root_id is not None
+
+        nc_calls: list[NanoContract] = []
+        for tx in block.iter_transactions_in_this_block():
+            if not isinstance(tx, NanoContract):
+                # Skip other type of transactions.
+                continue
+            tx_meta = tx.get_metadata()
+            if tx_meta.voided_by == {tx.hash, self._settings.NC_EXECUTION_FAIL_ID}:
+                if not tx_meta.conflict_with:
+                    tx_meta.voided_by = None
+                    self.context.save(tx)
+                else:
+                    raise NotImplementedError
+            if tx_meta.voided_by:
+                # Skip voided transactions.
+                continue
+            nc_calls.append(tx)
+
+        if not nc_calls:
+            meta.nc_block_root_id = block_root_id
+            self.context.save(block)
+            return
+
+        block_trie = self.context.consensus.nc_storage_factory.get_trie(block_root_id)
+
+        # TODO Bad ordering because tx.timestamp can be cherry picked. It's here just for testing.
+        nc_calls.sort(key=lambda tx: (tx.timestamp, tx.hash))
+        for tx in nc_calls:
+            nc_id = tx.get_nanocontract_id()
+
+            tx_meta = tx.get_metadata()
+            if tx_meta.voided_by:
+                # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
+                # mark this tx as voided.
+                continue
+
+            if tx.is_creating_a_new_contract():
+                # A contract tree cannot exist before the contract is created.
+                assert not block_trie.has_key(nc_id)
+                nc_root_id = None
+            else:
+                try:
+                    # A contract tree must always exist after the contract is created.
+                    nc_root_id = block_trie.get(nc_id)
+                except KeyError:
+                    # This case might only happen if the contract creation tx is voided.
+                    # So this transaction cannot be executed and it will be marked as if its execution has failed.
+                    self.mark_as_nc_fail_execution(tx)
+                    continue
+
+            nc_storage = self.context.consensus.nc_storage_factory(nc_id, nc_root_id)
+            try:
+                tx.execute(nc_storage)
+                # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
+                #      method once per contract per block, just like we do for the block_trie. This ensures we will
+                #      have a clean database with no orphan nodes.
+                nc_storage.commit()
+                block_trie.update(nc_id, nc_storage.get_root_id())
+            except NCFail:
+                self.log.exception("nc execution failed", tx=tx.hash.hex())
+                self.mark_as_nc_fail_execution(tx)
+
+        # Save block state root id. If nothings happens, it should be the same as its block parent.
+        block_trie.commit()
+        assert block_trie.root.id is not None
+        meta.nc_block_root_id = block_trie.root.id
+        self.context.save(block)
+
+    def mark_as_nc_fail_execution(self, tx: Transaction) -> None:
+        assert tx.storage is not None
+        tx_meta = tx.get_metadata()
+        tx_meta.add_voided_by(self._settings.NC_EXECUTION_FAIL_ID)
+        self.context.save(tx)
+        self.context.transaction_algorithm.add_voided_by(
+            tx, tx.hash, is_dag_verifications=False
+        )
 
     def update_voided_info(self, block: Block) -> None:
-        """ This method is called only once when a new block arrives.
+        """This method is called only once when a new block arrives.
 
         The blockchain part of the DAG is a tree with the genesis block as the root.
         I'll say the a block A is connected to a block B when A verifies B, i.e., B is a parent of A.
@@ -98,7 +245,9 @@ class BlockConsensusAlgorithm:
 
         When there are multiple best chains, all their heads will be voided.
         """
-        assert block.weight > 0, 'This algorithm assumes that block\'s weight is always greater than zero'
+        assert (
+            block.weight > 0
+        ), "This algorithm assumes that block's weight is always greater than zero"
         if not block.parents:
             assert block.is_genesis is True
             self.update_score_and_mark_as_the_best_chain(block)
@@ -117,7 +266,9 @@ class BlockConsensusAlgorithm:
         for h in voided_by:
             tx = storage.get_transaction(h)
             tx_meta = tx.get_metadata()
-            tx_meta.accumulated_weight = sum_weights(tx_meta.accumulated_weight, block.weight)
+            tx_meta.accumulated_weight = sum_weights(
+                tx_meta.accumulated_weight, block.weight
+            )
             self.context.save(tx)
 
         # Check conflicts of the transactions voiding us.
@@ -143,7 +294,9 @@ class BlockConsensusAlgorithm:
             # we need to check that block is not voided.
             meta = block.get_metadata()
             if not meta.voided_by:
-                storage.indexes.height.add_new(block.get_height(), block.hash, block.timestamp)
+                storage.indexes.height.add_new(
+                    block.get_height(), block.hash, block.timestamp
+                )
                 storage.update_best_block_tips_cache([block.hash])
             # The following assert must be true, but it is commented out for performance reasons.
             if self._settings.SLOW_ASSERTS:
@@ -151,16 +304,21 @@ class BlockConsensusAlgorithm:
         else:
             # Resolve all other cases, but (i).
             log = self.log.new(block=block.hash_hex)
-            log.debug('this block is not the head of the bestchain',
-                      is_connected_to_the_head=is_connected_to_the_head,
-                      is_connected_to_the_best_chain=is_connected_to_the_best_chain)
+            log.debug(
+                "this block is not the head of the bestchain",
+                is_connected_to_the_head=is_connected_to_the_head,
+                is_connected_to_the_best_chain=is_connected_to_the_best_chain,
+            )
 
             # First, void this block.
             self.mark_as_voided(block, skip_remove_first_block_markers=True)
 
             # Get the score of the best chains.
             # We need to void this block first, because otherwise it would always be one of the heads.
-            heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
+            heads = [
+                cast(Block, storage.get_transaction(h))
+                for h in storage.get_best_block_tips()
+            ]
             best_score = None
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
@@ -191,7 +349,9 @@ class BlockConsensusAlgorithm:
 
                 # We must have at most one valid head.
                 # Either we have a single best chain or all chains have already been voided.
-                assert len(valid_heads) <= 1, 'We must never have more than one valid head'
+                assert (
+                    len(valid_heads) <= 1
+                ), "We must never have more than one valid head"
 
                 # Add voided_by to all heads.
                 common_block = self._find_first_parent_in_best_chain(block)
@@ -205,7 +365,11 @@ class BlockConsensusAlgorithm:
                     meta = block.get_metadata()
                     height = block.get_height()
                     if not meta.voided_by:
-                        self.log.debug('index new winner block', height=height, block=block.hash_hex)
+                        self.log.debug(
+                            "index new winner block",
+                            height=height,
+                            block=block.hash_hex,
+                        )
                         # We update the height cache index with the new winner chain
                         storage.indexes.height.update_new_chain(height, block)
                         storage.update_best_block_tips_cache([block.hash])
@@ -239,7 +403,12 @@ class BlockConsensusAlgorithm:
                     # the blocks themselves.
                     voided_by2 = voided_by2.copy()
                     voided_by2.discard(parent.hash)
-                voided_by.update(self.context.consensus.filter_out_soft_voided_entries(parent, voided_by2))
+                voided_by.update(
+                    self.context.consensus.filter_out_soft_voided_entries(
+                        parent, voided_by2
+                    )
+                )
+                voided_by.discard(self._settings.NC_EXECUTION_FAIL_ID)
         return voided_by
 
     def update_voided_by_from_parents(self, block: Block) -> bool:
@@ -258,7 +427,9 @@ class BlockConsensusAlgorithm:
             return True
         return False
 
-    def add_voided_by_to_multiple_chains(self, block: Block, heads: list[Block], first_block: Block) -> None:
+    def add_voided_by_to_multiple_chains(
+        self, block: Block, heads: list[Block], first_block: Block
+    ) -> None:
         # We need to go through all side chains because there may be non-voided blocks
         # that must be voided.
         # For instance, imagine two chains with intersection with both heads voided.
@@ -287,7 +458,10 @@ class BlockConsensusAlgorithm:
 
         if self.update_voided_by_from_parents(block):
             storage = block.storage
-            heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
+            heads = [
+                cast(Block, storage.get_transaction(h))
+                for h in storage.get_best_block_tips()
+            ]
             best_score = 0.0
             best_heads: list[Block]
             for head in heads:
@@ -310,13 +484,13 @@ class BlockConsensusAlgorithm:
                 self.update_score_and_mark_as_the_best_chain_if_possible(best_heads[0])
 
     def update_score_and_mark_as_the_best_chain(self, block: Block) -> None:
-        """ Update score and mark the chain as the best chain.
+        """Update score and mark the chain as the best chain.
         Thus, transactions' first_block will point to the blocks in the chain.
         """
         self.calculate_score(block, mark_as_best_chain=True)
 
     def remove_voided_by_from_chain(self, block: Block) -> None:
-        """ Remove voided_by from the chain. Now, it is the best chain.
+        """Remove voided_by from the chain. Now, it is the best chain.
 
         The blocks are visited from right to left (most recent to least recent).
         """
@@ -328,7 +502,7 @@ class BlockConsensusAlgorithm:
             block = block.get_block_parent()
 
     def _find_first_parent_in_best_chain(self, block: Block) -> Block:
-        """ Find the first block in the side chain that is not voided, i.e., the block where the fork started.
+        """Find the first block in the side chain that is not voided, i.e., the block where the fork started.
 
         In the simple schema below, the best chain's blocks are O's, the side chain's blocks are I's, and the first
         valid block is the [O].
@@ -340,7 +514,9 @@ class BlockConsensusAlgorithm:
         assert block.storage is not None
         storage = block.storage
 
-        assert len(block.parents) > 0, 'This should never happen because the genesis is always in the best chain'
+        assert (
+            len(block.parents) > 0
+        ), "This should never happen because the genesis is always in the best chain"
         parent_hash = block.get_block_parent_hash()
         while True:
             parent = storage.get_transaction(parent_hash)
@@ -348,21 +524,25 @@ class BlockConsensusAlgorithm:
             parent_meta = parent.get_metadata()
             if not parent_meta.voided_by:
                 break
-            assert len(parent.parents) > 0, 'This should never happen because the genesis is always in the best chain'
+            assert (
+                len(parent.parents) > 0
+            ), "This should never happen because the genesis is always in the best chain"
             parent_hash = parent.get_block_parent_hash()
         return parent
 
-    def mark_as_voided(self, block: Block, *, skip_remove_first_block_markers: bool = False) -> None:
-        """ Mark a block as voided. By default, it will remove the first block markers from
+    def mark_as_voided(
+        self, block: Block, *, skip_remove_first_block_markers: bool = False
+    ) -> None:
+        """Mark a block as voided. By default, it will remove the first block markers from
         `meta.first_block` of the transactions that point to it.
         """
-        self.log.debug('block.mark_as_voided', block=block.hash_hex)
+        self.log.debug("block.mark_as_voided", block=block.hash_hex)
         if not skip_remove_first_block_markers:
             self.remove_first_block_markers(block)
         self.add_voided_by(block)
 
     def add_voided_by(self, block: Block, voided_hash: Optional[bytes] = None) -> bool:
-        """ Add a new hash in its `meta.voided_by`. If `voided_hash` is None, it includes
+        """Add a new hash in its `meta.voided_by`. If `voided_hash` is None, it includes
         the block's own hash.
         """
         assert block.storage is not None
@@ -379,7 +559,9 @@ class BlockConsensusAlgorithm:
         if voided_hash in meta.voided_by:
             return False
 
-        self.log.debug('add_voided_by', block=block.hash_hex, voided_hash=voided_hash.hex())
+        self.log.debug(
+            "add_voided_by", block=block.hash_hex, voided_hash=voided_hash.hex()
+        )
 
         meta.voided_by.add(voided_hash)
         self.context.save(block)
@@ -391,8 +573,10 @@ class BlockConsensusAlgorithm:
             self.context.transaction_algorithm.add_voided_by(tx, voided_hash)
         return True
 
-    def remove_voided_by(self, block: Block, voided_hash: Optional[bytes] = None) -> bool:
-        """ Remove a hash from its `meta.voided_by`. If `voided_hash` is None, it removes
+    def remove_voided_by(
+        self, block: Block, voided_hash: Optional[bytes] = None
+    ) -> bool:
+        """Remove a hash from its `meta.voided_by`. If `voided_hash` is None, it removes
         the block's own hash.
         """
         assert block.storage is not None
@@ -408,7 +592,9 @@ class BlockConsensusAlgorithm:
         if voided_hash not in meta.voided_by:
             return False
 
-        self.log.debug('remove_voided_by', block=block.hash_hex, voided_hash=voided_hash.hex())
+        self.log.debug(
+            "remove_voided_by", block=block.hash_hex, voided_hash=voided_hash.hex()
+        )
 
         meta.voided_by.remove(voided_hash)
         if not meta.voided_by:
@@ -423,13 +609,15 @@ class BlockConsensusAlgorithm:
         return True
 
     def remove_first_block_markers(self, block: Block) -> None:
-        """ Remove all `meta.first_block` pointing to this block.
-        """
+        """Remove all `meta.first_block` pointing to this block."""
         assert block.storage is not None
         storage = block.storage
 
         from hathor.transaction.storage.traversal import BFSTimestampWalk
-        bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_left_to_right=False)
+
+        bfs = BFSTimestampWalk(
+            storage, is_dag_verifications=True, is_left_to_right=False
+        )
         for tx in bfs.run(block, skip_root=True):
             if tx.is_block:
                 bfs.skip_neighbors(tx)
@@ -443,16 +631,21 @@ class BlockConsensusAlgorithm:
             meta.first_block = None
             self.context.save(tx)
 
-    def _score_block_dfs(self, block: BaseTransaction, used: set[bytes],
-                         mark_as_best_chain: bool, newest_timestamp: int) -> float:
-        """ Internal method to run a DFS. It is used by `calculate_score()`.
-        """
+    def _score_block_dfs(
+        self,
+        block: BaseTransaction,
+        used: set[bytes],
+        mark_as_best_chain: bool,
+        newest_timestamp: int,
+    ) -> float:
+        """Internal method to run a DFS. It is used by `calculate_score()`."""
         assert block.storage is not None
         assert block.is_block
 
         storage = block.storage
 
         from hathor.transaction import Block
+
         score = block.weight
         for parent in block.get_parents():
             if parent.is_block:
@@ -461,12 +654,17 @@ class BlockConsensusAlgorithm:
                     meta = parent.get_metadata()
                     x = meta.score
                 else:
-                    x = self._score_block_dfs(parent, used, mark_as_best_chain, newest_timestamp)
+                    x = self._score_block_dfs(
+                        parent, used, mark_as_best_chain, newest_timestamp
+                    )
                 score = sum_weights(score, x)
 
             else:
                 from hathor.transaction.storage.traversal import BFSTimestampWalk
-                bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_left_to_right=False)
+
+                bfs = BFSTimestampWalk(
+                    storage, is_dag_verifications=True, is_left_to_right=False
+                )
                 for tx in bfs.run(parent, skip_root=False):
                     assert not tx.is_block
 
@@ -499,13 +697,18 @@ class BlockConsensusAlgorithm:
             # Thus, if we have already calculated it, we just check the consistency of the calculation.
             # Unfortunately we may have to calculate it more than once when a new block arrives in a side
             # side because the `first_block` points only to the best chain.
-            assert abs(meta.score - score) < 1e-10, \
-                   'hash={} meta.score={} score={}'.format(block.hash.hex(), meta.score, score)
+            assert (
+                abs(meta.score - score) < 1e-10
+            ), "hash={} meta.score={} score={}".format(
+                block.hash.hex(), meta.score, score
+            )
 
         return score
 
-    def calculate_score(self, block: Block, *, mark_as_best_chain: bool = False) -> float:
-        """ Calculate block's score, which is the accumulated work of the verified transactions and blocks.
+    def calculate_score(
+        self, block: Block, *, mark_as_best_chain: bool = False
+    ) -> float:
+        """Calculate block's score, which is the accumulated work of the verified transactions and blocks.
 
         :param: mark_as_best_chain: If `True`, the transactions' will point `meta.first_block` to
                                     the blocks of the chain.
@@ -526,5 +729,5 @@ class BlockConsensusAlgorithm:
 
 
 class BlockConsensusAlgorithmFactory:
-    def __call__(self, context: 'ConsensusAlgorithmContext') -> BlockConsensusAlgorithm:
+    def __call__(self, context: "ConsensusAlgorithmContext") -> BlockConsensusAlgorithm:
         return BlockConsensusAlgorithm(context)

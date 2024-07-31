@@ -219,6 +219,18 @@ class ResourcesBuilder:
                 (b'utxo_search', UtxoSearchResource(self.manager), root),
             ])
 
+        if settings.ENABLE_NANO_CONTRACTS:
+            from hathor.nanocontracts.resources import (
+                BlueprintInfoResource,
+                NanoContractHistoryResource,
+                NanoContractStateResource,
+            )
+            nc_resource = Resource()
+            root.putChild(b'nano_contract', nc_resource)
+            nc_resource.putChild(b'blueprint', BlueprintInfoResource(self.manager))
+            nc_resource.putChild(b'history', NanoContractHistoryResource(self.manager))
+            nc_resource.putChild(b'state', NanoContractStateResource(self.manager))
+
         if self._args.enable_debug_api:
             debug_resource = Resource()
             root.putChild(b'_debug', debug_resource)

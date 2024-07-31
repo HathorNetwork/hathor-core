@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Iterable, Optional, Sized, TypeVar
 
 from structlog import get_logger
 
-from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
+from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
 from hathor.indexes.tx_group_index import TxGroupIndex
 from hathor.transaction import BaseTransaction
 
@@ -105,13 +105,24 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
     def _get_from_key(self, key: KT) -> Iterable[bytes]:
         return self._util_get_from_key(key)
 
-    def _get_sorted_from_key(self, key: KT, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
-        return self._util_get_from_key(key, tx_start)
+    def _get_sorted_from_key(self,
+                             key: KT,
+                             tx_start: Optional[BaseTransaction] = None,
+                             reverse: bool = False) -> Iterable[bytes]:
+        return self._util_get_from_key(key, tx_start, reverse)
 
-    def _util_get_from_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> Iterable[bytes]:
+    def _util_get_from_key(self,
+                           key: KT,
+                           tx: Optional[BaseTransaction] = None,
+                           reverse: bool = False) -> Iterable[bytes]:
         self.log.debug('seek to', key=key)
         it = self._db.iterkeys(self._cf)
-        it.seek(self._to_rocksdb_key(key, tx))
+        if reverse:
+            it = reversed(it)
+            # when reversed we increment the key by 1, which effectively goes to the end of a prefix
+            it.seek_for_prev(incr_key(self._to_rocksdb_key(key, tx)))
+        else:
+            it.seek(self._to_rocksdb_key(key, tx))
         for _cf, rocksdb_key in it:
             key2, _, tx_hash = self._from_rocksdb_key(rocksdb_key)
             if key2 != key:

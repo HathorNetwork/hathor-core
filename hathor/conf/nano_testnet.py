@@ -18,7 +18,7 @@ SETTINGS = HathorSettings(
     P2PKH_VERSION_BYTE=b'\x49',
     MULTISIG_VERSION_BYTE=b'\x87',
     NETWORK_NAME='nano-testnet-alpha',
-    BOOTSTRAP_DNS=[],
+    BOOTSTRAP_DNS=['alpha.nano-testnet.hathor.network'],
     # Genesis stuff
     GENESIS_OUTPUT_SCRIPT=bytes.fromhex('76a91478e804bf8aa68332c6c1ada274ac598178b972bf88ac'),
     GENESIS_BLOCK_TIMESTAMP=1677601898,
@@ -34,5 +34,8 @@ SETTINGS = HathorSettings(
     MIN_TX_WEIGHT=8,
     CHECKPOINTS=[],
     ENABLE_NANO_CONTRACTS=True,
-    BLUEPRINTS={},
+    BLUEPRINTS={
+        bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'): 'Bet',
+        bytes.fromhex('27db2b0b1a943c2714fb19d190ce87dc0094bba463b26452dd98de21a42e96a0'): 'Dozer_Pool',
+    },
 )
