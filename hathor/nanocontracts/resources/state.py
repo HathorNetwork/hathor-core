@@ -22,6 +22,7 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_arg
 from hathor.nanocontracts.exception import (
+    NanoContractDoesNotExist,
     NCContractCreationAtMempool,
     NCContractCreationNotFound,
     NCContractCreationVoided,
@@ -38,6 +39,8 @@ if TYPE_CHECKING:
     from twisted.web.http import Request
 
     from hathor.manager import HathorManager
+    from hathor.nanocontracts.storage import NCBaseStorage
+    from hathor.transaction.block import Block
 
 
 @register_resource
@@ -58,6 +61,11 @@ class NanoContractStateResource(Resource):
         if isinstance(params, ErrorResponse):
             request.setResponseCode(400)
             return params.json_dumpb()
+
+        if params.block_hash and params.block_height:
+            request.setResponseCode(400)
+            error_response = ErrorResponse(success=False, error='block_hash and block_height can\'t be used together.')
+            return error_response.json_dumpb()
 
         try:
             nc_id_bytes = ContractId(bytes.fromhex(params.id))
@@ -82,10 +90,62 @@ class NanoContractStateResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Nano contract failed execution: {params.id}')
             return error_response.json_dumpb()
 
-        runner = self.manager.get_best_block_nc_runner()
-        nc_storage = runner.get_storage(nc_id_bytes)
-        value: Any
+        nc_storage: NCBaseStorage
+        block: Block
+        block_hash: Optional[bytes]
+        try:
+            block_hash = bytes.fromhex(params.block_hash) if params.block_hash else None
+        except ValueError:
+            # This error will be raised in case the block_hash parameter is an invalid hex
+            request.setResponseCode(400)
+            error_response = ErrorResponse(success=False, error=f'Invalid block_hash parameter: {params.block_hash}')
+            return error_response.json_dumpb()
 
+        if params.block_height:
+            # Get hash of the block with the height
+            if self.manager.tx_storage.indexes is None:
+                # No indexes enabled in the storage
+                request.setResponseCode(503)
+                error_response = ErrorResponse(
+                                    success=False,
+                                    error='No indexes enabled in the storage, so we can\'t filter by block height.'
+                                )
+                return error_response.json_dumpb()
+
+            block_hash = self.manager.tx_storage.indexes.height.get(params.block_height)
+            if block_hash is None:
+                # No block hash was found with this height
+                request.setResponseCode(400)
+                error_response = ErrorResponse(
+                                    success=False,
+                                    error=f'No block hash was found with height {params.block_height}.'
+                                )
+                return error_response.json_dumpb()
+
+        if block_hash:
+            try:
+                block = self.manager.tx_storage.get_block(block_hash)
+            except AssertionError:
+                # This block hash is not from a block
+                request.setResponseCode(400)
+                error_response = ErrorResponse(success=False, error=f'Invalid block_hash {params.block_hash}.')
+                return error_response.json_dumpb()
+        else:
+            block = self.manager.tx_storage.get_best_block()
+
+        try:
+            runner = self.manager.get_nc_runner(block)
+            nc_storage = runner.get_storage(nc_id_bytes)
+        except NanoContractDoesNotExist:
+            # Nano contract does not exist at this block
+            request.setResponseCode(400)
+            error_response = ErrorResponse(
+                                success=False,
+                                error=f'Nano contract does not exist at block {block.hash_hex}.'
+                            )
+            return error_response.json_dumpb()
+
+        value: Any
         # Get balances.
         balances: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
         for token_uid_hex in params.balances:
@@ -201,6 +261,8 @@ class NCStateParams(QueryParams):
     fields: list[str] = Field(alias='fields[]', default=[])
     balances: list[str] = Field(alias='balances[]', default=[])
     calls: list[str] = Field(alias='calls[]', default=[])
+    block_hash: Optional[str]
+    block_height: Optional[int]
 
 
 class NCValueSuccessResponse(Response):
@@ -343,6 +405,26 @@ NanoContractStateResource.openapi = {
                                 'address_details.a\'Wi8zvxdXHjaUVAoCJf52t3WovTZYcU9aX6\''
                             ]
                         },
+                    }
+                },
+                {
+                    'name': 'block_height',
+                    'in': 'query',
+                    'description': 'Height of the block to get the nano contract state from.'
+                                   'Can\'t be used together with block_hash parameter.',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'block_hash',
+                    'in': 'query',
+                    'description': 'Hash of the block to get the nano contract state from.'
+                                   'Can\'t be used together with block_height parameter.',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
                     }
                 },
             ],

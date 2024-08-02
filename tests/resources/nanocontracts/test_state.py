@@ -178,8 +178,17 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             self.genesis_private_key,
         )
         self.assertTrue(self.manager.on_new_tx(nc, fails_silently=False))
+
+        # Before the execution we can't get the state
+        response0 = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+             ]
+        )
+        self.assertEqual(404, response0.responseCode)
         # Execute the nano contract
-        add_new_block(self.manager)
+        block = add_new_block(self.manager)
 
         response1 = yield self.web.get(
             'state', [
@@ -286,3 +295,93 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data3['blueprint_name'], 'MyBlueprint')
         balances3 = data3['balances']
         self.assertEqual(balances3, {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000'}})
+
+        # Test getting the state in a previous block
+        # With block hash
+        response4 = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'fields[]', b'total'),
+                (b'fields[]', b'date_last_bet'),
+                (b'fields[]', address_param.encode()),
+                (b'balances[]', settings.HATHOR_TOKEN_UID.hex().encode('ascii')),
+                (b'block_hash', block.hash.hex().encode('ascii')),
+            ]
+        )
+        data4 = response4.json_value()
+        fields4 = data4['fields']
+        self.assertEqual(data4['blueprint_id'], self.bet_id.hex())
+        self.assertEqual(data4['blueprint_name'], 'MyBlueprint')
+        self.assertEqual(fields4['token_uid'], {'value': settings.HATHOR_TOKEN_UID.hex()})
+        self.assertEqual(fields4['total'], {'value': 0})
+        self.assertEqual(fields4['date_last_bet'], {'value': date_last_bet})
+        self.assertEqual(fields4[address_param].get('value'), None)
+        balances4 = data4['balances']
+        self.assertEqual(balances4, {settings.HATHOR_TOKEN_UID.hex(): {'value': '0'}})
+
+        # With block height
+        response5 = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'fields[]', b'total'),
+                (b'fields[]', b'date_last_bet'),
+                (b'fields[]', address_param.encode()),
+                (b'balances[]', settings.HATHOR_TOKEN_UID.hex().encode('ascii')),
+                (b'block_height', str(block.static_metadata.height).encode('ascii')),
+            ]
+        )
+        data5 = response5.json_value()
+        fields5 = data5['fields']
+        self.assertEqual(data5['blueprint_id'], self.bet_id.hex())
+        self.assertEqual(data5['blueprint_name'], 'MyBlueprint')
+        self.assertEqual(fields5['token_uid'], {'value': settings.HATHOR_TOKEN_UID.hex()})
+        self.assertEqual(fields5['total'], {'value': 0})
+        self.assertEqual(fields5['date_last_bet'], {'value': date_last_bet})
+        self.assertEqual(fields5[address_param].get('value'), None)
+        balances5 = data5['balances']
+        self.assertEqual(balances5, {settings.HATHOR_TOKEN_UID.hex(): {'value': '0'}})
+
+        # Validate errors using block_hash / block_height
+
+        # Both parameters can't be used together
+        response6 = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'block_height', str(block.static_metadata.height).encode('ascii')),
+                (b'block_hash', block.hash.hex().encode('ascii')),
+             ]
+        )
+        self.assertEqual(400, response6.responseCode)
+
+        # block_height does not exist
+        response7 = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'block_height', str(block.static_metadata.height + 5).encode('ascii')),
+             ]
+        )
+        self.assertEqual(400, response7.responseCode)
+
+        # invalid block_hash does not exist
+        response8 = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'block_hash', '123'.encode('ascii')),
+             ]
+        )
+        self.assertEqual(400, response8.responseCode)
+
+        # block_hash is a tx
+        response9 = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'block_hash', nc_bet.hash.hex().encode('ascii')),
+             ]
+        )
+        self.assertEqual(400, response9.responseCode)
