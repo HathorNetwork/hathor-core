@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.transaction.aux_pow import BitcoinAuxPow
@@ -20,24 +22,39 @@ from hathor.transaction.block import Block
 from hathor.transaction.util import VerboseCallback
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 
 class MergeMinedBlock(Block):
-    def __init__(self,
-                 nonce: int = 0,
-                 timestamp: Optional[int] = None,
-                 signal_bits: int = 0,
-                 version: TxVersion = TxVersion.MERGE_MINED_BLOCK,
-                 weight: float = 0,
-                 outputs: Optional[list[TxOutput]] = None,
-                 parents: Optional[list[bytes]] = None,
-                 hash: Optional[bytes] = None,
-                 data: bytes = b'',
-                 aux_pow: Optional[BitcoinAuxPow] = None,
-                 storage: Optional['TransactionStorage'] = None) -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
-                         data=data, outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+    def __init__(
+        self,
+        nonce: int = 0,
+        timestamp: Optional[int] = None,
+        signal_bits: int = 0,
+        version: TxVersion = TxVersion.MERGE_MINED_BLOCK,
+        weight: float = 0,
+        outputs: Optional[list[TxOutput]] = None,
+        parents: Optional[list[bytes]] = None,
+        hash: Optional[bytes] = None,
+        data: bytes = b'',
+        aux_pow: Optional[BitcoinAuxPow] = None,
+        storage: Optional['TransactionStorage'] = None,
+        settings: HathorSettings | None = None,
+    ) -> None:
+        super().__init__(
+            nonce=nonce,
+            timestamp=timestamp,
+            signal_bits=signal_bits,
+            version=version,
+            weight=weight,
+            data=data,
+            outputs=outputs or [],
+            parents=parents or [],
+            hash=hash,
+            storage=storage,
+            settings=settings
+        )
         self.aux_pow = aux_pow
 
     def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:

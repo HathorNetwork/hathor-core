@@ -31,7 +31,8 @@ from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, tr
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
+from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.utils import discover_dns, generate_certificate
 from hathor.util import not_none
 
 if TYPE_CHECKING:
@@ -59,7 +60,7 @@ class PeerId:
     """
 
     id: Optional[str]
-    entrypoints: list[str]
+    entrypoints: list[Entrypoint]
     private_key: Optional[rsa.RSAPrivateKeyWithSerialization]
     public_key: Optional[rsa.RSAPublicKey]
     certificate: Optional[x509.Certificate]
@@ -90,8 +91,14 @@ class PeerId:
             self.generate_keys()
 
     def __str__(self):
-        return ('PeerId(id=%s, entrypoints=%s, retry_timestamp=%d, retry_interval=%d)' % (self.id, self.entrypoints,
-                self.retry_timestamp, self.retry_interval))
+        return (
+            f'PeerId(id={self.id}, entrypoints={self.entrypoints_as_str()}, retry_timestamp={self.retry_timestamp}, '
+            f'retry_interval={self.retry_interval})'
+        )
+
+    def entrypoints_as_str(self) -> list[str]:
+        """Return a list of entrypoints serialized as str"""
+        return list(map(str, self.entrypoints))
 
     def merge(self, other: 'PeerId') -> None:
         """ Merge two PeerId objects, checking that they have the same
@@ -200,7 +207,11 @@ class PeerId:
             obj.private_key = private_key
 
         if 'entrypoints' in data:
-            obj.entrypoints = data['entrypoints']
+            for entrypoint_string in data['entrypoints']:
+                entrypoint = Entrypoint.parse(entrypoint_string)
+                if entrypoint.peer_id is not None:
+                    raise ValueError('do not add id= to peer.json entrypoints')
+                obj.entrypoints.append(entrypoint)
 
         # TODO(epnichols): call obj.validate()?
         return obj
@@ -243,7 +254,7 @@ class PeerId:
         result = {
             'id': self.id,
             'pubKey': base64.b64encode(public_der).decode('utf-8'),
-            'entrypoints': self.entrypoints,
+            'entrypoints': self.entrypoints_as_str(),
         }
         if include_private_key:
             assert self.private_key is not None
@@ -352,23 +363,24 @@ class PeerId:
         # Entrypoint validation with connection string and connection host
         # Entrypoints have the format tcp://IP|name:port
         for entrypoint in self.entrypoints:
-            if protocol.connection_string:
+            if protocol.entrypoint is not None:
                 # Connection string has the format tcp://IP:port
                 # So we must consider that the entrypoint could be in name format
-                if protocol.connection_string == entrypoint:
+                if protocol.entrypoint.equals_ignore_peer_id(entrypoint):
+                    # XXX: wrong peer-id should not make it into self.entrypoints
+                    assert not protocol.entrypoint.peer_id_conflicts_with(entrypoint), 'wrong peer-id was added before'
                     # Found the entrypoint
                     found_entrypoint = True
                     break
-                host = connection_string_to_host(entrypoint)
                 # TODO: don't use `daa.TEST_MODE` for this
                 test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
-                result = await discover_dns(host, test_mode)
-                if protocol.connection_string in result:
+                result = await discover_dns(entrypoint.host, test_mode)
+                if protocol.entrypoint in result:
                     # Found the entrypoint
                     found_entrypoint = True
                     break
             else:
-                # When the peer is the server part of the connection we don't have the full connection_string
+                # When the peer is the server part of the connection we don't have the full entrypoint description
                 # So we can only validate the host from the protocol
                 assert protocol.transport is not None
                 connection_remote = protocol.transport.getPeer()
@@ -377,13 +389,12 @@ class PeerId:
                     continue
                 # Connection host has only the IP
                 # So we must consider that the entrypoint could be in name format and we just validate the host
-                host = connection_string_to_host(entrypoint)
-                if connection_host == host:
+                if connection_host == entrypoint.host:
                     found_entrypoint = True
                     break
                 test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
-                result = await discover_dns(host, test_mode)
-                if connection_host in [connection_string_to_host(x) for x in result]:
+                result = await discover_dns(entrypoint.host, test_mode)
+                if connection_host in [entrypoint.host for entrypoint in result]:
                     # Found the entrypoint
                     found_entrypoint = True
                     break

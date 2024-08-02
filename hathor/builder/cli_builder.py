@@ -22,6 +22,7 @@ from typing import Any, Optional
 from structlog import get_logger
 
 from hathor.cli.run_node_args import RunNodeArgs
+from hathor.cli.side_dag import SideDagArgs
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
@@ -33,12 +34,14 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, not_none
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -116,6 +119,7 @@ class CliBuilder:
             self.check_or_raise(not settings.ENABLE_NANO_CONTRACTS,
                                 'configuration error: NanoContracts can only be enabled on localnets for now')
 
+        vertex_parser = VertexParser(settings=settings)
         tx_storage: TransactionStorage
         event_storage: EventStorage
         indexes: IndexesManager
@@ -127,7 +131,7 @@ class CliBuilder:
             self.check_or_raise(not self._args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             indexes = MemoryIndexesManager()
-            tx_storage = TransactionMemoryStorage(indexes)
+            tx_storage = TransactionMemoryStorage(indexes, settings=settings)
             event_storage = EventMemoryStorage()
             self.check_or_raise(not self._args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
@@ -150,14 +154,16 @@ class CliBuilder:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
                 kwargs['indexes'] = indexes
-            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage, **kwargs)
+            tx_storage = TransactionRocksDBStorage(
+                self.rocksdb_storage, settings=settings, vertex_parser=vertex_parser, **kwargs
+            )
             event_storage = EventRocksDBStorage(self.rocksdb_storage)
             feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
         if self._args.cache:
             self.check_or_raise(not self._args.memory_storage, '--cache should not be used with --memory-storage')
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes)
+            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
             if self._args.cache_size:
                 tx_storage.capacity = self._args.cache_size
             if self._args.cache_interval:
@@ -176,8 +182,10 @@ class CliBuilder:
 
         sync_choice: SyncChoice
         if self._args.sync_bridge:
+            self.log.warn('--sync-bridge is deprecated and will be removed')
             sync_choice = SyncChoice.BRIDGE_DEFAULT
         elif self._args.sync_v1_only:
+            self.log.warn('--sync-v1-only is deprecated and will be removed')
             sync_choice = SyncChoice.V1_DEFAULT
         elif self._args.sync_v2_only:
             self.log.warn('--sync-v2-only is the default, this parameter has no effect')
@@ -185,10 +193,13 @@ class CliBuilder:
         elif self._args.x_remove_sync_v1:
             sync_choice = SyncChoice.V2_ONLY
         elif self._args.x_sync_bridge:
-            self.log.warn('--x-sync-bridge is deprecated and will be removed, use --sync-bridge instead')
+            self.log.warn('--x-sync-bridge is deprecated and will be removed')
             sync_choice = SyncChoice.BRIDGE_DEFAULT
+        elif self._args.x_sync_v1_only:
+            self.log.warn('--x-sync-v1-only is deprecated and will be removed')
+            sync_choice = SyncChoice.V1_DEFAULT
         elif self._args.x_sync_v2_only:
-            self.log.warn('--x-sync-v2-only is deprecated and will be removed, use --sync-v2-only instead')
+            self.log.warn('--x-sync-v2-only is deprecated and will be removed')
             sync_choice = SyncChoice.V2_DEFAULT
         else:
             # XXX: this is the default behavior when no parameter is given
@@ -284,12 +295,13 @@ class CliBuilder:
             daa=daa,
             feature_service=self.feature_service
         )
-        verification_service = VerificationService(verifiers=vertex_verifiers)
+        verification_service = VerificationService(settings=settings, verifiers=vertex_verifiers)
 
         cpu_mining_service = CpuMiningService()
 
         p2p_manager = ConnectionsManager(
-            reactor,
+            settings=settings,
+            reactor=reactor,
             network=network,
             my_peer=peer_id,
             pubsub=pubsub,
@@ -297,7 +309,7 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
         )
-        SyncSupportLevel.add_factories(p2p_manager, sync_v1_support, sync_v2_support)
+        SyncSupportLevel.add_factories(settings, p2p_manager, sync_v1_support, sync_v2_support, vertex_parser)
 
         vertex_handler = VertexHandler(
             reactor=reactor,
@@ -311,6 +323,18 @@ class CliBuilder:
             wallet=self.wallet,
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
+
+        from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
+        poa_block_producer: PoaBlockProducer | None = None
+        if settings.CONSENSUS_ALGORITHM.is_poa():
+            assert isinstance(self._args, SideDagArgs)
+            if self._args.poa_signer_file:
+                poa_signer_file = PoaSignerFile.parse_file(self._args.poa_signer_file)
+                poa_block_producer = PoaBlockProducer(
+                    settings=settings,
+                    reactor=reactor,
+                    poa_signer=poa_signer_file.get_signer(),
+                )
 
         self.manager = HathorManager(
             reactor,
@@ -334,6 +358,8 @@ class CliBuilder:
             cpu_mining_service=cpu_mining_service,
             execution_manager=execution_manager,
             vertex_handler=vertex_handler,
+            vertex_parser=vertex_parser,
+            poa_block_producer=poa_block_producer,
         )
 
         if self._args.x_ipython_kernel:
@@ -342,6 +368,8 @@ class CliBuilder:
             self._start_ipykernel()
 
         p2p_manager.set_manager(self.manager)
+        if poa_block_producer:
+            poa_block_producer.manager = self.manager
 
         if self._args.stratum:
             stratum_factory = StratumFactory(self.manager, reactor=reactor)
@@ -368,7 +396,8 @@ class CliBuilder:
             p2p_manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
 
         if self._args.bootstrap:
-            p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(self._args.bootstrap))
+            entrypoints = [Entrypoint.parse(desc) for desc in self._args.bootstrap]
+            p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(entrypoints))
 
         if self._args.x_rocksdb_indexes:
             self.log.warn('--x-rocksdb-indexes is now the default, no need to specify it')

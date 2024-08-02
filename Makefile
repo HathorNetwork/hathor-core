@@ -1,4 +1,4 @@
-py_sources = hathor/ tests/
+py_sources = hathor/ tests/ extras/custom_tests/
 
 .PHONY: all
 all: check tests
@@ -49,8 +49,12 @@ tests-genesis:
 tests-ci:
 	pytest $(tests_ci)
 
+.PHONY: tests-custom
+tests-custom:
+	bash ./extras/custom_tests.sh
+
 .PHONY: tests
-tests: tests-cli tests-lib tests-genesis tests-ci
+tests: tests-cli tests-lib tests-genesis tests-custom tests-ci
 
 .PHONY: tests-full
 tests-full:
@@ -60,11 +64,11 @@ tests-full:
 
 .PHONY: mypy
 mypy:
-	mypy -p hathor -p tests
+	mypy -p hathor -p tests -p extras.custom_tests
 
 .PHONY: dmypy
 dmypy:
-	dmypy run --timeout 86400 -- -p hathor -p tests
+	dmypy run --timeout 86400 -- -p hathor -p tests -p extras.custom_tests
 
 .PHONY: flake8
 flake8:
@@ -133,10 +137,6 @@ endif
 .PHONY: docker
 docker: $(docker_dir)/Dockerfile
 	docker build$(docker_build_flags) -t $(docker_tag) $(docker_dir)
-
-.PHONY: docker-pypy
-docker-pypy: $(docker_dir)/Dockerfile.pypy
-	docker build$(docker_build_flags) -f Dockerfile.pypy -t $(docker_tag) $(docker_dir)
 
 .PHONY: docker-push
 docker-push: docker

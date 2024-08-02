@@ -22,6 +22,7 @@ from hathor.transaction.exceptions import (
     InvalidOutputScriptSize,
     InvalidOutputValue,
     InvalidToken,
+    InvalidVersionError,
     ParentDoesNotExist,
     PowError,
     TimestampError,
@@ -43,6 +44,11 @@ class VertexVerifier:
 
     def __init__(self, *, settings: HathorSettings) -> None:
         self._settings = settings
+
+    def verify_version(self, vertex: BaseTransaction) -> None:
+        """Verify that the vertex version is valid."""
+        if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(vertex.version):
+            raise InvalidVersionError(f"invalid vertex version: {vertex.version}")
 
     def verify_parents(self, vertex: BaseTransaction) -> None:
         """All parents must exist and their timestamps must be smaller than ours.
@@ -126,6 +132,7 @@ class VertexVerifier:
 
         :raises PowError: when the hash is equal or greater than the target
         """
+        assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         numeric_hash = int(vertex.hash_hex, vertex.HEX_BASE)
         minimum_target = vertex.get_target(override_weight)
         if numeric_hash >= minimum_target:

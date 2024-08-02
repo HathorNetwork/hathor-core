@@ -45,7 +45,7 @@ from hathor.merged_mining.bitcoin import (
 )
 from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
 from hathor.merged_mining.util import Periodic
-from hathor.transaction import BitcoinAuxPow, MergeMinedBlock as HathorBlock
+from hathor.transaction import BitcoinAuxPow, MergeMinedBlock, MergeMinedBlock as HathorBlock
 from hathor.transaction.exceptions import ScriptError, TxValidationError
 from hathor.util import MaxSizeOrderedDict, Random, ichunks
 
@@ -1296,7 +1296,7 @@ class MergedMiningCoordinator:
             block_template = block_templates.choose_random_template(self.rng)
             address_str = self.payback_address_hathor
             address = decode_address(address_str) if address_str is not None else None
-            block = block_template.generate_mining_block(self.rng, merge_mined=True, address=address)
+            block = block_template.generate_mining_block(self.rng, address=address, cls=MergeMinedBlock)
             height = block_template.height
             assert isinstance(block, HathorBlock)
             self.last_hathor_block_received = time.time()

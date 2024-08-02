@@ -268,9 +268,13 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
 
         downloader = conn.proto2.connections.get_sync_factory(SyncVersion.V1_1).get_downloader()
 
-        node_sync1 = NodeSyncTimestamp(conn.proto1, downloader, reactor=conn.proto1.node.reactor)
+        node_sync1 = NodeSyncTimestamp(
+            conn.proto1, downloader, reactor=conn.proto1.node.reactor, vertex_parser=self.manager1.vertex_parser
+        )
         node_sync1.start()
-        node_sync2 = NodeSyncTimestamp(conn.proto2, downloader, reactor=conn.proto2.node.reactor)
+        node_sync2 = NodeSyncTimestamp(
+            conn.proto2, downloader, reactor=conn.proto2.node.reactor, vertex_parser=manager2.vertex_parser
+        )
         node_sync2.start()
 
         self.assertTrue(isinstance(conn.proto1.state, PeerIdState))

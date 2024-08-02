@@ -14,7 +14,7 @@
 
 import hashlib
 from abc import ABC, abstractmethod, abstractproperty
-from collections import defaultdict, deque
+from collections import deque
 from contextlib import AbstractContextManager
 from threading import Lock
 from typing import Any, Iterator, NamedTuple, Optional, cast
@@ -23,7 +23,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
@@ -104,8 +104,8 @@ class TransactionStorage(ABC):
 
     _migrations: list[BaseMigration]
 
-    def __init__(self) -> None:
-        self._settings = get_global_settings()
+    def __init__(self, *, settings: HathorSettings) -> None:
+        self._settings = settings
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -477,47 +477,6 @@ class TransactionStorage(ABC):
         """
         if self.indexes is not None:
             self.del_from_indexes(tx, remove_all=True, relax_assert=True)
-
-    def remove_transactions(self, txs: list[BaseTransaction]) -> None:
-        """Will remove all the transactions on the list from the database.
-
-        Special notes:
-
-        - will refuse and raise an error when removing all transactions would leave dangling transactions, that is,
-          transactions without existing parent. That is, it expects the `txs` list to include all children of deleted
-          txs, from both the confirmation and funds DAGs
-        - inputs's spent_outputs should not have any of the transactions being removed as spending transactions,
-          this method will update and save those transaction's metadata
-        - parent's children metadata will be updated to reflect the removals
-        - all indexes will be updated
-        """
-        parents_to_update: dict[bytes, list[bytes]] = defaultdict(list)
-        dangling_children: set[bytes] = set()
-        txset = {tx.hash for tx in txs}
-        for tx in txs:
-            tx_meta = tx.get_metadata()
-            assert not tx_meta.validation.is_checkpoint()
-            for parent in set(tx.parents) - txset:
-                parents_to_update[parent].append(tx.hash)
-            dangling_children.update(set(tx_meta.children) - txset)
-            for spending_txs in tx_meta.spent_outputs.values():
-                dangling_children.update(set(spending_txs) - txset)
-            for tx_input in tx.inputs:
-                spent_tx = tx.get_spent_tx(tx_input)
-                spent_tx_meta = spent_tx.get_metadata()
-                if tx.hash in spent_tx_meta.spent_outputs[tx_input.index]:
-                    spent_tx_meta.spent_outputs[tx_input.index].remove(tx.hash)
-                    self.save_transaction(spent_tx, only_metadata=True)
-        assert not dangling_children, 'It is an error to try to remove transactions that would leave a gap in the DAG'
-        for parent_hash, children_to_remove in parents_to_update.items():
-            parent_tx = self.get_transaction(parent_hash)
-            parent_meta = parent_tx.get_metadata()
-            for child in children_to_remove:
-                parent_meta.children.remove(child)
-            self.save_transaction(parent_tx, only_metadata=True)
-        for tx in txs:
-            self.log.debug('remove transaction', tx=tx.hash_hex)
-            self.remove_transaction(tx)
 
     @abstractmethod
     def transaction_exists(self, hash_bytes: bytes) -> bool:
@@ -1111,6 +1070,7 @@ class TransactionStorage(ABC):
     def _construct_genesis_block(self) -> Block:
         """Return the genesis block."""
         block = Block(
+            settings=self._settings,
             storage=self,
             nonce=self._settings.GENESIS_BLOCK_NONCE,
             timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
@@ -1127,6 +1087,7 @@ class TransactionStorage(ABC):
     def _construct_genesis_tx1(self) -> Transaction:
         """Return the genesis tx1."""
         tx1 = Transaction(
+            settings=self._settings,
             storage=self,
             nonce=self._settings.GENESIS_TX1_NONCE,
             timestamp=self._settings.GENESIS_TX1_TIMESTAMP,
@@ -1140,6 +1101,7 @@ class TransactionStorage(ABC):
     def _construct_genesis_tx2(self) -> Transaction:
         """Return the genesis tx2."""
         tx2 = Transaction(
+            settings=self._settings,
             storage=self,
             nonce=self._settings.GENESIS_TX2_NONCE,
             timestamp=self._settings.GENESIS_TX2_TIMESTAMP,
@@ -1165,8 +1127,14 @@ class TransactionStorage(ABC):
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]
 
-    def __init__(self, indexes: Optional[IndexesManager] = None, pubsub: Optional[Any] = None) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        indexes: Optional[IndexesManager] = None,
+        pubsub: Optional[Any] = None,
+        *,
+        settings: HathorSettings,
+    ) -> None:
+        super().__init__(settings=settings)
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub

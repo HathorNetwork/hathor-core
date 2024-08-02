@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
@@ -22,6 +24,7 @@ from hathor.indexes.scope import Scope
 from hathor.transaction.base_transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
+    from hathor.conf.settings import HathorSettings
     from hathor.indexes.manager import IndexesManager
 
 logger = get_logger()
@@ -33,8 +36,8 @@ class BaseIndex(ABC):
     This class exists so we can interact with indexes without knowing anything specific to its implemented. It was
     created to generalize how we initialize indexes and keep track of which ones are up-to-date.
     """
-    def __init__(self) -> None:
-        self._settings = get_global_settings()
+    def __init__(self, *, settings: HathorSettings | None = None) -> None:
+        self._settings = settings or get_global_settings()
         self.log = logger.new()
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:

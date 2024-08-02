@@ -135,7 +135,7 @@ class BaseTokenTest(unittest.TestCase):
 
         # mint tokens and transfer mint authority
         mint_amount = 10000000
-        deposit_amount = get_deposit_amount(mint_amount)
+        deposit_amount = get_deposit_amount(self._settings, mint_amount)
         _input1 = TxInput(tx.hash, 1, b'')
         _input2 = TxInput(tx.hash, 3, b'')
         token_output1 = TxOutput(mint_amount, script, 1)
@@ -195,7 +195,7 @@ class BaseTokenTest(unittest.TestCase):
 
         # try to mint and deposit less tokens than necessary
         mint_amount = 10000000
-        deposit_amount = get_deposit_amount(mint_amount) - 1
+        deposit_amount = get_deposit_amount(self._settings, mint_amount) - 1
         _input1 = TxInput(tx.hash, 1, b'')
         _input2 = TxInput(tx.hash, 3, b'')
         token_output1 = TxOutput(mint_amount, script, 1)
@@ -241,7 +241,7 @@ class BaseTokenTest(unittest.TestCase):
         # melt tokens and transfer melt authority
         melt_amount = 100
         new_amount = tx.outputs[0].value - melt_amount
-        withdraw_amount = get_withdraw_amount(melt_amount)
+        withdraw_amount = get_withdraw_amount(self._settings, melt_amount)
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
         token_output1 = TxOutput(new_amount, script, 1)
@@ -279,7 +279,7 @@ class BaseTokenTest(unittest.TestCase):
 
         # melt tokens and withdraw more than what's allowed
         melt_amount = 100
-        withdraw_amount = get_withdraw_amount(melt_amount)
+        withdraw_amount = get_withdraw_amount(self._settings, melt_amount)
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
         token_output1 = TxOutput(tx.outputs[0].value - melt_amount, script, 1)
@@ -371,7 +371,7 @@ class BaseTokenTest(unittest.TestCase):
 
         # new tx minting tokens
         mint_amount = 300
-        deposit_amount = get_deposit_amount(mint_amount)
+        deposit_amount = get_deposit_amount(self._settings, mint_amount)
         script = P2PKH.create_output_script(self.address)
         # inputs
         mint_input = TxInput(tx.hash, 1, b'')

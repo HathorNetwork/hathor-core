@@ -29,7 +29,6 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.reactor import get_global_reactor
 from hathor.transaction import Transaction
-from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
 
@@ -110,7 +109,7 @@ class SendTokensResource(Resource):
             )
 
         try:
-            tx = tx_or_block_from_bytes(bytes.fromhex(tx_hex))
+            tx = self.manager.vertex_parser.deserialize(bytes.fromhex(tx_hex))
         except (ValueError, struct.error):
             # ValueError: invalid hex
             # struct.error: invalid transaction data

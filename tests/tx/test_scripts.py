@@ -65,7 +65,7 @@ from tests.utils import BURN_ADDRESS, get_genesis_key
 class TestScripts(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        tx_storage = TransactionMemoryStorage()
+        tx_storage = TransactionMemoryStorage(settings=self._settings)
         self.genesis_blocks = [tx for tx in tx_storage.get_all_genesis() if tx.is_block]
         self.genesis_txs = [tx for tx in tx_storage.get_all_genesis() if not tx.is_block]
 

@@ -18,6 +18,7 @@ from structlog import get_logger
 
 import hathor
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states.base import BaseState
@@ -32,9 +33,8 @@ logger = get_logger()
 
 
 class HelloState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol') -> None:
-        super().__init__(protocol)
-        self._settings = get_global_settings()
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
+        super().__init__(protocol, settings)
         self.log = logger.new(**protocol.get_logger_context())
         self.cmd_map.update({
             ProtocolMessages.HELLO: self.handle_hello,
@@ -56,7 +56,7 @@ class HelloState(BaseState):
             'remote_address': format_address(remote),
             'genesis_short_hash': get_genesis_short_hash(),
             'timestamp': protocol.node.reactor.seconds(),
-            'settings_dict': get_settings_hello_dict(),
+            'settings_dict': get_settings_hello_dict(self._settings),
             'capabilities': protocol.node.capabilities,
         }
         if self.protocol.node.has_sync_version_capability():
@@ -130,7 +130,10 @@ class HelloState(BaseState):
         protocol.sync_version = max(common_sync_versions)
 
         if data['app'] != self._app():
-            self.log.warn('different versions', theirs=data['app'], ours=self._app())
+            remote_app = data['app'].encode().hex()
+            our_app = self._app().encode().hex()
+            # XXX: this used to be a warning, but it shouldn't be since it's perfectly normal
+            self.log.debug('different versions', theirs=remote_app, ours=our_app)
 
         if data['network'] != protocol.network:
             protocol.send_error_and_close_connection('Wrong network.')
@@ -147,7 +150,7 @@ class HelloState(BaseState):
 
         if 'settings_dict' in data:
             # If settings_dict is sent we must validate it
-            settings_dict = get_settings_hello_dict()
+            settings_dict = get_settings_hello_dict(self._settings)
             if data['settings_dict'] != settings_dict:
                 protocol.send_error_and_close_connection(
                     'Settings values are different. {}'.format(json_dumps(settings_dict))

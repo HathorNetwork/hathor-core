@@ -2,6 +2,7 @@ import sys
 
 import pytest
 
+from hathor.p2p.entrypoint import Entrypoint
 from tests import unittest
 from tests.utils import run_server
 
@@ -20,7 +21,7 @@ class ConnectionsTest(unittest.TestCase):
     def test_manager_connections(self) -> None:
         manager = self.create_peer('testnet', enable_sync_v1=True, enable_sync_v2=False)
 
-        endpoint = 'tcp://127.0.0.1:8005'
+        endpoint = Entrypoint.parse('tcp://127.0.0.1:8005')
         manager.connections.connect_to(endpoint, use_ssl=True)
 
         self.assertIn(endpoint, manager.connections.iter_not_ready_endpoints())

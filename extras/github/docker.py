@@ -89,18 +89,9 @@ def prep_tags(environ: Dict, base_version: str, is_release_candidate: bool):
         for line in open(filename).readlines():
             if line.startswith('ARG PYTHON'):
                 return line.split('=')[1].strip()
-    dockerfile_cpython = 'Dockerfile'
-    dockerfile_pypy = 'Dockerfile.pypy'
-    default_python = 'python' + extract_pyver(dockerfile_cpython)
-    default_pypy = 'pypy' + extract_pyver(dockerfile_pypy)
-
-    # Set which Dockerfile to use based on the versions matrix
-    if MATRIX_PYTHON_IMPL == 'pypy':
-        dockerfile = dockerfile_pypy
-        suffix = 'pypy' + MATRIX_PYTHON_VERSION
-    else:
-        dockerfile = dockerfile_cpython
-        suffix = 'python' + MATRIX_PYTHON_VERSION
+    dockerfile = 'Dockerfile'
+    default_python = 'python' + extract_pyver(dockerfile)
+    suffix = 'python' + MATRIX_PYTHON_VERSION
 
     # Build the tag list
 
@@ -116,8 +107,6 @@ def prep_tags(environ: Dict, base_version: str, is_release_candidate: bool):
     if suffix == default_python:
         tags.add(base_version)
         output['slack-notification-version'] = base_version
-    elif suffix == default_pypy:
-        tags.add(base_version + '-pypy')
 
     # Check if this is a stable release
     if re.match(r'^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$', base_version):

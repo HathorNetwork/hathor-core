@@ -21,6 +21,7 @@ from twisted.internet.interfaces import IDelayedCall, IReactorFromThreads
 from twisted.python.threadable import isInIOThread
 
 from hathor.reactor import ReactorProtocol as Reactor
+from hathor.types import VertexId
 from hathor.utils.zope import verified_cast
 
 if TYPE_CHECKING:
@@ -145,6 +146,7 @@ class EventArguments:
 
     # XXX: add these as needed, these attributes don't always exist, but when they do these are their types
     tx: 'BaseTransaction'
+    vertex_id: VertexId
     reorg_size: int
     old_best_block: 'Block'
     new_best_block: 'Block'

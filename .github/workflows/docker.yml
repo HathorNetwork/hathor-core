@@ -26,9 +26,6 @@ jobs:
           - '3.10'
           - '3.11'
           - '3.12'
-        include:
-          - python-impl: pypy
-            python-version: '3.10'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -96,7 +93,6 @@ jobs:
         run: docker run --rm ${{ env.TEST_TAG }} quick_test --data / --testnet
       - name: Build and push
         uses: docker/build-push-action@v3
-        continue-on-error: ${{ matrix.python-impl == 'pypy' }}  # PyPy is not first-class and has been causing some build failures
         if: ${{ !env.ACT }}  # Skip this step when testing locally with https://github.com/nektos/act
         with:
           context: .

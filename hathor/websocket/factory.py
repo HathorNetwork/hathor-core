@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import defaultdict, deque
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from autobahn.exception import Disconnected
 from autobahn.twisted.websocket import WebSocketServerFactory
@@ -22,11 +22,12 @@ from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
 from hathor.indexes import AddressIndex
+from hathor.manager import HathorManager
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.reactor import get_global_reactor
-from hathor.util import json_dumpb, json_loadb, json_loads
+from hathor.util import json_dumpb
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 settings = HathorSettings()
@@ -83,17 +84,24 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     max_subs_addrs_empty: Optional[int] = settings.WS_MAX_SUBS_ADDRS_EMPTY
 
     def buildProtocol(self, addr):
-        return self.protocol(self)
+        return self.protocol(self, is_history_streaming_enabled=self.is_history_streaming_enabled)
 
-    def __init__(self, metrics: Optional[Metrics] = None, address_index: Optional[AddressIndex] = None):
+    def __init__(self,
+                 manager: HathorManager,
+                 metrics: Optional[Metrics] = None,
+                 address_index: Optional[AddressIndex] = None):
         """
         :param metrics: If not given, a new one is created.
         :type metrics: :py:class:`hathor.metrics.Metrics`
         """
+        self.manager = manager
         self.reactor = get_global_reactor()
         # Opened websocket connections so I can broadcast messages later
         # It contains only connections that have finished handshaking.
         self.connections: set[HathorAdminWebsocketProtocol] = set()
+
+        # Enable/disable history streaming over the websocket connection.
+        self.is_history_streaming_enabled: bool = True
 
         # Websocket connection for each address
         self.address_connections: defaultdict[str, set[HathorAdminWebsocketProtocol]] = defaultdict(set)
@@ -128,6 +136,12 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         if self._lc_send_metrics.running:
             self._lc_send_metrics.stop()
         self.is_running = False
+
+    def disable_history_streaming(self) -> None:
+        """Disable history streaming for all connections."""
+        self.is_history_streaming_enabled = False
+        for conn in self.connections:
+            self.disable_history_streaming()
 
     def _setup_rate_limit(self):
         """ Set the limit of the RateLimiter and start the buffer deques with BUFFER_SIZE
@@ -300,44 +314,33 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                                        data_type=data_type)
                 break
 
-    def handle_message(self, connection: HathorAdminWebsocketProtocol, data: Union[bytes, str]) -> None:
-        """ General message handler, detects type and deletages to specific handler."""
-        if isinstance(data, bytes):
-            message = json_loadb(data)
-        else:
-            message = json_loads(data)
-        # we only handle ping messages for now
-        if message['type'] == 'ping':
-            self._handle_ping(connection, message)
-        elif message['type'] == 'subscribe_address':
-            self._handle_subscribe_address(connection, message)
-        elif message['type'] == 'unsubscribe_address':
-            self._handle_unsubscribe_address(connection, message)
-
-    def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: dict[Any, Any]) -> None:
-        """ Handler for ping message, should respond with a simple {"type": "pong"}"""
-        payload = json_dumpb({'type': 'pong'})
-        connection.sendMessage(payload, False)
-
     def _handle_subscribe_address(self, connection: HathorAdminWebsocketProtocol, message: dict[Any, Any]) -> None:
         """ Handler for subscription to an address, consideirs subscription limits."""
-        addr: str = message['address']
+        address: str = message['address']
+        success, errmsg = self.subscribe_address(connection, address)
+        response = {
+            'type': 'subscribe_address',
+            'address': address,
+            'success': success,
+        }
+        if not success:
+            response['message'] = errmsg
+        connection.sendMessage(json_dumpb(response), False)
+
+    def subscribe_address(self, connection: HathorAdminWebsocketProtocol, address: str) -> tuple[bool, str]:
+        """Subscribe an address to send real time updates to a websocket connection."""
         subs: set[str] = connection.subscribed_to
         if self.max_subs_addrs_conn is not None and len(subs) >= self.max_subs_addrs_conn:
-            payload = json_dumpb({'message': 'Reached maximum number of subscribed '
-                                             f'addresses ({self.max_subs_addrs_conn}).',
-                                  'type': 'subscribe_address', 'success': False})
+            return False, f'Reached maximum number of subscribed addresses ({self.max_subs_addrs_conn}).'
+
         elif self.max_subs_addrs_empty is not None and (
                  self.address_index and _count_empty(subs, self.address_index) >= self.max_subs_addrs_empty
              ):
-            payload = json_dumpb({'message': 'Reached maximum number of subscribed '
-                                             f'addresses without output ({self.max_subs_addrs_empty}).',
-                                  'type': 'subscribe_address', 'success': False})
-        else:
-            self.address_connections[addr].add(connection)
-            connection.subscribed_to.add(addr)
-            payload = json_dumpb({'type': 'subscribe_address', 'success': True})
-        connection.sendMessage(payload, False)
+            return False, f'Reached maximum number of subscribed empty addresses ({self.max_subs_addrs_empty}).'
+
+        self.address_connections[address].add(connection)
+        connection.subscribed_to.add(address)
+        return True, ''
 
     def _handle_unsubscribe_address(self, connection: HathorAdminWebsocketProtocol, message: dict[Any, Any]) -> None:
         """ Handler for unsubscribing from an address, also removes address connection set if it ends up empty."""

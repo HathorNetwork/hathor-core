@@ -173,6 +173,10 @@ class HDWallet(BaseWallet):
         new_key = self.chain_key.subkey(index)
         self._key_generated(new_key, index)
 
+    def get_xpub(self) -> str:
+        """Return wallet xpub after derivation."""
+        return self.chain_key.as_text(as_private=False)
+
     def _key_generated(self, key, index):
         """ Add generated key to self.keys and set last_generated_index
 
