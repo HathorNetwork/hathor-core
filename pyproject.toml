@@ -36,15 +36,15 @@ exclude = ["tests", "tests.*"]
 hathor-cli = 'hathor.cli.main:main'
 
 [tool.poetry.dev-dependencies]
-flake8 = "~6.1.0"
-isort = {version = "~5.12.0", extras = ["colors"]}
+flake8 = "~7.0.0"
+isort = {version = "~5.13.2", extras = ["colors"]}
 mypy = {version = "^1.9.0", markers = "implementation_name == 'cpython'"}
 mypy-zope = {version = "^1.0.4", markers = "implementation_name == 'cpython'"}
-pytest = "~7.4.3"
-pytest-cov = "~4.1.0"
-flaky = "~3.7.0"
-pytest-xdist = "~3.3.1"
-yamllint = "~1.32.0"
+pytest = "~8.1.1"
+pytest-cov = "~5.0.0"
+flaky = "~3.8.1"
+pytest-xdist = "~3.5.0"
+yamllint = "~1.35.1"
 # stubs:
 types-requests = "=2.28.11.4"
 types-pyopenssl = "=22.1.0.2"
@@ -52,34 +52,34 @@ types-pyyaml = "=6.0.12.9"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4"
-twisted = "~22.10.0"
+twisted = "~24.3.0"
 autobahn = "~23.6.2"
 base58 = "~2.1.1"
 colorama = "~0.4.6"
 configargparse = "~1.5.3"
-cryptography = "~38.0.3"
+cryptography = "~42.0.5"
 graphviz = "~0.20.1"
 ipython = {version = "~8.7.0", extras = ["kernel"]}
 mnemonic = "~0.20"
 prometheus_client = "~0.15.0"
-pyopenssl = "=22.1.0"
+pyopenssl = "=24.1.0"
 pycoin = "~0.92.20230326"
 pywin32 = {version = "306", markers = "sys_platform == 'win32'"}
-requests = "=2.28.1"
+requests = "=2.31.0"
 service_identity = "~21.1.0"
 pexpect = "~4.8.0"
 intervaltree = "~3.1.0"
 structlog = "~22.3.0"
 rocksdb = {git = "https://github.com/hathornetwork/python-rocksdb.git", markers = "sys_platform != 'win32'"}
-aiohttp = "~3.9.0"
+aiohttp = "~3.9.3"
 idna = "~3.4"
 setproctitle = "^1.2.2"
 sentry-sdk = {version = "^1.5.11", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
-hathorlib = "^0.5.2"
-pydantic = "~1.10.13"
+hathorlib = {git = "https://github.com/HathorNetwork/python-hathorlib.git", branch = "chore/update-deps" } # TODO: Use the latest version
+pydantic = "~1.10.15"
 pyyaml = "^6.0.1"
-typing-extensions = "~4.8.0"
+typing-extensions = "~4.11.0 "
 python-healthchecklib = "^0.1.0"
 
 [tool.poetry.extras]
