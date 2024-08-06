@@ -19,6 +19,7 @@ from hathor.transaction.base_transaction import (
     TxInput,
     TxOutput,
     TxVersion,
+    Vertex,
     sum_weights,
 )
 from hathor.transaction.block import Block
@@ -29,6 +30,7 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 __all__ = [
     'Transaction',
     'BitcoinAuxPow',
+    'Vertex',
     'BaseTransaction',
     'Block',
     'MergeMinedBlock',

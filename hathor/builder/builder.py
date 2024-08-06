@@ -535,10 +535,7 @@ class Builder:
         if self._feature_service is None:
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
-            self._feature_service = FeatureService(
-                feature_settings=settings.FEATURE_ACTIVATION,
-                tx_storage=tx_storage
-            )
+            self._feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
         return self._feature_service
 
@@ -549,7 +546,7 @@ class Builder:
             feature_service = self._get_or_create_feature_service()
             feature_storage = self._get_or_create_feature_storage()
             self._bit_signaling_service = BitSignalingService(
-                feature_settings=settings.FEATURE_ACTIVATION,
+                settings=settings,
                 feature_service=feature_service,
                 tx_storage=tx_storage,
                 support_features=self._support_features,
