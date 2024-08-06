@@ -68,9 +68,11 @@ class VerificationService:
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
+        assert self._tx_storage is not None
         from hathor.transaction.transaction_metadata import ValidationState
 
         meta = vertex.get_metadata()
+        vertex.init_static_metadata_from_storage(self._settings, self._tx_storage)
 
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
