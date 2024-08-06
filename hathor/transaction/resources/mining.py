@@ -18,6 +18,7 @@ from structlog import get_logger
 
 from hathor.api_util import Resource, get_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.exception import HathorError
 from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
@@ -49,6 +50,7 @@ class GetBlockTemplateResource(Resource):
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        self._settings = get_global_settings()
         self.log = logger.new()
 
     @api_catch_exceptions
@@ -76,6 +78,7 @@ class GetBlockTemplateResource(Resource):
         # get block
         # XXX: miner can edit block data and output_script, so it's fine if address is None
         block = self.manager.generate_mining_block(address=address, merge_mined=merged_mining)
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
 
         # serialize
         data = block.to_json(include_metadata=True)

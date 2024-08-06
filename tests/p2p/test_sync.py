@@ -711,8 +711,8 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             conn.run_one_step(debug=False)
             self.clock.advance(0.1)
 
-        self.assertEqual(self.manager1.tx_storage.get_best_block().get_metadata().height, TOTAL_BLOCKS)
-        self.assertEqual(manager2.tx_storage.get_best_block().get_metadata().height, TOTAL_BLOCKS)
+        self.assertEqual(self.manager1.tx_storage.get_best_block().static_metadata.height, TOTAL_BLOCKS)
+        self.assertEqual(manager2.tx_storage.get_best_block().static_metadata.height, TOTAL_BLOCKS)
 
         node_sync1 = conn.proto1.state.sync_agent
         node_sync2 = conn.proto2.state.sync_agent

@@ -82,6 +82,7 @@ def storage() -> TransactionStorage:
         block = Block(signal_bits=bits, parents=[parent.hash], storage=storage)
         block.update_hash()
         block.get_metadata().validation = ValidationState.FULL
+        block.init_static_metadata_from_storage(get_global_settings(), storage)
         storage.save_transaction(block)
         indexes.height.add_new(height, block.hash, block.timestamp)
 

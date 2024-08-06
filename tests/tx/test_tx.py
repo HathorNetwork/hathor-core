@@ -189,6 +189,7 @@ class BaseTransactionTest(unittest.TestCase):
             children_len.append(len(metadata.children))
 
         # update metadata
+        tx.init_static_metadata_from_storage(self._settings, self.tx_storage)
         tx.update_initial_metadata()
 
         # genesis transactions should have only this tx in their children set
@@ -250,6 +251,7 @@ class BaseTransactionTest(unittest.TestCase):
             )
         )
 
+        b.init_static_metadata_from_storage(self._settings, self.tx_storage)
         with self.assertRaises(AuxPowNoMagicError):
             self._verifiers.merge_mined_block.verify_aux_pow(b)
 
@@ -323,6 +325,8 @@ class BaseTransactionTest(unittest.TestCase):
         assert bytes(b1) != bytes(b2)
         assert b1.calculate_hash() == b2.calculate_hash()
 
+        b1.init_static_metadata_from_storage(self._settings, self.tx_storage)
+        b2.init_static_metadata_from_storage(self._settings, self.tx_storage)
         self._verifiers.merge_mined_block.verify_aux_pow(b1)  # OK
         with self.assertRaises(AuxPowUnexpectedMagicError):
             self._verifiers.merge_mined_block.verify_aux_pow(b2)
@@ -568,7 +572,7 @@ class BaseTransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         self.manager.cpu_mining_service.resolve(tx)
-        tx.update_reward_lock_metadata()
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.manager.verification_service.verify(tx)
 
     def test_tx_weight_too_high(self):
@@ -907,11 +911,14 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertEqual(str(cm.exception), 'version 0x200 must not be larger than one byte')
 
         # test serialization doesn't mess up with version
+        genesis_block = self.genesis_blocks[0]
         block = Block(
             signal_bits=0xF0,
             version=0x0F,
             nonce=100,
-            weight=1)
+            weight=1,
+            parents=[genesis_block.hash]
+        )
         block2 = block.clone()
         self.assertEqual(block.signal_bits, block2.signal_bits)
         self.assertEqual(block.version, block2.version)
