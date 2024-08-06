@@ -6,12 +6,10 @@ from hathor.simulator import FakeConnection, Simulator
 from tests import unittest
 
 
-class BaseSimulatorSelfTestCase(unittest.TestCase):
+class SimulatorSelfTestCase(unittest.TestCase):
     """These tests will basically setup two independent simulator instances and assert that they generate the same
     blocks and transactions to the hash throughout the execution.
     """
-
-    __test__ = False
 
     def setUp(self) -> None:
         super().setUp()
@@ -247,16 +245,3 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
             for idx, (node1, node2) in enumerate(zip(nodes1, nodes2)):
                 self.log.debug(f'checking node {idx}')
                 self.assertConsensusEqual(node1, node2)
-
-
-class SyncV1SimulatorSelfTestCase(unittest.SyncV1Params, BaseSimulatorSelfTestCase):
-    pass
-
-
-class SyncV2SimulatorSelfTestCase(unittest.SyncV2Params, BaseSimulatorSelfTestCase):
-    pass
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeSimulatorSelfTestCase(unittest.SyncBridgeParams, SyncV2SimulatorSelfTestCase):
-    pass

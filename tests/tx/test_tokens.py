@@ -14,9 +14,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
 
 
-class BaseTokenTest(unittest.TestCase):
-    __test__ = False
-
+class TokenTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
@@ -619,32 +617,6 @@ class BaseTokenTest(unittest.TestCase):
             print(tokens_index)
 
 
-class SyncV1TokenTest(unittest.SyncV1Params, BaseTokenTest):
-    pass
-
-
-class SyncV2TokenTest(unittest.SyncV2Params, BaseTokenTest):
-    pass
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTokenTest(unittest.SyncBridgeParams, SyncV2TokenTest):
-    pass
-
-
 @pytest.mark.skipif(unittest.USE_MEMORY_STORAGE, reason='previous tests already use memory, avoid duplication')
-class BaseMemoryTokenTest(BaseTokenTest):
+class MemoryTokenTest(TokenTest):
     use_memory_storage = True
-
-
-class SyncV1MemoryTokenTest(unittest.SyncV1Params, BaseMemoryTokenTest):
-    pass
-
-
-class SyncV2MemoryTokenTest(unittest.SyncV2Params, BaseMemoryTokenTest):
-    pass
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMemoryTokenTest(unittest.SyncBridgeParams, SyncV2MemoryTokenTest):
-    pass

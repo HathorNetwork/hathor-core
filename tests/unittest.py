@@ -63,18 +63,6 @@ def _get_default_peer_id_pool_filepath() -> str:
 PEER_ID_POOL = list(_load_peer_pool())
 
 
-class SyncV1Params:
-    __test__ = False
-
-
-class SyncV2Params:
-    __test__ = True
-
-
-class SyncBridgeParams:
-    __test__ = False
-
-
 class TestBuilder(Builder):
     __test__ = False
 

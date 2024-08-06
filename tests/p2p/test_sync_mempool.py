@@ -10,9 +10,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseHathorSyncMempoolTestCase(unittest.TestCase):
-    __test__ = False
-
+class SyncMempoolTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
@@ -97,17 +95,6 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager2)
         self.assertConsensusEqual(self.manager1, self.manager2)
 
-
-class SyncV1HathorSyncMempoolTestCase(unittest.SyncV1Params, BaseHathorSyncMempoolTestCase):
-    pass
-
-
-class SyncV2HathorSyncMempoolTestCase(unittest.SyncV2Params, BaseHathorSyncMempoolTestCase):
-    pass
-
-    def test_mempool_basic(self) -> None:
-        super().test_mempool_basic()
-
         # 3 genesis
         # 25 blocks
         # Unlock reward blocks
@@ -182,8 +169,3 @@ class SyncV2HathorSyncMempoolTestCase(unittest.SyncV2Params, BaseHathorSyncMempo
         self.assertFalse(conn.tr2.disconnecting)
         conn.run_one_step(debug=True)
         self.assertTrue(conn.tr2.disconnecting)
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeHathorSyncMempoolTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMempoolTestCase):
-    pass

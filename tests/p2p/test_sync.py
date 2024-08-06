@@ -8,9 +8,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseHathorSyncMethodsTestCase(unittest.TestCase):
-    __test__ = False
-
+class SyncMethodsTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
@@ -85,90 +83,6 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             expected_result = expected_result[::-1]
             self.assertEqual(result, expected_result)
 
-    def test_block_sync_only_genesis(self) -> None:
-        manager2 = self.create_peer(self.network)
-        self.assertEqual(manager2.state, manager2.NodeState.READY)
-
-        conn = FakeConnection(self.manager1, manager2)
-
-        conn.run_one_step()  # HELLO
-        conn.run_one_step()  # PEER-ID
-        conn.run_one_step()  # READY
-
-        node_sync = conn.proto1.state.sync_agent
-        self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
-        self.assertTipsEqual(self.manager1, manager2)
-
-    def test_block_sync_new_blocks(self) -> None:
-        self._add_new_blocks(15)
-
-        manager2 = self.create_peer(self.network)
-        self.assertEqual(manager2.state, manager2.NodeState.READY)
-
-        conn = FakeConnection(self.manager1, manager2)
-
-        for _ in range(10000):
-            if conn.is_empty():
-                break
-            conn.run_one_step(debug=True)
-            self.clock.advance(0.1)
-
-        node_sync = conn.proto1.state.sync_agent
-        self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
-        self.assertTipsEqual(self.manager1, manager2)
-        self.assertConsensusEqual(self.manager1, manager2)
-        self.assertConsensusValid(self.manager1)
-        self.assertConsensusValid(manager2)
-
-    def test_block_sync_many_new_blocks(self) -> None:
-        self._add_new_blocks(150)
-
-        manager2 = self.create_peer(self.network)
-        self.assertEqual(manager2.state, manager2.NodeState.READY)
-
-        conn = FakeConnection(self.manager1, manager2)
-        conn.disable_idle_timeout()
-
-        while not conn.is_empty():
-            conn.run_one_step(debug=True)
-            self.clock.advance(0.1)
-
-        node_sync = conn.proto1.state.sync_agent
-        self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
-        self.assertTipsEqual(self.manager1, manager2)
-        self.assertConsensusEqual(self.manager1, manager2)
-        self.assertConsensusValid(self.manager1)
-        self.assertConsensusValid(manager2)
-
-    def test_block_sync_new_blocks_and_txs(self) -> None:
-        self._add_new_blocks(25)
-        self._add_new_transactions(3)
-        self._add_new_blocks(4)
-        self._add_new_transactions(5)
-
-        manager2 = self.create_peer(self.network)
-        self.assertEqual(manager2.state, manager2.NodeState.READY)
-
-        conn = FakeConnection(self.manager1, manager2)
-
-        for _ in range(1000):
-            conn.run_one_step()
-            self.clock.advance(0.1)
-
-        # dot1 = self.manager1.tx_storage.graphviz(format='pdf')
-        # dot1.render('dot1')
-
-        # dot2 = manager2.tx_storage.graphviz(format='pdf')
-        # dot2.render('dot2')
-
-        node_sync = conn.proto1.state.sync_agent
-        self.assertEqual(self.manager1.tx_storage.latest_timestamp, manager2.tx_storage.latest_timestamp)
-        self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
-        self.assertTipsEqual(self.manager1, manager2)
-        self.assertConsensusEqual(self.manager1, manager2)
-        self.assertConsensusValid(self.manager1)
-        self.assertConsensusValid(manager2)
-
     def test_tx_propagation_nat_peers(self) -> None:
         """ manager1 <- manager2 <- manager3
         """
@@ -226,6 +140,18 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager2)
         self.assertConsensusValid(self.manager3)
 
+        node_sync1 = self.conn1.proto1.state.sync_agent
+        self.assertEqual(self.manager1.tx_storage.latest_timestamp, self.manager2.tx_storage.latest_timestamp)
+        self.assertEqual(node_sync1.peer_best_block, node_sync1.synced_block)
+        self.assertEqual(node_sync1.peer_best_block.height, self.manager1.tx_storage.get_height_best_block())
+        self.assertConsensusEqual(self.manager1, self.manager2)
+
+        node_sync2 = self.conn2.proto1.state.sync_agent
+        self.assertEqual(self.manager2.tx_storage.latest_timestamp, self.manager3.tx_storage.latest_timestamp)
+        self.assertEqual(node_sync2.peer_best_block, node_sync2.synced_block)
+        self.assertEqual(node_sync2.peer_best_block.height, self.manager2.tx_storage.get_height_best_block())
+        self.assertConsensusEqual(self.manager2, self.manager3)
+
     def test_check_sync_state(self) -> None:
         """Tests if the LoopingCall to check the sync state works"""
         # Initially it should do nothing, since there is no recent activity
@@ -242,8 +168,6 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertTrue(hasattr(self.manager1, "first_time_fully_synced"))
         self.assertFalse(self.manager1.lc_check_sync_state.running)
 
-
-class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
     def test_sync_metadata(self) -> None:
         # test if the synced peer will build all tx metadata correctly
 
@@ -288,50 +212,6 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
             self.assertCountEqual(meta1.voided_by or [], meta2.voided_by or [])
             self.assertCountEqual(meta1.conflict_with or [], meta2.conflict_with or [])
             self.assertCountEqual(meta1.twins or [], meta2.twins or [])
-
-    def test_tx_propagation_nat_peers(self) -> None:
-        super().test_tx_propagation_nat_peers()
-
-        node_sync1 = self.conn1.proto1.state.sync_agent
-        self.assertEqual(self.manager1.tx_storage.latest_timestamp, self.manager2.tx_storage.latest_timestamp)
-        self.assertEqual(node_sync1.peer_best_block, node_sync1.synced_block)
-        self.assertEqual(node_sync1.peer_best_block.height, self.manager1.tx_storage.get_height_best_block())
-        self.assertConsensusEqual(self.manager1, self.manager2)
-
-        node_sync2 = self.conn2.proto1.state.sync_agent
-        self.assertEqual(self.manager2.tx_storage.latest_timestamp, self.manager3.tx_storage.latest_timestamp)
-        self.assertEqual(node_sync2.peer_best_block, node_sync2.synced_block)
-        self.assertEqual(node_sync2.peer_best_block.height, self.manager2.tx_storage.get_height_best_block())
-        self.assertConsensusEqual(self.manager2, self.manager3)
-
-    def test_block_sync_new_blocks_and_txs(self) -> None:
-        self._add_new_blocks(25)
-        self._add_new_transactions(3)
-        self._add_new_blocks(4)
-        self._add_new_transactions(5)
-
-        manager2 = self.create_peer(self.network)
-        self.assertEqual(manager2.state, manager2.NodeState.READY)
-
-        conn = FakeConnection(self.manager1, manager2)
-
-        for _ in range(1000):
-            conn.run_one_step()
-            self.clock.advance(0.1)
-
-        # dot1 = self.manager1.tx_storage.graphviz(format='pdf')
-        # dot1.render('dot1')
-
-        # dot2 = manager2.tx_storage.graphviz(format='pdf')
-        # dot2.render('dot2')
-
-        node_sync = conn.proto1.state.sync_agent
-        self.assertEqual(self.manager1.tx_storage.latest_timestamp, manager2.tx_storage.latest_timestamp)
-        self.assertEqual(node_sync.peer_best_block, node_sync.synced_block)
-        self.assertEqual(node_sync.peer_best_block.height, self.manager1.tx_storage.get_height_best_block())
-        self.assertConsensusEqual(self.manager1, manager2)
-        self.assertConsensusValid(self.manager1)
-        self.assertConsensusValid(manager2)
 
     def test_block_sync_many_new_blocks(self) -> None:
         self._add_new_blocks(150)
@@ -510,10 +390,3 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
 
         self.assertEqual(self.manager1.tx_storage.get_vertices_count(), 3)
         self.assertEqual(manager2.tx_storage.get_vertices_count(), 3)
-
-    # TODO: an equivalent test to test_downloader, could be something like test_checkpoint_sync
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
-    pass

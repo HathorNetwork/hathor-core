@@ -4,7 +4,7 @@ from hathor.simulator import FakeConnection
 from tests import unittest
 
 
-class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase):
+class CapabilitiesTestCase(unittest.TestCase):
     def test_capabilities(self) -> None:
         network = 'testnet'
         manager1 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
@@ -44,8 +44,3 @@ class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase)
         self.assertEqual(conn2._proto2.state.state_name, 'READY')
         self.assertIsInstance(conn2._proto1.state.sync_agent, NodeBlockSync)
         self.assertIsInstance(conn2._proto2.state.sync_agent, NodeBlockSync)
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeHathorCapabilitiesTestCase(unittest.SyncBridgeParams, SyncV2HathorCapabilitiesTestCase):
-    pass
