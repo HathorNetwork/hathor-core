@@ -13,17 +13,15 @@
 #  limitations under the License.
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, TypeAlias
+from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.types import VertexId
 
 if TYPE_CHECKING:
-    from hathor.feature_activation.bit_signaling_service import BitSignalingService
-    from hathor.transaction import Block
-    from hathor.transaction.storage import TransactionStorage
+    from hathor.transaction import Block, Vertex
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,29 +40,31 @@ BlockSignalingState: TypeAlias = BlockIsSignaling | BlockIsMissingSignal
 
 
 class FeatureService:
-    __slots__ = ('_feature_settings', '_tx_storage', 'bit_signaling_service')
+    __slots__ = ('_feature_settings', '_vertex_getter', '_block_by_height_getter')
 
-    def __init__(self, *, settings: HathorSettings, tx_storage: 'TransactionStorage') -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        vertex_getter: Callable[[VertexId], 'Vertex'],
+        block_by_height_getter: Callable[[int], Optional['Block']],
+    ) -> None:
         self._feature_settings = settings.FEATURE_ACTIVATION
-        self._tx_storage = tx_storage
-        self.bit_signaling_service: Optional['BitSignalingService'] = None
+        self._vertex_getter = vertex_getter
+        self._block_by_height_getter = block_by_height_getter
 
-    def is_feature_active(self, *, block: 'Block', feature: Feature) -> bool:
-        """Returns whether a Feature is active at a certain block."""
-        state = self.get_state(block=block, feature=feature)
-
-        return state == FeatureState.ACTIVE
-
-    def is_signaling_mandatory_features(self, block: 'Block') -> BlockSignalingState:
+    @staticmethod
+    def is_signaling_mandatory_features(block: 'Block', settings: HathorSettings) -> BlockSignalingState:
         """
         Return whether a block is signaling features that are mandatory, that is, any feature currently in the
         MUST_SIGNAL phase.
         """
+        feature_settings = settings.FEATURE_ACTIVATION
         bit_counts = block.static_metadata.feature_activation_bit_counts
         height = block.static_metadata.height
-        offset_to_boundary = height % self._feature_settings.evaluation_interval
-        remaining_blocks = self._feature_settings.evaluation_interval - offset_to_boundary - 1
-        feature_infos = self.get_feature_infos(block=block)
+        offset_to_boundary = height % feature_settings.evaluation_interval
+        remaining_blocks = feature_settings.evaluation_interval - offset_to_boundary - 1
+        feature_infos = block.static_metadata.get_feature_infos(settings)
 
         must_signal_features = (
             feature for feature, feature_info in feature_infos.items()
@@ -72,8 +72,8 @@ class FeatureService:
         )
 
         for feature in must_signal_features:
-            criteria = self._feature_settings.features[feature]
-            threshold = criteria.get_threshold(self._feature_settings)
+            criteria = feature_settings.features[feature]
+            threshold = criteria.get_threshold(feature_settings)
             count = bit_counts[criteria.bit]
             missing_signals = threshold - count
 
@@ -82,53 +82,45 @@ class FeatureService:
 
         return BlockIsSignaling()
 
-    def get_state(self, *, block: 'Block', feature: Feature) -> FeatureState:
-        """Returns the state of a feature at a certain block. Uses block metadata to cache states."""
+    def calculate_all_feature_states(self, block: 'Block', *, height: int) -> dict[Feature, FeatureState]:
+        """Calculate the state of all features at a certain block."""
+        return {
+            feature: self._calculate_state(block=block, height=height, feature=feature)
+            for feature in self._feature_settings.features
+        }
+
+    def _calculate_state(self, *, block: 'Block', height: int, feature: Feature) -> FeatureState:
+        """Calculate the state of a feature at a certain block."""
 
         # per definition, the genesis block is in the DEFINED state for all features
         if block.is_genesis:
             return FeatureState.DEFINED
 
-        if state := block.get_feature_state(feature=feature):
-            return state
+        from hathor.transaction import Block
+        parent_hash = block.get_block_parent_hash()
+        parent_block = self._vertex_getter(parent_hash)
+        assert isinstance(parent_block, Block)
+        previous_state = parent_block.static_metadata.get_feature_state(feature)
 
         # All blocks within the same evaluation interval have the same state, that is, the state is only defined for
-        # the block in each interval boundary. Therefore, we get the state of the previous boundary block or calculate
+        # the block in each interval boundary. Therefore, we get the state of the previous block or calculate
         # a new state if this block is a boundary block.
-        height = block.static_metadata.height
-        offset_to_boundary = height % self._feature_settings.evaluation_interval
-        offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
-        previous_boundary_height = height - offset_to_previous_boundary
-        assert previous_boundary_height >= 0
-        previous_boundary_block = self._get_ancestor_at_height(block=block, ancestor_height=previous_boundary_height)
-        previous_boundary_state = self.get_state(block=previous_boundary_block, feature=feature)
+        is_boundary_block = height % self._feature_settings.evaluation_interval == 0
+        if not is_boundary_block:
+            return previous_state
 
-        # We cache _and save_ the state of the previous boundary block that we just got.
-        previous_boundary_block.set_feature_state(feature=feature, state=previous_boundary_state, save=True)
-
-        if offset_to_boundary != 0:
-            return previous_boundary_state
-
-        new_state = self._calculate_new_state(
+        return self._calculate_new_state(
             boundary_block=block,
+            height=height,
             feature=feature,
-            previous_state=previous_boundary_state
+            previous_state=previous_state
         )
-
-        if new_state == FeatureState.MUST_SIGNAL:
-            assert self.bit_signaling_service is not None
-            self.bit_signaling_service.on_must_signal(feature)
-
-        # We cache the just calculated state of the current block _without saving it_, as it may still be unverified,
-        # so we cannot persist its metadata. That's why we cache and save the previous boundary block above.
-        block.set_feature_state(feature=feature, state=new_state)
-
-        return new_state
 
     def _calculate_new_state(
         self,
         *,
         boundary_block: 'Block',
+        height: int,
         feature: Feature,
         previous_state: FeatureState
     ) -> FeatureState:
@@ -139,7 +131,6 @@ class FeatureService:
         an AssertionError. Non-boundary blocks never calculate their own state, they get it from their parent block
         instead.
         """
-        height = boundary_block.static_metadata.height
         criteria = self._feature_settings.features.get(feature)
         evaluation_interval = self._feature_settings.evaluation_interval
 
@@ -148,6 +139,7 @@ class FeatureService:
 
         assert not boundary_block.is_genesis, 'cannot calculate new state for genesis'
         assert height % evaluation_interval == 0, 'cannot calculate new state for a non-boundary block'
+        from hathor.transaction import Block
 
         if previous_state is FeatureState.DEFINED:
             if height >= criteria.start_height:
@@ -161,7 +153,9 @@ class FeatureService:
 
             # Get the count for this block's parent. Since this is a boundary block, its parent count represents the
             # previous evaluation interval count.
-            parent_block = boundary_block.get_block_parent()
+            parent_block_hash = boundary_block.get_block_parent_hash()
+            parent_block = self._vertex_getter(parent_block_hash)
+            assert isinstance(parent_block, Block)
             counts = parent_block.static_metadata.feature_activation_bit_counts
             count = counts[criteria.bit]
             threshold = criteria.get_threshold(self._feature_settings)
@@ -193,58 +187,3 @@ class FeatureService:
             return FeatureState.FAILED
 
         raise NotImplementedError(f'Unknown previous state: {previous_state}')
-
-    def get_feature_infos(self, *, block: 'Block') -> dict[Feature, FeatureInfo]:
-        """Returns the criteria definition and feature state for all features at a certain block."""
-        return {
-            feature: FeatureInfo(
-                criteria=criteria,
-                state=self.get_state(block=block, feature=feature)
-            )
-            for feature, criteria in self._feature_settings.features.items()
-        }
-
-    def _get_ancestor_at_height(self, *, block: 'Block', ancestor_height: int) -> 'Block':
-        """
-        Given a block, return its ancestor at a specific height.
-        Uses the height index if the block is in the best blockchain, or search iteratively otherwise.
-        """
-        assert ancestor_height < block.static_metadata.height, (
-            f"ancestor height must be lower than the block's height: "
-            f"{ancestor_height} >= {block.static_metadata.height}"
-        )
-
-        # It's possible that this method is called before the consensus runs for this block, therefore we do not know
-        # if it's in the best blockchain. For this reason, we have to get the ancestor starting from our parent block.
-        parent_block = block.get_block_parent()
-        parent_metadata = parent_block.get_metadata()
-        assert parent_metadata.validation.is_fully_connected(), 'The parent should always be fully validated.'
-
-        if parent_block.static_metadata.height == ancestor_height:
-            return parent_block
-
-        if not parent_metadata.voided_by:
-            ancestor = self._tx_storage.get_block_by_height(ancestor_height)
-            assert ancestor is not None, (
-                'it is guaranteed that the ancestor of a fully connected and non-voided block is in the height index'
-            )
-            return ancestor
-
-        return self._get_ancestor_iteratively(block=parent_block, ancestor_height=ancestor_height)
-
-    def _get_ancestor_iteratively(self, *, block: 'Block', ancestor_height: int) -> 'Block':
-        """
-        Given a block, return its ancestor at a specific height by iterating over its ancestors.
-        This is slower than using the height index.
-        """
-        # TODO: there are further optimizations to be done here, the latest common block height could be persisted in
-        #  metadata, so we could still use the height index if the requested height is before that height.
-        assert ancestor_height >= 0
-        assert block.static_metadata.height - ancestor_height <= self._feature_settings.evaluation_interval, (
-            'requested ancestor is deeper than the maximum allowed'
-        )
-        ancestor = block
-        while ancestor.static_metadata.height > ancestor_height:
-            ancestor = ancestor.get_block_parent()
-
-        return ancestor

@@ -1,7 +1,6 @@
 import base64
 import hashlib
 from math import isinf, isnan
-from unittest.mock import patch
 
 import pytest
 
@@ -9,7 +8,7 @@ from hathor.crypto.util import decode_address, get_address_from_public_key, get_
 from hathor.daa import TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
@@ -34,6 +33,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.scripts import P2PKH, parse_address_script
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import Wallet
@@ -341,16 +341,6 @@ class BaseTransactionTest(unittest.TestCase):
         address = decode_address(self.get_address(1))
         outputs = [TxOutput(100, P2PKH.create_output_script(address))]
 
-        patch_path = 'hathor.feature_activation.feature_service.FeatureService.is_feature_active'
-
-        def is_feature_active_false(self: FeatureService, *, block: Block, feature: Feature) -> bool:
-            assert feature == Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
-            return False
-
-        def is_feature_active_true(self: FeatureService, *, block: Block, feature: Feature) -> bool:
-            assert feature == Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
-            return True
-
         b = MergeMinedBlock(
             timestamp=self.genesis_blocks[0].timestamp + 1,
             weight=1,
@@ -364,15 +354,23 @@ class BaseTransactionTest(unittest.TestCase):
                 b'\x00' * 12,
             )
         )
+        static_metadata = BlockStaticMetadata(
+            height=123,
+            min_height=0,
+            feature_activation_bit_counts=[],
+            feature_states={
+                Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: FeatureState.FAILED
+            },
+        )
+        b.set_static_metadata(static_metadata)
 
         # Test with the INCREASE_MAX_MERKLE_PATH_LENGTH feature disabled
-        with patch(patch_path, is_feature_active_false):
-            with self.assertRaises(AuxPowLongMerklePathError):
-                self._verifiers.merge_mined_block.verify_aux_pow(b)
-
-            # removing one path makes it work
-            b.aux_pow.merkle_path.pop()
+        with self.assertRaises(AuxPowLongMerklePathError):
             self._verifiers.merge_mined_block.verify_aux_pow(b)
+
+        # removing one path makes it work
+        b.aux_pow.merkle_path.pop()
+        self._verifiers.merge_mined_block.verify_aux_pow(b)
 
         b2 = MergeMinedBlock(
             timestamp=self.genesis_blocks[0].timestamp + 1,
@@ -387,15 +385,23 @@ class BaseTransactionTest(unittest.TestCase):
                 b'\x00' * 12,
             )
         )
+        static_metadata = BlockStaticMetadata(
+            height=123,
+            min_height=0,
+            feature_activation_bit_counts=[],
+            feature_states={
+                Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: FeatureState.ACTIVE
+            },
+        )
+        b2.set_static_metadata(static_metadata)
 
         # Test with the INCREASE_MAX_MERKLE_PATH_LENGTH feature enabled
-        with patch(patch_path, is_feature_active_true):
-            with self.assertRaises(AuxPowLongMerklePathError):
-                self._verifiers.merge_mined_block.verify_aux_pow(b2)
-
-            # removing one path makes it work
-            b2.aux_pow.merkle_path.pop()
+        with self.assertRaises(AuxPowLongMerklePathError):
             self._verifiers.merge_mined_block.verify_aux_pow(b2)
+
+        # removing one path makes it work
+        b2.aux_pow.merkle_path.pop()
+        self._verifiers.merge_mined_block.verify_aux_pow(b2)
 
     def test_block_outputs(self):
         from hathor.transaction.exceptions import TooManyOutputs
