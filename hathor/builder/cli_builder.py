@@ -295,7 +295,11 @@ class CliBuilder:
             daa=daa,
             feature_service=self.feature_service
         )
-        verification_service = VerificationService(settings=settings, verifiers=vertex_verifiers)
+        verification_service = VerificationService(
+            settings=settings,
+            verifiers=vertex_verifiers,
+            tx_storage=tx_storage,
+        )
 
         cpu_mining_service = CpuMiningService()
 
