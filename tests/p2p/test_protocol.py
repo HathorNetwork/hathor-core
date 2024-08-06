@@ -589,8 +589,6 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
 
 
 class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTestCase):
-    __test__ = True
-
     def test_two_connections(self) -> None:
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
@@ -683,8 +681,6 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
 
 
 class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTestCase):
-    __test__ = True
-
     def test_two_connections(self) -> None:
         self.assertAndStepConn(self.conn, b'^HELLO')
         self.assertAndStepConn(self.conn, b'^PEER-ID')
@@ -699,7 +695,7 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         # disable timeout because we will make several steps on a new conn and this might get left behind
         self.conn.disable_idle_timeout()
 
-        manager3 = self.create_peer(self.network, enable_sync_v2=True)
+        manager3 = self.create_peer(self.network)
         conn = FakeConnection(self.manager1, manager3)
         self.assertAndStepConn(conn, b'^HELLO')
         self.assertAndStepConn(conn, b'^PEER-ID')

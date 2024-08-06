@@ -63,11 +63,11 @@ class BaseMempoolTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1MempoolTest(unittest.SyncV1Params, BaseMempoolTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MempoolTest(unittest.SyncV2Params, BaseMempoolTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

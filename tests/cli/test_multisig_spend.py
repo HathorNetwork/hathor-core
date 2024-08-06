@@ -124,11 +124,11 @@ class BaseMultiSigSpendTest(unittest.TestCase):
 
 
 class SyncV1MultiSigSpendTest(unittest.SyncV1Params, BaseMultiSigSpendTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MultiSigSpendTest(unittest.SyncV2Params, BaseMultiSigSpendTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

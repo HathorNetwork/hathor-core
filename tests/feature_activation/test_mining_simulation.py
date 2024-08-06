@@ -191,12 +191,12 @@ class BaseMiningSimulationTest(SimulatorTestCase):
 
 
 class SyncV1MiningSimulationTest(unittest.SyncV1Params, BaseMiningSimulationTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MiningSimulationTest(unittest.SyncV2Params, BaseMiningSimulationTest):
-    __test__ = True
+    pass
 
 
 class SyncBridgeMiningSimulationTest(unittest.SyncBridgeParams, BaseMiningSimulationTest):
-    __test__ = True
+    pass

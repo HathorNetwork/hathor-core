@@ -501,8 +501,8 @@ def _remove_timestamp(responses: list[EventResponse]) -> list[EventResponse]:
 
 
 class MemoryEventSimulationScenariosTest(BaseEventSimulationScenariosTest, MemoryEventSimulationTester):
-    __test__ = True
+    pass
 
 
 class RocksDBEventSimulationScenariosTest(BaseEventSimulationScenariosTest, RocksDBEventSimulationTester):
-    __test__ = True
+    pass

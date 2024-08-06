@@ -275,11 +275,11 @@ class BasePoaVerificationTest(unittest.TestCase):
 
 
 class SyncV1PoaVerificationTest(unittest.SyncV1Params, BasePoaVerificationTest):
-    __test__ = True
+    pass
 
 
 class SyncV2PoaVerificationTest(unittest.SyncV2Params, BasePoaVerificationTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

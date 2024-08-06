@@ -57,11 +57,11 @@ class BaseWalletIndexTest(unittest.TestCase):
 
 
 class SyncV1WalletIndexTest(unittest.SyncV1Params, BaseWalletIndexTest):
-    __test__ = True
+    pass
 
 
 class SyncV2WalletIndexTest(unittest.SyncV2Params, BaseWalletIndexTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

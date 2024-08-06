@@ -142,13 +142,13 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
 
 
 class SyncV1SimulatorIndexesTestCase(unittest.SyncV1Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2SimulatorIndexesTestCase(unittest.SyncV2Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeSimulatorIndexesTestCase(unittest.SyncBridgeParams, SyncV2SimulatorIndexesTestCase):
-    __test__ = True
+    pass

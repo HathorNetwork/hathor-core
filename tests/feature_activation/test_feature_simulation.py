@@ -809,24 +809,24 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
 
 
 class SyncV1MemoryStorageFeatureSimulationTest(unittest.SyncV1Params, BaseMemoryStorageFeatureSimulationTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MemoryStorageFeatureSimulationTest(unittest.SyncV2Params, BaseMemoryStorageFeatureSimulationTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeMemoryStorageFeatureSimulationTest(unittest.SyncBridgeParams, BaseMemoryStorageFeatureSimulationTest):
-    __test__ = True
+    pass
 
 
 class SyncV1RocksDBStorageFeatureSimulationTest(unittest.SyncV1Params, BaseRocksDBStorageFeatureSimulationTest):
-    __test__ = True
+    pass
 
 
 class SyncV2RocksDBStorageFeatureSimulationTest(unittest.SyncV2Params, BaseRocksDBStorageFeatureSimulationTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -834,4 +834,4 @@ class SyncBridgeRocksDBStorageFeatureSimulationTest(
     unittest.SyncBridgeParams,
     BaseRocksDBStorageFeatureSimulationTest
 ):
-    __test__ = True
+    pass

@@ -441,13 +441,13 @@ def check_decreasing_monotonicity(sequence: list[int]) -> bool:
 
 
 class SyncV1GetBestBlockchainTestCase(unittest.SyncV1Params, BaseGetBestBlockchainTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2GetBestBlockchainTestCase(unittest.SyncV2Params, BaseGetBestBlockchainTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeGetBestBlockchainTestCase(unittest.SyncBridgeParams, BaseGetBestBlockchainTestCase):
-    __test__ = True
+    pass

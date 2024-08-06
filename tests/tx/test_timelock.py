@@ -155,11 +155,11 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
 
 
 class SyncV1TimelockTransactionTestCase(unittest.SyncV1Params, BaseTimelockTransactionTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2TimelockTransactionTestCase(unittest.SyncV2Params, BaseTimelockTransactionTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

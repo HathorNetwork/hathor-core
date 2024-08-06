@@ -273,11 +273,11 @@ class BaseBasicWalletTest(unittest.TestCase):
 
 
 class SyncV1BasicWalletTest(unittest.SyncV1Params, BaseBasicWalletTest):
-    __test__ = True
+    pass
 
 
 class SyncV2BasicWalletTest(unittest.SyncV2Params, BaseBasicWalletTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

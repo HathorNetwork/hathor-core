@@ -152,17 +152,15 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
 
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
-    __test__ = True
-
     def test_compare_mempool_implementations(self) -> None:
         manager1 = self.create_peer()
         manager2 = self.create_peer()

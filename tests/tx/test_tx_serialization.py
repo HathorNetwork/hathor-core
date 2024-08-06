@@ -98,11 +98,11 @@ class BaseNoSerializationTest(_SerializationWithMetadataTest):
 
 
 class SyncV1NoSerializationTest(unittest.SyncV1Params, BaseNoSerializationTest):
-    __test__ = True
+    pass
 
 
 class SyncV2NoSerializationTest(unittest.SyncV2Params, BaseNoSerializationTest, _SerializationV2OnlyTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -118,11 +118,11 @@ class BaseStructSerializationTest(_SerializationWithoutMetadataTest):
 
 
 class SyncV1StructSerializationTest(unittest.SyncV1Params, BaseStructSerializationTest):
-    __test__ = True
+    pass
 
 
 class SyncV2StructSerializationTest(unittest.SyncV2Params, BaseStructSerializationTest, _SerializationV2OnlyTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

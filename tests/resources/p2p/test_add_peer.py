@@ -43,11 +43,11 @@ class BaseAddPeerTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1AddPeerTest(unittest.SyncV1Params, BaseAddPeerTest):
-    __test__ = True
+    pass
 
 
 class SyncV2AddPeerTest(unittest.SyncV2Params, BaseAddPeerTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

@@ -89,11 +89,11 @@ class BaseEventManagerTest(unittest.TestCase):
 
 
 class SyncV1EventManager(unittest.SyncV1Params, BaseEventManagerTest):
-    __test__ = True
+    pass
 
 
 class SyncV2EventManager(unittest.SyncV1Params, BaseEventManagerTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

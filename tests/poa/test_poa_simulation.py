@@ -577,11 +577,11 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
 
 class SyncV1PoaSimulationTest(unittest.SyncV1Params, BasePoaSimulationTest):
-    __test__ = True
+    pass
 
 
 class SyncV2PoaSimulationTest(unittest.SyncV2Params, BasePoaSimulationTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

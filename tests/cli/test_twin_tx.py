@@ -170,11 +170,11 @@ class BaseTwinTxTest(unittest.TestCase):
 
 
 class SyncV1TwinTxTest(unittest.SyncV1Params, BaseTwinTxTest):
-    __test__ = True
+    pass
 
 
 class SyncV2TwinTxTest(unittest.SyncV2Params, BaseTwinTxTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

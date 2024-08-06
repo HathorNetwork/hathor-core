@@ -81,11 +81,11 @@ class BaseGraphvizFullTest(BaseGraphvizTest):
 
 
 class SyncV1GraphvizFullTest(unittest.SyncV1Params, BaseGraphvizFullTest):
-    __test__ = True
+    pass
 
 
 class SyncV2GraphvizFullTest(unittest.SyncV2Params, BaseGraphvizFullTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -114,11 +114,11 @@ class BaseGraphvizNeigboursTest(BaseGraphvizTest):
 
 
 class SyncV1GraphvizNeigboursTest(unittest.SyncV1Params, BaseGraphvizNeigboursTest):
-    __test__ = True
+    pass
 
 
 class SyncV2GraphvizNeigboursTest(unittest.SyncV2Params, BaseGraphvizNeigboursTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

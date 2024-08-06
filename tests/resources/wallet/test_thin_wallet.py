@@ -685,11 +685,11 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1SendTokensTest(unittest.SyncV1Params, BaseSendTokensTest):
-    __test__ = True
+    pass
 
 
 class SyncV2SendTokensTest(unittest.SyncV2Params, BaseSendTokensTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

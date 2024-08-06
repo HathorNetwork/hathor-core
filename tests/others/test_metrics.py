@@ -284,11 +284,11 @@ class BaseMetricsTest(unittest.TestCase):
 
 
 class SyncV1MetricsTest(unittest.SyncV1Params, BaseMetricsTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MetricsTest(unittest.SyncV2Params, BaseMetricsTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

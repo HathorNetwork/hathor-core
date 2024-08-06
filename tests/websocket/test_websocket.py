@@ -231,11 +231,11 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1WebsocketTest(unittest.SyncV1Params, BaseWebsocketTest):
-    __test__ = True
+    pass
 
 
 class SyncV2WebsocketTest(unittest.SyncV2Params, BaseWebsocketTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

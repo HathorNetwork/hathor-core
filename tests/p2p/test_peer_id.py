@@ -309,11 +309,11 @@ class BasePeerIdTest(unittest.TestCase):
 
 
 class SyncV1PeerIdTest(unittest.SyncV1Params, BasePeerIdTest):
-    __test__ = True
+    pass
 
 
 class SyncV2PeerIdTest(unittest.SyncV2Params, BasePeerIdTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

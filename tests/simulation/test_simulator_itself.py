@@ -1,6 +1,5 @@
 import pytest
 
-from hathor.builder import SyncSupportLevel
 from hathor.manager import HathorManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.simulator import FakeConnection, Simulator
@@ -46,22 +45,8 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         enable_sync_v1: bool | None = None,
         enable_sync_v2: bool | None = None
     ) -> HathorManager:
-        if enable_sync_v1 is None:
-            assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
-                                                      'the test class or pass `enable_sync_v1` by argument')
-            enable_sync_v1 = self._enable_sync_v1
-        if enable_sync_v2 is None:
-            assert hasattr(self, '_enable_sync_v2'), ('`_enable_sync_v2` has no default by design, either set one on '
-                                                      'the test class or pass `enable_sync_v2` by argument')
-            enable_sync_v2 = self._enable_sync_v2
-        assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
-        sync_v1_support = SyncSupportLevel.ENABLED if enable_sync_v1 else SyncSupportLevel.DISABLED
-        sync_v2_support = SyncSupportLevel.ENABLED if enable_sync_v2 else SyncSupportLevel.DISABLED
-
         builder = simulator.get_default_builder() \
-            .set_peer(self.get_random_peer_from_pool()) \
-            .set_sync_v1_support(sync_v1_support) \
-            .set_sync_v2_support(sync_v2_support)
+            .set_peer(self.get_random_peer_from_pool())
 
         return simulator.create_peer(builder)
 
@@ -265,13 +250,13 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
 
 class SyncV1SimulatorSelfTestCase(unittest.SyncV1Params, BaseSimulatorSelfTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2SimulatorSelfTestCase(unittest.SyncV2Params, BaseSimulatorSelfTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeSimulatorSelfTestCase(unittest.SyncBridgeParams, SyncV2SimulatorSelfTestCase):
-    __test__ = True
+    pass

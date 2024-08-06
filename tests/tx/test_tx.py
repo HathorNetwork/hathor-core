@@ -1247,11 +1247,11 @@ class BaseTransactionTest(unittest.TestCase):
 
 
 class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
-    __test__ = True
+    pass
 
 
 class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

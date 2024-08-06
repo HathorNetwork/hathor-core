@@ -272,11 +272,11 @@ class BaseConsensusTestCase(unittest.TestCase):
 
 
 class SyncV1ConsensusTestCase(unittest.SyncV1Params, BaseConsensusTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2ConsensusTestCase(unittest.SyncV2Params, BaseConsensusTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

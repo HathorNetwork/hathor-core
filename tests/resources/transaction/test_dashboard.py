@@ -80,11 +80,11 @@ class BaseDashboardTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1DashboardTest(unittest.SyncV1Params, BaseDashboardTest):
-    __test__ = True
+    pass
 
 
 class SyncV2DashboardTest(unittest.SyncV2Params, BaseDashboardTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

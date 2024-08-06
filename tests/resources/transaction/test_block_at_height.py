@@ -111,11 +111,11 @@ class BaseBlockAtHeightTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1BlockAtHeightTest(unittest.SyncV1Params, BaseBlockAtHeightTest):
-    __test__ = True
+    pass
 
 
 class SyncV2BlockAtHeightTest(unittest.SyncV2Params, BaseBlockAtHeightTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

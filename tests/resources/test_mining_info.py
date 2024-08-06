@@ -64,11 +64,11 @@ class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1GetMiningInfoTest(unittest.SyncV1Params, BaseGetMiningInfoTest):
-    __test__ = True
+    pass
 
 
 class SyncV2GetMiningInfoTest(unittest.SyncV2Params, BaseGetMiningInfoTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

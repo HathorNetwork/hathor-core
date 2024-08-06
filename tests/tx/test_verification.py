@@ -1092,11 +1092,11 @@ class BaseVerificationTest(unittest.TestCase):
 
 
 class SyncV1VerificationTest(unittest.SyncV1Params, BaseVerificationTest):
-    __test__ = True
+    pass
 
 
 class SyncV2VerificationTest(unittest.SyncV2Params, BaseVerificationTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

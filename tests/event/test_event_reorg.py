@@ -90,11 +90,11 @@ class BaseEventReorgTest(unittest.TestCase):
 
 
 class SyncV1EventReorgTest(unittest.SyncV1Params, BaseEventReorgTest):
-    __test__ = True
+    pass
 
 
 class SyncV2EventReorgTest(unittest.SyncV1Params, BaseEventReorgTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

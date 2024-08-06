@@ -141,13 +141,13 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
 
 class SyncV1SoftVoidedTestCase(unittest.SyncV1Params, BaseSoftVoidedTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2SoftVoidedTestCase(unittest.SyncV2Params, BaseSoftVoidedTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeSoftVoidedTestCase(unittest.SyncBridgeParams, SyncV2SoftVoidedTestCase):
-    __test__ = True
+    pass

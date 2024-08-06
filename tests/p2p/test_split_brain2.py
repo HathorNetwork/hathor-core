@@ -76,11 +76,11 @@ class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
 
 
 class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

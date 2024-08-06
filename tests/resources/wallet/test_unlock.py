@@ -85,11 +85,11 @@ class BaseUnlockTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1UnlockTest(unittest.SyncV1Params, BaseUnlockTest):
-    __test__ = True
+    pass
 
 
 class SyncV2UnlockTest(unittest.SyncV2Params, BaseUnlockTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

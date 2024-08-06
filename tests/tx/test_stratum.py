@@ -145,11 +145,11 @@ class BaseStratumServerTest(_BaseStratumTest):
 
 
 class SyncV1StratumServerTest(unittest.SyncV1Params, BaseStratumServerTest):
-    __test__ = True
+    pass
 
 
 class SyncV2StratumServerTest(unittest.SyncV2Params, BaseStratumServerTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -236,11 +236,11 @@ class BaseStratumJobTest(_BaseStratumTest):
 
 
 class SyncV1StratumJobTest(unittest.SyncV1Params, BaseStratumJobTest):
-    __test__ = True
+    pass
 
 
 class SyncV2StratumJobTest(unittest.SyncV2Params, BaseStratumJobTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -297,11 +297,11 @@ class BaseStratumClientTest(unittest.TestCase):
 
 
 class SyncV1StratumClientTest(unittest.SyncV1Params, BaseStratumClientTest):
-    __test__ = True
+    pass
 
 
 class SyncV2StratumClientTest(unittest.SyncV2Params, BaseStratumClientTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

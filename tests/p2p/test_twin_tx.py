@@ -87,11 +87,11 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
 
 
 class SyncV1TwinTransactionTestCase(unittest.SyncV1Params, BaseTwinTransactionTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2TwinTransactionTestCase(unittest.SyncV2Params, BaseTwinTransactionTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

@@ -472,11 +472,11 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
 
 class SyncV1BlockchainTestCase(unittest.SyncV1Params, BaseBlockchainTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2BlockchainTestCase(unittest.SyncV2Params, BaseBlockchainTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

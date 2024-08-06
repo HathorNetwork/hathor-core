@@ -111,11 +111,11 @@ class BaseBFSTimestampWalkTestCase(_TraversalTestCase):
 
 
 class SyncV1BFSTimestampWalkTestCase(unittest.SyncV1Params, BaseBFSTimestampWalkTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2BFSTimestampWalkTestCase(unittest.SyncV2Params, BaseBFSTimestampWalkTestCase):
-    __test__ = True
+    pass
 
 
 class BaseBFSOrderWalkTestCase(_TraversalTestCase):
@@ -154,11 +154,11 @@ class BaseBFSOrderWalkTestCase(_TraversalTestCase):
 
 
 class SyncV1BFSOrderWalkTestCase(unittest.SyncV1Params, BaseBFSOrderWalkTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2BFSOrderWalkTestCase(unittest.SyncV2Params, BaseBFSOrderWalkTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -184,11 +184,11 @@ class BaseDFSWalkTestCase(_TraversalTestCase):
 
 
 class SyncV1DFSWalkTestCase(unittest.SyncV1Params, BaseDFSWalkTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2DFSWalkTestCase(unittest.SyncV2Params, BaseDFSWalkTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

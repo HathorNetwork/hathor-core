@@ -47,11 +47,11 @@ class BaseLockTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1LockTest(unittest.SyncV1Params, BaseLockTest):
-    __test__ = True
+    pass
 
 
 class SyncV2LockTest(unittest.SyncV2Params, BaseLockTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

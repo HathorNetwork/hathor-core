@@ -31,11 +31,11 @@ class BaseDecodeTxTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1DecodeTxTest(unittest.SyncV1Params, BaseDecodeTxTest):
-    __test__ = True
+    pass
 
 
 class SyncV2DecodeTxTest(unittest.SyncV2Params, BaseDecodeTxTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

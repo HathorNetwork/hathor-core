@@ -181,11 +181,11 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
 
 
 class SyncV1ManagerInitializationTestCase(unittest.SyncV1Params, BaseManagerInitializationTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2ManagerInitializationTestCase(unittest.SyncV2Params, BaseManagerInitializationTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

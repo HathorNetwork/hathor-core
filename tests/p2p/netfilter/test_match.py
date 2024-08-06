@@ -235,11 +235,11 @@ class BaseNetfilterMatchTest(unittest.TestCase):
 
 
 class SyncV1NetfilterMatchTest(unittest.SyncV1Params, BaseNetfilterMatchTest):
-    __test__ = True
+    pass
 
 
 class SyncV2NetfilterMatchTest(unittest.SyncV2Params, BaseNetfilterMatchTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

@@ -48,11 +48,11 @@ class BaseAccumulatedWeightTestCase(unittest.TestCase):
 
 
 class SyncV1AccumulatedWeightTestCase(unittest.SyncV1Params, BaseAccumulatedWeightTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2AccumulatedWeightTestCase(unittest.SyncV2Params, BaseAccumulatedWeightTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

@@ -63,11 +63,11 @@ class BasePrometheusTest(unittest.TestCase):
 
 
 class SyncV1PrometheusTest(unittest.SyncV1Params, BasePrometheusTest):
-    __test__ = True
+    pass
 
 
 class SyncV2PrometheusTest(unittest.SyncV2Params, BasePrometheusTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

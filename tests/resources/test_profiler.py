@@ -63,11 +63,11 @@ class BaseProfilerTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1ProfilerTest(unittest.SyncV1Params, BaseProfilerTest):
-    __test__ = True
+    pass
 
 
 class SyncV2ProfilerTest(unittest.SyncV2Params, BaseProfilerTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

@@ -37,11 +37,11 @@ class BaseAddressTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1AddressTest(unittest.SyncV1Params, BaseAddressTest):
-    __test__ = True
+    pass
 
 
 class SyncV2AddressTest(unittest.SyncV2Params, BaseAddressTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

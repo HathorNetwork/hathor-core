@@ -76,11 +76,11 @@ class BaseVersionTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1VersionTest(unittest.SyncV1Params, BaseVersionTest):
-    __test__ = True
+    pass
 
 
 class SyncV2VersionTest(unittest.SyncV2Params, BaseVersionTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

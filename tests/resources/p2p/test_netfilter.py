@@ -188,11 +188,11 @@ class BaseNetfilterTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1NetfilterTest(unittest.SyncV1Params, BaseNetfilterTest):
-    __test__ = True
+    pass
 
 
 class SyncV2NetfilterTest(unittest.SyncV2Params, BaseNetfilterTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

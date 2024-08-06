@@ -83,7 +83,7 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
             dot1 = GraphvizVisualizer(self.manager1.tx_storage, include_verifications=True, include_funds=True).dot()
             dot1.render('mempool-test')
 
-        self.manager2 = self.create_peer(self.network, enable_sync_v1=True)
+        self.manager2 = self.create_peer(self.network)
         self.assertEqual(self.manager2.state, self.manager2.NodeState.READY)
 
         conn = FakeConnection(self.manager1, self.manager2)
@@ -99,11 +99,11 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
 
 
 class SyncV1HathorSyncMempoolTestCase(unittest.SyncV1Params, BaseHathorSyncMempoolTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2HathorSyncMempoolTestCase(unittest.SyncV2Params, BaseHathorSyncMempoolTestCase):
-    __test__ = True
+    pass
 
     def test_mempool_basic(self) -> None:
         super().test_mempool_basic()
@@ -128,7 +128,7 @@ class SyncV2HathorSyncMempoolTestCase(unittest.SyncV2Params, BaseHathorSyncMempo
         # 30 transactions in the mempool
         txs = self._add_new_transactions(30)
 
-        self.manager2 = self.create_peer(self.network, enable_sync_v1=True)
+        self.manager2 = self.create_peer(self.network)
         self.assertEqual(self.manager2.state, self.manager2.NodeState.READY)
 
         conn = FakeConnection(self.manager1, self.manager2)

@@ -37,11 +37,11 @@ class BaseHistoryTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1HistoryTest(unittest.SyncV1Params, BaseHistoryTest):
-    __test__ = True
+    pass
 
 
 class SyncV2HistoryTest(unittest.SyncV2Params, BaseHistoryTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

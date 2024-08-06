@@ -142,11 +142,11 @@ class BaseMultisigTestCase(unittest.TestCase):
 
 
 class SyncV1MultisigTestCase(unittest.SyncV1Params, BaseMultisigTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2MultisigTestCase(unittest.SyncV2Params, BaseMultisigTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

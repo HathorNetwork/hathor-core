@@ -221,11 +221,11 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1NanoContractsTest(unittest.SyncV1Params, BaseNanoContractsTest):
-    __test__ = True
+    pass
 
 
 class SyncV2NanoContractsTest(unittest.SyncV2Params, BaseNanoContractsTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

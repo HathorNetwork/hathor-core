@@ -64,11 +64,11 @@ class BaseSignatureTest(unittest.TestCase):
 
 
 class SyncV1SignatureTest(unittest.SyncV1Params, BaseSignatureTest):
-    __test__ = True
+    pass
 
 
 class SyncV2SignatureTest(unittest.SyncV2Params, BaseSignatureTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

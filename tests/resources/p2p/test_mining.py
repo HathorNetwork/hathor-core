@@ -75,11 +75,11 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1MiningTest(unittest.SyncV1Params, BaseMiningTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MiningTest(unittest.SyncV2Params, BaseMiningTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

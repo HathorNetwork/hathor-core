@@ -312,11 +312,11 @@ class BasePushTxGetTest(BasePushTxTest):
 
 
 class SyncV1PushTxGetTest(unittest.SyncV1Params, BasePushTxGetTest):
-    __test__ = True
+    pass
 
 
 class SyncV2PushTxGetTest(unittest.SyncV2Params, BasePushTxGetTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -332,11 +332,11 @@ class BasePushTxPostTest(BasePushTxTest):
 
 
 class SyncV1PushTxPostTest(unittest.SyncV1Params, BasePushTxPostTest):
-    __test__ = True
+    pass
 
 
 class SyncV2PushTxPostTest(unittest.SyncV2Params, BasePushTxPostTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

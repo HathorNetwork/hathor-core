@@ -745,11 +745,11 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
 
 
 class SyncV1MemoryIndexesTest(unittest.SyncV1Params, BaseMemoryIndexesTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MemoryIndexesTest(unittest.SyncV2Params, BaseMemoryIndexesTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -758,11 +758,11 @@ class SyncBridgeMemoryIndexesTest(unittest.SyncBridgeParams, SyncV2MemoryIndexes
 
 
 class SyncV1RocksDBIndexesTest(unittest.SyncV1Params, BaseRocksDBIndexesTest):
-    __test__ = True
+    pass
 
 
 class SyncV2RocksDBIndexesTest(unittest.SyncV2Params, BaseRocksDBIndexesTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

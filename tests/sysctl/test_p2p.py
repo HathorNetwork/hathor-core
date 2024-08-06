@@ -187,14 +187,14 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
 
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
-    __test__ = True
+    pass
 
     def _default_enabled_sync_versions(self) -> list[str]:
         return ['v1']
 
 
 class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
-    __test__ = True
+    pass
 
     def _default_enabled_sync_versions(self) -> list[str]:
         return ['v2']
@@ -202,7 +202,7 @@ class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTe
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
-    __test__ = True
+    pass
 
     def _default_enabled_sync_versions(self) -> list[str]:
         return ['v1', 'v2']

@@ -144,11 +144,11 @@ class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
 
 
 class SyncV1SearchAddressTest(unittest.SyncV1Params, BaseSearchAddressTest):
-    __test__ = True
+    pass
 
 
 class SyncV2SearchAddressTest(unittest.SyncV2Params, BaseSearchAddressTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

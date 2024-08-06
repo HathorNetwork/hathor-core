@@ -1415,11 +1415,11 @@ class BitcoinRPCStub(IBitcoinRPC):
 
 
 class SyncV1MergedMiningTest(unittest.SyncV1Params, BaseMergedMiningTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MergedMiningTest(unittest.SyncV2Params, BaseMergedMiningTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

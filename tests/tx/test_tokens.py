@@ -620,11 +620,11 @@ class BaseTokenTest(unittest.TestCase):
 
 
 class SyncV1TokenTest(unittest.SyncV1Params, BaseTokenTest):
-    __test__ = True
+    pass
 
 
 class SyncV2TokenTest(unittest.SyncV2Params, BaseTokenTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
@@ -638,11 +638,11 @@ class BaseMemoryTokenTest(BaseTokenTest):
 
 
 class SyncV1MemoryTokenTest(unittest.SyncV1Params, BaseMemoryTokenTest):
-    __test__ = True
+    pass
 
 
 class SyncV2MemoryTokenTest(unittest.SyncV2Params, BaseMemoryTokenTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

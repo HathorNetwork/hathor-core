@@ -157,11 +157,11 @@ class BaseCacheStorageTest(unittest.TestCase):
 
 
 class SyncV1CacheStorageTest(unittest.SyncV1Params, BaseCacheStorageTest):
-    __test__ = True
+    pass
 
 
 class SyncV2CacheStorageTest(unittest.SyncV2Params, BaseCacheStorageTest):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2

@@ -85,13 +85,13 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
 
 class SyncV1ConsensusSimulatorTestCase(unittest.SyncV1Params, BaseConsensusSimulatorTestCase):
-    __test__ = True
+    pass
 
 
 class SyncV2ConsensusSimulatorTestCase(unittest.SyncV2Params, BaseConsensusSimulatorTestCase):
-    __test__ = True
+    pass
 
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeConsensusSimulatorTestCase(unittest.SyncBridgeParams, SyncV2ConsensusSimulatorTestCase):
-    __test__ = True
+    pass
