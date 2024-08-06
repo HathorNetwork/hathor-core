@@ -116,7 +116,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     @override
     def _save_static_metadata(self, tx: 'BaseTransaction') -> None:
-        self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.to_bytes())
+        self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.json_dumpb())
 
     @override
     def _get_static_metadata(self, vertex: 'BaseTransaction') -> VertexStaticMetadata | None:
