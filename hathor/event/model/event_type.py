@@ -14,7 +14,7 @@
 
 from enum import Enum
 
-from hathor.event.model.event_data import BaseEventData, EmptyData, ReorgData, TxData, VertexIdData
+from hathor.event.model.event_data import BaseEventData, EmptyData, ReorgData, TxData, TxDataWithoutMeta
 from hathor.pubsub import HathorEvents
 
 
@@ -56,6 +56,6 @@ _EVENT_TYPE_TO_EVENT_DATA: dict[EventType, type[BaseEventData]] = {
     EventType.REORG_STARTED: ReorgData,
     EventType.REORG_FINISHED: EmptyData,
     EventType.VERTEX_METADATA_CHANGED: TxData,
-    EventType.VERTEX_REMOVED: VertexIdData,
+    EventType.VERTEX_REMOVED: TxDataWithoutMeta,
     EventType.FULL_NODE_CRASHED: EmptyData,
 }
