@@ -15,7 +15,6 @@
 from typing import Optional, TypeAlias, Union, cast
 
 from pydantic import Extra, validator
-from typing_extensions import Self
 
 from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
@@ -118,7 +117,7 @@ class TxData(BaseEventData, extra=Extra.ignore):
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'TxData':
         from hathor.transaction.resources.transaction import get_tx_extra_data
-        tx_extra_data_json = get_tx_extra_data(args.tx, detail_tokens=False)
+        tx_extra_data_json = get_tx_extra_data(args.tx, detail_tokens=False, force_reload_metadata=False)
         tx_json = tx_extra_data_json['tx']
         meta_json = tx_extra_data_json['meta']
         tx_json['metadata'] = meta_json
@@ -136,14 +135,6 @@ class TxData(BaseEventData, extra=Extra.ignore):
         ]
 
         return cls(**tx_json)
-
-
-class VertexIdData(BaseEventData):
-    vertex_id: str
-
-    @classmethod
-    def from_event_arguments(cls, args: EventArguments) -> Self:
-        return cls(vertex_id=args.vertex_id.hex())
 
 
 class ReorgData(BaseEventData):
@@ -164,4 +155,4 @@ class ReorgData(BaseEventData):
 
 
 # Union type to encompass BaseEventData polymorphism
-EventData: TypeAlias = EmptyData | TxData | ReorgData | VertexIdData
+EventData: TypeAlias = EmptyData | TxData | ReorgData

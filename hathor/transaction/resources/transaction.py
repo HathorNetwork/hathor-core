@@ -47,7 +47,12 @@ def update_serialized_tokens_array(tx: BaseTransaction, serialized: dict[str, An
         serialized['tokens'] = [h.hex() for h in tx.tokens]
 
 
-def get_tx_extra_data(tx: BaseTransaction, *, detail_tokens: bool = True) -> dict[str, Any]:
+def get_tx_extra_data(
+    tx: BaseTransaction,
+    *,
+    detail_tokens: bool = True,
+    force_reload_metadata: bool = True,
+) -> dict[str, Any]:
     """ Get the data of a tx to be returned to the frontend
         Returns success, tx serializes, metadata and spent outputs
     """
@@ -61,7 +66,7 @@ def get_tx_extra_data(tx: BaseTransaction, *, detail_tokens: bool = True) -> dic
 
     # Update tokens array
     update_serialized_tokens_array(tx, serialized)
-    meta = tx.get_metadata(force_reload=True)
+    meta = tx.get_metadata(force_reload=force_reload_metadata)
     # To get the updated accumulated weight just need to call the
     # TransactionAccumulatedWeightResource (/transaction_acc_weight)
 
