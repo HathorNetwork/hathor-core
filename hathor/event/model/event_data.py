@@ -15,6 +15,7 @@
 from typing import Optional, TypeAlias, Union, cast
 
 from pydantic import Extra, validator
+from typing_extensions import Self
 
 from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
@@ -96,7 +97,7 @@ class EmptyData(BaseEventData):
         return cls()
 
 
-class TxData(BaseEventData, extra=Extra.ignore):
+class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
     """Class that represents transaction data on an event."""
     hash: str
     nonce: Optional[int] = None
@@ -111,13 +112,12 @@ class TxData(BaseEventData, extra=Extra.ignore):
     # TODO: Token name and symbol could be in a different class because they're only used by TokenCreationTransaction
     token_name: Optional[str]
     token_symbol: Optional[str]
-    metadata: 'TxMetadata'
     aux_pow: Optional[str] = None
 
     @classmethod
-    def from_event_arguments(cls, args: EventArguments) -> 'TxData':
+    def from_event_arguments(cls, args: EventArguments) -> Self:
         from hathor.transaction.resources.transaction import get_tx_extra_data
-        tx_extra_data_json = get_tx_extra_data(args.tx, detail_tokens=False, force_reload_metadata=False)
+        tx_extra_data_json = get_tx_extra_data(args.tx, detail_tokens=False)
         tx_json = tx_extra_data_json['tx']
         meta_json = tx_extra_data_json['meta']
         tx_json['metadata'] = meta_json
@@ -135,6 +135,10 @@ class TxData(BaseEventData, extra=Extra.ignore):
         ]
 
         return cls(**tx_json)
+
+
+class TxData(TxDataWithoutMeta):
+    metadata: 'TxMetadata'
 
 
 class ReorgData(BaseEventData):
@@ -155,4 +159,4 @@ class ReorgData(BaseEventData):
 
 
 # Union type to encompass BaseEventData polymorphism
-EventData: TypeAlias = EmptyData | TxData | ReorgData
+EventData: TypeAlias = EmptyData | TxData | TxDataWithoutMeta | ReorgData
