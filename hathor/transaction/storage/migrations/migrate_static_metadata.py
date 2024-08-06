@@ -65,12 +65,16 @@ class Migration(BaseMigration):
                     height=height,
                     min_height=min_height,
                     feature_activation_bit_counts=bit_counts,
-                    feature_states={},  # We leave it empty because migrate_feature_states will populate it
+                    # We leave it empty because add_closest_ancestor_block_metadata will populate it
+                    feature_states={},
                 )
             else:
                 assert bit_counts is None or bit_counts == []
                 static_metadata = TransactionStaticMetadata(
-                    min_height=min_height
+                    min_height=min_height,
+                    # We leave it empty because add_closest_ancestor_block_metadata will populate it
+                    closest_ancestor_block=b'',
+                    feature_states={},
                 )
 
             # We create a fake vertex with just the hash and static metadata, so we can use the existing
