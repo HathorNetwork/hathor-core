@@ -8,13 +8,10 @@ from twisted.internet.defer import inlineCallbacks
 import hathor
 from hathor.version import BASE_VERSION, DEFAULT_VERSION_SUFFIX, _get_version
 from hathor.version_resource import VersionResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseVersionTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class VersionTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(VersionResource(self.manager))
@@ -73,16 +70,3 @@ class BaseVersionTest(_BaseResourceTest._ResourceTest):
             with open(file_path, 'w') as build_version_file:
                 build_version_file.write('1.2.3-beta')
             self.assertEqual(_get_version(), f"{BASE_VERSION}-{git_head}-{DEFAULT_VERSION_SUFFIX}")
-
-
-class SyncV1VersionTest(unittest.SyncV1Params, BaseVersionTest):
-    __test__ = True
-
-
-class SyncV2VersionTest(unittest.SyncV2Params, BaseVersionTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeVersionTest(unittest.SyncBridgeParams, SyncV2VersionTest):
-    pass

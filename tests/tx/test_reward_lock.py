@@ -13,10 +13,8 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
 
 
-class BaseTransactionTest(unittest.TestCase):
-    __test__ = False
-
-    def setUp(self) -> None:
+class TransactionTest(unittest.TestCase):
+    def setUp(self):
         super().setUp()
         self.wallet = Wallet()
 
@@ -219,16 +217,3 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
             self.manager.verification_service.verify(tx)
-
-
-class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
-    __test__ = True
-
-
-class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
-    pass

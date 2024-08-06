@@ -2,9 +2,6 @@ from tests import unittest
 
 
 class FirstBlockTestCase(unittest.TestCase):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
-
     def setUp(self) -> None:
         super().setUp()
 

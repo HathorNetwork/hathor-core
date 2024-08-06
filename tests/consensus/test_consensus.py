@@ -8,9 +8,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 
-class BaseConsensusTestCase(unittest.TestCase):
-    __test__ = False
-
+class ConsensusTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.tx_storage = TransactionMemoryStorage(settings=self._settings)
@@ -269,16 +267,3 @@ class BaseConsensusTestCase(unittest.TestCase):
             self.assertIsNone(meta.voided_by)
 
         self.assertConsensusValid(manager)
-
-
-class SyncV1ConsensusTestCase(unittest.SyncV1Params, BaseConsensusTestCase):
-    __test__ = True
-
-
-class SyncV2ConsensusTestCase(unittest.SyncV2Params, BaseConsensusTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeConsensusTestCase(unittest.SyncBridgeParams, SyncV2ConsensusTestCase):
-    pass

@@ -27,9 +27,6 @@ async def async_islice(iterable: AsyncIterator[T], stop: int) -> AsyncIterator[T
 
 
 class AsyncIteratorsTestCase(TestCase):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
-
     def setUp(self) -> None:
         super().setUp()
 

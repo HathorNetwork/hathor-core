@@ -14,9 +14,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseMultiSigSpendTest(unittest.TestCase):
-    __test__ = False
-
+class MultiSigSpendTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -121,16 +119,3 @@ class BaseMultiSigSpendTest(unittest.TestCase):
 
         tx = Transaction.create_from_struct(bytes.fromhex(tx_raw))
         self.assertTrue(self.manager.propagate_tx(tx, False))
-
-
-class SyncV1MultiSigSpendTest(unittest.SyncV1Params, BaseMultiSigSpendTest):
-    __test__ = True
-
-
-class SyncV2MultiSigSpendTest(unittest.SyncV2Params, BaseMultiSigSpendTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMultiSigSpendTest(unittest.SyncBridgeParams, SyncV2MultiSigSpendTest):
-    pass

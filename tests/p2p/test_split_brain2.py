@@ -2,13 +2,10 @@ import pytest
 
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection
-from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
 
-class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
-    __test__ = False
-
+class SyncMethodsTestCase(SimulatorTestCase):
     @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_split_brain(self) -> None:
         debug_pdf = False
@@ -73,16 +70,3 @@ class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
         self.assertConsensusEqual(manager1, manager2)
         self.assertConsensusValid(manager1)
         self.assertConsensusValid(manager2)
-
-
-class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
-class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
-    pass

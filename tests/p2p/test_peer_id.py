@@ -258,10 +258,6 @@ class PeerIdTest(unittest.TestCase):
             UnverifiedPeer.create_from_json(peer_json_with_conflicting_ids)
         assert str(e.value) == f'conflicting peer_id: {other_peer_id} != {peer_id}'
 
-
-class BasePeerIdTest(unittest.TestCase):
-    __test__ = False
-
     async def test_validate_entrypoint(self) -> None:
         manager = self.create_peer('testnet', unlock_wallet=False)
         peer = manager.my_peer
@@ -306,16 +302,3 @@ class BasePeerIdTest(unittest.TestCase):
         peer.entrypoints = [PeerEndpoint.parse('tcp://[2001:db8::ff00:42:8329]:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
-
-
-class SyncV1PeerIdTest(unittest.SyncV1Params, BasePeerIdTest):
-    __test__ = True
-
-
-class SyncV2PeerIdTest(unittest.SyncV2Params, BasePeerIdTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgePeerIdTest(unittest.SyncBridgeParams, SyncV2PeerIdTest):
-    pass

@@ -5,9 +5,7 @@ from tests import unittest
 from tests.utils import BURN_ADDRESS, get_genesis_key
 
 
-class BaseEventReorgTest(unittest.TestCase):
-    __test__ = False
-
+class EventReorgTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
@@ -87,16 +85,3 @@ class BaseEventReorgTest(unittest.TestCase):
 
             for expected_data_key, expected_data_value in expected_partial_data.items():
                 self.assertEqual(actual_event.data.dict()[expected_data_key], expected_data_value)
-
-
-class SyncV1EventReorgTest(unittest.SyncV1Params, BaseEventReorgTest):
-    __test__ = True
-
-
-class SyncV2EventReorgTest(unittest.SyncV1Params, BaseEventReorgTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeEventReorgTest(unittest.SyncBridgeParams, SyncV2EventReorgTest):
-    pass

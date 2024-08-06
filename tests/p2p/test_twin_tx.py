@@ -7,9 +7,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending
 
 
-class BaseTwinTransactionTestCase(unittest.TestCase):
-    __test__ = False
-
+class TwinTransactionTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
@@ -84,16 +82,3 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         self.assertEqual(meta3.conflict_with, [tx1.hash, tx2.hash])
 
         self.assertConsensusValid(self.manager)
-
-
-class SyncV1TwinTransactionTestCase(unittest.SyncV1Params, BaseTwinTransactionTestCase):
-    __test__ = True
-
-
-class SyncV2TwinTransactionTestCase(unittest.SyncV2Params, BaseTwinTransactionTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTwinTransactionTestCase(unittest.SyncBridgeParams, SyncV2TwinTransactionTestCase):
-    pass

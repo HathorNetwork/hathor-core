@@ -3,9 +3,6 @@ from tests import unittest
 
 
 class DAGCreatorTestCase(unittest.TestCase):
-    _enable_sync_v1 = False
-    _enable_sync_v2 = True
-
     def setUp(self):
         super().setUp()
 

@@ -42,12 +42,16 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
         manager = artifacts.manager
         del manager
 
-        # disabling all sync versions should be invalid
-        with self.assertRaises(TypeError):
-            builder = TestBuilder()
-            builder.set_tx_storage(self.tx_storage)
+        builder = TestBuilder()
+        builder.set_tx_storage(self.tx_storage)
+
+        # removed method
+        with self.assertRaises(AttributeError):
             builder.disable_sync_v1()
-            builder.disable_sync_v2()
+
+        # but also it should still be impossible to build with no sync
+        builder.disable_sync_v2()
+        with self.assertRaises(TypeError):
             builder.build()
 
     def tests_init_with_stratum(self):
@@ -82,9 +86,7 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
             manager.stop()
 
 
-class BaseManagerInitializationTestCase(unittest.TestCase):
-    __test__ = False
-
+class ManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.tx_storage = ModifiedTransactionMemoryStorage(settings=self._settings)
@@ -178,16 +180,3 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
         all_tips = manager.generate_parent_txs(None).get_all_tips()
         iter_tips_meta = map(manager.tx_storage.get_metadata, all_tips)
         self.assertFalse(any(tx_meta.voided_by for tx_meta in iter_tips_meta))
-
-
-class SyncV1ManagerInitializationTestCase(unittest.SyncV1Params, BaseManagerInitializationTestCase):
-    __test__ = True
-
-
-class SyncV2ManagerInitializationTestCase(unittest.SyncV2Params, BaseManagerInitializationTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeManagerInitializationTestCase(unittest.SyncBridgeParams, SyncV2ManagerInitializationTestCase):
-    pass

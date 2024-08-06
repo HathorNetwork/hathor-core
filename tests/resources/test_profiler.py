@@ -6,13 +6,10 @@ import tempfile
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.profiler.resources import ProfilerResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseProfilerTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class ProfilerTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(ProfilerResource(self.manager))
@@ -60,16 +57,3 @@ class BaseProfilerTest(_BaseResourceTest._ResourceTest):
         filename_arr = filename.split('/')
         self.assertEqual(filename_arr[0], 'profiles')
         self.assertTrue(re.search(r'^profile\d{3}\.prof$', filename_arr[1]))
-
-
-class SyncV1ProfilerTest(unittest.SyncV1Params, BaseProfilerTest):
-    __test__ = True
-
-
-class SyncV2ProfilerTest(unittest.SyncV2Params, BaseProfilerTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeProfilerTest(unittest.SyncBridgeParams, SyncV2ProfilerTest):
-    pass

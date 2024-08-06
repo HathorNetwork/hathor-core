@@ -1,10 +1,9 @@
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
-from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
 
-class BaseRandomSimulatorTestCase(SimulatorTestCase):
+class RandomSimulatorTestCase(SimulatorTestCase):
     def test_new_node_disabled(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
@@ -67,16 +66,3 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             self.assertEqual(len(enabled2), 3)
         # Chance of false positive: (1/comb(15, 3))**2 = 0.00000483
         self.assertNotEqual(enabled, enabled2)
-
-
-class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-
-class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
-    __test__ = True
