@@ -1,0 +1,38 @@
+name: setup-hathor-env
+description: Setup Hathor node environment
+inputs:
+  python:
+    description: The python version
+  os:
+    description: The OS name
+runs:
+  using: composite
+  steps:
+    - name: Install Poetry
+      shell: bash
+      run: pipx install poetry
+
+    - name: Set up Python ${{ inputs.python }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python }}
+        cache: 'poetry'
+
+    - name: Install Ubuntu dependencies
+      if: startsWith(inputs.os, 'ubuntu')
+      run: |
+        sudo apt-get -qy update
+        sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev
+      shell: bash
+
+    - name: Install macOS dependencies
+      if: startsWith(inputs.os, 'macos')
+      run: |
+        brew cleanup -q
+        # brew update -q
+        brew install -q graphviz rocksdb pkg-config
+      shell: bash
+
+    - name: Install Poetry dependencies
+      run: poetry install -n --no-root
+      shell: bash
