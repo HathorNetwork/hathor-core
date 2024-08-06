@@ -19,7 +19,7 @@ from itertools import chain, starmap, zip_longest
 from operator import add
 from typing import TYPE_CHECKING, Callable, Optional
 
-from typing_extensions import Self
+from typing_extensions import Self, override
 
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_info import FeatureInfo
@@ -48,6 +48,9 @@ class VertexStaticMetadata(ABC, BaseModel):
     # metadata (that does not have this calculated, from a tx with a new format that does have this calculated)
     min_height: int
 
+    # A dict of features in the Feature Activation process and their respective state.
+    feature_states: dict[Feature, FeatureState]
+
     @classmethod
     def from_bytes(cls, data: bytes, *, target: 'BaseTransaction') -> 'VertexStaticMetadata':
         """Create a static metadata instance from a json bytes representation, with a known vertex type target."""
@@ -58,9 +61,28 @@ class VertexStaticMetadata(ABC, BaseModel):
             return BlockStaticMetadata(**json_dict)
 
         if isinstance(target, Transaction):
+            json_dict['closest_ancestor_block'] = bytes.fromhex(json_dict['closest_ancestor_block'])
             return TransactionStaticMetadata(**json_dict)
 
         raise NotImplementedError
+
+    def get_feature_state(self, feature: Feature) -> FeatureState:
+        """Return the feature state for vertex."""
+        return self.feature_states.get(feature, FeatureState.DEFINED)
+
+    def is_feature_active(self, feature: Feature) -> bool:
+        """Return whether a feature is active for this vertex."""
+        return self.get_feature_state(feature).is_active()
+
+    def get_feature_infos(self, settings: HathorSettings) -> dict[Feature, FeatureInfo]:
+        """Return the criteria definition and feature state for all features."""
+        return {
+            feature: FeatureInfo(
+                criteria=criteria,
+                state=self.get_feature_state(feature)
+            )
+            for feature, criteria in settings.FEATURE_ACTIVATION.features.items()
+        }
 
 
 class BlockStaticMetadata(VertexStaticMetadata):
@@ -70,9 +92,6 @@ class BlockStaticMetadata(VertexStaticMetadata):
     # Each list index corresponds to a bit position, and its respective value is the rolling count of active bits from
     # the previous boundary block up to this block, including it. LSB is on the left.
     feature_activation_bit_counts: list[int]
-
-    # A dict of features in the feature activation process and their respective state.
-    feature_states: dict[Feature, FeatureState]
 
     @classmethod
     def create_from_storage(cls, block: 'Block', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
@@ -181,26 +200,12 @@ class BlockStaticMetadata(VertexStaticMetadata):
 
         return parent_block.static_metadata.feature_activation_bit_counts
 
-    def get_feature_state(self, feature: Feature) -> FeatureState:
-        """Return the feature state for this block."""
-        return self.feature_states.get(feature, FeatureState.DEFINED)
-
-    def is_feature_active(self, feature: Feature) -> bool:
-        """Return whether a feature is active for this block."""
-        return self.get_feature_state(feature).is_active()
-
-    def get_feature_infos(self, settings: HathorSettings) -> dict[Feature, FeatureInfo]:
-        """Return the criteria definition and feature state for all features."""
-        return {
-            feature: FeatureInfo(
-                criteria=criteria,
-                state=self.get_feature_state(feature)
-            )
-            for feature, criteria in settings.FEATURE_ACTIVATION.features.items()
-        }
-
 
 class TransactionStaticMetadata(VertexStaticMetadata):
+    # The Block with the greatest height that is a direct or indirect dependency (ancestor) of the transaction,
+    # including both funds and confirmation DAGs. It's used by Feature Activation for Transactions.
+    closest_ancestor_block: VertexId
+
     @classmethod
     def create_from_storage(cls, tx: 'Transaction', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
         """Create a `TransactionStaticMetadata` using dependencies provided by a storage."""
@@ -214,14 +219,14 @@ class TransactionStaticMetadata(VertexStaticMetadata):
         vertex_getter: Callable[[VertexId], 'BaseTransaction'],
     ) -> Self:
         """Create a `TransactionStaticMetadata` using dependencies provided by a `vertex_getter`."""
-        min_height = cls._calculate_min_height(
-            tx,
-            settings,
-            vertex_getter=vertex_getter,
-        )
+        min_height = cls._calculate_min_height(tx, settings, vertex_getter)
+        closest_ancestor_block = cls._calculate_closest_ancestor_block(tx, settings, vertex_getter)
+        feature_states = cls._calculate_feature_states(closest_ancestor_block, vertex_getter)
 
         return cls(
-            min_height=min_height
+            min_height=min_height,
+            closest_ancestor_block=closest_ancestor_block,
+            feature_states=feature_states,
         )
 
     @classmethod
@@ -270,3 +275,63 @@ class TransactionStaticMetadata(VertexStaticMetadata):
             if isinstance(spent_tx, Block):
                 min_height = max(min_height, spent_tx.static_metadata.height + settings.REWARD_SPEND_MIN_BLOCKS + 1)
         return min_height
+
+    @staticmethod
+    def _calculate_closest_ancestor_block(
+        tx: 'Transaction',
+        settings: HathorSettings,
+        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+    ) -> VertexId:
+        """
+        Calculate the tx's closest_ancestor_block. It's calculated by propagating the metadata forward in the DAG.
+        """
+        from hathor.transaction import Block, Transaction
+        if tx.is_genesis:
+            return settings.GENESIS_BLOCK_HASH
+
+        closest_ancestor_block: Block | None = None
+        dependency_ids = tx.parents + [tx_input.tx_id for tx_input in tx.inputs]
+
+        for vertex_id in dependency_ids:
+            vertex = vertex_getter(vertex_id)
+            candidate: Block
+
+            if isinstance(vertex, Block):
+                candidate = vertex
+            elif isinstance(vertex, Transaction):
+                # TODO: Test this:
+                # candidate_id = (
+                #     settings.GENESIS_BLOCK_HASH if vertex.is_genesis
+                #     else vertex.static_metadata.closest_ancestor_block
+                # )
+                vertex_candidate = vertex_getter(vertex.static_metadata.closest_ancestor_block)
+                assert isinstance(vertex_candidate, Block)
+                candidate = vertex_candidate
+            else:
+                raise NotImplementedError
+
+            if (
+                not closest_ancestor_block
+                or candidate.static_metadata.height > closest_ancestor_block.static_metadata.height
+            ):
+                closest_ancestor_block = candidate
+
+        assert closest_ancestor_block is not None
+        return closest_ancestor_block.hash
+
+    @staticmethod
+    def _calculate_feature_states(
+        closest_ancestor_block_id: VertexId,
+        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+    ) -> dict[Feature, FeatureState]:
+        from hathor.transaction import Block
+        closest_ancestor_block = vertex_getter(closest_ancestor_block_id)
+        assert isinstance(closest_ancestor_block, Block)
+        return closest_ancestor_block.static_metadata.feature_states
+
+    @override
+    def json_dumpb(self) -> bytes:
+        from hathor.util import json_dumpb
+        json_dict = self.dict()
+        json_dict['closest_ancestor_block'] = json_dict['closest_ancestor_block'].hex()
+        return json_dumpb(json_dict)
