@@ -19,12 +19,15 @@ from itertools import chain
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
+from typing_extensions import override
+
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.reward_lock import iter_spent_rewards
-from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
-from hathor.transaction.base_transaction import TX_HASH_SIZE
+from hathor.transaction import TxInput, TxOutput, TxVersion
+from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 from hathor.util import not_none
@@ -51,7 +54,7 @@ class RewardLockedInfo(NamedTuple):
     blocks_needed: int
 
 
-class Transaction(BaseTransaction):
+class Transaction(GenericVertex[TransactionStaticMetadata]):
 
     SERIALIZATION_NONCE_SIZE = 4
 
@@ -389,3 +392,7 @@ class Transaction(BaseTransaction):
             if meta.voided_by:
                 return True
         return False
+
+    @override
+    def init_static_metadata_from_storage(self, storage: 'TransactionStorage') -> None:
+        raise NotImplementedError('this will be implemented')
