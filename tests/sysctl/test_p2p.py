@@ -5,11 +5,12 @@ from unittest.mock import MagicMock
 from hathor.p2p.peer_id import PeerId
 from hathor.sysctl import ConnectionsManagerSysctl
 from hathor.sysctl.exception import SysctlException
-from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
 
-class BaseRandomSimulatorTestCase(SimulatorTestCase):
+class RandomSimulatorTestCase(SimulatorTestCase):
+    __test__ = True
+
     def test_max_enabled_sync(self):
         manager = self.create_peer()
         connections = manager.connections
@@ -134,26 +135,21 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         connections = manager.connections
         sysctl = ConnectionsManagerSysctl(connections)
 
-        self.assertEqual(sysctl.get('available_sync_versions'), ['v1', 'v2'])
+        self.assertEqual(sysctl.get('available_sync_versions'), ['v2'])
 
         del connections._sync_factories[SyncVersion.V2]
-        self.assertEqual(sysctl.get('available_sync_versions'), ['v1'])
-
-    def _default_enabled_sync_versions(self) -> list[str]:
-        raise NotImplementedError
+        self.assertEqual(sysctl.get('available_sync_versions'), [])
 
     def test_enabled_sync_versions(self):
         manager = self.create_peer()
         connections = manager.connections
         sysctl = ConnectionsManagerSysctl(connections)
 
-        self.assertEqual(sysctl.get('enabled_sync_versions'), self._default_enabled_sync_versions())
-        sysctl.unsafe_set('enabled_sync_versions', ['v1', 'v2'])
-        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1', 'v2'])
+        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v2'])
+        sysctl.unsafe_set('enabled_sync_versions', [])
+        self.assertEqual(sysctl.get('enabled_sync_versions'), [])
         sysctl.unsafe_set('enabled_sync_versions', ['v2'])
         self.assertEqual(sysctl.get('enabled_sync_versions'), ['v2'])
-        sysctl.unsafe_set('enabled_sync_versions', ['v1'])
-        self.assertEqual(sysctl.get('enabled_sync_versions'), ['v1'])
 
     def test_kill_all_connections(self):
         manager = self.create_peer()
@@ -184,25 +180,3 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         with self.assertRaises(SysctlException):
             sysctl.unsafe_set('kill_connection', 'unknown-peer-id')
-
-
-class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-    def _default_enabled_sync_versions(self) -> list[str]:
-        return ['v1']
-
-
-class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-    def _default_enabled_sync_versions(self) -> list[str]:
-        return ['v2']
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
-    __test__ = True
-
-    def _default_enabled_sync_versions(self) -> list[str]:
-        return ['v1', 'v2']

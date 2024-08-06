@@ -10,7 +10,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
         super().setUp()
 
         self.network = 'testnet'
-        self.manager1 = self.create_peer(self.network, unlock_wallet=True, enable_sync_v1=True, enable_sync_v2=False)
+        self.manager1 = self.create_peer(self.network, unlock_wallet=True)
 
     @pytest.mark.xfail(strict=True)
     def test_double_spending_attempt_1(self) -> None:

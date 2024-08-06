@@ -41,9 +41,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
 
 
-class BaseTransactionTest(unittest.TestCase):
-    __test__ = False
-
+class TransactionTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.wallet = Wallet()
@@ -1244,16 +1242,3 @@ class BaseTransactionTest(unittest.TestCase):
 
         # the storage already has block1 and should correctly return False
         self.assertFalse(self.tx_storage.compare_bytes_with_local_tx(block2))
-
-
-class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
-    __test__ = True
-
-
-class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
-    pass

@@ -9,7 +9,6 @@ from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_tx_with_data_script, create_tokens
 
@@ -304,41 +303,18 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         expected = 'Transaction is non standard.'
         self.assertEqual(expected, data['message'])
 
+
 # GET
 
 
-class BasePushTxGetTest(BasePushTxTest):
+class PushTxGetTest(BasePushTxTest):
     is_post = False
-
-
-class SyncV1PushTxGetTest(unittest.SyncV1Params, BasePushTxGetTest):
     __test__ = True
-
-
-class SyncV2PushTxGetTest(unittest.SyncV2Params, BasePushTxGetTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgePushTxGetTest(unittest.SyncBridgeParams, SyncV2PushTxGetTest):
-    pass
 
 
 # POST
 
 
-class BasePushTxPostTest(BasePushTxTest):
+class PushTxPostTest(BasePushTxTest):
     is_post = True
-
-
-class SyncV1PushTxPostTest(unittest.SyncV1Params, BasePushTxPostTest):
     __test__ = True
-
-
-class SyncV2PushTxPostTest(unittest.SyncV2Params, BasePushTxPostTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgePushTxPostTest(unittest.SyncBridgeParams, SyncV2PushTxPostTest):
-    pass

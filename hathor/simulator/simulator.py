@@ -82,7 +82,6 @@ class Simulator:
             .set_peer(PrivatePeer.auto_generated()) \
             .set_soft_voided_tx_ids(set()) \
             .enable_full_verification() \
-            .enable_sync_v1() \
             .enable_sync_v2() \
             .use_memory() \
             .set_settings(self.settings)

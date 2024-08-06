@@ -269,11 +269,6 @@ def setup_logging(
                     'level': 'INFO' if logging_options.debug else 'WARN',
                     'propagate': False,
                 },
-                'hathor.p2p.sync_v1': {
-                    'handlers': handlers,
-                    'level': 'DEBUG' if debug_sync else 'INFO',
-                    'propagate': False,
-                },
                 'hathor.p2p.sync_v2': {
                     'handlers': handlers,
                     'level': 'DEBUG' if debug_sync else 'INFO',

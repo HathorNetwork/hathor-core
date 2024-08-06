@@ -5,9 +5,6 @@ from tests import unittest
 
 
 class WebsocketSysctlTestCase(unittest.TestCase):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
-
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')

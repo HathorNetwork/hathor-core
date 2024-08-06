@@ -3,7 +3,6 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import GraphvizFullResource, GraphvizNeighboursResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
@@ -35,7 +34,9 @@ class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
         raise NotImplementedError
 
 
-class BaseGraphvizFullTest(BaseGraphvizTest):
+class GraphvizFullTest(BaseGraphvizTest):
+    __test__ = True
+
     def create_resource(self):
         return GraphvizFullResource(self.manager, format='dot')
 
@@ -80,20 +81,9 @@ class BaseGraphvizFullTest(BaseGraphvizTest):
         self.assertIsNone(request._finishedDeferreds)
 
 
-class SyncV1GraphvizFullTest(unittest.SyncV1Params, BaseGraphvizFullTest):
+class GraphvizNeigboursTest(BaseGraphvizTest):
     __test__ = True
 
-
-class SyncV2GraphvizFullTest(unittest.SyncV2Params, BaseGraphvizFullTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeGraphvizFullTest(unittest.SyncBridgeParams, SyncV2GraphvizFullTest):
-    pass
-
-
-class BaseGraphvizNeigboursTest(BaseGraphvizTest):
     def create_resource(self):
         return GraphvizNeighboursResource(self.manager, format='dot')
 
@@ -111,16 +101,3 @@ class BaseGraphvizNeigboursTest(BaseGraphvizTest):
         self.assertIsNotNone(request._finishedDeferreds)
         self.resource._err_tx_resolve('Error', request)
         self.assertIsNone(request._finishedDeferreds)
-
-
-class SyncV1GraphvizNeigboursTest(unittest.SyncV1Params, BaseGraphvizNeigboursTest):
-    __test__ = True
-
-
-class SyncV2GraphvizNeigboursTest(unittest.SyncV2Params, BaseGraphvizNeigboursTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeGraphvizNeigboursTest(unittest.SyncBridgeParams, SyncV2GraphvizNeigboursTest):
-    pass

@@ -3,14 +3,11 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import UtxoSearchResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class UtxoSearchTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp(utxo_index=True)
         self.web = StubSite(UtxoSearchResource(self.manager))
@@ -100,16 +97,3 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])
-
-
-class SyncV1UtxoSearchTest(unittest.SyncV1Params, BaseUtxoSearchTest):
-    __test__ = True
-
-
-class SyncV2UtxoSearchTest(unittest.SyncV2Params, BaseUtxoSearchTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeUtxoSearchTest(unittest.SyncBridgeParams, SyncV2UtxoSearchTest):
-    pass

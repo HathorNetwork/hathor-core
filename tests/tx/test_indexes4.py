@@ -7,9 +7,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseSimulatorIndexesTestCase(unittest.TestCase):
-    __test__ = False
-
+class SimulatorIndexesTestCase(unittest.TestCase):
     def _build_randomized_blockchain(self, *, utxo_index=False):
         tx_storage = TransactionMemoryStorage(settings=self._settings)
         manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True,
@@ -139,16 +137,3 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
             self.assertEqual(len(txs), total_count, f'iterator "{name}" does not cover all txs')
             # must be topological
             self.assertIsTopological(iter(txs), f'iterator "{name}" is not topological')
-
-
-class SyncV1SimulatorIndexesTestCase(unittest.SyncV1Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
-
-
-class SyncV2SimulatorIndexesTestCase(unittest.SyncV2Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeSimulatorIndexesTestCase(unittest.SyncBridgeParams, SyncV2SimulatorIndexesTestCase):
-    __test__ = True

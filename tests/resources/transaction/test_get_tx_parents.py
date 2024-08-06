@@ -1,13 +1,10 @@
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.resources import TxParentsResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseDecodeTxTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class DecodeTxTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(TxParentsResource(self.manager))
@@ -28,16 +25,3 @@ class BaseDecodeTxTest(_BaseResourceTest._ResourceTest):
         data = resp.json_value()
 
         self.assertFalse(data['success'])
-
-
-class SyncV1DecodeTxTest(unittest.SyncV1Params, BaseDecodeTxTest):
-    __test__ = True
-
-
-class SyncV2DecodeTxTest(unittest.SyncV2Params, BaseDecodeTxTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeDecodeTxTest(unittest.SyncBridgeParams, SyncV2DecodeTxTest):
-    pass

@@ -8,9 +8,7 @@ from tests import unittest
 from tests.utils import add_new_transactions
 
 
-class BaseBlockchainTestCase(unittest.TestCase):
-    __test__ = False
-
+class BlockchainTestCase(unittest.TestCase):
     """
     Thus, there are eight cases to be handled when a new block arrives, which are:
     (i)    Single best chain, connected to the head of the best chain
@@ -22,6 +20,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
     (vii)  Multiple best chains, connected to the head of a side chain
     (viii) Multiple best chains, connected to the tail of a side chain
     """
+
     def setUp(self):
         super().setUp()
         self.tx_storage = TransactionMemoryStorage(settings=self._settings)
@@ -469,16 +468,3 @@ class BaseBlockchainTestCase(unittest.TestCase):
         manager.reactor.advance(1)
         weight = manager.generate_mining_block().weight
         self.assertAlmostEqual(weight, manager.daa.MIN_BLOCK_WEIGHT)
-
-
-class SyncV1BlockchainTestCase(unittest.SyncV1Params, BaseBlockchainTestCase):
-    __test__ = True
-
-
-class SyncV2BlockchainTestCase(unittest.SyncV2Params, BaseBlockchainTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeBlockchainTestCase(unittest.SyncBridgeParams, SyncV2BlockchainTestCase):
-    pass

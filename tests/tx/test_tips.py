@@ -4,9 +4,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 
-class BaseTipsTestCase(unittest.TestCase):
-    __test__ = False
-
+class TipsTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -14,7 +12,9 @@ class BaseTipsTestCase(unittest.TestCase):
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
     def get_tips(self):
-        raise NotImplementedError
+        assert self.manager.tx_storage.indexes is not None
+        assert self.manager.tx_storage.indexes.mempool_tips is not None
+        return self.manager.tx_storage.indexes.mempool_tips.get()
 
     def test_tips_back(self):
         add_new_block(self.manager, advance_clock=1)
@@ -160,24 +160,3 @@ class BaseTipsTestCase(unittest.TestCase):
 
         # tx6 is the only one left
         self.assertCountEqual(self.get_tips(), set([tx6.hash]))
-
-
-class SyncV1TipsTestCase(unittest.SyncV1Params, BaseTipsTestCase):
-    __test__ = True
-
-    def get_tips(self):
-        return {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips_from_tx_tips()}
-
-
-class SyncV2TipsTestCase(unittest.SyncV2Params, BaseTipsTestCase):
-    __test__ = True
-
-    def get_tips(self):
-        assert self.manager.tx_storage.indexes is not None
-        assert self.manager.tx_storage.indexes.mempool_tips is not None
-        return self.manager.tx_storage.indexes.mempool_tips.get()
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTipsTestCase(unittest.SyncBridgeParams, SyncV2TipsTestCase):
-    pass

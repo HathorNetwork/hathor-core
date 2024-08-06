@@ -2,13 +2,10 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction.resources import mining
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class MiningApiTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.get_block_template = StubSite(mining.GetBlockTemplateResource(self.manager, self.manager._settings))
@@ -102,16 +99,3 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
         block = create_tx_from_dict(data)
         CpuMiningService().resolve(block, update_time=False)
         self.assertTrue(self.manager.propagate_tx(block))
-
-
-class SyncV1MiningApiTest(unittest.SyncV1Params, BaseMiningApiTest):
-    __test__ = True
-
-
-class SyncV2MiningApiTest(unittest.SyncV2Params, BaseMiningApiTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMiningApiTest(unittest.SyncBridgeParams, SyncV2MiningApiTest):
-    pass

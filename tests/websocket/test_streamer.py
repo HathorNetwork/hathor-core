@@ -12,9 +12,6 @@ from tests.utils import GENESIS_ADDRESS_B58
 
 
 class AsyncIteratorsTestCase(TestCase):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
-
     WS_PROTOCOL_MESSAGE_SEPARATOR = b'\x81'
 
     def test_streamer(self) -> None:

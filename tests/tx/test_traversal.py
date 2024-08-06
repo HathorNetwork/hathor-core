@@ -6,7 +6,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions, add_new_tx
 
 
-class _TraversalTestCase(unittest.TestCase):
+class BaseTraversalTestCase(unittest.TestCase):
     __test__ = False
 
     def setUp(self):
@@ -87,7 +87,9 @@ class _TraversalTestCase(unittest.TestCase):
         self.assertTrue(seen_v.union(seen_f).issubset(seen_vf))
 
 
-class BaseBFSTimestampWalkTestCase(_TraversalTestCase):
+class BFSTimestampWalkTestCase(BaseTraversalTestCase):
+    __test__ = True
+
     def gen_walk(self, **kwargs):
         return BFSTimestampWalk(self.manager.tx_storage, **kwargs)
 
@@ -110,15 +112,9 @@ class BaseBFSTimestampWalkTestCase(_TraversalTestCase):
         return seen
 
 
-class SyncV1BFSTimestampWalkTestCase(unittest.SyncV1Params, BaseBFSTimestampWalkTestCase):
+class BFSOrderWalkTestCase(BaseTraversalTestCase):
     __test__ = True
 
-
-class SyncV2BFSTimestampWalkTestCase(unittest.SyncV2Params, BaseBFSTimestampWalkTestCase):
-    __test__ = True
-
-
-class BaseBFSOrderWalkTestCase(_TraversalTestCase):
     def gen_walk(self, **kwargs):
         return BFSOrderWalk(self.manager.tx_storage, **kwargs)
 
@@ -153,20 +149,9 @@ class BaseBFSOrderWalkTestCase(_TraversalTestCase):
         return seen
 
 
-class SyncV1BFSOrderWalkTestCase(unittest.SyncV1Params, BaseBFSOrderWalkTestCase):
+class DFSWalkTestCase(BaseTraversalTestCase):
     __test__ = True
 
-
-class SyncV2BFSOrderWalkTestCase(unittest.SyncV2Params, BaseBFSOrderWalkTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeBFSOrderWalkTestCase(unittest.SyncBridgeParams, SyncV2BFSOrderWalkTestCase):
-    pass
-
-
-class BaseDFSWalkTestCase(_TraversalTestCase):
     def gen_walk(self, **kwargs):
         return DFSWalk(self.manager.tx_storage, **kwargs)
 
@@ -181,16 +166,3 @@ class BaseDFSWalkTestCase(_TraversalTestCase):
         for tx in walk.run(self.root_tx, skip_root=True):
             seen.add(tx.hash)
         return seen
-
-
-class SyncV1DFSWalkTestCase(unittest.SyncV1Params, BaseDFSWalkTestCase):
-    __test__ = True
-
-
-class SyncV2DFSWalkTestCase(unittest.SyncV2Params, BaseDFSWalkTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeDFSWalkTestCase(unittest.SyncBridgeParams, SyncV2DFSWalkTestCase):
-    pass
