@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import re
 from typing import TYPE_CHECKING, Any, Optional
 
 from autobahn.twisted.resource import WebSocketResource
@@ -31,6 +32,31 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 logger = get_logger()
+
+PROMETHEUS_METRIC_RE = re.compile(r'[a-zA-Z_:][a-zA-Z0-9_:]*')
+
+
+def is_prometheus_metric_name_valid(name: str) -> bool:
+    """Whether a matric name is valid.
+
+    See: https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
+
+    >>> is_prometheus_metric_name_valid('')
+    False
+    >>> is_prometheus_metric_name_valid('hathor_core:')
+    True
+    >>> is_prometheus_metric_name_valid("'hathor_core:'")
+    False
+    >>> is_prometheus_metric_name_valid('_hathor_core')
+    True
+    >>> is_prometheus_metric_name_valid('__hathor_core')
+    False
+    """
+    if not PROMETHEUS_METRIC_RE.match(name):
+        return False
+    if name.startswith('__'):
+        return False
+    return True
 
 
 class ResourcesBuilder:
@@ -60,9 +86,14 @@ class ResourcesBuilder:
         return None
 
     def create_prometheus(self) -> PrometheusMetricsExporter:
+        prometheus_prefix = self._args.prometheus_prefix
+        if self._args.prometheus_prefix and not is_prometheus_metric_name_valid(prometheus_prefix):
+            raise BuilderError(f'Invalid prometheus prefix, must match {PROMETHEUS_METRIC_RE.pattern}, '
+                               'but the value given is {repr(prometheus_prefix)}')
+
         kwargs: dict[str, Any] = {
             'metrics': self.manager.metrics,
-            'metrics_prefix': self._args.prometheus_prefix
+            'metrics_prefix': prometheus_prefix,
         }
 
         if self._args.data:
