@@ -14,12 +14,15 @@
 
 from typing import Any, Iterator, Optional, TypeVar
 
+from typing_extensions import override
+
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
+from hathor.transaction import BaseTransaction
+from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
-from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
 _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
@@ -40,6 +43,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         """
         self.transactions: dict[bytes, BaseTransaction] = {}
         self.metadata: dict[bytes, TransactionMetadata] = {}
+        self._static_metadata: dict[bytes, VertexStaticMetadata] = {}
         # Store custom key/value attributes
         self.attributes: dict[str, Any] = {}
         self._clone_if_needed = _clone_if_needed
@@ -71,6 +75,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         super().remove_transaction(tx)
         self.transactions.pop(tx.hash, None)
         self.metadata.pop(tx.hash, None)
+        self._static_metadata.pop(tx.hash, None)
 
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         super().save_transaction(tx, only_metadata=only_metadata)
@@ -82,6 +87,14 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         meta = getattr(tx, '_metadata', None)
         if meta:
             self.metadata[tx.hash] = self._clone(meta)
+
+    @override
+    def _save_static_metadata(self, tx: BaseTransaction) -> None:
+        self._static_metadata[tx.hash] = tx.static_metadata
+
+    @override
+    def _get_static_metadata(self, vertex: BaseTransaction) -> VertexStaticMetadata | None:
+        return self._static_metadata.get(vertex.hash)
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         return hash_bytes in self.transactions

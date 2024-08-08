@@ -30,7 +30,8 @@ class QuickTest(RunNode):
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
-        from hathor.transaction import BaseTransaction, Block
+        from hathor.transaction import Block
+        from hathor.transaction.base_transaction import GenericVertex
         super().prepare(register_resources=False)
         self._no_wait = self._args.no_wait
 
@@ -47,7 +48,7 @@ class QuickTest(RunNode):
             else:
                 vertex = args[0]
                 should_quit = False
-                assert isinstance(vertex, BaseTransaction)
+                assert isinstance(vertex, GenericVertex)
 
                 if isinstance(vertex, Block):
                     should_quit = vertex.get_height() >= self._args.quit_after_n_blocks

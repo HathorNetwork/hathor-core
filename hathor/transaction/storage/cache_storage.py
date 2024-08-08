@@ -16,11 +16,13 @@ from collections import OrderedDict
 from typing import Any, Iterator, Optional
 
 from twisted.internet import threads
+from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
+from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
@@ -163,6 +165,14 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         # call super which adds to index if needed
         super().save_transaction(tx, only_metadata=only_metadata)
+
+    @override
+    def _save_static_metadata(self, tx: BaseTransaction) -> None:
+        self.store._save_static_metadata(tx)
+
+    @override
+    def _get_static_metadata(self, vertex: BaseTransaction) -> VertexStaticMetadata | None:
+        return self.store._get_static_metadata(vertex)
 
     def get_all_genesis(self) -> set[BaseTransaction]:
         return self.store.get_all_genesis()
