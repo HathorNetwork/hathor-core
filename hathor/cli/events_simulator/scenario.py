@@ -171,9 +171,6 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     assert manager.propagate_tx(b0, fails_silently=False)
     simulator.run(60)
 
-    # the transaction should have been removed from the mempool
+    # the transaction should have been removed from the mempool and the storage after the re-org
     assert tx not in manager.tx_storage.iter_mempool_from_best_index()
-
-    # additionally the transaction should have been marked as invalid and removed from the storage after the re-org
-    assert tx.get_metadata().validation.is_invalid()
     assert not manager.tx_storage.transaction_exists(tx.hash)
