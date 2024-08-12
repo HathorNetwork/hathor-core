@@ -24,8 +24,8 @@ jobs:
           import json
           full_matrix = {
             'python': ['3.10', '3.11', '3.12'],
-            # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
-            'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
+            # available OS's: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#standard-github-hosted-runners-for-public-repositories
+            'os': ['ubuntu-24.04', 'macos-14', 'windows-2022'],
           }
           # this is the fastest one:
           reduced_matrix = {
