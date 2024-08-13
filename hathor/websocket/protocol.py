@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Union
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from structlog import get_logger
+from twisted.python.failure import Failure
 
 from hathor.p2p.utils import format_address
 from hathor.util import json_dumpb, json_loadb, json_loads
@@ -243,12 +244,13 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
                       gap_limit=gap_limit,
                       last=last)
 
-    def _streamer_callback(self, success: bool) -> None:
+    def _streamer_callback(self, result: bool | Failure) -> None:
         """Callback used to identify when the streamer has ended."""
+        # TODO: Handle the case when `result` is Failure
         assert self._history_streamer is not None
         self.log.info('websocket xpub streaming has been finished',
                       stream_id=self._history_streamer.stream_id,
-                      success=success,
+                      success=result,
                       sent_addresses=self._history_streamer.stats_sent_addresses,
                       sent_vertices=self._history_streamer.stats_sent_vertices)
         self._history_streamer = None
