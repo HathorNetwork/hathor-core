@@ -20,26 +20,29 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
+from hathor.indexes import MemoryIndexesManager
 from hathor.transaction import Block, TransactionMetadata
 from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
+from hathor.transaction.validation_state import ValidationState
+from hathor.util import not_none
 from hathor.verification.block_verifier import BlockVerifier
 
 
 def test_calculate_feature_activation_bit_counts_genesis():
     settings = get_global_settings()
     storage = TransactionMemoryStorage(settings=settings)
-    genesis_block = storage.get_transaction(settings.GENESIS_BLOCK_HASH)
-    assert isinstance(genesis_block, Block)
+    genesis_block = storage.get_block(settings.GENESIS_BLOCK_HASH)
     result = genesis_block.get_feature_activation_bit_counts()
 
     assert result == [0, 0, 0, 0]
 
 
 @pytest.fixture
-def block_mocks() -> list[Block]:
+def tx_storage() -> TransactionStorage:
     settings = get_global_settings()
-    blocks: list[Block] = []
+    indexes = MemoryIndexesManager()
+    storage = TransactionMemoryStorage(indexes=indexes, settings=settings)
     feature_activation_bits = [
         0b0000,  # 0: boundary block
         0b1010,
@@ -55,20 +58,19 @@ def block_mocks() -> list[Block]:
         0b0000,
     ]
 
-    for i, bits in enumerate(feature_activation_bits):
-        genesis_hash = settings.GENESIS_BLOCK_HASH
-        block_hash = genesis_hash if i == 0 else b'some_hash'
+    for height, bits in enumerate(feature_activation_bits):
+        if height == 0:
+            continue
+        parent = not_none(storage.get_block_by_height(height - 1))
+        block = Block(signal_bits=bits, parents=[parent.hash], storage=storage)
+        block.update_hash()
+        meta = block.get_metadata()
+        meta.validation = ValidationState.FULL
+        meta.height = height
+        storage.save_transaction(block)
+        indexes.height.add_new(height, block.hash, block.timestamp)
 
-        storage = Mock(spec_set=TransactionStorage)
-        storage.get_metadata = Mock(return_value=None)
-
-        block = Block(hash=block_hash, storage=storage, signal_bits=bits)
-        blocks.append(block)
-
-        get_block_parent_mock = Mock(return_value=blocks[i - 1])
-        setattr(block, 'get_block_parent', get_block_parent_mock)
-
-    return blocks
+    return storage
 
 
 @pytest.mark.parametrize(
@@ -87,14 +89,12 @@ def block_mocks() -> list[Block]:
     ]
 )
 def test_calculate_feature_activation_bit_counts(
-    block_mocks: list[Block],
+    tx_storage: TransactionStorage,
     block_height: int,
     expected_counts: list[int]
 ) -> None:
-    block = block_mocks[block_height]
-    result = block.get_feature_activation_bit_counts()
-
-    assert result == expected_counts
+    block = not_none(tx_storage.get_block_by_height(block_height))
+    assert block.get_feature_activation_bit_counts() == expected_counts
 
 
 def test_get_height():

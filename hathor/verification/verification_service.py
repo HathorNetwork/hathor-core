@@ -18,6 +18,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.poa import PoaBlock
+from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.validation_state import ValidationState
@@ -28,11 +29,18 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('_settings', 'verifiers')
+    __slots__ = ('_settings', 'verifiers', '_tx_storage')
 
-    def __init__(self, *, settings: HathorSettings, verifiers: VertexVerifiers) -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        verifiers: VertexVerifiers,
+        tx_storage: TransactionStorage | None = None,
+    ) -> None:
         self._settings = settings
         self.verifiers = verifiers
+        self._tx_storage = tx_storage
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.

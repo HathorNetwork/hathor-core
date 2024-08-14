@@ -32,6 +32,7 @@ from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput
 from hathor.transaction.block import Block
 from hathor.transaction.exceptions import RewardLocked
+from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import (
     TransactionDoesNotExist,
     TransactionIsNotABlock,
@@ -425,6 +426,11 @@ class TransactionStorage(ABC):
         meta = tx.get_metadata()
         self.pre_save_validation(tx, meta)
 
+    @abstractmethod
+    def _save_static_metadata(self, vertex: BaseTransaction) -> None:
+        """Save a vertex's static metadata to this storage."""
+        raise NotImplementedError
+
     def pre_save_validation(self, tx: BaseTransaction, tx_meta: TransactionMetadata) -> None:
         """ Must be run before every save, will raise AssertionError or TransactionNotInAllowedScopeError
 
@@ -545,12 +551,12 @@ class TransactionStorage(ABC):
         self.post_get_validation(tx)
         return tx
 
-    def get_transaction_by_height(self, height: int) -> Optional[BaseTransaction]:
-        """Returns a transaction from the height index. This is fast."""
+    def get_block_by_height(self, height: int) -> Optional[Block]:
+        """Return a block in the best blockchain from the height index. This is fast."""
         assert self.indexes is not None
         ancestor_hash = self.indexes.height.get(height)
 
-        return None if ancestor_hash is None else self.get_transaction(ancestor_hash)
+        return None if ancestor_hash is None else self.get_block(ancestor_hash)
 
     def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
         """Returns the transaction metadata with hash `hash_bytes`.
@@ -563,6 +569,11 @@ class TransactionStorage(ABC):
             return tx.get_metadata(use_storage=False)
         except TransactionDoesNotExist:
             return None
+
+    @abstractmethod
+    def _get_static_metadata(self, vertex: BaseTransaction) -> VertexStaticMetadata | None:
+        """Get a vertex's static metadata from this storage."""
+        raise NotImplementedError
 
     def get_all_transactions(self) -> Iterator[BaseTransaction]:
         """Return all vertices (transactions and blocks) within the allowed scope.
