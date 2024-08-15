@@ -20,9 +20,8 @@ from typing import TYPE_CHECKING, Any, Optional
 from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.validation_state import ValidationState
-from hathor.util import practically_equal
+from hathor.util import json_dumpb, json_loadb, practically_equal
 
 if TYPE_CHECKING:
     from weakref import ReferenceType  # noqa: F401
@@ -209,10 +208,11 @@ class TransactionMetadata:
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight'] = self.accumulated_weight
         data['score'] = self.score
-        data['min_height'] = self.min_height
+
+        vertex = self.get_tx()
+        data['min_height'] = vertex.static_metadata.min_height
 
         from hathor.transaction import Block
-        vertex = self.get_tx()
         if isinstance(vertex, Block):
             data['height'] = vertex.static_metadata.height
             data['feature_activation_bit_counts'] = vertex.static_metadata.feature_activation_bit_counts
@@ -236,8 +236,8 @@ class TransactionMetadata:
         data = self.to_json()
         first_block_height: Optional[int]
         if self.first_block is not None:
-            first_block = tx_storage.get_transaction(self.first_block)
-            first_block_height = first_block.get_metadata().height
+            first_block = tx_storage.get_block(self.first_block)
+            first_block_height = first_block.static_metadata.height
         else:
             first_block_height = None
         data['first_block_height'] = first_block_height
@@ -287,6 +287,25 @@ class TransactionMetadata:
 
         return meta
 
+    @classmethod
+    def from_bytes(cls, data: bytes) -> 'TransactionMetadata':
+        """Deserialize a TransactionMetadata instance from bytes."""
+        return cls.create_from_json(json_loadb(data))
+
+    def to_bytes(self) -> bytes:
+        """Serialize a TransactionMetadata instance to bytes. This should be used for storage."""
+        json_dict = self.to_json()
+
+        # The `to_json()` method includes these fields for backwards compatibility with APIs, but since they're not
+        # part of metadata, they should not be serialized.
+        del json_dict['height']
+        del json_dict['min_height']
+        del json_dict['feature_activation_bit_counts']
+        # TODO: This one has not been migrated yet, but will be in the next PR
+        # del json_dict['feature_states']
+
+        return json_dumpb(json_dict)
+
     def clone(self) -> 'TransactionMetadata':
         """Return exact copy without sharing memory.
 
@@ -321,21 +340,3 @@ class TransactionMetadata:
         if self.voided_by is None:
             return False
         return item in self.voided_by
-
-    @property
-    def height(self) -> int:
-        """
-        Get the block's `height`. This property is just a forward from the block's `static_metadata`, for backwards
-        compatibility. It can be removed in the future.
-        """
-        static_metadata = self.get_tx().static_metadata
-        assert isinstance(static_metadata, BlockStaticMetadata)
-        return static_metadata.height
-
-    @property
-    def min_height(self) -> int:
-        """
-        Get the vertex's `min_height`. This property is just a forward from the vertex's `static_metadata`, for
-        backwards compatibility. It can be removed in the future.
-        """
-        return self.get_tx().static_metadata.min_height

@@ -259,7 +259,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
 
     def to_json_extended(self) -> dict[str, Any]:
         json = super().to_json_extended()
-        json['height'] = self.get_metadata().height
+        json['height'] = self.static_metadata.height
 
         return json
 

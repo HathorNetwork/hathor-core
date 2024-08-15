@@ -279,7 +279,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['meta']['first_block'], block.hash_hex)
 
         # now check that the first_block_height was correctly included
-        self.assertEqual(data['meta']['first_block_height'], block.get_metadata().height)
+        self.assertEqual(data['meta']['first_block_height'], block.static_metadata.height)
 
     @inlineCallbacks
     def test_get_many(self):

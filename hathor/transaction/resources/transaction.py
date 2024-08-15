@@ -28,6 +28,7 @@ from hathor.api_util import (
 )
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
+from hathor.transaction import Block
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import json_dumpb
@@ -70,9 +71,9 @@ def get_tx_extra_data(
     # To get the updated accumulated weight just need to call the
     # TransactionAccumulatedWeightResource (/transaction_acc_weight)
 
-    if tx.is_block:
+    if isinstance(tx, Block):
         # For blocks we need to add the height
-        serialized['height'] = meta.height
+        serialized['height'] = tx.static_metadata.height
 
     # In the metadata we have the spent_outputs, that are the txs that spent the outputs for each index
     # However we need to send also which one of them is not voided

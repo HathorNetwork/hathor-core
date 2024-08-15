@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.transaction import Block
 from hathor.transaction.storage.migrations import BaseMigration
 from hathor.util import progress
 
@@ -48,11 +49,10 @@ class Migration(BaseMigration):
         topological_iterator = storage.topological_iterator()
 
         for vertex in progress(topological_iterator, log=log, total=None):
-            if vertex.is_block:
+            if isinstance(vertex, Block):
                 meta = vertex.get_metadata()
-                assert meta.height is not None
                 # This is the start_height of the **second** Phased Testing, so we clear anything before it.
-                if meta.height < 3_386_880:
+                if vertex.static_metadata.height < 3_386_880:
                     meta.feature_states = None
 
                     storage.save_transaction(vertex, only_metadata=True)

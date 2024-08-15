@@ -336,7 +336,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
     def test_block_height(self):
         genesis_block = self.genesis_blocks[0]
-        self.assertEqual(genesis_block.get_metadata().height, 0)
+        self.assertEqual(genesis_block.static_metadata.height, 0)
 
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
@@ -345,7 +345,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
 
         for i, block in enumerate(blocks):
             expected_height = i + 1
-            self.assertEqual(block.get_metadata().height, expected_height)
+            self.assertEqual(block.static_metadata.height, expected_height)
 
     def test_tokens_issued_per_block(self):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
@@ -378,7 +378,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
             outputs = block.outputs
             self.assertEqual(len(outputs), 1)
             output = outputs[0]
-            height = block.get_metadata().height
+            height = block.static_metadata.height
             self.assertEqual(output.value, manager.get_tokens_issued_per_block(height))
 
     def test_daa_sanity(self):

@@ -62,7 +62,8 @@ class VerificationService:
         *,
         skip_block_weight_verification: bool = False,
         sync_checkpoints: bool = False,
-        reject_locked_reward: bool = True
+        reject_locked_reward: bool = True,
+        init_static_metadata: bool = True,
     ) -> bool:
         """ Run full validations (these need access to all dependencies) and update the validation state.
 
@@ -72,7 +73,8 @@ class VerificationService:
         from hathor.transaction.transaction_metadata import ValidationState
 
         meta = vertex.get_metadata()
-        vertex.init_static_metadata_from_storage(self._settings, self._tx_storage)
+        if init_static_metadata:
+            vertex.init_static_metadata_from_storage(self._settings, self._tx_storage)
 
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():

@@ -76,7 +76,12 @@ class Migration(BaseMigration):
             # We create a fake vertex with just the hash and static metadata, so we can use the existing
             # `storage._save_static_metadata()` instead of having to create an unsafe storage API that takes those
             # two arguments.
-            vertex = Mock(spec_set=BaseTransaction)
-            vertex.hash = vertex_id
-            vertex.static_metadata = static_metadata
-            storage._save_static_metadata(vertex)
+            mock_vertex = Mock(spec_set=BaseTransaction)
+            mock_vertex.hash = vertex_id
+            mock_vertex.static_metadata = static_metadata
+            storage._save_static_metadata(mock_vertex)
+
+            # Now we can take the actual vertex from the storage and save its metadata. It'll be serialized with the
+            # new `to_bytes()` method, excluding fields that were migrated.
+            vertex = storage.get_transaction(vertex_id)
+            storage.save_transaction(vertex, only_metadata=True)

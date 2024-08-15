@@ -26,12 +26,12 @@ from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
-from hathor.util import json_dumpb, json_loadb
+from hathor.util import json_loadb
 
 if TYPE_CHECKING:
     import rocksdb
 
-    from hathor.transaction import BaseTransaction, TransactionMetadata
+    from hathor.transaction import BaseTransaction
 
 logger = get_logger()
 
@@ -72,15 +72,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         from hathor.transaction.transaction_metadata import TransactionMetadata
 
         tx = self.vertex_parser.deserialize(tx_data)
-        tx._metadata = TransactionMetadata.create_from_json(json_loadb(meta_data))
+        tx._metadata = TransactionMetadata.from_bytes(meta_data)
         tx.storage = self
         return tx
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)
-
-    def _meta_to_bytes(self, meta: 'TransactionMetadata') -> bytes:
-        return json_dumpb(meta.to_json())
 
     def get_migration_state(self, migration_name: str) -> MigrationState:
         key = migration_name.encode('ascii')
@@ -111,7 +108,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if not only_metadata:
             tx_data = self._tx_to_bytes(tx)
             self._db.put((self._cf_tx, key), tx_data)
-        meta_data = self._meta_to_bytes(tx.get_metadata(use_storage=False))
+        meta_data = tx.get_metadata(use_storage=False).to_bytes()
         self._db.put((self._cf_meta, key), meta_data)
 
     @override

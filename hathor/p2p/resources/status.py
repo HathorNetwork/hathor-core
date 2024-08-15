@@ -92,9 +92,8 @@ class StatusResource(Resource):
 
         best_block_tips = []
         for tip in self.manager.tx_storage.get_best_block_tips():
-            tx = self.manager.tx_storage.get_transaction(tip)
-            meta = tx.get_metadata()
-            best_block_tips.append({'hash': tx.hash_hex, 'height': meta.height})
+            block = self.manager.tx_storage.get_block(tip)
+            best_block_tips.append({'hash': block.hash_hex, 'height': block.static_metadata.height})
 
         best_block = self.manager.tx_storage.get_best_block()
         raw_best_blockchain = self.manager.tx_storage.get_n_height_tips(self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
@@ -122,7 +121,7 @@ class StatusResource(Resource):
                 'best_block_tips': best_block_tips,
                 'best_block': {
                     'hash': best_block.hash_hex,
-                    'height': best_block.get_metadata().height,
+                    'height': best_block.static_metadata.height,
                 },
                 'best_blockchain': best_blockchain,
             }

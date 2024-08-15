@@ -658,31 +658,32 @@ class HathorManager:
         for checkpoint in expected_checkpoints:
             # XXX: query the database from checkpoint.hash and verify what comes out
             try:
-                tx = self.tx_storage.get_transaction(checkpoint.hash)
+                block = self.tx_storage.get_block(checkpoint.hash)
             except TransactionDoesNotExist as e:
                 raise InitializationError(f'Expected checkpoint does not exist in database: {checkpoint}') from e
-            tx_meta = tx.get_metadata()
-            if tx_meta.height != checkpoint.height:
+            meta = block.get_metadata()
+            height = block.static_metadata.height
+            if height != checkpoint.height:
                 raise InitializationError(
-                    f'Expected checkpoint of hash {tx.hash_hex} to have height {checkpoint.height}, but instead it has'
-                    f'height {tx_meta.height}'
+                    f'Expected checkpoint of hash {block.hash_hex} to have height {checkpoint.height},'
+                    f'but instead it has height {height}'
                 )
-            if tx_meta.voided_by:
-                pretty_voided_by = list(i.hex() for i in tx_meta.voided_by)
+            if meta.voided_by:
+                pretty_voided_by = list(i.hex() for i in meta.voided_by)
                 raise InitializationError(
                     f'Expected checkpoint {checkpoint} to *NOT* be voided, but it is being voided by: '
                     f'{pretty_voided_by}'
                 )
             # XXX: query the height index from checkpoint.height and check that the hash matches
-            tx_hash = self.tx_storage.indexes.height.get(checkpoint.height)
-            if tx_hash is None:
+            block_hash = self.tx_storage.indexes.height.get(checkpoint.height)
+            if block_hash is None:
                 raise InitializationError(
                     f'Expected checkpoint {checkpoint} to be found in the height index, but it was not found'
                 )
-            if tx_hash != tx.hash:
+            if block_hash != block.hash:
                 raise InitializationError(
                     f'Expected checkpoint {checkpoint} to be found in the height index, but it instead the block with '
-                    f'hash {tx_hash.hex()} was found'
+                    f'hash {block_hash.hex()} was found'
                 )
 
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
