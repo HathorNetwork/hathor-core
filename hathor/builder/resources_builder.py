@@ -215,7 +215,7 @@ class ResourcesBuilder:
             # mining
             (b'mining', MiningResource(self.manager), root),
             (b'getmininginfo', MiningInfoResource(self.manager), root),
-            (b'get_block_template', GetBlockTemplateResource(self.manager), root),
+            (b'get_block_template', GetBlockTemplateResource(self.manager, settings), root),
             (b'submit_block', SubmitBlockResource(self.manager), root),
             (b'tx_parents', TxParentsResource(self.manager), root),
             # /thin_wallet
@@ -281,7 +281,7 @@ class ResourcesBuilder:
                 (b'balance', BalanceResource(self.manager), wallet_resource),
                 (b'history', HistoryResource(self.manager), wallet_resource),
                 (b'address', AddressResource(self.manager), wallet_resource),
-                (b'send_tokens', SendTokensResource(self.manager), wallet_resource),
+                (b'send_tokens', SendTokensResource(self.manager, settings), wallet_resource),
                 (b'sign_tx', SignTxResource(self.manager), wallet_resource),
                 (b'unlock', UnlockWalletResource(self.manager), wallet_resource),
                 (b'lock', LockWalletResource(self.manager), wallet_resource),

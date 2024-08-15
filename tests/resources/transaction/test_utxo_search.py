@@ -59,7 +59,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'index': 0,
             'amount': 6400,
             'timelock': None,
-            'heightlock': b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+            'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[:1]])
 
         # Success non-empty address with medium amount, will require more than one output
@@ -72,7 +72,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'index': 0,
             'amount': 6400,
             'timelock': None,
-            'heightlock': b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+            'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[4:1:-1]])
 
         # Success non-empty address with exact amount, will require all UTXOs
@@ -85,7 +85,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'index': 0,
             'amount': 6400,
             'timelock': None,
-            'heightlock': b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+            'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])
 
         # Success non-empty address with excessive amount, will require all UTXOs, even if it's not enough
@@ -98,7 +98,7 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
             'index': 0,
             'amount': 6400,
             'timelock': None,
-            'heightlock': b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+            'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])
 
 

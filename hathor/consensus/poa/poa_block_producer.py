@@ -174,6 +174,7 @@ class PoaBlockProducer:
         from hathor.transaction.poa import PoaBlock
         block_templates = self.manager.get_block_templates(parent_block_hash=previous_block.hash)
         block = block_templates.generate_mining_block(self.manager.rng, cls=PoaBlock)
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         assert isinstance(block, PoaBlock)
 
         if block.get_height() <= self.manager.tx_storage.get_height_best_block():

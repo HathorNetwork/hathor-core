@@ -42,7 +42,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
-from hathor.util import collect_n, not_none
+from hathor.util import collect_n
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -846,7 +846,7 @@ class NodeBlockSync(SyncAgent):
         assert meta.validation.is_fully_connected()
         payload = BestBlockPayload(
             block=best_block.hash,
-            height=not_none(meta.height),
+            height=best_block.static_metadata.height,
         )
         self.send_message(ProtocolMessages.BEST_BLOCK, payload.json())
 

@@ -15,22 +15,23 @@
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
+from structlog.stdlib import BoundLogger
 from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
-from hathor.transaction.static_metadata import VertexStaticMetadata
+from hathor.transaction.static_metadata import BlockStaticMetadata, TransactionStaticMetadata, VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import json_dumpb, json_loadb
+from hathor.util import json_loadb, progress
 
 if TYPE_CHECKING:
     import rocksdb
 
-    from hathor.transaction import BaseTransaction, TransactionMetadata
+    from hathor.transaction import BaseTransaction
 
 logger = get_logger()
 
@@ -71,15 +72,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         from hathor.transaction.transaction_metadata import TransactionMetadata
 
         tx = self.vertex_parser.deserialize(tx_data)
-        tx._metadata = TransactionMetadata.create_from_json(json_loadb(meta_data))
+        tx._metadata = TransactionMetadata.from_bytes(meta_data)
         tx.storage = self
         return tx
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)
-
-    def _meta_to_bytes(self, meta: 'TransactionMetadata') -> bytes:
-        return json_dumpb(meta.to_json())
 
     def get_migration_state(self, migration_name: str) -> MigrationState:
         key = migration_name.encode('ascii')
@@ -110,17 +108,22 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if not only_metadata:
             tx_data = self._tx_to_bytes(tx)
             self._db.put((self._cf_tx, key), tx_data)
-        meta_data = self._meta_to_bytes(tx.get_metadata(use_storage=False))
+        meta_data = tx.get_metadata(use_storage=False).to_bytes()
         self._db.put((self._cf_meta, key), meta_data)
 
     @override
     def _save_static_metadata(self, tx: 'BaseTransaction') -> None:
         self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.to_bytes())
 
-    @override
-    def _get_static_metadata(self, vertex: 'BaseTransaction') -> VertexStaticMetadata | None:
+    def _load_static_metadata(self, vertex: 'BaseTransaction') -> None:
+        """Set vertex static metadata loaded from what's saved in this storage."""
+        if vertex.is_genesis:
+            vertex.init_static_metadata_from_storage(self._settings, self)
+            return
         data = self._db.get((self._cf_static_meta, vertex.hash))
-        return VertexStaticMetadata.from_bytes(data, target=vertex) if data else None
+        assert data is not None, f'static metadata not found for vertex {vertex.hash_hex}'
+        static_metadata = VertexStaticMetadata.from_bytes(data, target=vertex)
+        vertex.set_static_metadata(static_metadata)
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         may_exist, _ = self._db.key_may_exist((self._cf_tx, hash_bytes))
@@ -139,6 +142,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             raise TransactionDoesNotExist(hash_bytes.hex())
 
         assert tx._metadata is not None
+        assert tx._static_metadata is not None
         assert tx.hash == hash_bytes
 
         self._save_to_weakref(tx)
@@ -152,6 +156,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         assert meta_data is not None, 'expected metadata to exist when tx exists'
         tx = self._load_from_bytes(tx_data, meta_data)
+        self._load_static_metadata(tx)
         return tx
 
     def _get_tx(self, hash_bytes: bytes, tx_data: bytes) -> 'BaseTransaction':
@@ -159,6 +164,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if tx is None:
             meta_data = self._db.get((self._cf_meta, hash_bytes))
             tx = self._load_from_bytes(tx_data, meta_data)
+            self._load_static_metadata(tx)
             assert tx.hash == hash_bytes
             self._save_to_weakref(tx)
         return tx
@@ -227,3 +233,43 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         else:
             return data.decode()
+
+    @override
+    def migrate_static_metadata(self, log: BoundLogger) -> None:
+        metadata_iter = self._db.iteritems(self._cf_meta)
+        metadata_iter.seek_to_first()
+
+        # We have to iterate over metadata instead of vertices because the storage doesn't allow us to get a vertex if
+        # its static metadata is not set. We also use raw dict metadata because `metadata.create_from_json()` doesn't
+        # include attributes that should be static, which are exactly the ones we need for this migration.
+        for (_, vertex_id), metadata_bytes in progress(metadata_iter, log=log, total=None):
+            raw_metadata = json_loadb(metadata_bytes)
+            height = raw_metadata['height']
+            min_height = raw_metadata['min_height']
+            bit_counts = raw_metadata.get('feature_activation_bit_counts')
+
+            assert isinstance(height, int)
+            assert isinstance(min_height, int)
+
+            static_metadata: VertexStaticMetadata
+            is_block = (vertex_id == self._settings.GENESIS_BLOCK_HASH or height != 0)
+
+            if is_block:
+                assert isinstance(bit_counts, list)
+                for item in bit_counts:
+                    assert isinstance(item, int)
+
+                static_metadata = BlockStaticMetadata(
+                    height=height,
+                    min_height=min_height,
+                    feature_activation_bit_counts=bit_counts,
+                    feature_states={},  # This will be populated in the next PR
+                )
+            else:
+                assert bit_counts is None or bit_counts == []
+                static_metadata = TransactionStaticMetadata(
+                    min_height=min_height
+                )
+
+            # Save it manually to the CF
+            self._db.put((self._cf_static_meta, vertex_id), static_metadata.to_bytes())

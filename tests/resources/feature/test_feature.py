@@ -24,20 +24,25 @@ from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.storage import TransactionStorage
 from tests.resources.base_resource import StubSite
 
 
 @pytest.fixture
-def web():
-    block_mock = Mock(wraps=Block(), spec_set=Block)
-    block_mock.get_feature_activation_bit_counts = Mock(return_value=[0, 1, 0, 0])
-    block_mock.hash_hex = 'some_hash'
-    block_mock.get_height = Mock(return_value=123)
+def web() -> StubSite:
+    block = Block(hash=b'some_hash')
+    static_metadata = BlockStaticMetadata(
+        height=123,
+        min_height=0,
+        feature_activation_bit_counts=[0, 1, 0, 0],
+        feature_states={},
+    )
+    block.set_static_metadata(static_metadata)
 
     tx_storage = Mock(spec_set=TransactionStorage)
-    tx_storage.get_best_block = Mock(return_value=block_mock)
-    tx_storage.get_transaction = Mock(return_value=block_mock)
+    tx_storage.get_best_block = Mock(return_value=block)
+    tx_storage.get_transaction = Mock(return_value=block)
 
     def get_state(*, block: Block, feature: Feature) -> FeatureState:
         return FeatureState.ACTIVE if feature is Feature.NOP_FEATURE_1 else FeatureState.STARTED
@@ -81,11 +86,11 @@ def web():
     return StubSite(feature_resource)
 
 
-def test_get_features(web):
+def test_get_features(web: StubSite) -> None:
     response = web.get('feature')
     result = response.result.json_value()
     expected = dict(
-        block_hash='some_hash',
+        block_hash=b'some_hash'.hex(),
         block_height=123,
         features=[
             dict(
@@ -116,7 +121,7 @@ def test_get_features(web):
     assert result == expected
 
 
-def test_get_block_features(web):
+def test_get_block_features(web: StubSite) -> None:
     response = web.get('feature', args={b'block': b'1234'})
     result = response.result.json_value()
     expected = dict(
