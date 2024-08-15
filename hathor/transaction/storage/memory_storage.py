@@ -19,11 +19,11 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.transaction import BaseTransaction
-from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.types import VertexId
 
 _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
 
@@ -43,7 +43,6 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         """
         self.transactions: dict[bytes, BaseTransaction] = {}
         self.metadata: dict[bytes, TransactionMetadata] = {}
-        self._static_metadata: dict[bytes, VertexStaticMetadata] = {}
         # Store custom key/value attributes
         self.attributes: dict[str, Any] = {}
         self._clone_if_needed = _clone_if_needed
@@ -75,7 +74,6 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         super().remove_transaction(tx)
         self.transactions.pop(tx.hash, None)
         self.metadata.pop(tx.hash, None)
-        self._static_metadata.pop(tx.hash, None)
 
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         super().save_transaction(tx, only_metadata=only_metadata)
@@ -90,11 +88,8 @@ class TransactionMemoryStorage(BaseTransactionStorage):
 
     @override
     def _save_static_metadata(self, tx: BaseTransaction) -> None:
-        self._static_metadata[tx.hash] = tx.static_metadata
-
-    @override
-    def _get_static_metadata(self, vertex: BaseTransaction) -> VertexStaticMetadata | None:
-        return self._static_metadata.get(vertex.hash)
+        # We do not need to explicitly save the static metadata as the tx object already holds it in memory
+        pass
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         return hash_bytes in self.transactions
@@ -105,6 +100,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
             if hash_bytes in self.metadata:
                 tx._metadata = self._clone(self.metadata[hash_bytes])
             assert tx._metadata is not None
+            assert tx._static_metadata is not None
             return tx
         else:
             raise TransactionDoesNotExist(hash_bytes.hex())
@@ -130,3 +126,9 @@ class TransactionMemoryStorage(BaseTransactionStorage):
 
     def get_value(self, key: str) -> Optional[str]:
         return self.attributes.get(key)
+
+    @override
+    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
+        # This method is only ever used by the `migrate_static_metadata` migration, and therefore it is not necessary
+        # to implement for the memory storage.
+        raise NotImplementedError

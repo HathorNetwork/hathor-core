@@ -19,8 +19,10 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
+from hathor.manager import HathorManager
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
@@ -36,9 +38,10 @@ class SendTokensResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager, settings: HathorSettings) -> None:
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        self._settings = settings
 
     def render_POST(self, request):
         """ POST request for /wallet/send_tokens/
@@ -118,6 +121,7 @@ class SendTokensResource(Resource):
         return NOT_DONE_YET
 
     def _render_POST_thread(self, values: dict[str, Any], request: Request) -> Union[bytes, Transaction]:
+        assert self.manager.wallet is not None
         tx = self.manager.wallet.prepare_transaction(Transaction, values['inputs'],
                                                      values['outputs'], values['timestamp'])
         tx.storage = values['storage']
@@ -127,7 +131,7 @@ class SendTokensResource(Resource):
             weight = self.manager.daa.minimum_tx_weight(tx)
         tx.weight = weight
         self.manager.cpu_mining_service.resolve(tx)
-        tx.update_reward_lock_metadata()
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.manager.verification_service.verify(tx)
         return tx
 

@@ -120,6 +120,7 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
         tx_extra_data_json = get_tx_extra_data(args.tx, detail_tokens=False)
         tx_json = tx_extra_data_json['tx']
         meta_json = tx_extra_data_json['meta']
+        meta_json['height'] = meta_json.get('height', 0)  # TODO: Improve event model to reflect static metadata
         tx_json['metadata'] = meta_json
         tx_json['outputs'] = [
             output | dict(decoded=output['decoded'] or None)

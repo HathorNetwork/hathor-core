@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from structlog import get_logger
 from typing_extensions import override
@@ -25,6 +25,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
+from hathor.types import VertexId
 from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
@@ -117,10 +118,15 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     def _save_static_metadata(self, tx: 'BaseTransaction') -> None:
         self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.to_bytes())
 
-    @override
-    def _get_static_metadata(self, vertex: 'BaseTransaction') -> VertexStaticMetadata | None:
+    def _load_static_metadata(self, vertex: 'BaseTransaction') -> None:
+        """Set vertex static metadata loaded from what's saved in this storage."""
+        if vertex.is_genesis:
+            vertex.init_static_metadata_from_storage(self._settings, self)
+            return
         data = self._db.get((self._cf_static_meta, vertex.hash))
-        return VertexStaticMetadata.from_bytes(data, target=vertex) if data else None
+        assert data is not None, f'static metadata not found for vertex {vertex.hash_hex}'
+        static_metadata = VertexStaticMetadata.from_bytes(data, target=vertex)
+        vertex.set_static_metadata(static_metadata)
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         may_exist, _ = self._db.key_may_exist((self._cf_tx, hash_bytes))
@@ -139,6 +145,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             raise TransactionDoesNotExist(hash_bytes.hex())
 
         assert tx._metadata is not None
+        assert tx._static_metadata is not None
         assert tx.hash == hash_bytes
 
         self._save_to_weakref(tx)
@@ -152,6 +159,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         assert meta_data is not None, 'expected metadata to exist when tx exists'
         tx = self._load_from_bytes(tx_data, meta_data)
+        self._load_static_metadata(tx)
         return tx
 
     def _get_tx(self, hash_bytes: bytes, tx_data: bytes) -> 'BaseTransaction':
@@ -159,6 +167,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if tx is None:
             meta_data = self._db.get((self._cf_meta, hash_bytes))
             tx = self._load_from_bytes(tx_data, meta_data)
+            self._load_static_metadata(tx)
             assert tx.hash == hash_bytes
             self._save_to_weakref(tx)
         return tx
@@ -227,3 +236,11 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         else:
             return data.decode()
+
+    @override
+    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
+        items = self._db.iteritems(self._cf_meta)
+        items.seek_to_first()
+
+        for (_, vertex_id), metadata_bytes in items:
+            yield vertex_id, json_loadb(metadata_bytes)

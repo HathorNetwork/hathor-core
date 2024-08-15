@@ -17,7 +17,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
     def setUp(self):
         super().setUp()
-        self.web = StubSite(SendTokensResource(self.manager))
+        self.web = StubSite(SendTokensResource(self.manager, self._settings))
         self.web_mining = StubSite(MiningResource(self.manager))
         self.web_balance = StubSite(BalanceResource(self.manager))
         self.web_history = StubSite(HistoryResource(self.manager))
@@ -194,7 +194,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
     def test_error_request(self):
-        resource = SendTokensResource(self.manager)
+        resource = SendTokensResource(self.manager, self._settings)
         request = TestDummyRequest('POST', 'wallet/send_tokens', {})
 
         self.assertIsNotNone(request._finishedDeferreds)

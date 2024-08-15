@@ -61,6 +61,7 @@ class BaseTransactionTest(unittest.TestCase):
         input_.data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx)
         tx.update_initial_metadata(save=False)
+        tx.init_static_metadata_from_storage(self._settings, self.tx_storage)
         return tx
 
     def test_classic_reward_lock(self):

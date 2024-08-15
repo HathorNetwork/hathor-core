@@ -674,6 +674,7 @@ class StratumProtocol(JSONRPC):
         data = data[:self._settings.BLOCK_DATA_MAX_SIZE]
         block = self.manager.generate_mining_block(data=data, address=self.miner_address,
                                                    merge_mined=self.merged_mining)
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.log.debug('prepared block for mining', block=block)
         return block
 
