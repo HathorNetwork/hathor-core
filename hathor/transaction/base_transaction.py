@@ -875,9 +875,12 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
     def set_static_metadata(self, static_metadata: StaticMetadataT | None) -> None:
         """Set this vertex's static metadata. After it's set, it can only be set again to the same value."""
-        assert not self._static_metadata or self._static_metadata == static_metadata, (
-            'trying to set static metadata with different values'
-        )
+        if self._static_metadata is not None:
+            assert self._static_metadata == static_metadata, 'trying to set static metadata with different values'
+            self.log.warn(
+                'redundant call on set_static_metadata', vertex_id=self.hash_hex, static_metadata=static_metadata
+            )
+
         self._static_metadata = static_metadata
 
 
