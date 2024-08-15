@@ -6,9 +6,9 @@ from typing_extensions import override
 
 from hathor.p2p.entrypoint import Entrypoint, Protocol
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.peer import Peer
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, PeerDiscovery
 from hathor.p2p.peer_discovery.dns import LookupResult
-from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
 from tests import unittest
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
@@ -48,7 +48,7 @@ class MockDNSPeerDiscovery(DNSPeerDiscovery):
 class BootstrapTestCase(unittest.TestCase):
     def test_mock_discovery(self) -> None:
         pubsub = PubSubManager(self.clock)
-        connections = ConnectionsManager(self._settings, self.clock, 'testnet', PeerId(), pubsub, True, self.rng, True)
+        connections = ConnectionsManager(self._settings, self.clock, 'testnet', Peer(), pubsub, True, self.rng, True)
         host_ports1 = [
             ('foobar', 1234),
             ('127.0.0.99', 9999),
@@ -71,7 +71,7 @@ class BootstrapTestCase(unittest.TestCase):
 
     def test_dns_discovery(self) -> None:
         pubsub = PubSubManager(self.clock)
-        connections = ConnectionsManager(self._settings, self.clock, 'testnet', PeerId(), pubsub, True, self.rng, True)
+        connections = ConnectionsManager(self._settings, self.clock, 'testnet', Peer(), pubsub, True, self.rng, True)
         bootstrap_a = [
             '127.0.0.99',
             '127.0.0.88',

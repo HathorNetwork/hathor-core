@@ -47,7 +47,7 @@ class TestMode(IntFlag):
 
 
 class DifficultyAdjustmentAlgorithm:
-    # TODO: This singleton is temporary, and only used in PeerId. It should be removed from there, and then from here.
+    # TODO: This singleton is temporary, and only used in Peer. It should be removed from there, and then from here.
     singleton: ClassVar[Optional['DifficultyAdjustmentAlgorithm']] = None
 
     def __init__(self, *, settings: HathorSettings, test_mode: TestMode = TestMode.DISABLED) -> None:

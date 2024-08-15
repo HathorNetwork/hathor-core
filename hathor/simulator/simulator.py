@@ -26,7 +26,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.patches import SimulatorCpuMiningService, SimulatorVertexVerifier
@@ -81,7 +81,7 @@ class Simulator:
         """
         return Builder() \
             .set_network(self._network) \
-            .set_peer_id(PeerId()) \
+            .set_peer(Peer()) \
             .set_soft_voided_tx_ids(set()) \
             .enable_full_verification() \
             .enable_sync_v1() \

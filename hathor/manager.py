@@ -46,7 +46,7 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -96,7 +96,7 @@ class HathorManager:
         pubsub: PubSubManager,
         consensus_algorithm: ConsensusAlgorithm,
         daa: DifficultyAdjustmentAlgorithm,
-        peer_id: PeerId,
+        peer: Peer,
         tx_storage: TransactionStorage,
         p2p_manager: ConnectionsManager,
         event_manager: EventManager,
@@ -119,7 +119,7 @@ class HathorManager:
     ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
-        :param peer_id: Id of this node.
+        :param peer: Peer object, with peer-id of this node.
         :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
         :type network: string
 
@@ -163,7 +163,7 @@ class HathorManager:
         # Remote address, which can be different from local address.
         self.remote_address = None
 
-        self.my_peer = peer_id
+        self.my_peer = peer
         self.network = network
 
         self.is_started: bool = False
@@ -976,7 +976,7 @@ class HathorManager:
     def has_sync_version_capability(self) -> bool:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
 
-    def add_peer_to_whitelist(self, peer_id):
+    def add_peer_to_whitelist(self, peer_id: str) -> None:
         if not self._settings.ENABLE_PEER_WHITELIST:
             return
 

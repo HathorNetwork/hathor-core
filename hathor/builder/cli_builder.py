@@ -36,7 +36,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -98,7 +98,7 @@ class CliBuilder:
         self.log = logger.new()
         self.reactor = reactor
 
-        peer_id = PeerId.create_from_json_path(self._args.peer) if self._args.peer else PeerId()
+        peer = Peer.create_from_json_path(self._args.peer) if self._args.peer else Peer()
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
         self.log.info(
@@ -106,7 +106,7 @@ class CliBuilder:
             hathor=hathor.__version__,
             pid=os.getpid(),
             genesis=get_genesis_short_hash(),
-            my_peer_id=str(peer_id.id),
+            my_peer_id=str(peer.id),
             python=python,
             platform=platform.platform(),
             settings=settings_source,
@@ -225,7 +225,7 @@ class CliBuilder:
 
         if self._args.x_enable_event_queue:
             self.event_ws_factory = EventWebsocketFactory(
-                peer_id=not_none(peer_id.id),
+                peer_id=not_none(peer.id),
                 network=network,
                 reactor=reactor,
                 event_storage=event_storage
@@ -307,7 +307,7 @@ class CliBuilder:
             settings=settings,
             reactor=reactor,
             network=network,
-            my_peer=peer_id,
+            my_peer=peer,
             pubsub=pubsub,
             ssl=True,
             whitelist_only=False,
@@ -348,13 +348,13 @@ class CliBuilder:
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
             daa=daa,
-            peer_id=peer_id,
+            peer=peer,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
             event_manager=event_manager,
             wallet=self.wallet,
             checkpoints=settings.CHECKPOINTS,
-            environment_info=get_environment_info(args=str(self._args), peer_id=peer_id.id),
+            environment_info=get_environment_info(args=str(self._args), peer_id=peer.id),
             full_verification=full_verification,
             enable_event_queue=self._args.x_enable_event_queue,
             bit_signaling_service=bit_signaling_service,

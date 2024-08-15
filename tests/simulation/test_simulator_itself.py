@@ -2,7 +2,7 @@ import pytest
 
 from hathor.builder import SyncSupportLevel
 from hathor.manager import HathorManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.simulator import FakeConnection, Simulator
 from tests import unittest
 
@@ -42,7 +42,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
     def create_simulator_peer(
         self,
         simulator: Simulator,
-        peer_id_pool: list[PeerId],
+        peer_pool: list[Peer],
         enable_sync_v1: bool | None = None,
         enable_sync_v2: bool | None = None
     ) -> HathorManager:
@@ -59,7 +59,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         sync_v2_support = SyncSupportLevel.ENABLED if enable_sync_v2 else SyncSupportLevel.DISABLED
 
         builder = simulator.get_default_builder() \
-            .set_peer_id(self.get_random_peer_id_from_pool()) \
+            .set_peer(self.get_random_peer_from_pool()) \
             .set_sync_v1_support(sync_v1_support) \
             .set_sync_v2_support(sync_v2_support)
 
@@ -74,9 +74,9 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         nodes = []
         miners = []
         tx_generators = []
-        peer_id_pool = self.new_peer_id_pool()
+        peer_pool = self.new_peer_pool()
 
-        manager = self.create_simulator_peer(simulator, peer_id_pool)
+        manager = self.create_simulator_peer(simulator, peer_pool)
         nodes.append(manager)
         miner = simulator.create_miner(manager, hashpower=10e6)
         miner.start()
@@ -85,7 +85,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         simulator.run(10)
 
         for i, hashpower in enumerate([10e6, 8e6, 5e6]):
-            manager = self.create_simulator_peer(simulator, peer_id_pool)
+            manager = self.create_simulator_peer(simulator, peer_pool)
             for node in nodes:
                 conn = FakeConnection(manager, node, latency=0.085)
                 simulator.add_connection(conn)
@@ -103,7 +103,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
         self.log.debug(f'run{run_i}: adding late node')
 
-        late_manager = self.create_simulator_peer(simulator, peer_id_pool)
+        late_manager = self.create_simulator_peer(simulator, peer_pool)
         for node in nodes:
             conn = FakeConnection(late_manager, node, latency=0.300)
             simulator.add_connection(conn)
@@ -152,18 +152,18 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         miners2 = []
         tx_generators1 = []
         tx_generators2 = []
-        peer_id_pool1 = self.new_peer_id_pool()
-        peer_id_pool2 = self.new_peer_id_pool()
+        peer_pool1 = self.new_peer_pool()
+        peer_pool2 = self.new_peer_pool()
 
         self.log.debug('part1 simulator1')
-        manager1 = self.create_simulator_peer(self.simulator1, peer_id_pool1)
+        manager1 = self.create_simulator_peer(self.simulator1, peer_pool1)
         nodes1.append(manager1)
         miner1 = self.simulator1.create_miner(manager1, hashpower=10e6)
         miner1.start()
         miners1.append(miner1)
 
         self.log.debug('part1 simulator2')
-        manager2 = self.create_simulator_peer(self.simulator2, peer_id_pool2)
+        manager2 = self.create_simulator_peer(self.simulator2, peer_pool2)
         nodes2.append(manager2)
         miner2 = self.simulator2.create_miner(manager2, hashpower=10e6)
         miner2.start()
@@ -179,7 +179,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
 
         for i, hashpower in enumerate([10e6, 8e6, 5e6]):
             self.log.debug(f'part2.{i} simulator1')
-            manager1 = self.create_simulator_peer(self.simulator1, peer_id_pool1)
+            manager1 = self.create_simulator_peer(self.simulator1, peer_pool1)
             for node in nodes1:
                 conn = FakeConnection(manager1, node, latency=0.085)
                 self.simulator1.add_connection(conn)
@@ -189,7 +189,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
             miners1.append(miner1)
 
             self.log.debug(f'part2.{i} simulator2')
-            manager2 = self.create_simulator_peer(self.simulator2, peer_id_pool2)
+            manager2 = self.create_simulator_peer(self.simulator2, peer_pool2)
             for node in nodes2:
                 conn = FakeConnection(manager2, node, latency=0.085)
                 self.simulator2.add_connection(conn)
@@ -222,14 +222,14 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         self.log.debug('adding late node')
 
         self.log.debug('part4 simulator1')
-        late_manager1 = self.create_simulator_peer(self.simulator1, peer_id_pool1)
+        late_manager1 = self.create_simulator_peer(self.simulator1, peer_pool1)
         for node in nodes1:
             conn = FakeConnection(late_manager1, node, latency=0.300)
             self.simulator1.add_connection(conn)
         nodes1.append(late_manager1)
 
         self.log.debug('part4 simulator2')
-        late_manager2 = self.create_simulator_peer(self.simulator2, peer_id_pool2)
+        late_manager2 = self.create_simulator_peer(self.simulator2, peer_pool2)
         for node in nodes2:
             conn = FakeConnection(late_manager2, node, latency=0.300)
             self.simulator2.add_connection(conn)

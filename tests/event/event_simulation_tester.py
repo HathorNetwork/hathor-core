@@ -23,7 +23,7 @@ from hathor.builder import Builder
 from hathor.event.websocket import EventWebsocketProtocol
 from hathor.event.websocket.request import Request
 from hathor.event.websocket.response import EventResponse, InvalidRequestResponse
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.transaction.util import unpack, unpack_len
 from hathor.util import json_loadb
 from tests.simulation.base import SimulatorTestCase
@@ -34,14 +34,14 @@ class BaseEventSimulationTester(SimulatorTestCase):
     builder: Builder
 
     def _create_artifacts(self) -> None:
-        peer_id = PeerId()
-        builder = self.builder.set_peer_id(peer_id) \
+        peer = Peer()
+        builder = self.builder.set_peer(peer) \
             .disable_full_verification() \
             .enable_event_queue()
         artifacts = self.simulator.create_artifacts(builder)
 
-        assert peer_id.id is not None
-        self.peer_id: str = peer_id.id
+        assert peer.id is not None
+        self.peer_id: str = peer.id
         self.manager = artifacts.manager
         self.manager.allow_mining_without_peers()
         self.settings = artifacts.settings

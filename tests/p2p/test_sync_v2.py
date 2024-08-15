@@ -7,7 +7,7 @@ from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
 from hathor.simulator import FakeConnection
@@ -66,9 +66,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         # Create a new peer and run sync for a while (but stop before getting synced).
         path = self.mkdtemp()
-        peer_id = PeerId()
+        peer = Peer()
         builder2 = self.simulator.get_default_builder() \
-            .set_peer_id(peer_id) \
+            .set_peer(peer) \
             .disable_sync_v1() \
             .enable_sync_v2() \
             .use_rocksdb(path)
@@ -107,7 +107,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         # Restart full node using the same db.
         builder3 = self.simulator.get_default_builder() \
-            .set_peer_id(peer_id) \
+            .set_peer(peer) \
             .disable_sync_v1() \
             .enable_sync_v2() \
             .use_rocksdb(path)
@@ -220,9 +220,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             print()
 
         # Create a new peer and run sync for a while (but stop before getting synced).
-        peer_id = PeerId()
+        peer = Peer()
         builder2 = self.simulator.get_default_builder() \
-            .set_peer_id(peer_id) \
+            .set_peer(peer) \
             .disable_sync_v1() \
             .enable_sync_v2() \
 
@@ -311,9 +311,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertGreater(mempool_tips_count, 30)
 
         # Create a new peer and run sync for a while (but stop before getting synced).
-        peer_id = PeerId()
+        peer = Peer()
         builder2 = self.simulator.get_default_builder() \
-            .set_peer_id(peer_id) \
+            .set_peer(peer) \
             .disable_sync_v1() \
             .enable_sync_v2() \
 

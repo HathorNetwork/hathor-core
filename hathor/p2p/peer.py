@@ -49,7 +49,7 @@ class PeerFlags(str, Enum):
     RETRIES_EXCEEDED = 'retries_exceeded'
 
 
-class PeerId:
+class Peer:
     """ Identify a peer, even when it is disconnected.
 
     The public_key and private_key are used to ensure that a new connection
@@ -92,7 +92,7 @@ class PeerId:
 
     def __str__(self):
         return (
-            f'PeerId(id={self.id}, entrypoints={self.entrypoints_as_str()}, retry_timestamp={self.retry_timestamp}, '
+            f'Peer(id={self.id}, entrypoints={self.entrypoints_as_str()}, retry_timestamp={self.retry_timestamp}, '
             f'retry_interval={self.retry_interval})'
         )
 
@@ -100,8 +100,8 @@ class PeerId:
         """Return a list of entrypoints serialized as str"""
         return list(map(str, self.entrypoints))
 
-    def merge(self, other: 'PeerId') -> None:
-        """ Merge two PeerId objects, checking that they have the same
+    def merge(self, other: 'Peer') -> None:
+        """ Merge two Peer objects, checking that they have the same
         id, public_key, and private_key. The entrypoints are merged without
         duplicating their entries.
         """
@@ -174,18 +174,18 @@ class PeerId:
             return True
 
     @classmethod
-    def create_from_json_path(cls, path: str) -> 'PeerId':
-        """Create a new PeerId from a JSON file."""
+    def create_from_json_path(cls, path: str) -> 'Peer':
+        """Create a new Peer from a JSON file."""
         data = json.load(open(path, 'r'))
-        peer = PeerId.create_from_json(data)
+        peer = Peer.create_from_json(data)
         peer.source_file = path
         return peer
 
     @classmethod
-    def create_from_json(cls, data: dict[str, Any]) -> 'PeerId':
-        """ Create a new PeerId from JSON data.
+    def create_from_json(cls, data: dict[str, Any]) -> 'Peer':
+        """ Create a new Peer from JSON data.
 
-        It is used both to load a PeerId from disk and to create a PeerId
+        It is used both to load a Peer from disk and to create a Peer
         from a peer connection.
         """
         obj = cls(auto_generate_keys=False)
@@ -436,18 +436,18 @@ class PeerId:
         return True
 
     def reload_entrypoints_from_source_file(self) -> None:
-        """Update this PeerId's entrypoints from the json file."""
+        """Update this Peer's entrypoints from the json file."""
         if not self.source_file:
             raise Exception('Trying to reload entrypoints but no peer config file was provided.')
 
-        new_peer_id = PeerId.create_from_json_path(self.source_file)
+        new_peer = Peer.create_from_json_path(self.source_file)
 
-        if new_peer_id.id != self.id:
+        if new_peer.id != self.id:
             self._log.error(
                 'Ignoring peer id file update because the peer_id does not match.',
                 current_peer_id=self.id,
-                new_peer_id=new_peer_id.id,
+                new_peer_id=new_peer.id,
             )
             return
 
-        self.entrypoints = new_peer_id.entrypoints
+        self.entrypoints = new_peer.entrypoints

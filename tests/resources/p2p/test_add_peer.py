@@ -1,7 +1,7 @@
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.entrypoint import Entrypoint
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.p2p.resources import AddPeersResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
@@ -21,7 +21,7 @@ class BaseAddPeerTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['success'])
 
         # test when we send a peer we're already connected to
-        peer = PeerId()
+        peer = Peer()
         peer.entrypoints = [Entrypoint.parse('tcp://localhost:8006')]
         self.manager.connections.peer_storage.add(peer)
         response = yield self.web.post('p2p/peers', ['tcp://localhost:8006', 'tcp://localhost:8007'])
