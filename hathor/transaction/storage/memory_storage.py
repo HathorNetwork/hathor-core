@@ -14,6 +14,7 @@
 
 from typing import Any, Iterator, Optional, TypeVar
 
+from structlog.stdlib import BoundLogger
 from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
@@ -23,7 +24,6 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.types import VertexId
 
 _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
 
@@ -128,7 +128,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         return self.attributes.get(key)
 
     @override
-    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
-        # This method is only ever used by the `migrate_static_metadata` migration, and therefore it is not necessary
-        # to implement for the memory storage.
+    def migrate_static_metadata(self, log: BoundLogger) -> None:
+        # This method is only ever used by the `migrate_static_metadata` migration, and therefore must not be
+        # implemented for the memory storage.
         raise NotImplementedError

@@ -13,13 +13,12 @@
 #  limitations under the License.
 
 from typing import TYPE_CHECKING
-from unittest.mock import Mock
 
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.transaction import BaseTransaction
-from hathor.transaction.static_metadata import BlockStaticMetadata, TransactionStaticMetadata, VertexStaticMetadata
+from hathor.transaction import Block, Transaction
+from hathor.transaction.static_metadata import BlockStaticMetadata, TransactionStaticMetadata
 from hathor.transaction.storage.migrations import BaseMigration
 from hathor.util import progress
 
@@ -40,48 +39,29 @@ class Migration(BaseMigration):
         """This migration takes attributes from existing vertex metadata and saves them as static metadata."""
         log = logger.new()
         settings = get_global_settings()
-        # We have to iterate over metadata instead of vertices because the storage doesn't allow us to get a vertex if
-        # its static metadata is not set. We also use raw dict metadata because `metadata.create_from_json()` doesn't
-        # include attributes that should be static, which are exactly the ones we need for this migration.
-        metadata_iter = storage.iter_all_raw_metadata()
 
-        for vertex_id, raw_metadata in progress(metadata_iter, log=log, total=None):
-            height = raw_metadata['height']
-            min_height = raw_metadata['min_height']
-            bit_counts = raw_metadata.get('feature_activation_bit_counts')
+        # First we migrate static metadata using the storage itself since it uses internal structures.
+        log.info('creating static metadata...')
+        storage.migrate_static_metadata(log)
 
-            assert isinstance(height, int)
-            assert isinstance(min_height, int)
+        # Now that static metadata is set, we can use the topological iterator normally
+        log.info('removing old metadata and validating...')
+        topological_iter = storage.topological_iterator()
 
-            static_metadata: VertexStaticMetadata
-            is_block = (vertex_id == settings.GENESIS_BLOCK_HASH or height != 0)
+        for vertex in progress(topological_iter, log=log, total=None):
+            # We re-save the vertex's metadata so it's serialized with the new `to_bytes()` method, excluding fields
+            # that were migrated.
+            storage.save_transaction(vertex, only_metadata=True)
 
-            if is_block:
-                assert isinstance(bit_counts, list)
-                for item in bit_counts:
-                    assert isinstance(item, int)
-
-                static_metadata = BlockStaticMetadata(
-                    height=height,
-                    min_height=min_height,
-                    feature_activation_bit_counts=bit_counts,
-                    feature_states={},  # This will be populated in the next PR
+            # We re-create the static metadata from scratch and compare it with the value that was created by the
+            # migration above, as a sanity check.
+            if isinstance(vertex, Block):
+                assert vertex.static_metadata == BlockStaticMetadata.create_from_storage(
+                    vertex, settings, storage
+                )
+            elif isinstance(vertex, Transaction):
+                assert vertex.static_metadata == TransactionStaticMetadata.create_from_storage(
+                    vertex, settings, storage
                 )
             else:
-                assert bit_counts is None or bit_counts == []
-                static_metadata = TransactionStaticMetadata(
-                    min_height=min_height
-                )
-
-            # We create a fake vertex with just the hash and static metadata, so we can use the existing
-            # `storage._save_static_metadata()` instead of having to create an unsafe storage API that takes those
-            # two arguments.
-            mock_vertex = Mock(spec_set=BaseTransaction)
-            mock_vertex.hash = vertex_id
-            mock_vertex.static_metadata = static_metadata
-            storage._save_static_metadata(mock_vertex)
-
-            # Now we can take the actual vertex from the storage and save its metadata. It'll be serialized with the
-            # new `to_bytes()` method, excluding fields that were migrated.
-            vertex = storage.get_transaction(vertex_id)
-            storage.save_transaction(vertex, only_metadata=True)
+                raise NotImplementedError

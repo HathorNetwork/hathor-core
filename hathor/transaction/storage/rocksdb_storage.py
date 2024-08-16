@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
+from structlog.stdlib import BoundLogger
 from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
-from hathor.transaction.static_metadata import VertexStaticMetadata
+from hathor.transaction.static_metadata import BlockStaticMetadata, TransactionStaticMetadata, VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.types import VertexId
-from hathor.util import json_loadb
+from hathor.util import json_loadb, progress
 
 if TYPE_CHECKING:
     import rocksdb
@@ -235,9 +235,41 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return data.decode()
 
     @override
-    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
-        items = self._db.iteritems(self._cf_meta)
-        items.seek_to_first()
+    def migrate_static_metadata(self, log: BoundLogger) -> None:
+        metadata_iter = self._db.iteritems(self._cf_meta)
+        metadata_iter.seek_to_first()
 
-        for (_, vertex_id), metadata_bytes in items:
-            yield vertex_id, json_loadb(metadata_bytes)
+        # We have to iterate over metadata instead of vertices because the storage doesn't allow us to get a vertex if
+        # its static metadata is not set. We also use raw dict metadata because `metadata.create_from_json()` doesn't
+        # include attributes that should be static, which are exactly the ones we need for this migration.
+        for (_, vertex_id), metadata_bytes in progress(metadata_iter, log=log, total=None):
+            raw_metadata = json_loadb(metadata_bytes)
+            height = raw_metadata['height']
+            min_height = raw_metadata['min_height']
+            bit_counts = raw_metadata.get('feature_activation_bit_counts')
+
+            assert isinstance(height, int)
+            assert isinstance(min_height, int)
+
+            static_metadata: VertexStaticMetadata
+            is_block = (vertex_id == self._settings.GENESIS_BLOCK_HASH or height != 0)
+
+            if is_block:
+                assert isinstance(bit_counts, list)
+                for item in bit_counts:
+                    assert isinstance(item, int)
+
+                static_metadata = BlockStaticMetadata(
+                    height=height,
+                    min_height=min_height,
+                    feature_activation_bit_counts=bit_counts,
+                    feature_states={},  # This will be populated in the next PR
+                )
+            else:
+                assert bit_counts is None or bit_counts == []
+                static_metadata = TransactionStaticMetadata(
+                    min_height=min_height
+                )
+
+            # Save it manually to the CF
+            self._db.put((self._cf_static_meta, vertex_id), static_metadata.to_bytes())

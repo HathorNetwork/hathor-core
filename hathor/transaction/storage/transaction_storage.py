@@ -22,6 +22,7 @@ from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
 from structlog import get_logger
+from structlog.stdlib import BoundLogger
 
 from hathor.conf.settings import HathorSettings
 from hathor.execution_manager import ExecutionManager
@@ -1126,10 +1127,9 @@ class TransactionStorage(ABC):
         return block
 
     @abstractmethod
-    def iter_all_raw_metadata(self) -> Iterator[tuple[VertexId, dict[str, Any]]]:
+    def migrate_static_metadata(self, log: BoundLogger) -> None:
         """
-        Iterate over all vertex metadata from this storage, as raw dicts. This is only used for the
-        `migrate_static_metadata` migration.
+        Migrate metadata attributes to static metadata. This is only used for the `migrate_static_metadata` migration.
         """
         raise NotImplementedError
 
