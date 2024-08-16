@@ -8,6 +8,7 @@ from twisted.internet.interfaces import ITransport
 
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer import InvalidPeerIdException, Peer
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.util import not_none
 from tests import unittest
@@ -17,7 +18,7 @@ from tests.unittest import TestBuilder
 class PeerIdTest(unittest.TestCase):
     def test_invalid_id(self) -> None:
         p1 = Peer()
-        p1.id = not_none(p1.id)[::-1]
+        p1.id = PeerId(str(not_none(p1.id))[::-1])
         self.assertRaises(InvalidPeerIdException, p1.validate)
 
     def test_invalid_public_key(self) -> None:

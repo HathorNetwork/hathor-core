@@ -40,8 +40,7 @@ class BaseEventSimulationTester(SimulatorTestCase):
             .enable_event_queue()
         artifacts = self.simulator.create_artifacts(builder)
 
-        assert peer.id is not None
-        self.peer_id: str = peer.id
+        self.peer_id: str = str(peer.id)
         self.manager = artifacts.manager
         self.manager.allow_mining_without_peers()
         self.settings = artifacts.settings

@@ -42,7 +42,7 @@ from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import Random, not_none
+from hathor.util import Random
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
@@ -225,7 +225,7 @@ class CliBuilder:
 
         if self._args.x_enable_event_queue:
             self.event_ws_factory = EventWebsocketFactory(
-                peer_id=not_none(peer.id),
+                peer_id=str(peer.id),
                 network=network,
                 reactor=reactor,
                 event_storage=event_storage
@@ -354,7 +354,7 @@ class CliBuilder:
             event_manager=event_manager,
             wallet=self.wallet,
             checkpoints=settings.CHECKPOINTS,
-            environment_info=get_environment_info(args=str(self._args), peer_id=peer.id),
+            environment_info=get_environment_info(args=str(self._args), peer_id=str(peer.id)),
             full_verification=full_verification,
             enable_event_queue=self._args.x_enable_event_queue,
             bit_signaling_service=bit_signaling_service,

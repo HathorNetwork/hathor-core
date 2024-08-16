@@ -19,6 +19,7 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import Peer
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 from hathor.util import json_dumps, json_loads
 
@@ -68,7 +69,7 @@ class PeerIdState(BaseState):
         protocol = self.protocol
         my_peer = protocol.my_peer
         hello = {
-            'id': my_peer.id,
+            'id': str(my_peer.id),
             'pubKey': my_peer.get_public_key(),
             'entrypoints': my_peer.entrypoints_as_str(),
         }
@@ -139,7 +140,7 @@ class PeerIdState(BaseState):
 
         self.send_ready()
 
-    def _should_block_peer(self, peer_id: str) -> bool:
+    def _should_block_peer(self, peer_id: PeerId) -> bool:
         """ Determine if peer should not be allowed to connect.
 
         Currently this is only because the peer is not in a whitelist and whitelist blocking is active.

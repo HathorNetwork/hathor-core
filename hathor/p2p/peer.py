@@ -32,6 +32,7 @@ from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, tr
 from hathor.conf.get_settings import get_global_settings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_dns, generate_certificate
 from hathor.util import not_none
 
@@ -59,7 +60,7 @@ class Peer:
     Usually a peer will have only one entrypoint.
     """
 
-    id: Optional[str]
+    id: Optional[PeerId]
     entrypoints: list[Entrypoint]
     private_key: Optional[rsa.RSAPrivateKeyWithSerialization]
     public_key: Optional[rsa.RSAPublicKey]
@@ -135,7 +136,7 @@ class Peer:
         self.public_key = self.private_key.public_key()
         self.id = self.calculate_id()
 
-    def calculate_id(self) -> str:
+    def calculate_id(self) -> PeerId:
         """ Calculate and return the id based on the public key.
         """
         assert self.public_key is not None
@@ -143,7 +144,7 @@ class Peer:
                                                   format=serialization.PublicFormat.SubjectPublicKeyInfo)
         h1 = hashlib.sha256(public_der)
         h2 = hashlib.sha256(h1.digest())
-        return h2.hexdigest()
+        return PeerId(h2.digest())
 
     def get_public_key(self) -> str:
         """ Return the public key in DER encoding as an `str`.
@@ -189,7 +190,7 @@ class Peer:
         from a peer connection.
         """
         obj = cls(auto_generate_keys=False)
-        obj.id = data['id']
+        obj.id = PeerId(data['id'])
 
         if 'pubKey' in data:
             public_key_der = base64.b64decode(data['pubKey'])
@@ -252,7 +253,7 @@ class Peer:
                                                   format=serialization.PublicFormat.SubjectPublicKeyInfo)
         # This format is compatible with libp2p.
         result = {
-            'id': self.id,
+            'id': str(self.id),
             'pubKey': base64.b64encode(public_der).decode('utf-8'),
             'entrypoints': self.entrypoints_as_str(),
         }

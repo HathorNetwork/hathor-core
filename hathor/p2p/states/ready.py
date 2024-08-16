@@ -165,7 +165,7 @@ class ReadyState(BaseState):
         for peer in peer_list:
             if peer.entrypoints:
                 data.append({
-                    'id': peer.id,
+                    'id': str(peer.id),
                     'entrypoints': peer.entrypoints_as_str(),
                 })
         self.send_message(ProtocolMessages.PEERS, json_dumps(data))
