@@ -113,10 +113,17 @@ class NanoContractHistoryResource(Resource):
             iter_history = iter(tx_storage.indexes.nc_history.get_newest(nc_id_bytes))
 
         count = params.count
+        has_more = False
         history_list = []
         for idx, tx_id in enumerate(iter_history):
             history_list.append(tx_storage.get_transaction(tx_id).to_json_extended())
             if idx >= count - 1:
+                # Check if iterator still has more elements
+                try:
+                    next(iter_history)
+                    has_more = True
+                except StopIteration:
+                    has_more = False
                 break
 
         response = NCHistoryResponse(
@@ -125,6 +132,7 @@ class NanoContractHistoryResource(Resource):
             after=params.after,
             before=params.before,
             history=history_list,
+            has_more=has_more,
         )
         return response.json_dumpb()
 
@@ -142,6 +150,7 @@ class NCHistoryResponse(Response):
     after: Optional[str]
     before: Optional[str]
     history: list[dict[str, Any]]
+    has_more: bool
 
 
 openapi_history_response = {
@@ -248,6 +257,7 @@ NanoContractHistoryResource.openapi = {
                                     'value': {
                                         'success': True,
                                         'count': 100,
+                                        'has_more': False,
                                         'history': [openapi_history_response],
                                     }
                                 },

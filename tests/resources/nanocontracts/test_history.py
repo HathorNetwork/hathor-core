@@ -151,6 +151,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         )
         data1 = response1.json_value()
         self.assertEqual(len(data1['history']), 1)
+        self.assertEqual(data1['has_more'], False)
         self.assertEqual(data1['history'][0]['hash'], nc1.hash.hex())
         self.assertEqual(data1['history'][0]['nc_method'], 'initialize')
 
@@ -175,6 +176,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
             }
         )
         data2 = response2.json_value()
+        self.assertEqual(data2['has_more'], False)
         self.assertEqual(len(data2['history']), 2)
         ids = [tx['hash'] for tx in data2['history']]
         self.assertEqual(ids, [tx1.hash.hex(), nc1.hash.hex()])
@@ -190,6 +192,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         )
         data2a = response2a.json_value()
         self.assertEqual(len(data2a['history']), 1)
+        self.assertEqual(data2a['has_more'], False)
         self.assertEqual(data2a['count'], 1)
         self.assertEqual(data2a['after'], ids[0])
         self.assertEqual(data2a['before'], None)
@@ -207,10 +210,28 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         )
         data2b = response2b.json_value()
         self.assertEqual(len(data2b['history']), 1)
+        self.assertEqual(data2b['has_more'], False)
         self.assertEqual(data2b['count'], 1)
         self.assertEqual(data2b['after'], None)
         self.assertEqual(data2b['before'], ids[1])
         paginated_ids = [tx['hash'] for tx in data2b['history']]
+        self.assertEqual(paginated_ids, [ids[0]])
+
+        # Getting the first page only
+        response2c = yield self.web.get(
+            'history',
+            {
+                b'id': nc1.hash.hex().encode('ascii'),
+                b'count': b'1',
+            }
+        )
+        data2c = response2c.json_value()
+        self.assertEqual(len(data2c['history']), 1)
+        self.assertEqual(data2c['has_more'], True)
+        self.assertEqual(data2c['count'], 1)
+        self.assertEqual(data2c['after'], None)
+        self.assertEqual(data2c['before'], None)
+        paginated_ids = [tx['hash'] for tx in data2c['history']]
         self.assertEqual(paginated_ids, [ids[0]])
 
         # Make sure nc2 index still has only one tx.
@@ -221,6 +242,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
             }
         )
         data3 = response3.json_value()
+        self.assertEqual(data3['has_more'], False)
         self.assertEqual(len(data3['history']), 1)
         ids = set(tx['hash'] for tx in data3['history'])
         self.assertEqual(ids, {nc2.hash.hex()})
