@@ -13,11 +13,13 @@
 # limitations under the License.
 
 from hathor.nanocontracts.resources.blueprint import BlueprintInfoResource
+from hathor.nanocontracts.resources.blueprint_source_code import BlueprintSourceCodeResource
 from hathor.nanocontracts.resources.history import NanoContractHistoryResource
 from hathor.nanocontracts.resources.state import NanoContractStateResource
 
 __all__ = [
     'BlueprintInfoResource',
+    'BlueprintSourceCodeResource',
     'NanoContractStateResource',
     'NanoContractHistoryResource',
 ]

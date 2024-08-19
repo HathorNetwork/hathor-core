@@ -164,7 +164,7 @@ class BlueprintInfoResponse(Response):
 
 
 BlueprintInfoResource.openapi = {
-    '/version': {
+    '/nano_contract/blueprint/info': {
         'x-visibility': 'public',
         'x-rate-limit': {
             'global': [
