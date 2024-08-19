@@ -46,7 +46,7 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -60,7 +60,7 @@ from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import Address, VertexId
-from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none
+from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
@@ -97,7 +97,7 @@ class HathorManager:
         pubsub: PubSubManager,
         consensus_algorithm: ConsensusAlgorithm,
         daa: DifficultyAdjustmentAlgorithm,
-        peer: Peer,
+        peer: PrivatePeer,
         tx_storage: TransactionStorage,
         p2p_manager: ConnectionsManager,
         event_manager: EventManager,
@@ -298,7 +298,7 @@ class HathorManager:
                 sys.exit(-1)
 
         if self._enable_event_queue:
-            self._event_manager.start(str(not_none(self.my_peer.id)))
+            self._event_manager.start(str(self.my_peer.id))
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)

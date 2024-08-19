@@ -6,7 +6,7 @@ from twisted.internet.protocol import Protocol
 from twisted.python.failure import Failure
 
 from hathor.p2p.entrypoint import Entrypoint
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
 from hathor.simulator import FakeConnection
 from hathor.util import json_dumps, json_loadb
@@ -19,8 +19,8 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
-        self.peer1 = Peer()
-        self.peer2 = Peer()
+        self.peer1 = PrivatePeer.auto_generated()
+        self.peer2 = PrivatePeer.auto_generated()
         self.manager1 = self.create_peer(self.network, peer=self.peer1)
         self.manager2 = self.create_peer(self.network, peer=self.peer2)
         self.conn = FakeConnection(self.manager1, self.manager2)
@@ -73,8 +73,8 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
     def test_peer_with_entrypoint(self) -> None:
         entrypoint_str = 'tcp://192.168.1.1:54321'
         entrypoint = Entrypoint.parse(entrypoint_str)
-        self.peer1.entrypoints.append(entrypoint)
-        self.peer2.entrypoints.append(entrypoint)
+        self.peer1.info.entrypoints.append(entrypoint)
+        self.peer2.info.entrypoints.append(entrypoint)
         self.conn.run_one_step()  # HELLO
 
         msg1 = self.conn.peek_tr1_value()
@@ -291,22 +291,22 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.run_one_step()  # HELLO
         self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
         # No peer id in the peer_storage (known_peers)
-        self.assertNotIn(self.peer2.id, self.manager1.connections.peer_storage)
+        self.assertNotIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
         # The peer READY now depends on a message exchange from both peers, so we need one more step
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
         self.assertIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
         # Peer id 2 in the peer_storage (known_peers) after connection
-        self.assertIn(self.peer2.id, self.manager1.connections.peer_storage)
+        self.assertIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
         self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
         self.conn.disconnect(Failure(Exception('testing')))
         # Peer id 2 in the peer_storage (known_peers) after disconnection but before looping call
-        self.assertIn(self.peer2.id, self.manager1.connections.peer_storage)
+        self.assertIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
         self.assertNotIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
 
         self.clock.advance(10)
         # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call
-        self.assertNotIn(self.peer2.id, self.manager1.connections.peer_storage)
+        self.assertNotIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
 
     def test_idle_connection(self) -> None:
         self.clock.advance(self._settings.PEER_IDLE_TIMEOUT - 10)

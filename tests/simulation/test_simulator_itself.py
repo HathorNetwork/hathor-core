@@ -2,7 +2,7 @@ import pytest
 
 from hathor.builder import SyncSupportLevel
 from hathor.manager import HathorManager
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.simulator import FakeConnection, Simulator
 from tests import unittest
 
@@ -42,7 +42,7 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
     def create_simulator_peer(
         self,
         simulator: Simulator,
-        peer_pool: list[Peer],
+        peer_pool: list[PrivatePeer],
         enable_sync_v1: bool | None = None,
         enable_sync_v2: bool | None = None
     ) -> HathorManager:

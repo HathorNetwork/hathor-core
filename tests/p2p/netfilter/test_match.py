@@ -11,7 +11,7 @@ from hathor.p2p.netfilter.matches import (
     NetfilterMatchOr,
     NetfilterMatchPeerId,
 )
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.simulator import FakeConnection
 from tests import unittest
 
@@ -202,8 +202,8 @@ class BaseNetfilterMatchTest(unittest.TestCase):
 
     def test_match_peer_id(self) -> None:
         network = 'testnet'
-        peer1 = Peer()
-        peer2 = Peer()
+        peer1 = PrivatePeer.auto_generated()
+        peer2 = PrivatePeer.auto_generated()
         manager1 = self.create_peer(network, peer=peer1)
         manager2 = self.create_peer(network, peer=peer2)
 

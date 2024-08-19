@@ -20,9 +20,9 @@ import json
 
 
 def main() -> None:
-    from hathor.p2p.peer import Peer
+    from hathor.p2p.peer import PrivatePeer
 
-    peer = Peer()
-    data = peer.to_json(include_private_key=True)
+    peer = PrivatePeer.auto_generated()
+    data = peer.to_json_private()
     txt = json.dumps(data, indent=4)
     print(txt)

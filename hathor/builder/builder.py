@@ -35,7 +35,7 @@ from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesM
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
@@ -69,6 +69,7 @@ class SyncSupportLevel(IntEnum):
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
         vertex_parser: VertexParser,
+        vertex_handler: VertexHandler,
     ) -> None:
         """Adds the sync factory to the manager according to the support level."""
         from hathor.p2p.sync_v1.factory import SyncV11Factory
@@ -82,9 +83,13 @@ class SyncSupportLevel(IntEnum):
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(
-                SyncVersion.V2, SyncV2Factory(settings, p2p_manager, vertex_parser=vertex_parser)
+            sync_v2_factory = SyncV2Factory(
+                settings,
+                p2p_manager,
+                vertex_parser=vertex_parser,
+                vertex_handler=vertex_handler,
             )
+            p2p_manager.add_sync_factory(SyncVersion.V2, sync_v2_factory)
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
@@ -96,7 +101,7 @@ class StorageType(Enum):
 
 class BuildArtifacts(NamedTuple):
     """Artifacts created by a builder."""
-    peer: Peer
+    peer: PrivatePeer
     settings: HathorSettingsType
     rng: Random
     reactor: Reactor
@@ -137,7 +142,7 @@ class Builder:
         self._checkpoints: Optional[list[Checkpoint]] = None
         self._capabilities: Optional[list[str]] = None
 
-        self._peer: Optional[Peer] = None
+        self._peer: Optional[PrivatePeer] = None
         self._network: Optional[str] = None
         self._cmdline: str = ''
 
@@ -337,7 +342,7 @@ class Builder:
         self._capabilities = capabilities
         return self
 
-    def set_peer(self, peer: Peer) -> 'Builder':
+    def set_peer(self, peer: PrivatePeer) -> 'Builder':
         self.check_if_can_modify()
         self._peer = peer
         return self
@@ -361,7 +366,7 @@ class Builder:
 
         return set(settings.SOFT_VOIDED_TX_IDS)
 
-    def _get_peer(self) -> Peer:
+    def _get_peer(self) -> PrivatePeer:
         if self._peer is not None:
             return self._peer
         raise ValueError('peer not set')
@@ -436,6 +441,7 @@ class Builder:
             self._sync_v1_support,
             self._sync_v2_support,
             self._get_or_create_vertex_parser(),
+            self._get_or_create_vertex_handler(),
         )
         return self._p2p_manager
 

@@ -40,7 +40,7 @@ class BlockchainStreamingClient:
         self.sync_agent = sync_agent
         self.protocol = self.sync_agent.protocol
         self.tx_storage = self.sync_agent.tx_storage
-        self.manager = self.sync_agent.manager
+        self.vertex_handler = self.sync_agent.vertex_handler
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
 
@@ -132,7 +132,7 @@ class BlockchainStreamingClient:
 
         if blk.can_validate_full():
             try:
-                self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+                self.vertex_handler.on_new_vertex(blk, propagate_to_peers=False, fails_silently=False)
             except HathorError:
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return

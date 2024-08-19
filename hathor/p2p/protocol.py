@@ -26,7 +26,7 @@ from twisted.python.failure import Failure
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer, PublicPeer
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
@@ -74,12 +74,12 @@ class HathorProtocol:
         NO_ENTRYPOINTS = 'no_entrypoints'
 
     network: str
-    my_peer: Peer
+    my_peer: PrivatePeer
     connections: 'ConnectionsManager'
     node: 'HathorManager'
     app_version: str
     last_message: float
-    peer: Optional[Peer]
+    _peer: Optional[PublicPeer]
     transport: Optional[ITransport]
     state: Optional[BaseState]
     connection_time: float
@@ -92,10 +92,15 @@ class HathorProtocol:
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
     capabilities: set[str]  # capabilities received from the peer in HelloState
 
+    @property
+    def peer(self) -> PublicPeer:
+        assert self._peer is not None, 'self.peer must be initialized'
+        return self._peer
+
     def __init__(
         self,
         network: str,
-        my_peer: Peer,
+        my_peer: PrivatePeer,
         p2p_manager: 'ConnectionsManager',
         *,
         settings: HathorSettings,
@@ -126,7 +131,7 @@ class HathorProtocol:
         self.diff_timestamp = None
 
         # The peer on the other side of the connection.
-        self.peer = None
+        self._peer = None
 
         # The last time a message has been received from this peer.
         self.last_message = 0
@@ -195,13 +200,13 @@ class HathorProtocol:
 
     def get_peer_id(self) -> Optional[PeerId]:
         """Get peer id for logging."""
-        if self.peer and self.peer.id:
+        if self._peer is not None:
             return self.peer.id
         return None
 
     def get_short_peer_id(self) -> Optional[str]:
         """Get short peer id for logging."""
-        if self.peer and self.peer.id:
+        if self._peer and self._peer.id:
             return str(self.peer.id)[:7]
         return None
 
@@ -297,8 +302,8 @@ class HathorProtocol:
 
         now = self.reactor.seconds()
         self.last_message = now
-        if self.peer is not None:
-            self.peer.last_seen = now
+        if self._peer is not None:
+            self.peer.info.last_seen = now
         self.reset_idle_timeout()
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
