@@ -13,6 +13,14 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-22.04
+    env:
+      N_BLOCKS: 20000
+      CACHE_SIZE: 100000
+      SERVER_DATA_DIR: server-data
+      TCP_PORT: 40403
+      N_RUNS: 2
+      BENCH_FILE: bench_results.json
+      BENCH_DATA_DIR: bench-data
     steps:
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
@@ -25,17 +33,36 @@ jobs:
         with:
           python: 3.11
           os: ubuntu-22.04
+      - name: Download benchmark data
+        run: |
+          mkdir $SERVER_DATA_DIR
+          poetry run hathor-cli quick_test \
+            --testnet \
+            --data $SERVER_DATA_DIR \
+            --cache \
+            --cache-size $CACHE_SIZE \
+            --quit-after-n-blocks $N_BLOCKS
+      - name: Run server node
+        run: |
+          poetry run hathor-cli run_node \
+            --testnet \
+            --data $SERVER_DATA_DIR \
+            --cache \
+            --cache-size $CACHE_SIZE \
+            --x-localhost-only \
+            --listen tcp:$TCP_PORT \
+            &
       - name: Track PR Benchmarks with Bencher
         run: |
           bencher run \
-          --project hathor-core \
-          --token '${{ secrets.BENCHER_API_TOKEN }}' \
-          --branch '${{ github.head_ref }}' \
-          --branch-start-point '${{ github.base_ref }}' \
-          --branch-start-point-hash '${{ github.event.pull_request.base.sha }}' \
-          --testbed ubuntu-22.04 \
-          --adapter shell_hyperfine \
-          --err \
-          --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-          --file bench_results.json \
-          './extras/benchmarking/benchmark_sync_v2.sh'
+            --project hathor-core \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch '${{ github.head_ref }}' \
+            --branch-start-point '${{ github.base_ref }}' \
+            --branch-start-point-hash '${{ github.event.pull_request.base.sha }}' \
+            --testbed ubuntu-22.04 \
+            --adapter shell_hyperfine \
+            --err \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --file $BENCH_FILE \
+            './extras/benchmarking/benchmark_sync_v2.sh'
