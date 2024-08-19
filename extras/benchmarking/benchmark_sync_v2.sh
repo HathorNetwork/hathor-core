@@ -1,4 +1,4 @@
-N_BLOCKS=20000
+N_BLOCKS=1000
 CACHE_SIZE=100000
 TESTNET_DATA_DIR=server-data
 TCP_PORT=40403
@@ -22,7 +22,7 @@ poetry run hathor-cli run_node \
   --cache-size $CACHE_SIZE \
   --x-localhost-only \
   --listen tcp:$TCP_PORT \
-  > /dev/null 2>&1 &
+  &
 
 # Await initialization
 sleep $AWAIT_INIT_DELAY
