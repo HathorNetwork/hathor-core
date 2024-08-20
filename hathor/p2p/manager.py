@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet import endpoints
 from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IListeningPort, IProtocolFactory, IStreamClientEndpoint
+from twisted.internet.interfaces import IListeningPort, IProtocol, IProtocolFactory, IStreamClientEndpoint
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
@@ -593,7 +593,7 @@ class ConnectionsManager:
 
     def _connect_to_callback(
         self,
-        protocol: Union[HathorProtocol, TLSMemoryBIOProtocol],
+        protocol: IProtocol,
         peer: Optional[PeerId],
         endpoint: IStreamClientEndpoint,
         entrypoint: Entrypoint,
@@ -602,6 +602,7 @@ class ConnectionsManager:
         if isinstance(protocol, HathorProtocol):
             protocol.on_outbound_connect(entrypoint)
         else:
+            assert isinstance(protocol, TLSMemoryBIOProtocol)
             assert isinstance(protocol.wrappedProtocol, HathorProtocol)
             protocol.wrappedProtocol.on_outbound_connect(entrypoint)
         self.connecting_peers.pop(endpoint)
