@@ -187,7 +187,7 @@ class ReadyState(BaseState):
         for data in received_peers:
             peer = UnverifiedPeer.create_from_json(data)
             if self.protocol.connections:
-                self.protocol.connections.on_receive_peer(peer, origin=self)
+                self.protocol.on_receive_peer(peer)
         self.log.debug('received peers', payload=payload)
 
     def send_ping_if_necessary(self) -> None:

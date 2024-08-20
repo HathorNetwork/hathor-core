@@ -64,6 +64,9 @@ Some examples that won't match:
 """
 IPV6_REGEX = re.compile(r'''^(([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$''')  # noqa: E501
 
+# A host with length 64 and over would be rejected later by twisted
+MAX_HOST_LEN = 63
+
 
 class Protocol(Enum):
     TCP = 'tcp'
@@ -261,6 +264,14 @@ peer_id=None)
         >>> str(PeerEndpoint.parse('tcp://foo.bar.baz:40403/'))
         'tcp://foo.bar.baz:40403'
 
+        >>> str(PeerEndpoint.parse('tcp://foooooooooooooooooooo.baaaaaaaaaaaaaaaaaar.baaaaaaaaaaaaaaaaaaz:40403/'))
+        'tcp://foooooooooooooooooooo.baaaaaaaaaaaaaaaaaar.baaaaaaaaaaaaaaaaaaz:40403'
+
+        >>> PeerEndpoint.parse('tcp://foooooooooooooooooooo.baaaaaaaaaaaaaaaaaar.baaaaaaaaaaaaaaaaaazz:40403/')
+        Traceback (most recent call last):
+        ...
+        ValueError: hostname too long
+
         >>> PeerEndpoint.parse('tcp://127.0.0.1:40403/?id=123')
         Traceback (most recent call last):
         ...
@@ -317,6 +328,8 @@ def _parse_address_parts(description: str) -> tuple[Protocol, str, int, str]:
     host = url.hostname
     if host is None:
         raise ValueError(f'expected a host: "{description}"')
+    if len(host) > MAX_HOST_LEN:
+        raise ValueError('hostname too long')
     port = url.port
     if port is None:
         raise ValueError(f'expected a port: "{description}"')

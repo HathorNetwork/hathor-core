@@ -18,7 +18,7 @@ class ConnectionsTest(unittest.TestCase):
         manager: HathorManager = self.create_peer('testnet', enable_sync_v1=True, enable_sync_v2=False)
 
         endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
-        manager.connections.connect_to(endpoint, use_ssl=True)
+        manager.connections.connect_to_endpoint(endpoint, use_ssl=True)
 
         self.assertIn(endpoint, manager.connections.iter_not_ready_endpoints())
         self.assertNotIn(endpoint, manager.connections.iter_ready_connections())
@@ -36,7 +36,7 @@ class ConnectionsTest(unittest.TestCase):
         )
 
         endpoint = PeerEndpoint.parse('tcp://[::1]:8005')
-        manager.connections.connect_to(endpoint, use_ssl=True)
+        manager.connections.connect_to_endpoint(endpoint, use_ssl=True)
 
         self.assertNotIn(endpoint, manager.connections.iter_not_ready_endpoints())
         self.assertNotIn(endpoint, manager.connections.iter_ready_connections())
@@ -54,10 +54,10 @@ class ConnectionsTest(unittest.TestCase):
         )
 
         endpoint_ipv6 = PeerEndpoint.parse('tcp://[::3:2:1]:8005')
-        manager.connections.connect_to(endpoint_ipv6, use_ssl=True)
+        manager.connections.connect_to_endpoint(endpoint_ipv6, use_ssl=True)
 
         endpoint_ipv4 = PeerEndpoint.parse('tcp://1.2.3.4:8005')
-        manager.connections.connect_to(endpoint_ipv4, use_ssl=True)
+        manager.connections.connect_to_endpoint(endpoint_ipv4, use_ssl=True)
 
         self.assertIn(
             endpoint_ipv4.addr.host,
@@ -84,7 +84,7 @@ class ConnectionsTest(unittest.TestCase):
         )
 
         endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
-        manager.connections.connect_to(endpoint, use_ssl=True)
+        manager.connections.connect_to_endpoint(endpoint, use_ssl=True)
 
         self.assertEqual(0, len(list(manager.connections.iter_not_ready_endpoints())))
         self.assertEqual(0, len(list(manager.connections.iter_ready_connections())))

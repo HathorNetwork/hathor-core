@@ -275,9 +275,10 @@ class FakeConnection:
         self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
         self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
 
-        # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls connect_to()
+        # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls
+        # connect_to_endpoint()
         peer = self._proto1.my_peer.to_unverified_peer() if self._fake_bootstrap_id is False else None
-        self.manager2.connections.connect_to(self.entrypoint, peer)
+        self.manager2.connections.connect_to_endpoint(self.entrypoint, peer)
 
         connecting_peers = list(self.manager2.connections.connecting_peers.values())
         for connecting_peer in connecting_peers:

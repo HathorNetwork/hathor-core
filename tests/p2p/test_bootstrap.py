@@ -19,10 +19,10 @@ class MockPeerDiscovery(PeerDiscovery):
         self.mocked_host_ports = mocked_host_ports
 
     @override
-    async def discover_and_connect(self, connect_to: Callable[[PeerEndpoint], None]) -> None:
+    async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
         for host, port in self.mocked_host_ports:
             addr = PeerAddress(Protocol.TCP, host, port)
-            connect_to(addr.with_id())
+            connect_to_endpoint(addr.with_id())
 
 
 class MockDNSPeerDiscovery(DNSPeerDiscovery):
