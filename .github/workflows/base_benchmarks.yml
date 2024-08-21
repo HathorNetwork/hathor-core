@@ -4,6 +4,9 @@ on: # yamllint disable-line rule:truthy
   push:
     branches:
       - master
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   benchmark_base_branch:
@@ -23,6 +26,25 @@ jobs:
           os: ubuntu-22.04
       - name: Set env vars
         run: cat ./extras/benchmarking/.env >> $GITHUB_ENV
+      - name: Download benchmark data
+        run: |
+          mkdir $SERVER_DATA_DIR
+          poetry run hathor-cli quick_test \
+            --testnet \
+            --data $SERVER_DATA_DIR \
+            --cache \
+            --cache-size $CACHE_SIZE \
+            --quit-after-n-blocks $N_BLOCKS
+      - name: Run server node
+        run: |
+          poetry run hathor-cli run_node \
+            --testnet \
+            --data $SERVER_DATA_DIR \
+            --cache \
+            --cache-size $CACHE_SIZE \
+            --x-localhost-only \
+            --listen tcp:$TCP_PORT \
+            &
       - name: Track base branch benchmarks with Bencher
         run: |
           bencher run \
@@ -32,5 +54,5 @@ jobs:
           --testbed ubuntu-22.04 \
           --adapter shell_hyperfine \
           --err \
-          --file bench_results.json \
+          --file $BENCH_FILE \
           './extras/benchmarking/benchmark_sync_v2.sh'
