@@ -21,6 +21,8 @@ jobs:
         with:
           python: 3.11
           os: ubuntu-22.04
+      - name: Set env vars
+        run: cat ./extras/benchmarking/.env >> $GITHUB_ENV
       - name: Track base branch benchmarks with Bencher
         run: |
           bencher run \
