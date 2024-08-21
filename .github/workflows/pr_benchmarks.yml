@@ -17,6 +17,11 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-22.04
     steps:
+      - name: test
+        run: |
+          echo ${{ github.head_ref }}
+          echo ${{ github.base_ref }}
+          echo ${{ github.event.pull_request.base.sha }}
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
       - name: Install hyperfine
