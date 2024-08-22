@@ -113,7 +113,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     @override
     def _save_static_metadata(self, tx: 'BaseTransaction') -> None:
-        self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.to_bytes())
+        self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.json_dumpb())
 
     def _load_static_metadata(self, vertex: 'BaseTransaction') -> None:
         """Set vertex static metadata loaded from what's saved in this storage."""
@@ -272,4 +272,4 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
                 )
 
             # Save it manually to the CF
-            self._db.put((self._cf_static_meta, vertex_id), static_metadata.to_bytes())
+            self._db.put((self._cf_static_meta, vertex_id), static_metadata.json_dumpb())

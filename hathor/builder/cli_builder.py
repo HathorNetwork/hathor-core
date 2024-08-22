@@ -149,7 +149,7 @@ class CliBuilder:
             else:
                 indexes = RocksDBIndexesManager(self.rocksdb_storage)
 
-            kwargs = {}
+            kwargs: dict[str, Any] = {}
             if not self._args.cache:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
@@ -268,13 +268,10 @@ class CliBuilder:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
-        self.feature_service = FeatureService(
-            feature_settings=settings.FEATURE_ACTIVATION,
-            tx_storage=tx_storage
-        )
+        self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
         bit_signaling_service = BitSignalingService(
-            feature_settings=settings.FEATURE_ACTIVATION,
+            settings=settings,
             feature_service=self.feature_service,
             tx_storage=tx_storage,
             support_features=self._args.signal_support,
