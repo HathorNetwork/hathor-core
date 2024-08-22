@@ -30,6 +30,7 @@ from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.nanocontracts import NCStorageFactory
+    from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -69,6 +70,7 @@ class ConsensusAlgorithm:
         nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
+        nc_calls_sorter: NCSorterCallable,
     ) -> None:
         self._settings = get_global_settings()
         self.log = logger.new()
@@ -77,6 +79,7 @@ class ConsensusAlgorithm:
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
+        self.nc_calls_sorter = nc_calls_sorter
 
     def create_context(self) -> ConsensusAlgorithmContext:
         """Handy method to create a context that can be used to access block and transaction algorithms."""

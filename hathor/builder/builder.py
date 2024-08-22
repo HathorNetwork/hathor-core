@@ -36,6 +36,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.nanocontracts.sorter.types import NCSorterCallable
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
@@ -184,6 +185,8 @@ class Builder:
 
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
+
+        self._nc_anti_mev: bool = False
 
         self._nc_storage_factory: NCStorageFactory | None = None
 
@@ -370,14 +373,24 @@ class Builder:
         self._nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         return self._nc_storage_factory
 
+    def _get_nc_calls_sorter(self) -> NCSorterCallable:
+        if self._nc_anti_mev:
+            from hathor.nanocontracts.sorter.timestamp_sorter import timestamp_nc_calls_sorter
+            return timestamp_nc_calls_sorter
+        else:
+            from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
+            return random_nc_calls_sorter
+
     def _get_or_create_consensus(self) -> ConsensusAlgorithm:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             pubsub = self._get_or_create_pubsub()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
+            nc_calls_sorter = self._get_nc_calls_sorter()
             self._consensus = ConsensusAlgorithm(nc_storage_factory,
                                                  soft_voided_tx_ids,
-                                                 pubsub)
+                                                 pubsub,
+                                                 nc_calls_sorter)
 
         return self._consensus
 
@@ -774,6 +787,16 @@ class Builder:
     def disable_ipv4(self) -> 'Builder':
         self.check_if_can_modify()
         self._disable_ipv4 = True
+        return self
+
+    def enable_nc_anti_mev(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._nc_anti_mev = True
+        return self
+
+    def disable_nc_anti_mev(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._nc_anti_mev = False
         return self
 
     def set_soft_voided_tx_ids(self, soft_voided_tx_ids: set[bytes]) -> 'Builder':

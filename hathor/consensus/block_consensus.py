@@ -153,12 +153,11 @@ class BlockConsensusAlgorithm:
             self.context.save(block)
             return
 
+        nc_sorted_calls = self.context.consensus.nc_calls_sorter(block, nc_calls)
         block_trie = self.context.consensus.nc_storage_factory.get_trie(block_root_id)
         seed_hasher = hashlib.sha256(block.hash)
 
-        # TODO Bad ordering because tx.timestamp can be cherry picked. It's here just for testing.
-        nc_calls.sort(key=lambda tx: (tx.timestamp, tx.hash))
-        for tx in nc_calls:
+        for tx in nc_sorted_calls:
             seed_hasher.update(tx.hash)
             seed_hasher.update(block_trie.root.id)
 
@@ -197,6 +196,10 @@ class BlockConsensusAlgorithm:
         for tx in nc_calls:
             tx_meta = tx.get_metadata()
             assert tx_meta.nc_execution is not None
+            self.log.info('nano tx execution status',
+                          blk=block.hash.hex(),
+                          tx=tx.hash.hex(),
+                          execution=tx_meta.nc_execution.value)
             match tx_meta.nc_execution:
                 case NCExecutionState.PENDING:
                     assert False  # should never happen
