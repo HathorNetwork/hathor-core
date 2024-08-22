@@ -13,7 +13,7 @@ from tests import unittest
 
 class SysctlTest(unittest.TestCase):
     # We need this patch because pydantic.validate_arguments fails when it gets a mock function.
-    @patch('hathor.sysctl.sysctl.validate_arguments', new=lambda x: x)  # type: ignore
+    @patch('hathor.sysctl.sysctl.validate_arguments', new=lambda x: x)  # type: ignore[explicit-override, misc]
     def setUp(self) -> None:
         super().setUp()
 
