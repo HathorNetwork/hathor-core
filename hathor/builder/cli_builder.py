@@ -228,12 +228,16 @@ class CliBuilder:
             self.log.debug('enable nano indices')
             tx_storage.indexes.enable_nc_indices()
 
+        from hathor.nanocontracts.sorter.timestamp_sorter import timestamp_nc_calls_sorter
+        nc_calls_sorter = timestamp_nc_calls_sorter
+
         assert self.nc_storage_factory is not None
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
             self.nc_storage_factory,
             soft_voided_tx_ids,
             pubsub=pubsub,
+            nc_calls_sorter=nc_calls_sorter,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:

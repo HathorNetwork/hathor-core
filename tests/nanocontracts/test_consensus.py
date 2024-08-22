@@ -634,7 +634,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertNotEqual(address1, address2)
 
         # Prepare three sibling transactions.
-        _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
+        _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(6500, self.manager.tx_storage)
         tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1, nc_actions=[
             NanoHeaderAction(
@@ -647,7 +647,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.manager.reactor.advance(10)
 
-        withdrawal_amount_1 = 123
+        withdrawal_amount_1 = deposit_amount_1 - 100
         tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
         tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1, nc_actions=[
             NanoHeaderAction(
@@ -673,6 +673,9 @@ class NCConsensusTestCase(SimulatorTestCase):
         tx2.weight += 1
         self.manager.cpu_mining_service.resolve(tx2)
 
+        self.assertGreater(deposit_amount_1, deposit_amount_2)
+        self.assertGreater(withdrawal_amount_1, deposit_amount_2)
+
         # Propagate tx1, tx2, and tx11.
         self.manager.on_new_tx(tx1, fails_silently=False)
         self.manager.on_new_tx(tx2, fails_silently=False)
@@ -681,13 +684,18 @@ class NCConsensusTestCase(SimulatorTestCase):
         # Add a block that executes tx1 and tx11 (but not tx2).
         blk10 = self._add_new_block(tx_parents=[
             tx1.hash,
-            tx11.hash,
+            tx1.parents[0],
         ])
         blk_base_hash = blk10.parents[0]
 
+        blk11 = self._add_new_block(tx_parents=[
+            tx1.hash,
+            tx11.hash,
+        ])
+
         self.assertEqual(tx1.get_metadata().first_block, blk10.hash)
         self.assertIsNone(tx2.get_metadata().first_block)
-        self.assertEqual(tx11.get_metadata().first_block, blk10.hash)
+        self.assertEqual(tx11.get_metadata().first_block, blk11.hash)
 
         self.assertIsNone(tx1.get_metadata().voided_by)
         self.assertIsNone(tx2.get_metadata().voided_by)
@@ -700,17 +708,22 @@ class NCConsensusTestCase(SimulatorTestCase):
         blk20 = self._add_new_block(parents=[
             blk_base_hash,
             tx2.hash,
+            tx2.parents[0],
+        ])
+        blk21 = self._add_new_block(parents=[
+            blk20.hash,
+            tx2.hash,
             tx11.hash,
         ])
         self._add_new_block(parents=[
-            blk20.hash,
-            blk20.parents[1],
-            blk20.parents[2],
+            blk21.hash,
+            blk21.parents[1],
+            blk21.parents[2],
         ])
 
         self.assertIsNone(tx1.get_metadata().first_block)
         self.assertEqual(tx2.get_metadata().first_block, blk20.hash)
-        self.assertEqual(tx11.get_metadata().first_block, blk20.hash)
+        self.assertEqual(tx11.get_metadata().first_block, blk21.hash)
 
         self.assertIsNone(tx1.get_metadata().voided_by)
         self.assertIsNone(tx2.get_metadata().voided_by)
@@ -736,7 +749,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertNotEqual(address1, address2)
 
         # Prepare three sibling transactions.
-        _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(3, self.manager.tx_storage)
+        _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(6500, self.manager.tx_storage)
         tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2, nc_actions=[
             NanoHeaderAction(
@@ -749,7 +762,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.manager.reactor.advance(10)
 
-        withdrawal_amount_1 = 123
+        withdrawal_amount_1 = deposit_amount_2 - 100
         tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
         tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1, nc_actions=[
             NanoHeaderAction(
@@ -774,6 +787,9 @@ class NCConsensusTestCase(SimulatorTestCase):
         ])
         tx1.weight += 2
         self.manager.cpu_mining_service.resolve(tx1)
+
+        self.assertGreater(deposit_amount_2, deposit_amount_1)
+        self.assertGreater(withdrawal_amount_1, deposit_amount_1)
 
         # Propagate tx1, tx2, and tx11.
         self.manager.on_new_tx(tx1, fails_silently=False)
@@ -802,17 +818,17 @@ class NCConsensusTestCase(SimulatorTestCase):
         blk20 = self._add_new_block(parents=[
             blk_base_hash,
             tx2.hash,
-            tx11.hash,
+            tx2.parents[0],
         ])
-        self._add_new_block(parents=[
+        blk21 = self._add_new_block(parents=[
             blk20.hash,
-            blk20.parents[1],
-            blk20.parents[2],
+            tx2.hash,
+            tx11.hash,
         ])
 
         self.assertIsNone(tx1.get_metadata().first_block)
         self.assertEqual(tx2.get_metadata().first_block, blk20.hash)
-        self.assertEqual(tx11.get_metadata().first_block, blk20.hash)
+        self.assertEqual(tx11.get_metadata().first_block, blk21.hash)
 
         self.assertIsNone(tx1.get_metadata().voided_by)
         self.assertIsNone(tx2.get_metadata().voided_by)
