@@ -191,6 +191,7 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get('/health')
         data = response.json_value()
 
+        self.assertTrue('application/json; charset=utf-8' in response.responseHeaders.getRawHeaders('content-type'))
         self.assertEqual(response.responseCode, 200)
         self.assertEqual(data, {
             'status': 'pass',
