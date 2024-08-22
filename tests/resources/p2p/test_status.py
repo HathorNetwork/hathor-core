@@ -89,10 +89,10 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
         self.assertGreater(server_data['uptime'], 0)
 
         self.assertEqual(len(known_peers), 1)
-        self.assertEqual(known_peers[0]['id'], self.manager2.my_peer.id)
+        self.assertEqual(known_peers[0]['id'], str(self.manager2.my_peer.id))
 
         self.assertEqual(len(connections['connected_peers']), 1)
-        self.assertEqual(connections['connected_peers'][0]['id'], self.manager2.my_peer.id)
+        self.assertEqual(connections['connected_peers'][0]['id'], str(self.manager2.my_peer.id))
 
     @inlineCallbacks
     def test_connecting_peers(self):

@@ -47,6 +47,7 @@ from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import Peer
+from hathor.p2p.peer_id import PeerId
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -225,7 +226,7 @@ class HathorManager:
         self._full_verification = full_verification
 
         # List of whitelisted peers
-        self.peers_whitelist: list[str] = []
+        self.peers_whitelist: list[PeerId] = []
 
         # List of capabilities of the peer
         if capabilities is not None:
@@ -297,7 +298,7 @@ class HathorManager:
                 sys.exit(-1)
 
         if self._enable_event_queue:
-            self._event_manager.start(not_none(self.my_peer.id))
+            self._event_manager.start(str(not_none(self.my_peer.id)))
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
@@ -976,7 +977,7 @@ class HathorManager:
     def has_sync_version_capability(self) -> bool:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
 
-    def add_peer_to_whitelist(self, peer_id: str) -> None:
+    def add_peer_to_whitelist(self, peer_id: PeerId) -> None:
         if not self._settings.ENABLE_PEER_WHITELIST:
             return
 
@@ -985,7 +986,7 @@ class HathorManager:
         else:
             self.peers_whitelist.append(peer_id)
 
-    def remove_peer_from_whitelist_and_disconnect(self, peer_id: str) -> None:
+    def remove_peer_from_whitelist_and_disconnect(self, peer_id: PeerId) -> None:
         if not self._settings.ENABLE_PEER_WHITELIST:
             return
 

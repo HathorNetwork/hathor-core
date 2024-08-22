@@ -31,6 +31,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
+from hathor.p2p.peer_id import PeerId
 from hathor.transaction.genesis import get_representation_for_all_genesis
 
 
@@ -142,7 +143,7 @@ def parse_file(text: str, *, header: Optional[str] = None) -> list[str]:
     return list(nonblank_lines)
 
 
-def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[str]:
+def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[PeerId]:
     """ Parses the list of whitelist peer ids
 
     Example:
@@ -161,12 +162,7 @@ G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 
     """
     lines = parse_file(text, header=header)
-    peerids = {line.split()[0] for line in lines}
-    for peerid in peerids:
-        bpeerid = bytes.fromhex(peerid)
-        if len(bpeerid) != 32:
-            raise ValueError('invalid peerid size')
-    return peerids
+    return {PeerId(line.split()[0]) for line in lines}
 
 
 def format_address(addr: IAddress) -> str:

@@ -670,7 +670,7 @@ class StratumProtocol(JSONRPC):
         assert self.miner_id is not None
 
         # Only get first 32 bytes of peer_id because block data is limited to 100 bytes
-        data = '{}-{}-{}'.format(peer_id[:32], self.miner_id.hex, jobid.hex).encode()
+        data = '{}-{}-{}'.format(str(peer_id)[:32], self.miner_id.hex, jobid.hex).encode()
         data = data[:self._settings.BLOCK_DATA_MAX_SIZE]
         block = self.manager.generate_mining_block(data=data, address=self.miner_address,
                                                    merge_mined=self.merged_mining)

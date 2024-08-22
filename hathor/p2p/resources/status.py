@@ -64,7 +64,7 @@ class StatusResource(Resource):
             status = {}
             status[conn.state.sync_agent.name] = conn.state.sync_agent.get_status()
             connected_peers.append({
-                'id': conn.peer.id,
+                'id': str(conn.peer.id),
                 'app_version': conn.app_version,
                 'current_time': now,
                 'uptime': now - conn.connection_time,
@@ -82,7 +82,7 @@ class StatusResource(Resource):
         known_peers = []
         for peer in self.manager.connections.peer_storage.values():
             known_peers.append({
-                'id': peer.id,
+                'id': str(peer.id),
                 'entrypoints': peer.entrypoints_as_str(),
                 'last_seen': now - peer.last_seen,
                 'flags': [flag.value for flag in peer.flags],
@@ -102,7 +102,7 @@ class StatusResource(Resource):
 
         data = {
             'server': {
-                'id': self.manager.connections.my_peer.id,
+                'id': str(self.manager.connections.my_peer.id),
                 'app_version': app,
                 'state': self.manager.state.value,
                 'network': self.manager.network,

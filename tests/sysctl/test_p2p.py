@@ -2,6 +2,7 @@ import os
 import tempfile
 from unittest.mock import MagicMock
 
+from hathor.p2p.peer_id import PeerId
 from hathor.sysctl import ConnectionsManagerSysctl
 from hathor.sysctl.exception import SysctlException
 from tests import unittest
@@ -100,9 +101,12 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         connections = manager.connections
         sysctl = ConnectionsManagerSysctl(connections)
 
-        sysctl.unsafe_set('always_enable_sync', ['peer-1', 'peer-2'])
-        self.assertEqual(connections.always_enable_sync, {'peer-1', 'peer-2'})
-        self.assertEqual(set(sysctl.get('always_enable_sync')), {'peer-1', 'peer-2'})
+        peer_id_1 = '0e2bd0d8cd1fb6d040801c32ec27e8986ce85eb8810b6c878dcad15bce3b5b1e'
+        peer_id_2 = '2ff0d2c80c50f724de79f132a2f8cae576c64b57ea531d400577adf7db3e7c15'
+
+        sysctl.unsafe_set('always_enable_sync', [peer_id_1, peer_id_2])
+        self.assertEqual(connections.always_enable_sync, {PeerId(peer_id_1), PeerId(peer_id_2)})
+        self.assertEqual(set(sysctl.get('always_enable_sync')), {peer_id_1, peer_id_2})
 
         sysctl.unsafe_set('always_enable_sync', [])
         self.assertEqual(connections.always_enable_sync, set())
@@ -110,8 +114,8 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         with tempfile.TemporaryDirectory() as dir_path:
             content = [
-                'peer-id-1',
-                'peer-id-2',
+                peer_id_1,
+                peer_id_2,
             ]
 
             file_path = os.path.join(dir_path, 'a.txt')
@@ -120,7 +124,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             fp.close()
 
             sysctl.unsafe_set('always_enable_sync.readtxt', file_path)
-            self.assertEqual(connections.always_enable_sync, set(content))
+            self.assertEqual(connections.always_enable_sync, {PeerId(peer_id_1), PeerId(peer_id_2)})
             self.assertEqual(set(sysctl.get('always_enable_sync')), set(content))
 
     def test_available_sync_versions(self):
@@ -166,9 +170,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         p2p_manager = manager.connections
         sysctl = ConnectionsManagerSysctl(p2p_manager)
 
-        peer_id = 'my-peer-id'
+        peer_id = '0e2bd0d8cd1fb6d040801c32ec27e8986ce85eb8810b6c878dcad15bce3b5b1e'
         conn = MagicMock()
-        p2p_manager.connected_peers[peer_id] = conn
+        p2p_manager.connected_peers[PeerId(peer_id)] = conn
         self.assertEqual(conn.disconnect.call_count, 0)
         sysctl.unsafe_set('kill_connection', peer_id)
         self.assertEqual(conn.disconnect.call_count, 1)

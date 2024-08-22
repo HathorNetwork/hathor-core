@@ -47,7 +47,7 @@ from hathor.transaction.storage import (
     TransactionStorage,
 )
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import Random, get_environment_info, not_none
+from hathor.util import Random, get_environment_info
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
@@ -264,7 +264,7 @@ class Builder:
             rng=self._rng,
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
-            environment_info=get_environment_info(self._cmdline, peer.id),
+            environment_info=get_environment_info(self._cmdline, str(peer.id)),
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
@@ -515,7 +515,7 @@ class Builder:
             reactor = self._get_reactor()
             storage = self._get_or_create_event_storage()
             factory = EventWebsocketFactory(
-                peer_id=not_none(peer.id),
+                peer_id=str(peer.id),
                 network=settings.NETWORK_NAME,
                 reactor=reactor,
                 event_storage=storage,

@@ -15,6 +15,7 @@
 import os
 
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
 from hathor.sysctl.exception import SysctlException
@@ -161,11 +162,11 @@ class ConnectionsManagerSysctl(Sysctl):
 
     def get_always_enable_sync(self) -> list[str]:
         """Return the list of sync-always-enabled peers."""
-        return list(self.connections.always_enable_sync)
+        return list(map(str, self.connections.always_enable_sync))
 
     def set_always_enable_sync(self, values: list[str]) -> None:
         """Change the list of sync-always-enabled peers."""
-        self.connections.set_always_enable_sync(values)
+        self.connections.set_always_enable_sync(list(map(PeerId, values)))
 
     def set_always_enable_sync_readtxt(self, file_path: str) -> None:
         """Update the list of sync-always-enabled peers from a file."""
@@ -174,7 +175,7 @@ class ConnectionsManagerSysctl(Sysctl):
         values: list[str]
         with open(file_path, 'r') as fp:
             values = parse_text(fp.read())
-        self.connections.set_always_enable_sync(values)
+        self.connections.set_always_enable_sync(list(map(PeerId, values)))
 
     def get_max_enabled_sync(self) -> int:
         """Return the maximum number of peers running sync simultaneously."""
@@ -230,7 +231,11 @@ class ConnectionsManagerSysctl(Sysctl):
             self.connections.disconnect_all_peers(force=force)
             return
 
-        conn = self.connections.connected_peers.get(peer_id, None)
+        try:
+            peer_id_obj = PeerId(peer_id)
+        except ValueError:
+            raise SysctlException('invalid peer-id')
+        conn = self.connections.connected_peers.get(peer_id_obj, None)
         if conn is None:
             self.log.warn('Killing connection', peer_id=peer_id)
             raise SysctlException('peer-id is not connected')

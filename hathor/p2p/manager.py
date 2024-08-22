@@ -29,6 +29,7 @@ from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import Peer
 from hathor.p2p.peer_discovery import PeerDiscovery
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
@@ -51,11 +52,11 @@ WHITELIST_REQUEST_TIMEOUT = 45
 
 
 class _SyncRotateInfo(NamedTuple):
-    candidates: list[str]
-    old: set[str]
-    new: set[str]
-    to_disable: set[str]
-    to_enable: set[str]
+    candidates: list[PeerId]
+    old: set[PeerId]
+    new: set[PeerId]
+    to_disable: set[PeerId]
+    to_enable: set[PeerId]
 
 
 class _ConnectingPeer(NamedTuple):
@@ -79,7 +80,7 @@ class ConnectionsManager:
 
     manager: Optional['HathorManager']
     connections: set[HathorProtocol]
-    connected_peers: dict[str, HathorProtocol]
+    connected_peers: dict[PeerId, HathorProtocol]
     connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
     handshaking_peers: set[HathorProtocol]
     whitelist_only: bool
@@ -174,7 +175,7 @@ class ConnectionsManager:
         self.lc_sync_update_interval: float = 5  # seconds
 
         # Peers that always have sync enabled.
-        self.always_enable_sync: set[str] = set()
+        self.always_enable_sync: set[PeerId] = set()
 
         # Timestamp of the last time sync was updated.
         self._last_sync_rotate: float = 0.
@@ -485,7 +486,7 @@ class ConnectionsManager:
             else:
                 self.log.warn('handshaking protocol has empty connection string', protocol=protocol)
 
-    def is_peer_connected(self, peer_id: str) -> bool:
+    def is_peer_connected(self, peer_id: PeerId) -> bool:
         """
         :type peer_id: string (peer.id)
         """
@@ -729,7 +730,7 @@ class ConnectionsManager:
         assert protocol.peer.id is not None
         assert protocol.my_peer.id is not None
         other_connection = self.connected_peers[protocol.peer.id]
-        if protocol.my_peer.id > protocol.peer.id:
+        if bytes(protocol.my_peer.id) > bytes(protocol.peer.id):
             # connection started by me is kept
             if not protocol.inbound:
                 # other connection is dropped
@@ -751,7 +752,7 @@ class ConnectionsManager:
         self.log.debug('dropping connection', peer_id=protocol.peer.id, protocol=type(protocol).__name__)
         protocol.send_error_and_close_connection('Connection droped')
 
-    def drop_connection_by_peer_id(self, peer_id: str) -> None:
+    def drop_connection_by_peer_id(self, peer_id: PeerId) -> None:
         """ Drop a connection by peer id
         """
         protocol = self.connected_peers.get(peer_id)
@@ -765,9 +766,9 @@ class ConnectionsManager:
         except Exception:
             self.log.error('_sync_rotate_if_needed failed', exc_info=True)
 
-    def set_always_enable_sync(self, values: list[str]) -> None:
+    def set_always_enable_sync(self, values: list[PeerId]) -> None:
         """Set a new list of peers to always enable sync. This operation completely replaces the previous list."""
-        new: set[str] = set(values)
+        new: set[PeerId] = set(values)
 
         old = self.always_enable_sync
         if new == old:
@@ -792,14 +793,14 @@ class ConnectionsManager:
 
     def _calculate_sync_rotate(self) -> _SyncRotateInfo:
         """Calculate new sync rotation."""
-        current_enabled: set[str] = set()
+        current_enabled: set[PeerId] = set()
         for peer_id, conn in self.connected_peers.items():
             if conn.is_sync_enabled():
                 current_enabled.add(peer_id)
 
         candidates = list(self.connected_peers.keys())
         self.rng.shuffle(candidates)
-        selected_peers: set[str] = set(candidates[:self.MAX_ENABLED_SYNC])
+        selected_peers: set[PeerId] = set(candidates[:self.MAX_ENABLED_SYNC])
 
         to_disable = current_enabled - selected_peers
         to_enable = selected_peers - current_enabled

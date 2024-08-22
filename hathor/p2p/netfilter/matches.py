@@ -130,7 +130,7 @@ class NetfilterMatchPeerId(NetfilterMatch):
         if context.protocol.peer is None:
             return False
 
-        if context.protocol.peer.id != self.peer_id:
+        if str(context.protocol.peer.id) != self.peer_id:
             return False
 
         return True

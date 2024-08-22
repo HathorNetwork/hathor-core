@@ -27,6 +27,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import Peer
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
@@ -192,7 +193,7 @@ class HathorProtocol:
         assert self.transport is not None
         return format_address(self.transport.getPeer())
 
-    def get_peer_id(self) -> Optional[str]:
+    def get_peer_id(self) -> Optional[PeerId]:
         """Get peer id for logging."""
         if self.peer and self.peer.id:
             return self.peer.id
@@ -201,7 +202,7 @@ class HathorProtocol:
     def get_short_peer_id(self) -> Optional[str]:
         """Get short peer id for logging."""
         if self.peer and self.peer.id:
-            return self.peer.id[:7]
+            return str(self.peer.id)[:7]
         return None
 
     def get_logger_context(self) -> dict[str, Optional[str]]:
