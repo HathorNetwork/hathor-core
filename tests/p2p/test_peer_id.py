@@ -7,7 +7,7 @@ from unittest.mock import Mock
 from twisted.internet.interfaces import ITransport
 
 from hathor.p2p.entrypoint import Entrypoint
-from hathor.p2p.peer_id import InvalidPeerIdException, PeerId
+from hathor.p2p.peer import InvalidPeerIdException, Peer
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.util import not_none
 from tests import unittest
@@ -16,41 +16,41 @@ from tests.unittest import TestBuilder
 
 class PeerIdTest(unittest.TestCase):
     def test_invalid_id(self) -> None:
-        p1 = PeerId()
+        p1 = Peer()
         p1.id = not_none(p1.id)[::-1]
         self.assertRaises(InvalidPeerIdException, p1.validate)
 
     def test_invalid_public_key(self) -> None:
-        p1 = PeerId()
-        p2 = PeerId()
+        p1 = Peer()
+        p2 = Peer()
         p1.public_key = p2.public_key
         self.assertRaises(InvalidPeerIdException, p1.validate)
 
     def test_invalid_private_key(self) -> None:
-        p1 = PeerId()
-        p2 = PeerId()
+        p1 = Peer()
+        p2 = Peer()
         p1.private_key = p2.private_key
         self.assertRaises(InvalidPeerIdException, p1.validate)
 
     def test_no_private_key(self) -> None:
-        p1 = PeerId()
+        p1 = Peer()
         p1.private_key = None
         p1.validate()
 
     def test_create_from_json(self) -> None:
-        p1 = PeerId()
+        p1 = Peer()
         data1 = p1.to_json(include_private_key=True)
-        p2 = PeerId.create_from_json(data1)
+        p2 = Peer.create_from_json(data1)
         data2 = p2.to_json(include_private_key=True)
         self.assertEqual(data1, data2)
         p2.validate()
 
     def test_create_from_json_without_private_key(self) -> None:
-        p1 = PeerId()
+        p1 = Peer()
         data1 = p1.to_json()
         # Just to test a part of the code
         del data1['entrypoints']
-        p2 = PeerId.create_from_json(data1)
+        p2 = Peer.create_from_json(data1)
         data2 = p2.to_json()
         self.assertEqual(data2['entrypoints'], [])
         data1['entrypoints'] = []
@@ -59,13 +59,13 @@ class PeerIdTest(unittest.TestCase):
 
     def test_sign_verify(self) -> None:
         data = b'abacate'
-        p1 = PeerId()
+        p1 = Peer()
         signature = p1.sign(data)
         self.assertTrue(p1.verify_signature(signature, data))
 
     def test_sign_verify_fail(self) -> None:
         data = b'abacate'
-        p1 = PeerId()
+        p1 = Peer()
         signature = p1.sign(data)
         signature = signature[::-1]
         self.assertFalse(p1.verify_signature(signature, data))
@@ -74,8 +74,8 @@ class PeerIdTest(unittest.TestCase):
         # Testing peer storage with merge of peers
         peer_storage = PeerStorage()
 
-        p1 = PeerId()
-        p2 = PeerId()
+        p1 = Peer()
+        p2 = Peer()
         p2.id = p1.id
         p2.public_key = p1.public_key
         p1.public_key = None
@@ -95,12 +95,12 @@ class PeerIdTest(unittest.TestCase):
         ep2 = Entrypoint.parse('tcp://127.0.0.1:1002')
         ep3 = Entrypoint.parse('tcp://127.0.0.1:1003')
 
-        p3 = PeerId()
+        p3 = Peer()
         p3.entrypoints.append(ep1)
         p3.entrypoints.append(ep2)
         p3.public_key = None
 
-        p4 = PeerId()
+        p4 = Peer()
         p4.public_key = None
         p4.private_key = None
         p4.id = p3.id
@@ -124,7 +124,7 @@ class PeerIdTest(unittest.TestCase):
     def test_save_peer_file(self) -> None:
         import json
 
-        p = PeerId()
+        p = Peer()
         tmpdir = tempfile.mkdtemp()
         path = os.path.join(tmpdir, 'peer.json')
         p.save_to_file(path)
@@ -138,7 +138,7 @@ class PeerIdTest(unittest.TestCase):
         shutil.rmtree(tmpdir)
 
     def test_retry_connection(self) -> None:
-        p = PeerId()
+        p = Peer()
         interval = p.retry_interval
         p.increment_retry_attempt(0)
         self.assertEqual(self._settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER*interval, p.retry_interval)
@@ -159,7 +159,7 @@ class PeerIdTest(unittest.TestCase):
         artifacts = builder.build()
         protocol = artifacts.p2p_manager.server_factory.buildProtocol(Mock())
 
-        peer = PeerId()
+        peer = Peer()
 
         from OpenSSL import crypto
 
@@ -167,14 +167,14 @@ class PeerIdTest(unittest.TestCase):
             def getPeerCertificate(self) -> crypto.X509:
 
                 # we use a new peer here just to save the trouble of manually creating a certificate
-                random_peer = PeerId()
+                random_peer = Peer()
                 return crypto.X509.from_cryptography(random_peer.get_certificate())
         protocol.transport = cast(ITransport, FakeTransport())
         result = peer.validate_certificate(protocol)
         self.assertFalse(result)
 
     def test_retry_logic(self) -> None:
-        peer = PeerId()
+        peer = Peer()
         self.assertTrue(peer.can_retry(0))
 
         retry_interval = peer.retry_interval
@@ -220,26 +220,26 @@ class BasePeerIdTest(unittest.TestCase):
 
     async def test_validate_entrypoint(self) -> None:
         manager = self.create_peer('testnet', unlock_wallet=False)
-        peer_id = manager.my_peer
-        peer_id.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
+        peer = manager.my_peer
+        peer.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
 
         # we consider that we are starting the connection to the peer
         protocol = manager.connections.client_factory.buildProtocol('127.0.0.1')
         protocol.entrypoint = Entrypoint.parse('tcp://127.0.0.1:40403')
-        result = await peer_id.validate_entrypoint(protocol)
+        result = await peer.validate_entrypoint(protocol)
         self.assertTrue(result)
         # if entrypoint is an URI
-        peer_id.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
-        result = await peer_id.validate_entrypoint(protocol)
+        peer.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
+        result = await peer.validate_entrypoint(protocol)
         self.assertTrue(result)
         # test invalid. DNS in test mode will resolve to '127.0.0.1:40403'
         protocol.entrypoint = Entrypoint.parse('tcp://45.45.45.45:40403')
-        result = await peer_id.validate_entrypoint(protocol)
+        result = await peer.validate_entrypoint(protocol)
         self.assertFalse(result)
 
         # now test when receiving the connection - i.e. the peer starts it
         protocol.entrypoint = None
-        peer_id.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
+        peer.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
 
         from collections import namedtuple
         Peer = namedtuple('Peer', 'host')
@@ -248,11 +248,11 @@ class BasePeerIdTest(unittest.TestCase):
             def getPeer(self) -> Peer:
                 return Peer(host='127.0.0.1')
         protocol.transport = FakeTransport()
-        result = await peer_id.validate_entrypoint(protocol)
+        result = await peer.validate_entrypoint(protocol)
         self.assertTrue(result)
         # if entrypoint is an URI
-        peer_id.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
-        result = await peer_id.validate_entrypoint(protocol)
+        peer.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
+        result = await peer.validate_entrypoint(protocol)
         self.assertTrue(result)
 
 

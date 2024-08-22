@@ -219,7 +219,7 @@ class RunNode:
 
         from hathor.builder.builder import BuildArtifacts
         self.artifacts = BuildArtifacts(
-            peer_id=self.manager.my_peer,
+            peer=self.manager.my_peer,
             settings=settings,
             rng=self.manager.rng,
             reactor=self.manager.reactor,

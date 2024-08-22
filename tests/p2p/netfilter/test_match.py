@@ -11,7 +11,7 @@ from hathor.p2p.netfilter.matches import (
     NetfilterMatchOr,
     NetfilterMatchPeerId,
 )
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.simulator import FakeConnection
 from tests import unittest
 
@@ -202,15 +202,15 @@ class BaseNetfilterMatchTest(unittest.TestCase):
 
     def test_match_peer_id(self) -> None:
         network = 'testnet'
-        peer_id1 = PeerId()
-        peer_id2 = PeerId()
-        manager1 = self.create_peer(network, peer_id=peer_id1)
-        manager2 = self.create_peer(network, peer_id=peer_id2)
+        peer1 = Peer()
+        peer2 = Peer()
+        manager1 = self.create_peer(network, peer=peer1)
+        manager2 = self.create_peer(network, peer=peer2)
 
         conn = FakeConnection(manager1, manager2)
         self.assertTrue(conn.proto2.is_state(conn.proto2.PeerState.HELLO))
 
-        matcher = NetfilterMatchPeerId(str(peer_id1.id))
+        matcher = NetfilterMatchPeerId(str(peer1.id))
         context = NetfilterContext(protocol=conn.proto2)
         self.assertFalse(matcher.match(context))
 
@@ -231,7 +231,7 @@ class BaseNetfilterMatchTest(unittest.TestCase):
         # Guarantee the to_json is working fine
         json = matcher.to_json()
         self.assertEqual(json['type'], 'NetfilterMatchPeerId')
-        self.assertEqual(json['match_params']['peer_id'], str(peer_id1.id))
+        self.assertEqual(json['match_params']['peer_id'], str(peer1.id))
 
 
 class SyncV1NetfilterMatchTest(unittest.SyncV1Params, BaseNetfilterMatchTest):

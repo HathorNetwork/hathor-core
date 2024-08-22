@@ -27,8 +27,8 @@ from twisted.web.client import Agent
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.netfilter.factory import NetfilterFactory
+from hathor.p2p.peer import Peer
 from hathor.p2p.peer_discovery import PeerDiscovery
-from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
@@ -93,7 +93,7 @@ class ConnectionsManager:
         settings: HathorSettings,
         reactor: Reactor,
         network: str,
-        my_peer: PeerId,
+        my_peer: Peer,
         pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
@@ -159,7 +159,7 @@ class ConnectionsManager:
         self.received_peer_storage = PeerStorage()
 
         # List of known peers.
-        self.peer_storage = PeerStorage()  # dict[string (peer.id), PeerId]
+        self.peer_storage = PeerStorage()  # dict[string (peer.id), Peer]
 
         # Maximum unseen time before removing a peer (seconds).
         self.max_peer_unseen_dt: float = 30 * 60   # 30-minutes
@@ -366,7 +366,7 @@ class ConnectionsManager:
         for conn in self.iter_all_connections():
             conn.disconnect(force=force)
 
-    def on_connection_failure(self, failure: Failure, peer: Optional[PeerId], endpoint: IStreamClientEndpoint) -> None:
+    def on_connection_failure(self, failure: Failure, peer: Optional[Peer], endpoint: IStreamClientEndpoint) -> None:
         connecting_peer = self.connecting_peers[endpoint]
         entrypoint = connecting_peer.entrypoint
         self.log.warn('connection failure', entrypoint=entrypoint, failure=failure.getErrorMessage())
@@ -433,7 +433,7 @@ class ConnectionsManager:
         # Notify other peers about this new peer connection.
         self.relay_peer_to_ready_connections(protocol.peer)
 
-    def relay_peer_to_ready_connections(self, peer: PeerId) -> None:
+    def relay_peer_to_ready_connections(self, peer: Peer) -> None:
         """Relay peer to all ready connections."""
         for conn in self.iter_ready_connections():
             if conn.peer == peer:
@@ -491,7 +491,7 @@ class ConnectionsManager:
         """
         return peer_id in self.connected_peers
 
-    def on_receive_peer(self, peer: PeerId, origin: Optional[ReadyState] = None) -> None:
+    def on_receive_peer(self, peer: Peer, origin: Optional[ReadyState] = None) -> None:
         """ Update a peer information in our storage, and instantly attempt to connect
         to it if it is not connected yet.
         """
@@ -503,7 +503,7 @@ class ConnectionsManager:
     def peers_cleanup(self) -> None:
         """Clean up aged peers."""
         now = self.reactor.seconds()
-        to_be_removed: list[PeerId] = []
+        to_be_removed: list[Peer] = []
         for peer in self.peer_storage.values():
             assert peer.id is not None
             if self.is_peer_connected(peer.id):
@@ -574,7 +574,7 @@ class ConnectionsManager:
         for peer_id in peers_to_remove:
             self.manager.remove_peer_from_whitelist_and_disconnect(peer_id)
 
-    def connect_to_if_not_connected(self, peer: PeerId, now: int) -> None:
+    def connect_to_if_not_connected(self, peer: Peer, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
         """
         if not peer.entrypoints:
@@ -594,7 +594,7 @@ class ConnectionsManager:
     def _connect_to_callback(
         self,
         protocol: IProtocol,
-        peer: Optional[PeerId],
+        peer: Optional[Peer],
         endpoint: IStreamClientEndpoint,
         entrypoint: Entrypoint,
     ) -> None:
@@ -610,7 +610,7 @@ class ConnectionsManager:
     def connect_to(
         self,
         entrypoint: Entrypoint,
-        peer: Optional[PeerId] = None,
+        peer: Optional[Peer] = None,
         use_ssl: Optional[bool] = None,
     ) -> None:
         """ Attempt to connect to a peer, even if a connection already exists.

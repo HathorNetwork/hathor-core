@@ -18,7 +18,7 @@ from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.p2p.states.base import BaseState
 from hathor.util import json_dumps, json_loads
 
@@ -87,7 +87,7 @@ class PeerIdState(BaseState):
 
         data = json_loads(payload)
 
-        peer = PeerId.create_from_json(data)
+        peer = Peer.create_from_json(data)
         peer.validate()
         assert peer.id is not None
 

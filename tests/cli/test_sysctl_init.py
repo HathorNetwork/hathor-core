@@ -156,13 +156,15 @@ class SysctlInitTest(unittest.TestCase):
                 expected_sysctl_dict['p2p.sync_update_interval'])
 
         # assert always_enabled_sync when it is set with a file
+        peer_1 = '0e2bd0d8cd1fb6d040801c32ec27e8986ce85eb8810b6c878dcad15bce3b5b1e'
+        peer_2 = '2ff0d2c80c50f724de79f132a2f8cae576c64b57ea531d400577adf7db3e7c15'
         expected_sysctl_dict = {
-            'p2p.always_enable_sync': ['peer-3', 'peer-4'],
+            'p2p.always_enable_sync': [peer_1, peer_2],
         }
 
         file_content = [
-            'peer-3',
-            'peer-4',
+            peer_1,
+            peer_2,
         ]
 
         # set the always_enabled_sync peers file
@@ -195,6 +197,6 @@ class SysctlInitTest(unittest.TestCase):
         self.assertTrue(run_node is not None)
         conn = run_node.manager.connections
 
-        curr_always_enabled_sync = list(conn.always_enable_sync)
+        curr_always_enabled_sync = list(map(str, conn.always_enable_sync))
         self.assertTrue(
                 set(curr_always_enabled_sync).issuperset(set(expected_sysctl_dict['p2p.always_enable_sync'])))

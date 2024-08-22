@@ -22,13 +22,13 @@ from twisted.internet.testing import StringTransport
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
-    from hathor.p2p.peer_id import PeerId
+    from hathor.p2p.peer import Peer
 
 logger = get_logger()
 
 
 class HathorStringTransport(StringTransport):
-    def __init__(self, peer: 'PeerId'):
+    def __init__(self, peer: 'Peer'):
         super().__init__()
         self.peer = peer
 

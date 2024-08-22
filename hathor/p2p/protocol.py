@@ -26,7 +26,7 @@ from twisted.python.failure import Failure
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
@@ -73,12 +73,12 @@ class HathorProtocol:
         NO_ENTRYPOINTS = 'no_entrypoints'
 
     network: str
-    my_peer: PeerId
+    my_peer: Peer
     connections: 'ConnectionsManager'
     node: 'HathorManager'
     app_version: str
     last_message: float
-    peer: Optional[PeerId]
+    peer: Optional[Peer]
     transport: Optional[ITransport]
     state: Optional[BaseState]
     connection_time: float
@@ -94,7 +94,7 @@ class HathorProtocol:
     def __init__(
         self,
         network: str,
-        my_peer: PeerId,
+        my_peer: Peer,
         p2p_manager: 'ConnectionsManager',
         *,
         settings: HathorSettings,

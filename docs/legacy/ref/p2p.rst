@@ -27,7 +27,7 @@ The :py:mod:`hathor.p2p.states` has all states and messages of the p2p network. 
 to send new messages and handle the new incoming ones.
 
 
-The :py:class:`hathor.p2p.peer_id.PeerId` stores the peer's identity, entrypoint, reputation and history.
+The :py:class:`hathor.p2p.peer.Peer` stores the peer's identity, entrypoint, reputation and history.
 
 
 

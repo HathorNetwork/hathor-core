@@ -5,7 +5,7 @@ import pytest
 
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import PeerConnectionsMetrics
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import Peer
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
@@ -61,7 +61,7 @@ class BaseMetricsTest(unittest.TestCase):
         wallet.unlock(b'teste')
         manager = self.create_peer('testnet', tx_storage=tx_storage, wallet=wallet)
 
-        manager.connections.peer_storage.update({"1": PeerId(), "2": PeerId(), "3": PeerId()})
+        manager.connections.peer_storage.update({"1": Peer(), "2": Peer(), "3": Peer()})
         manager.connections.connected_peers.update({"1": Mock(), "2": Mock()})
         manager.connections.handshaking_peers.update({Mock()})
 
@@ -223,7 +223,7 @@ class BaseMetricsTest(unittest.TestCase):
                 inbound=False,
                 settings=self._settings
             )
-            protocol.peer = PeerId()
+            protocol.peer = Peer()
 
             return protocol
 
