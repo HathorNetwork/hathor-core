@@ -263,7 +263,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
                     height=height,
                     min_height=min_height,
                     feature_activation_bit_counts=bit_counts,
-                    feature_states={},  # This will be populated in the next PR
+                    feature_states={},  # We leave it empty because migrate_feature_states will populate it
                 )
             else:
                 assert bit_counts is None or bit_counts == []
