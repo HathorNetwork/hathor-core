@@ -12,12 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
 from hathor.indexes import MemoryIndexesManager
@@ -139,25 +138,23 @@ def test_get_feature_activation_bit_value() -> None:
 
 
 def test_verify_must_signal() -> None:
-    settings = Mock(spec_set=HathorSettings)
-    feature_service = Mock(spec_set=FeatureService)
-    feature_service.is_signaling_mandatory_features = Mock(
+    verifier = BlockVerifier(settings=Mock(), daa=Mock())
+    is_signaling_mandatory_features_mock = Mock(
         return_value=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)
     )
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
     block = Block()
 
-    with pytest.raises(BlockMustSignalError) as e:
-        verifier.verify_mandatory_signaling(block)
+    with patch.object(FeatureService, 'is_signaling_mandatory_features', is_signaling_mandatory_features_mock):
+        with pytest.raises(BlockMustSignalError) as e:
+            verifier.verify_mandatory_signaling(block)
 
     assert str(e.value) == "Block must signal support for feature 'NOP_FEATURE_1' during MUST_SIGNAL phase."
 
 
 def test_verify_must_not_signal() -> None:
-    settings = Mock(spec_set=HathorSettings)
-    feature_service = Mock(spec_set=FeatureService)
-    feature_service.is_signaling_mandatory_features = Mock(return_value=BlockIsSignaling())
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    verifier = BlockVerifier(settings=Mock(), daa=Mock())
+    is_signaling_mandatory_features_mock = Mock(return_value=BlockIsSignaling())
     block = Block()
 
-    verifier.verify_mandatory_signaling(block)
+    with patch.object(FeatureService, 'is_signaling_mandatory_features', is_signaling_mandatory_features_mock):
+        verifier.verify_mandatory_signaling(block)
