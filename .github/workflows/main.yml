@@ -62,14 +62,14 @@ jobs:
       matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - uses: ./.github/actions/setup-hathor-env
         name: Setup Hathor node environment
         with:
           python: ${{ matrix.python }}
           os: ${{ matrix.os }}
       - name: Cache mypy
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .mypy_cache
           # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
