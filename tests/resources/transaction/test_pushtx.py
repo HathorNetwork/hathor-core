@@ -25,7 +25,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(PushTxResource(self.manager))
-        self.web_tokens = StubSite(SendTokensResource(self.manager))
+        self.web_tokens = StubSite(SendTokensResource(self.manager, self._settings))
 
     def get_tx(self, inputs: Optional[list[WalletInputInfo]] = None,
                outputs: Optional[list[WalletOutputInfo]] = None) -> Transaction:
@@ -47,6 +47,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         self.manager.cpu_mining_service.resolve(tx)
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return tx
 
     def push_tx(self, data=None):

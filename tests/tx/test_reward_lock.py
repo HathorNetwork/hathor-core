@@ -39,7 +39,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(reward_block)
         self.assertTrue(self.manager.propagate_tx(reward_block))
         # XXX: calculate unlock height AFTER adding the block so the height is correctly calculated
-        unlock_height = reward_block.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS + 1
+        unlock_height = reward_block.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS + 1
         return reward_block, unlock_height
 
     def _spend_reward_tx(self, manager, reward_block):
@@ -61,6 +61,7 @@ class BaseTransactionTest(unittest.TestCase):
         input_.data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx)
         tx.update_initial_metadata(save=False)
+        tx.init_static_metadata_from_storage(self._settings, self.tx_storage)
         return tx
 
     def test_classic_reward_lock(self):
@@ -70,14 +71,14 @@ class BaseTransactionTest(unittest.TestCase):
         # reward cannot be spent while not enough blocks are added
         for _ in range(self._settings.REWARD_SPEND_MIN_BLOCKS):
             tx = self._spend_reward_tx(self.manager, reward_block)
-            self.assertEqual(tx.get_metadata().min_height, unlock_height)
+            self.assertEqual(tx.static_metadata.min_height, unlock_height)
             with self.assertRaises(RewardLocked):
                 self.manager.verification_service.verify(tx)
             add_new_blocks(self.manager, 1, advance_clock=1)
 
         # now it should be spendable
         tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.propagate_tx(tx, fails_silently=False))
 
     def test_block_with_not_enough_height(self):
@@ -91,7 +92,7 @@ class BaseTransactionTest(unittest.TestCase):
         # XXX: this situation is impossible in practice, but we force it to test that when a block tries to confirm a
         #      transaction before it can the RewardLocked exception is raised
         tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False, reject_locked_reward=False))
 
         # new block will try to confirm it and fail
@@ -113,7 +114,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # add tx that spends the reward
         tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
 
         # new block will be able to confirm it
@@ -130,7 +131,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # add tx to mempool, must fail reward-lock verification
         tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
             self.manager.verification_service.verify(tx)
         with self.assertRaises(InvalidNewTransaction):
@@ -145,7 +146,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # add tx that spends the reward, must not fail
         tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
 
     def test_mempool_tx_invalid_after_reorg(self):
@@ -157,7 +158,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # add tx that spends the reward, must not fail
         tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
 
         # re-org: replace last two blocks with one block, new height will be just one short of enough
@@ -203,7 +204,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx = self._spend_reward_tx(self.manager, reward_block)
         tx.timestamp = blocks[-1].timestamp
         self.manager.cpu_mining_service.resolve(tx)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
             self.manager.verification_service.verify(tx)
 

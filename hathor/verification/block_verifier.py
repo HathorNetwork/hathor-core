@@ -43,11 +43,10 @@ class BlockVerifier:
 
     def verify_height(self, block: Block) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
-        meta = block.get_metadata()
-        assert meta.height is not None
-        assert meta.min_height is not None
-        if meta.height < meta.min_height:
-            raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
+        height = block.static_metadata.height
+        min_height = block.static_metadata.min_height
+        if height < min_height:
+            raise RewardLocked(f'Block needs {min_height} height but has {height}')
 
     def verify_weight(self, block: Block) -> None:
         """Validate minimum block difficulty."""

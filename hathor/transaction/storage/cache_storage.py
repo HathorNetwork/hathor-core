@@ -15,6 +15,7 @@
 from collections import OrderedDict
 from typing import Any, Iterator, Optional
 
+from structlog.stdlib import BoundLogger
 from twisted.internet import threads
 from typing_extensions import override
 
@@ -22,7 +23,6 @@ from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
-from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
@@ -170,10 +170,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def _save_static_metadata(self, tx: BaseTransaction) -> None:
         self.store._save_static_metadata(tx)
 
-    @override
-    def _get_static_metadata(self, vertex: BaseTransaction) -> VertexStaticMetadata | None:
-        return self.store._get_static_metadata(vertex)
-
     def get_all_genesis(self) -> set[BaseTransaction]:
         return self.store.get_all_genesis()
 
@@ -255,3 +251,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def flush(self):
         self._flush_to_storage(self.dirty_txs.copy())
+
+    @override
+    def migrate_static_metadata(self, log: BoundLogger) -> None:
+        return self.store.migrate_static_metadata(log)
