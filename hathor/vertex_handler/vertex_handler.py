@@ -19,7 +19,6 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
@@ -41,7 +40,6 @@ class VertexHandler:
         '_verification_service',
         '_consensus',
         '_p2p_manager',
-        '_feature_service',
         '_pubsub',
         '_wallet',
         '_log_vertex_bytes',
@@ -56,7 +54,6 @@ class VertexHandler:
         verification_service: VerificationService,
         consensus: ConsensusAlgorithm,
         p2p_manager: ConnectionsManager,
-        feature_service: FeatureService,
         pubsub: PubSubManager,
         wallet: BaseWallet | None,
         log_vertex_bytes: bool = False,
@@ -68,7 +65,6 @@ class VertexHandler:
         self._verification_service = verification_service
         self._consensus = consensus
         self._p2p_manager = p2p_manager
-        self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
         self._log_vertex_bytes = log_vertex_bytes
@@ -228,7 +224,7 @@ class VertexHandler:
         if tx.is_block:
             message = message_fmt.format('block')
             if isinstance(tx, Block):
-                feature_infos = self._feature_service.get_feature_infos(block=tx)
+                feature_infos = tx.static_metadata.get_feature_infos(self._settings)
                 feature_states = {
                     feature.value: info.state.value
                     for feature, info in feature_infos.items()

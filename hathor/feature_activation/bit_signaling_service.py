@@ -16,10 +16,10 @@ from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
+from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
 
@@ -30,8 +30,8 @@ class BitSignalingService:
     __slots__ = (
         '_log',
         '_settings',
-        '_feature_service',
         '_tx_storage',
+        '_pubsub',
         '_support_features',
         '_not_support_features',
         '_feature_storage',
@@ -41,22 +41,21 @@ class BitSignalingService:
         self,
         *,
         settings: HathorSettings,
-        feature_service: FeatureService,
         tx_storage: TransactionStorage,
+        pubsub: PubSubManager,
         support_features: set[Feature],
         not_support_features: set[Feature],
         feature_storage: FeatureActivationStorage | None,
     ) -> None:
         self._log = logger.new()
         self._settings = settings
-        self._feature_service = feature_service
         self._tx_storage = tx_storage
+        self._pubsub = pubsub
         self._support_features = support_features
         self._not_support_features = not_support_features
         self._feature_storage = feature_storage
 
         self._validate_support_intersection()
-        self._feature_service.bit_signaling_service = self
 
     def start(self) -> None:
         """
@@ -70,6 +69,7 @@ class BitSignalingService:
 
         self._warn_non_signaling_features(best_block)
         self._log_feature_signals(best_block)
+        self._pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self._on_new_vertex)
 
     def generate_signal_bits(self, *, block: Block, log: bool = False) -> int:
         """
@@ -137,11 +137,27 @@ class BitSignalingService:
         self._support_features.discard(feature)
         self._not_support_features.add(feature)
 
-    def on_must_signal(self, feature: Feature) -> None:
+    def _on_new_vertex(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
         """
-        When the MUST_SIGNAL phase is reached, feature support is automatically enabled.
+        When a new block is received, if it's the first block in the `MUST_SIGNAL` phase for a feature,
+        then feature support is automatically enabled for that feature.
         """
-        self.add_feature_support(feature)
+        assert hathor_event is HathorEvents.NETWORK_NEW_TX_ACCEPTED
+        vertex = event_args.tx
+        if not isinstance(vertex, Block) or vertex.is_genesis:
+            return
+
+        parent_block = vertex.get_block_parent()
+        block_feature_infos = vertex.static_metadata.get_feature_infos(self._settings)
+
+        for feature, block_feature_info in block_feature_infos.items():
+            parent_feature_state = parent_block.static_metadata.get_feature_state(feature)
+
+            if (
+                block_feature_info.state is FeatureState.MUST_SIGNAL
+                and parent_feature_state is not FeatureState.MUST_SIGNAL
+            ):
+                self.add_feature_support(feature)
 
     def _log_signal_bits(self, feature: Feature, enable_bit: bool, support: bool, not_support: bool) -> None:
         """Generate info log for a feature's signal."""
@@ -163,7 +179,7 @@ class BitSignalingService:
 
     def _get_signaling_features(self, block: Block) -> dict[Feature, Criteria]:
         """Given a specific block, return all features that are in a signaling state for that block."""
-        feature_infos = self._feature_service.get_feature_infos(block=block)
+        feature_infos = block.static_metadata.get_feature_infos(self._settings)
         signaling_features = {
             feature: feature_info.criteria
             for feature, feature_info in feature_infos.items()

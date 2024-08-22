@@ -70,15 +70,13 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
-        feature_service = artifacts.feature_service
         manager = artifacts.manager
 
-        feature_resource = FeatureResource(
-            settings=settings,
-            feature_service=feature_service,
-            tx_storage=artifacts.tx_storage
-        )
+        feature_resource = FeatureResource(settings=settings, tx_storage=artifacts.tx_storage)
         web_client = StubSite(feature_resource)
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # at the beginning, the feature is DEFINED:
         add_new_blocks(manager, 10)
@@ -101,6 +99,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
+
         # at block 19, the feature is DEFINED, just before becoming STARTED:
         add_new_blocks(manager, 9)
         self.simulator.run(60)
@@ -121,6 +122,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # at block 20, the feature becomes STARTED:
         add_new_blocks(manager, 1)
@@ -143,6 +147,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
         # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
         add_new_blocks(manager, 35)
         self.simulator.run(60)
@@ -164,6 +171,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
         # at block 56, the feature becomes MUST_SIGNAL:
         add_new_blocks(manager, 1)
         self.simulator.run(60)
@@ -184,6 +194,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == [Feature.NOP_FEATURE_1]
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         add_new_blocks(manager, 1, signal_bits=0b1)
 
@@ -219,6 +232,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == [Feature.NOP_FEATURE_1]
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
+
         # at block 60, the feature becomes LOCKED_IN:
         add_new_blocks(manager, 1)
         self.simulator.run(60)
@@ -239,6 +255,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == [Feature.NOP_FEATURE_1]
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
         add_new_blocks(manager, 11)
@@ -261,6 +280,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == [Feature.NOP_FEATURE_1]
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
+
         # at block 72, the feature becomes ACTIVE, forever:
         add_new_blocks(manager, 1)
         self.simulator.run(60)
@@ -282,6 +304,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
+
     def test_reorg(self) -> None:
         feature_settings = FeatureSettings(
             evaluation_interval=4,
@@ -301,15 +326,13 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
-        feature_service = artifacts.feature_service
         manager = artifacts.manager
 
-        feature_resource = FeatureResource(
-            settings=settings,
-            feature_service=feature_service,
-            tx_storage=artifacts.tx_storage
-        )
+        feature_resource = FeatureResource(settings=settings, tx_storage=artifacts.tx_storage)
         web_client = StubSite(feature_resource)
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # at the beginning, the feature is DEFINED:
         self.simulator.run(60)
@@ -330,6 +353,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # at block 4, the feature becomes STARTED with 0% acceptance
         add_new_blocks(manager, 4)
@@ -352,6 +378,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
         # at block 7, acceptance is 25% (we're signaling 1 block out of 4)
         add_new_blocks(manager, 2)
         add_new_blocks(manager, 1, signal_bits=0b10)
@@ -373,6 +402,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
 
         # at block 11, acceptance is 75% (we're signaling 3 blocks out of 4),
         # so the feature will be locked-in in the next block
@@ -397,6 +429,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
         # at block 12, the feature is locked-in
         add_new_blocks(manager, 1)
         self.simulator.run(60)
@@ -418,6 +453,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
         # at block 16, the feature is activated
         add_new_blocks(manager, 4)
         self.simulator.run(60)
@@ -438,6 +476,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # We then create a new manager with one more block (17 vs 16), so its blockchain wins when
         # both managers are connected. This causes a reorg and the feature goes back to the STARTED state.
@@ -469,6 +510,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
 
 
 class BaseMemoryStorageFeatureSimulationTest(BaseFeatureSimulationTest):
@@ -516,14 +560,9 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         rocksdb_dir = self.get_rocksdb_directory()
         builder1 = self.get_simulator_builder_from_dir(rocksdb_dir).set_settings(settings)
         artifacts1 = self.simulator.create_artifacts(builder1)
-        feature_service1 = artifacts1.feature_service
         manager1 = artifacts1.manager
 
-        feature_resource = FeatureResource(
-            settings=settings,
-            feature_service=feature_service1,
-            tx_storage=artifacts1.tx_storage
-        )
+        feature_resource = FeatureResource(settings=settings, tx_storage=artifacts1.tx_storage)
         web_client = StubSite(feature_resource)
 
         assert artifacts1.tx_storage.get_vertices_count() == 3  # genesis vertices in the storage
@@ -557,13 +596,8 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         # new builder is created with the same storage from the previous manager
         builder2 = self.get_simulator_builder_from_dir(rocksdb_dir).set_settings(settings)
         artifacts2 = self.simulator.create_artifacts(builder2)
-        feature_service = artifacts2.feature_service
 
-        feature_resource = FeatureResource(
-            settings=settings,
-            feature_service=feature_service,
-            tx_storage=artifacts2.tx_storage
-        )
+        feature_resource = FeatureResource(settings=settings, tx_storage=artifacts2.tx_storage)
         web_client = StubSite(feature_resource)
 
         # the new storage starts populated

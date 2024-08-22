@@ -17,11 +17,12 @@ from __future__ import annotations
 from abc import ABC
 from itertools import chain, starmap, zip_longest
 from operator import add
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Optional
 
 from typing_extensions import Self
 
 from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.types import VertexId
 from hathor.util import json_loadb
@@ -76,19 +77,27 @@ class BlockStaticMetadata(VertexStaticMetadata):
     @classmethod
     def create_from_storage(cls, block: 'Block', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
         """Create a `BlockStaticMetadata` using dependencies provided by a storage."""
-        return cls.create(block, settings, storage.get_vertex)
+        return cls.create(block, settings, storage.get_vertex, storage.get_block_by_height)
 
     @classmethod
     def create(
         cls,
         block: 'Block',
         settings: HathorSettings,
-        vertex_getter: Callable[[VertexId], 'BaseTransaction']
+        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+        block_by_height_getter: Callable[[int], Optional['Block']],
     ) -> Self:
         """Create a `BlockStaticMetadata` using dependencies provided by a `vertex_getter`.
         This must be fast, ideally O(1)."""
+        from hathor.feature_activation.feature_service import FeatureService
+        feature_service = FeatureService(
+            settings=settings,
+            vertex_getter=vertex_getter,
+            block_by_height_getter=block_by_height_getter,
+        )
         height = cls._calculate_height(block, vertex_getter)
         min_height = cls._calculate_min_height(block, vertex_getter)
+        feature_states = feature_service.calculate_all_feature_states(block, height=height)
         feature_activation_bit_counts = cls._calculate_feature_activation_bit_counts(
             block,
             height,
@@ -100,7 +109,7 @@ class BlockStaticMetadata(VertexStaticMetadata):
             height=height,
             min_height=min_height,
             feature_activation_bit_counts=feature_activation_bit_counts,
-            feature_states={},  # This will be populated in the next PR
+            feature_states=feature_states,
         )
 
     @staticmethod
@@ -172,6 +181,24 @@ class BlockStaticMetadata(VertexStaticMetadata):
         assert isinstance(parent_block, Block)
 
         return parent_block.static_metadata.feature_activation_bit_counts
+
+    def get_feature_state(self, feature: Feature) -> FeatureState:
+        """Return the feature state for this block."""
+        return self.feature_states.get(feature, FeatureState.DEFINED)
+
+    def is_feature_active(self, feature: Feature) -> bool:
+        """Return whether a feature is active for this block."""
+        return self.get_feature_state(feature).is_active()
+
+    def get_feature_infos(self, settings: HathorSettings) -> dict[Feature, FeatureInfo]:
+        """Return the criteria definition and feature state for all features."""
+        return {
+            feature: FeatureInfo(
+                criteria=criteria,
+                state=self.get_feature_state(feature)
+            )
+            for feature, criteria in settings.FEATURE_ACTIVATION.features.items()
+        }
 
 
 class TransactionStaticMetadata(VertexStaticMetadata):
