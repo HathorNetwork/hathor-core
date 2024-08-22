@@ -106,6 +106,7 @@ class BlockConsensusAlgorithm:
         without handling reorgs.
         """
         from hathor.nanocontracts import NanoContract, NCFail
+        from hathor.nanocontracts.sorter import NCBlockSorter
 
         assert self._settings.ENABLE_NANO_CONTRACTS
 
@@ -148,11 +149,13 @@ class BlockConsensusAlgorithm:
             self.context.save(block)
             return
 
+        seed = block.hash
+        sorter = NCBlockSorter.create_from_block(block, nc_calls)
+        nc_sorted_calls = sorter.get_random_topological_order(seed, nc_calls)
+
         block_trie = self.context.consensus.nc_storage_factory.get_trie(block_root_id)
 
-        # TODO Bad ordering because tx.timestamp can be cherry picked. It's here just for testing.
-        nc_calls.sort(key=lambda tx: (tx.timestamp, tx.hash))
-        for tx in nc_calls:
+        for tx in nc_sorted_calls:
             nc_id = tx.get_nanocontract_id()
 
             tx_meta = tx.get_metadata()
