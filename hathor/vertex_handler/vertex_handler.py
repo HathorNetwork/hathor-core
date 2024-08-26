@@ -78,6 +78,7 @@ class VertexHandler:
         fails_silently: bool = True,
         propagate_to_peers: bool = True,
         reject_locked_reward: bool = True,
+        is_sync_v2: bool = False,
     ) -> bool:
         """Method for adding vertices (transactions or blocks) that steps the validation state machine, synchronously.
 
@@ -86,6 +87,9 @@ class VertexHandler:
         :param fails_silently: if False will raise an exception when tx cannot be added
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
+        if is_sync_v2:
+            assert vertex.storage is None, 'sync-v2 should never set a storage in the vertex'
+
         is_pre_valid = self._pre_validate_vertex(vertex, fails_silently=fails_silently)
         if not is_pre_valid:
             return False
