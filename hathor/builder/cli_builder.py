@@ -44,6 +44,7 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random
+from hathor.verification.verification_coordinator import VerificationCoordinator
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
@@ -320,11 +321,19 @@ class CliBuilder:
             use_async=self._args.x_async_sync_v2
         )
 
+        verification_coordinator = VerificationCoordinator(
+            tx_storage=tx_storage,
+            verification_service=verification_service,
+            daa=daa,
+            reactor=reactor,
+        )
+
         vertex_handler = VertexHandler(
             reactor=reactor,
             settings=settings,
             tx_storage=tx_storage,
             verification_service=verification_service,
+            verification_coordinator=verification_coordinator,
             consensus=consensus_algorithm,
             p2p_manager=p2p_manager,
             pubsub=pubsub,
