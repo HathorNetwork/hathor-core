@@ -163,6 +163,8 @@ class RunNode:
                             help='Disable websocket history streaming API')
         parser.add_argument('--x-async-sync-v2', action='store_true',
                             help='Use the asynchronous version of sync-v2.')
+        parser.add_argument('--x-use-multiprocessor', action='store_true',
+                            help='Use multiple processes to verify vertices in async sync-v2.')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:

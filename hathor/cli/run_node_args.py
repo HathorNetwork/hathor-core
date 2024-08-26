@@ -83,3 +83,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     log_vertex_bytes: bool
     disable_ws_history_streaming: bool
     x_async_sync_v2: bool
+    x_use_multiprocessor: bool

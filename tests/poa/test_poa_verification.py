@@ -23,6 +23,7 @@ from hathor.transaction.poa import PoaBlock
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
+from hathor.verification.verification_service import verify_without_storage
 from hathor.verification.vertex_verifier import VertexVerifier
 from tests import unittest
 
@@ -113,7 +114,8 @@ class BasePoaVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(block)
+            # TODO
+            verify_without_storage(self.verifiers, block)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()

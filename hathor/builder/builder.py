@@ -33,6 +33,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor import Multiprocessor
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import Peer
 from hathor.pubsub import PubSubManager
@@ -193,6 +194,8 @@ class Builder:
         self._p2p_manager: ConnectionsManager | None = None
         self._poa_signer: PoaSigner | None = None
         self._poa_block_producer: PoaBlockProducer | None = None
+        self._multiprocessor: Multiprocessor | None = None
+        self._use_multiprocessor: bool = False
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -226,6 +229,7 @@ class Builder:
         vertex_handler = self._get_or_create_vertex_handler()
         vertex_parser = self._get_or_create_vertex_parser()
         poa_block_producer = self._get_or_create_poa_block_producer()
+        multiprocessor = self._get_or_create_multiprocessor()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -267,6 +271,7 @@ class Builder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            multiprocessor=multiprocessor,
             **kwargs
         )
 
@@ -540,14 +545,18 @@ class Builder:
     def _get_or_create_verification_service(self) -> VerificationService:
         if self._verification_service is None:
             settings = self._get_or_create_settings()
+            reactor = self._get_reactor()
             verifiers = self._get_or_create_vertex_verifiers()
             storage = self._get_or_create_tx_storage()
             daa = self._get_or_create_daa()
+            multiprocessor = self._get_or_create_multiprocessor()
             self._verification_service = VerificationService(
                 settings=settings,
+                reactor=reactor,
                 verifiers=verifiers,
                 tx_storage=storage,
                 daa=daa,
+                multiprocessor=multiprocessor,
             )
 
         return self._verification_service
@@ -621,6 +630,11 @@ class Builder:
             )
 
         return self._poa_block_producer
+
+    def _get_or_create_multiprocessor(self) -> Multiprocessor | None:
+        if self._multiprocessor is None and self._use_multiprocessor:
+            self._multiprocessor = Multiprocessor()
+        return self._multiprocessor
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()

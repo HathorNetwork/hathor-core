@@ -135,13 +135,12 @@ def execute(args: Namespace) -> None:
         try:
             from hathor.conf.get_settings import get_global_settings
             from hathor.daa import DifficultyAdjustmentAlgorithm
-            from hathor.verification.verification_service import VerificationService
+            from hathor.verification.verification_service import verify_without_storage
             from hathor.verification.vertex_verifiers import VertexVerifiers
             settings = get_global_settings()
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
             verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
-            verification_service = VerificationService(settings=settings, verifiers=verifiers, daa=daa)
-            verification_service.verify_without_storage(block)
+            verify_without_storage(verifiers, block)
         except HathorError:
             print('[{}] ERROR: Block has not been pushed because it is not valid.'.format(datetime.datetime.now()))
         else:
