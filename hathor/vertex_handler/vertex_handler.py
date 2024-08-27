@@ -241,7 +241,7 @@ class VertexHandler:
         # We call this here even though static metadata has already been set to make sure its value calculated from
         # memory is the same as the one calculated from storage, as at this point it's guaranteed that all dependencies
         # are fully validated and saved.
-        vertex.init_static_metadata_from_storage(self._settings, self._tx_storage)
+        # vertex.init_static_metadata_from_storage(self._settings, self._tx_storage)
         # The method below adds the tx as a child of the parents
         # This needs to be called right before the save because we were adding the children
         # in the tx parents even if the tx was invalid (failing the verifications above)

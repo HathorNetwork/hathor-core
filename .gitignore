@@ -25,3 +25,5 @@ extras/docker/envvars
 
 # Nix
 .direnv/
+
+server-data
