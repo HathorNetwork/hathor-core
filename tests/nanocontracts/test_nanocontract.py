@@ -243,6 +243,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         tx = Transaction(outputs=outputs, tokens=tokens)
         tx.get_metadata().validation = ValidationState.FULL
         tx.update_hash()
+        tx.init_static_metadata_from_storage(self._settings, tx_storage)
         tx_storage.save_transaction(tx)
 
         # Incomplete nanocontract transaction.
@@ -303,7 +304,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         tx = Transaction(inputs=inputs, outputs=outputs, tokens=tokens)
         tx.get_metadata().validation = ValidationState.FULL
         tx.update_hash()
-        tx.get_metadata().validation = ValidationState.FULL
+        tx.init_static_metadata_from_storage(self._settings, tx_storage)
         tx_storage.save_transaction(tx)
 
         # Incomplete nanocontract transaction with a token authority on one output.
