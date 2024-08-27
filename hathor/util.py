@@ -123,7 +123,7 @@ def ichunks(array: bytes, chunk_size: int) -> Iterator[bytes]:
     return takewhile(bool, (bytes(islice(idata, chunk_size)) for _ in repeat(None)))
 
 
-def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[tuple[T, ...]]:
+def iwindows(items: list[T], window_size: int) -> Iterator[tuple[T, ...]]:
     """ Adapt iterator to yield windows of the given size.
 
     window_size must be greater than 0
@@ -139,17 +139,12 @@ def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[tuple[T, ...]]
     >>> list(iwindows([1, 2, 3, 4], 1))
     [(1,), (2,), (3,), (4,)]
     """
-    from collections import deque
-    it = iter(iterable)
     assert window_size > 0
-    res_item: deque[T] = deque()
-    while len(res_item) < window_size:
-        res_item.append(next(it))
-    yield tuple(res_item)
-    for item in it:
-        res_item.popleft()
-        res_item.append(item)
-        yield tuple(res_item)
+    for index, item in enumerate(items):
+        end_index = index + window_size
+        if end_index - 1 >= len(items):
+            break
+        yield tuple(items[index:end_index])
 
 
 class classproperty:

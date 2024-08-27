@@ -19,6 +19,7 @@ block rewards.
 NOTE: This module could use a better name.
 """
 
+from collections import defaultdict, deque
 from enum import IntFlag
 from math import log
 from typing import TYPE_CHECKING, Callable, ClassVar, Optional
@@ -28,13 +29,17 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.types import VertexId
-from hathor.util import iwindows
+from hathor.util import iwindows, MaxSizeOrderedDict
 
 if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
 
 logger = get_logger()
 cpu = get_cpu_profiler()
+
+cache_hits = 0
+cache_miss = 0
+cache_misses = defaultdict(int)
 
 
 class TestMode(IntFlag):
@@ -55,6 +60,7 @@ class DifficultyAdjustmentAlgorithm:
         self.AVG_TIME_BETWEEN_BLOCKS = self._settings.AVG_TIME_BETWEEN_BLOCKS
         self.MIN_BLOCK_WEIGHT = self._settings.MIN_BLOCK_WEIGHT
         self.TEST_MODE = test_mode
+        self._block_cache: MaxSizeOrderedDict[VertexId, 'Block'] = MaxSizeOrderedDict(max=270)
         DifficultyAdjustmentAlgorithm.singleton = self
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
@@ -66,28 +72,31 @@ class DifficultyAdjustmentAlgorithm:
         if block.is_genesis:
             return self.MIN_BLOCK_WEIGHT
 
-        parent_block = parent_block_getter(block)
+        parent_block = self._get_cached_parent_block(block, parent_block_getter)
         return self.calculate_next_weight(parent_block, block.timestamp, parent_block_getter)
 
     def _calculate_N(self, parent_block: 'Block') -> int:
         """Calculate the N value for the `calculate_next_weight` algorithm."""
         return min(2 * self._settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_height() - 1)
 
-    def get_block_dependencies(
-        self,
-        block: 'Block',
-        parent_block_getter: Callable[['Block'], 'Block'],
-    ) -> list[VertexId]:
-        """Return the ids of the required blocks to call `calculate_block_difficulty` for the provided block."""
+    def _get_cached_parent_block(self, block: 'Block',
+                                 parent_block_getter: Callable[['Block'], 'Block']) -> 'Block':
+        global cache_hits, cache_miss, cache_misses
+        parent_block_hash = block.get_block_parent_hash()
+        cached_parent_block = self._block_cache.get(parent_block_hash)
+
+        if cached_parent_block is not None:
+            cache_hits += 1
+            print(f'hits={cache_hits}, miss={cache_miss}')
+            return cached_parent_block
+
+        cache_miss += 1
         parent_block = parent_block_getter(block)
-        N = self._calculate_N(parent_block)
-        ids: list[VertexId] = [parent_block.hash]
-
-        while len(ids) <= N + 1:
-            parent_block = parent_block_getter(parent_block)
-            ids.append(parent_block.hash)
-
-        return ids
+        self._block_cache[parent_block.hash] = parent_block
+        cache_misses[(parent_block_hash, parent_block.static_metadata.height)] += 1
+        print(f'hits={cache_hits}, miss={cache_miss}')
+        print('MISSES =', sorted([(k[1], v) for k, v in cache_misses.items() if v != 1]))
+        return parent_block
 
     def calculate_next_weight(
         self,
@@ -106,7 +115,6 @@ class DifficultyAdjustmentAlgorithm:
 
         from hathor.transaction import sum_weights
 
-        root = parent_block
         N = self._calculate_N(parent_block)
         K = N // 2
         T = self.AVG_TIME_BETWEEN_BLOCKS
@@ -114,20 +122,16 @@ class DifficultyAdjustmentAlgorithm:
         if N < 10:
             return self.MIN_BLOCK_WEIGHT
 
-        blocks: list['Block'] = []
-        while len(blocks) < N + 1:
-            blocks.append(root)
-            root = parent_block_getter(root)
+        current_block = parent_block
+        solvetimes = deque()
+        weights = deque()
 
-        # TODO: revise if this assertion can be safely removed
-        assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)
-        blocks = list(reversed(blocks))
+        while len(solvetimes) < N:
+            previous_block = self._get_cached_parent_block(current_block, parent_block_getter)
+            solvetimes.appendleft(current_block.timestamp - previous_block.timestamp)
+            weights.appendleft(current_block.weight)
+            current_block = previous_block
 
-        assert len(blocks) == N + 1
-        solvetimes, weights = zip(*(
-            (block.timestamp - prev_block.timestamp, block.weight)
-            for prev_block, block in iwindows(blocks, 2)
-        ))
         assert len(solvetimes) == len(weights) == N, f'got {len(solvetimes)}, {len(weights)} expected {N}'
 
         sum_solvetimes = 0.0
