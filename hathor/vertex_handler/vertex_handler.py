@@ -228,10 +228,10 @@ class VertexHandler:
         if tx.is_block:
             message = message_fmt.format('block')
             if isinstance(tx, Block):
-                feature_descriptions = self._feature_service.get_bits_description(block=tx)
+                feature_infos = self._feature_service.get_feature_infos(block=tx)
                 feature_states = {
-                    feature.value: description.state.value
-                    for feature, description in feature_descriptions.items()
+                    feature.value: info.state.value
+                    for feature, info in feature_infos.items()
                 }
                 kwargs['_height'] = tx.get_height()
                 kwargs['feature_states'] = feature_states

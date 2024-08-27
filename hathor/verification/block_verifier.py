@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from typing_extensions import assert_never
+
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
@@ -93,5 +95,4 @@ class BlockVerifier:
                     f"Block must signal support for feature '{feature.value}' during MUST_SIGNAL phase."
                 )
             case _:
-                # TODO: This will be changed to assert_never() so mypy can check it.
-                raise NotImplementedError
+                assert_never(signaling_state)
