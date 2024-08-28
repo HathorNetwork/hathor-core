@@ -116,7 +116,9 @@ class RunNode:
         parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
         parser.add_argument('--prometheus-prefix', default='',
                             help='A prefix that will be added in all Prometheus metrics')
-        parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
+        cache_args = parser.add_mutually_exclusive_group()
+        cache_args.add_argument('--cache', action='store_true', help=SUPPRESS)  # moved to --disable-cache
+        cache_args.add_argument('--disable-cache', action='store_true', help='Disable cache for tx storage')
         parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')

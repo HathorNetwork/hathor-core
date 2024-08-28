@@ -52,6 +52,7 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     prometheus: bool
     prometheus_prefix: str
     cache: bool
+    disable_cache: bool
     cache_size: Optional[int]
     cache_interval: Optional[int]
     recursion_limit: Optional[int]
