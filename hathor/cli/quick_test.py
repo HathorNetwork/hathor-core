@@ -59,6 +59,7 @@ class QuickTest(RunNode):
                 self.log.info(f'successfully {msg}, exit now')
                 self.manager.connections.disconnect_all_peers(force=True)
                 self.reactor.fireSystemEvent('shutdown')
+                return
                 os._exit(0)
             return res
         self.manager.on_new_tx = patched_on_new_tx

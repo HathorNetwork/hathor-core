@@ -18,7 +18,7 @@ block rewards.
 
 NOTE: This module could use a better name.
 """
-
+from collections import deque
 from enum import IntFlag
 from math import log
 from typing import TYPE_CHECKING, Callable, ClassVar, Optional
@@ -55,6 +55,7 @@ class DifficultyAdjustmentAlgorithm:
         self.AVG_TIME_BETWEEN_BLOCKS = self._settings.AVG_TIME_BETWEEN_BLOCKS
         self.MIN_BLOCK_WEIGHT = self._settings.MIN_BLOCK_WEIGHT
         self.TEST_MODE = test_mode
+        self._block_window_cache: deque['Block'] | None = None
         DifficultyAdjustmentAlgorithm.singleton = self
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
@@ -115,13 +116,17 @@ class DifficultyAdjustmentAlgorithm:
             return self.MIN_BLOCK_WEIGHT
 
         blocks: list['Block'] = []
-        while len(blocks) < N + 1:
-            blocks.append(root)
-            root = parent_block_getter(root)
+        grandparent_block = parent_block_getter(parent_block)
 
-        # TODO: revise if this assertion can be safely removed
-        assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)
-        blocks = list(reversed(blocks))
+        if self._block_window_cache and self._block_window_cache[-1] == grandparent_block:
+            pass
+        else:
+            while len(blocks) < N + 1:
+                blocks.append(root)
+                root = parent_block_getter(root)
+            blocks = list(reversed(blocks))
+
+        self._block_window_cache = blocks
 
         assert len(blocks) == N + 1
         solvetimes, weights = zip(*(
