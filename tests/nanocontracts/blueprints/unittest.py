@@ -1,5 +1,6 @@
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.manager import HathorManager
 from hathor.nanocontracts.storage import NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
@@ -21,7 +22,7 @@ class BlueprintTestCase(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.manager = self.create_peer('testnet', use_memory_storage=True)
+        self.manager = self.build_manager()
         self.rng = self.manager.rng
         self.wallet = self.manager.wallet
         self.reactor = self.manager.reactor
@@ -36,6 +37,9 @@ class BlueprintTestCase(unittest.TestCase):
         self.now = int(self.reactor.seconds())
 
         self._token_index = 1
+
+    def build_manager(self) -> HathorManager:
+        return self.create_peer('testnet', use_memory_storage=True)
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""
