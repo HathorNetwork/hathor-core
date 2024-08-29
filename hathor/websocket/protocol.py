@@ -122,6 +122,8 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
             self._handle_history_manual_streamer(message)
         elif _type == 'request:history:stop':
             self._stop_streamer(message)
+        elif _type == 'request:history:ack':
+            self._ack_streamer(message)
 
     def _handle_ping(self, message: dict[Any, Any]) -> None:
         """Handle ping message, should respond with a simple {"type": "pong"}"""
@@ -140,9 +142,14 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
         ))
         return True
 
-    def _create_streamer(self, stream_id: str, search: AddressSearch) -> None:
+    def _create_streamer(self, stream_id: str, search: AddressSearch, window_size: int | None) -> None:
         """Create the streamer and handle its callbacks."""
         self._history_streamer = HistoryStreamer(protocol=self, stream_id=stream_id, search=search)
+        if window_size is not None:
+            if window_size < 0:
+                self._history_streamer.set_sliding_window_size(None)
+            else:
+                self._history_streamer.set_sliding_window_size(window_size)
         deferred = self._history_streamer.start()
         deferred.addBoth(self._streamer_callback)
         return
@@ -181,7 +188,8 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
             return
 
         search = gap_limit_search(self.factory.manager, address_iter, gap_limit)
-        self._create_streamer(stream_id, search)
+        window_size = message.get('window-size', None)
+        self._create_streamer(stream_id, search, window_size)
         self.log.info('opening a websocket xpub streaming',
                       stream_id=stream_id,
                       xpub=xpub,
@@ -237,7 +245,8 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
             return
 
         search = gap_limit_search(self.factory.manager, address_iter, gap_limit)
-        self._create_streamer(stream_id, search)
+        window_size = message.get('window-size', None)
+        self._create_streamer(stream_id, search, window_size)
         self.log.info('opening a websocket manual streaming',
                       stream_id=stream_id,
                       addresses=addresses,
@@ -278,6 +287,51 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
 
         self._history_streamer.stop(success=False)
         self.log.info('stopping a websocket xpub streaming', stream_id=stream_id)
+
+    def _ack_streamer(self, message: dict[Any, Any]) -> None:
+        """Handle request to set the ack number in the current streamer."""
+        stream_id: str = message.get('id', '')
+
+        if self._history_streamer is None:
+            self.send_message(StreamErrorMessage(
+                id=stream_id,
+                errmsg='No streaming opened.'
+            ))
+            return
+
+        assert self._history_streamer is not None
+
+        if self._history_streamer.stream_id != stream_id:
+            self.send_message(StreamErrorMessage(
+                id=stream_id,
+                errmsg='Current stream has a different id.'
+            ))
+            return
+
+        ack = message.get('ack', None)
+        if ack is not None:
+            if not isinstance(ack, int):
+                self.send_message(StreamErrorMessage(
+                    id=stream_id,
+                    errmsg='Invalid ack.'
+                ))
+                return
+            self.log.info('ack received', stream_id=stream_id, ack=ack)
+            self._history_streamer.set_ack(ack)
+
+        window = message.get('window', None)
+        if window is not None:
+            if not isinstance(window, int):
+                self.send_message(StreamErrorMessage(
+                    id=stream_id,
+                    errmsg='Invalid window.'
+                ))
+                return
+            self.log.info('sliding window size updated', stream_id=stream_id, sliding_window_size=window)
+            if window < 0:
+                self._history_streamer.set_sliding_window_size(None)
+            else:
+                self._history_streamer.set_sliding_window_size(window)
 
     def send_message(self, message: WebSocketMessage) -> None:
         """Send a typed message."""
