@@ -20,8 +20,7 @@ from typing import AsyncIterator, Iterator, TypeAlias
 from twisted.internet.defer import Deferred
 
 from hathor.manager import HathorManager
-from hathor.transaction import BaseTransaction
-from hathor.types import AddressB58
+from hathor.types import AddressB58, VertexId
 from hathor.websocket.exception import InvalidAddress, InvalidXPub, LimitExceeded
 
 
@@ -33,7 +32,7 @@ class AddressItem:
 
 @dataclass(frozen=True, slots=True)
 class VertexItem:
-    vertex: BaseTransaction
+    vertex_id: VertexId
 
 
 class ManualAddressSequencer(AsyncIterable[AddressItem]):
@@ -139,8 +138,7 @@ async def gap_limit_search(
 
         vertex_counter = 0
         for vertex_id in addresses_index.get_sorted_from_address(item.address):
-            tx = manager.tx_storage.get_transaction(vertex_id)
-            yield VertexItem(tx)
+            yield VertexItem(vertex_id)
             vertex_counter += 1
 
         if vertex_counter == 0:

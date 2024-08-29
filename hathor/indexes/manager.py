@@ -24,6 +24,7 @@ from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.height_index import HeightIndex
 from hathor.indexes.info_index import InfoIndex
+from hathor.indexes.json_extended_cache import JsonExtendedCache
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
 from hathor.indexes.timestamp_index import ScopeType as TimestampScopeType, TimestampIndex
 from hathor.indexes.tips_index import ScopeType as TipsScopeType, TipsIndex
@@ -66,6 +67,8 @@ class IndexesManager(ABC):
     tokens: Optional[TokensIndex]
     utxo: Optional[UtxoIndex]
 
+    json_extended_cache: JsonExtendedCache | None
+
     def __init_checks__(self):
         """ Implementations must call this at the **end** of their __init__ for running ValueError checks."""
         # check if every index has a unique db_name
@@ -93,6 +96,7 @@ class IndexesManager(ABC):
             self.addresses,
             self.tokens,
             self.utxo,
+            self.json_extended_cache,
         ])
 
     @abstractmethod
@@ -113,6 +117,11 @@ class IndexesManager(ABC):
     @abstractmethod
     def enable_mempool_index(self) -> None:
         """Enable mempool index. It does nothing if it has already been enabled."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def enable_json_extended_cache(self) -> None:
+        """Enable json-extended cache. It does nothing if it has already been enabled."""
         raise NotImplementedError
 
     def force_clear_all(self) -> None:
@@ -190,6 +199,9 @@ class IndexesManager(ABC):
         if self.utxo:
             self.utxo.update(tx)
 
+        if self.json_extended_cache:
+            self.json_extended_cache.invalidate(tx.hash)
+
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
 
@@ -221,6 +233,9 @@ class IndexesManager(ABC):
         # just changing from voided to executed or vice-versa
         if r1 and r3:
             self.info.update_counts(tx)
+
+        if self.json_extended_cache:
+            self.json_extended_cache.invalidate(tx.hash)
 
         return r3
 
@@ -258,6 +273,9 @@ class IndexesManager(ABC):
         if self.tokens:
             self.tokens.del_tx(tx)
 
+        if self.json_extended_cache:
+            self.json_extended_cache.invalidate(tx.hash)
+
 
 class MemoryIndexesManager(IndexesManager):
     def __init__(self, *, settings: HathorSettings | None = None) -> None:
@@ -280,6 +298,7 @@ class MemoryIndexesManager(IndexesManager):
         self.utxo = None
         self.height = MemoryHeightIndex(settings=settings)
         self.mempool_tips = None
+        self.json_extended_cache = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -303,6 +322,11 @@ class MemoryIndexesManager(IndexesManager):
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         if self.mempool_tips is None:
             self.mempool_tips = MemoryMempoolTipsIndex()
+
+    def enable_json_extended_cache(self) -> None:
+        from hathor.indexes.memory_json_extended_cache import MemoryJsonExtendedCache
+        if self.json_extended_cache is None:
+            self.json_extended_cache = MemoryJsonExtendedCache()
 
 
 class RocksDBIndexesManager(IndexesManager):
@@ -328,6 +352,7 @@ class RocksDBIndexesManager(IndexesManager):
         self.tokens = None
         self.utxo = None
         self.mempool_tips = None
+        self.json_extended_cache = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -352,3 +377,8 @@ class RocksDBIndexesManager(IndexesManager):
         if self.mempool_tips is None:
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
             self.mempool_tips = MemoryMempoolTipsIndex()
+
+    def enable_json_extended_cache(self) -> None:
+        from hathor.indexes.rocksdb_json_extended_cache import RocksDBJsonExtendedCache
+        if self.json_extended_cache is None:
+            self.json_extended_cache = RocksDBJsonExtendedCache(self._db)

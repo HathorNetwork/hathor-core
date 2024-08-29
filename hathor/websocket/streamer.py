@@ -28,6 +28,7 @@ from hathor.websocket.messages import (
     StreamErrorMessage,
     StreamVertexMessage,
 )
+from hathor.util import json_loadb
 
 if TYPE_CHECKING:
     from hathor.websocket.protocol import HathorAdminWebsocketProtocol
@@ -66,6 +67,7 @@ class HistoryStreamer:
         self.search_iter = aiter(search)
 
         self.reactor = self.protocol.factory.manager.reactor
+        self.tx_storage = self.protocol.factory.manager.tx_storage
 
         self.max_seconds_locking_event_loop = 1
 
@@ -121,6 +123,8 @@ class HistoryStreamer:
     async def _async_run(self):
         """Internal method that runs the streaming main loop."""
         t0 = self.reactor.seconds()
+        assert self.tx_storage.indexes.json_extended_cache is not None
+        json_extended_cache = self.tx_storage.indexes.json_extended_cache
 
         async for item in self.search_iter:
             # The methods `pauseProducing()` and `stopProducing()` might be called during the
@@ -151,9 +155,11 @@ class HistoryStreamer:
 
                 case VertexItem():
                     self.stats_sent_vertices += 1
+                    data = json_extended_cache.get_with_cache(item.vertex_id, self.tx_storage)
+                    assert data is not None
                     self.send_message(StreamVertexMessage(
                         id=self.stream_id,
-                        data=item.vertex.to_json_extended(),
+                        data=json_loadb(data),
                     ))
 
                 case _:

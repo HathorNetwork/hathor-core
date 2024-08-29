@@ -249,6 +249,10 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
+        # XXX: TESTING
+        if tx_storage.indexes is not None:
+            tx_storage.indexes.enable_json_extended_cache()
+
         full_verification = False
         if self._args.x_full_verification:
             self.check_or_raise(
