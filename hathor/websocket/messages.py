@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import Field
 
@@ -41,6 +41,7 @@ class StreamErrorMessage(StreamBase):
 class StreamBeginMessage(StreamBase):
     type: str = Field('stream:history:begin', const=True)
     id: str
+    sliding_window_size: Optional[int]
 
 
 class StreamEndMessage(StreamBase):
@@ -51,12 +52,14 @@ class StreamEndMessage(StreamBase):
 class StreamVertexMessage(StreamBase):
     type: str = Field('stream:history:vertex', const=True)
     id: str
+    seq: int
     data: dict[str, Any]
 
 
 class StreamAddressMessage(StreamBase):
     type: str = Field('stream:history:address', const=True)
     id: str
+    seq: int
     index: int
     address: str
     subscribed: bool

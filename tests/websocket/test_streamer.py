@@ -39,7 +39,11 @@ class AsyncIteratorsTestCase(TestCase):
             addresses.append(AddressItem(idx, wallet.get_address(wallet.get_key_at_index(idx))))
 
         # Create the expected result.
-        expected_result: list[dict[str, Any]] = [{'type': 'stream:history:begin', 'id': stream_id}]
+        expected_result: list[dict[str, Any]] = [{
+            'type': 'stream:history:begin',
+            'id': stream_id,
+            'sliding_window_size': None,
+        }]
         expected_result += [
             {
                 'type': 'stream:history:address',
@@ -56,6 +60,8 @@ class AsyncIteratorsTestCase(TestCase):
             'data': genesis.to_json_extended(),
         })
         expected_result.append({'type': 'stream:history:end', 'id': stream_id})
+        for index, item in enumerate(expected_result[1:-1]):
+            item['seq'] = index
 
         # Create both the address iterator and the GAP limit searcher.
         address_iter = ManualAddressSequencer()
