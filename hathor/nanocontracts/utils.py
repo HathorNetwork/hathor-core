@@ -27,7 +27,12 @@ from hathor.types import VertexId
 
 def is_nc_public_method(method: Callable) -> bool:
     """Return True if the method is nc_public."""
-    return getattr(method, '_is_nc_public', False)
+    return getattr(method, '_nc_method_type', None) == 'public'
+
+
+def is_nc_view_method(method: Callable) -> bool:
+    """Return True if the method is nc_view."""
+    return getattr(method, '_nc_method_type', None) == 'view'
 
 
 def get_nano_contract_creation(tx_storage: TransactionStorage,

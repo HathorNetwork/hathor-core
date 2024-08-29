@@ -163,15 +163,15 @@ class _SingleCallRunner:
         self.update_deposits_and_withdrawals(ctx)
         return ret
 
-    def call_private_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        """Call a contract private method. It cannot change the state."""
-        from hathor.nanocontracts.utils import is_nc_public_method
+    def call_view_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
+        """Call a contract view method. It cannot change the state."""
+        from hathor.nanocontracts.utils import is_nc_view_method
         blueprint = self.blueprint_class(self.changes_tracker)
         method = getattr(blueprint, method_name)
         if method is None:
             raise NCMethodNotFound(method_name)
-        if is_nc_public_method(method):
-            raise NCError('not a private method')
+        if is_nc_view_method(method):
+            raise NCError('not a view method')
         ret = method(*args, **kwargs)
         if not self.changes_tracker.is_empty():
             raise NCPrivateMethodError('private methods cannot change the state')
@@ -393,8 +393,8 @@ class Runner:
         ctx._runner = None
         return ret
 
-    def call_private_method(self, nanocontract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        """Call a contract private method."""
+    def call_view_method(self, nanocontract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
+        """Call a contract view method."""
         if self._call_info is None:
             self._call_info = self._build_call_info()
 
@@ -412,13 +412,15 @@ class Runner:
 
         self._call_info.pre_call(call_record)
         single_runner = self._get_single_runner(nanocontract_id)
-        ret = single_runner.call_private_method(method_name, *args, **kwargs)
+        ret = single_runner.call_view_method(method_name, *args, **kwargs)
         self._call_info.post_call(call_record)
 
         if not self._call_info.stack:
             self._call_info = None
 
         return ret
+
+    call_private_method = call_view_method
 
     def get_balance(self, nanocontract_id: ContractId | None, token_uid: TokenUid | None) -> Amount:
         """Return a contract balance for a given token."""

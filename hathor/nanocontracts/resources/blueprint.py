@@ -23,6 +23,7 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts import types as nc_types
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.types import Context
+from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 if TYPE_CHECKING:
@@ -123,11 +124,11 @@ class BlueprintInfoResource(Resource):
                 return_type=self.get_type_name(return_type),
             )
 
-            is_public = getattr(method, '_is_nc_public', False)
-            if is_public:
+            if is_nc_public_method(method):
                 assert name not in public_methods
                 public_methods[name] = method_info
-            else:
+
+            if is_nc_view_method(method):
                 assert name not in private_methods
                 private_methods[name] = method_info
 

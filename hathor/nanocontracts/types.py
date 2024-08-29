@@ -80,7 +80,15 @@ class SignedData(Generic[T]):
 
 def public(fn: Callable) -> Callable:
     """Decorator to mark a blueprint method as public."""
-    setattr(fn, '_is_nc_public', True)
+    assert not hasattr(fn, '_nc_method_type')
+    setattr(fn, '_nc_method_type', 'public')
+    return fn
+
+
+def view(fn: Callable) -> Callable:
+    """Decorator to mark a blueprint method as view (read-only)."""
+    assert not hasattr(fn, '_nc_method_type')
+    setattr(fn, '_nc_method_type', 'view')
     return fn
 
 

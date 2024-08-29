@@ -28,6 +28,7 @@ from hathor.nanocontracts.types import (
     TokenUid,
     TxOutputScript,
     public,
+    view,
 )
 
 Result = str
@@ -123,6 +124,7 @@ class Bet(Blueprint):
         self.final_result = None
         self.total = Amount(0)
 
+    @view
     def has_result(self) -> bool:
         """Return True if the final result has already been set."""
         return bool(self.final_result is not None)
@@ -206,12 +208,14 @@ class Bet(Blueprint):
         else:
             self.withdrawals[ctx.address] += action.amount
 
+    @view
     def get_max_withdrawal(self, address: Address) -> Amount:
         """Return the maximum amount available for withdrawal."""
         total = self.get_winner_amount(address)
         withdrawals = self.withdrawals.get(address, Amount(0))
         return total - withdrawals
 
+    @view
     def get_winner_amount(self, address: Address) -> Amount:
         """Return how much an address has won."""
         self.fail_if_result_is_not_available()

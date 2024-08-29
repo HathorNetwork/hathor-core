@@ -76,6 +76,7 @@ class SwapDemo(Blueprint):
         # All good! Let's accept the transaction.
         self.swaps_counter += 1
 
+    @view
     def is_ratio_valid(self, qty_a: int, qty_b: int) -> bool:
         """Check if the swap quantities are valid."""
         return (self.multiplier_a * qty_a == self.multiplier_b * qty_b)
