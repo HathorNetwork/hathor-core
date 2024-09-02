@@ -88,44 +88,41 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
         raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> None:
-    """Evaluates the output script and input data according to
-    a very limited subset of Bitcoin's scripting language.
+def evaluate_scripts(tx: Transaction) -> None:
+    p2pkh_scripts: list[tuple[bytes, ScriptExtras]] = []
 
-    :param tx: the transaction being validated, the 'owner' of the input data
-    :type tx: :py:class:`hathor.transaction.Transaction`
+    for tx_input in tx.inputs:
+        spent_tx = tx.get_spent_tx(tx_input)
+        input_data = tx_input.data
+        output_script = spent_tx.outputs[tx_input.index].script
+        log: list[str] = []
+        extras = ScriptExtras(tx=tx, txin=tx_input, spent_tx=spent_tx)
 
-    :param txin: transaction input being evaluated
-    :type txin: :py:class:`hathor.transaction.TxInput`
+        from hathor.transaction.scripts import P2PKH, MultiSig
+        if MultiSig.re_match.search(output_script):
+            # For MultiSig there are 2 executions:
+            # First we need to evaluate that redeem_script matches redeem_script_hash
+            # we can't use input_data + output_script because it will end with an invalid stack
+            # i.e. the signatures will still be on the stack after ouput_script is executed
+            redeem_script_pos = MultiSig.get_multisig_redeem_script_pos(input_data)
+            full_data = tx_input.data[redeem_script_pos:] + output_script
+            execute_eval(full_data, log, extras)
 
-    :param spent_tx: the transaction referenced by the input
-    :type spent_tx: :py:class:`hathor.transaction.BaseTransaction`
+            # Second, we need to validate that the signatures on the input_data solves the redeem_script
+            # we pop and append the redeem_script to the input_data and execute it
+            multisig_data = MultiSig.get_multisig_data(extras.txin.data)
+            execute_eval(multisig_data, log, extras)
+        else:
+            # merge input_data and output_script
+            full_data = input_data + output_script
+            if P2PKH.re_match.search(output_script):
+                p2pkh_scripts.append((full_data, extras))
+            else:
+                execute_eval(full_data, log, extras)
 
-    :raises ScriptError: if script verification fails
-    """
-    input_data = txin.data
-    output_script = spent_tx.outputs[txin.index].script
-    log: list[str] = []
-    extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
-
-    from hathor.transaction.scripts import MultiSig
-    if MultiSig.re_match.search(output_script):
-        # For MultiSig there are 2 executions:
-        # First we need to evaluate that redeem_script matches redeem_script_hash
-        # we can't use input_data + output_script because it will end with an invalid stack
-        # i.e. the signatures will still be on the stack after ouput_script is executed
-        redeem_script_pos = MultiSig.get_multisig_redeem_script_pos(input_data)
-        full_data = txin.data[redeem_script_pos:] + output_script
-        execute_eval(full_data, log, extras)
-
-        # Second, we need to validate that the signatures on the input_data solves the redeem_script
-        # we pop and append the redeem_script to the input_data and execute it
-        multisig_data = MultiSig.get_multisig_data(extras.txin.data)
-        execute_eval(multisig_data, log, extras)
-    else:
-        # merge input_data and output_script
-        full_data = input_data + output_script
-        execute_eval(full_data, log, extras)
+    for script, extras in p2pkh_scripts:
+        log = []
+        execute_eval(script, log, extras)
 
 
 def decode_opn(opcode: int) -> int:
