@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import struct
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from enum import IntEnum, auto
 from typing import NamedTuple, Optional, Union
 
@@ -90,13 +91,13 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
 
 
 class ScriptEvaluationMode(IntEnum):
-    NORMAL = auto()
+    CURRENT = auto()
     RUST_MULTITHREAD = auto()
     PYTHON_MULTITHREAD = auto()
     PYTHON_MULTIPROCESS = auto()
 
 
-def evaluate_scripts(tx: Transaction, mode: ScriptEvaluationMode = ScriptEvaluationMode.NORMAL) -> None:
+def evaluate_scripts(tx: Transaction, mode: ScriptEvaluationMode = ScriptEvaluationMode.CURRENT) -> None:
     p2pkh_scripts: list[tuple[bytes, ScriptExtras]] = []
 
     for tx_input in tx.inputs:
@@ -128,12 +129,13 @@ def evaluate_scripts(tx: Transaction, mode: ScriptEvaluationMode = ScriptEvaluat
             else:
                 execute_eval(full_data, log, extras)
 
+    storage = tx.storage
+    tx.storage = None
     match mode:
-        case ScriptEvaluationMode.NORMAL:
+        case ScriptEvaluationMode.CURRENT:
             for script, extras in p2pkh_scripts:
                 log = []
                 execute_eval(script, log, extras)
-            return
         case ScriptEvaluationMode.RUST_MULTITHREAD:
             import py_hathor_nucleus
             scripts = [script for script, _ in p2pkh_scripts]
@@ -141,9 +143,16 @@ def evaluate_scripts(tx: Transaction, mode: ScriptEvaluationMode = ScriptEvaluat
             if not is_valid:
                 raise ScriptError
         case ScriptEvaluationMode.PYTHON_MULTITHREAD:
-            raise NotImplementedError
+            with ThreadPoolExecutor() as executor:
+                futures = [executor.submit(execute_eval, script, [], extras) for script, extras in p2pkh_scripts]
+                for future in as_completed(futures):
+                    future.result()
         case ScriptEvaluationMode.PYTHON_MULTIPROCESS:
-            raise NotImplementedError
+            with ProcessPoolExecutor() as executor:
+                futures = [executor.submit(execute_eval, script, [], extras) for script, extras in p2pkh_scripts]
+                for future in as_completed(futures):
+                    future.result()
+    tx.storage = storage
 
 
 def decode_opn(opcode: int) -> int:

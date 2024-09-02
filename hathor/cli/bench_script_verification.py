@@ -19,15 +19,13 @@ from unittest.mock import Mock
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.transaction.scripts.execute import ScriptEvaluationMode
-
 """
-Run this benchmark with:
+Run this benchmark locally with:
 
 hyperfine \
   --warmup 1 \
   --runs 2 \
-  --parameter-list mode NORMAL,RUST_MULTITHREAD \
+  --parameter-list mode CURRENT,RUST_MULTITHREAD,PYTHON_MULTITHREAD,PYTHON_MULTIPROCESS \
   --command-name '{mode}' \
   'python -m hathor bench_script_verification --n-scripts 255 --n-txs 1000 --mode {mode}'
 """
@@ -38,6 +36,7 @@ def main() -> None:
     from hathor.crypto.util import get_address_from_public_key, get_public_key_bytes_compressed
     from hathor.transaction import Transaction, TxInput, TxOutput
     from hathor.transaction.scripts import P2PKH
+    from hathor.transaction.scripts.execute import ScriptEvaluationMode
     from hathor.verification.transaction_verifier import TransactionVerifier
 
     parser = create_parser()

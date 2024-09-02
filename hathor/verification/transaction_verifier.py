@@ -132,7 +132,7 @@ class TransactionVerifier:
             self.verify_scripts(tx)
 
     @staticmethod
-    def verify_scripts(tx: Transaction, mode: ScriptEvaluationMode = ScriptEvaluationMode.NORMAL) -> None:
+    def verify_scripts(tx: Transaction, mode: ScriptEvaluationMode = ScriptEvaluationMode.CURRENT) -> None:
         from hathor.transaction.scripts import evaluate_scripts
         try:
             evaluate_scripts(tx, mode)
