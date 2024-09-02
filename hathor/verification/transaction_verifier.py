@@ -35,6 +35,7 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
+from hathor.transaction.scripts.execute import ScriptEvaluationMode
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -131,10 +132,10 @@ class TransactionVerifier:
             self.verify_scripts(tx)
 
     @staticmethod
-    def verify_scripts(tx: Transaction) -> None:
+    def verify_scripts(tx: Transaction, mode: ScriptEvaluationMode = ScriptEvaluationMode.NORMAL) -> None:
         from hathor.transaction.scripts import evaluate_scripts
         try:
-            evaluate_scripts(tx)
+            evaluate_scripts(tx, mode)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 

@@ -13,10 +13,11 @@
 #  limitations under the License.
 
 import struct
+from enum import IntEnum, auto
 from typing import NamedTuple, Optional, Union
 
 from hathor.transaction import BaseTransaction, Transaction, TxInput
-from hathor.transaction.exceptions import DataIndexError, FinalStackInvalid, InvalidScriptError, OutOfData
+from hathor.transaction.exceptions import DataIndexError, FinalStackInvalid, InvalidScriptError, OutOfData, ScriptError
 
 
 class ScriptExtras(NamedTuple):
@@ -88,7 +89,14 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
         raise FinalStackInvalid('\n'.join(log))
 
 
-def evaluate_scripts(tx: Transaction) -> None:
+class ScriptEvaluationMode(IntEnum):
+    NORMAL = auto()
+    RUST_MULTITHREAD = auto()
+    PYTHON_MULTITHREAD = auto()
+    PYTHON_MULTIPROCESS = auto()
+
+
+def evaluate_scripts(tx: Transaction, mode: ScriptEvaluationMode = ScriptEvaluationMode.NORMAL) -> None:
     p2pkh_scripts: list[tuple[bytes, ScriptExtras]] = []
 
     for tx_input in tx.inputs:
@@ -120,9 +128,22 @@ def evaluate_scripts(tx: Transaction) -> None:
             else:
                 execute_eval(full_data, log, extras)
 
-    for script, extras in p2pkh_scripts:
-        log = []
-        execute_eval(script, log, extras)
+    match mode:
+        case ScriptEvaluationMode.NORMAL:
+            for script, extras in p2pkh_scripts:
+                log = []
+                execute_eval(script, log, extras)
+            return
+        case ScriptEvaluationMode.RUST_MULTITHREAD:
+            import py_hathor_nucleus
+            scripts = [script for script, _ in p2pkh_scripts]
+            is_valid = py_hathor_nucleus.evaluate_scripts(scripts, tx.timestamp, tx.get_sighash_all_data())
+            if not is_valid:
+                raise ScriptError
+        case ScriptEvaluationMode.PYTHON_MULTITHREAD:
+            raise NotImplementedError
+        case ScriptEvaluationMode.PYTHON_MULTIPROCESS:
+            raise NotImplementedError
 
 
 def decode_opn(opcode: int) -> int:

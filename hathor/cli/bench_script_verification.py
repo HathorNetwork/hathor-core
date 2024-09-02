@@ -19,20 +19,40 @@ from unittest.mock import Mock
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.crypto.util import get_public_key_bytes_compressed, get_address_from_public_key
-from hathor.transaction import Transaction, TxOutput, TxInput
-from hathor.transaction.scripts import P2PKH
-from hathor.verification.transaction_verifier import TransactionVerifier
+from hathor.transaction.scripts.execute import ScriptEvaluationMode
+
+"""
+Run this benchmark with:
+
+hyperfine \
+  --warmup 1 \
+  --runs 2 \
+  --parameter-list mode NORMAL,RUST_MULTITHREAD \
+  --command-name '{mode}' \
+  'python -m hathor bench_script_verification --n-scripts 255 --n-txs 1000 --mode {mode}'
+"""
 
 
 def main() -> None:
     from hathor.cli.util import create_parser
+    from hathor.crypto.util import get_address_from_public_key, get_public_key_bytes_compressed
+    from hathor.transaction import Transaction, TxInput, TxOutput
+    from hathor.transaction.scripts import P2PKH
+    from hathor.verification.transaction_verifier import TransactionVerifier
+
     parser = create_parser()
     parser.add_argument('--n-txs', type=str, help='Number of txs')
     parser.add_argument('--n-scripts', type=str, help='Number of scripts in each tx')
+    parser.add_argument(
+        '--mode',
+        type=str,
+        help='Script evaluation mode',
+        choices=[variant.name for variant in ScriptEvaluationMode]
+    )
     args = parser.parse_args(sys.argv[1:])
     n_scripts = int(args.n_scripts)
     n_txs = int(args.n_txs)
+    mode = ScriptEvaluationMode[args.mode]
 
     storage = Mock()
     private_key = ec.generate_private_key(ec.SECP256K1())
@@ -61,4 +81,4 @@ def main() -> None:
         input_.data = intput_data
 
     for _ in range(n_txs):
-        TransactionVerifier.verify_scripts(tx)
+        TransactionVerifier.verify_scripts(tx, mode)

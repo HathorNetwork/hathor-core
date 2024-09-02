@@ -32,6 +32,7 @@ class CliManager:
         self.longest_cmd: int = 0
 
         from . import (
+            bench_script_verification,
             db_export,
             db_import,
             generate_genesis,
@@ -60,7 +61,6 @@ class CliManager:
             twin_tx,
             tx_generator,
             wallet,
-            bench_script_verification,
         )
         from .events_simulator import events_simulator
 
