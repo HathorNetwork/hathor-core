@@ -42,7 +42,7 @@ class AsyncIteratorsTestCase(TestCase):
         expected_result: list[dict[str, Any]] = [{
             'type': 'stream:history:begin',
             'id': stream_id,
-            'sliding_window_size': None,
+            'window_size': None,
         }]
         expected_result += [
             {
