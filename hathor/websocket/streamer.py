@@ -104,9 +104,16 @@ class HistoryStreamer:
         """
         if ack <= self._last_ack:
             # We might receive outdated or duplicate ACKs, and we can safely ignore them.
+            self.send_message(StreamErrorMessage(
+                id=self.stream_id,
+                errmsg=f'Outdated ACK received. Skipping it... (ack={ack})'
+            ))
             return
         if ack >= self._next_sequence_number:
-            # Should we raise an exception here?
+            self.send_message(StreamErrorMessage(
+                id=self.stream_id,
+                errmsg=f'Received ACK is higher than the last sent message. Skipping it... (ack={ack})'
+            ))
             return
         self._last_ack = ack
         self.resume_if_possible()
@@ -130,7 +137,7 @@ class HistoryStreamer:
 
         assert not self._started
         self._started = True
-        self.send_message(StreamBeginMessage(id=self.stream_id, sliding_window_size=self._sliding_window_size))
+        self.send_message(StreamBeginMessage(id=self.stream_id, window_size=self._sliding_window_size))
         self.resumeProducing()
         return self.deferred
 

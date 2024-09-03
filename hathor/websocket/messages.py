@@ -41,7 +41,7 @@ class StreamErrorMessage(StreamBase):
 class StreamBeginMessage(StreamBase):
     type: str = Field('stream:history:begin', const=True)
     id: str
-    sliding_window_size: Optional[int]
+    window_size: Optional[int]
 
 
 class StreamEndMessage(StreamBase):

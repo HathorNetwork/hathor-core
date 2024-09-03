@@ -188,7 +188,7 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
             return
 
         search = gap_limit_search(self.factory.manager, address_iter, gap_limit)
-        window_size = message.get('window_size', None)
+        window_size = message.get('window-size', None)
         self._create_streamer(stream_id, search, window_size)
         self.log.info('opening a websocket xpub streaming',
                       stream_id=stream_id,
@@ -245,7 +245,7 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
             return
 
         search = gap_limit_search(self.factory.manager, address_iter, gap_limit)
-        window_size = message.get('window_size', None)
+        window_size = message.get('window-size', None)
         self._create_streamer(stream_id, search, window_size)
         self.log.info('opening a websocket manual streaming',
                       stream_id=stream_id,
