@@ -41,12 +41,14 @@ class StreamErrorMessage(StreamBase):
 class StreamBeginMessage(StreamBase):
     type: str = Field('stream:history:begin', const=True)
     id: str
+    seq: int
     window_size: Optional[int]
 
 
 class StreamEndMessage(StreamBase):
     type: str = Field('stream:history:end', const=True)
     id: str
+    seq: int
 
 
 class StreamVertexMessage(StreamBase):

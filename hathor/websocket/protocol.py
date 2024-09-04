@@ -144,6 +144,7 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
 
     def _create_streamer(self, stream_id: str, search: AddressSearch, window_size: int | None) -> None:
         """Create the streamer and handle its callbacks."""
+        assert self._history_streamer is None
         self._history_streamer = HistoryStreamer(protocol=self, stream_id=stream_id, search=search)
         if window_size is not None:
             if window_size < 0:
