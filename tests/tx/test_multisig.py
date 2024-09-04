@@ -4,7 +4,7 @@ from hathor.crypto.util import decode_address, get_private_key_from_bytes, get_p
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
-from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, parse_address_script, script_eval
+from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, evaluate_scripts, parse_address_script
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
@@ -134,7 +134,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}
         self.assertEqual(cls_script.to_human_readable(), expected_dict)
 
-        script_eval(tx, tx_input, tx1)
+        evaluate_scripts(tx)
 
         # Script error
         with self.assertRaises(ScriptError):
