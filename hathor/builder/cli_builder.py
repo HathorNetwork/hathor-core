@@ -50,6 +50,8 @@ from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
 
+DEFAULT_CACHE_SIZE: int = 100000
+
 
 class SyncChoice(Enum):
     V1_DEFAULT = auto()  # v1 enabled, v2 disabled but can be enabled in runtime
@@ -150,7 +152,7 @@ class CliBuilder:
                 indexes = RocksDBIndexesManager(self.rocksdb_storage)
 
             kwargs: dict[str, Any] = {}
-            if not self._args.cache:
+            if self._args.disable_cache:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
                 kwargs['indexes'] = indexes
@@ -161,14 +163,27 @@ class CliBuilder:
             feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
+
         if self._args.cache:
-            self.check_or_raise(not self._args.memory_storage, '--cache should not be used with --memory-storage')
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
+            self.log.warn('--cache is now the default and will be removed')
+
+        if self._args.disable_cache:
+            self.check_or_raise(self._args.cache_size is None, 'cannot use --disable-cache with --cache-size')
+            self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
+
+        if self._args.memory_storage:
             if self._args.cache_size:
-                tx_storage.capacity = self._args.cache_size
+                self.log.warn('using --cache-size with --memory-storage has no effect')
+            if self._args.cache_interval:
+                self.log.warn('using --cache-interval with --memory-storage has no effect')
+
+        if not self._args.disable_cache and not self._args.memory_storage:
+            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
+            tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
             if self._args.cache_interval:
                 tx_storage.interval = self._args.cache_interval
             self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
+
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
 
