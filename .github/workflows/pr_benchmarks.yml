@@ -30,7 +30,7 @@ jobs:
           os: ubuntu-22.04
       - name: Set env vars
         run: cat ./extras/benchmarking/.env >> $GITHUB_ENV
-      - name: Download benchmark data
+      - name: Download Sync-v2 benchmark data
         run: |
           mkdir $SERVER_DATA_DIR
           poetry run hathor-cli quick_test \
@@ -49,7 +49,7 @@ jobs:
             --x-localhost-only \
             --listen tcp:$TCP_PORT \
             &
-      - name: Track PR Benchmarks with Bencher
+      - name: Benchmarks Sync-v2 (PR)
         run: |
           bencher run \
             --project hathor-core \
@@ -63,3 +63,17 @@ jobs:
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --file $BENCH_FILE \
             './extras/benchmarking/benchmark_sync_v2.sh'
+      - name: Benchmark scripts verification (PR)
+        run: |
+          bencher run \
+            --project hathor-core \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch '${{ github.head_ref }}' \
+            --branch-start-point '${{ github.base_ref }}' \
+            --branch-start-point-hash '${{ github.event.pull_request.base.sha }}' \
+            --testbed ubuntu-22.04 \
+            --adapter shell_hyperfine \
+            --err \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --file tx_scripts_verification_results.json \
+            './extras/benchmarking/benchmark_tx_scripts_verification.sh'

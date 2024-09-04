@@ -130,7 +130,8 @@ class TransactionVerifier:
         if not skip_script:
             self.verify_scripts(tx)
 
-    def verify_scripts(self, tx: Transaction) -> None:
+    @staticmethod
+    def verify_scripts(tx: Transaction) -> None:
         """
         :type tx: Transaction
         """

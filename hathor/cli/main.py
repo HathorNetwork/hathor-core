@@ -32,6 +32,7 @@ class CliManager:
         self.longest_cmd: int = 0
 
         from . import (
+            bench_script_verification,
             db_export,
             db_import,
             generate_genesis,
@@ -100,6 +101,8 @@ class CliManager:
         self.add_cmd('dev', 'x-import', db_import, 'EXPERIMENTAL: Import database from exported format.')
         self.add_cmd('dev', 'replay-logs', replay_logs, 'EXPERIMENTAL: re-play json logs as console printted')
         self.add_cmd('dev', 'load-from-logs', load_from_logs, 'Load vertices as they are found in a log dump')
+
+        self.add_cmd('bench', 'bench_script_verification', bench_script_verification, 'Benchmark script verification')
 
     def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: Optional[str] = None) -> None:
         self.command_list[cmd] = module

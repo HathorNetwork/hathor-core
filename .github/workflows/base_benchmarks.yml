@@ -26,7 +26,7 @@ jobs:
           os: ubuntu-22.04
       - name: Set env vars
         run: cat ./extras/benchmarking/.env >> $GITHUB_ENV
-      - name: Download benchmark data
+      - name: Download Sync-v2 benchmark data
         run: |
           mkdir $SERVER_DATA_DIR
           poetry run hathor-cli quick_test \
@@ -45,7 +45,7 @@ jobs:
             --x-localhost-only \
             --listen tcp:$TCP_PORT \
             &
-      - name: Track base branch benchmarks with Bencher
+      - name: Benchmarks Sync-v2 (base branch)
         run: |
           bencher run \
           --project hathor-core \
@@ -56,3 +56,14 @@ jobs:
           --err \
           --file $BENCH_FILE \
           './extras/benchmarking/benchmark_sync_v2.sh'
+      - name: Benchmark scripts verification (base branch)
+        run: |
+          bencher run \
+          --project hathor-core \
+          --token '${{ secrets.BENCHER_API_TOKEN }}' \
+          --branch master \
+          --testbed ubuntu-22.04 \
+          --adapter shell_hyperfine \
+          --err \
+          --file tx_scripts_verification_results.json \
+          './extras/benchmarking/benchmark_tx_scripts_verification.sh'
