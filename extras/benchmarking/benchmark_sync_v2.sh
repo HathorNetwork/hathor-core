@@ -1,3 +1,5 @@
+#!/bin/bash
+
 hyperfine \
   --warmup 1 \
   --runs $N_RUNS \
