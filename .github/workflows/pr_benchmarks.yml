@@ -29,16 +29,19 @@ jobs:
           python: 3.11
           os: ubuntu-22.04
       - name: Set env vars
-        run: cat ./extras/benchmarking/.env >> $GITHUB_ENV
+        run: cat ./extras/benchmarking/sync_v2/.env >> $GITHUB_ENV
       - name: Download benchmark data
         run: |
+          wget $BENCH_DATA_URL
+          tar -xzf $BENCH_DATA_FILE_NAME.tar.gz
           mkdir $SERVER_DATA_DIR
-          poetry run hathor-cli quick_test \
+          poetry run hathor-cli load-from-logs \
             --testnet \
             --data $SERVER_DATA_DIR \
             --cache \
             --cache-size $CACHE_SIZE \
-            --quit-after-n-blocks $N_BLOCKS
+            --x-localhost-only \
+            --log-dump $BENCH_DATA_FILE_NAME
       - name: Run server node
         run: |
           poetry run hathor-cli run_node \
@@ -62,4 +65,4 @@ jobs:
             --err \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --file $BENCH_FILE \
-            './extras/benchmarking/benchmark_sync_v2.sh'
+            './extras/benchmarking/sync_v2/benchmark_sync_v2.sh'
