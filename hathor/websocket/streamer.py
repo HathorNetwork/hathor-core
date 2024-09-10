@@ -49,7 +49,7 @@ class StreamerState(Enum):
 VALID_TRANSITIONS = {
     StreamerState.NOT_STARTED: {StreamerState.ACTIVE},
     StreamerState.ACTIVE: {StreamerState.ACTIVE, StreamerState.PAUSED, StreamerState.CLOSING, StreamerState.CLOSED},
-    StreamerState.PAUSED: {StreamerState.ACTIVE, StreamerState.CLOSED},
+    StreamerState.PAUSED: {StreamerState.ACTIVE, StreamerState.PAUSED, StreamerState.CLOSED},
     StreamerState.CLOSING: {StreamerState.CLOSED},
     StreamerState.CLOSED: set()
 }
