@@ -708,7 +708,7 @@ class HathorManager:
         assert can_include_intervals, 'tips cannot be empty'
         max_timestamp = max(int(i.begin) for i in can_include_intervals)
         must_include: list[VertexId] = []
-        assert len(can_include_intervals) > 0, f'invalid timestamp "{timestamp}", no tips found"'
+        assert len(can_include_intervals) > 0, f'invalid timestamp "{timestamp}", no tips found'
         if len(can_include_intervals) < 2:
             # If there is only one tip, let's randomly choose one of its parents.
             must_include_interval = can_include_intervals[0]
