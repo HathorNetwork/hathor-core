@@ -141,8 +141,7 @@ class NCStorage:
             if node.value is None:
                 # Skip all nodes with no value.
                 continue
-            # Found a leaf!
-            assert is_leaf
+            # Found a token.
             assert node.value is not None
             value = self._deserialize(node.value)
             token_uid = self._trie._decode_key(node.key)[1:]
