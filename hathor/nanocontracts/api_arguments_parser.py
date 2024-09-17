@@ -16,7 +16,7 @@ from types import GenericAlias
 from typing import Any, NamedTuple, Optional, TypeVar, Union, get_args, get_origin
 
 from hathor.crypto.util import decode_address
-from hathor.nanocontracts.types import SignedData
+from hathor.nanocontracts.types import Address, SignedData
 
 # This is a workaround, so mypy doesn't complain about Optional type checking
 # The optional fields comes as _UnionGenericAlias and this helps us, so we don't
@@ -33,7 +33,7 @@ def parse_arg(arg: Any, expected_type: Any) -> Any:
 
     We support int, float, str, bytes, address, list, tuple, namedtuple, and optional
     """
-    if expected_type == bytes:
+    if expected_type == bytes or expected_type == Address:
         # It can be an address, or it comes as an hexadecimal value
         if arg.startswith("a'") and arg.endswith("'"):
             # It's an address
