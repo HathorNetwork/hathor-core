@@ -241,13 +241,13 @@ class NCBlueprintTestCase(unittest.TestCase):
         ctx = Context([], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'initialize', ctx)
 
-        token_uid = b'\0'
+        token_uid = b'\0'  # HTR
         action = NCAction(NCActionType.DEPOSIT, token_uid, 100)
         ctx = Context([action], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
         self.assertEqual(100, storage.get_balance(token_uid))
 
-        token_uid2 = b'\1'
+        token_uid2 = b'\0' + b'\1' * 31
         action = NCAction(NCActionType.DEPOSIT, token_uid2, 200)
         ctx = Context([action], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
