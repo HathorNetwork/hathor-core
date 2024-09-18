@@ -14,7 +14,6 @@
 
 import os
 from argparse import ArgumentParser
-from typing import Any
 
 from hathor.cli.run_node import RunNode
 
@@ -30,23 +29,22 @@ class QuickTest(RunNode):
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
-        from hathor.transaction import Block
+        from hathor.transaction import Block, Vertex
         from hathor.transaction.base_transaction import GenericVertex
         super().prepare(register_resources=False)
         self._no_wait = self._args.no_wait
 
         self.log.info('patching on_new_tx to quit on success')
-        orig_on_new_tx = self.manager.on_new_tx
+        orig_on_new_vertex = type(self.manager.vertex_handler).on_new_vertex
+        orig_on_new_vertex_async = type(self.manager.vertex_handler).on_new_vertex_async
 
-        def patched_on_new_tx(*args: Any, **kwargs: Any) -> bool:
-            res = orig_on_new_tx(*args, **kwargs)
+        def patch(vertex: Vertex, res: bool) -> bool:
             msg: str | None = None
 
             if self._args.quit_after_n_blocks is None:
                 should_quit = res
                 msg = 'added a tx'
             else:
-                vertex = args[0]
                 should_quit = False
                 assert isinstance(vertex, GenericVertex)
 
@@ -61,7 +59,20 @@ class QuickTest(RunNode):
                 self.reactor.fireSystemEvent('shutdown')
                 os._exit(0)
             return res
-        self.manager.on_new_tx = patched_on_new_tx
+
+        def patched_on_new_vertex(*args, **kwargs):
+            vertex = args[1]
+            res = orig_on_new_vertex(*args, **kwargs)
+            return patch(vertex, res)
+
+        async def patched_on_new_vertex_async(*args, **kwargs):
+            vertex = args[1]
+            print(args, kwargs)
+            res = await orig_on_new_vertex_async(*args, **kwargs)
+            return patch(vertex, res)
+
+        setattr(type(self.manager.vertex_handler), 'on_new_vertex', patched_on_new_vertex)
+        setattr(type(self.manager.vertex_handler), 'on_new_vertex_async', patched_on_new_vertex_async)
 
         timeout = 300
         self.log.info('exit with error code if it take too long', timeout=timeout)
