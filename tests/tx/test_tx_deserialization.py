@@ -1,7 +1,7 @@
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.verification.verification_service import VerificationService
+from hathor.verification.verification_service import verify_without_storage
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from tests import unittest
 
@@ -11,8 +11,7 @@ class _BaseTest:
         def setUp(self) -> None:
             super().setUp()
             daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
-            verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=daa)
-            self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers, daa=daa)
+            self._verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=daa)
 
         def test_deserialize(self):
             cls = self.get_tx_class()
@@ -27,7 +26,7 @@ class _BaseTest:
 
             cls = self.get_tx_class()
             tx = cls.create_from_struct(self.tx_bytes, verbose=verbose)
-            self._verification_service.verify_without_storage(tx)
+            verify_without_storage(self._verifiers, tx)
 
             key, version = v[1]
             self.assertEqual(key, 'version')

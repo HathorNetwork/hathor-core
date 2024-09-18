@@ -34,6 +34,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocessor import Multiprocessor
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import Peer
@@ -302,12 +303,15 @@ class CliBuilder:
 
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
 
+        multiprocessor = Multiprocessor() if self._args.x_use_multiprocessor else None
         vertex_verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa)
         verification_service = VerificationService(
             settings=settings,
+            reactor=reactor,
             verifiers=vertex_verifiers,
             tx_storage=tx_storage,
             daa=daa,
+            multiprocessor=multiprocessor,
         )
 
         cpu_mining_service = CpuMiningService()
@@ -379,6 +383,7 @@ class CliBuilder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            multiprocessor=multiprocessor,
         )
 
         if self._args.x_ipython_kernel:
