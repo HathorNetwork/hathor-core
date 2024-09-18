@@ -23,7 +23,7 @@ from typing_extensions import override
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
-from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
+from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex, register_vertex_pickler
 from hathor.transaction.exceptions import InexistentInput, InvalidToken
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
@@ -368,3 +368,6 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
         static_metadata = TransactionStaticMetadata.create_from_storage(self, settings, storage)
         self.set_static_metadata(static_metadata)
+
+
+register_vertex_pickler(Transaction)

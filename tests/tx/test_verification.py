@@ -24,6 +24,7 @@ from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
 from hathor.verification.transaction_verifier import TransactionVerifier
+from hathor.verification.verification_service import verify_without_storage
 from hathor.verification.vertex_verifier import VertexVerifier
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
@@ -154,7 +155,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(block)
+            verify_without_storage(self.verifiers, block)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -351,7 +352,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(block)
+            verify_without_storage(self.verifiers, block)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -576,7 +577,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(tx)
+            verify_without_storage(self.verifiers, tx)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -872,7 +873,7 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(tx)
+            verify_without_storage(self.verifiers, tx)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()

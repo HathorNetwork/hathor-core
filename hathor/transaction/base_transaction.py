@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import base64
+import copyreg
 import datetime
 import hashlib
 import time
@@ -24,9 +25,10 @@ from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
 from structlog import get_logger
+from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
@@ -248,7 +250,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     @classmethod
     @abstractmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'BaseTransaction':
+                           *, verbose: VerboseCallback = None) -> Self:
         """ Create a transaction from its bytes.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -808,7 +810,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         return ret
 
-    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> 'BaseTransaction':
+    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> Self:
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
@@ -1112,3 +1114,39 @@ def output_value_to_bytes(number: int) -> bytes:
         return (-number).to_bytes(8, byteorder='big', signed=True)
     else:
         return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well
+
+
+# TODO: This was removed, it shouldn't be here
+def tx_or_block_from_bytes(data: bytes,
+                           storage: Optional['TransactionStorage'] = None) -> BaseTransaction:
+    """ Creates the correct tx subclass from a sequence of bytes
+    """
+    # version field takes up the second byte only
+    version = data[1]
+    try:
+        tx_version = TxVersion(version)
+        cls = tx_version.get_cls()
+        return cls.create_from_struct(data, storage=storage)
+    except ValueError:
+        raise StructError('Invalid bytes to create transaction subclass.')
+
+
+T = TypeVar('T', bound=Vertex)
+
+
+def _unpickle_vertex(vertex_bytes: bytes, static_metadata_bytes: bytes) -> Vertex:
+    vertex = tx_or_block_from_bytes(vertex_bytes)
+    static_metadata = VertexStaticMetadata.from_bytes(static_metadata_bytes, target=vertex)
+    vertex.set_static_metadata(static_metadata)
+    return vertex
+
+
+def register_vertex_pickler(type_: type[T]) -> None:
+    """Register the custom serializer for a Vertex subclass in the global pickler."""
+    def vertex_pickler(vertex: T) -> tuple[Callable[[bytes, bytes], T], tuple[bytes, bytes]]:
+        unpickle_args = bytes(vertex), vertex.static_metadata.json_dumpb()
+        # _unpickle_vertex should really return a T, which would pass the type check, however it has to be a top-level
+        # function for pickler to be able to pickle it.
+        return _unpickle_vertex, unpickle_args  # type: ignore[return-value]
+
+    copyreg.pickle(type_, vertex_pickler)
