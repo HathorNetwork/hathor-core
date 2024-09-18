@@ -12,7 +12,7 @@ class _BaseTest:
             super().setUp()
             daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
             verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=daa)
-            self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
+            self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers, daa=daa)
 
         def test_deserialize(self):
             cls = self.get_tx_class()

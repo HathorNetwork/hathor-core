@@ -24,7 +24,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
-from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.exceptions import InexistentInput, InvalidToken
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
@@ -240,7 +240,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """
         if index == 0:
             return self._settings.HATHOR_TOKEN_UID
-        return self.tokens[index - 1]
+
+        try:
+            return self.tokens[index - 1]
+        except IndexError:
+            raise InvalidToken(f'token uid index not available: index {index}')
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
@@ -282,7 +286,12 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
+            try:
+                spent_output = spent_tx.outputs[tx_input.index]
+            except IndexError:
+                raise InexistentInput(
+                    f'Output spent by this input does not exist: {tx_input.tx_id.hex()} index {tx_input.index}'
+                )
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             (amount, can_mint, can_melt) = token_dict.get(token_uid, default_info)

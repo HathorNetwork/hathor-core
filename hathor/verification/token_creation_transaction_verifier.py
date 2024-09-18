@@ -15,9 +15,8 @@
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import clean_token_string
-from hathor.types import TokenUid
+from hathor.verification.verification_dependencies import TransactionDependencies
 
 
 class TokenCreationTransactionVerifier:
@@ -26,7 +25,7 @@ class TokenCreationTransactionVerifier:
     def __init__(self, *, settings: HathorSettings) -> None:
         self._settings = settings
 
-    def verify_minted_tokens(self, tx: TokenCreationTransaction, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verify_minted_tokens(self, tx: TokenCreationTransaction, tx_deps: TransactionDependencies) -> None:
         """ Besides all checks made on regular transactions, a few extra ones are made:
         - only HTR tokens on the inputs;
         - new tokens are actually being minted;
@@ -35,7 +34,7 @@ class TokenCreationTransactionVerifier:
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
         # make sure tokens are being minted
-        token_info = token_dict[tx.hash]
+        token_info = tx_deps.token_info[tx.hash]
         if token_info.amount <= 0:
             raise InvalidToken('Token creation transaction must mint new tokens')
 
