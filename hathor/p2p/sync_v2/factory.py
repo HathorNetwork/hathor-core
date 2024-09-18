@@ -19,6 +19,8 @@ from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_v2.agent import NodeBlockSync
+from hathor.p2p.sync_v2.p2p_storage import P2PStorage
+from hathor.p2p.sync_v2.p2p_vertex_handler import P2PVertexHandler
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction.vertex_parser import VertexParser
 
@@ -33,4 +35,14 @@ class SyncV2Factory(SyncAgentFactory):
         self.vertex_parser = vertex_parser
 
     def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Reactor) -> SyncAgent:
-        return NodeBlockSync(self._settings, protocol, reactor=reactor, vertex_parser=self.vertex_parser)
+        p2p_storage = P2PStorage(tx_storage=protocol.node.tx_storage)
+        p2p_vertex_handler = P2PVertexHandler(manager=protocol.node)
+
+        return NodeBlockSync(
+            settings=self._settings,
+            protocol=protocol,
+            reactor=reactor,
+            vertex_parser=self.vertex_parser,
+            p2p_storage=p2p_storage,
+            p2p_vertex_handler=p2p_vertex_handler,
+        )
