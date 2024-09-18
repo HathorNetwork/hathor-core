@@ -20,6 +20,7 @@ from enum import Enum, auto
 from typing import Any, Optional
 
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.cli.run_node_args import RunNodeArgs
 from hathor.cli.side_dag import SideDagArgs
@@ -234,6 +235,8 @@ class CliBuilder:
             case SyncChoice.V2_ONLY:
                 sync_v1_support = SyncSupportLevel.UNAVAILABLE
                 sync_v2_support = SyncSupportLevel.ENABLED
+            case _:
+                assert_never(sync_choice)
 
         pubsub = PubSubManager(reactor)
 
@@ -319,7 +322,14 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
         )
-        SyncSupportLevel.add_factories(settings, p2p_manager, sync_v1_support, sync_v2_support, vertex_parser)
+        SyncSupportLevel.add_factories(
+            settings,
+            p2p_manager,
+            sync_v1_support,
+            sync_v2_support,
+            vertex_parser,
+            use_async=self._args.x_async_sync_v2
+        )
 
         vertex_handler = VertexHandler(
             reactor=reactor,
