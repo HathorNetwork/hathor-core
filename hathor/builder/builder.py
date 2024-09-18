@@ -48,6 +48,7 @@ from hathor.transaction.storage import (
 )
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, get_environment_info
+from hathor.verification.verification_coordinator import VerificationCoordinator
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
@@ -155,6 +156,7 @@ class Builder:
         self._vertex_verifiers: Optional[VertexVerifiers] = None
         self._vertex_verifiers_builder: _VertexVerifiersBuilder | None = None
         self._verification_service: Optional[VerificationService] = None
+        self._verification_coordinator: VerificationCoordinator | None = None
 
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
@@ -561,6 +563,17 @@ class Builder:
 
         return self._verification_service
 
+    def _get_or_create_verification_coordinator(self) -> VerificationCoordinator:
+        if self._verification_coordinator is None:
+            self._verification_coordinator = VerificationCoordinator(
+                tx_storage=self._get_or_create_tx_storage(),
+                verification_service=self._get_or_create_verification_service(),
+                daa=self._get_or_create_daa(),
+                reactor=self._get_reactor(),
+            )
+
+        return self._verification_coordinator
+
     def _get_or_create_feature_storage(self) -> FeatureActivationStorage | None:
         match self._storage_type:
             case StorageType.MEMORY: return None
@@ -602,6 +615,7 @@ class Builder:
                 settings=self._get_or_create_settings(),
                 tx_storage=self._get_or_create_tx_storage(),
                 verification_service=self._get_or_create_verification_service(),
+                verification_coordinator=self._get_or_create_verification_coordinator(),
                 consensus=self._get_or_create_consensus(),
                 p2p_manager=self._get_or_create_p2p_manager(),
                 pubsub=self._get_or_create_pubsub(),
