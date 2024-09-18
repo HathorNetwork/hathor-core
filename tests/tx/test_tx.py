@@ -34,8 +34,11 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.scripts import P2PKH, parse_address_script
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.util import not_none
+from hathor.verification.verification_dependencies import TransactionDependencies, VertexDependencies
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
@@ -80,8 +83,9 @@ class BaseTransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
+        deps = TransactionDependencies.create_from_storage(tx, not_none(tx.storage))
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
+            self._verifiers.tx.verify_sum(deps)
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -120,8 +124,9 @@ class BaseTransactionTest(unittest.TestCase):
         data_wrong = P2PKH.create_input_data(public_bytes, signature)
         _input.data = data_wrong
 
+        deps = TransactionDependencies.create_from_storage(tx, not_none(tx.storage))
         with self.assertRaises(InvalidInputData):
-            self._verifiers.tx.verify_inputs(tx)
+            self._verifiers.tx.verify_inputs(tx, deps)
 
     def test_too_many_inputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -221,7 +226,7 @@ class BaseTransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(block)
 
         with self.assertRaises(BlockWithInputs):
-            self.manager.verification_service.verify(block)
+            self._verifiers.block.verify_no_inputs(block)
 
     def test_merge_mined_no_magic(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -470,8 +475,12 @@ class BaseTransactionTest(unittest.TestCase):
             storage=self.tx_storage)
 
         self.manager.cpu_mining_service.resolve(block)
-        with self.assertRaises(ParentDoesNotExist):
+
+        with self.assertRaises(TransactionDoesNotExist):
             self.manager.verification_service.verify(block)
+
+        with self.assertRaises(ParentDoesNotExist):
+            self._verifiers.vertex.verify_parents(block, VertexDependencies(parents={}))
 
     def test_block_number_parents(self):
         address = get_address_from_public_key(self.genesis_public_key)
@@ -479,6 +488,7 @@ class BaseTransactionTest(unittest.TestCase):
         tx_outputs = [TxOutput(100, output_script)]
 
         parents = [tx.hash for tx in self.genesis_txs]
+        parents_by_hash = {tx.hash: tx for tx in self.genesis_txs}
 
         block = Block(
             nonce=100,
@@ -489,7 +499,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(IncorrectParents):
-            self.manager.verification_service.verify(block)
+            self._verifiers.vertex.verify_parents(block, VertexDependencies(parents=parents_by_hash))
 
     def test_tx_inputs_out_of_range(self):
         # we'll try to spend output 3 from genesis transaction, which does not exist
@@ -527,8 +537,12 @@ class BaseTransactionTest(unittest.TestCase):
         _input = [TxInput(random_bytes, 3, data)]
         tx.inputs = _input
         self.manager.cpu_mining_service.resolve(tx)
-        with self.assertRaises(InexistentInput):
+
+        with self.assertRaises(TransactionDoesNotExist):
             self.manager.verification_service.verify(tx)
+
+        with self.assertRaises(InexistentInput):
+            self._verifiers.tx.verify_inputs(tx, TransactionDependencies({}, {}, {}, None, 0))
 
     def test_tx_inputs_conflict(self):
         # the new tx inputs will try to spend the same output
@@ -739,28 +753,31 @@ class BaseTransactionTest(unittest.TestCase):
             self._verifiers.vertex.verify_pow(tx2)
 
         # Verify parent timestamps
-        self._verifiers.vertex.verify_parents(tx2)
+        deps = TransactionDependencies.create_from_storage(tx2, not_none(tx2.storage))
+        self._verifiers.vertex.verify_parents(tx2, deps)
         tx2_timestamp = tx2.timestamp
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            self._verifiers.vertex.verify_parents(tx2)
+            self._verifiers.vertex.verify_parents(tx2, deps)
         tx2.timestamp = tx2_timestamp
 
         # Verify inputs timestamps
-        self._verifiers.tx.verify_inputs(tx2)
+        self._verifiers.tx.verify_inputs(tx2, deps)
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            self._verifiers.tx.verify_inputs(tx2)
+            self._verifiers.tx.verify_inputs(tx2, deps)
         tx2.timestamp = tx2_timestamp
 
         # Validate maximum distance between blocks
         block = blocks[0]
         block2 = blocks[1]
         block2.timestamp = block.timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS
-        self._verifiers.vertex.verify_parents(block2)
+        parents_by_hash = {tx_hash: block2.storage.get_vertex(tx_hash) for tx_hash in block2.parents}
+        deps = VertexDependencies(parents=parents_by_hash)
+        self._verifiers.vertex.verify_parents(block2, deps)
         block2.timestamp += 1
         with self.assertRaises(TimestampError):
-            self._verifiers.vertex.verify_parents(block2)
+            self._verifiers.vertex.verify_parents(block2, deps)
 
     def test_block_big_nonce(self):
         block = self.genesis_blocks[0]
@@ -861,7 +878,7 @@ class BaseTransactionTest(unittest.TestCase):
         # 'Manually resolving', to validate verify method
         tx.hash = bytes.fromhex('012cba011be3c29f1c406f9015e42698b97169dbc6652d1f5e4d5c5e83138858')
         with self.assertRaises(InvalidOutputValue):
-            self.manager.verification_service.verify(tx)
+            self._verifiers.vertex.verify_outputs(tx)
 
         # Invalid output value
         invalid_output = bytes.fromhex('ffffffff')
@@ -968,7 +985,8 @@ class BaseTransactionTest(unittest.TestCase):
             outputs=[_output],
             storage=self.tx_storage
         )
-        self._verifiers.tx.verify_inputs(tx, skip_script=True)
+        deps = TransactionDependencies.create_from_storage(tx, not_none(tx.storage))
+        self._verifiers.tx.verify_inputs(tx, deps, skip_script=True)
 
     def test_txin_data_limit_exceeded(self):
         with self.assertRaises(InvalidInputDataSize):
@@ -1175,7 +1193,8 @@ class BaseTransactionTest(unittest.TestCase):
         input3 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input3], outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
-        self._verifiers.tx.verify_sigops_input(tx)
+        deps = TransactionDependencies.create_from_storage(tx, not_none(tx.storage))
+        self._verifiers.tx.verify_sigops_input(tx, deps)
 
     def test_sigops_input_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1189,7 +1208,8 @@ class BaseTransactionTest(unittest.TestCase):
         input4 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input4]*num_inputs, outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
-        self._verifiers.tx.verify_sigops_input(tx)
+        deps = TransactionDependencies.create_from_storage(tx, not_none(tx.storage))
+        self._verifiers.tx.verify_sigops_input(tx, deps)
 
     def test_compare_bytes_equal(self) -> None:
         # create some block

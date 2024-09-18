@@ -311,6 +311,7 @@ class CliBuilder:
             settings=settings,
             verifiers=vertex_verifiers,
             tx_storage=tx_storage,
+            daa=daa,
         )
 
         cpu_mining_service = CpuMiningService()
