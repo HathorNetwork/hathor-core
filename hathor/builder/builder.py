@@ -68,6 +68,8 @@ class SyncSupportLevel(IntEnum):
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
         vertex_parser: VertexParser,
+        *,
+        use_async: bool,
     ) -> None:
         """Adds the sync factory to the manager according to the support level."""
         from hathor.p2p.sync_v1.factory import SyncV11Factory
@@ -82,7 +84,7 @@ class SyncSupportLevel(IntEnum):
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
             p2p_manager.add_sync_factory(
-                SyncVersion.V2, SyncV2Factory(settings, p2p_manager, vertex_parser=vertex_parser)
+                SyncVersion.V2, SyncV2Factory(settings, p2p_manager, vertex_parser=vertex_parser, use_async=use_async)
             )
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
@@ -423,6 +425,7 @@ class Builder:
             self._sync_v1_support,
             self._sync_v2_support,
             self._get_or_create_vertex_parser(),
+            use_async=False,  # TODO: Add a config with True, for tests
         )
         return self._p2p_manager
 
