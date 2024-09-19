@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import gc
+import os
 from typing import TYPE_CHECKING
 
 from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
@@ -69,6 +69,7 @@ GC_METRICS = {
     'uncollectable': 'Number of objects that could not be collected by the garbage collector',
     'threshold': 'Current threshold of the garbage collector',
 }
+
 
 class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
