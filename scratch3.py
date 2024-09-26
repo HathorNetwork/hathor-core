@@ -1,3 +1,17 @@
+#  Copyright 2024 Hathor Labs
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 from __future__ import annotations
 
 import os
@@ -8,7 +22,7 @@ from twisted.internet.protocol import ServerFactory
 from twisted.protocols.basic import LineReceiver
 
 from hathor.multiprocess.process_rpc import ProcessRPC, ProcessRPCHandler
-from hathor.reactor import initialize_global_reactor
+from hathor.reactor import initialize_global_reactor, ReactorProtocol
 
 
 class HathorProtocol:
@@ -62,17 +76,25 @@ class ProcessLineReceiver(LineReceiver):
         self._rpc = rpc
 
     def lineReceived(self, data: bytes) -> None:
-        time.sleep(5)
+        time.sleep(10)
         deferred = self._rpc.call(b'do_something ' + data)
         deferred.addCallback(lambda _: self.sendLine(b'echo ' + data))
 
 
 class MyFactory(ServerFactory):
-    def __init__(self, rpc: ProcessRPC) -> None:
-        self._rpc = rpc
+    def __init__(self, reactor: ReactorProtocol, manager: HathorManager) -> None:
+        self.reactor = reactor
+        self.manager = manager
 
-    def buildProtocol(self, addr: IAddress) -> "Optional[Protocol]":
-        return ProcessLineReceiver(self._rpc)
+    def buildProtocol(self, addr: IAddress) -> ProcessLineReceiver:
+        main_rpc = ProcessRPC.fork(
+            main_reactor=self.reactor,
+            target=sub_callback,
+            subprocess_name='sub',
+            main_handler=MainHandler(self.manager),
+            subprocess_handler=SubprocessHandler(),
+        )
+        return ProcessLineReceiver(main_rpc)
 
 
 class HathorManager:
@@ -90,18 +112,15 @@ async def sub_callback(rpc: ProcessRPC) -> None:
     rpc._handler.protocol = HathorProtocol(rpc)
 
 
-if __name__ == '__main__':
+def main():
     port = 8080
     reactor = initialize_global_reactor()
     manager = HathorManager(data=b'manager data')
-    main_rpc = ProcessRPC.fork(
-        main_reactor=reactor,
-        target=sub_callback,
-        subprocess_name='sub',
-        main_handler=MainHandler(manager),
-        subprocess_handler=SubprocessHandler(),
-    )
-    factory = MyFactory(main_rpc)
+    factory = MyFactory(reactor, manager)
     reactor.listenTCP(port, factory)
     print(f'Server running on port {port}')
     reactor.run()
+
+
+if __name__ == '__main__':
+    main()
