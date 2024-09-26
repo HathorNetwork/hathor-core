@@ -32,7 +32,7 @@ T = TypeVar('T')
 
 class ProcessRPCHandler(ABC, Generic[T]):
     @abstractmethod
-    def handle_request(self, request: T) -> T:
+    async def handle_request(self, request: T) -> T:
         raise NotImplementedError
 
     @abstractmethod
@@ -72,7 +72,7 @@ class ProcessRPC(Generic[T]):
         self._conn = conn
         self._message_id = message_id
         self._handler = handler
-        self._poll_lc = LoopingCall(self._poll)
+        self._poll_lc = LoopingCall(lambda: Deferred.fromCoroutine(self._safe_poll()))
         self._poll_lc.clock = reactor
         self._pending_calls: dict[int, Deferred[T]] = {}
 
@@ -115,6 +115,8 @@ class ProcessRPC(Generic[T]):
     ) -> None:
         subprocess_reactor = initialize_global_reactor()
         subprocess_rpc = cls(reactor=subprocess_reactor, name=name, conn=conn, message_id=message_id, handler=handler)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
         subprocess_reactor.callWhenRunning(lambda: Deferred.fromCoroutine(target(subprocess_rpc)))
         subprocess_reactor.run()
 
@@ -124,7 +126,13 @@ class ProcessRPC(Generic[T]):
         self._pending_calls[message.id] = deferred
         return deferred
 
-    def _poll(self) -> None:
+    async def _safe_poll(self) -> None:
+        try:
+            await self._unsafe_poll()
+        except Exception as e:
+            print('error', e)
+
+    async def _unsafe_poll(self) -> None:
         if not self._conn.poll():
             return
 
@@ -134,14 +142,14 @@ class ProcessRPC(Generic[T]):
 
         if pending_call := self._pending_calls.pop(message.id, None):
             # The received message is a response for one of our own requests
-            print(f'res({self._name}): {message_data}')
+            # print(f'res({self._name}): {message_data}')
             pending_call.callback(message_data)
             return
 
         # The received message is a request
-        response = self._handler.handle_request(message_data)
-        print(f'req({self._name}): {message_data}')
-        self._send_message(response, request_id=message.id)
+        # print(f'req({self._name}): {message_data}')
+        deferred = Deferred.fromCoroutine(self._handler.handle_request(message_data))
+        deferred.addCallback(lambda response: self._send_message(response, request_id=message.id))
 
     def _send_message(self, data: T, request_id: int | None = None) -> _Message:
         message_id = request_id
