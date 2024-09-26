@@ -31,6 +31,7 @@ class HathorProtocol:
 
     async def do_something(self, data: bytes) -> None:
         print('printing HathorManager data from HathorProtocol: ', await self._rpc.call(b'get_data'), os.getpid())
+        time.sleep(10)
         await self._rpc.call(b'send_data ' + data)
 
 
@@ -76,7 +77,6 @@ class ProcessLineReceiver(LineReceiver):
         self._rpc = rpc
 
     def lineReceived(self, data: bytes) -> None:
-        time.sleep(10)
         deferred = self._rpc.call(b'do_something ' + data)
         deferred.addCallback(lambda _: self.sendLine(b'echo ' + data))
 
@@ -90,7 +90,7 @@ class MyFactory(ServerFactory):
         main_rpc = ProcessRPC.fork(
             main_reactor=self.reactor,
             target=sub_callback,
-            subprocess_name='sub',
+            subprocess_name=str(addr.port),
             main_handler=MainHandler(self.manager),
             subprocess_handler=SubprocessHandler(),
         )

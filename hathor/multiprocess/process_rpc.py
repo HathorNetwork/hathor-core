@@ -72,7 +72,7 @@ class ProcessRPC(Generic[T]):
         self._conn = conn
         self._message_id = message_id
         self._handler = handler
-        self._poll_lc = LoopingCall(lambda: Deferred.fromCoroutine(self._safe_poll()))
+        self._poll_lc = LoopingCall(self._safe_poll)
         self._poll_lc.clock = reactor
         self._pending_calls: dict[int, Deferred[T]] = {}
 
@@ -126,13 +126,13 @@ class ProcessRPC(Generic[T]):
         self._pending_calls[message.id] = deferred
         return deferred
 
-    async def _safe_poll(self) -> None:
+    def _safe_poll(self) -> None:
         try:
-            await self._unsafe_poll()
+            self._unsafe_poll()
         except Exception as e:
             print('error', e)
 
-    async def _unsafe_poll(self) -> None:
+    def _unsafe_poll(self) -> None:
         if not self._conn.poll():
             return
 
