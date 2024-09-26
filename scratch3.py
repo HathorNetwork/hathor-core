@@ -26,17 +26,42 @@ from hathor.reactor import initialize_global_reactor, ReactorProtocol
 
 
 class HathorProtocol:
-    def __init__(self, rpc: ProcessRPC) -> None:
-        self._rpc = rpc
+    def __init__(self, handler: SubprocessHandler) -> None:
+        self._handler = handler
 
     async def do_something(self, data: bytes) -> None:
-        print('printing HathorManager data from HathorProtocol: ', await self._rpc.call(b'get_data'), os.getpid())
-        time.sleep(10)
-        await self._rpc.call(b'send_data ' + data)
+        print('printing HathorManager data from HathorProtocol: ', await self._handler.get_data(), os.getpid())
+        time.sleep(5)
+        await self._handler.send_data(data)
+
+
+class SubprocessHandler(ProcessRPCHandler[bytes]):
+    def __init__(self) -> None:
+        super().__init__()
+        self.protocol = HathorProtocol(self)
+
+    async def handle_request(self, request: bytes) -> bytes:
+        cmd, _, data = request.partition(b' ')
+        assert cmd == b'do_something', request
+        await self.protocol.do_something(data)
+        return b'success'
+
+    def serialize(self, message: bytes) -> bytes:
+        return message
+
+    def deserialize(self, data: bytes) -> bytes:
+        return data
+
+    async def get_data(self) -> bytes:
+        return await self.rpc.call(b'get_data')
+
+    async def send_data(self, data: bytes) -> None:
+        await self.rpc.call(b'send_data ' + data)
 
 
 class MainHandler(ProcessRPCHandler[bytes]):
     def __init__(self, manager: HathorManager) -> None:
+        super().__init__()
         self.manager = manager
 
     async def handle_request(self, request: bytes) -> bytes:
@@ -47,23 +72,6 @@ class MainHandler(ProcessRPCHandler[bytes]):
             self.manager.send_data(data)
             return b'success'
         raise AssertionError(request)
-
-    def serialize(self, message: bytes) -> bytes:
-        return message
-
-    def deserialize(self, data: bytes) -> bytes:
-        return data
-
-
-class SubprocessHandler(ProcessRPCHandler[bytes]):
-    def __init__(self) -> None:
-        self.protocol: HathorProtocol | None = None
-
-    async def handle_request(self, request: bytes) -> bytes:
-        cmd, _, data = request.partition(b' ')
-        assert cmd == b'do_something', request
-        await self.protocol.do_something(data)
-        return b'success'
 
     def serialize(self, message: bytes) -> bytes:
         return message
@@ -89,7 +97,6 @@ class MyFactory(ServerFactory):
     def buildProtocol(self, addr: IAddress) -> ProcessLineReceiver:
         main_rpc = ProcessRPC.fork(
             main_reactor=self.reactor,
-            target=sub_callback,
             subprocess_name=str(addr.port),
             main_handler=MainHandler(self.manager),
             subprocess_handler=SubprocessHandler(),
@@ -106,10 +113,6 @@ class HathorManager:
 
     def send_data(self, data: bytes) -> None:
         print('printing received data from HathorManager: ', data, os.getpid())
-
-
-async def sub_callback(rpc: ProcessRPC) -> None:
-    rpc._handler.protocol = HathorProtocol(rpc)
 
 
 def main():

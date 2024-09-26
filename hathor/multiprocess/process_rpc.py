@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 import multiprocessing
 from abc import ABC, abstractmethod
 from multiprocessing import Pipe, Process
@@ -31,6 +33,19 @@ T = TypeVar('T')
 
 
 class ProcessRPCHandler(ABC, Generic[T]):
+    def __init__(self) -> None:
+        self._rpc: ProcessRPC[T] | None = None
+
+    @property
+    def rpc(self) -> ProcessRPC[T]:
+        assert self._rpc is not None
+        return self._rpc
+
+    @rpc.setter
+    def rpc(self, rpc: ProcessRPC[T]) -> None:
+        assert self._rpc is None
+        self._rpc = rpc
+
     @abstractmethod
     async def handle_request(self, request: T) -> T:
         raise NotImplementedError
@@ -76,6 +91,9 @@ class ProcessRPC(Generic[T]):
         self._poll_lc.clock = reactor
         self._pending_calls: dict[int, Deferred[T]] = {}
 
+        self._handler.rpc = self
+
+    def _start(self) -> None:
         self._poll_lc.start(POLLING_INTERVAL, now=False)
 
     @classmethod
@@ -83,7 +101,6 @@ class ProcessRPC(Generic[T]):
         cls,
         *,
         main_reactor: ReactorProtocol,
-        target: Callable[[Self], Coroutine[Deferred[None], None, None]],
         main_handler: ProcessRPCHandler,
         subprocess_handler: ProcessRPCHandler,
         subprocess_name: str,
@@ -94,20 +111,18 @@ class ProcessRPC(Generic[T]):
         message_id = multiprocessing.Value('i', 0)
         subprocess = Process(
             target=cls._run_subprocess,
-            kwargs=dict(
-                target=target, name=subprocess_name, conn=conn2, message_id=message_id, handler=subprocess_handler
-            ),
+            kwargs=dict(name=subprocess_name, conn=conn2, message_id=message_id, handler=subprocess_handler),
             name=subprocess_name,
         )
         subprocess.start()
         main_rpc = cls(reactor=main_reactor, name='main', conn=conn1, message_id=message_id, handler=main_handler)
+        main_rpc._start()
         return main_rpc
 
     @classmethod
     def _run_subprocess(
         cls,
         *,
-        target: Callable[[Self], Coroutine[Deferred[None], None, None]],
         name: str,
         conn: Connection,
         message_id: Synchronized,
@@ -115,9 +130,7 @@ class ProcessRPC(Generic[T]):
     ) -> None:
         subprocess_reactor = initialize_global_reactor()
         subprocess_rpc = cls(reactor=subprocess_reactor, name=name, conn=conn, message_id=message_id, handler=handler)
-        # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
-        subprocess_reactor.callWhenRunning(lambda: Deferred.fromCoroutine(target(subprocess_rpc)))
+        subprocess_rpc._start()
         subprocess_reactor.run()
 
     def call(self, request: T) -> Deferred[T]:
