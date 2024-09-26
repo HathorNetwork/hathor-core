@@ -17,12 +17,13 @@ from __future__ import annotations
 import os
 import time
 
+from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IAddress
 from twisted.internet.protocol import ServerFactory
 from twisted.protocols.basic import LineReceiver
 
 from hathor.multiprocess import ipc
-from hathor.multiprocess.ipc import IpcConnection, IpcInterface
+from hathor.multiprocess.ipc import IpcInterface
 from hathor.reactor import initialize_global_reactor, ReactorProtocol
 
 
@@ -31,9 +32,10 @@ class HathorProtocol:
         self._interface = interface
 
     async def do_something(self, data: bytes) -> None:
-        print('printing HathorManager data from HathorProtocol: ', await self._interface.get_data(), os.getpid())
+        print('printing storage data from HathorProtocol: ', await self._interface.read_storage(), os.getpid())
         time.sleep(5)
-        await self._interface.send_data(data)
+        await self._interface.save_storage(data)
+        await self._interface.send_line(b'some line ' + data)
 
 
 class SubprocessInterface(IpcInterface[bytes]):
@@ -55,26 +57,33 @@ class SubprocessInterface(IpcInterface[bytes]):
     def deserialize(self, data: bytes) -> bytes:
         return data
 
-    async def get_data(self) -> bytes:
-        return await self.ipc_conn.call(b'get_data')
+    async def read_storage(self) -> bytes:
+        return await self.ipc_conn.call(b'read_storage')
 
-    async def send_data(self, data: bytes) -> None:
-        await self.ipc_conn.call(b'send_data ' + data)
+    async def save_storage(self, data: bytes) -> None:
+        await self.ipc_conn.call(b'save_storage ' + data)
+
+    async def send_line(self, data: bytes) -> None:
+        await self.ipc_conn.call(b'send_line ' + data)
 
 
 class MainInterface(IpcInterface[bytes]):
-    __slots__ = ('manager',)
+    __slots__ = ('manager', '_line_receiver')
 
     def __init__(self, manager: HathorManager) -> None:
         super().__init__()
         self.manager = manager
+        self._line_receiver = None
 
     async def handle_request(self, request: bytes) -> bytes:
         cmd, _, data = request.partition(b' ')
-        if cmd == b'get_data':
-            return self.manager.get_data()
-        elif cmd == b'send_data':
-            self.manager.send_data(data)
+        if cmd == b'read_storage':
+            return self.manager.read_storage()
+        elif cmd == b'save_storage':
+            self.manager.save_storage(data)
+            return b'success'
+        elif cmd == b'send_line':
+            self._line_receiver.sendLine(data)
             return b'success'
         raise AssertionError(request)
 
@@ -84,15 +93,18 @@ class MainInterface(IpcInterface[bytes]):
     def deserialize(self, data: bytes) -> bytes:
         return data
 
+    def do_something(self, data: bytes) -> Deferred[bytes]:
+        return self.ipc_conn.call(b'do_something ' + data)
+
 
 class IpcLineReceiver(LineReceiver):
-    __slots__ = ('_ipc_conn',)
+    __slots__ = ('_interface',)
 
-    def __init__(self, ipc_conn: IpcConnection) -> None:
-        self._ipc_conn = ipc_conn
+    def __init__(self, interface: MainInterface) -> None:
+        self._interface = interface
 
     def lineReceived(self, data: bytes) -> None:
-        deferred = self._ipc_conn.call(b'do_something ' + data)
+        deferred = self._interface.do_something(data)
         deferred.addCallback(lambda _: self.sendLine(b'echo ' + data))
 
 
@@ -102,30 +114,33 @@ class IpcFactory(ServerFactory):
         self.manager = manager
 
     def buildProtocol(self, addr: IAddress) -> IpcLineReceiver:
-        main_rpc_conn = ipc.fork(
+        main_interface = MainInterface(self.manager)
+        ipc.connect(
             main_reactor=self.reactor,
             subprocess_name=str(addr.port),
-            main_interface=MainInterface(self.manager),
+            main_interface=main_interface,
             subprocess_interface=SubprocessInterface(),
         )
-        return IpcLineReceiver(main_rpc_conn)
+        protocol = IpcLineReceiver(main_interface)
+        main_interface._line_receiver = protocol
+        return protocol
 
 
 class HathorManager:
-    def __init__(self, *, data: bytes):
-        self._data = data
+    def __init__(self, *, storage: bytes):
+        self._storage = storage
 
-    def get_data(self) -> bytes:
-        return self._data
+    def read_storage(self) -> bytes:
+        return self._storage
 
-    def send_data(self, data: bytes) -> None:
-        print('printing received data from HathorManager: ', data, os.getpid())
+    def save_storage(self, data: bytes) -> None:
+        print('printing from HathorManager.save_storage: ', data, os.getpid())
 
 
 def main():
     port = 8080
     reactor = initialize_global_reactor()
-    manager = HathorManager(data=b'manager data')
+    manager = HathorManager(storage=b'manager storage')
     factory = IpcFactory(reactor, manager)
     reactor.listenTCP(port, factory)
     print(f'Server running on port {port}')

@@ -33,13 +33,13 @@ MESSAGE_SEPARATOR: bytes = b' '
 MAX_MESSAGE_ID: int = 2**64-1
 
 
-def fork(
+def connect(
     *,
     main_reactor: ReactorProtocol,
     main_interface: IpcInterface,
     subprocess_interface: IpcInterface,
     subprocess_name: str,
-) -> IpcConnection:
+) -> None:
     conn1: Connection
     conn2: Connection
     conn1, conn2 = Pipe()
@@ -52,11 +52,10 @@ def fork(
     )
     subprocess.start()
 
-    main_ipc_conn = IpcConnection(
+    main_ipc_conn = _IpcConnection(
         reactor=main_reactor, name='main', conn=conn1, message_id=message_id, interface=main_interface
     )
     main_ipc_conn.start_listening()
-    return main_ipc_conn
 
 
 def _run_subprocess(
@@ -67,7 +66,7 @@ def _run_subprocess(
     message_id: Synchronized,
 ) -> None:
     subprocess_reactor = initialize_global_reactor()
-    subprocess_ipc_conn = IpcConnection(
+    subprocess_ipc_conn = _IpcConnection(
         reactor=subprocess_reactor, name=name, conn=conn, interface=interface, message_id=message_id
     )
     subprocess_ipc_conn.start_listening()
@@ -81,15 +80,15 @@ class IpcInterface(ABC, Generic[T]):
     __slots__ = ('_ipc_conn',)
 
     def __init__(self) -> None:
-        self._ipc_conn: IpcConnection[T] | None = None
+        self._ipc_conn: _IpcConnection[T] | None = None
 
     @property
-    def ipc_conn(self) -> IpcConnection[T]:
+    def ipc_conn(self) -> _IpcConnection[T]:
         assert self._ipc_conn is not None
         return self._ipc_conn
 
     @ipc_conn.setter
-    def ipc_conn(self, ipc_conn: IpcConnection[T]) -> None:
+    def ipc_conn(self, ipc_conn: _IpcConnection[T]) -> None:
         assert self._ipc_conn is None
         self._ipc_conn = ipc_conn
 
@@ -123,7 +122,7 @@ class _Message(NamedTuple):
         )
 
 
-class IpcConnection(Generic[T]):
+class _IpcConnection(Generic[T]):
     __slots__ = (
         '_name',
         '_conn',
