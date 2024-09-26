@@ -20,13 +20,13 @@ from twisted.internet.interfaces import IAddress
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import Peer
-from hathor.p2p.protocol import HathorLineReceiver
+from hathor.p2p.sync_v2.sync_process_rpc import ProcessRPCLineReceiver
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
 
-MyServerProtocol = HathorLineReceiver
-MyClientProtocol = HathorLineReceiver
+MyServerProtocol = ProcessRPCLineReceiver
+MyClientProtocol = ProcessRPCLineReceiver
 
 
 class HathorServerFactory(protocol.ServerFactory):
@@ -55,12 +55,12 @@ class HathorServerFactory(protocol.ServerFactory):
     def buildProtocol(self, addr: IAddress) -> MyServerProtocol:
         assert self.protocol is not None
         p = self.protocol(
+            reactor=self.p2p_manager.reactor,
+            addr=addr,
             network=self.network,
             my_peer=self.my_peer,
-            p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
             inbound=True,
-            settings=self._settings
         )
         p.factory = self
         return p
@@ -91,12 +91,12 @@ class HathorClientFactory(protocol.ClientFactory):
     def buildProtocol(self, addr: IAddress) -> MyClientProtocol:
         assert self.protocol is not None
         p = self.protocol(
+            reactor=self.p2p_manager.reactor,
+            addr=addr,
             network=self.network,
             my_peer=self.my_peer,
-            p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
-            inbound=False,
-            settings=self._settings
+            inbound=True,
         )
         p.factory = self
         return p

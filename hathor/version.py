@@ -62,6 +62,7 @@ def _get_git_revision_short_hash() -> Optional[str]:
 
 
 def _get_local_version() -> str:
+    return ''
     git_head = _get_git_revision_short_hash()
 
     if git_head:

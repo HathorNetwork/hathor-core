@@ -15,20 +15,22 @@
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
+from twisted.internet.interfaces import IAddress
+from twisted.protocols.basic import LineReceiver
 from typing_extensions import assert_never
 
-from hathor.multiprocess.process_rpc import ProcessRPCHandler
+from hathor.multiprocess.process_rpc import ProcessRPCHandler, ProcessRPC, T
+from hathor.p2p.peer import Peer
+from hathor.reactor import ReactorProtocol
 from hathor.utils.pydantic import BaseModel
 
 
-class RequestA(BaseModel):
-    type: Literal['A'] = Field(default='A', const=True)
-    a: int
+class InitProtocol(BaseModel):
+    type: Literal['INIT_PROTOCOL'] = Field(default='INIT_PROTOCOL', const=True)
 
 
-class RequestB(BaseModel):
-    type: Literal['B'] = Field(default='B', const=True)
-    b: str
+class Success(BaseModel):
+    type: Literal['SUCCESS'] = Field(default='SUCCESS', const=True)
 
 
 class ResponseC(BaseModel):
@@ -36,7 +38,7 @@ class ResponseC(BaseModel):
     c: str
 
 
-Message: TypeAlias = Annotated[RequestA | RequestB | ResponseC, Field(discriminator='type')]
+Message: TypeAlias = Annotated[InitProtocol | Success | ResponseC, Field(discriminator='type')]
 
 
 class MessageWrapper(BaseModel):
@@ -50,17 +52,18 @@ class MessageWrapper(BaseModel):
 
 class MyProcessRPCHandler(ProcessRPCHandler[Message]):
     def handle_request(self, request: Message) -> Message:
-        response: Message
-        match request:
-            case RequestA():
-                response = self._handle_request_a(request)
-            case RequestB():
-                response = self._handle_request_b(request)
-            case ResponseC():
-                raise NotImplementedError
-            case _:
-                assert_never(request)
-        return response
+        raise NotImplementedError
+        # response: Message
+        # match request:
+        #     case InitProtocol():
+        #         response = self._handle_request_a(request)
+        #     case RequestB():
+        #         response = self._handle_request_b(request)
+        #     case ResponseC():
+        #         raise NotImplementedError
+        #     case _:
+        #         assert_never(request)
+        # return response
 
     def deserialize(self, data: bytes) -> Message:
         return MessageWrapper.deserialize(data)
@@ -68,10 +71,45 @@ class MyProcessRPCHandler(ProcessRPCHandler[Message]):
     def serialize(self, data: Message) -> bytes:
         return data.json_dumpb()
 
-    @staticmethod
-    def _handle_request_a(a: RequestA) -> ResponseC:
+
+class SyncRPCHandler(ProcessRPCHandler[Message]):
+    def handle_request(self, request: Message) -> Message:
+        response: Message
+        match request:
+            case InitProtocol():
+                pass
+            case _:
+                raise AssertionError(request)
+
+    def serialize(self, message: Message) -> bytes:
         raise NotImplementedError
 
+    def deserialize(self, data: bytes) -> Message:
+        raise NotImplementedError
+
+
+class ProcessRPCLineReceiver(LineReceiver):
+    __slots__ = ('_rpc', '_protocol',)
+
+    def __init__(
+        self,
+        *,
+        reactor: ReactorProtocol,
+        addr: IAddress,
+        network: str,
+        my_peer: Peer,
+        use_ssl: bool,
+        inbound: bool,
+    ) -> None:
+        self._rpc = ProcessRPC.fork(
+            main_reactor=reactor,
+            target=self._run_line_receiver,
+            subprocess_name=str(addr),
+            main_handler=MyProcessRPCHandler(),
+            subprocess_handler=SyncRPCHandler()
+        )
+        # self._protocol = HathorLineReceiver(*args, **kwargs)
+
     @staticmethod
-    def _handle_request_b(b: RequestB) -> ResponseC:
-        return ResponseC(c=f'res {b.b}')
+    async def _run_line_receiver(rpc: ProcessRPC) -> None:
+        await rpc.call(InitProtocol())

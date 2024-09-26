@@ -35,9 +35,11 @@ class ProcessRPCHandler(ABC, Generic[T]):
     def handle_request(self, request: T) -> T:
         raise NotImplementedError
 
+    @abstractmethod
     def serialize(self, message: T) -> bytes:
         raise NotImplementedError
 
+    @abstractmethod
     def deserialize(self, data: bytes) -> T:
         raise NotImplementedError
 
