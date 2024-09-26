@@ -21,7 +21,8 @@ from twisted.internet.interfaces import IAddress
 from twisted.internet.protocol import ServerFactory
 from twisted.protocols.basic import LineReceiver
 
-from hathor.multiprocess.process_rpc import IpcConnection, IpcInterface
+from hathor.multiprocess import ipc
+from hathor.multiprocess.ipc import IpcConnection, IpcInterface
 from hathor.reactor import initialize_global_reactor, ReactorProtocol
 
 
@@ -101,7 +102,7 @@ class IpcFactory(ServerFactory):
         self.manager = manager
 
     def buildProtocol(self, addr: IAddress) -> IpcLineReceiver:
-        main_rpc_conn = IpcConnection.fork(
+        main_rpc_conn = ipc.fork(
             main_reactor=self.reactor,
             subprocess_name=str(addr.port),
             main_interface=MainInterface(self.manager),

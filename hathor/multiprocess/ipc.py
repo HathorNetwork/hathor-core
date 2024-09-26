@@ -26,11 +26,53 @@ from twisted.internet.task import LoopingCall
 from typing_extensions import Self
 
 from hathor.reactor import ReactorProtocol, initialize_global_reactor
-from hathor.transaction.util import int_to_bytes, bytes_to_int
+from hathor.transaction.util import bytes_to_int, int_to_bytes
 
 POLLING_INTERVAL: float = 0.001
 MESSAGE_SEPARATOR: bytes = b' '
 MAX_MESSAGE_ID: int = 2**64-1
+
+
+def fork(
+    *,
+    main_reactor: ReactorProtocol,
+    main_interface: IpcInterface,
+    subprocess_interface: IpcInterface,
+    subprocess_name: str,
+) -> IpcConnection:
+    conn1: Connection
+    conn2: Connection
+    conn1, conn2 = Pipe()
+    message_id = multiprocessing.Value('L', 0)
+
+    subprocess = Process(
+        name=subprocess_name,
+        target=_run_subprocess,
+        kwargs=dict(name=subprocess_name, conn=conn2, interface=subprocess_interface, message_id=message_id),
+    )
+    subprocess.start()
+
+    main_ipc_conn = IpcConnection(
+        reactor=main_reactor, name='main', conn=conn1, message_id=message_id, interface=main_interface
+    )
+    main_ipc_conn.start_listening()
+    return main_ipc_conn
+
+
+def _run_subprocess(
+    *,
+    name: str,
+    conn: Connection,
+    interface: IpcInterface,
+    message_id: Synchronized,
+) -> None:
+    subprocess_reactor = initialize_global_reactor()
+    subprocess_ipc_conn = IpcConnection(
+        reactor=subprocess_reactor, name=name, conn=conn, interface=interface, message_id=message_id
+    )
+    subprocess_ipc_conn.start_listening()
+    subprocess_reactor.run()
+
 
 T = TypeVar('T')
 
@@ -75,7 +117,7 @@ class _Message(NamedTuple):
     def deserialize(cls, data: bytes) -> Self:
         id_, separator, data = data.partition(MESSAGE_SEPARATOR)
         assert separator == MESSAGE_SEPARATOR
-        return _Message(
+        return cls(
             id=bytes_to_int(id_),
             data=data,
         )
@@ -110,47 +152,8 @@ class IpcConnection(Generic[T]):
 
         self._interface.ipc_conn = self
 
-    def _start_listening(self) -> None:
+    def start_listening(self) -> None:
         self._poll_lc.start(POLLING_INTERVAL, now=False)
-
-    @classmethod
-    def fork(
-        cls,
-        *,
-        main_reactor: ReactorProtocol,
-        main_interface: IpcInterface,
-        subprocess_interface: IpcInterface,
-        subprocess_name: str,
-    ) -> Self:
-        conn1: Connection
-        conn2: Connection
-        conn1, conn2 = Pipe()
-        message_id = multiprocessing.Value('L', 0)
-
-        subprocess = Process(
-            name=subprocess_name,
-            target=cls._run_subprocess,
-            kwargs=dict(name=subprocess_name, conn=conn2, interface=subprocess_interface, message_id=message_id),
-        )
-        subprocess.start()
-
-        main_ipc_conn = cls(reactor=main_reactor, name='main', conn=conn1, message_id=message_id, interface=main_interface)
-        main_ipc_conn._start_listening()
-        return main_ipc_conn
-
-    @classmethod
-    def _run_subprocess(
-        cls,
-        *,
-        name: str,
-        conn: Connection,
-        interface: IpcInterface,
-        message_id: Synchronized,
-    ) -> None:
-        subprocess_reactor = initialize_global_reactor()
-        subprocess_ipc_conn = cls(reactor=subprocess_reactor, name=name, conn=conn, interface=interface, message_id=message_id)
-        subprocess_ipc_conn._start_listening()
-        subprocess_reactor.run()
 
     def call(self, request: T) -> Deferred[T]:
         message = self._send_message(request)
