@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from multiprocessing.sharedctypes import Synchronized
-from typing import Generic, NamedTuple, TypeVar
+from typing import Callable, NamedTuple, TypeVar
 
 from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
@@ -32,12 +32,16 @@ POLLING_INTERVAL: float = 0.001
 MESSAGE_SEPARATOR: bytes = b' '
 MAX_MESSAGE_ID: int = 2**64-1
 
+ClientT = TypeVar('ClientT', bound='IpcClient')
+
 
 def connect(
     *,
     main_reactor: ReactorProtocol,
-    main_interface: IpcInterface,
-    subprocess_interface: IpcInterface,
+    main_client: IpcClient,
+    main_server: IpcServer,
+    subprocess_client_builder: Callable[[], ClientT],
+    subprocess_server_builder: Callable[[ClientT], IpcServer],
     subprocess_name: str,
 ) -> None:
     conn1: Connection
@@ -45,64 +49,64 @@ def connect(
     conn1, conn2 = Pipe()
     message_id = multiprocessing.Value('L', 0)
 
+    main_ipc_conn = _IpcConnection(
+        reactor=main_reactor, name='main', conn=conn1, message_id=message_id, server=main_server
+    )
+    main_ipc_conn.start_listening()
+    main_client.set_ipc_conn(main_ipc_conn)
+
     subprocess = Process(
         name=subprocess_name,
         target=_run_subprocess,
-        kwargs=dict(name=subprocess_name, conn=conn2, interface=subprocess_interface, message_id=message_id),
+        kwargs=dict(
+            name=subprocess_name,
+            conn=conn2,
+            client_builder=subprocess_client_builder,
+            server_builder=subprocess_server_builder,
+            message_id=message_id,
+        ),
     )
     subprocess.start()
-
-    main_ipc_conn = _IpcConnection(
-        reactor=main_reactor, name='main', conn=conn1, message_id=message_id, interface=main_interface
-    )
-    main_ipc_conn.start_listening()
 
 
 def _run_subprocess(
     *,
     name: str,
     conn: Connection,
-    interface: IpcInterface,
+    client_builder: Callable[[], IpcClient],
+    server_builder: Callable[[IpcClient], IpcServer],
     message_id: Synchronized,
 ) -> None:
     subprocess_reactor = initialize_global_reactor()
+    client = client_builder()
+    server = server_builder(client)
     subprocess_ipc_conn = _IpcConnection(
-        reactor=subprocess_reactor, name=name, conn=conn, interface=interface, message_id=message_id
+        reactor=subprocess_reactor, name=name, conn=conn, server=server, message_id=message_id
     )
     subprocess_ipc_conn.start_listening()
+    client.set_ipc_conn(subprocess_ipc_conn)
     subprocess_reactor.run()
 
 
-T = TypeVar('T')
+class IpcServer(ABC):
+    @abstractmethod
+    async def handle_request(self, request: bytes) -> bytes:
+        raise NotImplementedError
 
 
-class IpcInterface(ABC, Generic[T]):
+class IpcClient(ABC):
     __slots__ = ('_ipc_conn',)
 
     def __init__(self) -> None:
-        self._ipc_conn: _IpcConnection[T] | None = None
+        self._ipc_conn: _IpcConnection | None = None
 
-    @property
-    def ipc_conn(self) -> _IpcConnection[T]:
-        assert self._ipc_conn is not None
-        return self._ipc_conn
-
-    @ipc_conn.setter
-    def ipc_conn(self, ipc_conn: _IpcConnection[T]) -> None:
+    def set_ipc_conn(self, ipc_conn: _IpcConnection) -> None:
         assert self._ipc_conn is None
         self._ipc_conn = ipc_conn
 
-    @abstractmethod
-    async def handle_request(self, request: T) -> T:
-        raise NotImplementedError
-
-    @abstractmethod
-    def serialize(self, content: T) -> bytes:
-        raise NotImplementedError
-
-    @abstractmethod
-    def deserialize(self, data: bytes) -> T:
-        raise NotImplementedError
+    def _call(self, request: bytes) -> Deferred[bytes]:
+        assert self._ipc_conn is not None
+        return self._ipc_conn.call(request)
 
 
 class _Message(NamedTuple):
@@ -122,11 +126,11 @@ class _Message(NamedTuple):
         )
 
 
-class _IpcConnection(Generic[T]):
+class _IpcConnection:
     __slots__ = (
         '_name',
         '_conn',
-        '_interface',
+        '_server',
         '_message_id',
         '_poll_lc',
         '_pending_calls',
@@ -138,31 +142,28 @@ class _IpcConnection(Generic[T]):
         reactor: ReactorProtocol,
         name: str,
         conn: Connection,
-        interface: IpcInterface[T],
+        server: IpcServer,
         message_id: Synchronized,
     ) -> None:
         self._name = name
         self._conn = conn
-        self._interface = interface
+        self._server = server
         self._message_id = message_id
         self._poll_lc = LoopingCall(self._safe_poll)
         self._poll_lc.clock = reactor
-        self._pending_calls: dict[int, Deferred[T]] = {}
-
-        self._interface.ipc_conn = self
+        self._pending_calls: dict[int, Deferred[bytes]] = {}
 
     def start_listening(self) -> None:
         self._poll_lc.start(POLLING_INTERVAL, now=False)
 
-    def call(self, request: T) -> Deferred[T]:
+    def call(self, request: bytes) -> Deferred[bytes]:
         message = self._send_message(request)
-        deferred: Deferred[T] = Deferred()
+        deferred: Deferred[bytes] = Deferred()
         self._pending_calls[message.id] = deferred
         return deferred
 
-    def _send_message(self, content: T, request_id: int | None = None) -> _Message:
+    def _send_message(self, data: bytes, request_id: int | None = None) -> _Message:
         message_id = self._get_new_message_id() if request_id is None else request_id
-        data = self._interface.serialize(content)
         message = _Message(id=message_id, data=data)
         self._conn.send_bytes(message.serialize())
         return message
@@ -186,16 +187,15 @@ class _IpcConnection(Generic[T]):
 
         message_bytes = self._conn.recv_bytes()
         message = _Message.deserialize(message_bytes)
-        message_content = self._interface.deserialize(message.data)
 
         if pending_call := self._pending_calls.pop(message.id, None):
             # The received message is a response for one of our own requests
             # print(f'res({self._name}): {message_data}')
-            pending_call.callback(message_content)
+            pending_call.callback(message.data)
             return
 
         # The received message is a new request
         # print(f'req({self._name}): {message_data}')
-        coro = self._interface.handle_request(message_content)
+        coro = self._server.handle_request(message.data)
         deferred = Deferred.fromCoroutine(coro)
         deferred.addCallback(lambda response: self._send_message(response, request_id=message.id))

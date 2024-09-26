@@ -21,29 +21,36 @@ from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IAddress
 from twisted.internet.protocol import ServerFactory
 from twisted.protocols.basic import LineReceiver
+from typing_extensions import Self
 
 from hathor.multiprocess import ipc
-from hathor.multiprocess.ipc import IpcInterface
+from hathor.multiprocess.ipc import IpcServer, IpcClient
 from hathor.reactor import initialize_global_reactor, ReactorProtocol
 
 
 class HathorProtocol:
-    def __init__(self, interface: SubprocessInterface) -> None:
-        self._interface = interface
+    __slots__ = ('_client',)
+
+    def __init__(self, client: SubprocessIpcClient) -> None:
+        self._client = client
 
     async def do_something(self, data: bytes) -> None:
-        print('printing storage data from HathorProtocol: ', await self._interface.read_storage(), os.getpid())
+        print('printing storage data from HathorProtocol: ', await self._client.read_storage(), os.getpid())
         time.sleep(5)
-        await self._interface.save_storage(data)
-        await self._interface.send_line(b'some line ' + data)
+        await self._client.save_storage(data)
+        await self._client.send_line(b'some line ' + data)
 
 
-class SubprocessInterface(IpcInterface[bytes]):
+class SubprocessIpcServer(IpcServer):
     __slots__ = ('_protocol',)
 
-    def __init__(self) -> None:
-        super().__init__()
-        self._protocol = HathorProtocol(self)
+    @classmethod
+    def build(cls, client: SubprocessIpcClient) -> Self:
+        protocol = HathorProtocol(client)
+        return cls(protocol)
+
+    def __init__(self, protocol: HathorProtocol) -> None:
+        self._protocol = protocol
 
     async def handle_request(self, request: bytes) -> bytes:
         cmd, _, data = request.partition(b' ')
@@ -51,29 +58,24 @@ class SubprocessInterface(IpcInterface[bytes]):
         await self._protocol.do_something(data)
         return b'success'
 
-    def serialize(self, message: bytes) -> bytes:
-        return message
 
-    def deserialize(self, data: bytes) -> bytes:
-        return data
+class SubprocessIpcClient(IpcClient):
+    def read_storage(self) -> Deferred[bytes]:
+        return self._call(b'read_storage')
 
-    async def read_storage(self) -> bytes:
-        return await self.ipc_conn.call(b'read_storage')
+    def save_storage(self, data: bytes) -> Deferred[bytes]:
+        return self._call(b'save_storage ' + data)
 
-    async def save_storage(self, data: bytes) -> None:
-        await self.ipc_conn.call(b'save_storage ' + data)
-
-    async def send_line(self, data: bytes) -> None:
-        await self.ipc_conn.call(b'send_line ' + data)
+    def send_line(self, data: bytes) -> Deferred[bytes]:
+        return self._call(b'send_line ' + data)
 
 
-class MainInterface(IpcInterface[bytes]):
+class MainIpcServer(IpcServer):
     __slots__ = ('manager', '_line_receiver')
 
-    def __init__(self, manager: HathorManager) -> None:
-        super().__init__()
+    def __init__(self, manager: HathorManager, line_receiver: IpcLineReceiver) -> None:
         self.manager = manager
-        self._line_receiver = None
+        self._line_receiver = line_receiver
 
     async def handle_request(self, request: bytes) -> bytes:
         cmd, _, data = request.partition(b' ')
@@ -87,25 +89,20 @@ class MainInterface(IpcInterface[bytes]):
             return b'success'
         raise AssertionError(request)
 
-    def serialize(self, message: bytes) -> bytes:
-        return message
 
-    def deserialize(self, data: bytes) -> bytes:
-        return data
-
+class MainIpcClient(IpcClient):
     def do_something(self, data: bytes) -> Deferred[bytes]:
-        return self.ipc_conn.call(b'do_something ' + data)
+        return self._call(b'do_something ' + data)
 
 
 class IpcLineReceiver(LineReceiver):
-    __slots__ = ('_interface',)
+    __slots__ = ('_client',)
 
-    def __init__(self, interface: MainInterface) -> None:
-        self._interface = interface
+    def __init__(self, client: MainIpcClient) -> None:
+        self._client = client
 
     def lineReceived(self, data: bytes) -> None:
-        deferred = self._interface.do_something(data)
-        deferred.addCallback(lambda _: self.sendLine(b'echo ' + data))
+        self._client.do_something(data)
 
 
 class IpcFactory(ServerFactory):
@@ -114,16 +111,18 @@ class IpcFactory(ServerFactory):
         self.manager = manager
 
     def buildProtocol(self, addr: IAddress) -> IpcLineReceiver:
-        main_interface = MainInterface(self.manager)
+        main_client = MainIpcClient()
+        line_receiver = IpcLineReceiver(main_client)
+        main_server = MainIpcServer(self.manager, line_receiver)
         ipc.connect(
             main_reactor=self.reactor,
-            subprocess_name=str(addr.port),
-            main_interface=main_interface,
-            subprocess_interface=SubprocessInterface(),
+            main_client=main_client,
+            main_server=main_server,
+            subprocess_client_builder=SubprocessIpcClient,
+            subprocess_server_builder=SubprocessIpcServer.build,
+            subprocess_name=str(addr.port)
         )
-        protocol = IpcLineReceiver(main_interface)
-        main_interface._line_receiver = protocol
-        return protocol
+        return line_receiver
 
 
 class HathorManager:
