@@ -19,39 +19,44 @@ from abc import ABC, abstractmethod
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from multiprocessing.sharedctypes import Synchronized
-from typing import Callable, Coroutine, Generic, NamedTuple, TypeVar
+from typing import Generic, NamedTuple, TypeVar
 
 from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 from typing_extensions import Self
 
 from hathor.reactor import ReactorProtocol, initialize_global_reactor
+from hathor.transaction.util import int_to_bytes, bytes_to_int
 
 POLLING_INTERVAL: float = 0.001
+MESSAGE_SEPARATOR: bytes = b' '
+MAX_MESSAGE_ID: int = 2**64-1
 
 T = TypeVar('T')
 
 
-class ProcessRPCHandler(ABC, Generic[T]):
+class IpcInterface(ABC, Generic[T]):
+    __slots__ = ('_ipc_conn',)
+
     def __init__(self) -> None:
-        self._rpc: ProcessRPC[T] | None = None
+        self._ipc_conn: IpcConnection[T] | None = None
 
     @property
-    def rpc(self) -> ProcessRPC[T]:
-        assert self._rpc is not None
-        return self._rpc
+    def ipc_conn(self) -> IpcConnection[T]:
+        assert self._ipc_conn is not None
+        return self._ipc_conn
 
-    @rpc.setter
-    def rpc(self, rpc: ProcessRPC[T]) -> None:
-        assert self._rpc is None
-        self._rpc = rpc
+    @ipc_conn.setter
+    def ipc_conn(self, ipc_conn: IpcConnection[T]) -> None:
+        assert self._ipc_conn is None
+        self._ipc_conn = ipc_conn
 
     @abstractmethod
     async def handle_request(self, request: T) -> T:
         raise NotImplementedError
 
     @abstractmethod
-    def serialize(self, message: T) -> bytes:
+    def serialize(self, content: T) -> bytes:
         raise NotImplementedError
 
     @abstractmethod
@@ -63,13 +68,25 @@ class _Message(NamedTuple):
     id: int
     data: bytes
 
+    def serialize(self) -> bytes:
+        return int_to_bytes(self.id, size=8) + MESSAGE_SEPARATOR + self.data
 
-class ProcessRPC(Generic[T]):
+    @classmethod
+    def deserialize(cls, data: bytes) -> Self:
+        id_, separator, data = data.partition(MESSAGE_SEPARATOR)
+        assert separator == MESSAGE_SEPARATOR
+        return _Message(
+            id=bytes_to_int(id_),
+            data=data,
+        )
+
+
+class IpcConnection(Generic[T]):
     __slots__ = (
         '_name',
         '_conn',
+        '_interface',
         '_message_id',
-        '_handler',
         '_poll_lc',
         '_pending_calls',
     )
@@ -80,20 +97,20 @@ class ProcessRPC(Generic[T]):
         reactor: ReactorProtocol,
         name: str,
         conn: Connection,
+        interface: IpcInterface[T],
         message_id: Synchronized,
-        handler: ProcessRPCHandler[T]
     ) -> None:
         self._name = name
         self._conn = conn
+        self._interface = interface
         self._message_id = message_id
-        self._handler = handler
         self._poll_lc = LoopingCall(self._safe_poll)
         self._poll_lc.clock = reactor
         self._pending_calls: dict[int, Deferred[T]] = {}
 
-        self._handler.rpc = self
+        self._interface.ipc_conn = self
 
-    def _start(self) -> None:
+    def _start_listening(self) -> None:
         self._poll_lc.start(POLLING_INTERVAL, now=False)
 
     @classmethod
@@ -101,23 +118,25 @@ class ProcessRPC(Generic[T]):
         cls,
         *,
         main_reactor: ReactorProtocol,
-        main_handler: ProcessRPCHandler,
-        subprocess_handler: ProcessRPCHandler,
+        main_interface: IpcInterface,
+        subprocess_interface: IpcInterface,
         subprocess_name: str,
     ) -> Self:
         conn1: Connection
         conn2: Connection
         conn1, conn2 = Pipe()
-        message_id = multiprocessing.Value('i', 0)
+        message_id = multiprocessing.Value('L', 0)
+
         subprocess = Process(
-            target=cls._run_subprocess,
-            kwargs=dict(name=subprocess_name, conn=conn2, message_id=message_id, handler=subprocess_handler),
             name=subprocess_name,
+            target=cls._run_subprocess,
+            kwargs=dict(name=subprocess_name, conn=conn2, interface=subprocess_interface, message_id=message_id),
         )
         subprocess.start()
-        main_rpc = cls(reactor=main_reactor, name='main', conn=conn1, message_id=message_id, handler=main_handler)
-        main_rpc._start()
-        return main_rpc
+
+        main_ipc_conn = cls(reactor=main_reactor, name='main', conn=conn1, message_id=message_id, interface=main_interface)
+        main_ipc_conn._start_listening()
+        return main_ipc_conn
 
     @classmethod
     def _run_subprocess(
@@ -125,12 +144,12 @@ class ProcessRPC(Generic[T]):
         *,
         name: str,
         conn: Connection,
+        interface: IpcInterface,
         message_id: Synchronized,
-        handler: ProcessRPCHandler,
     ) -> None:
         subprocess_reactor = initialize_global_reactor()
-        subprocess_rpc = cls(reactor=subprocess_reactor, name=name, conn=conn, message_id=message_id, handler=handler)
-        subprocess_rpc._start()
+        subprocess_ipc_conn = cls(reactor=subprocess_reactor, name=name, conn=conn, interface=interface, message_id=message_id)
+        subprocess_ipc_conn._start_listening()
         subprocess_reactor.run()
 
     def call(self, request: T) -> Deferred[T]:
@@ -138,6 +157,20 @@ class ProcessRPC(Generic[T]):
         deferred: Deferred[T] = Deferred()
         self._pending_calls[message.id] = deferred
         return deferred
+
+    def _send_message(self, content: T, request_id: int | None = None) -> _Message:
+        message_id = self._get_new_message_id() if request_id is None else request_id
+        data = self._interface.serialize(content)
+        message = _Message(id=message_id, data=data)
+        self._conn.send_bytes(message.serialize())
+        return message
+
+    def _get_new_message_id(self) -> int:
+        with self._message_id.get_lock():
+            message_id = self._message_id.value
+            assert message_id < MAX_MESSAGE_ID
+            self._message_id.value += 1
+            return message_id
 
     def _safe_poll(self) -> None:
         try:
@@ -149,28 +182,18 @@ class ProcessRPC(Generic[T]):
         if not self._conn.poll():
             return
 
-        message = self._conn.recv()
-        assert isinstance(message, _Message)
-        message_data = self._handler.deserialize(message.data)
+        message_bytes = self._conn.recv_bytes()
+        message = _Message.deserialize(message_bytes)
+        message_content = self._interface.deserialize(message.data)
 
         if pending_call := self._pending_calls.pop(message.id, None):
             # The received message is a response for one of our own requests
             # print(f'res({self._name}): {message_data}')
-            pending_call.callback(message_data)
+            pending_call.callback(message_content)
             return
 
-        # The received message is a request
+        # The received message is a new request
         # print(f'req({self._name}): {message_data}')
-        deferred = Deferred.fromCoroutine(self._handler.handle_request(message_data))
+        coro = self._interface.handle_request(message_content)
+        deferred = Deferred.fromCoroutine(coro)
         deferred.addCallback(lambda response: self._send_message(response, request_id=message.id))
-
-    def _send_message(self, data: T, request_id: int | None = None) -> _Message:
-        message_id = request_id
-        if message_id is None:
-            with self._message_id.get_lock():
-                message_id = self._message_id.value
-                self._message_id.value += 1
-
-        message = _Message(id=message_id, data=self._handler.serialize(data))
-        self._conn.send(message)
-        return message

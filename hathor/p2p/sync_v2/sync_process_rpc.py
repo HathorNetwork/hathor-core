@@ -19,7 +19,7 @@ from twisted.internet.interfaces import IAddress
 from twisted.protocols.basic import LineReceiver
 from typing_extensions import assert_never
 
-from hathor.multiprocess.process_rpc import ProcessRPCHandler, ProcessRPC, T
+from hathor.multiprocess.process_rpc import IpcInterface, IpcConnection, T
 from hathor.p2p.peer import Peer
 from hathor.reactor import ReactorProtocol
 from hathor.utils.pydantic import BaseModel
@@ -50,7 +50,7 @@ class MessageWrapper(BaseModel):
         return cls.parse_raw(raw).__root__
 
 
-class MyProcessRPCHandler(ProcessRPCHandler[Message]):
+class MyIpcInterface(IpcInterface[Message]):
     def handle_request(self, request: Message) -> Message:
         raise NotImplementedError
         # response: Message
@@ -72,7 +72,7 @@ class MyProcessRPCHandler(ProcessRPCHandler[Message]):
         return data.json_dumpb()
 
 
-class SyncRPCHandler(ProcessRPCHandler[Message]):
+class SyncRpcInterface(IpcInterface[Message]):
     def handle_request(self, request: Message) -> Message:
         response: Message
         match request:
@@ -101,15 +101,15 @@ class ProcessRPCLineReceiver(LineReceiver):
         use_ssl: bool,
         inbound: bool,
     ) -> None:
-        self._rpc = ProcessRPC.fork(
+        self._rpc = IpcConnection.fork(
             main_reactor=reactor,
             target=self._run_line_receiver,
             subprocess_name=str(addr),
-            main_handler=MyProcessRPCHandler(),
-            subprocess_handler=SyncRPCHandler()
+            main_interface=MyIpcInterface(),
+            subprocess_interface=SyncRpcInterface()
         )
         # self._protocol = HathorLineReceiver(*args, **kwargs)
 
     @staticmethod
-    async def _run_line_receiver(rpc: ProcessRPC) -> None:
+    async def _run_line_receiver(rpc: IpcConnection) -> None:
         await rpc.call(InitProtocol())

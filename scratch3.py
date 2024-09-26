@@ -21,29 +21,31 @@ from twisted.internet.interfaces import IAddress
 from twisted.internet.protocol import ServerFactory
 from twisted.protocols.basic import LineReceiver
 
-from hathor.multiprocess.process_rpc import ProcessRPC, ProcessRPCHandler
+from hathor.multiprocess.process_rpc import IpcConnection, IpcInterface
 from hathor.reactor import initialize_global_reactor, ReactorProtocol
 
 
 class HathorProtocol:
-    def __init__(self, handler: SubprocessHandler) -> None:
-        self._handler = handler
+    def __init__(self, interface: SubprocessInterface) -> None:
+        self._interface = interface
 
     async def do_something(self, data: bytes) -> None:
-        print('printing HathorManager data from HathorProtocol: ', await self._handler.get_data(), os.getpid())
+        print('printing HathorManager data from HathorProtocol: ', await self._interface.get_data(), os.getpid())
         time.sleep(5)
-        await self._handler.send_data(data)
+        await self._interface.send_data(data)
 
 
-class SubprocessHandler(ProcessRPCHandler[bytes]):
+class SubprocessInterface(IpcInterface[bytes]):
+    __slots__ = ('_protocol',)
+
     def __init__(self) -> None:
         super().__init__()
-        self.protocol = HathorProtocol(self)
+        self._protocol = HathorProtocol(self)
 
     async def handle_request(self, request: bytes) -> bytes:
         cmd, _, data = request.partition(b' ')
         assert cmd == b'do_something', request
-        await self.protocol.do_something(data)
+        await self._protocol.do_something(data)
         return b'success'
 
     def serialize(self, message: bytes) -> bytes:
@@ -53,13 +55,15 @@ class SubprocessHandler(ProcessRPCHandler[bytes]):
         return data
 
     async def get_data(self) -> bytes:
-        return await self.rpc.call(b'get_data')
+        return await self.ipc_conn.call(b'get_data')
 
     async def send_data(self, data: bytes) -> None:
-        await self.rpc.call(b'send_data ' + data)
+        await self.ipc_conn.call(b'send_data ' + data)
 
 
-class MainHandler(ProcessRPCHandler[bytes]):
+class MainInterface(IpcInterface[bytes]):
+    __slots__ = ('manager',)
+
     def __init__(self, manager: HathorManager) -> None:
         super().__init__()
         self.manager = manager
@@ -80,28 +84,30 @@ class MainHandler(ProcessRPCHandler[bytes]):
         return data
 
 
-class ProcessLineReceiver(LineReceiver):
-    def __init__(self, rpc: ProcessRPC) -> None:
-        self._rpc = rpc
+class IpcLineReceiver(LineReceiver):
+    __slots__ = ('_ipc_conn',)
+
+    def __init__(self, ipc_conn: IpcConnection) -> None:
+        self._ipc_conn = ipc_conn
 
     def lineReceived(self, data: bytes) -> None:
-        deferred = self._rpc.call(b'do_something ' + data)
+        deferred = self._ipc_conn.call(b'do_something ' + data)
         deferred.addCallback(lambda _: self.sendLine(b'echo ' + data))
 
 
-class MyFactory(ServerFactory):
+class IpcFactory(ServerFactory):
     def __init__(self, reactor: ReactorProtocol, manager: HathorManager) -> None:
         self.reactor = reactor
         self.manager = manager
 
-    def buildProtocol(self, addr: IAddress) -> ProcessLineReceiver:
-        main_rpc = ProcessRPC.fork(
+    def buildProtocol(self, addr: IAddress) -> IpcLineReceiver:
+        main_rpc_conn = IpcConnection.fork(
             main_reactor=self.reactor,
             subprocess_name=str(addr.port),
-            main_handler=MainHandler(self.manager),
-            subprocess_handler=SubprocessHandler(),
+            main_interface=MainInterface(self.manager),
+            subprocess_interface=SubprocessInterface(),
         )
-        return ProcessLineReceiver(main_rpc)
+        return IpcLineReceiver(main_rpc_conn)
 
 
 class HathorManager:
@@ -119,7 +125,7 @@ def main():
     port = 8080
     reactor = initialize_global_reactor()
     manager = HathorManager(data=b'manager data')
-    factory = MyFactory(reactor, manager)
+    factory = IpcFactory(reactor, manager)
     reactor.listenTCP(port, factory)
     print(f'Server running on port {port}')
     reactor.run()
