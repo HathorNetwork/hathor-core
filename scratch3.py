@@ -21,7 +21,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IAddress
 from twisted.internet.protocol import ServerFactory
 from twisted.protocols.basic import LineReceiver
-from typing_extensions import Self
+from typing_extensions import Self, override
 
 from hathor.multiprocess import ipc
 from hathor.multiprocess.ipc import IpcServer, IpcClient
@@ -41,6 +41,17 @@ class HathorProtocol:
         await self._client.send_line(b'some line ' + data)
 
 
+class SubprocessIpcClient(IpcClient):
+    def read_storage(self) -> Deferred[bytes]:
+        return self._call(b'read_storage')
+
+    def save_storage(self, data: bytes) -> Deferred[bytes]:
+        return self._call(b'save_storage ' + data)
+
+    def send_line(self, data: bytes) -> Deferred[bytes]:
+        return self._call(b'send_line ' + data)
+
+
 class SubprocessIpcServer(IpcServer):
     __slots__ = ('_protocol',)
 
@@ -52,6 +63,7 @@ class SubprocessIpcServer(IpcServer):
     def __init__(self, protocol: HathorProtocol) -> None:
         self._protocol = protocol
 
+    @override
     async def handle_request(self, request: bytes) -> bytes:
         cmd, _, data = request.partition(b' ')
         assert cmd == b'do_something', request
@@ -59,15 +71,9 @@ class SubprocessIpcServer(IpcServer):
         return b'success'
 
 
-class SubprocessIpcClient(IpcClient):
-    def read_storage(self) -> Deferred[bytes]:
-        return self._call(b'read_storage')
-
-    def save_storage(self, data: bytes) -> Deferred[bytes]:
-        return self._call(b'save_storage ' + data)
-
-    def send_line(self, data: bytes) -> Deferred[bytes]:
-        return self._call(b'send_line ' + data)
+class MainIpcClient(IpcClient):
+    def do_something(self, data: bytes) -> Deferred[bytes]:
+        return self._call(b'do_something ' + data)
 
 
 class MainIpcServer(IpcServer):
@@ -88,11 +94,6 @@ class MainIpcServer(IpcServer):
             self._line_receiver.sendLine(data)
             return b'success'
         raise AssertionError(request)
-
-
-class MainIpcClient(IpcClient):
-    def do_something(self, data: bytes) -> Deferred[bytes]:
-        return self._call(b'do_something ' + data)
 
 
 class IpcLineReceiver(LineReceiver):
