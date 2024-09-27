@@ -12,20 +12,35 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+#  Copyright 2024 Hathor Labs
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 from __future__ import annotations
 
 import os
 import time
+from typing import Any
 
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IAddress
 from twisted.internet.protocol import ServerFactory
 from twisted.protocols.basic import LineReceiver
-from typing_extensions import Self, override
+from typing_extensions import override
 
 from hathor.multiprocess import ipc
-from hathor.multiprocess.ipc import IpcServer, IpcClient
-from hathor.reactor import initialize_global_reactor, ReactorProtocol
+from hathor.multiprocess.ipc import IpcClient, IpcServer
+from hathor.reactor import ReactorProtocol, initialize_global_reactor
 
 
 class HathorProtocol:
@@ -43,24 +58,20 @@ class HathorProtocol:
 
 class SubprocessIpcClient(IpcClient):
     def read_storage(self) -> Deferred[bytes]:
-        return self._call(b'read_storage')
+        return self.call(b'read_storage')
 
     def save_storage(self, data: bytes) -> Deferred[bytes]:
-        return self._call(b'save_storage ' + data)
+        return self.call(b'save_storage ' + data)
 
     def send_line(self, data: bytes) -> Deferred[bytes]:
-        return self._call(b'send_line ' + data)
+        return self.call(b'send_line ' + data)
 
 
 class SubprocessIpcServer(IpcServer):
     __slots__ = ('_protocol',)
 
-    @classmethod
-    def build(cls, client: SubprocessIpcClient) -> Self:
-        protocol = HathorProtocol(client)
-        return cls(protocol)
-
-    def __init__(self, protocol: HathorProtocol) -> None:
+    def __init__(self, protocol: HathorProtocol, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self._protocol = protocol
 
     @override
@@ -73,13 +84,14 @@ class SubprocessIpcServer(IpcServer):
 
 class MainIpcClient(IpcClient):
     def do_something(self, data: bytes) -> Deferred[bytes]:
-        return self._call(b'do_something ' + data)
+        return self.call(b'do_something ' + data)
 
 
 class MainIpcServer(IpcServer):
     __slots__ = ('manager', '_line_receiver')
 
-    def __init__(self, manager: HathorManager, line_receiver: IpcLineReceiver) -> None:
+    def __init__(self, manager: HathorManager, line_receiver: IpcLineReceiver, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self.manager = manager
         self._line_receiver = line_receiver
 
@@ -112,17 +124,16 @@ class IpcFactory(ServerFactory):
         self.manager = manager
 
     def buildProtocol(self, addr: IAddress) -> IpcLineReceiver:
-        main_client = MainIpcClient()
-        line_receiver = IpcLineReceiver(main_client)
-        main_server = MainIpcServer(self.manager, line_receiver)
-        ipc.connect(
+        port = getattr(addr, 'port')
+        main_client = ipc.connect(
             main_reactor=self.reactor,
-            main_client=main_client,
-            main_server=main_server,
-            subprocess_client_builder=SubprocessIpcClient,
-            subprocess_server_builder=SubprocessIpcServer.build,
-            subprocess_name=str(addr.port)
+            main=(MainIpcClient, MainIpcServer),
+            subprocess=(SubprocessIpcClient, SubprocessIpcServer),
+            subprocess_name=str(port),
+            main_server_dependencies_builder=lambda _: dict(self.manager, ),
+            subprocess_server_dependencies_builder=lambda client: {},
         )
+        line_receiver = IpcLineReceiver(main_client)
         return line_receiver
 
 

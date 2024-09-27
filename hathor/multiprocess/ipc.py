@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from multiprocessing.sharedctypes import Synchronized
-from typing import Callable, NamedTuple, TypeVar
+from typing import Any, Callable, NamedTuple, TypeVar
 
 from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
@@ -38,12 +38,12 @@ ClientT = TypeVar('ClientT', bound='IpcClient')
 def connect(
     *,
     main_reactor: ReactorProtocol,
-    main_client: IpcClient,
-    main_server: IpcServer,
-    subprocess_client_builder: Callable[[], ClientT],
-    subprocess_server_builder: Callable[[ClientT], IpcServer],
+    main: tuple[type[ClientT], type[IpcServer]],
+    subprocess: tuple[type[IpcClient], type[IpcServer]],
+    main_server_dependencies_builder: Callable[[IpcClient], dict[str, Any]],
+    subprocess_server_dependencies_builder: Callable[[IpcClient], dict[str, Any]],
     subprocess_name: str,
-) -> None:
+) -> ClientT:
     main_client_conn: Connection
     main_server_conn: Connection
     subprocess_client_conn: Connection
@@ -54,56 +54,47 @@ def connect(
     main_server_message_id = multiprocessing.Value('L', 0)
     subprocess_server_message_id = multiprocessing.Value('L', 0)
 
-    main_client_ipc = _create_ipc_pair(
+    main_client_class, main_server_class = main
+    subprocess_client_class, subprocess_server_class = subprocess
+
+    main_client = _create_ipc_pair(
         reactor=main_reactor,
         name='main',
-        client_conn=main_client_conn,
-        server_conn=main_server_conn,
-        client_message_id=subprocess_server_message_id,
-        server_message_id=main_server_message_id,
-        ipc_server=main_server,
+        client=(main_client_class, main_client_conn, subprocess_server_message_id),
+        server=(main_server_class, main_server_conn, main_server_message_id),
+        server_dependencies_builder=main_server_dependencies_builder,
     )
-    main_client.set_ipc_conn(main_client_ipc)
 
-    subprocess = Process(
+    process = Process(
         name=subprocess_name,
         target=_run_subprocess,
         kwargs=dict(
             name=subprocess_name,
-            client_conn=subprocess_client_conn,
-            server_conn=subprocess_server_conn,
-            client_message_id=main_server_message_id,
-            server_message_id=subprocess_server_message_id,
-            client_builder=subprocess_client_builder,
-            server_builder=subprocess_server_builder,
+            client=(subprocess_client_class, subprocess_client_conn, main_server_message_id),
+            server=(subprocess_server_class, subprocess_server_conn, subprocess_server_message_id),
+            server_dependencies_builder=subprocess_server_dependencies_builder,
         ),
     )
-    subprocess.start()
+    process.start()
+
+    return main_client
 
 
 def _run_subprocess(
     *,
     name: str,
-    client_conn: Connection,
-    server_conn: Connection,
-    client_message_id: Synchronized,
-    server_message_id: Synchronized,
-    client_builder: Callable[[], ClientT],
-    server_builder: Callable[[ClientT], IpcServer],
+    client: tuple[type[IpcClient], Connection, Synchronized],
+    server: tuple[type[IpcServer], Connection, Synchronized],
+    server_dependencies_builder: Callable[[IpcClient], dict[str, Any]]
 ) -> None:
     subprocess_reactor = initialize_global_reactor()
-    client = client_builder()
-    server = server_builder(client)
-    client_ipc = _create_ipc_pair(
+    _create_ipc_pair(
         reactor=subprocess_reactor,
         name=name,
-        client_conn=client_conn,
-        server_conn=server_conn,
-        client_message_id=client_message_id,
-        server_message_id=server_message_id,
-        ipc_server=server,
+        client=client,
+        server=server,
+        server_dependencies_builder=server_dependencies_builder,
     )
-    client.set_ipc_conn(client_ipc)
     subprocess_reactor.run()
 
 
@@ -111,50 +102,29 @@ def _create_ipc_pair(
     *,
     reactor: ReactorProtocol,
     name: str,
-    client_conn: Connection,
-    server_conn: Connection,
-    client_message_id: Synchronized,
-    server_message_id: Synchronized,
-    ipc_server: IpcServer,
-) -> _ClientIpcConnection:
-    client = _ClientIpcConnection(
+    client: tuple[type[ClientT], Connection, Synchronized],
+    server: tuple[type[IpcServer], Connection, Synchronized],
+    server_dependencies_builder: Callable[[IpcClient], dict[str, Any]]
+) -> ClientT:
+    client_class, client_conn, client_message_id = client
+    server_class, server_conn, server_message_id = server
+    ipc_client = client_class(
         reactor=reactor,
         name=f'client({name})',
         conn=client_conn,
         message_id=client_message_id,
     )
-    server = _ServerIpcConnection(
+    ipc_server = server_class(
         reactor=reactor,
         name=f'server({name})',
         conn=server_conn,
         message_id=server_message_id,
-        server=ipc_server,
+        **server_dependencies_builder(ipc_client)
     )
 
-    client.start_listening()
-    server.start_listening()
-    return client
-
-
-class IpcClient(ABC):
-    __slots__ = ('_ipc_conn',)
-
-    def __init__(self) -> None:
-        self._ipc_conn: _ClientIpcConnection | None = None
-
-    def set_ipc_conn(self, ipc_conn: _ClientIpcConnection) -> None:
-        assert self._ipc_conn is None
-        self._ipc_conn = ipc_conn
-
-    def _call(self, request: bytes) -> Deferred[bytes]:
-        assert self._ipc_conn is not None
-        return self._ipc_conn.call(request)
-
-
-class IpcServer(ABC):
-    @abstractmethod
-    async def handle_request(self, request: bytes) -> bytes:
-        raise NotImplementedError
+    ipc_client.start_listening()
+    ipc_server.start_listening()
+    return ipc_client
 
 
 class _Message(NamedTuple):
@@ -234,7 +204,7 @@ class _AbstractIpcConnection(ABC):
 
 
 # sends requests and receive responses
-class _ClientIpcConnection(_AbstractIpcConnection):
+class IpcClient(_AbstractIpcConnection):
     __slots__ = ('_pending_calls',)
 
     def __init__(
@@ -263,24 +233,16 @@ class _ClientIpcConnection(_AbstractIpcConnection):
 
 
 # receives requests and sends responses
-class _ServerIpcConnection(_AbstractIpcConnection):
-    __slots__ = ('_server',)
-
-    def __init__(
-        self,
-        *,
-        reactor: ReactorProtocol,
-        name: str,
-        conn: Connection,
-        message_id: Synchronized,
-        server: IpcServer,
-    ) -> None:
-        super().__init__(reactor=reactor, name=name, conn=conn, message_id=message_id)
-        self._server = server
+class IpcServer(_AbstractIpcConnection):
+    __slots__ = ()
 
     @override
     def _handle_message(self, message: _Message) -> None:
         # print(f'req({self._name}): ', message.data)
-        coro = self._server.handle_request(message.data)
+        coro = self.handle_request(message.data)
         deferred = Deferred.fromCoroutine(coro)
         deferred.addCallback(lambda response: self._send_message(response, request_id=message.id))
+
+    @abstractmethod
+    async def handle_request(self, request: bytes) -> bytes:
+        raise NotImplementedError
