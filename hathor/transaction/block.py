@@ -325,6 +325,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
     def iter_transactions_in_this_block(self) -> Iterator[BaseTransaction]:
         """Return an iterator of the transactions that have this block as meta.first_block."""
         from hathor.transaction.storage.traversal import BFSOrderWalk
+        assert self.storage is not None
         bfs = BFSOrderWalk(self.storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
         for tx in bfs.run(self, skip_root=True):
             tx_meta = tx.get_metadata()
