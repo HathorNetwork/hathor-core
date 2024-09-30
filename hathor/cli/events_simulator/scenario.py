@@ -160,11 +160,15 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     blocks = add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
     simulator.run(60)
 
+    balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
+    assert balance_per_address[address] == 6400
     tx = gen_new_tx(manager, address, 1000)
     tx.weight = manager.daa.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx, fails_silently=False)
     simulator.run(60)
+    balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
+    assert balance_per_address[address] == 1000
 
     # re-org: replace last two blocks with one block, new height will be just one short of enough
     block_to_replace = blocks[-2]
@@ -178,6 +182,9 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     # the transaction should have been removed from the mempool and the storage after the re-org
     assert tx not in manager.tx_storage.iter_mempool_from_best_index()
     assert not manager.tx_storage.transaction_exists(tx.hash)
+    assert bool(tx.get_metadata().voided_by)
+    balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
+    assert balance_per_address[address] == 6400
 
 
 def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> None:
