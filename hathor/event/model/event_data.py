@@ -125,15 +125,22 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
             output | dict(decoded=output['decoded'] or None)
             for output in tx_json['outputs']
         ]
-        tx_json['inputs'] = [
-            dict(
-                tx_id=input_['tx_id'],
-                index=input_['index'],
-                spent_output=input_
-            )
-            for input_ in tx_json['inputs']
-        ]
 
+        inputs = []
+        for tx_input in tx_json['inputs']:
+            decoded = tx_input.get('decoded')
+            if decoded and decoded.get('address') is None:
+                # we remove the decoded data if it does not contain an address
+                tx_input['decoded'] = None
+            inputs.append(
+                dict(
+                    tx_id=tx_input['tx_id'],
+                    index=tx_input['index'],
+                    spent_output=tx_input,
+                )
+            )
+
+        tx_json['inputs'] = inputs
         return cls(**tx_json)
 
 

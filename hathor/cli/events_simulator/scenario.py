@@ -27,6 +27,8 @@ class Scenario(Enum):
     REORG = 'REORG'
     UNVOIDED_TRANSACTION = 'UNVOIDED_TRANSACTION'
     INVALID_MEMPOOL_TRANSACTION = 'INVALID_MEMPOOL_TRANSACTION'
+    EMPTY_SCRIPT = 'EMPTY_SCRIPT'
+    CUSTOM_SCRIPT = 'CUSTOM_SCRIPT'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
         simulate_fns = {
@@ -36,6 +38,8 @@ class Scenario(Enum):
             Scenario.REORG: simulate_reorg,
             Scenario.UNVOIDED_TRANSACTION: simulate_unvoided_transaction,
             Scenario.INVALID_MEMPOOL_TRANSACTION: simulate_invalid_mempool_transaction,
+            Scenario.EMPTY_SCRIPT: simulate_empty_script,
+            Scenario.CUSTOM_SCRIPT: simulate_custom_script,
         }
 
         simulate_fn = simulate_fns[self]
@@ -174,3 +178,73 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     # the transaction should have been removed from the mempool and the storage after the re-org
     assert tx not in manager.tx_storage.iter_mempool_from_best_index()
     assert not manager.tx_storage.transaction_exists(tx.hash)
+
+
+def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> None:
+    from hathor.conf.get_settings import get_global_settings
+    from hathor.simulator.utils import add_new_blocks, gen_new_tx
+    from hathor.transaction import TxInput, TxOutput
+
+    settings = get_global_settings()
+    assert manager.wallet is not None
+    address = manager.wallet.get_unused_address(mark_as_used=False)
+
+    add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    simulator.run(60)
+
+    tx1 = gen_new_tx(manager, address, 1000)
+    original_script = tx1.outputs[1].script
+    tx1.outputs[1].script = b''
+    tx1.weight = manager.daa.minimum_tx_weight(tx1)
+    tx1.update_hash()
+    assert manager.propagate_tx(tx1, fails_silently=False)
+    simulator.run(60)
+
+    tx2 = gen_new_tx(manager, address, 1000)
+    tx2.inputs = [TxInput(tx_id=tx1.hash, index=1, data=b'\x51')]
+    tx2.outputs = [TxOutput(value=1000, script=original_script)]
+    tx2.weight = manager.daa.minimum_tx_weight(tx2)
+    tx2.update_hash()
+    assert manager.propagate_tx(tx2, fails_silently=False)
+    simulator.run(60)
+
+    add_new_blocks(manager, 1)
+    simulator.run(60)
+
+
+def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> None:
+    from hathor.conf.get_settings import get_global_settings
+    from hathor.simulator.utils import add_new_blocks, gen_new_tx
+    from hathor.transaction import TxInput, TxOutput
+    from hathor.transaction.scripts import HathorScript, Opcode
+
+    settings = get_global_settings()
+    assert manager.wallet is not None
+    address = manager.wallet.get_unused_address()
+
+    add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    simulator.run(60)
+
+    tx1 = gen_new_tx(manager, address, 1000)
+    s = HathorScript()
+    some_data = b'some_data'
+    s.pushData(some_data)
+    s.addOpcode(Opcode.OP_EQUALVERIFY)
+    s.addOpcode(Opcode.OP_1)
+    original_script = tx1.outputs[1].script
+    tx1.outputs[1].script = s.data
+    tx1.weight = manager.daa.minimum_tx_weight(tx1)
+    tx1.update_hash()
+    assert manager.propagate_tx(tx1, fails_silently=False)
+    simulator.run(60)
+
+    tx2 = gen_new_tx(manager, address, 1000)
+    tx2.inputs = [TxInput(tx_id=tx1.hash, index=1, data=bytes([len(some_data)]) + some_data)]
+    tx2.outputs = [TxOutput(value=1000, script=original_script)]
+    tx2.weight = manager.daa.minimum_tx_weight(tx2)
+    tx2.update_hash()
+    assert manager.propagate_tx(tx2, fails_silently=False)
+    simulator.run(60)
+
+    add_new_blocks(manager, 1)
+    simulator.run(60)
