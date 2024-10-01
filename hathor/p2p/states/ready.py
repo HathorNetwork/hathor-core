@@ -40,7 +40,7 @@ class ReadyState(BaseState):
 
         self.log = logger.new(**self.protocol.get_logger_context())
 
-        self.reactor = self.protocol.node.reactor
+        self.reactor = self.protocol.reactor
 
         # It triggers an event to send a ping message if necessary.
         self.lc_ping = LoopingCall(self.send_ping_if_necessary)
@@ -85,7 +85,7 @@ class ReadyState(BaseState):
         self.lc_get_best_blockchain: Optional[LoopingCall] = None
 
         # if the peer has the GET-BEST-BLOCKCHAIN capability
-        common_capabilities = protocol.capabilities & set(protocol.node.capabilities)
+        common_capabilities = protocol.capabilities & set(protocol.my_capabilities)
         if (self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN in common_capabilities):
             # set the loop to get the best blockchain from the peer
             self.lc_get_best_blockchain = LoopingCall(self.send_get_best_blockchain)
@@ -97,7 +97,7 @@ class ReadyState(BaseState):
             })
 
         # Initialize sync manager and add its commands to the list of available commands.
-        connections = self.protocol.connections
+        connections = self.protocol.connections  # type: ignore[attr-defined] # TODO: FIX
         assert connections is not None
 
         # Get the sync factory and create a sync manager from it
@@ -110,8 +110,7 @@ class ReadyState(BaseState):
         self.cmd_map.update(self.sync_agent.get_cmd_dict())
 
     def on_enter(self) -> None:
-        if self.protocol.connections:
-            self.protocol.on_peer_ready()
+        self.protocol.on_peer_ready()
 
         self.lc_ping.start(1, now=False)
 
@@ -155,7 +154,7 @@ class ReadyState(BaseState):
         """ Executed when a GET-PEERS command is received. It just responds with
         a list of all known peers.
         """
-        for peer in self.protocol.connections.peer_storage.values():
+        for peer in self.protocol.client.get_peer_storage().values():
             self.send_peers([peer])
 
     def send_peers(self, peer_list: Iterable['Peer']) -> None:
@@ -179,8 +178,7 @@ class ReadyState(BaseState):
         for data in received_peers:
             peer = Peer.create_from_json(data)
             peer.validate()
-            if self.protocol.connections:
-                self.protocol.connections.on_receive_peer(peer, origin=self)
+            self.protocol.client.on_receive_peer(peer)
         self.log.debug('received peers', payload=payload)
 
     def send_ping_if_necessary(self) -> None:
@@ -199,8 +197,7 @@ class ReadyState(BaseState):
         """
         # Add a salt number to prevent peers from faking rtt.
         self.ping_start_time = self.reactor.seconds()
-        rng = self.protocol.connections.rng
-        self.ping_salt = rng.randbytes(self.ping_salt_size).hex()
+        self.ping_salt = self.protocol.client.randbytes(self.ping_salt_size).hex()
         self.send_message(ProtocolMessages.PING, self.ping_salt)
 
     def send_pong(self, salt: str) -> None:
@@ -259,7 +256,7 @@ class ReadyState(BaseState):
             )
             return
 
-        best_blockchain = self.protocol.node.tx_storage.get_n_height_tips(n_blocks)
+        best_blockchain = self.protocol.client.get_n_height_tips(n_blocks)
         self.send_best_blockchain(best_blockchain)
 
     def send_best_blockchain(self, best_blockchain: list[HeightInfo]) -> None:

@@ -25,6 +25,8 @@ from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 from typing_extensions import Self
 
+from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.reactor import ReactorProtocol, initialize_global_reactor
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 
@@ -41,7 +43,8 @@ def connect(
     main_client: IpcClient,
     main_server: IpcServer,
     subprocess_client_builder: Callable[[], ClientT],
-    subprocess_server_builder: Callable[[ClientT], IpcServer],
+    subprocess_server_builder: Callable[[ReactorProtocol, HathorSettings, ClientT, dict[str, Any]], IpcServer],
+    subprocess_server_args: dict[str, Any],
     subprocess_name: str,
 ) -> None:
     conn1: Connection
@@ -64,6 +67,7 @@ def connect(
             conn=conn2,
             client_builder=subprocess_client_builder,
             server_builder=subprocess_server_builder,
+            server_args=subprocess_server_args,
             message_id=message_id,
         ),
     )
@@ -74,13 +78,20 @@ def _run_subprocess(
     *,
     name: str,
     conn: Connection,
-    client_builder: Callable[[], IpcClient],
-    server_builder: Callable[[IpcClient], IpcServer],
+    client_builder: Callable[[], ClientT],
+    server_builder: Callable[[ReactorProtocol, HathorSettings, ClientT, dict[str, Any]], IpcServer],
+    server_args: dict[str, Any],
     message_id: Synchronized,
 ) -> None:
     subprocess_reactor = initialize_global_reactor()
+    settings = get_global_settings()  # TODO: Check if this uses the correct env vars
     client = client_builder()
-    server = server_builder(client)
+    server = server_builder(
+        subprocess_reactor,
+        settings,
+        client,
+        server_args,
+    )
     subprocess_ipc_conn = _IpcConnection(
         reactor=subprocess_reactor, name=name, conn=conn, server=server, message_id=message_id
     )

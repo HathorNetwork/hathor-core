@@ -977,9 +977,6 @@ class HathorManager:
             is_sync_v2=is_sync_v2,
         )
 
-    def has_sync_version_capability(self) -> bool:
-        return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
-
     def add_peer_to_whitelist(self, peer_id: PeerId) -> None:
         if not self._settings.ENABLE_PEER_WHITELIST:
             return

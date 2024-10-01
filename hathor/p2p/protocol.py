@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import time
+from abc import ABC, abstractmethod
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Coroutine, Generator, Optional, cast
+from typing import TYPE_CHECKING, Any, Coroutine, Generator, Optional, cast, Iterable
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
@@ -24,15 +25,18 @@ from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
+from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import Peer
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import format_address
 from hathor.profiler import get_cpu_profiler
+from hathor.reactor import ReactorProtocol
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
@@ -42,7 +46,7 @@ logger = get_logger()
 cpu = get_cpu_profiler()
 
 
-class HathorProtocol:
+class AbstractHathorProtocol(ABC):
     """ Implements Hathor Peer-to-Peer Protocol. An instance of this class is
     created for each connection.
 
@@ -75,8 +79,6 @@ class HathorProtocol:
 
     network: str
     my_peer: Peer
-    connections: 'ConnectionsManager'
-    node: 'HathorManager'
     app_version: str
     last_message: float
     peer: Optional[Peer]
@@ -94,24 +96,19 @@ class HathorProtocol:
 
     def __init__(
         self,
-        network: str,
-        my_peer: Peer,
-        p2p_manager: 'ConnectionsManager',
         *,
+        reactor: ReactorProtocol,
         settings: HathorSettings,
+        my_peer: Peer,
+        my_capabilities: list[str],
         use_ssl: bool,
         inbound: bool,
     ) -> None:
         self._settings = settings
-        self.network = network
+        self.network = settings.NETWORK_NAME
         self.my_peer = my_peer
-        self.connections = p2p_manager
-
-        assert p2p_manager.manager is not None
-        self.node = p2p_manager.manager
-
-        assert self.connections.reactor is not None
-        self.reactor = self.connections.reactor
+        self.reactor = reactor
+        self.my_capabilities = my_capabilities
 
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
         self.inbound = inbound
@@ -249,8 +246,7 @@ class HathorProtocol:
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
-        if self.connections:
-            self.connections.on_peer_connect(self)
+        self.connections.on_peer_connect(self)  # type: ignore[attr-defined] # TODO: FIX
 
     def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
@@ -258,10 +254,9 @@ class HathorProtocol:
         self.entrypoint = entrypoint
 
     def on_peer_ready(self) -> None:
-        assert self.connections is not None
         assert self.peer is not None
         self.update_log_context()
-        self.connections.on_peer_ready(self)
+        self.connections.on_peer_ready(self)  # type: ignore[attr-defined] # TODO: FIX
         self.log.info('peer connected', peer_id=self.peer.id)
 
     def on_disconnect(self, reason: Failure) -> None:
@@ -279,8 +274,7 @@ class HathorProtocol:
         if self.state:
             self.state.on_exit()
             self.state = None
-        if self.connections:
-            self.connections.on_peer_disconnect(self)
+        self.connections.on_peer_disconnect(self)  # type: ignore[attr-defined] # TODO: FIX
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message
@@ -387,6 +381,85 @@ class HathorProtocol:
         assert isinstance(self.state, ReadyState)
         self.log.info('disable sync')
         self.state.sync_agent.disable_sync()
+
+    def has_sync_version_capability(self) -> bool:
+        return self._settings.CAPABILITY_SYNC_VERSION in self.my_capabilities
+
+    @abstractmethod
+    def get_enabled_sync_versions(self) -> set[SyncVersion]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_peer_storage_values(self) -> Iterable[Peer]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def on_receive_peer(self, peer: Peer) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def randbytes(self, salt: int) -> bytes:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def is_peer_connected(self, peer_id: PeerId) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_peers_whitelist(self) -> list[PeerId]:
+        raise NotImplementedError
+
+
+class HathorProtocol(AbstractHathorProtocol):
+    __slots__ = ('manager', 'connections')
+
+    def __init__(
+        self,
+        *,
+        reactor: ReactorProtocol,
+        settings: HathorSettings,
+        manager: HathorManager,
+        connections: ConnectionsManager,
+        my_peer: Peer,
+        my_capabilities: list[str],
+        use_ssl: bool,
+        inbound: bool,
+    ) -> None:
+        super().__init__(
+            reactor=reactor,
+            settings=settings,
+            my_peer=my_peer,
+            my_capabilities=my_capabilities,
+            use_ssl=use_ssl,
+            inbound=inbound,
+        )
+        self.manager = manager
+        self.connections = connections
+
+    def get_enabled_sync_versions(self) -> set[SyncVersion]:
+        return self.connections.get_enabled_sync_versions()
+
+    def get_peer_storage_values(self) -> Iterable[Peer]:
+        return self.connections.peer_storage.values()
+
+    def on_receive_peer(self, peer: Peer) -> None:
+        self.connections.on_receive_peer(peer)
+
+    def randbytes(self, salt: int) -> bytes:
+        return self.connections.rng.randbytes(salt)
+
+    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        return self.manager.tx_storage.get_n_height_tips(n_blocks)
+
+    def is_peer_connected(self, peer_id: PeerId) -> bool:
+        return self.connections.is_peer_connected(peer_id)
+
+    def get_peers_whitelist(self) -> list[PeerId]:
+        return self.manager.peers_whitelist
 
 
 class HathorLineReceiver(LineReceiver, HathorProtocol):
