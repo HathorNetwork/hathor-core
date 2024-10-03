@@ -25,16 +25,14 @@ from hathor.p2p.protocol import HathorLineReceiver
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
 
-MyServerProtocol = HathorLineReceiver
-MyClientProtocol = HathorLineReceiver
 
-
-class HathorServerFactory(protocol.ServerFactory):
-    """ HathorServerFactory is used to generate HathorProtocol objects when a new connection arrives.
+class SyncFactory(protocol.ServerFactory):
+    """
+    SyncFactory is used to generate HathorProtocol objects for new connections for both clients and servers,
+    depending on the inbound parameter.
     """
 
     manager: Optional[ConnectionsManager]
-    protocol: type[MyServerProtocol] = MyServerProtocol
 
     def __init__(
         self,
@@ -44,6 +42,7 @@ class HathorServerFactory(protocol.ServerFactory):
         *,
         settings: HathorSettings,
         use_ssl: bool,
+        inbound: bool,
     ):
         super().__init__()
         self._settings = settings
@@ -51,52 +50,16 @@ class HathorServerFactory(protocol.ServerFactory):
         self.my_peer = my_peer
         self.p2p_manager = p2p_manager
         self.use_ssl = use_ssl
+        self.inbound = inbound
 
-    def buildProtocol(self, addr: IAddress) -> MyServerProtocol:
+    def buildProtocol(self, addr: IAddress) -> HathorLineReceiver:
         assert self.protocol is not None
-        p = self.protocol(
-            network=self.network,
+        p = HathorLineReceiver(
+            reactor=self.p2p_manager.reactor,
+            settings=self._settings,
             my_peer=self.my_peer,
-            p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
-            inbound=True,
-            settings=self._settings
-        )
-        p.factory = self
-        return p
-
-
-class HathorClientFactory(protocol.ClientFactory):
-    """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
-    """
-
-    protocol: type[MyClientProtocol] = MyClientProtocol
-
-    def __init__(
-        self,
-        network: str,
-        my_peer: Peer,
-        p2p_manager: ConnectionsManager,
-        *,
-        settings: HathorSettings,
-        use_ssl: bool,
-    ):
-        super().__init__()
-        self._settings = settings
-        self.network = network
-        self.my_peer = my_peer
-        self.p2p_manager = p2p_manager
-        self.use_ssl = use_ssl
-
-    def buildProtocol(self, addr: IAddress) -> MyClientProtocol:
-        assert self.protocol is not None
-        p = self.protocol(
-            network=self.network,
-            my_peer=self.my_peer,
-            p2p_manager=self.p2p_manager,
-            use_ssl=self.use_ssl,
-            inbound=False,
-            settings=self._settings
+            inbound=self.inbound,
         )
         p.factory = self
         return p
