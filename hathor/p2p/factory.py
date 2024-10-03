@@ -21,6 +21,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import Peer
 from hathor.p2p.protocol import HathorLineReceiver
+from hathor.reactor import ReactorProtocol
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
@@ -32,32 +33,36 @@ class SyncFactory(protocol.ServerFactory):
     depending on the inbound parameter.
     """
 
-    manager: Optional[ConnectionsManager]
-
     def __init__(
         self,
-        network: str,
-        my_peer: Peer,
-        p2p_manager: ConnectionsManager,
         *,
+        reactor: ReactorProtocol,
         settings: HathorSettings,
+        manager: HathorManager,
+        connections: ConnectionsManager,
+        my_peer: Peer,
+        my_capabilities: list[str],
         use_ssl: bool,
         inbound: bool,
-    ):
+    ) -> None:
         super().__init__()
+        self.reactor = reactor
         self._settings = settings
-        self.network = network
+        self.manager = manager
+        self.connections = connections
         self.my_peer = my_peer
-        self.p2p_manager = p2p_manager
+        self.my_capabilities = my_capabilities
         self.use_ssl = use_ssl
         self.inbound = inbound
 
     def buildProtocol(self, addr: IAddress) -> HathorLineReceiver:
-        assert self.protocol is not None
         p = HathorLineReceiver(
-            reactor=self.p2p_manager.reactor,
+            reactor=self.reactor,
             settings=self._settings,
+            manager=self.manager,
+            connections=self.connections,
             my_peer=self.my_peer,
+            my_capabilities=self.my_capabilities,
             use_ssl=self.use_ssl,
             inbound=self.inbound,
         )
