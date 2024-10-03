@@ -109,10 +109,9 @@ class PeerIdState(BaseState):
             protocol.send_error_and_close_connection('Are you my clone?!')
             return
 
-        if protocol.connections is not None:
-            if protocol.connections.is_peer_connected(peer.id):
-                protocol.send_error_and_close_connection('We are already connected.')
-                return
+        if protocol.client.is_peer_connected(peer.id):
+            protocol.send_error_and_close_connection('We are already connected.')
+            return
 
         entrypoint_valid = await peer.validate_entrypoint(protocol)
         if not entrypoint_valid:
@@ -130,7 +129,6 @@ class PeerIdState(BaseState):
 
         context = NetfilterContext(
             protocol=protocol,
-            connections=protocol.connections,
             addr=protocol.transport.getPeer(),
         )
         verdict = get_table('filter').get_chain('post_peerid').process(context)
@@ -145,7 +143,7 @@ class PeerIdState(BaseState):
 
         Currently this is only because the peer is not in a whitelist and whitelist blocking is active.
         """
-        peer_is_whitelisted = peer_id in self.protocol.node.peers_whitelist
+        peer_is_whitelisted = peer_id in self.protocol.client.get_peers_whitelist()
         # never block whitelisted peers
         if peer_is_whitelisted:
             return False
@@ -160,10 +158,9 @@ class PeerIdState(BaseState):
                     return True
 
         # otherwise we block non-whitelisted peers when on "whitelist-only mode"
-        if self.protocol.connections is not None:
-            protocol_is_whitelist_only = self.protocol.connections.whitelist_only
-            if protocol_is_whitelist_only and not peer_is_whitelisted:
-                return True
+        protocol_is_whitelist_only = self.protocol.connections.whitelist_only  # type: ignore[attr-defined] # TODO: FIX
+        if protocol_is_whitelist_only and not peer_is_whitelisted:
+            return True
 
         # default is not blocking, this will be sync-v2 peers not on whitelist when not on whitelist-only mode
         return False

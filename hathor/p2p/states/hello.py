@@ -55,19 +55,17 @@ class HelloState(BaseState):
             'network': protocol.network,
             'remote_address': format_address(remote),
             'genesis_short_hash': get_genesis_short_hash(),
-            'timestamp': protocol.node.reactor.seconds(),
+            'timestamp': protocol.reactor.seconds(),
             'settings_dict': get_settings_hello_dict(self._settings),
-            'capabilities': protocol.node.capabilities,
+            'capabilities': protocol.my_capabilities,
         }
-        if self.protocol.node.has_sync_version_capability():
+        if self.protocol.has_sync_version_capability():
             data['sync_versions'] = [x.value for x in self._get_sync_versions()]
         return data
 
     def _get_sync_versions(self) -> set[SyncVersion]:
         """Shortcut to ConnectionManager.get_enabled_sync_versions"""
-        connections_manager = self.protocol.connections
-        assert connections_manager is not None
-        return connections_manager.get_enabled_sync_versions()
+        return self.protocol.client.get_enabled_sync_versions()
 
     def on_enter(self) -> None:
         # After a connection is made, we just send a HELLO message.
@@ -143,7 +141,7 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Different genesis.')
             return
 
-        dt = data['timestamp'] - protocol.node.reactor.seconds()
+        dt = data['timestamp'] - protocol.reactor.seconds()
         if abs(dt) > self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED / 2:
             protocol.send_error_and_close_connection('Nodes timestamps too far apart.')
             return
@@ -162,7 +160,6 @@ class HelloState(BaseState):
 
         context = NetfilterContext(
             protocol=protocol,
-            connections=protocol.connections,
             addr=protocol.transport.getPeer(),
         )
         verdict = get_table('filter').get_chain('post_hello').process(context)

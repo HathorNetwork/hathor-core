@@ -40,7 +40,7 @@ from hathor.p2p.utils import parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
-from hathor.util import Random
+from hathor.util import Random, not_none
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -127,13 +127,27 @@ class ConnectionsManager:
         self.localhost_only = False
 
         # Factories.
-        from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
+        from hathor.p2p.factory import SyncFactory
         self.use_ssl = ssl
-        self.server_factory = HathorServerFactory(
-            self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+        self.server_factory = SyncFactory(
+            reactor=self.reactor,
+            settings=self._settings,
+            manager=not_none(self.manager),
+            connections=self,
+            my_peer=self.my_peer,
+            # my_capabilities=not_
+            use_ssl=self.use_ssl,
+            inbound=True,
         )
-        self.client_factory = HathorClientFactory(
-            self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+        self.client_factory = SyncFactory(
+            reactor=self.reactor,
+            settings=self._settings,
+            manager=not_none(self.manager),
+            connections=self,
+            my_peer=self.my_peer,
+#             my_capabilities=not_
+            use_ssl=self.use_ssl,
+            inbound=False,
         )
 
         # Global maximum number of connections.
@@ -492,7 +506,7 @@ class ConnectionsManager:
         """
         return peer_id in self.connected_peers
 
-    def on_receive_peer(self, peer: Peer, origin: Optional[ReadyState] = None) -> None:
+    def on_receive_peer(self, peer: Peer) -> None:
         """ Update a peer information in our storage, and instantly attempt to connect
         to it if it is not connected yet.
         """
@@ -685,7 +699,7 @@ class ConnectionsManager:
         else:
             factory = self.server_factory
 
-        factory = NetfilterFactory(self, factory)
+        factory = NetfilterFactory(factory)
 
         self.log.info('trying to listen on', endpoint=description)
         deferred: Deferred[IListeningPort] = endpoint.listen(factory)
