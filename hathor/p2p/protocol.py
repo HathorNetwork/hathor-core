@@ -42,7 +42,7 @@ logger = get_logger()
 cpu = get_cpu_profiler()
 
 
-class HathorProtocol:
+class AbstractHathorProtocol(ABC):
     """ Implements Hathor Peer-to-Peer Protocol. An instance of this class is
     created for each connection.
 
@@ -75,8 +75,6 @@ class HathorProtocol:
 
     network: str
     my_peer: Peer
-    connections: 'ConnectionsManager'
-    node: 'HathorManager'
     app_version: str
     last_message: float
     peer: Optional[Peer]
@@ -94,24 +92,19 @@ class HathorProtocol:
 
     def __init__(
         self,
-        network: str,
-        my_peer: Peer,
-        p2p_manager: 'ConnectionsManager',
         *,
+        reactor: ReactorProtocol,
         settings: HathorSettings,
+        my_peer: Peer,
+        my_capabilities: list[str],
         use_ssl: bool,
         inbound: bool,
     ) -> None:
         self._settings = settings
-        self.network = network
+        self.network = settings.NETWORK_NAME
         self.my_peer = my_peer
-        self.connections = p2p_manager
-
-        assert p2p_manager.manager is not None
-        self.node = p2p_manager.manager
-
-        assert self.connections.reactor is not None
-        self.reactor = self.connections.reactor
+        self.reactor = reactor
+        self.my_capabilities = my_capabilities
 
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
         self.inbound = inbound
