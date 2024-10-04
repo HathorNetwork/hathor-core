@@ -198,7 +198,6 @@ class RunNode:
 
         self.tx_storage = self.manager.tx_storage
         self.wallet = self.manager.wallet
-        self.start_manager()
 
         if self._args.stratum:
             assert self.manager.stratum_factory is not None
@@ -218,6 +217,8 @@ class RunNode:
             if self._args.status:
                 assert status_server is not None
                 self.reactor.listenTCP(self._args.status, status_server)
+
+        self.start_manager()
 
         from hathor.builder.builder import BuildArtifacts
         self.artifacts = BuildArtifacts(

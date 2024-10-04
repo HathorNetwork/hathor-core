@@ -39,7 +39,7 @@ class SysctlInitTest(unittest.TestCase):
         # prepare to register only p2p commands
         artifacts = Mock(**{
             'p2p_manager': Mock(),
-            'manager.metrics.websocket_factory.return_value': None
+            'manager.websocket_factory.return_value': None
         })
 
         with self.assertRaises(SysctlEntryNotFound) as context:
@@ -68,7 +68,7 @@ class SysctlInitTest(unittest.TestCase):
         # prepare to register only p2p commands
         artifacts = Mock(**{
             'p2p_manager': Mock(),
-            'manager.metrics.websocket_factory.return_value': None
+            'manager.websocket_factory.return_value': None
         })
 
         with self.assertRaises(SysctlRunnerException) as context:
@@ -85,7 +85,7 @@ class SysctlInitTest(unittest.TestCase):
         # prepare to register only p2p commands
         artifacts = Mock(**{
             'p2p_manager': Mock(),
-            'manager.metrics.websocket_factory.return_value': None
+            'manager.websocket_factory.return_value': None
         })
 
         with self.assertRaises(AssertionError):
