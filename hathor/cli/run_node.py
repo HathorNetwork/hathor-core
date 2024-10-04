@@ -93,7 +93,9 @@ class RunNode:
                             help='Address to listen for new connections (eg: tcp:8000)')
         parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
         parser.add_argument('--status', type=int, help='Port to run status server')
+        parser.add_argument('--x-status-ipv6-interface', help='IPv6 interface to bind the status server')
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
+        parser.add_argument('--x-stratum-ipv6-interface', help='IPv6 interface to bind the stratum server')
         parser.add_argument('--data', help='Data directory')
         storage = parser.add_mutually_exclusive_group()
         storage.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend (default)')
@@ -162,6 +164,10 @@ class RunNode:
                             help='Log tx bytes for debugging')
         parser.add_argument('--disable-ws-history-streaming', action='store_true',
                             help='Disable websocket history streaming API')
+        parser.add_argument('--x-enable-ipv6', action='store_true',
+                            help='Enables listening on IPv6 interface and connecting to IPv6 peers')
+        parser.add_argument('--x-disable-ipv4', action='store_true',
+                            help='Disables connecting to IPv4 peers')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -181,6 +187,7 @@ class RunNode:
             print('Maximum number of open file descriptors is too low. Minimum required is 256.')
             sys.exit(-2)
 
+        self.validate_args()
         self.check_unsafe_arguments()
         self.check_python_version()
 
@@ -202,7 +209,15 @@ class RunNode:
 
         if self._args.stratum:
             assert self.manager.stratum_factory is not None
-            self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
+
+            if self._args.x_enable_ipv6:
+                interface = self._args.x_stratum_ipv6_interface or '::0'
+                # Linux by default will map IPv4 to IPv6, so listening only in the IPv6 interface will be
+                # enough to handle IPv4 connections. There is a kernel parameter that controls this behavior:
+                # https://sysctl-explorer.net/net/ipv6/bindv6only/
+                self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory, interface=interface)
+            else:
+                self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
         from hathor.conf.get_settings import get_global_settings
         settings = get_global_settings()
@@ -217,7 +232,12 @@ class RunNode:
             status_server = resources_builder.build()
             if self._args.status:
                 assert status_server is not None
-                self.reactor.listenTCP(self._args.status, status_server)
+
+                if self._args.x_enable_ipv6:
+                    interface = self._args.x_status_ipv6_interface or '::0'
+                    self.reactor.listenTCP(self._args.status, status_server, interface=interface)
+                else:
+                    self.reactor.listenTCP(self._args.status, status_server)
 
         self.start_manager()
 
@@ -350,6 +370,11 @@ class RunNode:
                     self.log.warn('[USR2] Error', errmsg=str(e))
                 except SysctlRunnerException as e:
                     self.log.warn('[USR2] Error', errmsg=str(e))
+
+    def validate_args(self) -> None:
+        if self._args.x_disable_ipv4 and not self._args.x_enable_ipv6:
+            self.log.critical('You must enable IPv6 if you disable IPv4.')
+            sys.exit(-1)
 
     def check_unsafe_arguments(self) -> None:
         unsafe_args_found = []

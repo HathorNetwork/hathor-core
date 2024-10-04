@@ -226,7 +226,9 @@ class TestCase(unittest.TestCase):
         pubsub: PubSubManager | None = None,
         event_storage: EventStorage | None = None,
         enable_event_queue: bool | None = None,
-        use_memory_storage: bool | None = None
+        use_memory_storage: bool | None = None,
+        enable_ipv6: bool = False,
+        disable_ipv4: bool = False,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
@@ -289,6 +291,15 @@ class TestCase(unittest.TestCase):
 
         if utxo_index:
             builder.enable_utxo_index()
+
+        if capabilities is not None:
+            builder.set_capabilities(capabilities)
+
+        if enable_ipv6:
+            builder.enable_ipv6()
+
+        if disable_ipv4:
+            builder.disable_ipv4()
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)

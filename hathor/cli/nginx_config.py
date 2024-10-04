@@ -240,11 +240,12 @@ limit_conn_zone $per_ip_key zone=per_ip__event_ws:10m;
 
     server_open = f'''
 upstream backend {{
-    server fullnode:8080;
+    server 127.0.0.1:8080;
 }}
 
 server {{
     listen 80;
+    listen [::]:80;
     server_name localhost;
 
     # Look for client IP in the X-Forwarded-For header

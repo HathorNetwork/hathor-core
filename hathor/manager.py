@@ -251,7 +251,8 @@ class HathorManager:
         return [
             self._settings.CAPABILITY_WHITELIST,
             self._settings.CAPABILITY_SYNC_VERSION,
-            self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN
+            self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN,
+            self._settings.CAPABILITY_IPV6,
         ]
 
     def start(self) -> None:

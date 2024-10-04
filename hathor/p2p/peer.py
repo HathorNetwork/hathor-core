@@ -114,6 +114,18 @@ class PeerInfo:
     flags: set[str] = field(default_factory=set)
     _settings: HathorSettings = field(default_factory=get_global_settings, repr=False)
 
+    def get_ipv4_only_entrypoints(self) -> list[PeerAddress]:
+        return list(filter(lambda e: not e.is_ipv6(), self.entrypoints))
+
+    def get_ipv6_only_entrypoints(self) -> list[PeerAddress]:
+        return list(filter(lambda e: e.is_ipv6(), self.entrypoints))
+
+    def ipv4_entrypoints_as_str(self) -> list[str]:
+        return list(map(str, self.get_ipv4_only_entrypoints()))
+
+    def ipv6_entrypoints_as_str(self) -> list[str]:
+        return list(map(str, self.get_ipv6_only_entrypoints()))
+
     def entrypoints_as_str(self) -> list[str]:
         """Return a list of entrypoints serialized as str"""
         return list(map(str, self.entrypoints))
@@ -203,14 +215,19 @@ class UnverifiedPeer:
     id: PeerId
     info: PeerInfo = field(default_factory=PeerInfo)
 
-    def to_json(self) -> dict[str, Any]:
+    def to_json(self, only_ipv4_entrypoints: bool = True) -> dict[str, Any]:
         """ Return a JSON serialization of the object.
 
         This format is compatible with libp2p.
         """
+        if only_ipv4_entrypoints:
+            entrypoints_as_str = self.info.ipv4_entrypoints_as_str()
+        else:
+            entrypoints_as_str = self.info.entrypoints_as_str()
+
         return {
             'id': str(self.id),
-            'entrypoints': self.info.entrypoints_as_str(),
+            'entrypoints': entrypoints_as_str,
         }
 
     @classmethod
