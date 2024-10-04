@@ -27,3 +27,65 @@ class ConnectionsTest(unittest.TestCase):
         self.assertIn(endpoint, manager.connections.iter_not_ready_endpoints())
         self.assertNotIn(endpoint, manager.connections.iter_ready_connections())
         self.assertNotIn(endpoint, manager.connections.iter_all_connections())
+
+    def test_manager_disabled_ipv6(self) -> None:
+        """Should not try to connect to ipv6 peers if ipv6 is disabled"""
+
+        manager = self.create_peer(
+            'testnet',
+            enable_sync_v1=False,
+            enable_sync_v2=True,
+            enable_ipv6=False,
+            disable_ipv4=False
+        )
+
+        endpoint = Entrypoint.parse('tcp://[::1]:8005')
+        manager.connections.connect_to(endpoint, use_ssl=True)
+
+        self.assertNotIn(endpoint, manager.connections.iter_not_ready_endpoints())
+        self.assertNotIn(endpoint, manager.connections.iter_ready_connections())
+        self.assertNotIn(endpoint, manager.connections.iter_all_connections())
+
+    def test_manager_enabled_ipv6_and_ipv4(self) -> None:
+        """Should connect to both ipv4 and ipv6 peers if both are enabled"""
+
+        manager = self.create_peer(
+            'testnet',
+            enable_sync_v1=False,
+            enable_sync_v2=True,
+            enable_ipv6=True,
+            disable_ipv4=False
+        )
+
+        endpoint_ipv6 = Entrypoint.parse('tcp://[::1]:8005')
+        manager.connections.connect_to(endpoint_ipv6, use_ssl=True)
+
+        endpoint_ipv4 = Entrypoint.parse('tcp://127.0.0.1:8005')
+        manager.connections.connect_to(endpoint_ipv4, use_ssl=True)
+
+        self.assertIn(endpoint_ipv4, manager.connections.iter_not_ready_endpoints())
+        self.assertIn(endpoint_ipv6, manager.connections.iter_not_ready_endpoints())
+
+        self.assertNotIn(endpoint_ipv4, manager.connections.iter_ready_connections())
+        self.assertNotIn(endpoint_ipv6, manager.connections.iter_ready_connections())
+
+        self.assertNotIn(endpoint_ipv4, manager.connections.iter_all_connections())
+        self.assertNotIn(endpoint_ipv6, manager.connections.iter_all_connections())
+
+    def test_manager_disabled_ipv4(self) -> None:
+        """Should not try to connect to ipv4 peers if ipv4 is disabled"""
+
+        manager = self.create_peer(
+            'testnet',
+            enable_sync_v1=False,
+            enable_sync_v2=True,
+            enable_ipv6=True,
+            disable_ipv4=True,
+        )
+
+        endpoint = Entrypoint.parse('tcp://127.0.0.1:8005')
+        manager.connections.connect_to(endpoint, use_ssl=True)
+
+        self.assertNotIn(endpoint, manager.connections.iter_not_ready_endpoints())
+        self.assertNotIn(endpoint, manager.connections.iter_ready_connections())
+        self.assertNotIn(endpoint, manager.connections.iter_all_connections())

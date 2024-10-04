@@ -222,6 +222,10 @@ class BasePeerIdTest(unittest.TestCase):
         peer.info.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
+        # if entrypoint is an IPv6
+        peer.entrypoints = [Entrypoint.parse('tcp://[::1]:40403')]
+        result = await peer.info.validate_entrypoint(protocol)
+        self.assertTrue(result)
         # test invalid. DNS in test mode will resolve to '127.0.0.1:40403'
         protocol.entrypoint = Entrypoint.parse('tcp://45.45.45.45:40403')
         result = await peer.info.validate_entrypoint(protocol)
@@ -242,6 +246,10 @@ class BasePeerIdTest(unittest.TestCase):
         self.assertTrue(result)
         # if entrypoint is an URI
         peer.info.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
+        result = await peer.info.validate_entrypoint(protocol)
+        self.assertTrue(result)
+        # if entrypoint is an IPv6
+        peer.entrypoints = [Entrypoint.parse('tcp://[2001:db8::ff00:42:8329]:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
 
