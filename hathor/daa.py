@@ -19,6 +19,7 @@ block rewards.
 NOTE: This module could use a better name.
 """
 
+from collections import deque
 from enum import IntFlag
 from math import log
 from typing import TYPE_CHECKING, Callable, ClassVar, Optional
@@ -55,6 +56,7 @@ class DifficultyAdjustmentAlgorithm:
         self.AVG_TIME_BETWEEN_BLOCKS = self._settings.AVG_TIME_BETWEEN_BLOCKS
         self.MIN_BLOCK_WEIGHT = self._settings.MIN_BLOCK_WEIGHT
         self.TEST_MODE = test_mode
+        self._block_window_cache: deque['Block'] | None = None
         DifficultyAdjustmentAlgorithm.singleton = self
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
@@ -106,7 +108,6 @@ class DifficultyAdjustmentAlgorithm:
 
         from hathor.transaction import sum_weights
 
-        root = parent_block
         N = self._calculate_N(parent_block)
         K = N // 2
         T = self.AVG_TIME_BETWEEN_BLOCKS
@@ -114,19 +115,23 @@ class DifficultyAdjustmentAlgorithm:
         if N < 10:
             return self.MIN_BLOCK_WEIGHT
 
-        blocks: list['Block'] = []
-        while len(blocks) < N + 1:
-            blocks.append(root)
-            root = parent_block_getter(root)
+        root = parent_block
+        grandparent_block = parent_block_getter(parent_block)
 
-        # TODO: revise if this assertion can be safely removed
-        assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)
-        blocks = list(reversed(blocks))
+        if self._block_window_cache and self._block_window_cache[-1] == grandparent_block:
+            self._block_window_cache.append(parent_block)
+            if len(self._block_window_cache) > N + 1:
+                self._block_window_cache.popleft()
+        else:
+            self._block_window_cache = deque([])
+            while len(self._block_window_cache) < N + 1:
+                self._block_window_cache.appendleft(root)
+                root = parent_block_getter(root)
 
-        assert len(blocks) == N + 1
+        assert len(self._block_window_cache) == N + 1
         solvetimes, weights = zip(*(
             (block.timestamp - prev_block.timestamp, block.weight)
-            for prev_block, block in iwindows(blocks, 2)
+            for prev_block, block in iwindows(self._block_window_cache, 2)
         ))
         assert len(solvetimes) == len(weights) == N, f'got {len(solvetimes)}, {len(weights)} expected {N}'
 
