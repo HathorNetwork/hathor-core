@@ -210,6 +210,7 @@ class ConsensusAlgorithm:
         for tx in txs:
             tx_meta = tx.get_metadata()
             assert not tx_meta.validation.is_checkpoint()
+            assert bool(tx_meta.voided_by), 'removed txs must be voided'
             for parent in set(tx.parents) - txset:
                 parents_to_update[parent].append(tx.hash)
             dangling_children.update(set(tx_meta.children) - txset)

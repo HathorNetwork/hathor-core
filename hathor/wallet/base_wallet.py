@@ -126,6 +126,7 @@ class BaseWallet:
 
         self.pubsub_events = [
             HathorEvents.CONSENSUS_TX_UPDATE,
+            HathorEvents.CONSENSUS_TX_REMOVED,
         ]
 
         if reactor is None:
@@ -176,6 +177,12 @@ class BaseWallet:
         data = args.__dict__
         if key == HathorEvents.CONSENSUS_TX_UPDATE:
             self.on_tx_update(data['tx'])
+        elif key == HathorEvents.CONSENSUS_TX_REMOVED:
+            # we use the same method as above because a removed tx is also voided
+            tx = data['tx']
+            assert isinstance(tx, Transaction)
+            assert bool(tx.get_metadata().voided_by)
+            self.on_tx_update(tx)
         else:
             raise NotImplementedError
 

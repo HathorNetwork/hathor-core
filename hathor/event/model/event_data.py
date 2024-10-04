@@ -117,7 +117,7 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> Self:
         from hathor.transaction.resources.transaction import get_tx_extra_data
-        tx_extra_data_json = get_tx_extra_data(args.tx, detail_tokens=False)
+        tx_extra_data_json = get_tx_extra_data(args.tx, detail_tokens=False, force_reload_metadata=False)
         tx_json = tx_extra_data_json['tx']
         meta_json = tx_extra_data_json['meta']
         tx_json['metadata'] = meta_json
