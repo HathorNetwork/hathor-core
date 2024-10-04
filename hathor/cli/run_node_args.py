@@ -36,7 +36,9 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     listen: list[str]
     bootstrap: Optional[list[str]]
     status: Optional[int]
+    x_status_ipv6_interface: Optional[str]
     stratum: Optional[int]
+    x_stratum_ipv6_interface: Optional[str]
     data: Optional[str]
     rocksdb_storage: bool
     memory_storage: bool
@@ -83,3 +85,5 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     nano_testnet: bool
     log_vertex_bytes: bool
     disable_ws_history_streaming: bool
+    x_enable_ipv6: bool
+    x_disable_ipv4: bool

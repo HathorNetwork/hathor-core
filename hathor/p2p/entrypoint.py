@@ -12,17 +12,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from urllib.parse import parse_qs, urlparse
 
 from twisted.internet.address import IPv4Address, IPv6Address
-from twisted.internet.endpoints import TCP4ClientEndpoint
+from twisted.internet.endpoints import TCP4ClientEndpoint, TCP6ClientEndpoint
 from twisted.internet.interfaces import IStreamClientEndpoint
 from typing_extensions import Self
 
 from hathor.p2p.peer_id import PeerId
 from hathor.reactor import ReactorProtocol as Reactor
+
+"""
+This Regex will match any valid IPv6 address.
+
+Some examples that will match:
+    '::'
+    '::1'
+    '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+    '2001:db8:85a3:0:0:8a2e:370:7334'
+    '2001:db8::8a2e:370:7334'
+    '2001:db8:0:0:0:0:2:1'
+    '1234::5678'
+    'fe80::'
+    '::abcd:abcd:abcd:abcd:abcd:abcd'
+    '0:0:0:0:0:0:0:1'
+    '0:0:0:0:0:0:0:0'
+
+Some examples that won't match:
+    '127.0.0.1' -->  # IPv4
+    '1200::AB00:1234::2552:7777:1313' -->  # double '::'
+    '2001:db8::g123' -->  # invalid character
+    '2001:db8::85a3::7334' -->  # double '::'
+    '2001:db8:85a3:0000:0000:8a2e:0370:7334:1234' -->  # too many groups
+    '12345::abcd' -->  # too many characters in a group
+    '2001:db8:85a3:8a2e:0370' -->  # too few groups
+    '2001:db8:85a3::8a2e:3707334' -->  # too many characters in a group
+    '1234:56789::abcd' -->  # too many characters in a group
+    ':2001:db8::1' -->  # invalid start
+    '2001:db8::1:' -->  # invalid end
+"""
+IPV6_REGEX = re.compile(r'''^(([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$''')  # noqa: E501
 
 
 class Protocol(Enum):
@@ -39,10 +71,14 @@ class Entrypoint:
     peer_id: PeerId | None = None
 
     def __str__(self):
+        host = self.host
+        if self.is_ipv6():
+            host = f'[{self.host}]'
+
         if self.peer_id is None:
-            return f'{self.protocol.value}://{self.host}:{self.port}'
+            return f'{self.protocol.value}://{host}:{self.port}'
         else:
-            return f'{self.protocol.value}://{self.host}:{self.port}/?id={self.peer_id}'
+            return f'{self.protocol.value}://{host}:{self.port}/?id={self.peer_id}'
 
     @classmethod
     def parse(cls, description: str) -> Self:
@@ -72,6 +108,9 @@ peer_id=PeerId('c0f19299c2a4dcbb6613a14011ff07b63d6cb809e4cee25e9c1ccccdd6628696
 
         >>> str(Entrypoint.parse('tcp://foo.bar.baz:40403/'))
         'tcp://foo.bar.baz:40403'
+
+        >>> Entrypoint.parse('tcp://[::1]:40403/')
+        Entrypoint(protocol=<Protocol.TCP: 'tcp'>, host='::1', port=40403, peer_id=None)
 
         >>> Entrypoint.parse('tcp://127.0.0.1:40403/?id=123')
         Traceback (most recent call last):
@@ -137,9 +176,11 @@ peer_id=PeerId('c0f19299c2a4dcbb6613a14011ff07b63d6cb809e4cee25e9c1ccccdd6628696
 
     def to_client_endpoint(self, reactor: Reactor) -> IStreamClientEndpoint:
         """This method generates a twisted client endpoint that has a .connect() method."""
-        # XXX: currently we don't support IPv6, but when we do we have to decide between TCP4ClientEndpoint and
-        # TCP6ClientEndpoint, when the host is an IP address that is easy, but when it is a DNS hostname, we will not
-        # know which to use until we know which resource records it holds (A or AAAA)
+        # XXX: currently we only support IPv6 IPs, not hosts resolving to AAAA records.
+        # To support them we would have to perform DNS queries to resolve
+        # the host and check which record it holds (A or AAAA).
+        if self.is_ipv6():
+            return TCP6ClientEndpoint(reactor, self.host, self.port)
         return TCP4ClientEndpoint(reactor, self.host, self.port)
 
     def equals_ignore_peer_id(self, other: Self) -> bool:
@@ -212,4 +253,17 @@ peer_id=PeerId('c0f19299c2a4dcbb6613a14011ff07b63d6cb809e4cee25e9c1ccccdd6628696
             return True
         if self.host == 'localhost':
             return True
+        if self.host == '::1':
+            True
         return False
+
+    def is_ipv6(self) -> bool:
+        """Used to determine if the entrypoint host is an IPv6 address.
+        """
+        # XXX: This means we don't currently consider DNS names that resolve to IPv6 addresses as IPv6.
+        return IPV6_REGEX.fullmatch(self.host) is not None
+
+    def is_ipv4(self) -> bool:
+        """Used to determine if the entrypoint host is an IPv4 address.
+        """
+        return not self.is_ipv6()
