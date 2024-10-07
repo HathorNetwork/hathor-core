@@ -18,7 +18,7 @@ from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PublicPeer
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 from hathor.util import json_dumps, json_loads
@@ -71,7 +71,7 @@ class PeerIdState(BaseState):
         hello = {
             'id': str(my_peer.id),
             'pubKey': my_peer.get_public_key(),
-            'entrypoints': my_peer.entrypoints_as_str(),
+            'entrypoints': my_peer.info.entrypoints_as_str(),
         }
         self.send_message(ProtocolMessages.PEER_ID, json_dumps(hello))
 
@@ -88,7 +88,7 @@ class PeerIdState(BaseState):
 
         data = json_loads(payload)
 
-        peer = Peer.create_from_json(data)
+        peer = PublicPeer.create_from_json(data)
         peer.validate()
         assert peer.id is not None
 
@@ -114,7 +114,7 @@ class PeerIdState(BaseState):
                 protocol.send_error_and_close_connection('We are already connected.')
                 return
 
-        entrypoint_valid = await peer.validate_entrypoint(protocol)
+        entrypoint_valid = await peer.info.validate_entrypoint(protocol)
         if not entrypoint_valid:
             protocol.send_error_and_close_connection('Connection string is not in the entrypoints.')
             return
@@ -126,7 +126,7 @@ class PeerIdState(BaseState):
                 return
 
         # If it gets here, the peer is validated, and we are ready to start communicating.
-        protocol.peer = peer
+        protocol._peer = peer
 
         context = NetfilterContext(
             protocol=protocol,

@@ -11,13 +11,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+This module exposes three peer classes that share similar behavior but must not be mixed.
+
+This is the class structure:
+
+    PeerInfo has entrypoints and reconnect info
+    UnverifiedPeer has a PeerId and PeerInfo
+    PublicPeer has an UnverifiedPeer and a public-key
+    PrivatePeer has a PublicPeer and a private-key
+
+This way the shared behavior is implemented and propagated through the private classes, and the public classes don't
+share the same inheritance tree and for example a `peer: PublicPeer` will have `isinstance(peer, UnverifiedPeer) ==
+False`, so they can't be mixed.
+
+This makes it harder for external functions to support "subtypes" by accepting a base class, but this is intentional.
+If a function can work for any type of peer, it should be defined as `def foo(peer: UnverifiedPeer)` and callers will
+have to call `private_peer.to_unverified_peer()` because `PrivatePeer` is not a subclass of `UnverifiedPeer`.
+"""
+
+from __future__ import annotations
 
 import base64
 import hashlib
 import json
+from dataclasses import dataclass, field
 from enum import Enum
+from functools import cached_property
 from math import inf
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -28,8 +50,10 @@ from OpenSSL.crypto import X509, PKey
 from structlog import get_logger
 from twisted.internet.interfaces import ISSLTransport
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
+from typing_extensions import Self
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer_id import PeerId
@@ -50,307 +74,66 @@ class PeerFlags(str, Enum):
     RETRIES_EXCEEDED = 'retries_exceeded'
 
 
-class Peer:
-    """ Identify a peer, even when it is disconnected.
+def _parse_entrypoint(entrypoint_string: str) -> Entrypoint:
+    """ Helper function to parse an entrypoint from string."""
+    entrypoint = Entrypoint.parse(entrypoint_string)
+    if entrypoint.peer_id is not None:
+        raise ValueError('do not add id= to peer.json entrypoints')
+    return entrypoint
 
-    The public_key and private_key are used to ensure that a new connection
-    that claims to be this peer is really from this peer.
 
-    The entrypoints are strings that describe a way to connect to this peer.
-    Usually a peer will have only one entrypoint.
+def _parse_pubkey(pubkey_string: str) -> rsa.RSAPublicKey:
+    """ Helper function to parse a public key from string."""
+    public_key_der = base64.b64decode(pubkey_string)
+    public_key = serialization.load_der_public_key(data=public_key_der, backend=default_backend())
+    assert public_key is not None
+    return public_key
+
+
+def _parse_privkey(privkey_string: str) -> rsa.RSAPrivateKeyWithSerialization:
+    """ Helper function to parse a private key from string."""
+    private_key_der = base64.b64decode(privkey_string)
+    private_key = serialization.load_der_private_key(data=private_key_der, password=None, backend=default_backend())
+    assert private_key is not None
+    return private_key
+
+
+def _calculate_peer_id(public_key: rsa.RSAPublicKey) -> PeerId:
+    """ Helper function to calculate a peer id from a public key."""
+    public_der = public_key.public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    h1 = hashlib.sha256(public_der)
+    h2 = hashlib.sha256(h1.digest())
+    return PeerId(h2.digest())
+
+
+@dataclass(kw_only=True, slots=True)
+class PeerInfo:
+    """ Stores entrypoint and connection attempts information.
     """
 
-    id: Optional[PeerId]
-    entrypoints: list[Entrypoint]
-    private_key: Optional[rsa.RSAPrivateKeyWithSerialization]
-    public_key: Optional[rsa.RSAPublicKey]
-    certificate: Optional[x509.Certificate]
-    retry_timestamp: int    # should only try connecting to this peer after this timestamp
-    retry_interval: int     # how long to wait for next connection retry. It will double for each failure
-    retry_attempts: int     # how many retries were made
-    last_seen: float        # last time this peer was seen
-    flags: set[str]
-    source_file: str | None
-
-    def __init__(self, auto_generate_keys: bool = True) -> None:
-        self._log = logger.new()
-        self._settings = get_global_settings()
-        self.id = None
-        self.private_key = None
-        self.public_key = None
-        self.certificate = None
-        self.entrypoints = []
-        self.retry_timestamp = 0
-        self.retry_interval = 5
-        self.retry_attempts = 0
-        self.last_seen = inf
-        self.flags = set()
-        self._certificate_options: Optional[CertificateOptions] = None
-        self.source_file = None
-
-        if auto_generate_keys:
-            self.generate_keys()
-
-    def __str__(self):
-        return (
-            f'Peer(id={self.id}, entrypoints={self.entrypoints_as_str()}, retry_timestamp={self.retry_timestamp}, '
-            f'retry_interval={self.retry_interval})'
-        )
+    entrypoints: list[Entrypoint] = field(default_factory=list)
+    retry_timestamp: int = 0   # should only try connecting to this peer after this timestamp
+    retry_interval: int = 5     # how long to wait for next connection retry. It will double for each failure
+    retry_attempts: int = 0     # how many retries were made
+    last_seen: float = inf        # last time this peer was seen
+    flags: set[str] = field(default_factory=set)
+    _settings: HathorSettings = field(default_factory=get_global_settings, repr=False)
 
     def entrypoints_as_str(self) -> list[str]:
         """Return a list of entrypoints serialized as str"""
         return list(map(str, self.entrypoints))
 
-    def merge(self, other: 'Peer') -> None:
-        """ Merge two Peer objects, checking that they have the same
-        id, public_key, and private_key. The entrypoints are merged without
-        duplicating their entries.
-        """
-        assert (self.id == other.id)
-
-        # Copy public key if `self` doesn't have it and `other` does.
-        if not self.public_key and other.public_key:
-            self.public_key = other.public_key
-            self.validate()
-
-        if self.public_key and other.public_key:
-            assert (self.get_public_key() == other.get_public_key())
-
-        # Copy private key if `self` doesn't have it and `other` does.
-        if not self.private_key and other.private_key:
-            self.private_key = other.private_key
-            self.validate()
-
+    def _merge(self, other: PeerInfo) -> None:
+        """Actual merge execution, must only be made after verifications."""
         # Merge entrypoints.
         for ep in other.entrypoints:
             if ep not in self.entrypoints:
                 self.entrypoints.append(ep)
 
-    def generate_keys(self, key_size: int = 2048) -> None:
-        """ Generate a random pair of private key and public key.
-        It also calculates the id of this peer, based on its public key.
-        """
-        # https://security.stackexchange.com/questions/5096/rsa-vs-dsa-for-ssh-authentication-keys
-        self.private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size,
-                                                    backend=default_backend())
-        self.public_key = self.private_key.public_key()
-        self.id = self.calculate_id()
-
-    def calculate_id(self) -> PeerId:
-        """ Calculate and return the id based on the public key.
-        """
-        assert self.public_key is not None
-        public_der = self.public_key.public_bytes(encoding=serialization.Encoding.DER,
-                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo)
-        h1 = hashlib.sha256(public_der)
-        h2 = hashlib.sha256(h1.digest())
-        return PeerId(h2.digest())
-
-    def get_public_key(self) -> str:
-        """ Return the public key in DER encoding as an `str`.
-        """
-        assert self.public_key is not None
-        public_der = self.public_key.public_bytes(encoding=serialization.Encoding.DER,
-                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo)
-        return base64.b64encode(public_der).decode('utf-8')
-
-    def sign(self, data: bytes) -> bytes:
-        """ Sign any data (of type `bytes`).
-        """
-        assert self.private_key is not None
-        return self.private_key.sign(
-            data, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
-
-    def verify_signature(self, signature: bytes, data: bytes) -> bool:
-        """ Verify a signature of a data. Both must be of type `bytes`.
-        """
-        try:
-            assert self.public_key is not None
-            self.public_key.verify(signature, data,
-                                   padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
-                                   hashes.SHA256())
-        except InvalidSignature:
-            return False
-        else:
-            return True
-
-    @classmethod
-    def create_from_json_path(cls, path: str) -> 'Peer':
-        """Create a new Peer from a JSON file."""
-        data = json.load(open(path, 'r'))
-        peer = Peer.create_from_json(data)
-        peer.source_file = path
-        return peer
-
-    @classmethod
-    def create_from_json(cls, data: dict[str, Any]) -> 'Peer':
-        """ Create a new Peer from JSON data.
-
-        It is used both to load a Peer from disk and to create a Peer
-        from a peer connection.
-        """
-        obj = cls(auto_generate_keys=False)
-        obj.id = PeerId(data['id'])
-
-        if 'pubKey' in data:
-            public_key_der = base64.b64decode(data['pubKey'])
-            public_key = serialization.load_der_public_key(data=public_key_der, backend=default_backend())
-            assert public_key is not None
-            public_key = cast(rsa.RSAPublicKey, public_key)
-            obj.public_key = public_key
-
-        if 'privKey' in data:
-            private_key_der = base64.b64decode(data['privKey'])
-            private_key = serialization.load_der_private_key(data=private_key_der, password=None,
-                                                             backend=default_backend())
-            assert private_key is not None
-            private_key = cast(rsa.RSAPrivateKey, private_key)
-            obj.private_key = private_key
-
-        if 'entrypoints' in data:
-            for entrypoint_string in data['entrypoints']:
-                entrypoint = Entrypoint.parse(entrypoint_string)
-                if entrypoint.peer_id is not None:
-                    raise ValueError('do not add id= to peer.json entrypoints')
-                obj.entrypoints.append(entrypoint)
-
-        # TODO(epnichols): call obj.validate()?
-        return obj
-
-    def validate(self) -> None:
-        """ Return `True` if the following conditions are valid:
-          (i) public key and private key matches;
-         (ii) the id matches with the public key.
-
-         TODO(epnichols): Update docs.  Only raises exceptions; doesn't return anything.
-        """
-        if self.private_key and not self.public_key:
-            # TODO(epnichols): Modifies self.public_key, even though we're calling "validate". Why is state modified?
-            self.public_key = self.private_key.public_key()
-
-        if self.public_key:
-            if self.id != self.calculate_id():
-                raise InvalidPeerIdException('id does not match public key')
-
-        if self.private_key:
-            assert self.public_key is not None
-            public_der1 = self.public_key.public_bytes(encoding=serialization.Encoding.DER,
-                                                       format=serialization.PublicFormat.SubjectPublicKeyInfo)
-            public_key = self.private_key.public_key()
-            public_der2 = public_key.public_bytes(encoding=serialization.Encoding.DER,
-                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo)
-            if public_der1 != public_der2:
-                raise InvalidPeerIdException('private/public pair does not match')
-
-    def to_json(self, include_private_key: bool = False) -> dict[str, Any]:
-        """ Return a JSON serialization of the object.
-
-        By default, it will not include the private key. If you would like to add
-        it, use the parameter `include_private_key`.
-        """
-        assert self.public_key is not None
-        public_der = self.public_key.public_bytes(encoding=serialization.Encoding.DER,
-                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo)
-        # This format is compatible with libp2p.
-        result = {
-            'id': str(self.id),
-            'pubKey': base64.b64encode(public_der).decode('utf-8'),
-            'entrypoints': self.entrypoints_as_str(),
-        }
-        if include_private_key:
-            assert self.private_key is not None
-            private_der = self.private_key.private_bytes(
-                encoding=serialization.Encoding.DER,
-                format=serialization.PrivateFormat.PKCS8,
-                # TODO encryption_algorithm=serialization.BestAvailableEncryption(b'mypassword')
-                encryption_algorithm=serialization.NoEncryption())
-            result['privKey'] = base64.b64encode(private_der).decode('utf-8')
-
-        return result
-
-    def save_to_file(self, path: str) -> None:
-        """ Save the object to a JSON file.
-        """
-        import json
-        data = self.to_json(include_private_key=True)
-        fp = open(path, 'w')
-        json.dump(data, fp, indent=4)
-        fp.close()
-
-    def increment_retry_attempt(self, now: int) -> None:
-        """ Updates timestamp for next retry.
-
-        :param now: current timestamp
-        """
-        self.retry_timestamp = now + self.retry_interval
-        self.retry_attempts += 1
-        self.retry_interval = self.retry_interval * self._settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER
-        if self.retry_interval > self._settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL:
-            self.retry_interval = self._settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL
-
-    def reset_retry_timestamp(self) -> None:
-        """ Resets retry values.
-        """
-        self.retry_interval = 5
-        self.retry_timestamp = 0
-        self.retry_attempts = 0
-        self.flags.discard(PeerFlags.RETRIES_EXCEEDED)
-
-    def can_retry(self, now: int) -> bool:
-        """ Return if can retry to connect to self in `now` timestamp
-            We validate if peer already has RETRIES_EXCEEDED flag, or has reached the maximum allowed attempts
-            If not, we check if the timestamp is already a valid one to retry
-        """
-        if now < self.retry_timestamp:
-            return False
-        return True
-
-    def get_certificate(self) -> x509.Certificate:
-        if not self.certificate:
-            assert self.private_key is not None
-            certificate = generate_certificate(
-                self.private_key,
-                self._settings.CA_FILEPATH,
-                self._settings.CA_KEY_FILEPATH
-            )
-            self.certificate = certificate
-        return self.certificate
-
-    def get_certificate_options(self) -> CertificateOptions:
-        """ Return certificate options With certificate generated and signed with peer private key
-
-        The result is cached so subsequent calls are really cheap.
-        """
-        if self._certificate_options is None:
-            self._certificate_options = self._get_certificate_options()
-        return self._certificate_options
-
-    def _get_certificate_options(self) -> CertificateOptions:
-        """Implementation of get_certificate_options, this should be cached to avoid opening the same static file
-        multiple times"""
-        certificate = self.get_certificate()
-        openssl_certificate = X509.from_cryptography(certificate)
-        assert self.private_key is not None
-        openssl_pkey = PKey.from_cryptography_key(self.private_key)
-
-        with open(self._settings.CA_FILEPATH, 'rb') as f:
-            ca = x509.load_pem_x509_certificate(data=f.read(), backend=default_backend())
-
-        openssl_ca = X509.from_cryptography(ca)
-        ca_cert = Certificate(openssl_ca)
-        trust_root = trustRootFromCertificates([ca_cert])
-
-        # We should not use a ContextFactory
-        # https://twistedmatrix.com/documents/19.7.0/api/twisted.protocols.tls.TLSMemoryBIOFactory.html
-        certificate_options = CertificateOptions(
-            privateKey=openssl_pkey,
-            certificate=openssl_certificate,
-            trustRoot=trust_root,
-            raiseMinimumTo=TLSVersion.TLSv1_3
-        )
-        return certificate_options
-
-    async def validate_entrypoint(self, protocol: 'HathorProtocol') -> bool:
+    async def validate_entrypoint(self, protocol: HathorProtocol) -> bool:
         """ Validates if connection entrypoint is one of the peer entrypoints
         """
         found_entrypoint = False
@@ -406,7 +189,137 @@ class Peer:
 
         return True
 
-    def validate_certificate(self, protocol: 'HathorProtocol') -> bool:
+    def increment_retry_attempt(self, now: int) -> None:
+        """ Updates timestamp for next retry.
+
+        :param now: current timestamp
+        """
+        self.retry_timestamp = now + self.retry_interval
+        self.retry_attempts += 1
+        self.retry_interval = self.retry_interval * self._settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER
+        if self.retry_interval > self._settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL:
+            self.retry_interval = self._settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL
+
+    def reset_retry_timestamp(self) -> None:
+        """ Resets retry values.
+        """
+        self.retry_interval = 5
+        self.retry_timestamp = 0
+        self.retry_attempts = 0
+        self.flags.discard(PeerFlags.RETRIES_EXCEEDED)
+
+    def can_retry(self, now: int) -> bool:
+        """ Return if can retry to connect to self in `now` timestamp
+            We validate if peer already has RETRIES_EXCEEDED flag, or has reached the maximum allowed attempts
+            If not, we check if the timestamp is already a valid one to retry
+        """
+        if now < self.retry_timestamp:
+            return False
+        return True
+
+
+@dataclass(slots=True)
+class UnverifiedPeer:
+    """ Represents a peer with an unverified id and entrypoint list, which we can try to connect to.
+    """
+
+    id: PeerId
+    info: PeerInfo = field(default_factory=PeerInfo)
+
+    def to_json(self) -> dict[str, Any]:
+        """ Return a JSON serialization of the object.
+
+        This format is compatible with libp2p.
+        """
+        return {
+            'id': str(self.id),
+            'entrypoints': self.info.entrypoints_as_str(),
+        }
+
+    @classmethod
+    def create_from_json(cls, data: dict[str, Any]) -> Self:
+        """ Create a new UnverifiedPeer from JSON data.
+
+        It is to create an UnverifiedPeer from a peer connection.
+        """
+        return cls(
+            id=PeerId(data['id']),
+            info=PeerInfo(entrypoints=[_parse_entrypoint(e) for e in data.get('entrypoints', [])]),
+        )
+
+    def merge(self, other: UnverifiedPeer) -> None:
+        """ Merge two UnverifiedPeer objects, checking that they have the same
+        id, public_key, and private_key. The entrypoints are merged without
+        duplicating their entries.
+        """
+        assert self.id == other.id
+        self.info._merge(other.info)
+
+
+@dataclass(slots=True)
+class PublicPeer:
+    """ Represents a peer that can verify signatures, and thus communicate to.
+    """
+
+    _peer: UnverifiedPeer
+    public_key: rsa.RSAPublicKey
+
+    @property
+    def id(self) -> PeerId:
+        return self._peer.id
+
+    @property
+    def info(self) -> PeerInfo:
+        return self._peer.info
+
+    def to_unverified_peer(self) -> UnverifiedPeer:
+        """Convert to a simple UnverifiedPeer."""
+        return self._peer
+
+    def to_json(self) -> dict[str, Any]:
+        """ Return a JSON serialization of the object.
+
+        This format is compatible with libp2p.
+        """
+        public_der = self.public_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return {
+            **self._peer.to_json(),
+            'pubKey': base64.b64encode(public_der).decode('utf-8'),
+        }
+
+    @classmethod
+    def create_from_json(cls, data: dict[str, Any]) -> Self:
+        """ Create a new PublicPeer from JSON data.
+
+        It is used to create a PublicPeer from that same peer.
+        """
+        public_key = _parse_pubkey(data['pubKey'])
+        peer = UnverifiedPeer.create_from_json(data)
+        obj = cls(
+            _peer=peer,
+            public_key=public_key,
+        )
+        obj.validate()
+        return obj
+
+    def calculate_id(self) -> PeerId:
+        """ Calculate and return the id based on the public key.
+        """
+        return _calculate_peer_id(self.public_key)
+
+    def get_public_key(self) -> str:
+        """ Return the public key in DER encoding as an `str`.
+        """
+        public_der = self.public_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return base64.b64encode(public_der).decode('utf-8')
+
+    def validate_certificate(self, protocol: HathorProtocol) -> bool:
         """ Validates if the public key of the connection certificate is the public key of the peer
         """
         assert protocol.transport is not None
@@ -426,7 +339,6 @@ class Peer:
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
-        assert self.public_key is not None
         peer_pubkey_bytes = self.public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -436,19 +348,223 @@ class Peer:
 
         return True
 
-    def reload_entrypoints_from_source_file(self) -> None:
-        """Update this Peer's entrypoints from the json file."""
-        if not self.source_file:
-            raise Exception('Trying to reload entrypoints but no peer config file was provided.')
+    def verify_signature(self, signature: bytes, data: bytes) -> bool:
+        """ Verify a signature of a data. Both must be of type `bytes`.
+        """
+        try:
+            self.public_key.verify(
+                signature,
+                data,
+                padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+                hashes.SHA256(),
+            )
+        except InvalidSignature:
+            return False
+        else:
+            return True
 
-        new_peer = Peer.create_from_json_path(self.source_file)
+    def validate(self) -> None:
+        """ Return `True` if the following conditions are valid:
+          (i) public key and private key matches;
+         (ii) the id matches with the public key.
+
+         TODO(epnichols): Update docs.  Only raises exceptions; doesn't return anything.
+        """
+        if self.id != self.calculate_id():
+            raise InvalidPeerIdException('id does not match public key')
+
+    def merge(self, other: PublicPeer) -> None:
+        """ Merge two PublicPeer objects, checking that they have the same
+        id, public_key, and private_key. The entrypoints are merged without
+        duplicating their entries.
+        """
+        assert self.id == other.id
+        assert self.get_public_key() == other.get_public_key()
+        self._peer.merge(other._peer)
+        self.validate()
+
+
+# XXX: no slots because we have cached properties
+@dataclass
+class PrivatePeer:
+    """ Represents a peer that can be used to sign messages, and thus communicate from.
+    """
+
+    _public_peer: PublicPeer
+    private_key: rsa.RSAPrivateKeyWithSerialization
+    _source_file: str | None = None
+
+    @property
+    def id(self) -> PeerId:
+        return self._public_peer._peer.id
+
+    @property
+    def info(self) -> PeerInfo:
+        return self._public_peer._peer.info
+
+    @property
+    def public_key(self) -> rsa.RSAPublicKey:
+        return self._public_peer.public_key
+
+    def to_unverified_peer(self) -> UnverifiedPeer:
+        """Convert to a simple UnverifiedPeer."""
+        return self._public_peer._peer
+
+    def to_public_peer(self) -> PublicPeer:
+        """Convert to a simple PublicPeer."""
+        return self._public_peer
+
+    def to_json(self) -> dict[str, Any]:
+        """ Return a JSON serialization of the object without the private key.
+
+        This format is compatible with libp2p.
+        """
+        return self._public_peer.to_json()
+
+    def to_json_private(self) -> dict[str, Any]:
+        """ Return a JSON serialization of the object with the private key.
+
+        This format is compatible with libp2p.
+        """
+        private_der = self.private_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            # TODO encryption_algorithm=serialization.BestAvailableEncryption(b'mypassword')
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        return {
+            **self._public_peer.to_json(),
+            'privKey': base64.b64encode(private_der).decode('utf-8'),
+        }
+
+    def get_public_key(self) -> str:
+        """ Return the public key in DER encoding as an `str`.
+        """
+        return self._public_peer.get_public_key()
+
+    @classmethod
+    def create_from_json(cls, data: dict[str, Any]) -> Self:
+        private_key = _parse_privkey(data['privKey'])
+        public_peer = PublicPeer.create_from_json(data)
+        obj = cls(
+            _public_peer=public_peer,
+            private_key=private_key
+        )
+        obj.validate()
+        return obj
+
+    def validate(self) -> None:
+        self._public_peer.validate()
+        public_der1 = self._public_peer.public_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        public_der2 = self.private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        if public_der1 != public_der2:
+            raise InvalidPeerIdException('private/public pair does not match')
+
+    @classmethod
+    def auto_generated(cls, key_size: int = 2048) -> Self:
+        """ Generate a random pair of private key and public key.
+        It also calculates the id of this peer, based on its public key.
+        """
+        # https://security.stackexchange.com/questions/5096/rsa-vs-dsa-for-ssh-authentication-keys
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=key_size,
+            backend=default_backend(),
+        )
+        public_key = private_key.public_key()
+        return cls(
+            _public_peer=PublicPeer(
+                _peer=UnverifiedPeer(id=_calculate_peer_id(public_key)),
+                public_key=public_key,
+            ),
+            private_key=private_key,
+        )
+
+    def sign(self, data: bytes) -> bytes:
+        """ Sign any data (of type `bytes`).
+        """
+        return self.private_key.sign(
+            data,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+            hashes.SHA256(),
+        )
+
+    @cached_property
+    def certificate(self) -> x509.Certificate:
+        """ Return certificate generated and signed with peer private key.
+
+        The result is cached so subsequent calls are really cheap.
+        """
+        _settings = self._public_peer._peer.info._settings
+        return generate_certificate(
+            self.private_key,
+            _settings.CA_FILEPATH,
+            _settings.CA_KEY_FILEPATH,
+        )
+
+    @cached_property
+    def certificate_options(self) -> CertificateOptions:
+        """ Return certificate options with certificate generated and signed with peer private key.
+
+        The result is cached so subsequent calls are really cheap.
+        """
+        _settings = self._public_peer._peer.info._settings
+        openssl_certificate = X509.from_cryptography(self.certificate)
+        openssl_pkey = PKey.from_cryptography_key(self.private_key)
+
+        with open(_settings.CA_FILEPATH, 'rb') as f:
+            ca = x509.load_pem_x509_certificate(data=f.read(), backend=default_backend())
+
+        openssl_ca = X509.from_cryptography(ca)
+        ca_cert = Certificate(openssl_ca)
+        trust_root = trustRootFromCertificates([ca_cert])
+
+        # We should not use a ContextFactory
+        # https://twistedmatrix.com/documents/19.7.0/api/twisted.protocols.tls.TLSMemoryBIOFactory.html
+        certificate_options = CertificateOptions(
+            privateKey=openssl_pkey,
+            certificate=openssl_certificate,
+            trustRoot=trust_root,
+            raiseMinimumTo=TLSVersion.TLSv1_3
+        )
+        return certificate_options
+
+    @classmethod
+    def create_from_json_path(cls, path: str) -> Self:
+        """Create a new PrivatePeer from a JSON file."""
+        data = json.load(open(path, 'r'))
+        peer = cls.create_from_json(data)
+        peer._source_file = path
+        return peer
+
+    def reload_entrypoints_from_source_file(self) -> None:
+        """Update this PrivatePeer's entrypoints from the json file."""
+        if not self._source_file:
+            raise ValueError('Trying to reload entrypoints but no peer config file was provided.')
+
+        new_peer = PrivatePeer.create_from_json_path(self._source_file)
 
         if new_peer.id != self.id:
-            self._log.error(
+            logger.error(
                 'Ignoring peer id file update because the peer_id does not match.',
                 current_peer_id=self.id,
                 new_peer_id=new_peer.id,
             )
             return
 
-        self.entrypoints = new_peer.entrypoints
+        self._public_peer._peer.info.entrypoints = new_peer._public_peer._peer.info.entrypoints
+
+    def save_to_file(self, path: str) -> None:
+        """ Save the object to a JSON file.
+        """
+        import json
+        data = self.to_json_private()
+        fp = open(path, 'w')
+        json.dump(data, fp, indent=4)
+        fp.close()

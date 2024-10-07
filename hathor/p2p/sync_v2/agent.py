@@ -25,6 +25,7 @@ from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall, deferLater
 
 from hathor.conf.settings import HathorSettings
+from hathor.exception import InvalidNewTransaction
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
@@ -43,6 +44,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
 from hathor.util import collect_n
+from hathor.vertex_handler import VertexHandler
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -91,6 +93,7 @@ class NodeBlockSync(SyncAgent):
         reactor: Reactor,
         *,
         vertex_parser: VertexParser,
+        vertex_handler: VertexHandler,
     ) -> None:
         """
         :param protocol: Protocol of the connection.
@@ -101,8 +104,8 @@ class NodeBlockSync(SyncAgent):
         """
         self._settings = settings
         self.vertex_parser = vertex_parser
+        self.vertex_handler = vertex_handler
         self.protocol = protocol
-        self.manager = protocol.node
         self.tx_storage: 'TransactionStorage' = protocol.node.tx_storage
         self.state = PeerState.UNKNOWN
 
@@ -615,13 +618,16 @@ class NodeBlockSync(SyncAgent):
     def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> Generator[Any, Any, None]:
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
-        for tx in vertex_list:
-            if not self.tx_storage.transaction_exists(tx.hash):
-                self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
-            yield deferLater(self.reactor, 0, lambda: None)
+        try:
+            for tx in vertex_list:
+                if not self.tx_storage.transaction_exists(tx.hash):
+                    self.vertex_handler.on_new_vertex(tx, propagate_to_peers=False, fails_silently=False)
+                yield deferLater(self.reactor, 0, lambda: None)
 
-        if not self.tx_storage.transaction_exists(blk.hash):
-            self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+            if not self.tx_storage.transaction_exists(blk.hash):
+                self.vertex_handler.on_new_vertex(blk, propagate_to_peers=False, fails_silently=False)
+        except InvalidNewTransaction:
+            self.protocol.send_error_and_close_connection('invalid vertex received')
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
@@ -1160,14 +1166,17 @@ class NodeBlockSync(SyncAgent):
         if self.partial_vertex_exists(tx.hash):
             # transaction already added to the storage, ignore it
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
-            self.manager.tx_storage.compare_bytes_with_local_tx(tx)
+            self.tx_storage.compare_bytes_with_local_tx(tx)
             return
         else:
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
             if tx.can_validate_full():
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                self.manager.on_new_tx(tx, propagate_to_peers=True)
+                try:
+                    self.vertex_handler.on_new_vertex(tx, propagate_to_peers=True, fails_silently=False)
+                except InvalidNewTransaction:
+                    self.protocol.send_error_and_close_connection('invalid vertex received')
             else:
                 self.log.debug('skipping tx received in real time from peer',
                                tx=tx.hash_hex, peer=self.protocol.get_peer_id())

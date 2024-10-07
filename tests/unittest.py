@@ -17,7 +17,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.manager import HathorManager
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.p2p.sync_version import SyncVersion
@@ -40,7 +40,7 @@ def short_hashes(container: Collection[bytes]) -> Iterable[str]:
     return map(lambda hash_bytes: hash_bytes[-2:].hex(), container)
 
 
-def _load_peer_pool(file_path: Optional[str] = None) -> Iterator[Peer]:
+def _load_peer_pool(file_path: Optional[str] = None) -> Iterator[PrivatePeer]:
     import json
 
     if file_path is None:
@@ -49,7 +49,7 @@ def _load_peer_pool(file_path: Optional[str] = None) -> Iterator[Peer]:
     with open(file_path) as peer_id_pool_file:
         peer_id_pool_dict = json.load(peer_id_pool_file)
         for peer_id_dict in peer_id_pool_dict:
-            yield Peer.create_from_json(peer_id_dict)
+            yield PrivatePeer.create_from_json(peer_id_dict)
 
 
 def _get_default_peer_id_pool_filepath() -> str:
@@ -97,10 +97,10 @@ class TestBuilder(Builder):
         artifacts.manager.connections.disable_rate_limiter()
         return artifacts
 
-    def _get_peer(self) -> Peer:
+    def _get_peer(self) -> PrivatePeer:
         if self._peer is not None:
             return self._peer
-        return Peer()
+        return PrivatePeer.auto_generated()
 
     def _get_reactor(self) -> Reactor:
         if self._reactor is None:
@@ -135,10 +135,14 @@ class TestCase(unittest.TestCase):
     def reset_peer_pool(self) -> None:
         self._free_peer_pool = self.new_peer_pool()
 
-    def new_peer_pool(self) -> list[Peer]:
+    def new_peer_pool(self) -> list[PrivatePeer]:
         return PEER_ID_POOL.copy()
 
-    def get_random_peer_from_pool(self, pool: Optional[list[Peer]] = None, rng: Optional[Random] = None) -> Peer:
+    def get_random_peer_from_pool(
+        self,
+        pool: Optional[list[PrivatePeer]] = None,
+        rng: Optional[Random] = None,
+    ) -> PrivatePeer:
         if pool is None:
             pool = self._free_peer_pool
         if not pool:
@@ -193,7 +197,7 @@ class TestCase(unittest.TestCase):
     def create_peer(  # type: ignore[no-untyped-def]
         self,
         network: str,
-        peer: Peer | None = None,
+        peer: PrivatePeer | None = None,
         wallet: BaseWallet | None = None,
         tx_storage: TransactionStorage | None = None,
         unlock_wallet: bool = True,
@@ -225,7 +229,7 @@ class TestCase(unittest.TestCase):
             builder.set_pubsub(pubsub)
 
         if peer is None:
-            peer = Peer()
+            peer = PrivatePeer.auto_generated()
         builder.set_peer(peer)
 
         if not wallet:

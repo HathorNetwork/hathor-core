@@ -17,12 +17,12 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(StatusResource(self.manager))
         self.entrypoint = Entrypoint.parse('tcp://192.168.1.1:54321')
-        self.manager.connections.my_peer.entrypoints.append(self.entrypoint)
+        self.manager.connections.my_peer.info.entrypoints.append(self.entrypoint)
         self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
         self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
 
         self.manager2 = self.create_peer('testnet')
-        self.manager2.connections.my_peer.entrypoints.append(self.entrypoint)
+        self.manager2.connections.my_peer.info.entrypoints.append(self.entrypoint)
         self.conn1 = FakeConnection(self.manager, self.manager2)
 
     @inlineCallbacks

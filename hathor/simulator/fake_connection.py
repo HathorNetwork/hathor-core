@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import deque
 from typing import TYPE_CHECKING, Optional
 
@@ -20,21 +22,27 @@ from structlog import get_logger
 from twisted.internet.address import HostnameAddress
 from twisted.internet.testing import StringTransport
 
+from hathor.p2p.peer import PrivatePeer
+
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
-    from hathor.p2p.peer import Peer
+    from hathor.p2p.peer import PublicPeer
 
 logger = get_logger()
 
 
 class HathorStringTransport(StringTransport):
-    def __init__(self, peer: 'Peer'):
+    def __init__(self, peer: PrivatePeer):
         super().__init__()
-        self.peer = peer
+        self._peer = peer
+
+    @property
+    def peer(self) -> PublicPeer:
+        return self._peer.to_public_peer()
 
     def getPeerCertificate(self) -> X509:
-        certificate = self.peer.get_certificate()
-        return X509.from_cryptography(certificate)
+        assert isinstance(self._peer, PrivatePeer)
+        return X509.from_cryptography(self._peer.certificate)
 
 
 class FakeConnection:

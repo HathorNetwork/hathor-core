@@ -246,7 +246,7 @@ class Metrics:
         self.peer_connection_metrics.clear()
 
         for connection in self.connections.connections:
-            if not connection.peer or not connection.peer.id:
+            if not connection._peer:
                 # A connection without peer will not be able to communicate
                 # So we can just discard it for the sake of the metrics
                 continue

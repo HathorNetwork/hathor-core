@@ -36,7 +36,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -100,7 +100,11 @@ class CliBuilder:
         self.log = logger.new()
         self.reactor = reactor
 
-        peer = Peer.create_from_json_path(self._args.peer) if self._args.peer else Peer()
+        peer: PrivatePeer
+        if self._args.peer:
+            peer = PrivatePeer.create_from_json_path(self._args.peer)
+        else:
+            peer = PrivatePeer.auto_generated()
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
         self.log.info(
@@ -325,7 +329,6 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
         )
-        SyncSupportLevel.add_factories(settings, p2p_manager, sync_v1_support, sync_v2_support, vertex_parser)
 
         vertex_handler = VertexHandler(
             reactor=reactor,
@@ -338,6 +341,15 @@ class CliBuilder:
             pubsub=pubsub,
             wallet=self.wallet,
             log_vertex_bytes=self._args.log_vertex_bytes,
+        )
+
+        SyncSupportLevel.add_factories(
+            settings,
+            p2p_manager,
+            sync_v1_support,
+            sync_v2_support,
+            vertex_parser,
+            vertex_handler,
         )
 
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile

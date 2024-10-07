@@ -80,12 +80,12 @@ class StatusResource(Resource):
             })
 
         known_peers = []
-        for peer in self.manager.connections.peer_storage.values():
+        for peer in self.manager.connections.verified_peer_storage.values():
             known_peers.append({
                 'id': str(peer.id),
-                'entrypoints': peer.entrypoints_as_str(),
-                'last_seen': now - peer.last_seen,
-                'flags': [flag.value for flag in peer.flags],
+                'entrypoints': peer.info.entrypoints_as_str(),
+                'last_seen': now - peer.info.last_seen,
+                'flags': [flag.value for flag in peer.info.flags],
             })
 
         app = 'Hathor v{}'.format(hathor.__version__)
@@ -106,7 +106,7 @@ class StatusResource(Resource):
                 'state': self.manager.state.value,
                 'network': self.manager.network,
                 'uptime': now - self.manager.start_time,
-                'entrypoints': self.manager.connections.my_peer.entrypoints_as_str(),
+                'entrypoints': self.manager.connections.my_peer.info.entrypoints_as_str(),
             },
             'peers_whitelist': [str(peer_id) for peer_id in self.manager.peers_whitelist],
             'known_peers': known_peers,

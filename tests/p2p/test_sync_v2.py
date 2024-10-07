@@ -7,7 +7,7 @@ from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
 from hathor.simulator import FakeConnection
@@ -66,7 +66,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         # Create a new peer and run sync for a while (but stop before getting synced).
         path = self.mkdtemp()
-        peer = Peer()
+        peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
             .set_peer(peer) \
             .disable_sync_v1() \
@@ -220,7 +220,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             print()
 
         # Create a new peer and run sync for a while (but stop before getting synced).
-        peer = Peer()
+        peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
             .set_peer(peer) \
             .disable_sync_v1() \
@@ -311,7 +311,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertGreater(mempool_tips_count, 30)
 
         # Create a new peer and run sync for a while (but stop before getting synced).
-        peer = Peer()
+        peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
             .set_peer(peer) \
             .disable_sync_v1() \

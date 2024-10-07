@@ -21,7 +21,7 @@ from twisted.internet.task import LoopingCall
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PublicPeer, UnverifiedPeer
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.utils import to_height_info, to_serializable_best_blockchain
@@ -155,19 +155,16 @@ class ReadyState(BaseState):
         """ Executed when a GET-PEERS command is received. It just responds with
         a list of all known peers.
         """
-        for peer in self.protocol.connections.peer_storage.values():
+        for peer in self.protocol.connections.verified_peer_storage.values():
             self.send_peers([peer])
 
-    def send_peers(self, peer_list: Iterable['Peer']) -> None:
+    def send_peers(self, peer_list: Iterable[PublicPeer]) -> None:
         """ Send a PEERS command with a list of peers.
         """
         data = []
         for peer in peer_list:
-            if peer.entrypoints:
-                data.append({
-                    'id': str(peer.id),
-                    'entrypoints': peer.entrypoints_as_str(),
-                })
+            if peer.info.entrypoints:
+                data.append(peer.to_unverified_peer().to_json())
         self.send_message(ProtocolMessages.PEERS, json_dumps(data))
         self.log.debug('send peers', peers=data)
 
@@ -177,8 +174,7 @@ class ReadyState(BaseState):
         """
         received_peers = json_loads(payload)
         for data in received_peers:
-            peer = Peer.create_from_json(data)
-            peer.validate()
+            peer = UnverifiedPeer.create_from_json(data)
             if self.protocol.connections:
                 self.protocol.connections.on_receive_peer(peer, origin=self)
         self.log.debug('received peers', payload=payload)

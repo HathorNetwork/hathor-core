@@ -23,7 +23,7 @@ from hathor.builder import Builder
 from hathor.event.websocket import EventWebsocketProtocol
 from hathor.event.websocket.request import Request
 from hathor.event.websocket.response import EventResponse, InvalidRequestResponse
-from hathor.p2p.peer import Peer
+from hathor.p2p.peer import PrivatePeer
 from hathor.transaction.util import unpack, unpack_len
 from hathor.util import json_loadb
 from tests.simulation.base import SimulatorTestCase
@@ -34,7 +34,7 @@ class BaseEventSimulationTester(SimulatorTestCase):
     builder: Builder
 
     def _create_artifacts(self) -> None:
-        peer = Peer()
+        peer = PrivatePeer.auto_generated()
         builder = self.builder.set_peer(peer) \
             .disable_full_verification() \
             .enable_event_queue()
