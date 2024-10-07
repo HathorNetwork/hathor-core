@@ -21,8 +21,6 @@ from typing import TYPE_CHECKING, Callable
 
 from typing_extensions import Self
 
-from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.types import VertexId
 from hathor.util import json_loadb
 from hathor.utils.pydantic import BaseModel
@@ -70,9 +68,6 @@ class BlockStaticMetadata(VertexStaticMetadata):
     # the previous boundary block up to this block, including it. LSB is on the left.
     feature_activation_bit_counts: list[int]
 
-    # A dict of features in the feature activation process and their respective state.
-    feature_states: dict[Feature, FeatureState]
-
     @classmethod
     def create_from_storage(cls, block: 'Block', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
         """Create a `BlockStaticMetadata` using dependencies provided by a storage."""
@@ -100,7 +95,6 @@ class BlockStaticMetadata(VertexStaticMetadata):
             height=height,
             min_height=min_height,
             feature_activation_bit_counts=feature_activation_bit_counts,
-            feature_states={},  # This will be populated in the next PR
         )
 
     @staticmethod

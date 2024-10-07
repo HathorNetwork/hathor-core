@@ -304,9 +304,6 @@ class TransactionMetadata:
             del json_dict['min_height']
         if 'feature_activation_bit_counts' in json_dict:
             del json_dict['feature_activation_bit_counts']
-        # TODO: This one has not been migrated yet, but will be in the next PR
-        # if 'feature_states' in json_dict:
-        #     del json_dict['feature_states']
 
         return json_dumpb(json_dict)
 

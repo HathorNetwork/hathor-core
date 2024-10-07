@@ -47,6 +47,7 @@ from hathor.transaction.storage.migrations import (
     migrate_static_metadata,
     remove_first_nop_features,
     remove_second_nop_features,
+    remove_static_metadata_feature_states,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -103,6 +104,7 @@ class TransactionStorage(ABC):
         add_feature_activation_bit_counts_metadata2.Migration,
         remove_second_nop_features.Migration,
         migrate_static_metadata.Migration,
+        remove_static_metadata_feature_states.Migration,
     ]
 
     _migrations: list[BaseMigration]
@@ -1129,7 +1131,15 @@ class TransactionStorage(ABC):
     @abstractmethod
     def migrate_static_metadata(self, log: BoundLogger) -> None:
         """
-        Migrate metadata attributes to static metadata. This is only used for the `migrate_static_metadata` migration.
+        Migrate metadata attributes to static metadata. This is only used by the `migrate_static_metadata` migration.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def remove_static_metadata_feature_states(self, log: BoundLogger) -> None:
+        """
+        Remove feature_states from static metadata.
+        This is only used by the `remove_static_metadata_feature_states` migration.
         """
         raise NotImplementedError
 

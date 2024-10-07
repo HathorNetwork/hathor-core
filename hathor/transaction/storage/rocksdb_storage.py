@@ -26,7 +26,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import json_loadb, progress
+from hathor.util import json_dumpb, json_loadb, progress
 
 if TYPE_CHECKING:
     import rocksdb
@@ -263,7 +263,6 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
                     height=height,
                     min_height=min_height,
                     feature_activation_bit_counts=bit_counts,
-                    feature_states={},  # This will be populated in the next PR
                 )
             else:
                 assert bit_counts is None or bit_counts == []
@@ -273,3 +272,21 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
             # Save it manually to the CF
             self._db.put((self._cf_static_meta, vertex_id), static_metadata.json_dumpb())
+
+    @override
+    def remove_static_metadata_feature_states(self, log: BoundLogger) -> None:
+        static_meta_iter = self._db.iteritems(self._cf_static_meta)
+        static_meta_iter.seek_to_first()
+
+        # We have to iterate over raw static metadata so we can manipulate its data without instantiating the static
+        # metadata classes (as they would fail if instantiated with an extra attribute).
+        for (_, vertex_id), static_meta_bytes in progress(static_meta_iter, log=log, total=None):
+            raw_static_meta = json_loadb(static_meta_bytes)
+
+            if 'feature_states' in raw_static_meta:
+                # we haven't migrated this field so all instances must be empty
+                assert raw_static_meta['feature_states'] == {}
+
+                # delete it and save it manually to the CF
+                del raw_static_meta['feature_states']
+                self._db.put((self._cf_static_meta, vertex_id), json_dumpb(raw_static_meta))
