@@ -297,7 +297,6 @@ class ResourcesBuilder:
                                                  address_index=self.manager.tx_storage.indexes.addresses)
         if self._args.disable_ws_history_streaming:
             ws_factory.disable_history_streaming()
-        ws_factory.start()
         root.putChild(b'ws', WebSocketResource(ws_factory))
 
         if settings.CONSENSUS_ALGORITHM.is_pow():
@@ -322,8 +321,8 @@ class ResourcesBuilder:
         status_server = SiteProfiler(real_root)
         self.log.info('with status', listen=self._args.status, with_wallet_api=with_wallet_api)
 
-        # Set websocket factory in metrics
-        self.manager.metrics.websocket_factory = ws_factory
+        # Set websocket factory in metrics. It'll be started when the manager is started.
+        self.manager.websocket_factory = ws_factory
 
         self._built_status = True
         return status_server

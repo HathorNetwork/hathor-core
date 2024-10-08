@@ -17,7 +17,7 @@ import sys
 import time
 from cProfile import Profile
 from enum import Enum
-from typing import Iterator, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -64,6 +64,9 @@ from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_sign
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
+
+if TYPE_CHECKING:
+    from hathor.websocket.factory import HathorAdminWebsocketFactory
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -117,6 +120,8 @@ class HathorManager:
         full_verification: bool = False,
         enable_event_queue: bool = False,
         poa_block_producer: PoaBlockProducer | None = None,
+        # Websocket factory
+        websocket_factory: Optional['HathorAdminWebsocketFactory'] = None
     ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
@@ -199,12 +204,15 @@ class HathorManager:
         self.vertex_handler = vertex_handler
         self.vertex_parser = vertex_parser
 
+        self.websocket_factory = websocket_factory
+
         self.metrics = Metrics(
             pubsub=self.pubsub,
             avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
             connections=self.connections,
             tx_storage=self.tx_storage,
             reactor=self.reactor,
+            websocket_factory=self.websocket_factory,
         )
 
         self.wallet = wallet
@@ -322,6 +330,10 @@ class HathorManager:
         self.tx_storage.set_allow_scope(TxAllowScope.VALID)
         self.tx_storage.enable_lock()
 
+        # Preferably start before self.metrics
+        if self.websocket_factory:
+            self.websocket_factory.start()
+
         # Metric starts to capture data
         self.metrics.start()
 
@@ -359,6 +371,9 @@ class HathorManager:
 
         # Metric stops to capture data
         self.metrics.stop()
+
+        if self.websocket_factory:
+            self.websocket_factory.stop()
 
         if self.lc_check_sync_state.running:
             self.lc_check_sync_state.stop()

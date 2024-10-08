@@ -217,6 +217,8 @@ class Metrics:
         """ Set websocket metrics data. Connections and addresses subscribed.
         """
         if self.websocket_factory:
+            assert self.websocket_factory.is_running, 'Websocket factory has not been started'
+
             self.websocket_connections = len(self.websocket_factory.connections)
             self.subscribed_addresses = len(self.websocket_factory.address_connections)
 
