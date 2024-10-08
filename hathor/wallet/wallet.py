@@ -17,7 +17,6 @@ import json
 import os
 from typing import Any, Optional
 
-from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.interfaces import IDelayedCall
@@ -179,7 +178,7 @@ class Wallet(BaseWallet):
         # Publish to pubsub that new keys were generated
         self.publish_update(HathorEvents.WALLET_KEYS_GENERATED, keys_count=count)
 
-    def get_private_key(self, address58: str) -> _EllipticCurvePrivateKey:
+    def get_private_key(self, address58: str) -> ec.EllipticCurvePrivateKey:
         """ Get private key from the address58
 
             :param address58: address in base58
@@ -204,7 +203,7 @@ class Wallet(BaseWallet):
     def is_locked(self):
         return self.password is None
 
-    def get_input_aux_data(self, data_to_sign: bytes, private_key: _EllipticCurvePrivateKey) -> tuple[bytes, bytes]:
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: ec.EllipticCurvePrivateKey) -> tuple[bytes, bytes]:
         """ Sign the data to be used in input and get public key compressed in bytes
 
             :param data_to_sign: Data to be signed

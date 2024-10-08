@@ -68,21 +68,21 @@ def generate_new_genesis(
         weight=min_block_weight,
         outputs=[TxOutput(tokens, output_script)],
     )
-    mining_service.start_mining(block)
+    mining_service.start_mining(block, update_time=False)
     block.update_hash()
 
     tx1 = Transaction(
         timestamp=block_timestamp + 1,
         weight=min_tx_weight,
     )
-    mining_service.start_mining(tx1)
+    mining_service.start_mining(tx1, update_time=False)
     tx1.update_hash()
 
     tx2 = Transaction(
         timestamp=block_timestamp + 2,
         weight=min_tx_weight,
     )
-    mining_service.start_mining(tx2)
+    mining_service.start_mining(tx2, update_time=False)
     tx2.update_hash()
 
     return block, tx1, tx2

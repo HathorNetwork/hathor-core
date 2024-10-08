@@ -19,7 +19,7 @@ from twisted.internet.interfaces import IAddress
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorLineReceiver
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class HathorServerFactory(protocol.ServerFactory):
     def __init__(
         self,
         network: str,
-        my_peer: PeerId,
+        my_peer: PrivatePeer,
         p2p_manager: ConnectionsManager,
         *,
         settings: HathorSettings,
@@ -75,7 +75,7 @@ class HathorClientFactory(protocol.ClientFactory):
     def __init__(
         self,
         network: str,
-        my_peer: PeerId,
+        my_peer: PrivatePeer,
         p2p_manager: ConnectionsManager,
         *,
         settings: HathorSettings,

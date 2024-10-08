@@ -64,7 +64,7 @@ class StatusResource(Resource):
             status = {}
             status[conn.state.sync_agent.name] = conn.state.sync_agent.get_status()
             connected_peers.append({
-                'id': conn.peer.id,
+                'id': str(conn.peer.id),
                 'app_version': conn.app_version,
                 'current_time': now,
                 'uptime': now - conn.connection_time,
@@ -80,21 +80,20 @@ class StatusResource(Resource):
             })
 
         known_peers = []
-        for peer in self.manager.connections.peer_storage.values():
+        for peer in self.manager.connections.verified_peer_storage.values():
             known_peers.append({
-                'id': peer.id,
-                'entrypoints': peer.entrypoints_as_str(),
-                'last_seen': now - peer.last_seen,
-                'flags': [flag.value for flag in peer.flags],
+                'id': str(peer.id),
+                'entrypoints': peer.info.entrypoints_as_str(),
+                'last_seen': now - peer.info.last_seen,
+                'flags': [flag.value for flag in peer.info.flags],
             })
 
         app = 'Hathor v{}'.format(hathor.__version__)
 
         best_block_tips = []
         for tip in self.manager.tx_storage.get_best_block_tips():
-            tx = self.manager.tx_storage.get_transaction(tip)
-            meta = tx.get_metadata()
-            best_block_tips.append({'hash': tx.hash_hex, 'height': meta.height})
+            block = self.manager.tx_storage.get_block(tip)
+            best_block_tips.append({'hash': block.hash_hex, 'height': block.static_metadata.height})
 
         best_block = self.manager.tx_storage.get_best_block()
         raw_best_blockchain = self.manager.tx_storage.get_n_height_tips(self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
@@ -102,14 +101,14 @@ class StatusResource(Resource):
 
         data = {
             'server': {
-                'id': self.manager.connections.my_peer.id,
+                'id': str(self.manager.connections.my_peer.id),
                 'app_version': app,
                 'state': self.manager.state.value,
                 'network': self.manager.network,
                 'uptime': now - self.manager.start_time,
-                'entrypoints': self.manager.connections.my_peer.entrypoints_as_str(),
+                'entrypoints': self.manager.connections.my_peer.info.entrypoints_as_str(),
             },
-            'peers_whitelist': self.manager.peers_whitelist,
+            'peers_whitelist': [str(peer_id) for peer_id in self.manager.peers_whitelist],
             'known_peers': known_peers,
             'connections': {
                 'connected_peers': connected_peers,
@@ -122,7 +121,7 @@ class StatusResource(Resource):
                 'best_block_tips': best_block_tips,
                 'best_block': {
                     'hash': best_block.hash_hex,
-                    'height': best_block.get_metadata().height,
+                    'height': best_block.static_metadata.height,
                 },
                 'best_blockchain': best_blockchain,
             }

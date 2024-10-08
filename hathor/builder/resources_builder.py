@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import re
 from typing import TYPE_CHECKING, Any, Optional
 
 from autobahn.twisted.resource import WebSocketResource
@@ -31,6 +32,31 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 logger = get_logger()
+
+PROMETHEUS_METRIC_RE = re.compile(r'[a-zA-Z_:][a-zA-Z0-9_:]*')
+
+
+def is_prometheus_metric_name_valid(name: str) -> bool:
+    """Whether a matric name is valid.
+
+    See: https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
+
+    >>> is_prometheus_metric_name_valid('')
+    False
+    >>> is_prometheus_metric_name_valid('hathor_core:')
+    True
+    >>> is_prometheus_metric_name_valid("'hathor_core:'")
+    False
+    >>> is_prometheus_metric_name_valid('_hathor_core')
+    True
+    >>> is_prometheus_metric_name_valid('__hathor_core')
+    False
+    """
+    if not PROMETHEUS_METRIC_RE.match(name):
+        return False
+    if name.startswith('__'):
+        return False
+    return True
 
 
 class ResourcesBuilder:
@@ -60,9 +86,14 @@ class ResourcesBuilder:
         return None
 
     def create_prometheus(self) -> PrometheusMetricsExporter:
+        prometheus_prefix = self._args.prometheus_prefix
+        if self._args.prometheus_prefix and not is_prometheus_metric_name_valid(prometheus_prefix):
+            raise BuilderError(f'Invalid prometheus prefix, must match {PROMETHEUS_METRIC_RE.pattern}, '
+                               'but the value given is {repr(prometheus_prefix)}')
+
         kwargs: dict[str, Any] = {
             'metrics': self.manager.metrics,
-            'metrics_prefix': self._args.prometheus_prefix
+            'metrics_prefix': prometheus_prefix,
         }
 
         if self._args.data:
@@ -184,7 +215,7 @@ class ResourcesBuilder:
             # mining
             (b'mining', MiningResource(self.manager), root),
             (b'getmininginfo', MiningInfoResource(self.manager), root),
-            (b'get_block_template', GetBlockTemplateResource(self.manager), root),
+            (b'get_block_template', GetBlockTemplateResource(self.manager, settings), root),
             (b'submit_block', SubmitBlockResource(self.manager), root),
             (b'tx_parents', TxParentsResource(self.manager), root),
             # /thin_wallet
@@ -206,7 +237,7 @@ class ResourcesBuilder:
             (
                 b'feature',
                 FeatureResource(
-                    feature_settings=settings.FEATURE_ACTIVATION,
+                    settings=settings,
                     feature_service=self._feature_service,
                     tx_storage=self.manager.tx_storage
                 ),
@@ -250,7 +281,7 @@ class ResourcesBuilder:
                 (b'balance', BalanceResource(self.manager), wallet_resource),
                 (b'history', HistoryResource(self.manager), wallet_resource),
                 (b'address', AddressResource(self.manager), wallet_resource),
-                (b'send_tokens', SendTokensResource(self.manager), wallet_resource),
+                (b'send_tokens', SendTokensResource(self.manager, settings), wallet_resource),
                 (b'sign_tx', SignTxResource(self.manager), wallet_resource),
                 (b'unlock', UnlockWalletResource(self.manager), wallet_resource),
                 (b'lock', LockWalletResource(self.manager), wallet_resource),
@@ -266,7 +297,6 @@ class ResourcesBuilder:
                                                  address_index=self.manager.tx_storage.indexes.addresses)
         if self._args.disable_ws_history_streaming:
             ws_factory.disable_history_streaming()
-        ws_factory.start()
         root.putChild(b'ws', WebSocketResource(ws_factory))
 
         if settings.CONSENSUS_ALGORITHM.is_pow():
@@ -291,8 +321,8 @@ class ResourcesBuilder:
         status_server = SiteProfiler(real_root)
         self.log.info('with status', listen=self._args.status, with_wallet_api=with_wallet_api)
 
-        # Set websocket factory in metrics
-        self.manager.metrics.websocket_factory = ws_factory
+        # Set websocket factory in metrics. It'll be started when the manager is started.
+        self.manager.websocket_factory = ws_factory
 
         self._built_status = True
         return status_server
