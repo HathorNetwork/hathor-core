@@ -251,11 +251,3 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def flush(self):
         self._flush_to_storage(self.dirty_txs.copy())
-
-    @override
-    def migrate_static_metadata(self, log: BoundLogger) -> None:
-        return self.store.migrate_static_metadata(log)
-
-    @override
-    def remove_static_metadata_feature_states(self, log: BoundLogger) -> None:
-        return self.store.remove_static_metadata_feature_states(log)

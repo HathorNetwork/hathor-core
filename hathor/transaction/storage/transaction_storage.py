@@ -41,15 +41,7 @@ from hathor.transaction.storage.exceptions import (
 from hathor.transaction.storage.migrations import (
     BaseMigration,
     MigrationState,
-    add_closest_ancestor_block,
-    add_feature_activation_bit_counts_metadata,
-    add_feature_activation_bit_counts_metadata2,
-    add_min_height_metadata,
     change_score_acc_weight_metadata,
-    migrate_static_metadata,
-    remove_first_nop_features,
-    remove_second_nop_features,
-    remove_static_metadata_feature_states,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -100,14 +92,6 @@ class TransactionStorage(ABC):
 
     # history of migrations that have to be applied in the order defined here
     _migration_factories: list[type[BaseMigration]] = [
-        add_min_height_metadata.Migration,
-        add_feature_activation_bit_counts_metadata.Migration,
-        remove_first_nop_features.Migration,
-        add_feature_activation_bit_counts_metadata2.Migration,
-        remove_second_nop_features.Migration,
-        migrate_static_metadata.Migration,
-        remove_static_metadata_feature_states.Migration,
-        add_closest_ancestor_block.Migration,
         change_score_acc_weight_metadata.Migration,
     ]
 
@@ -1131,21 +1115,6 @@ class TransactionStorage(ABC):
         block = self.get_vertex(block_id)
         assert isinstance(block, Block)
         return block
-
-    @abstractmethod
-    def migrate_static_metadata(self, log: BoundLogger) -> None:
-        """
-        Migrate metadata attributes to static metadata. This is only used by the `migrate_static_metadata` migration.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def remove_static_metadata_feature_states(self, log: BoundLogger) -> None:
-        """
-        Remove feature_states from static metadata.
-        This is only used by the `remove_static_metadata_feature_states` migration.
-        """
-        raise NotImplementedError
 
 
 class BaseTransactionStorage(TransactionStorage):
