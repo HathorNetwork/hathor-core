@@ -31,7 +31,7 @@ class MergeMinedBlockVerifier:
         assert block.aux_pow is not None
 
         is_feature_active = self._feature_service.is_feature_active(
-            block=block,
+            vertex=block,
             feature=Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
         )
         max_merkle_path_length = (

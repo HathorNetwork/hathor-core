@@ -41,6 +41,7 @@ from hathor.transaction.storage.exceptions import (
 from hathor.transaction.storage.migrations import (
     BaseMigration,
     MigrationState,
+    add_closest_ancestor_block,
     add_feature_activation_bit_counts_metadata,
     add_feature_activation_bit_counts_metadata2,
     add_min_height_metadata,
@@ -105,6 +106,7 @@ class TransactionStorage(ABC):
         remove_second_nop_features.Migration,
         migrate_static_metadata.Migration,
         remove_static_metadata_feature_states.Migration,
+        add_closest_ancestor_block.Migration,
     ]
 
     _migrations: list[BaseMigration]
