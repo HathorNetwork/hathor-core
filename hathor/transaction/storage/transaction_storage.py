@@ -41,12 +41,15 @@ from hathor.transaction.storage.exceptions import (
 from hathor.transaction.storage.migrations import (
     BaseMigration,
     MigrationState,
+    add_closest_ancestor_block,
     add_feature_activation_bit_counts_metadata,
     add_feature_activation_bit_counts_metadata2,
     add_min_height_metadata,
+    change_score_acc_weight_metadata,
     migrate_static_metadata,
     remove_first_nop_features,
     remove_second_nop_features,
+    remove_static_metadata_feature_states,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -103,6 +106,9 @@ class TransactionStorage(ABC):
         add_feature_activation_bit_counts_metadata2.Migration,
         remove_second_nop_features.Migration,
         migrate_static_metadata.Migration,
+        remove_static_metadata_feature_states.Migration,
+        add_closest_ancestor_block.Migration,
+        change_score_acc_weight_metadata.Migration,
     ]
 
     _migrations: list[BaseMigration]
@@ -611,7 +617,7 @@ class TransactionStorage(ABC):
         if timestamp is None and not skip_cache and self._best_block_tips_cache is not None:
             return self._best_block_tips_cache[:]
 
-        best_score = 0.0
+        best_score: int = 0
         best_tip_blocks: list[bytes] = []
 
         for block_hash in (x.data for x in self.get_block_tips(timestamp)):
@@ -620,7 +626,7 @@ class TransactionStorage(ABC):
             if meta.voided_by and meta.voided_by != set([block_hash]):
                 # If anyone but the block itself is voiding this block, then it must be skipped.
                 continue
-            if abs(meta.score - best_score) < 1e-10:
+            if meta.score == best_score:
                 best_tip_blocks.append(block_hash)
             elif meta.score > best_score:
                 best_score = meta.score
@@ -1063,7 +1069,7 @@ class TransactionStorage(ABC):
         for tx in self.iter_mempool_from_best_index():
             try:
                 TransactionVerifier.verify_reward_locked_for_height(
-                    tx, new_best_height, assert_min_height_verification=False
+                    self._settings, tx, new_best_height, assert_min_height_verification=False
                 )
             except RewardLocked:
                 tx.set_validation(ValidationState.INVALID)
@@ -1129,7 +1135,15 @@ class TransactionStorage(ABC):
     @abstractmethod
     def migrate_static_metadata(self, log: BoundLogger) -> None:
         """
-        Migrate metadata attributes to static metadata. This is only used for the `migrate_static_metadata` migration.
+        Migrate metadata attributes to static metadata. This is only used by the `migrate_static_metadata` migration.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def remove_static_metadata_feature_states(self, log: BoundLogger) -> None:
+        """
+        Remove feature_states from static metadata.
+        This is only used by the `remove_static_metadata_feature_states` migration.
         """
         raise NotImplementedError
 

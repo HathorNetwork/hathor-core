@@ -132,3 +132,9 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         # This method is only ever used by the `migrate_static_metadata` migration, and therefore must not be
         # implemented for the memory storage.
         raise NotImplementedError
+
+    @override
+    def remove_static_metadata_feature_states(self, log: BoundLogger) -> None:
+        # This method is only ever used by the `remove_static_metadata_feature_states` migration,
+        # and therefore must not be implemented for the memory storage.
+        raise NotImplementedError

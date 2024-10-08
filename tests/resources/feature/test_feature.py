@@ -37,7 +37,6 @@ def web() -> StubSite:
         height=123,
         min_height=0,
         feature_activation_bit_counts=[0, 1, 0, 0],
-        feature_states={},
     )
     block.set_static_metadata(static_metadata)
 

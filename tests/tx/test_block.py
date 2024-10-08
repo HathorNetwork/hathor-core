@@ -102,7 +102,6 @@ def test_get_height() -> None:
         min_height=0,
         height=10,
         feature_activation_bit_counts=[],
-        feature_states={},
     )
     block = Block()
     block.set_static_metadata(static_metadata)

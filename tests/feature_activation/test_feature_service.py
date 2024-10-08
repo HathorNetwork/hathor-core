@@ -394,6 +394,40 @@ def test_get_state_from_active(block_height: int) -> None:
 
 
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
+def test_caching_mechanism(block_height: int) -> None:
+    features = {
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=3,
+                start_height=0,
+                timeout_height=8,
+                lock_in_on_timeout=True,
+                version=Mock()
+            )
+        }
+    settings = get_settings(features=features)
+    storage = get_storage(settings, up_to_height=block_height)
+    service = FeatureService(
+        settings=settings,
+        tx_storage=storage
+    )
+    service.bit_signaling_service = Mock()
+    block = not_none(storage.get_block_by_height(block_height))
+    calculate_new_state_mock = Mock(wraps=service._calculate_new_state)
+
+    with patch.object(FeatureService, '_calculate_new_state', calculate_new_state_mock):
+        result1 = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+        assert result1 == FeatureState.ACTIVE
+        assert calculate_new_state_mock.call_count == 4
+
+        calculate_new_state_mock.reset_mock()
+        result2 = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+        assert result2 == FeatureState.ACTIVE
+        assert calculate_new_state_mock.call_count == 0
+
+
+@pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_is_feature_active(block_height: int) -> None:
     features = {
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -413,7 +447,7 @@ def test_is_feature_active(block_height: int) -> None:
     service.bit_signaling_service = Mock()
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.is_feature_active(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service.is_feature_active(vertex=block, feature=Feature.NOP_FEATURE_1)
 
     assert result is True
 
@@ -471,7 +505,7 @@ def test_get_feature_info() -> None:
         return states[feature]
 
     with patch('hathor.feature_activation.feature_service.FeatureService.get_state', get_state):
-        result = service.get_feature_infos(block=Mock())
+        result = service.get_feature_infos(vertex=Mock(spec_set=Block))
 
     expected = {
         Feature.NOP_FEATURE_1: FeatureInfo(criteria_mock_1, FeatureState.STARTED),

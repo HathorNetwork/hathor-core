@@ -113,7 +113,6 @@ def test_verify_poa() -> None:
             min_height=0,
             height=2,
             feature_activation_bit_counts=[],
-            feature_states={},
         )
     )
 
@@ -209,7 +208,6 @@ def test_verify_poa() -> None:
             min_height=0,
             height=3,
             feature_activation_bit_counts=[],
-            feature_states={},
         )
     )
 

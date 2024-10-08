@@ -255,3 +255,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     @override
     def migrate_static_metadata(self, log: BoundLogger) -> None:
         return self.store.migrate_static_metadata(log)
+
+    @override
+    def remove_static_metadata_feature_states(self, log: BoundLogger) -> None:
+        return self.store.remove_static_metadata_feature_states(log)
