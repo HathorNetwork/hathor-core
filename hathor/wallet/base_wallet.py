@@ -24,7 +24,8 @@ from pycoin.key.Key import Key
 from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
@@ -36,7 +37,6 @@ from hathor.transaction.transaction import Transaction
 from hathor.types import AddressB58, Amount, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
-settings = HathorSettings()
 logger = get_logger()
 
 # check interval for maybe_spent_txs
@@ -55,7 +55,7 @@ class WalletOutputInfo(NamedTuple):
     address: bytes
     value: int
     timelock: Optional[int]
-    token_uid: str = settings.HATHOR_TOKEN_UID.hex()
+    token_uid: str = HATHOR_TOKEN_UID.hex()
 
 
 class WalletBalance(NamedTuple):
@@ -79,8 +79,13 @@ class BaseWallet:
         # Normal key pair wallet
         KEY_PAIR = 'keypair'
 
-    def __init__(self, directory: str = './', pubsub: Optional[PubSubManager] = None,
-                 reactor: Optional[Reactor] = None) -> None:
+    def __init__(
+        self,
+        directory: str = './',
+        pubsub: Optional[PubSubManager] = None,
+        reactor: Optional[Reactor] = None,
+        settings: HathorSettings | None = None,
+    ) -> None:
         """ A wallet will hold the unspent and spent transactions
 
         All files will be stored in the same directory, and it should
@@ -96,6 +101,7 @@ class BaseWallet:
         :type reactor: :py:class:`twisted.internet.Reactor`
         """
         self.log = logger.new()
+        self.settings = settings or get_global_settings()
 
         # dict[token_id, dict[tuple[tx_id, index], UnspentTx]]
         self.unspent_txs: defaultdict[bytes, dict[tuple[bytes, int], UnspentTx]] = defaultdict(dict)
@@ -228,7 +234,7 @@ class BaseWallet:
         tokens = []         # list[bytes] = list[token_uid]
         for txout in outputs:
             token_uid = bytes.fromhex(txout.token_uid)
-            if token_uid == settings.HATHOR_TOKEN_UID:
+            if token_uid == HATHOR_TOKEN_UID:
                 token_index = 0
             elif token_uid in token_dict:
                 token_index = token_dict[token_uid]
@@ -436,7 +442,7 @@ class BaseWallet:
                 _input.data = P2PKH.create_input_data(public_key_bytes, signature)
 
     def handle_change_tx(self, sum_inputs: int, sum_outputs: int,
-                         token_uid: bytes = settings.HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
+                         token_uid: bytes = HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
         """Creates an output transaction with the change value
 
         :param sum_inputs: Sum of the input amounts
@@ -462,7 +468,7 @@ class BaseWallet:
 
     def get_inputs_from_amount(
         self, amount: int, tx_storage: 'TransactionStorage',
-        token_uid: bytes = settings.HATHOR_TOKEN_UID, max_ts: Optional[int] = None
+        token_uid: bytes = HATHOR_TOKEN_UID, max_ts: Optional[int] = None
     ) -> tuple[list[WalletInputInfo], int]:
         """Creates inputs from our pool of unspent tx given a value
 
@@ -514,7 +520,7 @@ class BaseWallet:
         tx = tx_storage.get_transaction(tx_id)
         if tx.is_block:
             assert isinstance(tx, Block)
-            if tx_storage.get_height_best_block() - tx.get_height() < settings.REWARD_SPEND_MIN_BLOCKS:
+            if tx_storage.get_height_best_block() - tx.get_height() < self.settings.REWARD_SPEND_MIN_BLOCKS:
                 return False
         return True
 

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from mnemonic import Mnemonic
 
+from hathor.conf.settings import HathorSettings
 from hathor.pubsub import HathorEvents
 from hathor.wallet import BaseWallet
 from hathor.wallet.exceptions import InvalidWords
@@ -58,7 +59,8 @@ class HDWallet(BaseWallet):
 
     def __init__(self, *, words: Optional[Any] = None, language: str = 'english', passphrase: bytes = b'',
                  gap_limit: int = 20, word_count: int = 24, directory: str = './', pubsub: Optional[Any] = None,
-                 reactor: Optional[Any] = None, initial_key_generation: Optional[Any] = None) -> None:
+                 reactor: Optional[Any] = None, initial_key_generation: Optional[Any] = None,
+                 settings: HathorSettings | None = None) -> None:
         """
         :param words: words to generate the seed. It's a string with the words separated by a single space.
         If None we generate new words when starting the wallet
@@ -84,7 +86,7 @@ class HDWallet(BaseWallet):
 
         :raises ValueError: Raised on invalid word_count
         """
-        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
+        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor, settings=settings)
 
         # dict[string(base58), BIP32Key]
         self.keys: dict[str, Any] = {}
