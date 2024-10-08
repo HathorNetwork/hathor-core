@@ -131,8 +131,6 @@ class SendTokensResource(Resource):
             weight = self.manager.daa.minimum_tx_weight(tx)
         tx.weight = weight
         self.manager.cpu_mining_service.resolve(tx)
-        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        self.manager.verification_service.verify(tx)
         return tx
 
     def _cb_tx_resolve(self, tx, request):

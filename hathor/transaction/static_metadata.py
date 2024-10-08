@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC
 from itertools import chain, starmap, zip_longest
 from operator import add
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, TypeVar, cast
 
 from typing_extensions import Self, override
 
@@ -28,7 +28,10 @@ from hathor.utils.pydantic import BaseModel
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.transaction import BaseTransaction, Block, Transaction
+    from hathor.transaction.base_transaction import GenericVertex
     from hathor.transaction.storage import TransactionStorage
+
+StaticMetadataT = TypeVar('StaticMetadataT', bound='VertexStaticMetadata')
 
 
 class VertexStaticMetadata(ABC, BaseModel):
@@ -46,7 +49,7 @@ class VertexStaticMetadata(ABC, BaseModel):
     min_height: int
 
     @classmethod
-    def from_bytes(cls, data: bytes, *, target: 'BaseTransaction') -> 'VertexStaticMetadata':
+    def from_bytes(cls, data: bytes, *, target: BaseTransaction) -> VertexStaticMetadata:
         """Create a static metadata instance from a json bytes representation, with a known vertex type target."""
         from hathor.transaction import Block, Transaction
         json_dict = json_loadb(data)
@@ -60,6 +63,25 @@ class VertexStaticMetadata(ABC, BaseModel):
 
         raise NotImplementedError
 
+    @classmethod
+    def from_storage(
+        cls,
+        settings: HathorSettings,
+        storage: TransactionStorage,
+        *,
+        target: GenericVertex[StaticMetadataT]
+    ) -> StaticMetadataT:
+        """Create a static metadata instance using dependencies from a storage, with a known vertex type target."""
+        from hathor.transaction import Block, Transaction
+
+        if isinstance(target, Block):
+            return cast(StaticMetadataT, BlockStaticMetadata.create_from_storage(target, settings, storage))
+
+        if isinstance(target, Transaction):
+            return cast(StaticMetadataT, TransactionStaticMetadata.create_from_storage(target, settings, storage))
+
+        raise NotImplementedError
+
 
 class BlockStaticMetadata(VertexStaticMetadata):
     height: int
@@ -70,14 +92,14 @@ class BlockStaticMetadata(VertexStaticMetadata):
     feature_activation_bit_counts: list[int]
 
     @classmethod
-    def create_from_storage(cls, block: 'Block', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
+    def create_from_storage(cls, block: 'Block', settings: HathorSettings, storage: TransactionStorage) -> Self:
         """Create a `BlockStaticMetadata` using dependencies provided by a storage."""
         return cls.create(block, settings, storage.get_vertex)
 
     @classmethod
     def create(
         cls,
-        block: 'Block',
+        block: Block,
         settings: HathorSettings,
         vertex_getter: Callable[[VertexId], 'BaseTransaction']
     ) -> Self:
@@ -99,7 +121,7 @@ class BlockStaticMetadata(VertexStaticMetadata):
         )
 
     @staticmethod
-    def _calculate_height(block: 'Block', vertex_getter: Callable[[VertexId], 'BaseTransaction']) -> int:
+    def _calculate_height(block: Block, vertex_getter: Callable[[VertexId], BaseTransaction]) -> int:
         """Return the height of the block, i.e., the number of blocks since genesis"""
         if block.is_genesis:
             return 0
@@ -111,7 +133,7 @@ class BlockStaticMetadata(VertexStaticMetadata):
         return parent_block.static_metadata.height + 1
 
     @staticmethod
-    def _calculate_min_height(block: 'Block', vertex_getter: Callable[[VertexId], 'BaseTransaction']) -> int:
+    def _calculate_min_height(block: Block, vertex_getter: Callable[[VertexId], BaseTransaction]) -> int:
         """The minimum height the next block needs to have, basically the maximum min-height of this block's parents.
         """
         # maximum min-height of any parent tx
@@ -125,10 +147,10 @@ class BlockStaticMetadata(VertexStaticMetadata):
     @classmethod
     def _calculate_feature_activation_bit_counts(
         cls,
-        block: 'Block',
+        block: Block,
         height: int,
         settings: HathorSettings,
-        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+        vertex_getter: Callable[[VertexId], BaseTransaction],
     ) -> list[int]:
         """
         Lazily calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation
@@ -146,10 +168,10 @@ class BlockStaticMetadata(VertexStaticMetadata):
 
     @staticmethod
     def _get_previous_feature_activation_bit_counts(
-        block: 'Block',
+        block: Block,
         height: int,
         settings: HathorSettings,
-        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+        vertex_getter: Callable[[VertexId], BaseTransaction],
     ) -> list[int]:
         """
         Returns the feature_activation_bit_counts metadata attribute from the parent block,
@@ -175,16 +197,16 @@ class TransactionStaticMetadata(VertexStaticMetadata):
     closest_ancestor_block: VertexId
 
     @classmethod
-    def create_from_storage(cls, tx: 'Transaction', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
+    def create_from_storage(cls, tx: Transaction, settings: HathorSettings, storage: TransactionStorage) -> Self:
         """Create a `TransactionStaticMetadata` using dependencies provided by a storage."""
         return cls.create(tx, settings, storage.get_vertex)
 
     @classmethod
     def create(
         cls,
-        tx: 'Transaction',
+        tx: Transaction,
         settings: HathorSettings,
-        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+        vertex_getter: Callable[[VertexId], BaseTransaction],
     ) -> Self:
         """Create a `TransactionStaticMetadata` using dependencies provided by a `vertex_getter`.
         This must be fast, ideally O(1)."""
@@ -199,9 +221,9 @@ class TransactionStaticMetadata(VertexStaticMetadata):
     @classmethod
     def _calculate_min_height(
         cls,
-        tx: 'Transaction',
+        tx: Transaction,
         settings: HathorSettings,
-        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+        vertex_getter: Callable[[VertexId], BaseTransaction],
     ) -> int:
         """Calculates the min height the first block confirming this tx needs to have for reward lock verification."""
         if tx.is_genesis:
@@ -216,8 +238,8 @@ class TransactionStaticMetadata(VertexStaticMetadata):
 
     @staticmethod
     def _calculate_inherited_min_height(
-        tx: 'Transaction',
-        vertex_getter: Callable[[VertexId], 'BaseTransaction']
+        tx: Transaction,
+        vertex_getter: Callable[[VertexId], BaseTransaction]
     ) -> int:
         """ Calculates min height inherited from any input or parent"""
         min_height = 0
@@ -230,9 +252,9 @@ class TransactionStaticMetadata(VertexStaticMetadata):
 
     @staticmethod
     def _calculate_my_min_height(
-        tx: 'Transaction',
+        tx: Transaction,
         settings: HathorSettings,
-        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+        vertex_getter: Callable[[VertexId], BaseTransaction],
     ) -> int:
         """ Calculates min height derived from own spent block rewards"""
         from hathor.transaction import Block
@@ -245,9 +267,9 @@ class TransactionStaticMetadata(VertexStaticMetadata):
 
     @staticmethod
     def _calculate_closest_ancestor_block(
-        tx: 'Transaction',
+        tx: Transaction,
         settings: HathorSettings,
-        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+        vertex_getter: Callable[[VertexId], BaseTransaction],
     ) -> VertexId:
         """
         Calculate the tx's closest_ancestor_block. It's calculated by propagating the metadata forward in the DAG.
