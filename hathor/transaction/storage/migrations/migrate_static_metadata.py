@@ -60,8 +60,11 @@ class Migration(BaseMigration):
                     vertex, settings, storage
                 )
             elif isinstance(vertex, Transaction):
-                assert vertex.static_metadata == TransactionStaticMetadata.create_from_storage(
+                # We exclude `closest_ancestor_block` from the expected metadata as it'll
+                # be calculated in its own migration
+                expected_static_metadata = TransactionStaticMetadata.create_from_storage(
                     vertex, settings, storage
-                )
+                ).copy(update=dict(closest_ancestor_block=b''))
+                assert vertex.static_metadata == expected_static_metadata
             else:
                 raise NotImplementedError
