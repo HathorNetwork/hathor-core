@@ -101,6 +101,8 @@ class ConnectionsManager:
         ssl: bool,
         rng: Random,
         whitelist_only: bool,
+        enable_ipv6: bool,
+        disable_ipv4: bool,
     ) -> None:
         self.log = logger.new()
         self._settings = settings
@@ -192,6 +194,12 @@ class ConnectionsManager:
 
         # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
         self.whitelist_only = whitelist_only
+
+        # Parameter to enable IPv6 connections
+        self.enable_ipv6 = enable_ipv6
+
+        # Parameter to disable IPv4 connections
+        self.disable_ipv4 = disable_ipv4
 
         # Timestamp when the last discovery ran
         self._last_discovery: float = 0.
@@ -580,7 +588,11 @@ class ConnectionsManager:
     def connect_to_if_not_connected(self, peer: UnverifiedPeer | PublicPeer, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
         """
-        if not peer.info.entrypoints:
+        if not peer.info.entrypoints or (
+            not self.enable_ipv6 and not peer.info.get_ipv4_only_entrypoints()
+        ) or (
+            self.disable_ipv4 and not peer.info.get_ipv6_only_entrypoints()
+        ):
             # It makes no sense to keep storing peers that have disconnected and have no entrypoints
             # We will never be able to connect to them anymore and they will only keep spending memory
             # and other resources when used in APIs, so we are removing them here
@@ -592,7 +604,14 @@ class ConnectionsManager:
 
         assert peer.id is not None
         if peer.info.can_retry(now):
-            self.connect_to(self.rng.choice(peer.info.entrypoints), peer)
+            if self.enable_ipv6 and not self.disable_ipv4:
+                self.connect_to(self.rng.choice(peer.info.entrypoints), peer)
+            elif self.enable_ipv6 and self.disable_ipv4:
+                self.connect_to(self.rng.choice(peer.info.get_ipv6_only_entrypoints()), peer)
+            elif not self.enable_ipv6 and not self.disable_ipv4:
+                self.connect_to(self.rng.choice(peer.info.get_ipv4_only_entrypoints()), peer)
+            else:
+                raise ValueError('IPv4 is disabled and IPv6 is not enabled')
 
     def _connect_to_callback(
         self,
@@ -633,6 +652,14 @@ class ConnectionsManager:
 
         if self.localhost_only and not entrypoint.is_localhost():
             self.log.debug('skip because of simple localhost check', entrypoint=entrypoint)
+            return
+
+        if not self.enable_ipv6 and entrypoint.is_ipv6():
+            self.log.info('skip because IPv6 is disabled', entrypoint=entrypoint)
+            return
+
+        if self.disable_ipv4 and entrypoint.is_ipv4():
+            self.log.info('skip because IPv4 is disabled', entrypoint=entrypoint)
             return
 
         if use_ssl is None:

@@ -195,6 +195,75 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.conn.tr1.disconnecting)
         self.assertFalse(self.conn.tr2.disconnecting)
 
+    def test_hello_without_ipv6_capability(self) -> None:
+        """Tests the connection between peers with and without the IPV6 capability.
+           Expected behavior: the entrypoint with IPV6 is not relayed.
+        """
+
+        entrypoint_ipv6 = Entrypoint.parse('tcp://[::1]:54321')
+        entrypoint_ipv4 = Entrypoint.parse('tcp://192.168.1.1:54321')
+
+        self.peer1.info.entrypoints.append(entrypoint_ipv6)
+        self.peer1.info.entrypoints.append(entrypoint_ipv4)
+        self.peer2.info.entrypoints.append(entrypoint_ipv4)
+
+        network = 'testnet'
+        manager1 = self.create_peer(
+            network,
+            peer=self.peer1,
+            capabilities=[self._settings.CAPABILITY_IPV6, self._settings.CAPABILITY_SYNC_VERSION]
+        )
+        manager2 = self.create_peer(
+            network,
+            peer=self.peer2,
+            capabilities=[self._settings.CAPABILITY_SYNC_VERSION]
+        )
+
+        conn = FakeConnection(manager1, manager2)
+
+        conn.run_one_step()  # HELLO
+        conn.run_one_step()  # PEER-ID
+
+        self.assertEqual(len(conn.proto1.peer.info.entrypoints), 1)
+        self.assertEqual(len(conn.proto2.peer.info.entrypoints), 1)
+        self.assertEqual(conn.proto1.peer.info.entrypoints[0].host, '192.168.1.1')
+        self.assertEqual(conn.proto2.peer.info.entrypoints[0].host, '192.168.1.1')
+
+    def test_hello_with_ipv6_capability(self) -> None:
+        """Tests the connection between peers with and without the IPV6 capability.
+           Expected behavior: the entrypoint with IPV6 is relayed.
+        """
+
+        entrypoint_ipv6 = Entrypoint.parse('tcp://[::1]:54321')
+        entrypoint_ipv4 = Entrypoint.parse('tcp://192.168.1.1:54321')
+
+        self.peer1.info.entrypoints.append(entrypoint_ipv6)
+        self.peer1.info.entrypoints.append(entrypoint_ipv4)
+        self.peer2.info.entrypoints.append(entrypoint_ipv4)
+
+        network = 'testnet'
+        manager1 = self.create_peer(
+            network,
+            peer=self.peer1,
+            capabilities=[self._settings.CAPABILITY_IPV6, self._settings.CAPABILITY_SYNC_VERSION]
+        )
+        manager2 = self.create_peer(
+            network,
+            peer=self.peer2,
+            capabilities=[self._settings.CAPABILITY_IPV6, self._settings.CAPABILITY_SYNC_VERSION]
+        )
+
+        conn = FakeConnection(manager1, manager2)
+
+        conn.run_one_step()  # HELLO
+        conn.run_one_step()  # PEER-ID
+
+        self.assertEqual(len(conn.proto1.peer.info.entrypoints), 1)
+        self.assertEqual(len(conn.proto2.peer.info.entrypoints), 2)
+        self.assertTrue('::1' in map(lambda x: x.host, conn.proto2.peer.info.entrypoints))
+        self.assertTrue('192.168.1.1' in map(lambda x: x.host, conn.proto2.peer.info.entrypoints))
+        self.assertEqual(conn.proto1.peer.info.entrypoints[0].host, '192.168.1.1')
+
     def test_invalid_same_peer_id(self) -> None:
         manager3 = self.create_peer(self.network, peer=self.peer1)
         conn = FakeConnection(self.manager1, manager3)
