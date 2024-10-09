@@ -55,7 +55,6 @@ class Simulator:
         self.seed = seed
         self.rng = Random(self.seed)
         self.settings = get_global_settings()._replace(AVG_TIME_BETWEEN_BLOCKS=SIMULATOR_AVG_TIME_BETWEEN_BLOCKS)
-        self._network = 'testnet'
         self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
         self._connections: list['FakeConnection'] = []
@@ -80,7 +79,6 @@ class Simulator:
         Returns a builder with default configuration, for convenience when using create_peer() or create_artifacts()
         """
         return Builder() \
-            .set_network(self._network) \
             .set_peer(PrivatePeer.auto_generated()) \
             .set_soft_voided_tx_ids(set()) \
             .enable_full_verification() \
