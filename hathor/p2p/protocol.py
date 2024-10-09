@@ -73,7 +73,6 @@ class HathorProtocol:
         NO_PEER_ID_URL = 'no_peer_id_url'
         NO_ENTRYPOINTS = 'no_entrypoints'
 
-    network: str
     my_peer: PrivatePeer
     connections: 'ConnectionsManager'
     node: 'HathorManager'
@@ -99,7 +98,6 @@ class HathorProtocol:
 
     def __init__(
         self,
-        network: str,
         my_peer: PrivatePeer,
         p2p_manager: 'ConnectionsManager',
         *,
@@ -108,7 +106,6 @@ class HathorProtocol:
         inbound: bool,
     ) -> None:
         self._settings = settings
-        self.network = network
         self.my_peer = my_peer
         self.connections = p2p_manager
 

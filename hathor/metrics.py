@@ -256,7 +256,7 @@ class Metrics:
             metric = PeerConnectionMetrics(
                 connection_string=str(connection.entrypoint) if connection.entrypoint else "",
                 peer_id=str(connection.peer.id),
-                network=connection.network,
+                network=settings.NETWORK_NAME,
                 received_messages=connection.metrics.received_messages,
                 sent_messages=connection.metrics.sent_messages,
                 received_bytes=connection.metrics.received_bytes,

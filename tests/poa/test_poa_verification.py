@@ -47,7 +47,7 @@ class BasePoaVerificationTest(unittest.TestCase):
             ),
         )
 
-        builder = self.get_builder('network').set_settings(settings)
+        builder = self.get_builder().set_settings(settings)
         self.manager = self.create_peer_from_builder(builder)
         self.verifiers = self.manager.verification_service.verifiers
 
