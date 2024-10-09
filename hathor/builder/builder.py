@@ -143,7 +143,6 @@ class Builder:
         self._capabilities: Optional[list[str]] = None
 
         self._peer: Optional[PrivatePeer] = None
-        self._network: Optional[str] = None
         self._cmdline: str = ''
 
         self._storage_type: StorageType = StorageType.MEMORY
@@ -207,9 +206,6 @@ class Builder:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
 
-        if self._network is None:
-            raise TypeError('you must set a network')
-
         if SyncSupportLevel.ENABLED not in {self._sync_v1_support, self._sync_v2_support}:
             raise TypeError('you must enable at least one sync version')
 
@@ -257,7 +253,6 @@ class Builder:
         manager = HathorManager(
             reactor,
             settings=settings,
-            network=self._network,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
             daa=daa,
@@ -423,12 +418,9 @@ class Builder:
         reactor = self._get_reactor()
         my_peer = self._get_peer()
 
-        assert self._network is not None
-
         self._p2p_manager = ConnectionsManager(
             settings=self._get_or_create_settings(),
             reactor=reactor,
-            network=self._network,
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
@@ -522,7 +514,7 @@ class Builder:
             storage = self._get_or_create_event_storage()
             factory = EventWebsocketFactory(
                 peer_id=str(peer.id),
-                network=settings.NETWORK_NAME,
+                settings=settings,
                 reactor=reactor,
                 event_storage=storage,
             )
@@ -774,11 +766,6 @@ class Builder:
     def set_pubsub(self, pubsub: PubSubManager) -> 'Builder':
         self.check_if_can_modify()
         self._pubsub = pubsub
-        return self
-
-    def set_network(self, network: str) -> 'Builder':
-        self.check_if_can_modify()
-        self._network = network
         return self
 
     def set_sync_v1_support(self, support_level: SyncSupportLevel) -> 'Builder':

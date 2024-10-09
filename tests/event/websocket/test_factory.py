@@ -16,6 +16,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
+from hathor.conf.get_settings import get_global_settings
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
@@ -76,7 +77,7 @@ def test_broadcast_event(can_receive_event: bool) -> None:
 
     response = EventResponse(
         peer_id='my_peer_id',
-        network='my_network',
+        network='unittests',
         event=event,
         latest_event_id=n_starting_events - 1,
         stream_id=stream_id
@@ -141,7 +142,7 @@ def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_
         event = EventMocker.create_event(_id)
         response = EventResponse(
             peer_id='my_peer_id',
-            network='my_network',
+            network='unittests',
             event=event,
             latest_event_id=n_starting_events - 1,
             stream_id=stream_id
@@ -164,7 +165,7 @@ def _get_factory(
 
     return EventWebsocketFactory(
         peer_id='my_peer_id',
-        network='my_network',
+        settings=get_global_settings(),
         reactor=clock,
         event_storage=event_storage
     )

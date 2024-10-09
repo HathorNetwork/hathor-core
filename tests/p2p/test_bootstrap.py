@@ -49,7 +49,7 @@ class BootstrapTestCase(unittest.TestCase):
     def test_mock_discovery(self) -> None:
         pubsub = PubSubManager(self.clock)
         peer = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(self._settings, self.clock, 'testnet', peer, pubsub, True, self.rng, True)
+        connections = ConnectionsManager(self._settings, self.clock, peer, pubsub, True, self.rng, True)
         host_ports1 = [
             ('foobar', 1234),
             ('127.0.0.99', 9999),
@@ -73,7 +73,7 @@ class BootstrapTestCase(unittest.TestCase):
     def test_dns_discovery(self) -> None:
         pubsub = PubSubManager(self.clock)
         peer = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(self._settings, self.clock, 'testnet', peer, pubsub, True, self.rng, True)
+        connections = ConnectionsManager(self._settings, self.clock, peer, pubsub, True, self.rng, True)
         bootstrap_a = [
             '127.0.0.99',
             '127.0.0.88',

@@ -96,7 +96,7 @@ class BaseMetricsTest(unittest.TestCase):
         self.tmpdirs.append(path)
 
         def _init_manager():
-            builder = self.get_builder('testnet') \
+            builder = self.get_builder() \
                 .use_rocksdb(path, cache_capacity=100) \
                 .force_memory_index() \
                 .set_wallet(self._create_test_wallet(unlocked=True))
@@ -148,7 +148,7 @@ class BaseMetricsTest(unittest.TestCase):
         self.tmpdirs.append(path)
 
         def _init_manager():
-            builder = self.get_builder('testnet') \
+            builder = self.get_builder() \
                 .use_rocksdb(path, cache_capacity=100) \
                 .force_memory_index() \
                 .set_wallet(self._create_test_wallet(unlocked=True)) \
@@ -220,7 +220,6 @@ class BaseMetricsTest(unittest.TestCase):
 
         def build_hathor_protocol():
             protocol = HathorProtocol(
-                network="testnet",
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,

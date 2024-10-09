@@ -197,7 +197,6 @@ class CliBuilder:
             self.log.info('with wallet', wallet=self.wallet, path=self._args.data)
 
         hostname = self.get_hostname()
-        network = settings.NETWORK_NAME
 
         sync_choice: SyncChoice
         if self._args.sync_bridge:
@@ -245,7 +244,7 @@ class CliBuilder:
         if self._args.x_enable_event_queue:
             self.event_ws_factory = EventWebsocketFactory(
                 peer_id=str(peer.id),
-                network=network,
+                settings=settings,
                 reactor=reactor,
                 event_storage=event_storage
             )
@@ -322,7 +321,6 @@ class CliBuilder:
         p2p_manager = ConnectionsManager(
             settings=settings,
             reactor=reactor,
-            network=network,
             my_peer=peer,
             pubsub=pubsub,
             ssl=True,
@@ -367,7 +365,6 @@ class CliBuilder:
         self.manager = HathorManager(
             reactor,
             settings=settings,
-            network=network,
             hostname=hostname,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
