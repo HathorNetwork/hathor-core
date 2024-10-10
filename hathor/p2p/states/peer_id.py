@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.p2p_dependencies import P2PDependencies
 from hathor.p2p.peer import PublicPeer
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
@@ -30,8 +30,8 @@ logger = get_logger()
 
 
 class PeerIdState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
-        super().__init__(protocol, settings)
+    def __init__(self, protocol: 'HathorProtocol', *, dependencies: P2PDependencies) -> None:
+        super().__init__(protocol, dependencies=dependencies)
         self.log = logger.new(remote=protocol.get_short_remote())
         self.cmd_map.update({
             ProtocolMessages.PEER_ID: self.handle_peer_id,

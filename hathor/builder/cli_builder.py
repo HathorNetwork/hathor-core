@@ -36,6 +36,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.p2p_dependencies import P2PDependencies
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
@@ -318,16 +319,6 @@ class CliBuilder:
 
         cpu_mining_service = CpuMiningService()
 
-        p2p_manager = ConnectionsManager(
-            settings=settings,
-            reactor=reactor,
-            my_peer=peer,
-            pubsub=pubsub,
-            ssl=True,
-            whitelist_only=False,
-            rng=Random(),
-        )
-
         vertex_handler = VertexHandler(
             reactor=reactor,
             settings=settings,
@@ -340,13 +331,29 @@ class CliBuilder:
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
+        p2p_dependencies = P2PDependencies(
+            reactor=reactor,
+            settings=settings,
+            vertex_parser=vertex_parser,
+            tx_storage=tx_storage,
+            vertex_handler=vertex_handler,
+            verification_service=verification_service,
+            pubsub=pubsub,
+        )
+
+        p2p_manager = ConnectionsManager(
+            dependencies=p2p_dependencies,
+            my_peer=peer,
+            ssl=True,
+            whitelist_only=False,
+            rng=Random(),
+        )
+
         SyncSupportLevel.add_factories(
-            settings,
             p2p_manager,
+            p2p_dependencies,
             sync_v1_support,
             sync_v2_support,
-            vertex_parser,
-            vertex_handler,
         )
 
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile

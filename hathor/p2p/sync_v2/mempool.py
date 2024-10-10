@@ -19,6 +19,7 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.exception import InvalidNewTransaction
+from hathor.p2p.p2p_dependencies import P2PDependencies
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
@@ -30,15 +31,14 @@ logger = get_logger()
 class SyncMempoolManager:
     """Manage the sync-v2 mempool with one peer.
     """
-    def __init__(self, sync_agent: 'NodeBlockSync'):
+    def __init__(self, sync_agent: 'NodeBlockSync', *, dependencies: P2PDependencies):
         """Initialize the sync-v2 mempool manager."""
         self.log = logger.new(peer=sync_agent.protocol.get_short_peer_id())
+        self.dependencies = dependencies
 
         # Shortcuts.
         self.sync_agent = sync_agent
-        self.vertex_handler = self.sync_agent.vertex_handler
-        self.tx_storage = self.sync_agent.tx_storage
-        self.reactor = self.sync_agent.reactor
+        self.reactor = dependencies.reactor
 
         self._deferred: Optional[Deferred[bool]] = None
 
@@ -90,7 +90,7 @@ class SyncMempoolManager:
         if not self.missing_tips:
             # No missing tips? Let's get them!
             tx_hashes: list[bytes] = yield self.sync_agent.get_tips()
-            self.missing_tips.update(h for h in tx_hashes if not self.tx_storage.transaction_exists(h))
+            self.missing_tips.update(h for h in tx_hashes if not self.dependencies.vertex_exists(h))
 
         while self.missing_tips:
             self.log.debug('We have missing tips! Let\'s start!', missing_tips=[x.hex() for x in self.missing_tips])
@@ -127,20 +127,20 @@ class SyncMempoolManager:
         """Get the first missing dependency found of tx."""
         assert not tx.is_block
         for txin in tx.inputs:
-            if not self.tx_storage.transaction_exists(txin.tx_id):
+            if not self.dependencies.vertex_exists(txin.tx_id):
                 return txin.tx_id
         for parent in tx.parents:
-            if not self.tx_storage.transaction_exists(parent):
+            if not self.dependencies.vertex_exists(parent):
                 return parent
         return None
 
     def _add_tx(self, tx: BaseTransaction) -> None:
         """Add tx to the DAG."""
         self.missing_tips.discard(tx.hash)
-        if self.tx_storage.transaction_exists(tx.hash):
+        if self.dependencies.vertex_exists(tx.hash):
             return
         try:
-            result = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+            result = self.dependencies.on_new_vertex(tx, fails_silently=False)
             if result:
                 self.sync_agent.protocol.connections.send_tx_to_peers(tx)
         except InvalidNewTransaction:
