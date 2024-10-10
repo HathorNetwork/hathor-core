@@ -15,11 +15,14 @@
 import time
 from collections import defaultdict
 from functools import wraps
-from typing import Any, Callable, Union
+from typing import Callable, ParamSpec, TypeVar, Union
 
 from twisted.internet.task import LoopingCall
 
 Key = tuple[str, ...]
+
+T = TypeVar('T')
+P = ParamSpec('P')
 
 
 class ProcItem:
@@ -184,7 +187,7 @@ class SimpleCPUProfiler:
         t1 = time.process_time()
         self.measures[('profiler',)].add_time(t1 - t0)
 
-    def profiler(self, key: Union[str, Callable[..., str]]) -> Callable[[Callable[..., Any]], Any]:
+    def profiler(self, key: Union[str, Callable[..., str]]) -> Callable[[Callable[P, T]], Callable[P, T]]:
         """Decorator to collect data. The `key` must be the key itself
         or a method that returns the key.
 
