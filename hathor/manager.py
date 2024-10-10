@@ -47,7 +47,6 @@ from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
-from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
@@ -108,9 +107,7 @@ class HathorManager:
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
-        hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
-        capabilities: Optional[list[str]] = None,
         checkpoints: Optional[list[Checkpoint]] = None,
         rng: Optional[Random] = None,
         environment_info: Optional[EnvironmentInfo] = None,
@@ -157,9 +154,6 @@ class HathorManager:
         self.profiler: Optional[Profile] = None
         self.is_profiler_running: bool = False
         self.profiler_last_start_time: float = 0
-
-        # Hostname, used to be accessed by other peers.
-        self.hostname = hostname
 
         # Remote address, which can be different from local address.
         self.remote_address = None
@@ -226,15 +220,6 @@ class HathorManager:
         # Can be activated on the command line with --full-verification
         self._full_verification = full_verification
 
-        # List of whitelisted peers
-        self.peers_whitelist: list[PeerId] = []
-
-        # List of capabilities of the peer
-        if capabilities is not None:
-            self.capabilities = capabilities
-        else:
-            self.capabilities = self.get_default_capabilities()
-
         # This is included in some logs to provide more context
         self.environment_info = environment_info
 
@@ -244,14 +229,6 @@ class HathorManager:
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
-
-    def get_default_capabilities(self) -> list[str]:
-        """Return the default capabilities for this manager."""
-        return [
-            self._settings.CAPABILITY_WHITELIST,
-            self._settings.CAPABILITY_SYNC_VERSION,
-            self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN
-        ]
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -984,27 +961,6 @@ class HathorManager:
 
         return result
 
-    def has_sync_version_capability(self) -> bool:
-        return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
-
-    def add_peer_to_whitelist(self, peer_id: PeerId) -> None:
-        if not self._settings.ENABLE_PEER_WHITELIST:
-            return
-
-        if peer_id in self.peers_whitelist:
-            self.log.info('peer already in whitelist', peer_id=peer_id)
-        else:
-            self.peers_whitelist.append(peer_id)
-
-    def remove_peer_from_whitelist_and_disconnect(self, peer_id: PeerId) -> None:
-        if not self._settings.ENABLE_PEER_WHITELIST:
-            return
-
-        if peer_id in self.peers_whitelist:
-            self.peers_whitelist.remove(peer_id)
-            # disconnect from node
-            self.connections.drop_connection_by_peer_id(peer_id)
-
     def has_recent_activity(self) -> bool:
         current_timestamp = time.time()
         latest_blockchain_timestamp = self.tx_storage.latest_timestamp
@@ -1052,13 +1008,6 @@ class HathorManager:
     def get_cmd_path(self) -> Optional[str]:
         """Return the cmd path. If no cmd path is set, returns None."""
         return self._cmd_path
-
-    def set_hostname_and_reset_connections(self, new_hostname: str) -> None:
-        """Set the hostname and reset all connections."""
-        old_hostname = self.hostname
-        self.hostname = new_hostname
-        self.connections.update_hostname_entrypoints(old_hostname=old_hostname, new_hostname=self.hostname)
-        self.connections.disconnect_all_peers(force=True)
 
 
 class ParentTxs(NamedTuple):

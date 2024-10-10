@@ -54,6 +54,7 @@ class BootstrapTestCase(unittest.TestCase):
             whitelist_only=True,
             rng=self.rng,
             ssl=True,
+            capabilities=self._settings.get_default_capabilities()
         )
         host_ports1 = [
             ('foobar', 1234),
@@ -83,6 +84,7 @@ class BootstrapTestCase(unittest.TestCase):
             whitelist_only=True,
             rng=self.rng,
             ssl=True,
+            capabilities=self._settings.get_default_capabilities()
         )
         bootstrap_a = [
             '127.0.0.99',

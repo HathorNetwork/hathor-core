@@ -243,20 +243,17 @@ class ConnectionsManagerSysctl(Sysctl):
 
     def get_hostname(self) -> str | None:
         """Return the configured hostname."""
-        assert self.connections.manager is not None
-        return self.connections.manager.hostname
+        return self.connections.hostname
 
     def set_hostname(self, hostname: str) -> None:
         """Set the hostname and reset all connections."""
-        assert self.connections.manager is not None
-        self.connections.manager.set_hostname_and_reset_connections(hostname)
+        self.connections.set_hostname_and_reset_connections(hostname)
 
     def refresh_auto_hostname(self) -> None:
         """
         Automatically discover the hostname and set it, if it's found. This operation blocks the event loop.
         Then, reset all connections.
         """
-        assert self.connections.manager is not None
         try:
             hostname = discover_hostname(timeout=AUTO_HOSTNAME_TIMEOUT_SECONDS)
         except Exception as e:
@@ -264,7 +261,7 @@ class ConnectionsManagerSysctl(Sysctl):
             return
 
         if hostname:
-            self.connections.manager.set_hostname_and_reset_connections(hostname)
+            self.connections.set_hostname_and_reset_connections(hostname)
 
     def reload_entrypoints_and_connections(self) -> None:
         """Kill all connections and reload entrypoints from the peer config file."""

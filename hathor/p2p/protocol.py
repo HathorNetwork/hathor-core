@@ -75,7 +75,6 @@ class HathorProtocol:
 
     my_peer: PrivatePeer
     connections: 'ConnectionsManager'
-    node: 'HathorManager'
     app_version: str
     last_message: float
     _peer: Optional[PublicPeer]
@@ -109,9 +108,6 @@ class HathorProtocol:
         self._settings = dependencies.settings
         self.my_peer = my_peer
         self.connections = p2p_manager
-
-        assert p2p_manager.manager is not None
-        self.node = p2p_manager.manager
 
         assert self.connections.reactor is not None
         self.reactor = self.connections.reactor
