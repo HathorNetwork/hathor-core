@@ -130,3 +130,6 @@ class P2PDependencies:
 
     def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
         return self._tx_storage.partial_vertex_exists(vertex_id)
+
+    def enable_mempool_index(self) -> None:
+        self._indexes.enable_mempool_index()

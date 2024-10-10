@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Optional
+from typing import Any, Iterable, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -40,9 +40,6 @@ from hathor.p2p.utils import parse_whitelist
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
 from hathor.util import Random
-
-if TYPE_CHECKING:
-    from hathor.manager import HathorManager
 
 logger = get_logger()
 
@@ -77,7 +74,6 @@ class ConnectionsManager:
     class GlobalRateLimiter:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
 
-    manager: Optional['HathorManager']
     connections: set[HathorProtocol]
     connected_peers: dict[PeerId, HathorProtocol]
     connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
@@ -97,12 +93,14 @@ class ConnectionsManager:
         ssl: bool,
         rng: Random,
         whitelist_only: bool,
+        capabilities: list[str],
+        hostname: str | None = None,
     ) -> None:
         self.log = logger.new()
         self.dependencies = dependencies
         self._settings = dependencies.settings
         self.rng = rng
-        self.manager = None
+        self.capabilities = capabilities
 
         self.MAX_ENABLED_SYNC = self._settings.MAX_ENABLED_SYNC
         self.SYNC_UPDATE_INTERVAL = self._settings.SYNC_UPDATE_INTERVAL
@@ -110,6 +108,13 @@ class ConnectionsManager:
 
         self.reactor = dependencies.reactor
         self.my_peer = my_peer
+        self._started = False
+
+        # List of whitelisted peers
+        self.peers_whitelist: list[PeerId] = []
+
+        # Hostname, used to be accessed by other peers.
+        self.hostname = hostname
 
         # List of address descriptions to listen for new connections (eg: [tcp:8000])
         self.listen_address_descriptions: list[str] = []
@@ -204,7 +209,7 @@ class ConnectionsManager:
     def add_sync_factory(self, sync_version: SyncVersion, sync_factory: SyncAgentFactory) -> None:
         """Add factory for the given sync version, must use a sync version that does not already exist."""
         # XXX: to allow code in `set_manager` to safely use the the available sync versions, we add this restriction:
-        assert self.manager is None, 'Cannot modify sync factories after a manager is set'
+        assert not self._started, 'Cannot modify sync factories after start'
         if sync_version in self._sync_factories:
             raise ValueError('sync version already exists')
         self._sync_factories[sync_version] = sync_factory
@@ -240,18 +245,6 @@ class ConnectionsManager:
             return
         self._enabled_sync_versions.discard(sync_version)
 
-    def set_manager(self, manager: 'HathorManager') -> None:
-        """Set the manager. This method must be called before start()."""
-        if len(self._enabled_sync_versions) == 0:
-            raise TypeError('Class built incorrectly without any enabled sync version')
-
-        self.manager = manager
-        if self.is_sync_version_available(SyncVersion.V2):
-            assert self.manager.tx_storage.indexes is not None
-            indexes = self.manager.tx_storage.indexes
-            self.log.debug('enable sync-v2 indexes')
-            indexes.enable_mempool_index()
-
     def add_listen_address_description(self, addr: str) -> None:
         """Add address to listen for incoming connections."""
         self.listen_address_descriptions.append(addr)
@@ -283,8 +276,13 @@ class ConnectionsManager:
 
     def start(self) -> None:
         """Listen on the given address descriptions and start accepting and processing connections."""
-        if self.manager is None:
-            raise TypeError('Class was built incorrectly without a HathorManager.')
+        self._started = True
+        if len(self._enabled_sync_versions) == 0:
+            raise TypeError('Class built incorrectly without any enabled sync version')
+
+        if self.is_sync_version_available(SyncVersion.V2):
+            self.log.debug('enable sync-v2 indexes')
+            self.dependencies.enable_mempool_index()
 
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
@@ -313,6 +311,7 @@ class ConnectionsManager:
         self.reactor.callLater(30, self._start_whitelist_reconnect)
 
     def stop(self) -> None:
+        assert self._started
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
 
@@ -524,7 +523,6 @@ class ConnectionsManager:
         """
         self.peers_cleanup()
         # when we have no connected peers left, run the discovery process again
-        assert self.manager is not None
         now = self.reactor.seconds()
         if now - self._last_discovery >= self.PEER_DISCOVERY_INTERVAL:
             self._last_discovery = now
@@ -555,7 +553,6 @@ class ConnectionsManager:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
 
     def _update_whitelist_cb(self, body: bytes) -> None:
-        assert self.manager is not None
         self.log.info('update whitelist got response')
         try:
             text = body.decode()
@@ -563,7 +560,7 @@ class ConnectionsManager:
         except Exception:
             self.log.exception('failed to parse whitelist')
             return
-        current_whitelist = set(self.manager.peers_whitelist)
+        current_whitelist = set(self.peers_whitelist)
         peers_to_add = new_whitelist - current_whitelist
         if peers_to_add:
             self.log.info('add new peers to whitelist', peers=peers_to_add)
@@ -571,9 +568,9 @@ class ConnectionsManager:
         if peers_to_remove:
             self.log.info('remove peers peers from whitelist', peers=peers_to_remove)
         for peer_id in peers_to_add:
-            self.manager.add_peer_to_whitelist(peer_id)
+            self._add_peer_to_whitelist(peer_id)
         for peer_id in peers_to_remove:
-            self.manager.remove_peer_from_whitelist_and_disconnect(peer_id)
+            self._remove_peer_from_whitelist_and_disconnect(peer_id)
 
     def connect_to_if_not_connected(self, peer: UnverifiedPeer | PublicPeer, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
@@ -699,24 +696,21 @@ class ConnectionsManager:
             return
 
         self._listen_addresses.append(address)
+        self._add_hostname_entrypoint(address)
 
-        assert self.manager is not None
-        if self.manager.hostname:
-            self._add_hostname_entrypoint(self.manager.hostname, address)
-
-    def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:
+    def _update_hostname_entrypoints(self, *, old_hostname: str | None) -> None:
         """Add new hostname entrypoints according to the listen addresses, and remove any old entrypoint."""
-        assert self.manager is not None
         for address in self._listen_addresses:
             if old_hostname is not None:
                 old_entrypoint = Entrypoint.from_hostname_address(old_hostname, address)
                 if old_entrypoint in self.my_peer.info.entrypoints:
                     self.my_peer.info.entrypoints.remove(old_entrypoint)
-            self._add_hostname_entrypoint(new_hostname, address)
+            self._add_hostname_entrypoint(address)
 
-    def _add_hostname_entrypoint(self, hostname: str, address: IPv4Address | IPv6Address) -> None:
-        hostname_entrypoint = Entrypoint.from_hostname_address(hostname, address)
-        self.my_peer.info.entrypoints.append(hostname_entrypoint)
+    def _add_hostname_entrypoint(self, address: IPv4Address | IPv6Address) -> None:
+        if self.hostname:
+            hostname_entrypoint = Entrypoint.from_hostname_address(self.hostname, address)
+            self.my_peer.info.entrypoints.append(hostname_entrypoint)
 
     def get_connection_to_drop(self, protocol: HathorProtocol) -> HathorProtocol:
         """ When there are duplicate connections, determine which one should be dropped.
@@ -750,7 +744,7 @@ class ConnectionsManager:
         self.log.debug('dropping connection', peer_id=protocol.peer.id, protocol=type(protocol).__name__)
         protocol.send_error_and_close_connection('Connection droped')
 
-    def drop_connection_by_peer_id(self, peer_id: PeerId) -> None:
+    def _drop_connection_by_peer_id(self, peer_id: PeerId) -> None:
         """ Drop a connection by peer id
         """
         protocol = self.connected_peers.get(peer_id)
@@ -844,3 +838,31 @@ class ConnectionsManager:
         self.log.warn('Killing all connections and resetting entrypoints...')
         self.disconnect_all_peers(force=True)
         self.my_peer.reload_entrypoints_from_source_file()
+
+    def has_sync_version_capability(self) -> bool:
+        return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
+
+    def _add_peer_to_whitelist(self, peer_id: PeerId) -> None:
+        if not self._settings.ENABLE_PEER_WHITELIST:
+            return
+
+        if peer_id in self.peers_whitelist:
+            self.log.info('peer already in whitelist', peer_id=peer_id)
+        else:
+            self.peers_whitelist.append(peer_id)
+
+    def _remove_peer_from_whitelist_and_disconnect(self, peer_id: PeerId) -> None:
+        if not self._settings.ENABLE_PEER_WHITELIST:
+            return
+
+        if peer_id in self.peers_whitelist:
+            self.peers_whitelist.remove(peer_id)
+            # disconnect from node
+            self._drop_connection_by_peer_id(peer_id)
+
+    def set_hostname_and_reset_connections(self, new_hostname: str) -> None:
+        """Set the hostname and reset all connections."""
+        old_hostname = self.hostname
+        self.hostname = new_hostname
+        self._update_hostname_entrypoints(old_hostname=old_hostname)
+        self.disconnect_all_peers(force=True)
