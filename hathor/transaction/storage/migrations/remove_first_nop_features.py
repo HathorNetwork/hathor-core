@@ -16,10 +16,7 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_global_settings
-from hathor.transaction import Block
 from hathor.transaction.storage.migrations import BaseMigration
-from hathor.util import progress
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage
@@ -38,21 +35,5 @@ class Migration(BaseMigration):
         """
         This migration clears the Feature Activation metadata related to the first Phased Testing on testnet.
         """
-        settings = get_global_settings()
         log = logger.new()
-
-        if settings.NETWORK_NAME != 'testnet-golf':
-            # If it's not testnet, we don't have to clear anything.
-            log.info('Skipping testnet-only migration.')
-            return
-
-        topological_iterator = storage.topological_iterator()
-
-        for vertex in progress(topological_iterator, log=log, total=None):
-            if isinstance(vertex, Block):
-                meta = vertex.get_metadata()
-                # This is the start_height of the **second** Phased Testing, so we clear anything before it.
-                if vertex.static_metadata.height < 3_386_880:
-                    meta.feature_states = None
-
-                    storage.save_transaction(vertex, only_metadata=True)
+        log.info('Skipping migration as it will run on migrate_feature_states.')

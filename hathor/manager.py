@@ -542,6 +542,8 @@ class HathorManager:
 
         self.tx_storage.indexes._manually_initialize(self.tx_storage)
 
+        self._bit_signaling_service.start()
+
         self.log.debug('done loading transactions')
 
         # Check if all checkpoints in database are ok

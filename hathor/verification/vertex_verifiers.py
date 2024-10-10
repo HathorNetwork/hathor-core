@@ -16,7 +16,6 @@ from typing import NamedTuple
 
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
@@ -35,13 +34,7 @@ class VertexVerifiers(NamedTuple):
     token_creation_tx: TokenCreationTransactionVerifier
 
     @classmethod
-    def create_defaults(
-        cls,
-        *,
-        settings: HathorSettings,
-        daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService,
-    ) -> 'VertexVerifiers':
+    def create_defaults(cls, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
@@ -52,7 +45,6 @@ class VertexVerifiers(NamedTuple):
             settings=settings,
             vertex_verifier=vertex_verifier,
             daa=daa,
-            feature_service=feature_service
         )
 
     @classmethod
@@ -62,13 +54,12 @@ class VertexVerifiers(NamedTuple):
         settings: HathorSettings,
         vertex_verifier: VertexVerifier,
         daa: DifficultyAdjustmentAlgorithm,
-        feature_service: FeatureService,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using a custom vertex_verifier.
         """
-        block_verifier = BlockVerifier(settings=settings, daa=daa, feature_service=feature_service)
-        merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
+        block_verifier = BlockVerifier(settings=settings, daa=daa)
+        merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings)
         poa_block_verifier = PoaBlockVerifier(settings=settings)
         tx_verifier = TransactionVerifier(settings=settings, daa=daa)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)

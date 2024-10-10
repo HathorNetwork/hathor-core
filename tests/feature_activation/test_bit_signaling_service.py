@@ -16,16 +16,19 @@ from unittest.mock import Mock
 
 import pytest
 
+from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
+from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import Block
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.storage import TransactionStorage
+from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
 
 @pytest.mark.parametrize(
@@ -168,19 +171,19 @@ def _test_generate_signal_bits(
 ) -> int:
     settings = Mock(spec_set=HathorSettings)
     settings.FEATURE_ACTIVATION = FeatureSettings()
-    feature_service = Mock(spec_set=FeatureService)
-    feature_service.get_feature_infos = lambda block: feature_infos
+    block = Mock(spec_set=Block)
+    block.static_metadata.get_feature_infos = lambda _: feature_infos
 
     service = BitSignalingService(
         settings=settings,
-        feature_service=feature_service,
         tx_storage=Mock(),
         support_features=support_features,
         not_support_features=not_support_features,
         feature_storage=Mock(),
+        pubsub=Mock(),
     )
 
-    return service.generate_signal_bits(block=Mock())
+    return service.generate_signal_bits(block=block)
 
 
 @pytest.mark.parametrize(
@@ -216,11 +219,11 @@ def test_support_intersection_validation(
     with pytest.raises(ValueError) as e:
         BitSignalingService(
             settings=Mock(),
-            feature_service=Mock(),
             tx_storage=Mock(),
             support_features=support_features,
             not_support_features=not_support_features,
             feature_storage=Mock(),
+            pubsub=Mock(),
         )
 
     message = str(e.value)
@@ -258,27 +261,24 @@ def test_non_signaling_features_warning(
     settings = Mock(spec_set=HathorSettings)
     settings.FEATURE_ACTIVATION = FeatureSettings()
 
-    best_block = Mock(spec_set=Block)
-    best_block.get_height = Mock(return_value=123)
-    best_block.hash_hex = 'abc'
+    best_block = Block(hash=b'abc')
+    static_metadata = BlockStaticMetadata(
+        height=123,
+        min_height=0,
+        feature_activation_bit_counts=[],
+        feature_states={},
+    )
+    best_block.set_static_metadata(static_metadata)
     tx_storage = Mock(spec_set=TransactionStorage)
     tx_storage.get_best_block = lambda: best_block
 
-    def get_feature_infos_mock(block: Block) -> dict[Feature, FeatureInfo]:
-        if block == best_block:
-            return {}
-        raise NotImplementedError
-
-    feature_service = Mock(spec_set=FeatureService)
-    feature_service.get_feature_infos = get_feature_infos_mock
-
     service = BitSignalingService(
         settings=settings,
-        feature_service=feature_service,
         tx_storage=tx_storage,
         support_features=support_features,
         not_support_features=not_support_features,
         feature_storage=Mock(),
+        pubsub=Mock(),
     )
     logger_mock = Mock()
     service._log = logger_mock
@@ -289,38 +289,124 @@ def test_non_signaling_features_warning(
         'Considering the current best block, there are signaled features outside their signaling period. '
         'Therefore, signaling for them has no effect. Make sure you are signaling for the desired features.',
         best_block_height=123,
-        best_block_hash='abc',
+        best_block_hash=b'abc'.hex(),
         non_signaling_features=non_signaling_features,
     )
 
 
 def test_on_must_signal_not_supported() -> None:
+    settings = get_global_settings()._replace(
+        FEATURE_ACTIVATION=FeatureSettings.construct(
+            features={
+                Feature.NOP_FEATURE_1: Mock()
+            }
+        )
+    )
+
+    best_block = Mock(spec_set=Block)
+    best_block.static_metadata.get_feature_infos = Mock(return_value={})
+
+    storage = Mock(spec_set=TransactionStorage)
+    storage.get_best_block = Mock(return_value=best_block)
+
+    pubsub = PubSubManager(TestMemoryReactorClock())
     service = BitSignalingService(
-        settings=Mock(),
-        feature_service=Mock(),
-        tx_storage=Mock(),
+        settings=settings,
+        tx_storage=storage,
         support_features=set(),
         not_support_features={Feature.NOP_FEATURE_1},
         feature_storage=Mock(),
+        pubsub=pubsub,
     )
 
-    service.on_must_signal(feature=Feature.NOP_FEATURE_1)
+    parent_block = Block()
+    parent_block.set_static_metadata(
+        BlockStaticMetadata(
+            height=122,
+            min_height=0,
+            feature_activation_bit_counts=[],
+            feature_states={
+                Feature.NOP_FEATURE_1: FeatureState.STARTED
+            }
+        )
+    )
+
+    block = Block()
+    block.set_static_metadata(
+        BlockStaticMetadata(
+            height=123,
+            min_height=0,
+            feature_activation_bit_counts=[],
+            feature_states={
+                Feature.NOP_FEATURE_1: FeatureState.MUST_SIGNAL
+            }
+        )
+    )
+    block_mock = Mock(wraps=block, spec_set=Block)
+    block_mock.get_block_parent = Mock(return_value=parent_block)
+    block_mock.is_genesis = False
+
+    service.start()
+    pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=block_mock)
 
     assert service._support_features == {Feature.NOP_FEATURE_1}
     assert service._not_support_features == set()
 
 
 def test_on_must_signal_supported() -> None:
+    settings = get_global_settings()._replace(
+        FEATURE_ACTIVATION=FeatureSettings.construct(
+            features={
+                Feature.NOP_FEATURE_1: Mock()
+            }
+        )
+    )
+
+    best_block = Mock(spec_set=Block)
+    best_block.static_metadata.get_feature_infos = Mock(return_value={})
+
+    storage = Mock(spec_set=TransactionStorage)
+    storage.get_best_block = Mock(return_value=best_block)
+
+    pubsub = PubSubManager(TestMemoryReactorClock())
     service = BitSignalingService(
-        settings=Mock(),
-        feature_service=Mock(),
-        tx_storage=Mock(),
+        settings=settings,
+        tx_storage=storage,
         support_features=set(),
         not_support_features=set(),
         feature_storage=Mock(),
+        pubsub=pubsub,
     )
 
-    service.on_must_signal(feature=Feature.NOP_FEATURE_1)
+    parent_block = Block()
+    parent_block.set_static_metadata(
+        BlockStaticMetadata(
+            height=122,
+            min_height=0,
+            feature_activation_bit_counts=[],
+            feature_states={
+                Feature.NOP_FEATURE_1: FeatureState.STARTED
+            }
+        )
+    )
+
+    block = Block()
+    block.set_static_metadata(
+        BlockStaticMetadata(
+            height=123,
+            min_height=0,
+            feature_activation_bit_counts=[],
+            feature_states={
+                Feature.NOP_FEATURE_1: FeatureState.MUST_SIGNAL
+            }
+        )
+    )
+    block_mock = Mock(wraps=block, spec_set=Block)
+    block_mock.get_block_parent = Mock(return_value=parent_block)
+    block_mock.is_genesis = False
+
+    service.start()
+    pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=block_mock)
 
     assert service._support_features == {Feature.NOP_FEATURE_1}
     assert service._not_support_features == set()
