@@ -488,7 +488,9 @@ class NodeBlockSync(SyncAgent):
         data = [bytes.fromhex(x) for x in data]
         # filter-out txs we already have
         try:
-            self._receiving_tips.extend(VertexId(tx_id) for tx_id in data if not self.partial_vertex_exists(tx_id))
+            self._receiving_tips.extend(
+                VertexId(tx_id) for tx_id in data if not self.tx_storage.partial_vertex_exists(tx_id)
+            )
         except ValueError:
             self.protocol.send_error_and_close_connection('Invalid trasaction ID received')
         # XXX: it's OK to do this *after* the extend because the payload is limited by the line protocol
@@ -553,12 +555,6 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.state is not None
         self.protocol.state.send_message(cmd, payload)
 
-    def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
-        """ Return true if the vertex exists no matter its validation state.
-        """
-        with self.tx_storage.allow_partially_validated_context():
-            return self.tx_storage.transaction_exists(vertex_id)
-
     @inlineCallbacks
     def find_best_common_block(self,
                                my_best_block: _HeightInfo,
@@ -621,11 +617,11 @@ class NodeBlockSync(SyncAgent):
         try:
             for tx in vertex_list:
                 if not self.tx_storage.transaction_exists(tx.hash):
-                    self.vertex_handler.on_new_vertex(tx, propagate_to_peers=False, fails_silently=False)
+                    self.vertex_handler.on_new_vertex(tx, fails_silently=False)
                 yield deferLater(self.reactor, 0, lambda: None)
 
             if not self.tx_storage.transaction_exists(blk.hash):
-                self.vertex_handler.on_new_vertex(blk, propagate_to_peers=False, fails_silently=False)
+                self.vertex_handler.on_new_vertex(blk, fails_silently=False)
         except InvalidNewTransaction:
             self.protocol.send_error_and_close_connection('invalid vertex received')
 
@@ -1163,7 +1159,7 @@ class NodeBlockSync(SyncAgent):
 
         tx.storage = self.protocol.node.tx_storage
 
-        if self.partial_vertex_exists(tx.hash):
+        if self.tx_storage.partial_vertex_exists(tx.hash):
             # transaction already added to the storage, ignore it
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
             self.tx_storage.compare_bytes_with_local_tx(tx)
@@ -1174,7 +1170,9 @@ class NodeBlockSync(SyncAgent):
             if self.tx_storage.can_validate_full(tx):
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
                 try:
-                    self.vertex_handler.on_new_vertex(tx, propagate_to_peers=True, fails_silently=False)
+                    result = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+                    if result:
+                        self.protocol.connections.send_tx_to_peers(tx)
                 except InvalidNewTransaction:
                     self.protocol.send_error_and_close_connection('invalid vertex received')
             else:
