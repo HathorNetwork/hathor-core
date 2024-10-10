@@ -614,7 +614,6 @@ class Builder:
                 tx_storage=self._get_or_create_tx_storage(),
                 verification_service=self._get_or_create_verification_service(),
                 consensus=self._get_or_create_consensus(),
-                p2p_manager=self._get_or_create_p2p_manager(),
                 feature_service=self._get_or_create_feature_service(),
                 pubsub=self._get_or_create_pubsub(),
                 wallet=self._get_or_create_wallet(),
