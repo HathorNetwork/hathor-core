@@ -1171,7 +1171,7 @@ class NodeBlockSync(SyncAgent):
         else:
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            if tx.can_validate_full():
+            if self.tx_storage.can_validate_full(tx):
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
                 try:
                     self.vertex_handler.on_new_vertex(tx, propagate_to_peers=True, fails_silently=False)

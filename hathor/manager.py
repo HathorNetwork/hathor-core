@@ -483,7 +483,7 @@ class HathorManager:
                 # TODO: deal with invalid tx
                 tx._update_parents_children_metadata()
 
-                if tx.can_validate_full():
+                if self.tx_storage.can_validate_full(tx):
                     tx.update_initial_metadata()
                     if tx.is_genesis:
                         assert tx.validate_checkpoint(self.checkpoints)
