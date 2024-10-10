@@ -61,7 +61,7 @@ class QuickTest(RunNode):
                 self.reactor.fireSystemEvent('shutdown')
                 os._exit(0)
             return res
-        self.manager.on_new_tx = patched_on_new_tx
+        self.manager.on_new_tx = patched_on_new_tx  # type: ignore[method-assign]
 
         timeout = 300
         self.log.info('exit with error code if it take too long', timeout=timeout)
