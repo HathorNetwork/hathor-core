@@ -24,9 +24,9 @@ from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
-from hathor.conf.settings import HathorSettings
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.netfilter.factory import NetfilterFactory
+from hathor.p2p.p2p_dependencies import P2PDependencies
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -37,8 +37,7 @@ from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import parse_whitelist
-from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.reactor import ReactorProtocol as Reactor
+from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
 from hathor.util import Random
 
@@ -93,24 +92,23 @@ class ConnectionsManager:
 
     def __init__(
         self,
-        settings: HathorSettings,
-        reactor: Reactor,
+        dependencies: P2PDependencies,
         my_peer: PrivatePeer,
-        pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
         whitelist_only: bool,
     ) -> None:
         self.log = logger.new()
-        self._settings = settings
+        self.dependencies = dependencies
+        self._settings = dependencies.settings
         self.rng = rng
         self.manager = None
 
-        self.MAX_ENABLED_SYNC = settings.MAX_ENABLED_SYNC
-        self.SYNC_UPDATE_INTERVAL = settings.SYNC_UPDATE_INTERVAL
-        self.PEER_DISCOVERY_INTERVAL = settings.PEER_DISCOVERY_INTERVAL
+        self.MAX_ENABLED_SYNC = self._settings.MAX_ENABLED_SYNC
+        self.SYNC_UPDATE_INTERVAL = self._settings.SYNC_UPDATE_INTERVAL
+        self.PEER_DISCOVERY_INTERVAL = self._settings.PEER_DISCOVERY_INTERVAL
 
-        self.reactor = reactor
+        self.reactor = dependencies.reactor
         self.my_peer = my_peer
 
         # List of address descriptions to listen for new connections (eg: [tcp:8000])
@@ -129,10 +127,16 @@ class ConnectionsManager:
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
         self.use_ssl = ssl
         self.server_factory = HathorServerFactory(
-            self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+            my_peer=self.my_peer,
+            p2p_manager=self,
+            dependencies=dependencies,
+            use_ssl=self.use_ssl,
         )
         self.client_factory = HathorClientFactory(
-            self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+            my_peer=self.my_peer,
+            p2p_manager=self,
+            dependencies=dependencies,
+            use_ssl=self.use_ssl,
         )
 
         # Global maximum number of connections.
@@ -183,9 +187,6 @@ class ConnectionsManager:
         if self._settings.ENABLE_PEER_WHITELIST:
             self.wl_reconnect = LoopingCall(self.update_whitelist)
             self.wl_reconnect.clock = self.reactor
-
-        # Pubsub object to publish events
-        self.pubsub = pubsub
 
         # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
         self.whitelist_only = whitelist_only
@@ -373,7 +374,7 @@ class ConnectionsManager:
         self.log.warn('connection failure', entrypoint=entrypoint, failure=failure.getErrorMessage())
         self.connecting_peers.pop(endpoint)
 
-        self.pubsub.publish(
+        self.dependencies.publish(
             HathorEvents.NETWORK_PEER_CONNECTION_FAILED,
             peer=peer,
             peers_count=self._get_peers_count()
@@ -388,7 +389,7 @@ class ConnectionsManager:
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
-        self.pubsub.publish(
+        self.dependencies.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
             protocol=protocol,
             peers_count=self._get_peers_count()
@@ -405,7 +406,7 @@ class ConnectionsManager:
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emitted regardless
-        self.pubsub.publish(
+        self.dependencies.publish(
             HathorEvents.NETWORK_PEER_READY,
             protocol=protocol,
             peers_count=self._get_peers_count()
@@ -459,7 +460,7 @@ class ConnectionsManager:
                 # chance it can happen if both connections start at the same time and none of them has
                 # reached READY state while the other is on PEER_ID state
                 self.connected_peers[protocol.peer.id] = existing_protocol
-        self.pubsub.publish(
+        self.dependencies.publish(
             HathorEvents.NETWORK_PEER_DISCONNECTED,
             protocol=protocol,
             peers_count=self._get_peers_count()
@@ -653,7 +654,7 @@ class ConnectionsManager:
         deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)  # type: ignore
         deferred.addErrback(self.on_connection_failure, peer, endpoint)  # type: ignore
         self.log.info('connect to', entrypoint=str(entrypoint), peer=str(peer))
-        self.pubsub.publish(
+        self.dependencies.publish(
             HathorEvents.NETWORK_PEER_CONNECTING,
             peer=peer,
             peers_count=self._get_peers_count()

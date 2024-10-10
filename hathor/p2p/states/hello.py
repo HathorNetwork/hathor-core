@@ -18,9 +18,9 @@ from structlog import get_logger
 
 import hathor
 from hathor.conf.get_settings import get_global_settings
-from hathor.conf.settings import HathorSettings
 from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.p2p_dependencies import P2PDependencies
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import format_address, get_genesis_short_hash, get_settings_hello_dict
@@ -33,8 +33,8 @@ logger = get_logger()
 
 
 class HelloState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
-        super().__init__(protocol, settings)
+    def __init__(self, protocol: 'HathorProtocol', *, dependencies: P2PDependencies) -> None:
+        super().__init__(protocol, dependencies=dependencies)
         self.log = logger.new(**protocol.get_logger_context())
         self.cmd_map.update({
             ProtocolMessages.HELLO: self.handle_hello,
@@ -55,7 +55,7 @@ class HelloState(BaseState):
             'network': self._settings.NETWORK_NAME,
             'remote_address': format_address(remote),
             'genesis_short_hash': get_genesis_short_hash(),
-            'timestamp': protocol.node.reactor.seconds(),
+            'timestamp': self.dependencies.reactor.seconds(),
             'settings_dict': get_settings_hello_dict(self._settings),
             'capabilities': protocol.node.capabilities,
         }
@@ -143,7 +143,7 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Different genesis.')
             return
 
-        dt = data['timestamp'] - protocol.node.reactor.seconds()
+        dt = data['timestamp'] - self.dependencies.reactor.seconds()
         if abs(dt) > self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED / 2:
             protocol.send_error_and_close_connection('Nodes timestamps too far apart.')
             return
