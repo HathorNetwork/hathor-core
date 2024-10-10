@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 from structlog import get_logger
 
 import hathor
-from hathor.conf.get_settings import get_global_settings
 from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.p2p_dependencies import P2PDependencies
@@ -57,9 +56,9 @@ class HelloState(BaseState):
             'genesis_short_hash': get_genesis_short_hash(),
             'timestamp': self.dependencies.reactor.seconds(),
             'settings_dict': get_settings_hello_dict(self._settings),
-            'capabilities': protocol.node.capabilities,
+            'capabilities': protocol.connections.capabilities,
         }
-        if self.protocol.node.has_sync_version_capability():
+        if protocol.connections.has_sync_version_capability():
             data['sync_versions'] = [x.value for x in self._get_sync_versions()]
         return data
 
@@ -112,7 +111,7 @@ class HelloState(BaseState):
 
         my_sync_versions = self._get_sync_versions()
         try:
-            remote_sync_versions = _parse_sync_versions(data)
+            remote_sync_versions = self._parse_sync_versions(data)
         except HathorError as e:
             # this will only happen if the remote implementation is wrong
             self.log.warn('invalid protocol', error=e)
@@ -172,16 +171,14 @@ class HelloState(BaseState):
 
         protocol.change_state(protocol.PeerState.PEER_ID)
 
-
-def _parse_sync_versions(hello_data: dict[str, Any]) -> set[SyncVersion]:
-    """Versions that are not recognized will not be included."""
-    settings = get_global_settings()
-    if settings.CAPABILITY_SYNC_VERSION in hello_data['capabilities']:
-        if 'sync_versions' not in hello_data:
-            raise HathorError('protocol error, expected sync_versions field')
-        known_values = set(x.value for x in SyncVersion)
-        recognized_values = set(hello_data['sync_versions']) & known_values
-        return set(SyncVersion(x) for x in recognized_values)
-    else:
-        # XXX: implied value when sync-version capability isn't present
-        return {SyncVersion.V1_1}
+    def _parse_sync_versions(self, hello_data: dict[str, Any]) -> set[SyncVersion]:
+        """Versions that are not recognized will not be included."""
+        if self._settings.CAPABILITY_SYNC_VERSION in hello_data['capabilities']:
+            if 'sync_versions' not in hello_data:
+                raise HathorError('protocol error, expected sync_versions field')
+            known_values = set(x.value for x in SyncVersion)
+            recognized_values = set(hello_data['sync_versions']) & known_values
+            return set(SyncVersion(x) for x in recognized_values)
+        else:
+            # XXX: implied value when sync-version capability isn't present
+            return {SyncVersion.V1_1}
