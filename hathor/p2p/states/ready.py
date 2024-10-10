@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
+from hathor.p2p import P2PDependencies
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PublicPeer, UnverifiedPeer
 from hathor.p2p.states.base import BaseState
@@ -35,12 +35,12 @@ logger = get_logger()
 
 
 class ReadyState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
-        super().__init__(protocol, settings)
+    def __init__(self, protocol: 'HathorProtocol', *, dependencies: P2PDependencies) -> None:
+        super().__init__(protocol, dependencies=dependencies)
 
         self.log = logger.new(**self.protocol.get_logger_context())
 
-        self.reactor = self.protocol.node.reactor
+        self.reactor = self.dependencies.reactor
 
         # It triggers an event to send a ping message if necessary.
         self.lc_ping = LoopingCall(self.send_ping_if_necessary)
@@ -106,7 +106,7 @@ class ReadyState(BaseState):
         self.log.debug(f'loading {sync_version}')
         sync_factory = connections.get_sync_factory(sync_version)
 
-        self.sync_agent: SyncAgent = sync_factory.create_sync_agent(self.protocol, reactor=self.reactor)
+        self.sync_agent: SyncAgent = sync_factory.create_sync_agent(self.protocol)
         self.cmd_map.update(self.sync_agent.get_cmd_dict())
 
     def on_enter(self) -> None:
@@ -255,7 +255,7 @@ class ReadyState(BaseState):
             )
             return
 
-        best_blockchain = self.protocol.node.tx_storage.get_n_height_tips(n_blocks)
+        best_blockchain = self.dependencies.get_n_height_tips(n_blocks)
         self.send_best_blockchain(best_blockchain)
 
     def send_best_blockchain(self, best_blockchain: list[HeightInfo]) -> None:

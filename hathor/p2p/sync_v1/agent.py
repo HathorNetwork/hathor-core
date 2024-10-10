@@ -22,14 +22,12 @@ from structlog import get_logger
 from twisted.internet.defer import CancelledError, Deferred, inlineCallbacks
 from twisted.internet.interfaces import IDelayedCall
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.p2p import P2PDependencies
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
-from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import json_dumps, json_loads
 
 logger = get_logger()
@@ -64,9 +62,8 @@ class NodeSyncTimestamp(SyncAgent):
         self,
         protocol: 'HathorProtocol',
         downloader: Downloader,
-        reactor: Reactor,
         *,
-        vertex_parser: VertexParser,
+        dependencies: P2PDependencies,
     ) -> None:
         """
         :param protocol: Protocol of the connection.
@@ -75,13 +72,11 @@ class NodeSyncTimestamp(SyncAgent):
         :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
         :type reactor: Reactor
         """
-        self._settings = get_global_settings()
-        self.vertex_parser = vertex_parser
+        self._settings = dependencies.settings
+        self.dependencies = dependencies
         self.protocol = protocol
-        self.manager = protocol.node
         self.downloader = downloader
-
-        self.reactor: Reactor = reactor
+        self.reactor = dependencies.reactor
 
         # Rate limit for this connection.
         assert protocol.connections is not None
@@ -184,7 +179,7 @@ class NodeSyncTimestamp(SyncAgent):
         See the `send_tx_to_peer_if_possible` method for the exact process and to understand why this condition has to
         be this way.
         """
-        return self.manager.tx_storage.latest_timestamp - self.synced_timestamp <= self.sync_threshold
+        return self.dependencies.get_latest_timestamp() - self.synced_timestamp <= self.sync_threshold
 
     def is_errored(self) -> bool:
         # XXX: this sync manager does not have an error state, this method exists for API parity with sync-v2
@@ -203,7 +198,7 @@ class NodeSyncTimestamp(SyncAgent):
             # parents' timestamps are below synced_timestamp, i.e., we know that the peer
             # has all the parents.
             for parent_hash in tx.parents:
-                parent = self.protocol.node.tx_storage.get_transaction(parent_hash)
+                parent = self.dependencies.get_vertex(parent_hash)
                 if parent.timestamp > self.synced_timestamp:
                     return
 
@@ -286,7 +281,7 @@ class NodeSyncTimestamp(SyncAgent):
                            next_offset=payload.next_offset, hashes=len(payload.hashes))
             count = 0
             for h in payload.hashes:
-                if not self.manager.tx_storage.transaction_exists(h):
+                if not self.dependencies.vertex_exists(h):
                     pending.add(self.get_data(h))
                     count += 1
             self.log.debug('...', next_ts=next_timestamp, count=count, pending=len(pending))
@@ -321,18 +316,18 @@ class NodeSyncTimestamp(SyncAgent):
         # Maximum of ceil(log(k)), where k is the number of items between the new one and the latest item.
         prev_cur = None
         cur = self.peer_timestamp
-        local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(cur)
+        local_merkle_tree, _ = self.dependencies.get_merkle_tree(cur)
         step = 1
         while tips.merkle_tree != local_merkle_tree:
-            if cur <= self.manager.tx_storage.first_timestamp:
+            if cur <= self.dependencies.get_first_timestamp():
                 raise Exception(
                     'We cannot go before genesis. Peer is probably running with wrong configuration or database.'
                 )
             prev_cur = cur
-            assert self.manager.tx_storage.first_timestamp > 0
-            cur = max(cur - step, self.manager.tx_storage.first_timestamp)
+            assert self.dependencies.get_first_timestamp() > 0
+            cur = max(cur - step, self.dependencies.get_first_timestamp())
             tips = (yield self.get_peer_tips(cur))
-            local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(cur)
+            local_merkle_tree, _ = self.dependencies.get_merkle_tree(cur)
             step *= 2
 
         # Here, both nodes are synced at timestamp `cur` and not synced at timestamp `prev_cur`.
@@ -348,7 +343,7 @@ class NodeSyncTimestamp(SyncAgent):
         while high - low > 1:
             mid = (low + high + 1) // 2
             tips = (yield self.get_peer_tips(mid))
-            local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(mid)
+            local_merkle_tree, _ = self.dependencies.get_merkle_tree(mid)
             if tips.merkle_tree == local_merkle_tree:
                 low = mid
             else:
@@ -442,9 +437,8 @@ class NodeSyncTimestamp(SyncAgent):
         from hathor.indexes.timestamp_index import RangeIdx
         count = self.MAX_HASHES
 
-        assert self.manager.tx_storage.indexes is not None
         from_idx = RangeIdx(timestamp, offset)
-        hashes, next_idx = self.manager.tx_storage.indexes.sorted_all.get_hashes_and_next_idx(from_idx, count)
+        hashes, next_idx = self.dependencies.get_hashes_and_next_idx(from_idx, count)
         if next_idx is None:
             # this means we've reached the end and there's nothing else to sync
             next_timestamp, next_offset = inf, 0
@@ -524,7 +518,7 @@ class NodeSyncTimestamp(SyncAgent):
         """ Send a TIPS message.
         """
         if timestamp is None:
-            timestamp = self.manager.tx_storage.latest_timestamp
+            timestamp = self.dependencies.get_latest_timestamp()
 
         # All tips
         # intervals = self.manager.tx_storage.get_all_tips(timestamp)
@@ -532,7 +526,7 @@ class NodeSyncTimestamp(SyncAgent):
         #     raise Exception('No tips for timestamp {}'.format(timestamp))
 
         # Calculate list of hashes to be sent
-        merkle_tree, hashes = self.manager.tx_storage.get_merkle_tree(timestamp)
+        merkle_tree, hashes = self.dependencies.get_merkle_tree(timestamp)
         has_more = False
 
         if not include_hashes:
@@ -577,7 +571,7 @@ class NodeSyncTimestamp(SyncAgent):
         hash_hex = payload
         # self.log.debug('handle_get_data', payload=hash_hex)
         try:
-            tx = self.protocol.node.tx_storage.get_transaction(bytes.fromhex(hash_hex))
+            tx = self.dependencies.get_vertex(bytes.fromhex(hash_hex))
             self.send_data(tx)
         except TransactionDoesNotExist:
             # In case the tx does not exist we send a NOT-FOUND message
@@ -605,7 +599,7 @@ class NodeSyncTimestamp(SyncAgent):
         data = base64.b64decode(payload)
 
         try:
-            tx = self.vertex_parser.deserialize(data)
+            tx = self.dependencies.vertex_parser.deserialize(data)
         except struct.error:
             # Invalid data for tx decode
             return
@@ -614,11 +608,10 @@ class NodeSyncTimestamp(SyncAgent):
 
         self.log.debug('tx received from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
 
-        if self.protocol.node.tx_storage.get_genesis(tx.hash):
+        if self.dependencies.get_genesis(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return
-        tx.storage = self.protocol.node.tx_storage
 
         key = self.get_data_key(tx.hash)
         deferred = self.deferred_by_key.pop(key, None)
@@ -627,16 +620,16 @@ class NodeSyncTimestamp(SyncAgent):
             assert tx.timestamp is not None
             self.requested_data_arrived(tx.timestamp)
             deferred.callback(tx)
-        elif self.manager.tx_storage.transaction_exists(tx.hash):
+        elif self.dependencies.vertex_exists(tx.hash):
             # transaction already added to the storage, ignore it
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
-            self.manager.tx_storage.compare_bytes_with_local_tx(tx)
+            self.dependencies.compare_bytes_with_local_vertex(tx)
             return
         else:
             self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            result = self.manager.vertex_handler.on_new_vertex(tx)
+            result = self.dependencies.on_new_vertex(tx)
             if result:
                 self.protocol.connections.send_tx_to_peers(tx)
             self.update_received_stats(tx, result)
@@ -682,12 +675,12 @@ class NodeSyncTimestamp(SyncAgent):
         # the parameter of the second callback is the return of the first
         # so I need to return the same tx to guarantee that all peers will receive it
         if tx:
-            if self.manager.tx_storage.transaction_exists(tx.hash):
-                self.manager.tx_storage.compare_bytes_with_local_tx(tx)
+            if self.dependencies.vertex_exists(tx.hash):
+                self.dependencies.compare_bytes_with_local_vertex(tx)
                 success = True
             else:
                 # Add tx to the DAG.
-                success = self.manager.vertex_handler.on_new_vertex(tx)
+                success = self.dependencies.on_new_vertex(tx)
                 if success:
                     self.protocol.connections.send_tx_to_peers(tx)
             # Updating stats data

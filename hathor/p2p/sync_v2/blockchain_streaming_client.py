@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred
 
+from hathor.p2p import P2PDependencies
 from hathor.p2p.sync_v2.exception import (
     BlockNotConnectedToPreviousBlock,
     InvalidVertexError,
@@ -35,11 +36,17 @@ logger = get_logger()
 
 
 class BlockchainStreamingClient:
-    def __init__(self, sync_agent: 'NodeBlockSync', start_block: '_HeightInfo', end_block: '_HeightInfo') -> None:
+    def __init__(
+        self,
+        sync_agent: 'NodeBlockSync',
+        start_block: '_HeightInfo',
+        end_block: '_HeightInfo',
+        *,
+        dependencies: P2PDependencies,
+    ) -> None:
+        self.dependencies = dependencies
         self.sync_agent = sync_agent
         self.protocol = self.sync_agent.protocol
-        self.tx_storage = self.sync_agent.tx_storage
-        self.vertex_handler = self.sync_agent.vertex_handler
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
 
@@ -99,7 +106,7 @@ class BlockchainStreamingClient:
 
         # Check for repeated blocks.
         is_duplicated = False
-        if self.tx_storage.partial_vertex_exists(blk.hash):
+        if self.dependencies.partial_vertex_exists(blk.hash):
             # We reached a block we already have. Skip it.
             self._blk_repeated += 1
             is_duplicated = True
@@ -124,9 +131,9 @@ class BlockchainStreamingClient:
         else:
             self.log.debug('block received', blk_id=blk.hash.hex())
 
-        if self.tx_storage.can_validate_full(blk):
+        if self.dependencies.can_validate_full(blk):
             try:
-                self.vertex_handler.on_new_vertex(blk, fails_silently=False)
+                self.dependencies.on_new_vertex(blk, fails_silently=False)
             except HathorError:
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return

@@ -2,6 +2,7 @@ from twisted.python.failure import Failure
 
 from hathor.checkpoint import Checkpoint as cp
 from hathor.crypto.util import decode_address
+from hathor.p2p import SingleProcessP2PDependencies
 from hathor.p2p.protocol import PeerIdState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
@@ -268,13 +269,27 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
 
         downloader = conn.proto2.connections.get_sync_factory(SyncVersion.V1_1).get_downloader()
 
-        node_sync1 = NodeSyncTimestamp(
-            conn.proto1, downloader, reactor=conn.proto1.node.reactor, vertex_parser=self.manager1.vertex_parser
+        p2p_dependencies1 = SingleProcessP2PDependencies(
+            reactor=self.manager1.reactor,
+            settings=self._settings,
+            vertex_parser=self.manager1.vertex_parser,
+            tx_storage=self.manager1.tx_storage,
+            vertex_handler=self.manager1.vertex_handler,
+            verification_service=self.manager1.verification_service,
+            pubsub=self.manager1.pubsub,
         )
+        p2p_dependencies2 = SingleProcessP2PDependencies(
+            reactor=manager2.reactor,
+            settings=self._settings,
+            vertex_parser=manager2.vertex_parser,
+            tx_storage=manager2.tx_storage,
+            vertex_handler=manager2.vertex_handler,
+            verification_service=manager2.verification_service,
+            pubsub=manager2.tx_storage,
+        )
+        node_sync1 = NodeSyncTimestamp(conn.proto1, downloader, dependencies=p2p_dependencies1)
         node_sync1.start()
-        node_sync2 = NodeSyncTimestamp(
-            conn.proto2, downloader, reactor=conn.proto2.node.reactor, vertex_parser=manager2.vertex_parser
-        )
+        node_sync2 = NodeSyncTimestamp(conn.proto2, downloader, dependencies=p2p_dependencies2)
         node_sync2.start()
 
         self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
