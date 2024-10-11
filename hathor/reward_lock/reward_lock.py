@@ -14,7 +14,7 @@
 
 from typing import TYPE_CHECKING, Iterator, Optional
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.transaction import Block
 from hathor.util import not_none
 
@@ -32,19 +32,23 @@ def iter_spent_rewards(tx: 'Transaction', storage: 'VertexStorageProtocol') -> I
             yield spent_tx
 
 
-def is_spent_reward_locked(tx: 'Transaction') -> bool:
+def is_spent_reward_locked(settings: HathorSettings, tx: 'Transaction') -> bool:
     """ Check whether any spent reward is currently locked, considering only the block rewards spent by this tx
     itself, and not the inherited `min_height`"""
-    return get_spent_reward_locked_info(tx, not_none(tx.storage)) is not None
+    return get_spent_reward_locked_info(settings, tx, not_none(tx.storage)) is not None
 
 
-def get_spent_reward_locked_info(tx: 'Transaction', storage: 'VertexStorageProtocol') -> Optional['RewardLockedInfo']:
+def get_spent_reward_locked_info(
+    settings: HathorSettings,
+    tx: 'Transaction',
+    storage: 'VertexStorageProtocol',
+) -> Optional['RewardLockedInfo']:
     """Check if any input block reward is locked, returning the locked information if any, or None if they are all
     unlocked."""
     from hathor.transaction.transaction import RewardLockedInfo
     best_height = get_minimum_best_height(storage)
     for blk in iter_spent_rewards(tx, storage):
-        needed_height = _spent_reward_needed_height(blk, best_height)
+        needed_height = _spent_reward_needed_height(settings, blk, best_height)
         if needed_height > 0:
             return RewardLockedInfo(blk.hash, needed_height)
     return None
@@ -65,10 +69,9 @@ def get_minimum_best_height(storage: 'VertexStorageProtocol') -> int:
     return best_height
 
 
-def _spent_reward_needed_height(block: Block, best_height: int) -> int:
+def _spent_reward_needed_height(settings: HathorSettings, block: Block, best_height: int) -> int:
     """ Returns height still needed to unlock this `block` reward: 0 means it's unlocked."""
     spent_height = block.get_height()
     spend_blocks = best_height - spent_height
-    settings = get_global_settings()
     needed_height = settings.REWARD_SPEND_MIN_BLOCKS - spend_blocks
     return max(needed_height, 0)

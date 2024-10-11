@@ -103,7 +103,7 @@ class Simulator:
         assert self._started, 'Simulator is not started.'
         builder = builder or self.get_default_builder()
 
-        wallet = HDWallet(gap_limit=2)
+        wallet = HDWallet(gap_limit=2, settings=self.settings)
         wallet._manually_initialize()
 
         cpu_mining_service = SimulatorCpuMiningService()

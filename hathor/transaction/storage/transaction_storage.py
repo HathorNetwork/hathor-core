@@ -1063,7 +1063,7 @@ class TransactionStorage(ABC):
         for tx in self.iter_mempool_from_best_index():
             try:
                 TransactionVerifier.verify_reward_locked_for_height(
-                    tx, new_best_height, assert_min_height_verification=False
+                    self._settings, tx, new_best_height, assert_min_height_verification=False
                 )
             except RewardLocked:
                 tx.set_validation(ValidationState.INVALID)

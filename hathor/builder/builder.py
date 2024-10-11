@@ -676,7 +676,7 @@ class Builder:
 
         if self._wallet_directory is None:
             return None
-        self._wallet = Wallet(directory=self._wallet_directory)
+        self._wallet = Wallet(directory=self._wallet_directory, settings=self._get_or_create_settings())
         if self._wallet_unlock is not None:
             self._wallet.unlock(self._wallet_unlock)
         return self._wallet
