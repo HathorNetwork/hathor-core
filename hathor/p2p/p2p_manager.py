@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Iterable, NamedTuple, Optional
+from typing import Any, Iterable, Iterator, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -31,7 +31,7 @@ from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import UnverifiedPeerStorage, VerifiedPeerStorage
-from hathor.p2p.protocol import HathorProtocol
+from hathor.p2p.protocol import ConnectionMetrics, HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.sync_factory import SyncAgentFactory
@@ -867,3 +867,16 @@ class P2PManager:
         self.hostname = new_hostname
         self._update_hostname_entrypoints(old_hostname=old_hostname)
         self.disconnect_all_peers(force=True)
+
+    def get_all_connection_metrics(self) -> Iterator[tuple[str, str, ConnectionMetrics]]:
+        for connection in self.connections:
+            peer_id = connection.get_peer_id()
+            if not peer_id:
+                # A connection without peer will not be able to communicate
+                # So we can just discard it for the sake of the metrics
+                continue
+            entrypoint = connection.entrypoint or ''
+            yield str(peer_id), str(entrypoint), connection.metrics
+
+    def set_localhost_only(self) -> None:
+        self.localhost_only = True

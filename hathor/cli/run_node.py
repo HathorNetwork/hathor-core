@@ -227,7 +227,7 @@ class RunNode:
             rng=self.manager.rng,
             reactor=self.manager.reactor,
             manager=self.manager,
-            p2p_manager=self.manager.connections,
+            p2p_manager=self.manager.p2p_manager,
             pubsub=self.manager.pubsub,
             consensus=self.manager.consensus_algorithm,
             tx_storage=self.manager.tx_storage,
@@ -280,7 +280,7 @@ class RunNode:
         """Called when USR1 signal is received."""
         try:
             self.log.warn('USR1 received.')
-            self.manager.connections.reload_entrypoints_and_connections()
+            self.manager.p2p_manager.reload_entrypoints_and_connections()
         except Exception:
             # see: https://docs.python.org/3/library/signal.html#note-on-signal-handlers-and-exceptions
             self.log.error('prevented exception from escaping the signal handler', exc_info=True)

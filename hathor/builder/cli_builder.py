@@ -416,7 +416,7 @@ class CliBuilder:
             self.manager.allow_mining_without_peers()
 
         if self._args.x_localhost_only:
-            self.manager.connections.localhost_only = True
+            self.manager.p2p_manager.set_localhost_only()
 
         dns_hosts = []
         if settings.BOOTSTRAP_DNS:

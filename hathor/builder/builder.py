@@ -36,6 +36,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.p2p_dependencies import P2PDependencies
 from hathor.p2p.p2p_manager import P2PManager
+from hathor.p2p.p2p_manager_protocol import P2PManagerProtocol
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -99,7 +100,7 @@ class BuildArtifacts(NamedTuple):
     rng: Random
     reactor: Reactor
     manager: HathorManager
-    p2p_manager: P2PManager
+    p2p_manager: P2PManagerProtocol
     pubsub: PubSubManager
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
