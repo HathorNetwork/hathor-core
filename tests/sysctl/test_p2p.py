@@ -3,7 +3,7 @@ import tempfile
 from unittest.mock import MagicMock
 
 from hathor.p2p.peer_id import PeerId
-from hathor.sysctl import ConnectionsManagerSysctl
+from hathor.sysctl import P2PManagerSysctl
 from hathor.sysctl.exception import SysctlException
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -13,7 +13,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_max_enabled_sync(self):
         manager = self.create_peer()
         connections = manager.connections
-        sysctl = ConnectionsManagerSysctl(connections)
+        sysctl = P2PManagerSysctl(connections)
 
         connections._sync_rotate_if_needed = MagicMock()
         self.assertEqual(connections._sync_rotate_if_needed.call_count, 0)
@@ -44,7 +44,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_global_rate_limiter_send_tips(self):
         manager = self.create_peer()
         connections = manager.connections
-        sysctl = ConnectionsManagerSysctl(connections)
+        sysctl = P2PManagerSysctl(connections)
 
         path = 'rate_limit.global.send_tips'
 
@@ -75,7 +75,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_force_sync_rotate(self):
         manager = self.create_peer()
         connections = manager.connections
-        sysctl = ConnectionsManagerSysctl(connections)
+        sysctl = P2PManagerSysctl(connections)
 
         connections._sync_rotate_if_needed = MagicMock()
         self.assertEqual(connections._sync_rotate_if_needed.call_count, 0)
@@ -87,7 +87,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_sync_update_interval(self):
         manager = self.create_peer()
         connections = manager.connections
-        sysctl = ConnectionsManagerSysctl(connections)
+        sysctl = P2PManagerSysctl(connections)
 
         sysctl.unsafe_set('sync_update_interval', 10)
         self.assertEqual(connections.lc_sync_update_interval, 10)
@@ -99,7 +99,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_always_enable_sync(self):
         manager = self.create_peer()
         connections = manager.connections
-        sysctl = ConnectionsManagerSysctl(connections)
+        sysctl = P2PManagerSysctl(connections)
 
         peer_id_1 = '0e2bd0d8cd1fb6d040801c32ec27e8986ce85eb8810b6c878dcad15bce3b5b1e'
         peer_id_2 = '2ff0d2c80c50f724de79f132a2f8cae576c64b57ea531d400577adf7db3e7c15'
@@ -132,7 +132,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         manager = self.create_peer()
         connections = manager.connections
-        sysctl = ConnectionsManagerSysctl(connections)
+        sysctl = P2PManagerSysctl(connections)
 
         self.assertEqual(sysctl.get('available_sync_versions'), ['v1', 'v2'])
 
@@ -145,7 +145,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_enabled_sync_versions(self):
         manager = self.create_peer()
         connections = manager.connections
-        sysctl = ConnectionsManagerSysctl(connections)
+        sysctl = P2PManagerSysctl(connections)
 
         self.assertEqual(sysctl.get('enabled_sync_versions'), self._default_enabled_sync_versions())
         sysctl.unsafe_set('enabled_sync_versions', ['v1', 'v2'])
@@ -158,7 +158,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_kill_all_connections(self):
         manager = self.create_peer()
         p2p_manager = manager.connections
-        sysctl = ConnectionsManagerSysctl(p2p_manager)
+        sysctl = P2PManagerSysctl(p2p_manager)
 
         p2p_manager.disconnect_all_peers = MagicMock()
         self.assertEqual(p2p_manager.disconnect_all_peers.call_count, 0)
@@ -168,7 +168,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_kill_one_connection(self):
         manager = self.create_peer()
         p2p_manager = manager.connections
-        sysctl = ConnectionsManagerSysctl(p2p_manager)
+        sysctl = P2PManagerSysctl(p2p_manager)
 
         peer_id = '0e2bd0d8cd1fb6d040801c32ec27e8986ce85eb8810b6c878dcad15bce3b5b1e'
         conn = MagicMock()
@@ -180,7 +180,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_kill_connection_unknown_peer_id(self):
         manager = self.create_peer()
         p2p_manager = manager.connections
-        sysctl = ConnectionsManagerSysctl(p2p_manager)
+        sysctl = P2PManagerSysctl(p2p_manager)
 
         with self.assertRaises(SysctlException):
             sysctl.unsafe_set('kill_connection', 'unknown-peer-id')

@@ -45,7 +45,7 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.p2p_manager import P2PManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -99,7 +99,7 @@ class HathorManager:
         daa: DifficultyAdjustmentAlgorithm,
         peer: PrivatePeer,
         tx_storage: TransactionStorage,
-        p2p_manager: ConnectionsManager,
+        p2p_manager: P2PManager,
         event_manager: EventManager,
         bit_signaling_service: BitSignalingService,
         verification_service: VerificationService,

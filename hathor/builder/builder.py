@@ -34,8 +34,8 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.p2p_dependencies import P2PDependencies
+from hathor.p2p.p2p_manager import P2PManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -65,7 +65,7 @@ class SyncSupportLevel(IntEnum):
     @classmethod
     def add_factories(
         cls,
-        p2p_manager: ConnectionsManager,
+        p2p_manager: P2PManager,
         dependencies: P2PDependencies,
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
@@ -99,7 +99,7 @@ class BuildArtifacts(NamedTuple):
     rng: Random
     reactor: Reactor
     manager: HathorManager
-    p2p_manager: ConnectionsManager
+    p2p_manager: P2PManager
     pubsub: PubSubManager
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
@@ -191,7 +191,7 @@ class Builder:
         self._vertex_handler: VertexHandler | None = None
         self._vertex_parser: VertexParser | None = None
         self._consensus: ConsensusAlgorithm | None = None
-        self._p2p_manager: ConnectionsManager | None = None
+        self._p2p_manager: P2PManager | None = None
         self._poa_signer: PoaSigner | None = None
         self._poa_block_producer: PoaBlockProducer | None = None
 
@@ -402,7 +402,7 @@ class Builder:
 
         return self._rocksdb_storage
 
-    def _get_or_create_p2p_manager(self) -> ConnectionsManager:
+    def _get_or_create_p2p_manager(self) -> P2PManager:
         if self._p2p_manager:
             return self._p2p_manager
 
@@ -419,7 +419,7 @@ class Builder:
             pubsub=self._get_or_create_pubsub(),
         )
 
-        self._p2p_manager = ConnectionsManager(
+        self._p2p_manager = P2PManager(
             dependencies=dependencies,
             my_peer=my_peer,
             ssl=enable_ssl,

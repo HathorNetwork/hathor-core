@@ -7,7 +7,7 @@ from twisted.web.client import Agent
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
-from hathor.p2p.manager import WHITELIST_REQUEST_TIMEOUT
+from hathor.p2p.p2p_manager import WHITELIST_REQUEST_TIMEOUT
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -88,25 +88,25 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
     def test_update_whitelist(self) -> None:
         network = 'testnet'
         manager: HathorManager = self.create_peer(network)
-        connections_manager = manager.connections
+        p2p_manager = manager.connections
 
         settings_mock = Mock(spec_set=HathorSettings)
         settings_mock.WHITELIST_URL = 'some_url'
-        connections_manager._settings = settings_mock
+        p2p_manager._settings = settings_mock
 
         agent_mock = Mock(spec_set=Agent)
         agent_mock.request = Mock()
-        connections_manager._http_agent = agent_mock
+        p2p_manager._http_agent = agent_mock
 
         with (
-            patch.object(connections_manager, '_update_whitelist_cb') as _update_whitelist_cb_mock,
-            patch.object(connections_manager, '_update_whitelist_err') as _update_whitelist_err_mock,
+            patch.object(p2p_manager, '_update_whitelist_cb') as _update_whitelist_cb_mock,
+            patch.object(p2p_manager, '_update_whitelist_err') as _update_whitelist_err_mock,
             patch('twisted.web.client.readBody') as read_body_mock
         ):
             # Test success
             agent_mock.request.return_value = Deferred()
             read_body_mock.return_value = b'body'
-            d = connections_manager.update_whitelist()
+            d = p2p_manager.update_whitelist()
             d.callback(None)
 
             read_body_mock.assert_called_once_with(None)
@@ -119,7 +119,7 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
 
             # Test request error
             agent_mock.request.return_value = Deferred()
-            d = connections_manager.update_whitelist()
+            d = p2p_manager.update_whitelist()
             error = Failure('some_error')
             d.errback(error)
 
@@ -134,7 +134,7 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
             # Test timeout
             agent_mock.request.return_value = Deferred()
             read_body_mock.return_value = b'body'
-            connections_manager.update_whitelist()
+            p2p_manager.update_whitelist()
 
             self.clock.advance(WHITELIST_REQUEST_TIMEOUT + 1)
 

@@ -67,7 +67,7 @@ class PeerConnectionsMetrics(NamedTuple):
     known_peers_count: int
 
 
-class ConnectionsManager:
+class P2PManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
 

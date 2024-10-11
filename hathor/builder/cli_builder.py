@@ -35,8 +35,8 @@ from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesM
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.entrypoint import Entrypoint
-from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.p2p_dependencies import P2PDependencies
+from hathor.p2p.p2p_manager import P2PManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
@@ -342,7 +342,7 @@ class CliBuilder:
         )
 
         capabilities = settings.get_default_capabilities()
-        p2p_manager = ConnectionsManager(
+        p2p_manager = P2PManager(
             dependencies=p2p_dependencies,
             my_peer=peer,
             ssl=True,
