@@ -107,7 +107,6 @@ class HathorManager:
         bit_signaling_service: BitSignalingService,
         verification_service: VerificationService,
         cpu_mining_service: CpuMiningService,
-        network: str,
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
@@ -126,8 +125,6 @@ class HathorManager:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer: Peer object, with peer-id of this node.
-        :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
-        :type network: string
 
         :param tx_storage: Required storage backend.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
@@ -170,7 +167,7 @@ class HathorManager:
         self.remote_address = None
 
         self.my_peer = peer
-        self.network = network
+        self.network = settings.NETWORK_NAME
 
         self.is_started: bool = False
 

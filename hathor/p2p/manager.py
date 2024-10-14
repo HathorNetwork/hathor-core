@@ -95,7 +95,6 @@ class ConnectionsManager:
         self,
         settings: HathorSettings,
         reactor: Reactor,
-        network: str,
         my_peer: PrivatePeer,
         pubsub: PubSubManager,
         ssl: bool,
@@ -114,8 +113,6 @@ class ConnectionsManager:
         self.reactor = reactor
         self.my_peer = my_peer
 
-        self.network = network
-
         # List of address descriptions to listen for new connections (eg: [tcp:8000])
         self.listen_address_descriptions: list[str] = []
 
@@ -132,10 +129,10 @@ class ConnectionsManager:
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
         self.use_ssl = ssl
         self.server_factory = HathorServerFactory(
-            self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+            self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
         )
         self.client_factory = HathorClientFactory(
-            self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+            self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
         )
 
         # Global maximum number of connections.
@@ -407,7 +404,7 @@ class ConnectionsManager:
         self.unverified_peer_storage.pop(protocol.peer.id, None)
 
         # we emit the event even if it's a duplicate peer as a matching
-        # NETWORK_PEER_DISCONNECTED will be emmited regardless
+        # NETWORK_PEER_DISCONNECTED will be emitted regardless
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_READY,
             protocol=protocol,

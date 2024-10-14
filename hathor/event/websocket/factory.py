@@ -17,6 +17,7 @@ from typing import Optional
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
@@ -45,14 +46,14 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self,
         *,
         peer_id: str,
-        network: str,
+        settings: HathorSettings,
         reactor: Reactor,
         event_storage: EventStorage
     ) -> None:
         super().__init__()
         self.log = logger.new()
         self._peer_id = peer_id
-        self._network = network
+        self._network = settings.NETWORK_NAME
         self._reactor = reactor
         self._event_storage = event_storage
         self._connections: set[EventWebsocketProtocol] = set()

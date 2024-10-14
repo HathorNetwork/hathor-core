@@ -85,7 +85,6 @@ class TestBuilder(Builder):
 
     def __init__(self, settings: HathorSettings | None = None) -> None:
         super().__init__()
-        self.set_network('testnet')
         # default builder has sync-v2 enabled for tests
         self.enable_sync_v2()
         self.set_settings(settings or get_global_settings())
@@ -171,11 +170,10 @@ class TestCase(unittest.TestCase):
             wallet.lock()
         return wallet
 
-    def get_builder(self, network: str) -> TestBuilder:
+    def get_builder(self) -> TestBuilder:
         builder = TestBuilder()
         builder.set_rng(self.rng) \
-            .set_reactor(self.clock) \
-            .set_network(network)
+            .set_reactor(self.clock)
         return builder
 
     def create_peer_from_builder(self, builder: Builder, start_manager: bool = True) -> HathorManager:
@@ -218,9 +216,10 @@ class TestCase(unittest.TestCase):
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
-        builder = self.get_builder(network) \
+        settings = self._settings._replace(NETWORK_NAME=network)
+        builder = self.get_builder() \
             .set_full_verification(full_verification) \
-            .set_settings(self._settings)
+            .set_settings(settings)
 
         if checkpoints is not None:
             builder.set_checkpoints(checkpoints)

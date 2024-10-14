@@ -11,10 +11,12 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 from unittest.mock import Mock
 
 from hathor.cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
 from hathor.cli.events_simulator.events_simulator import create_parser, execute
+from hathor.conf.get_settings import get_global_settings
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
 
@@ -29,7 +31,7 @@ def test_events_simulator() -> None:
     factory = EventForwardingWebsocketFactory(
         simulator=Mock(),
         peer_id='test_peer_id',
-        network='test_network',
+        settings=get_global_settings(),
         reactor=reactor,
         event_storage=Mock()
     )
