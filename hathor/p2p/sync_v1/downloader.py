@@ -22,10 +22,10 @@ from twisted.internet.defer import Deferred
 from twisted.python.failure import Failure
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.p2p import P2PDependencies
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 if TYPE_CHECKING:
-    from hathor.manager import HathorManager
     from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
     from hathor.transaction import BaseTransaction
 
@@ -145,10 +145,10 @@ class Downloader:
     # Size of the sliding window used to download transactions.
     window_size: int
 
-    def __init__(self, manager: 'HathorManager', window_size: int = 100):
-        self._settings = get_global_settings()
+    def __init__(self, dependencies: P2PDependencies, window_size: int = 100):
+        self.dependencies = dependencies
+        self._settings = dependencies.settings
         self.log = logger.new()
-        self.manager = manager
 
         self.pending_transactions = {}
         self.waiting_deque = deque()
@@ -172,7 +172,7 @@ class Downloader:
             # If I already have this tx in the storage just return a defer already success
             # In the node_sync code we already handle this case but in a race condition situation
             # we might get here but it's not common
-            tx = self.manager.tx_storage.get_transaction(tx_id)
+            tx = self.dependencies.get_vertex(tx_id)
             self.log.debug('requesting to download a tx that is already in the storage', tx=tx_id.hex())
             return defer.succeed(tx)
         except TransactionDoesNotExist:

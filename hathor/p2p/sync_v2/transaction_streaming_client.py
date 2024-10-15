@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Generator, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
+from hathor.p2p import P2PDependencies
 from hathor.p2p.sync_v2.exception import (
     InvalidVertexError,
     StreamingError,
@@ -37,16 +38,18 @@ logger = get_logger()
 
 
 class TransactionStreamingClient:
-    def __init__(self,
-                 sync_agent: 'NodeBlockSync',
-                 partial_blocks: list['Block'],
-                 *,
-                 limit: int) -> None:
+    def __init__(
+        self,
+        sync_agent: 'NodeBlockSync',
+        partial_blocks: list['Block'],
+        *,
+        limit: int,
+        dependencies: P2PDependencies,
+    ) -> None:
+        self.dependencies = dependencies
         self.sync_agent = sync_agent
         self.protocol = self.sync_agent.protocol
-        self.tx_storage = self.sync_agent.tx_storage
-        self.verification_service = self.protocol.node.verification_service
-        self.reactor = sync_agent.reactor
+        self.reactor = self.dependencies.reactor
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
 
@@ -153,7 +156,7 @@ class TransactionStreamingClient:
         # Run basic verification.
         if not tx.is_genesis:
             try:
-                self.verification_service.verify_basic(tx)
+                self.dependencies.verify_basic(tx)
             except TxValidationError as e:
                 self.fails(InvalidVertexError(repr(e)))
                 return
@@ -194,7 +197,7 @@ class TransactionStreamingClient:
     def _update_dependencies(self, tx: BaseTransaction) -> None:
         """Update _existing_deps and _waiting_for with the dependencies."""
         for dep in tx.get_all_dependencies():
-            if self.tx_storage.transaction_exists(dep) or dep in self._db:
+            if self.dependencies.vertex_exists(dep) or dep in self._db:
                 self._existing_deps.add(dep)
             else:
                 self._waiting_for.add(dep)

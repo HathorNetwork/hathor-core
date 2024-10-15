@@ -14,34 +14,29 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p import P2PDependencies
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 from hathor.p2p.sync_v1.downloader import Downloader
-from hathor.reactor import ReactorProtocol as Reactor
-from hathor.transaction.vertex_parser import VertexParser
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
 
 
 class SyncV11Factory(SyncAgentFactory):
-    def __init__(self, connections: ConnectionsManager, *, vertex_parser: VertexParser):
-        self.connections = connections
-        self.vertex_parser = vertex_parser
+    def __init__(self, dependencies: P2PDependencies) -> None:
+        self.dependencies = dependencies
         self._downloader: Optional[Downloader] = None
 
     def get_downloader(self) -> Downloader:
         if self._downloader is None:
-            assert self.connections.manager is not None
-            self._downloader = Downloader(self.connections.manager)
+            self._downloader = Downloader(self.dependencies)
         return self._downloader
 
-    def create_sync_agent(self, protocol: 'HathorProtocol', reactor: Reactor) -> SyncAgent:
+    def create_sync_agent(self, protocol: 'HathorProtocol') -> SyncAgent:
         return NodeSyncTimestamp(
             protocol,
             downloader=self.get_downloader(),
-            reactor=reactor,
-            vertex_parser=self.vertex_parser
+            dependencies=self.dependencies,
         )

@@ -51,8 +51,6 @@ class TransactionVerifier:
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
-        assert tx.storage is not None
-
         # check if parents are duplicated
         parents_set = set(tx.parents)
         if len(tx.parents) > len(parents_set):
