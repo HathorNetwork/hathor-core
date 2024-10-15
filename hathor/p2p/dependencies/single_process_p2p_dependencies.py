@@ -142,7 +142,3 @@ class SingleProcessP2PDependencies(P2PDependencies):
     @override
     def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
         return self._tx_storage.partial_vertex_exists(vertex_id)
-
-    @override
-    def enable_mempool_index(self) -> None:
-        self._indexes.enable_mempool_index()
