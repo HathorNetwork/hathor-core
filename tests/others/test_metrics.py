@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import pytest
 
 from hathor.p2p.entrypoint import Entrypoint
-from hathor.p2p.manager import PeerConnectionsMetrics
+from hathor.p2p.p2p_manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
@@ -20,7 +20,7 @@ class BaseMetricsTest(unittest.TestCase):
 
     def test_p2p_network_events(self):
         """Simulates publishing an event to pubsub the same way as done
-           by the ConnectionsManager class.
+           by the P2PManager class.
 
            The expected result is that the Metrics class will use the info provided with
            the event to set its own fields related to the network peers
@@ -47,11 +47,11 @@ class BaseMetricsTest(unittest.TestCase):
 
         manager.metrics.stop()
 
-    def test_connections_manager_integration(self):
-        """Tests the integration with the ConnectionsManager class
+    def test_p2p_manager_integration(self):
+        """Tests the integration with the P2PManager class
 
            The expected result is that the both classes communicate through pubsub
-           to update the Metrics class with info from ConnectionsManager class
+           to update the Metrics class with info from P2PManager class
         """
         # Preparation
         tx_storage = TransactionMemoryStorage(settings=self._settings)
@@ -209,7 +209,7 @@ class BaseMetricsTest(unittest.TestCase):
 
     def test_peer_connections_data_collection(self):
         """Test if peer connections data is correctly being collected from the
-            ConnectionsManager
+            P2PManager
         """
         # Preparation
         self.use_memory_storage = True

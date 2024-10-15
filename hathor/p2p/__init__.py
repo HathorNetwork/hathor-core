@@ -14,8 +14,10 @@
 
 from hathor.p2p.dependencies.p2p_dependencies import P2PDependencies
 from hathor.p2p.dependencies.single_process_p2p_dependencies import SingleProcessP2PDependencies
+from hathor.p2p.p2p_manager import P2PManager
 
 __all__ = [
+    'P2PManager',
     'P2PDependencies',
     'SingleProcessP2PDependencies'
 ]

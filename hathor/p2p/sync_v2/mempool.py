@@ -140,7 +140,7 @@ class SyncMempoolManager:
         try:
             result = await self.dependencies.on_new_vertex(tx, fails_silently=False)
             if result:
-                self.sync_agent.protocol.connections.send_tx_to_peers(tx)
+                self.sync_agent.protocol.p2p_manager.send_tx_to_peers(tx)
         except InvalidNewTransaction:
             self.sync_agent.protocol.send_error_and_close_connection('invalid vertex received')
             raise

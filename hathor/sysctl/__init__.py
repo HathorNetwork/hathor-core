@@ -14,13 +14,13 @@
 
 from hathor.sysctl.core.manager import HathorManagerSysctl
 from hathor.sysctl.feature_activation.manager import FeatureActivationSysctl
-from hathor.sysctl.p2p.manager import ConnectionsManagerSysctl
+from hathor.sysctl.p2p.manager import P2PManagerSysctl
 from hathor.sysctl.sysctl import Sysctl
 from hathor.sysctl.websocket.manager import WebsocketManagerSysctl
 
 __all__ = [
     'Sysctl',
-    'ConnectionsManagerSysctl',
+    'P2PManagerSysctl',
     'HathorManagerSysctl',
     'WebsocketManagerSysctl',
     'FeatureActivationSysctl',
