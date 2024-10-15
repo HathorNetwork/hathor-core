@@ -341,12 +341,15 @@ class CliBuilder:
             pubsub=pubsub,
         )
 
+        capabilities = settings.get_default_capabilities()
         p2p_manager = ConnectionsManager(
             dependencies=p2p_dependencies,
             my_peer=peer,
             ssl=True,
             whitelist_only=False,
             rng=Random(),
+            capabilities=capabilities,
+            hostname=hostname,
         )
 
         SyncSupportLevel.add_factories(
@@ -371,7 +374,6 @@ class CliBuilder:
         self.manager = HathorManager(
             reactor,
             settings=settings,
-            hostname=hostname,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
             daa=daa,
@@ -398,7 +400,7 @@ class CliBuilder:
                                 '--x-ipython-kernel must be used with --x-asyncio-reactor')
             self._start_ipykernel()
 
-        p2p_manager.set_manager(self.manager)
+        p2p_manager.finalize_factories()
         if poa_block_producer:
             poa_block_producer.manager = self.manager
 

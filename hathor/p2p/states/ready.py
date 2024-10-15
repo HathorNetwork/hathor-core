@@ -85,7 +85,7 @@ class ReadyState(BaseState):
         self.lc_get_best_blockchain: Optional[LoopingCall] = None
 
         # if the peer has the GET-BEST-BLOCKCHAIN capability
-        common_capabilities = protocol.capabilities & set(protocol.node.capabilities)
+        common_capabilities = protocol.capabilities & set(protocol.connections.capabilities)
         if (self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN in common_capabilities):
             # set the loop to get the best blockchain from the peer
             self.lc_get_best_blockchain = LoopingCall(self.send_get_best_blockchain)
