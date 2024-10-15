@@ -23,7 +23,6 @@ from hathor.p2p import P2PDependencies
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PublicPeer, UnverifiedPeer
 from hathor.p2p.states.base import BaseState
-from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.utils import to_height_info, to_serializable_best_blockchain
 from hathor.transaction import BaseTransaction
 from hathor.util import json_dumps, json_loads
@@ -106,6 +105,7 @@ class ReadyState(BaseState):
         self.log.debug(f'loading {sync_version}')
         sync_factory = connections.get_sync_factory(sync_version)
 
+        from hathor.p2p.sync_agent import SyncAgent
         self.sync_agent: SyncAgent = sync_factory.create_sync_agent(self.protocol)
         self.cmd_map.update(self.sync_agent.get_cmd_dict())
 

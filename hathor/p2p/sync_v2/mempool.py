@@ -13,14 +13,15 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Any, Generator, Optional
+from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred, inlineCallbacks
+from twisted.internet.defer import Deferred
 
 from hathor.exception import InvalidNewTransaction
 from hathor.p2p import P2PDependencies
 from hathor.transaction import BaseTransaction
+from hathor.utils.twisted import call_coro_later
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -62,7 +63,7 @@ class SyncMempoolManager:
             assert self._deferred is not None
             return self._deferred
         self._is_running = True
-        self.reactor.callLater(0, self._run)
+        call_coro_later(self.reactor, 0, self._run)
 
         # TODO Implement a stop() and call it after N minutes.
 
@@ -70,11 +71,10 @@ class SyncMempoolManager:
         self._deferred = Deferred()
         return self._deferred
 
-    @inlineCallbacks
-    def _run(self) -> Generator[Deferred, Any, None]:
+    async def _run(self) -> None:
         is_synced = False
         try:
-            is_synced = yield self._unsafe_run()
+            is_synced = await self._unsafe_run()
         except InvalidNewTransaction:
             return
         finally:
@@ -84,29 +84,27 @@ class SyncMempoolManager:
             self._deferred.callback(is_synced)
             self._deferred = None
 
-    @inlineCallbacks
-    def _unsafe_run(self) -> Generator[Deferred, Any, bool]:
+    async def _unsafe_run(self) -> bool:
         """Run a single loop of the sync-v2 mempool."""
         if not self.missing_tips:
             # No missing tips? Let's get them!
-            tx_hashes: list[bytes] = yield self.sync_agent.get_tips()
+            tx_hashes: list[bytes] = await self.sync_agent.get_tips()
             self.missing_tips.update(h for h in tx_hashes if not self.dependencies.vertex_exists(h))
 
         while self.missing_tips:
             self.log.debug('We have missing tips! Let\'s start!', missing_tips=[x.hex() for x in self.missing_tips])
             tx_id = next(iter(self.missing_tips))
-            tx: BaseTransaction = yield self.sync_agent.get_tx(tx_id)
+            tx: BaseTransaction = await self.sync_agent.get_tx(tx_id)
             # Stack used by the DFS in the dependencies.
             # We use a deque for performance reasons.
             self.log.debug('start mempool DSF', tx=tx.hash_hex)
-            yield self._dfs(deque([tx]))
+            await self._dfs(deque([tx]))
 
         if not self.missing_tips:
             return True
         return False
 
-    @inlineCallbacks
-    def _dfs(self, stack: deque[BaseTransaction]) -> Generator[Deferred, Any, None]:
+    async def _dfs(self, stack: deque[BaseTransaction]) -> None:
         """DFS method."""
         while stack:
             tx = stack[-1]
@@ -114,11 +112,11 @@ class SyncMempoolManager:
             missing_dep = self._next_missing_dep(tx)
             if missing_dep is None:
                 self.log.debug(r'No dependencies missing! \o/')
-                self._add_tx(tx)
+                await self._add_tx(tx)
                 assert tx == stack.pop()
             else:
                 self.log.debug('Iterate in the DFS.', missing_dep=missing_dep.hex())
-                tx_dep = yield self.sync_agent.get_tx(missing_dep)
+                tx_dep = await self.sync_agent.get_tx(missing_dep)
                 stack.append(tx_dep)
                 if len(stack) > self.MAX_STACK_LENGTH:
                     stack.popleft()
@@ -134,13 +132,13 @@ class SyncMempoolManager:
                 return parent
         return None
 
-    def _add_tx(self, tx: BaseTransaction) -> None:
+    async def _add_tx(self, tx: BaseTransaction) -> None:
         """Add tx to the DAG."""
         self.missing_tips.discard(tx.hash)
         if self.dependencies.vertex_exists(tx.hash):
             return
         try:
-            result = self.dependencies.on_new_vertex(tx, fails_silently=False)
+            result = await self.dependencies.on_new_vertex(tx, fails_silently=False)
             if result:
                 self.sync_agent.protocol.connections.send_tx_to_peers(tx)
         except InvalidNewTransaction:

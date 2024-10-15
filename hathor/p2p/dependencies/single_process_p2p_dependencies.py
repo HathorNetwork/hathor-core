@@ -60,7 +60,7 @@ class SingleProcessP2PDependencies(P2PDependencies):
         self._indexes = not_none(tx_storage.indexes)
 
     @override
-    def on_new_vertex(self, vertex: Vertex, *, fails_silently: bool = True) -> bool:
+    async def on_new_vertex(self, vertex: Vertex, *, fails_silently: bool = True) -> bool:
         return self._vertex_handler.on_new_vertex(vertex=vertex, fails_silently=fails_silently)
 
     @override

@@ -47,7 +47,7 @@ class P2PDependencies(ABC):
         self.vertex_parser = vertex_parser
 
     @abstractmethod
-    def on_new_vertex(self, vertex: Vertex, *, fails_silently: bool = True) -> bool:
+    async def on_new_vertex(self, vertex: Vertex, *, fails_silently: bool = True) -> bool:
         raise NotImplementedError
 
     @abstractmethod

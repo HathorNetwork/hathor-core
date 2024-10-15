@@ -1,3 +1,4 @@
+from twisted.internet.defer import Deferred
 from twisted.python.failure import Failure
 
 from hathor.checkpoint import Checkpoint as cp
@@ -296,7 +297,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
 
         deferred1 = downloader.get_tx(blocks[0].hash, node_sync1)
-        deferred1.addCallback(node_sync1.on_tx_success)
+        deferred1.addCallback(lambda tx: Deferred.fromCoroutine(node_sync1.on_tx_success(tx)))
 
         self.assertEqual(len(downloader.pending_transactions), 1)
 
@@ -305,7 +306,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         self.assertEqual(len(downloader.downloading_deque), 1)
 
         deferred2 = downloader.get_tx(blocks[0].hash, node_sync2)
-        deferred2.addCallback(node_sync2.on_tx_success)
+        deferred2.addCallback(lambda tx: Deferred.fromCoroutine(node_sync2.on_tx_success(tx)))
 
         self.assertEqual(len(downloader.pending_transactions), 1)
         self.assertEqual(len(downloader.pending_transactions[blocks[0].hash].connections), 2)
