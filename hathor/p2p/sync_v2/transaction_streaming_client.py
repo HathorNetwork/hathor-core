@@ -13,10 +13,10 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Any, Generator, Optional
+from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred, inlineCallbacks
+from twisted.internet.defer import Deferred
 
 from hathor.p2p import P2PDependencies
 from hathor.p2p.sync_v2.exception import (
@@ -29,6 +29,7 @@ from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import BaseTransaction
 from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.types import VertexId
+from hathor.utils.twisted import call_coro_later
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -124,10 +125,9 @@ class TransactionStreamingClient:
         assert len(self._queue) <= self._tx_max_quantity
 
         if not self._is_processing:
-            self.reactor.callLater(0, self.process_queue)
+            call_coro_later(self.reactor, 0, self.process_queue)
 
-    @inlineCallbacks
-    def process_queue(self) -> Generator[Any, Any, None]:
+    async def process_queue(self) -> None:
         """Process next transaction in the queue."""
         if self._deferred.called:
             return
@@ -143,14 +143,13 @@ class TransactionStreamingClient:
         try:
             tx = self._queue.popleft()
             self.log.debug('processing tx', tx_id=tx.hash.hex())
-            yield self._process_transaction(tx)
+            await self._process_transaction(tx)
         finally:
             self._is_processing = False
 
-        self.reactor.callLater(0, self.process_queue)
+        call_coro_later(self.reactor, 0, self.process_queue)
 
-    @inlineCallbacks
-    def _process_transaction(self, tx: BaseTransaction) -> Generator[Any, Any, None]:
+    async def _process_transaction(self, tx: BaseTransaction) -> None:
         """Process transaction."""
 
         # Run basic verification.
@@ -185,7 +184,7 @@ class TransactionStreamingClient:
         if not self._waiting_for:
             self.log.debug('no pending dependencies, processing buffer')
             while not self._waiting_for:
-                result = yield self._execute_and_prepare_next()
+                result = await self._execute_and_prepare_next()
                 if not result:
                     break
         else:
@@ -221,8 +220,7 @@ class TransactionStreamingClient:
         self.log.info('transactions streaming ended', reason=self._response_code, waiting_for=len(self._waiting_for))
         self._deferred.callback(self._response_code)
 
-    @inlineCallbacks
-    def _execute_and_prepare_next(self) -> Generator[Any, Any, bool]:
+    async def _execute_and_prepare_next(self) -> bool:
         """Add the block and its vertices to the DAG."""
         assert not self._waiting_for
 
@@ -231,7 +229,7 @@ class TransactionStreamingClient:
         vertex_list.sort(key=lambda v: v.timestamp)
 
         try:
-            yield self.sync_agent.on_block_complete(blk, vertex_list)
+            await self.sync_agent.on_block_complete(blk, vertex_list)
         except HathorError as e:
             self.fails(InvalidVertexError(repr(e)))
             return False

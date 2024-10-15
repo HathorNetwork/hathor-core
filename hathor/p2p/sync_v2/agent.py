@@ -18,7 +18,7 @@ import math
 import struct
 from collections import OrderedDict
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, Generator, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
@@ -27,6 +27,7 @@ from twisted.internet.task import LoopingCall, deferLater
 from hathor.exception import InvalidNewTransaction
 from hathor.p2p import P2PDependencies
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.states.base import CommandHandler
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
@@ -228,7 +229,7 @@ class NodeBlockSync(SyncAgent):
         if self._lc_run.running:
             self._lc_run.stop()
 
-    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, CommandHandler]:
         """ Return a dict of messages of the plugin.
 
         For further information about each message, see the RFC.
@@ -596,18 +597,17 @@ class NodeBlockSync(SyncAgent):
         self.log.debug('find_best_common_block n-ary search finished', lo=lo, hi=hi)
         return lo
 
-    @inlineCallbacks
-    def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> Generator[Any, Any, None]:
+    async def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> None:
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         try:
             for tx in vertex_list:
                 if not self.dependencies.vertex_exists(tx.hash):
-                    self.dependencies.on_new_vertex(tx, fails_silently=False)
-                yield deferLater(self.reactor, 0, lambda: None)
+                    await self.dependencies.on_new_vertex(tx, fails_silently=False)
+                await deferLater(self.reactor, 0, lambda: None)
 
             if not self.dependencies.vertex_exists(blk.hash):
-                self.dependencies.on_new_vertex(blk, fails_silently=False)
+                await self.dependencies.on_new_vertex(blk, fails_silently=False)
         except InvalidNewTransaction:
             self.protocol.send_error_and_close_connection('invalid vertex received')
 
@@ -752,7 +752,7 @@ class NodeBlockSync(SyncAgent):
         self._blk_streaming_client.handle_blocks_end(response_code)
         self.log.debug('block streaming ended', reason=str(response_code))
 
-    def handle_blocks(self, payload: str) -> None:
+    async def handle_blocks(self, payload: str) -> None:
         """ Handle a BLOCKS message.
         """
         if self.state is not PeerState.SYNCING_BLOCKS:
@@ -769,7 +769,7 @@ class NodeBlockSync(SyncAgent):
             return
 
         assert self._blk_streaming_client is not None
-        self._blk_streaming_client.handle_blocks(blk)
+        await self._blk_streaming_client.handle_blocks(blk)
 
     def send_stop_block_streaming(self) -> None:
         """ Send a STOP-BLOCK-STREAMING message.
@@ -1109,7 +1109,7 @@ class NodeBlockSync(SyncAgent):
             # In case the tx does not exist we send a NOT-FOUND message
             self.send_message(ProtocolMessages.NOT_FOUND, txid_hex)
 
-    def handle_data(self, payload: str) -> None:
+    async def handle_data(self, payload: str) -> None:
         """ Handle a DATA message.
         """
         if not payload:
@@ -1154,7 +1154,7 @@ class NodeBlockSync(SyncAgent):
             if self.dependencies.can_validate_full(tx):
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
                 try:
-                    result = self.dependencies.on_new_vertex(tx, fails_silently=False)
+                    result = await self.dependencies.on_new_vertex(tx, fails_silently=False)
                     if result:
                         self.protocol.connections.send_tx_to_peers(tx)
                 except InvalidNewTransaction:

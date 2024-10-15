@@ -81,7 +81,7 @@ class BlockchainStreamingClient:
         """Fail the execution by resolving the deferred with an error."""
         self._deferred.errback(reason)
 
-    def handle_blocks(self, blk: Block) -> None:
+    async def handle_blocks(self, blk: Block) -> None:
         """This method is called by the sync agent when a BLOCKS message is received."""
         if self._deferred.called:
             return
@@ -133,7 +133,7 @@ class BlockchainStreamingClient:
 
         if self.dependencies.can_validate_full(blk):
             try:
-                self.dependencies.on_new_vertex(blk, fails_silently=False)
+                await self.dependencies.on_new_vertex(blk, fails_silently=False)
             except HathorError:
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return
