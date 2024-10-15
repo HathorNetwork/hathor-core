@@ -129,3 +129,7 @@ class P2PDependencies(ABC):
     @abstractmethod
     def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
         raise NotImplementedError
+
+    @abstractmethod
+    def enable_mempool_index(self) -> None:
+        raise NotImplementedError
