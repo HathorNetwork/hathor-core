@@ -20,6 +20,7 @@ from enum import Enum, auto
 from typing import Any, Optional
 
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.cli.run_node_args import RunNodeArgs
 from hathor.cli.side_dag import SideDagArgs
@@ -238,6 +239,8 @@ class CliBuilder:
             case SyncChoice.V2_ONLY:
                 sync_v1_support = SyncSupportLevel.UNAVAILABLE
                 sync_v2_support = SyncSupportLevel.ENABLED
+            case _:
+                assert_never(sync_choice)
 
         pubsub = PubSubManager(reactor)
 
@@ -341,6 +344,13 @@ class CliBuilder:
         )
 
         capabilities = settings.get_default_capabilities()
+        sync_factories = SyncSupportLevel.get_factories(
+            tx_storage,
+            p2p_dependencies,
+            sync_v1_support,
+            sync_v2_support,
+        )
+
         p2p_manager = P2PManager(
             dependencies=p2p_dependencies,
             my_peer=peer,
@@ -348,14 +358,8 @@ class CliBuilder:
             whitelist_only=False,
             rng=Random(),
             capabilities=capabilities,
+            sync_factories=sync_factories,
             hostname=hostname,
-        )
-
-        SyncSupportLevel.add_factories(
-            p2p_manager,
-            p2p_dependencies,
-            sync_v1_support,
-            sync_v2_support,
         )
 
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
@@ -399,7 +403,6 @@ class CliBuilder:
                                 '--x-ipython-kernel must be used with --x-asyncio-reactor')
             self._start_ipykernel()
 
-        p2p_manager.finalize_factories()
         if poa_block_producer:
             poa_block_producer.manager = self.manager
 

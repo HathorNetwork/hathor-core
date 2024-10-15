@@ -35,7 +35,9 @@ from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesM
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p import P2PDependencies, P2PManager, SingleProcessP2PDependencies
+from hathor.p2p.p2p_manager import SyncFactoryConfig
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.sync_version import SyncVersion
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
@@ -62,28 +64,38 @@ class SyncSupportLevel(IntEnum):
     ENABLED = 2  # available and enabled by default, possible to disable at runtime
 
     @classmethod
-    def add_factories(
+    def get_factories(
         cls,
-        p2p_manager: P2PManager,
+        tx_storage: TransactionStorage,
         dependencies: P2PDependencies,
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
-    ) -> None:
-        """Adds the sync factory to the manager according to the support level."""
+    ) -> dict[SyncVersion, SyncFactoryConfig]:
+        """Create sync factories according to the support level."""
         from hathor.p2p.sync_v1.factory import SyncV11Factory
         from hathor.p2p.sync_v2.factory import SyncV2Factory
         from hathor.p2p.sync_version import SyncVersion
+        log = logger.new()
+        sync_factories: dict[SyncVersion, SyncFactoryConfig] = {}
 
         # sync-v1 support:
         if sync_v1_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(dependencies))
-        if sync_v1_support is cls.ENABLED:
-            p2p_manager.enable_sync_version(SyncVersion.V1_1)
+            sync_factories[SyncVersion.V1_1] = SyncFactoryConfig(
+                factory=SyncV11Factory(dependencies),
+                enabled=sync_v1_support is cls.ENABLED
+            )
+
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(dependencies))
-        if sync_v2_support is cls.ENABLED:
-            p2p_manager.enable_sync_version(SyncVersion.V2)
+            sync_factories[SyncVersion.V2] = SyncFactoryConfig(
+                factory=SyncV2Factory(dependencies),
+                enabled=sync_v2_support is cls.ENABLED
+            )
+            log.debug('enable sync-v2 indexes')
+            assert tx_storage.indexes is not None
+            tx_storage.indexes.enable_mempool_index()
+
+        return sync_factories
 
 
 class StorageType(Enum):
@@ -266,7 +278,6 @@ class Builder:
             **kwargs
         )
 
-        p2p_manager.finalize_factories()
         if poa_block_producer:
             poa_block_producer.manager = manager
 
@@ -407,15 +418,22 @@ class Builder:
 
         enable_ssl = True
         my_peer = self._get_peer()
+        tx_storage = self._get_or_create_tx_storage()
 
         dependencies = SingleProcessP2PDependencies(
             reactor=self._get_reactor(),
             settings=self._get_or_create_settings(),
             vertex_parser=self._get_or_create_vertex_parser(),
-            tx_storage=self._get_or_create_tx_storage(),
+            tx_storage=tx_storage,
             vertex_handler=self._get_or_create_vertex_handler(),
             verification_service=self._get_or_create_verification_service(),
             pubsub=self._get_or_create_pubsub(),
+        )
+        sync_factories = SyncSupportLevel.get_factories(
+            tx_storage,
+            dependencies,
+            self._sync_v1_support,
+            self._sync_v2_support,
         )
 
         self._p2p_manager = P2PManager(
@@ -425,12 +443,7 @@ class Builder:
             whitelist_only=False,
             rng=self._rng,
             capabilities=self._get_or_create_capabilities(),
-        )
-        SyncSupportLevel.add_factories(
-            self._p2p_manager,
-            dependencies,
-            self._sync_v1_support,
-            self._sync_v2_support,
+            sync_factories=sync_factories,
         )
         return self._p2p_manager
 
