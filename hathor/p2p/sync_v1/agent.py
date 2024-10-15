@@ -80,9 +80,8 @@ class NodeSyncTimestamp(SyncAgent):
         self.reactor = dependencies.reactor
 
         # Rate limit for this connection.
-        assert protocol.connections is not None
-        self.global_rate_limiter: 'RateLimiter' = protocol.connections.rate_limiter
-        self.GlobalRateLimiter = protocol.connections.GlobalRateLimiter
+        self.global_rate_limiter: 'RateLimiter' = protocol.p2p_manager.rate_limiter
+        self.GlobalRateLimiter = protocol.p2p_manager.GlobalRateLimiter
 
         self.call_later_id: Optional[IDelayedCall] = None
         self.call_later_interval: int = 1  # seconds
@@ -632,7 +631,7 @@ class NodeSyncTimestamp(SyncAgent):
             # in the network, thus, we propagate it as well.
             result = await self.dependencies.on_new_vertex(tx)
             if result:
-                self.protocol.connections.send_tx_to_peers(tx)
+                self.protocol.p2p_manager.send_tx_to_peers(tx)
             self.update_received_stats(tx, result)
 
     def update_received_stats(self, tx: 'BaseTransaction', result: bool) -> None:
@@ -683,7 +682,7 @@ class NodeSyncTimestamp(SyncAgent):
                 # Add tx to the DAG.
                 success = await self.dependencies.on_new_vertex(tx)
                 if success:
-                    self.protocol.connections.send_tx_to_peers(tx)
+                    self.protocol.p2p_manager.send_tx_to_peers(tx)
             # Updating stats data
             self.update_received_stats(tx, success)
         return tx

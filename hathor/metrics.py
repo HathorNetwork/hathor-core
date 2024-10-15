@@ -20,7 +20,7 @@ from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
-from hathor.p2p.manager import ConnectionsManager, PeerConnectionsMetrics
+from hathor.p2p.p2p_manager import P2PManager, PeerConnectionsMetrics
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction.base_transaction import sum_weights
@@ -60,7 +60,7 @@ class PeerConnectionMetrics:
 class Metrics:
     pubsub: PubSubManager
     avg_time_between_blocks: int
-    connections: ConnectionsManager
+    connections: P2PManager
     tx_storage: TransactionStorage
     # Twisted reactor that handles the time and callLater
     reactor: Reactor

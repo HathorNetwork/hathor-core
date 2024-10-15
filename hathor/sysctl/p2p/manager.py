@@ -14,7 +14,7 @@
 
 import os
 
-from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.p2p_manager import P2PManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
@@ -57,11 +57,11 @@ def pretty_sync_version(sync_version: SyncVersion) -> str:
             raise ValueError('unknown or not implemented')
 
 
-class ConnectionsManagerSysctl(Sysctl):
-    def __init__(self, connections: ConnectionsManager) -> None:
+class P2PManagerSysctl(Sysctl):
+    def __init__(self, p2p_manager: P2PManager) -> None:
         super().__init__()
 
-        self.connections = connections
+        self.p2p_manager = p2p_manager
         self.register(
             'max_enabled_sync',
             self.get_max_enabled_sync,
@@ -125,11 +125,11 @@ class ConnectionsManagerSysctl(Sysctl):
 
     def set_force_sync_rotate(self) -> None:
         """Force a sync rotate."""
-        self.connections._sync_rotate_if_needed(force=True)
+        self.p2p_manager._sync_rotate_if_needed(force=True)
 
     def get_global_send_tips_rate_limit(self) -> tuple[int, float]:
         """Return the global rate limiter for SEND_TIPS."""
-        limit = self.connections.rate_limiter.get_limit(self.connections.GlobalRateLimiter.SEND_TIPS)
+        limit = self.p2p_manager.rate_limiter.get_limit(self.p2p_manager.GlobalRateLimiter.SEND_TIPS)
         if limit is None:
             return (0, 0)
         return (limit.max_hits, limit.window_seconds)
@@ -139,34 +139,34 @@ class ConnectionsManagerSysctl(Sysctl):
 
         The rate limiter is disabled when `window_seconds == 0`."""
         if window_seconds == 0:
-            self.connections.disable_rate_limiter()
+            self.p2p_manager.disable_rate_limiter()
             return
         if max_hits < 0:
             raise SysctlException('max_hits must be >= 0')
         if window_seconds < 0:
             raise SysctlException('window_seconds must be >= 0')
-        self.connections.enable_rate_limiter(max_hits, window_seconds)
+        self.p2p_manager.enable_rate_limiter(max_hits, window_seconds)
 
     def get_lc_sync_update_interval(self) -> float:
         """Return the interval to rotate sync (in seconds)."""
-        return self.connections.lc_sync_update_interval
+        return self.p2p_manager.lc_sync_update_interval
 
     def set_lc_sync_update_interval(self, value: float) -> None:
         """Change the interval to rotate sync (in seconds)."""
         if value <= 0:
             raise SysctlException('value must be > 0')
-        self.connections.lc_sync_update_interval = value
-        if self.connections.lc_sync_update.running:
-            self.connections.lc_sync_update.stop()
-            self.connections.lc_sync_update.start(self.connections.lc_sync_update_interval, now=False)
+        self.p2p_manager.lc_sync_update_interval = value
+        if self.p2p_manager.lc_sync_update.running:
+            self.p2p_manager.lc_sync_update.stop()
+            self.p2p_manager.lc_sync_update.start(self.p2p_manager.lc_sync_update_interval, now=False)
 
     def get_always_enable_sync(self) -> list[str]:
         """Return the list of sync-always-enabled peers."""
-        return list(map(str, self.connections.always_enable_sync))
+        return list(map(str, self.p2p_manager.always_enable_sync))
 
     def set_always_enable_sync(self, values: list[str]) -> None:
         """Change the list of sync-always-enabled peers."""
-        self.connections.set_always_enable_sync(list(map(PeerId, values)))
+        self.p2p_manager.set_always_enable_sync(list(map(PeerId, values)))
 
     def set_always_enable_sync_readtxt(self, file_path: str) -> None:
         """Update the list of sync-always-enabled peers from a file."""
@@ -175,35 +175,35 @@ class ConnectionsManagerSysctl(Sysctl):
         values: list[str]
         with open(file_path, 'r') as fp:
             values = parse_text(fp.read())
-        self.connections.set_always_enable_sync(list(map(PeerId, values)))
+        self.p2p_manager.set_always_enable_sync(list(map(PeerId, values)))
 
     def get_max_enabled_sync(self) -> int:
         """Return the maximum number of peers running sync simultaneously."""
-        return self.connections.MAX_ENABLED_SYNC
+        return self.p2p_manager.MAX_ENABLED_SYNC
 
     @signal_handler_safe
     def set_max_enabled_sync(self, value: int) -> None:
         """Change the maximum number of peers running sync simultaneously."""
         if value < 0:
             raise SysctlException('value must be >= 0')
-        if value == self.connections.MAX_ENABLED_SYNC:
+        if value == self.p2p_manager.MAX_ENABLED_SYNC:
             return
-        self.connections.MAX_ENABLED_SYNC = value
-        self.connections._sync_rotate_if_needed(force=True)
+        self.p2p_manager.MAX_ENABLED_SYNC = value
+        self.p2p_manager._sync_rotate_if_needed(force=True)
 
     def get_available_sync_verions(self) -> list[str]:
         """Return the list of AVAILABLE sync versions."""
-        return sorted(map(pretty_sync_version, self.connections.get_available_sync_versions()))
+        return sorted(map(pretty_sync_version, self.p2p_manager.get_available_sync_versions()))
 
     def get_enabled_sync_versions(self) -> list[str]:
         """Return the list of ENABLED sync versions."""
-        return sorted(map(pretty_sync_version, self.connections.get_enabled_sync_versions()))
+        return sorted(map(pretty_sync_version, self.p2p_manager.get_enabled_sync_versions()))
 
     @signal_handler_safe
     def set_enabled_sync_versions(self, sync_versions: list[str]) -> None:
         """Set the list of ENABLED sync versions."""
         new_sync_versions = set(map(parse_sync_version, sync_versions))
-        old_sync_versions = self.connections.get_enabled_sync_versions()
+        old_sync_versions = self.p2p_manager.get_enabled_sync_versions()
         to_enable = new_sync_versions - old_sync_versions
         to_disable = old_sync_versions - new_sync_versions
         for sync_version in to_enable:
@@ -213,29 +213,29 @@ class ConnectionsManagerSysctl(Sysctl):
 
     def _enable_sync_version(self, sync_version: SyncVersion) -> None:
         """Enable the given sync version, it must be available, otherwise it will fail silently."""
-        if not self.connections.is_sync_version_available(sync_version):
-            self.connections.log.warn('tried to enable a sync version through sysctl, but it is not available',
+        if not self.p2p_manager.is_sync_version_available(sync_version):
+            self.p2p_manager.log.warn('tried to enable a sync version through sysctl, but it is not available',
                                       sync_version=sync_version)
             return
-        self.connections.enable_sync_version(sync_version)
+        self.p2p_manager.enable_sync_version(sync_version)
 
     def _disable_sync_version(self, sync_version: SyncVersion) -> None:
         """Disable the given sync version."""
-        self.connections.disable_sync_version(sync_version)
+        self.p2p_manager.disable_sync_version(sync_version)
 
     @signal_handler_safe
     def set_kill_connection(self, peer_id: str, force: bool = False) -> None:
         """Kill connection with peer_id or kill all connections if peer_id == '*'."""
         if peer_id == '*':
             self.log.warn('Killing all connections')
-            self.connections.disconnect_all_peers(force=force)
+            self.p2p_manager.disconnect_all_peers(force=force)
             return
 
         try:
             peer_id_obj = PeerId(peer_id)
         except ValueError:
             raise SysctlException('invalid peer-id')
-        conn = self.connections.connected_peers.get(peer_id_obj, None)
+        conn = self.p2p_manager.connected_peers.get(peer_id_obj, None)
         if conn is None:
             self.log.warn('Killing connection', peer_id=peer_id)
             raise SysctlException('peer-id is not connected')
@@ -243,11 +243,11 @@ class ConnectionsManagerSysctl(Sysctl):
 
     def get_hostname(self) -> str | None:
         """Return the configured hostname."""
-        return self.connections.hostname
+        return self.p2p_manager.hostname
 
     def set_hostname(self, hostname: str) -> None:
         """Set the hostname and reset all connections."""
-        self.connections.set_hostname_and_reset_connections(hostname)
+        self.p2p_manager.set_hostname_and_reset_connections(hostname)
 
     def refresh_auto_hostname(self) -> None:
         """
@@ -261,8 +261,8 @@ class ConnectionsManagerSysctl(Sysctl):
             return
 
         if hostname:
-            self.connections.set_hostname_and_reset_connections(hostname)
+            self.p2p_manager.set_hostname_and_reset_connections(hostname)
 
     def reload_entrypoints_and_connections(self) -> None:
         """Kill all connections and reload entrypoints from the peer config file."""
-        self.connections.reload_entrypoints_and_connections()
+        self.p2p_manager.reload_entrypoints_and_connections()

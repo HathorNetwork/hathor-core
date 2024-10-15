@@ -270,7 +270,6 @@ class NodeBlockSync(SyncAgent):
     def handle_error(self, payload: str) -> None:
         """ Override protocols original handle_error so we can recover a sync in progress.
         """
-        assert self.protocol.connections is not None
         # forward message to overloaded handle_error:
         self.protocol.handle_error(payload)
 
@@ -320,7 +319,6 @@ class NodeBlockSync(SyncAgent):
         """
         assert not self.receiving_stream
         assert not self.mempool_manager.is_running()
-        assert self.protocol.connections is not None
 
         is_block_synced = yield self.run_sync_blocks()
         if is_block_synced:
@@ -741,7 +739,6 @@ class NodeBlockSync(SyncAgent):
 
         response_code = StreamEnd(int(payload))
         self.receiving_stream = False
-        assert self.protocol.connections is not None
 
         if self.state is not PeerState.SYNCING_BLOCKS:
             self.log.error('unexpected BLOCKS-END', state=self.state, response_code=response_code.name)
@@ -759,8 +756,6 @@ class NodeBlockSync(SyncAgent):
             self.log.error('unexpected BLOCK', state=self.state)
             self.protocol.send_error_and_close_connection('Not expecting to receive BLOCK message')
             return
-
-        assert self.protocol.connections is not None
 
         blk_bytes = base64.b64decode(payload)
         blk = self.vertex_parser.deserialize(blk_bytes)
@@ -997,7 +992,6 @@ class NodeBlockSync(SyncAgent):
 
         response_code = StreamEnd(int(payload))
         self.receiving_stream = False
-        assert self.protocol.connections is not None
 
         if self.state is not PeerState.SYNCING_TRANSACTIONS:
             self.log.error('unexpected TRANSACTIONS-END', state=self.state, response_code=response_code.name)
@@ -1011,7 +1005,6 @@ class NodeBlockSync(SyncAgent):
     def handle_transaction(self, payload: str) -> None:
         """ Handle a TRANSACTION message.
         """
-        assert self.protocol.connections is not None
 
         # tx_bytes = bytes.fromhex(payload)
         tx_bytes = base64.b64decode(payload)
@@ -1156,7 +1149,7 @@ class NodeBlockSync(SyncAgent):
                 try:
                     result = await self.dependencies.on_new_vertex(tx, fails_silently=False)
                     if result:
-                        self.protocol.connections.send_tx_to_peers(tx)
+                        self.protocol.p2p_manager.send_tx_to_peers(tx)
                 except InvalidNewTransaction:
                     self.protocol.send_error_and_close_connection('invalid vertex received')
             else:

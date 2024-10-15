@@ -268,7 +268,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
         self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
 
-        downloader = conn.proto2.connections.get_sync_factory(SyncVersion.V1_1).get_downloader()
+        downloader = conn.proto2.p2p_manager.get_sync_factory(SyncVersion.V1_1).get_downloader()
 
         p2p_dependencies1 = SingleProcessP2PDependencies(
             reactor=self.manager1.reactor,

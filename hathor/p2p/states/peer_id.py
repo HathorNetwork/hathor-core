@@ -109,8 +109,8 @@ class PeerIdState(BaseState):
             protocol.send_error_and_close_connection('Are you my clone?!')
             return
 
-        if protocol.connections is not None:
-            if protocol.connections.is_peer_connected(peer.id):
+        if protocol.p2p_manager is not None:
+            if protocol.p2p_manager.is_peer_connected(peer.id):
                 protocol.send_error_and_close_connection('We are already connected.')
                 return
 
@@ -130,7 +130,7 @@ class PeerIdState(BaseState):
 
         context = NetfilterContext(
             protocol=protocol,
-            connections=protocol.connections,
+            connections=protocol.p2p_manager,
             addr=protocol.transport.getPeer(),
         )
         verdict = get_table('filter').get_chain('post_peerid').process(context)
@@ -145,7 +145,7 @@ class PeerIdState(BaseState):
 
         Currently this is only because the peer is not in a whitelist and whitelist blocking is active.
         """
-        peer_is_whitelisted = peer_id in self.protocol.connections.peers_whitelist
+        peer_is_whitelisted = peer_id in self.protocol.p2p_manager.peers_whitelist
         # never block whitelisted peers
         if peer_is_whitelisted:
             return False
@@ -160,8 +160,8 @@ class PeerIdState(BaseState):
                     return True
 
         # otherwise we block non-whitelisted peers when on "whitelist-only mode"
-        if self.protocol.connections is not None:
-            protocol_is_whitelist_only = self.protocol.connections.whitelist_only
+        if self.protocol.p2p_manager is not None:
+            protocol_is_whitelist_only = self.protocol.p2p_manager.whitelist_only
             if protocol_is_whitelist_only and not peer_is_whitelisted:
                 return True
 

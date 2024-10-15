@@ -36,7 +36,7 @@ from hathor.profiler import get_cpu_profiler
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
-    from hathor.p2p.manager import ConnectionsManager  # noqa: F401
+    from hathor.p2p.p2p_manager import P2PManager  # noqa: F401
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -74,7 +74,7 @@ class HathorProtocol:
         NO_ENTRYPOINTS = 'no_entrypoints'
 
     my_peer: PrivatePeer
-    connections: 'ConnectionsManager'
+    p2p_manager: 'P2PManager'
     app_version: str
     last_message: float
     _peer: Optional[PublicPeer]
@@ -98,7 +98,7 @@ class HathorProtocol:
     def __init__(
         self,
         my_peer: PrivatePeer,
-        p2p_manager: 'ConnectionsManager',
+        p2p_manager: 'P2PManager',
         *,
         dependencies: P2PDependencies,
         use_ssl: bool,
@@ -107,10 +107,8 @@ class HathorProtocol:
         self.dependencies = dependencies
         self._settings = dependencies.settings
         self.my_peer = my_peer
-        self.connections = p2p_manager
-
-        assert self.connections.reactor is not None
-        self.reactor = self.connections.reactor
+        self.p2p_manager = p2p_manager
+        self.reactor = self.dependencies.reactor
 
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
         self.inbound = inbound
@@ -154,7 +152,7 @@ class HathorProtocol:
         # Set of warning flags that may be added during the connection process
         self.warning_flags: set[str] = set()
 
-        # This property is used to indicate the connection is being dropped (either because of a prototcol error or
+        # This property is used to indicate the connection is being dropped (either because of a protocol error or
         # because the remote disconnected), and the following buffered lines are ignored.
         # See `HathorLineReceiver.lineReceived`
         self.aborting = False
@@ -248,8 +246,8 @@ class HathorProtocol:
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
-        if self.connections:
-            self.connections.on_peer_connect(self)
+        if self.p2p_manager:
+            self.p2p_manager.on_peer_connect(self)
 
     def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
@@ -257,10 +255,8 @@ class HathorProtocol:
         self.entrypoint = entrypoint
 
     def on_peer_ready(self) -> None:
-        assert self.connections is not None
-        assert self.peer is not None
         self.update_log_context()
-        self.connections.on_peer_ready(self)
+        self.p2p_manager.on_peer_ready(self)
         self.log.info('peer connected', peer_id=self.peer.id)
 
     def on_disconnect(self, reason: Failure) -> None:
@@ -278,8 +274,7 @@ class HathorProtocol:
         if self.state:
             self.state.on_exit()
             self.state = None
-        if self.connections:
-            self.connections.on_peer_disconnect(self)
+        self.p2p_manager.on_peer_disconnect(self)
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message

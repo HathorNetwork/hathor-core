@@ -6,7 +6,7 @@ from twisted.names.dns import TXT, A, Record_A, Record_TXT, RRHeader
 from typing_extensions import override
 
 from hathor.p2p.entrypoint import Entrypoint, Protocol
-from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.p2p_manager import P2PManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, PeerDiscovery
 from hathor.p2p.peer_discovery.dns import LookupResult
@@ -48,7 +48,7 @@ class MockDNSPeerDiscovery(DNSPeerDiscovery):
 class BootstrapTestCase(unittest.TestCase):
     def test_mock_discovery(self) -> None:
         peer = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(
+        p2p_manager = P2PManager(
             dependencies=Mock(),
             my_peer=peer,
             whitelist_only=True,
@@ -64,11 +64,11 @@ class BootstrapTestCase(unittest.TestCase):
             ('baz', 456),
             ('127.0.0.88', 8888),
         ]
-        connections.add_peer_discovery(MockPeerDiscovery(host_ports1))
-        connections.add_peer_discovery(MockPeerDiscovery(host_ports2))
-        connections.do_discovery()
+        p2p_manager.add_peer_discovery(MockPeerDiscovery(host_ports1))
+        p2p_manager.add_peer_discovery(MockPeerDiscovery(host_ports2))
+        p2p_manager.do_discovery()
         self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
+        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in p2p_manager.connecting_peers.values()}
         self.assertEqual(connecting_entrypoints, {
             'tcp://foobar:1234',
             'tcp://127.0.0.99:9999',
@@ -78,7 +78,7 @@ class BootstrapTestCase(unittest.TestCase):
 
     def test_dns_discovery(self) -> None:
         peer = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(
+        p2p_manager = P2PManager(
             dependencies=Mock(),
             my_peer=peer,
             whitelist_only=True,
@@ -94,10 +94,10 @@ class BootstrapTestCase(unittest.TestCase):
             ('foobar', 1234),
             ('baz', 456),
         ]
-        connections.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a))
-        connections.do_discovery()
+        p2p_manager.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a))
+        p2p_manager.do_discovery()
         self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
+        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in p2p_manager.connecting_peers.values()}
         self.assertEqual(connecting_entrypoints, {
             'tcp://127.0.0.99:40403',
             'tcp://127.0.0.88:40403',
