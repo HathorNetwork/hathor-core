@@ -50,7 +50,7 @@ class LoadFromLogs(RunNode):
             vertex = parser.deserialize(vertex_bytes)
             await deferLater(self.reactor, 0, self.manager.on_new_tx, vertex)
 
-        self.manager.connections.disconnect_all_peers(force=True)
+        self.manager.p2p_manager.disconnect_all_peers(force=True)
         self.reactor.fireSystemEvent('shutdown')
 
 

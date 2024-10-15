@@ -20,7 +20,8 @@ from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
-from hathor.p2p.p2p_manager import P2PManager, PeerConnectionsMetrics
+from hathor.p2p.p2p_manager import PeerConnectionsMetrics
+from hathor.p2p.p2p_manager_protocol import P2PManagerProtocol
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction.base_transaction import sum_weights
@@ -60,7 +61,7 @@ class PeerConnectionMetrics:
 class Metrics:
     pubsub: PubSubManager
     avg_time_between_blocks: int
-    connections: P2PManager
+    p2p_manager: P2PManagerProtocol
     tx_storage: TransactionStorage
     # Twisted reactor that handles the time and callLater
     reactor: Reactor
@@ -247,7 +248,7 @@ class Metrics:
         """
         self.peer_connection_metrics.clear()
 
-        for connection in self.connections.connections:
+        for connection in self.p2p_manager.get_connections():
             if not connection._peer:
                 # A connection without peer will not be able to communicate
                 # So we can just discard it for the sake of the metrics
