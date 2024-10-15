@@ -58,8 +58,9 @@ jobs:
             --project hathor-core \
             --token '${{ secrets.BENCHER_API_TOKEN }}' \
             --branch '${{ github.head_ref }}' \
-            --branch-start-point '${{ github.base_ref }}' \
-            --branch-start-point-hash '${{ github.event.pull_request.base.sha }}' \
+            --start-point '${{ github.base_ref }}' \
+            --start-point-hash '${{ github.event.pull_request.base.sha }}' \
+            --start-point-clone-thresholds \
             --testbed ubuntu-22.04 \
             --adapter shell_hyperfine \
             --err \
