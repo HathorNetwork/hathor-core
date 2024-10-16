@@ -220,7 +220,7 @@ class NodeBlockSync(SyncAgent):
         if self._started:
             raise Exception('NodeSyncBlock is already running')
         self._started = True
-        self._lc_run.start(5)
+        self._lc_run.start(1)
 
     def stop(self) -> None:
         if not self._started:
@@ -841,7 +841,7 @@ class NodeBlockSync(SyncAgent):
         if deferred:
             deferred.callback(best_block)
 
-    def start_transactions_streaming(self, partial_blocks: list[Block]) -> Deferred[StreamEnd]:
+    async def start_transactions_streaming(self, partial_blocks: list[Block]) -> StreamEnd:
         """Request peer to start streaming transactions to us."""
         self._tx_streaming_client = TransactionStreamingClient(
             self, partial_blocks, limit=self.DEFAULT_STREAMING_LIMIT, dependencies=self.dependencies
@@ -850,12 +850,12 @@ class NodeBlockSync(SyncAgent):
         start_from: list[bytes] = []
         first_block_hash = partial_blocks[0].hash
         last_block_hash = partial_blocks[-1].hash
-        self.log.info('requesting transactions streaming',
+        self.log.info('requesting transactions streaming (start)',
                       start_from=[x.hex() for x in start_from],
                       first_block=first_block_hash.hex(),
                       last_block=last_block_hash.hex())
         self.send_get_transactions_bfs(start_from, first_block_hash, last_block_hash)
-        return self._tx_streaming_client.wait()
+        return await self._tx_streaming_client.wait()
 
     def resume_transactions_streaming(self) -> Deferred[StreamEnd]:
         """Resume transaction streaming."""
@@ -866,7 +866,7 @@ class NodeBlockSync(SyncAgent):
         start_from = list(self._tx_streaming_client._waiting_for)
         first_block_hash = partial_blocks[0].hash
         last_block_hash = partial_blocks[-1].hash
-        self.log.info('requesting transactions streaming',
+        self.log.info('requesting transactions streaming (resume)',
                       start_from=[x.hex() for x in start_from],
                       first_block=first_block_hash.hex(),
                       last_block=last_block_hash.hex())

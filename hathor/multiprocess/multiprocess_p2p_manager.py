@@ -22,7 +22,7 @@ from twisted.internet.endpoints import UNIXClientEndpoint, UNIXServerEndpoint, c
 from twisted.internet.interfaces import IProcessTransport
 from twisted.protocols import amp
 
-from hathor.multiprocess.node_ipc_server import NodeIpcServerFactor
+from hathor.multiprocess.node_ipc_server import NodeIpcServerFactory
 from hathor.multiprocess.p2p_ipc_main import P2P_IPC_MAIN
 from hathor.multiprocess.p2p_ipc_server import Start
 from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
@@ -59,7 +59,7 @@ class MultiprocessP2PManager:
         outbound_socket = os.path.join(self._tmp_dir.name, 'out.sock')
         inbound_socket = os.path.join(self._tmp_dir.name, 'in.sock')
 
-        server_factory = NodeIpcServerFactor(vertex_parser=self.vertex_parser, vertex_handler=self.vertex_handler, tx_storage=self.tx_storage)
+        server_factory = NodeIpcServerFactory(vertex_parser=self.vertex_parser, vertex_handler=self.vertex_handler, tx_storage=self.tx_storage)
         server_endpoint = UNIXServerEndpoint(reactor=self.reactor, address=outbound_socket)
         server_endpoint.listen(server_factory)
 
@@ -72,7 +72,7 @@ class MultiprocessP2PManager:
         )
 
         client_endpoint = UNIXClientEndpoint(reactor=self.reactor, path=inbound_socket)
-        time.sleep(5)  # TODO: Couldn't use timeout in endpoint
+        time.sleep(2)  # TODO: Couldn't use timeout in endpoint? Improve this
         client: amp.AMP = await connectProtocol(client_endpoint, amp.AMP())
         await client.callRemote(Start)
 

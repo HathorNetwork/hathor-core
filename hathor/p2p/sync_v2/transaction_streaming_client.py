@@ -86,10 +86,10 @@ class TransactionStreamingClient:
         self._db: dict[VertexId, BaseTransaction] = {}
         self._existing_deps: set[VertexId] = set()
 
-    def wait(self) -> Deferred[StreamEnd]:
+    async def wait(self) -> StreamEnd:
         """Return the deferred."""
-        self._prepare_block(self.partial_blocks[0])
-        return self._deferred
+        await self._prepare_block(self.partial_blocks[0])
+        return await self._deferred
 
     def resume(self) -> Deferred[StreamEnd]:
         """Resume receiving vertices."""

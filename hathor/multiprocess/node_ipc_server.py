@@ -135,7 +135,7 @@ class NodeIpcServer(amp.AMP):
         return dict(vertex_bytes=[bytes(vertex), vertex.static_metadata.json_dumpb()])
 
 
-class NodeIpcServerFactor(ServerFactory):
+class NodeIpcServerFactory(ServerFactory):
     __slots__ = ('vertex_parser', 'vertex_handler', 'tx_storage')
 
     def __init__(self, *, vertex_parser: VertexParser, vertex_handler: VertexHandler, tx_storage: TransactionStorage) -> None:

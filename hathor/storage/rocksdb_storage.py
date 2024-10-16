@@ -61,7 +61,7 @@ class RocksDBStorage:
         column_families = {cf: rocksdb.ColumnFamilyOptions() for cf in cf_names}
 
         # finally, open the database
-        self._db = rocksdb.DB(db_path, options, column_families=column_families, secondary_path=secondary_path)
+        self._db = rocksdb.DB(db_path, options, column_families=column_families)
         self.log.debug('open db', cf_list=[cf.name.decode('ascii') for cf in self._db.column_families])
 
     def get_db(self) -> 'rocksdb.DB':
