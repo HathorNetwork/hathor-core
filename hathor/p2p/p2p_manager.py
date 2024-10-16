@@ -302,7 +302,7 @@ class P2PManager:
     async def start(self) -> None:
         """Listen on the given address descriptions and start accepting and processing connections."""
         self.lc_reconnect.start(5, now=False)
-        self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
+        # self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
 
         if self._settings.ENABLE_PEER_WHITELIST:
             self._start_whitelist_reconnect()

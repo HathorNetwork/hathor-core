@@ -97,9 +97,11 @@ class MultiprocessP2PDependencies(P2PDependencies):
         raise NotImplementedError
 
     @override
-    def vertex_exists(self, vertex_id: VertexId) -> bool:
+    async def vertex_exists(self, vertex_id: VertexId) -> bool:
         # return self._tx_storage.transaction_exists(vertex_id)
-        raise NotImplementedError
+        response = await self._client.callRemote(VertexExists, vertex_id=vertex_id)
+        return response['exists']
+
 
     @override
     async def can_validate_full(self, vertex: Vertex) -> bool:

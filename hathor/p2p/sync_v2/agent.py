@@ -600,11 +600,10 @@ class NodeBlockSync(SyncAgent):
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         try:
             for tx in vertex_list:
-                if not self.dependencies.vertex_exists(tx.hash):
+                if not await self.dependencies.vertex_exists(tx.hash):
                     await self.dependencies.on_new_vertex(tx, fails_silently=False)
-                await deferLater(self.reactor, 0, lambda: None)
 
-            if not self.dependencies.vertex_exists(blk.hash):
+            if not await self.dependencies.vertex_exists(blk.hash):
                 await self.dependencies.on_new_vertex(blk, fails_silently=False)
         except InvalidNewTransaction:
             self.protocol.send_error_and_close_connection('invalid vertex received')

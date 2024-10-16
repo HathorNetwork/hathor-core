@@ -89,7 +89,7 @@ class SyncMempoolManager:
         if not self.missing_tips:
             # No missing tips? Let's get them!
             tx_hashes: list[bytes] = await self.sync_agent.get_tips()
-            self.missing_tips.update(h for h in tx_hashes if not self.dependencies.vertex_exists(h))
+            self.missing_tips.update(h for h in tx_hashes if not await self.dependencies.vertex_exists(h))
 
         while self.missing_tips:
             self.log.debug('We have missing tips! Let\'s start!', missing_tips=[x.hex() for x in self.missing_tips])
@@ -109,7 +109,7 @@ class SyncMempoolManager:
         while stack:
             tx = stack[-1]
             self.log.debug('step mempool DSF', tx=tx.hash_hex, stack_len=len(stack))
-            missing_dep = self._next_missing_dep(tx)
+            missing_dep = await self._next_missing_dep(tx)
             if missing_dep is None:
                 self.log.debug(r'No dependencies missing! \o/')
                 await self._add_tx(tx)
@@ -121,21 +121,21 @@ class SyncMempoolManager:
                 if len(stack) > self.MAX_STACK_LENGTH:
                     stack.popleft()
 
-    def _next_missing_dep(self, tx: BaseTransaction) -> Optional[bytes]:
+    async def _next_missing_dep(self, tx: BaseTransaction) -> Optional[bytes]:
         """Get the first missing dependency found of tx."""
         assert not tx.is_block
         for txin in tx.inputs:
-            if not self.dependencies.vertex_exists(txin.tx_id):
+            if not await self.dependencies.vertex_exists(txin.tx_id):
                 return txin.tx_id
         for parent in tx.parents:
-            if not self.dependencies.vertex_exists(parent):
+            if not await self.dependencies.vertex_exists(parent):
                 return parent
         return None
 
     async def _add_tx(self, tx: BaseTransaction) -> None:
         """Add tx to the DAG."""
         self.missing_tips.discard(tx.hash)
-        if self.dependencies.vertex_exists(tx.hash):
+        if await self.dependencies.vertex_exists(tx.hash):
             return
         try:
             result = await self.dependencies.on_new_vertex(tx, fails_silently=False)

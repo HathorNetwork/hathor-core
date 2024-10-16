@@ -87,6 +87,9 @@ class BlockchainStreamingClient:
         if self._deferred.called:
             return
 
+        last_received_block = self._last_received_block
+        self._last_received_block = blk
+
         self._blk_received += 1
         if self._blk_received > self._blk_max_quantity:
             self.log.warn('too many blocks received',
@@ -114,16 +117,15 @@ class BlockchainStreamingClient:
             if self._blk_repeated > self.max_repeated_blocks:
                 self.log.info('too many repeated block received', total_repeated=self._blk_repeated)
                 self.fails(TooManyRepeatedVerticesError())
-            self._last_received_block = blk
             return
 
         # basic linearity validation, crucial for correctly predicting the next block's height
         if self._reverse:
-            if self._last_received_block and blk.hash != self._last_received_block.get_block_parent_hash():
+            if last_received_block and blk.hash != last_received_block.get_block_parent_hash():
                 self.fails(BlockNotConnectedToPreviousBlock())
                 return
         else:
-            if self._last_received_block and blk.get_block_parent_hash() != self._last_received_block.hash:
+            if last_received_block and blk.get_block_parent_hash() != last_received_block.hash:
                 self.fails(BlockNotConnectedToPreviousBlock())
                 return
 
@@ -141,7 +143,6 @@ class BlockchainStreamingClient:
         else:
             self._partial_blocks.append(blk)
 
-        self._last_received_block = blk
         self._blk_repeated = 0
         # XXX: debugging log, maybe add timing info
         if self._blk_received % 500 == 0:

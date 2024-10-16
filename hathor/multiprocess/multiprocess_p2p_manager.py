@@ -72,7 +72,7 @@ class MultiprocessP2PManager:
         )
 
         client_endpoint = UNIXClientEndpoint(reactor=self.reactor, path=inbound_socket)
-        time.sleep(3)  # TODO: Couldn't use timeout in endpoint
+        time.sleep(5)  # TODO: Couldn't use timeout in endpoint
         client: amp.AMP = await connectProtocol(client_endpoint, amp.AMP())
         await client.callRemote(Start)
 

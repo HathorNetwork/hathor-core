@@ -45,6 +45,11 @@ class PartialVertexExists(amp.Command):
     response = [(b'exists', amp.Boolean())]
 
 
+class VertexExists(amp.Command):
+    arguments = [(b'vertex_id', amp.String())]
+    response = [(b'exists', amp.Boolean())]
+
+
 class CanValidateFull(amp.Command):
     arguments = [(b'vertex_bytes', amp.String())]
     response = [(b'can_validate_full', amp.Boolean())]
@@ -100,6 +105,12 @@ class NodeIpcServer(amp.AMP):
     def partial_vertex_exists(self, vertex_id: VertexId) -> dict[str, Any]:
         return dict(
             exists=self.tx_storage.partial_vertex_exists(vertex_id)
+        )
+
+    @VertexExists.responder
+    def vertex_exists(self, vertex_id: VertexId) -> dict[str, Any]:
+        return dict(
+            exists=self.tx_storage.transaction_exists(vertex_id)
         )
 
     @CanValidateFull.responder

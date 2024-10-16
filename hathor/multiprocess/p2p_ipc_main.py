@@ -70,6 +70,8 @@ async def main(reactor: ReactorProtocol, settings: HathorSettings, inbound_socke
     server_endpoint.listen(server_factory)
 
 if __name__ == '__main__':
+    # import pydevd_pycharm
+    # pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
     _, inbound_socket, outbound_socket = sys.argv
     reactor = initialize_global_reactor()
     settings = get_global_settings()
