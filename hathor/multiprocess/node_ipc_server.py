@@ -58,6 +58,11 @@ class GetNHeightTips(amp.Command):
     ]))]
 
 
+class GetVertex(amp.Command):
+    arguments = [(b'vertex_id', amp.String())]
+    response = [(b'vertex_bytes', amp.ListOf(amp.String()))]
+
+
 class NodeIpcServer(amp.AMP):
     __slots__ = ('vertex_parser', 'vertex_handler', 'tx_storage')
 
@@ -112,6 +117,11 @@ class NodeIpcServer(amp.AMP):
                 dict(height=info.height, id=info.id) for info in tips
             ]
         )
+
+    @GetVertex.responder
+    def get_vertex(self, vertex_id: VertexId) -> dict[str, Any]:
+        vertex = self.tx_storage.get_vertex(vertex_id)
+        return dict(vertex_bytes=[bytes(vertex), vertex.static_metadata.json_dumpb()])
 
 
 class NodeIpcServerFactor(ServerFactory):

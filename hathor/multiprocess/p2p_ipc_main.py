@@ -19,6 +19,7 @@ from twisted.internet.endpoints import UNIXClientEndpoint, UNIXServerEndpoint, c
 from twisted.protocols import amp
 
 from hathor.builder import SyncSupportLevel
+from hathor.cli.util import setup_logging, LoggingOutput, LoggingOptions
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import MemoryIndexesManager, RocksDBIndexesManager
@@ -72,5 +73,9 @@ if __name__ == '__main__':
     _, inbound_socket, outbound_socket = sys.argv
     reactor = initialize_global_reactor()
     settings = get_global_settings()
+    setup_logging(
+        logging_output=LoggingOutput.PRETTY,
+        logging_options=LoggingOptions(debug=False, sentry=False)
+    )
     Deferred.fromCoroutine(main(reactor, settings, inbound_socket, outbound_socket))
     reactor.run()

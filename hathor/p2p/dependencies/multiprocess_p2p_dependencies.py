@@ -72,9 +72,14 @@ class MultiprocessP2PDependencies(P2PDependencies):
         raise NotImplementedError
 
     @override
-    def get_vertex(self, vertex_id: VertexId) -> Vertex:
+    async def get_vertex(self, vertex_id: VertexId) -> Vertex:
         # return self._tx_storage.get_vertex(vertex_id)
-        raise NotImplementedError
+        response = await self._client.callRemote(GetVertex, vertex_id=vertex_id)
+        vertex_bytes, static_metadata_bytes = response['vertex_bytes']
+        vertex = self.vertex_parser.deserialize(vertex_bytes)
+        static_metadata = VertexStaticMetadata.from_bytes(static_metadata_bytes, target=vertex)
+        vertex.set_static_metadata(static_metadata)
+        return vertex
 
     @override
     def get_block(self, block_id: VertexId) -> Block:

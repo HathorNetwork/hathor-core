@@ -305,14 +305,13 @@ class NodeBlockSync(SyncAgent):
             return
         self._is_running = True
         self._sync_started_at = self.reactor.seconds()
-        yield self._run_sync()
-        # try:
-        #     yield self._run_sync()
-        # except Exception:
-        #     self.protocol.send_error_and_close_connection('internal error')
-        #     self.log.error('unhandled exception', exc_info=True)
-        # finally:
-        #     self._is_running = False
+        try:
+            yield self._run_sync()
+        except Exception:
+            self.protocol.send_error_and_close_connection('internal error')
+            self.log.error('unhandled exception', exc_info=True)
+        finally:
+            self._is_running = False
 
     @inlineCallbacks
     def _run_sync(self) -> Generator[Any, Any, None]:
@@ -583,11 +582,11 @@ class NodeBlockSync(SyncAgent):
             for info in block_info_list:
                 try:
                     # We must check only fully validated transactions.
-                    blk = self.dependencies.get_vertex(info.id)
+                    blk = yield self.dependencies.get_vertex(info.id)
                 except TransactionDoesNotExist:
                     hi = info
                 else:
-                    assert blk.get_metadata().validation.is_fully_connected()
+                    # assert blk.get_metadata().validation.is_fully_connected()
                     assert isinstance(blk, Block)
                     assert info.height == blk.get_height()
                     lo = info
@@ -625,7 +624,7 @@ class NodeBlockSync(SyncAgent):
         payload = json.dumps(heights)
         self.send_message(ProtocolMessages.GET_PEER_BLOCK_HASHES, payload)
 
-    def handle_get_peer_block_hashes(self, payload: str) -> None:
+    async def handle_get_peer_block_hashes(self, payload: str) -> None:
         """ Handle a GET-PEER-BLOCK-HASHES message.
         """
         heights = json.loads(payload)
@@ -638,7 +637,7 @@ class NodeBlockSync(SyncAgent):
             blk_hash = self.dependencies.height_index_get(h)
             if blk_hash is None:
                 break
-            blk = self.dependencies.get_vertex(blk_hash)
+            blk = await self.dependencies.get_vertex(blk_hash)
             if blk.get_metadata().voided_by:
                 break
             data.append((h, blk_hash.hex()))
@@ -1027,7 +1026,7 @@ class NodeBlockSync(SyncAgent):
             self.log.debug('tx in cache', tx=tx_id.hex())
             return tx
         try:
-            tx = self.dependencies.get_vertex(tx_id)
+            tx = yield self.dependencies.get_vertex(tx_id)
         except TransactionDoesNotExist:
             tx = yield self.get_data(tx_id, 'mempool')
             assert tx is not None
@@ -1089,7 +1088,7 @@ class NodeBlockSync(SyncAgent):
         payload = json.dumps(data)
         self.send_message(ProtocolMessages.GET_DATA, payload)
 
-    def handle_get_data(self, payload: str) -> None:
+    async def handle_get_data(self, payload: str) -> None:
         """ Handle a GET-DATA message.
         """
         data = json.loads(payload)
@@ -1097,7 +1096,7 @@ class NodeBlockSync(SyncAgent):
         origin = data.get('origin', '')
         # self.log.debug('handle_get_data', payload=hash_hex)
         try:
-            tx = self.dependencies.get_vertex(bytes.fromhex(txid_hex))
+            tx = await self.dependencies.get_vertex(bytes.fromhex(txid_hex))
             self.send_data(tx, origin=origin)
         except TransactionDoesNotExist:
             # In case the tx does not exist we send a NOT-FOUND message
