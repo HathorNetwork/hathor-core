@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional
 
 from pydantic import ValidationError
 from structlog import get_logger
+from twisted.internet.defer import Deferred
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -262,7 +263,6 @@ class RunNode:
 
     def start_manager(self) -> None:
         self.start_sentry_if_possible()
-        self.manager.start()
 
     def register_signal_handlers(self) -> None:
         """Register signal handlers."""
@@ -543,6 +543,7 @@ class RunNode:
         return RunNodeArgs.parse_obj(args)
 
     def run(self) -> None:
+        self.reactor.callWhenRunning(lambda: Deferred.fromCoroutine(self.manager.start()))
         self.reactor.run()
 
 

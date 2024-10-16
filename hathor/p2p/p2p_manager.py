@@ -299,7 +299,7 @@ class P2PManager:
             window_seconds
         )
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Listen on the given address descriptions and start accepting and processing connections."""
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)

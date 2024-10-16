@@ -22,18 +22,21 @@ from structlog import get_logger
 
 logger = get_logger()
 _DB_NAME = 'data_v2.db'
+_SECONDARY_DB_NAME = 'secondary_data.db'
 
 
 class RocksDBStorage:
     """ Creates a RocksDB database
         Give clients the option to create column families
     """
-    def __init__(self, path: str = './', cache_capacity: Optional[int] = None):
+    def __init__(self, path: str = './', cache_capacity: Optional[int] = None, *, open_as_secondary: bool = False):
         import rocksdb
         self.log = logger.new()
         self._path = path
+        self.is_secondary = open_as_secondary
 
         db_path = os.path.join(path, _DB_NAME)
+        secondary_path = os.path.join(path, _SECONDARY_DB_NAME) if open_as_secondary else None
         lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
         table_factory = rocksdb.BlockBasedTableFactory(block_cache=lru_cache)
         options = rocksdb.Options(
@@ -50,6 +53,7 @@ class RocksDBStorage:
             cf_names = rocksdb.list_column_families(db_path, options)
         except rocksdb.errors.RocksIOError:
             # this means the db doesn't exist, a repair will create one
+            assert not open_as_secondary
             rocksdb.repair_db(db_path, options)
             cf_names = []
 
@@ -57,7 +61,7 @@ class RocksDBStorage:
         column_families = {cf: rocksdb.ColumnFamilyOptions() for cf in cf_names}
 
         # finally, open the database
-        self._db = rocksdb.DB(db_path, options, column_families=column_families)
+        self._db = rocksdb.DB(db_path, options, column_families=column_families, secondary_path=secondary_path)
         self.log.debug('open db', cf_list=[cf.name.decode('ascii') for cf in self._db.column_families])
 
     def get_db(self) -> 'rocksdb.DB':

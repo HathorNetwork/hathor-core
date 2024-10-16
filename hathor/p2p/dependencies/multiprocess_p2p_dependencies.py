@@ -11,33 +11,31 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+import time
 from typing import Any
 
 from intervaltree import Interval
+from twisted.protocols import amp
 from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
 from hathor.indexes.timestamp_index import RangeIdx
+from hathor.multiprocess.node_ipc_server import OnNewVertex
 from hathor.p2p import P2PDependencies
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import HathorEvents
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Block, Vertex
-from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage import TransactionStorage, TransactionCacheStorage
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
 from hathor.util import not_none
-from hathor.verification.verification_service import VerificationService
-from hathor.vertex_handler import VertexHandler
 
 
-class SingleProcessP2PDependencies(P2PDependencies):
+class MultiprocessP2PDependencies(P2PDependencies):
     __slots__ = (
+        '_client',
         '_tx_storage',
-        '_vertex_handler',
-        '_verification_service',
-        '_pubsub',
         '_indexes',
     )
 
@@ -46,30 +44,45 @@ class SingleProcessP2PDependencies(P2PDependencies):
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
+        client: amp.AMP,
         vertex_parser: VertexParser,
-        tx_storage: TransactionStorage,
-        vertex_handler: VertexHandler,
-        verification_service: VerificationService,
-        pubsub: PubSubManager,
+        tx_storage: TransactionCacheStorage,
     ) -> None:
         super().__init__(reactor=reactor, settings=settings, vertex_parser=vertex_parser)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
+        self._client = client
         self._tx_storage = tx_storage
-        self._vertex_handler = vertex_handler
-        self._verification_service = verification_service
-        self._pubsub = pubsub
         self._indexes = not_none(tx_storage.indexes)
 
     @override
     async def on_new_vertex(self, vertex: Vertex, *, fails_silently: bool = True) -> bool:
-        return self._vertex_handler.on_new_vertex(vertex=vertex, fails_silently=fails_silently)
+        response = await self._client.callRemote(
+            OnNewVertex,
+            vertex_bytes=bytes(vertex),
+            fails_silently=fails_silently
+        )
+        success = response['success']
+        count = 0
+        if success:
+            while not self._tx_storage.transaction_exists(vertex.hash):
+                print('catch up count', count)
+                count += 1
+                self._tx_storage.store._db.try_catch_up_with_primary()
+                time.sleep(1)
+        else:
+            print()
+        return success
 
     @override
     def verify_basic(self, vertex: Vertex) -> None:
-        return self._verification_service.verify_basic(vertex)
+        # TODO
+        return
 
     @override
     def publish(self, key: HathorEvents, **kwargs: Any) -> None:
-        self._pubsub.publish(key, **kwargs)
+        # TODO
+        return
 
     @override
     def get_genesis(self, vertex_id: VertexId) -> Vertex | None:

@@ -230,7 +230,7 @@ class HathorManager:
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
         if self.is_started:
@@ -307,7 +307,7 @@ class HathorManager:
         # Metric starts to capture data
         self.metrics.start()
 
-        self.p2p_manager.start()
+        await self.p2p_manager.start()
 
         self.start_time = time.time()
 

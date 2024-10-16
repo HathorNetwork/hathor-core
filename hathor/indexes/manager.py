@@ -25,6 +25,7 @@ from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.height_index import HeightIndex
 from hathor.indexes.info_index import InfoIndex
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
+from hathor.indexes.rocksdb_mempool_tips_index import RocksDBMempoolTipsIndex
 from hathor.indexes.timestamp_index import ScopeType as TimestampScopeType, TimestampIndex
 from hathor.indexes.tips_index import ScopeType as TipsScopeType, TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
@@ -351,4 +352,4 @@ class RocksDBIndexesManager(IndexesManager):
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         if self.mempool_tips is None:
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
-            self.mempool_tips = MemoryMempoolTipsIndex()
+            self.mempool_tips = RocksDBMempoolTipsIndex(self._db)

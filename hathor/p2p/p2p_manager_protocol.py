@@ -24,7 +24,7 @@ from hathor.transaction import BaseTransaction
 
 class P2PManagerProtocol(Protocol):
     @abstractmethod
-    def start(self) -> None:
+    async def start(self) -> None:
         raise NotImplementedError
 
     @abstractmethod

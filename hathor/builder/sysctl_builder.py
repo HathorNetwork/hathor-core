@@ -37,8 +37,8 @@ class SysctlBuilder:
         core.put_child('features', FeatureActivationSysctl(self.artifacts.bit_signaling_service))
 
         root.put_child('core', core)
-        assert isinstance(self.artifacts.p2p_manager, P2PManager), 'sysctl currently only supports P2PManager'
-        root.put_child('p2p', P2PManagerSysctl(self.artifacts.p2p_manager))
+        # assert isinstance(self.artifacts.p2p_manager, P2PManager), 'sysctl currently only supports P2PManager'
+        # root.put_child('p2p', P2PManagerSysctl(self.artifacts.p2p_manager))
 
         ws_factory = self.artifacts.manager.websocket_factory
         if ws_factory is not None:

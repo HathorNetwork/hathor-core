@@ -15,7 +15,7 @@
 from typing import cast
 
 from structlog import get_logger
-from twisted.internet.interfaces import IReactorCore, IReactorTCP, IReactorTime
+from twisted.internet.interfaces import IReactorCore, IReactorProcess, IReactorTCP, IReactorTime
 from zope.interface.verify import verifyObject
 
 from hathor.reactor.reactor_protocol import ReactorProtocol
@@ -81,6 +81,7 @@ def initialize_global_reactor(*, use_asyncio_reactor: bool = False) -> ReactorPr
     assert verifyObject(IReactorTime, twisted_reactor) is True
     assert verifyObject(IReactorCore, twisted_reactor) is True
     assert verifyObject(IReactorTCP, twisted_reactor) is True
+    assert verifyObject(IReactorProcess, twisted_reactor) is True
 
     # We cast to ReactorProtocol, our own type that stubs the necessary Twisted zope interfaces, to aid typing.
     _reactor = cast(ReactorProtocol, twisted_reactor)

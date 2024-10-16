@@ -305,13 +305,14 @@ class NodeBlockSync(SyncAgent):
             return
         self._is_running = True
         self._sync_started_at = self.reactor.seconds()
-        try:
-            yield self._run_sync()
-        except Exception:
-            self.protocol.send_error_and_close_connection('internal error')
-            self.log.error('unhandled exception', exc_info=True)
-        finally:
-            self._is_running = False
+        yield self._run_sync()
+        # try:
+        #     yield self._run_sync()
+        # except Exception:
+        #     self.protocol.send_error_and_close_connection('internal error')
+        #     self.log.error('unhandled exception', exc_info=True)
+        # finally:
+        #     self._is_running = False
 
     @inlineCallbacks
     def _run_sync(self) -> Generator[Any, Any, None]:
