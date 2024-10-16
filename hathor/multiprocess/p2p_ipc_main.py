@@ -41,26 +41,11 @@ async def main(reactor: ReactorProtocol, settings: HathorSettings, inbound_socke
     client: amp.AMP = await connectProtocol(client_endpoint, amp.AMP())
 
     vertex_parser = VertexParser(settings=settings)
-    rocksdb_storage = RocksDBStorage(open_as_secondary=True)
-    indexes = RocksDBIndexesManager(rocksdb_storage)
-    tx_rocksdb_storage = TransactionRocksDBStorage(
-        rocksdb_storage=rocksdb_storage,
-        settings=settings,
-        vertex_parser=vertex_parser,
-    )
-    tx_storage = TransactionCacheStorage(
-        reactor=reactor,
-        settings=settings,
-        store=tx_rocksdb_storage,
-        indexes=indexes,
-    )
-
     dependencies = MultiprocessP2PDependencies(
         reactor=reactor,
         settings=settings,
         client=client,
         vertex_parser=vertex_parser,
-        tx_storage=tx_storage,
     )
 
     p2p_manager = P2PManager(
@@ -71,7 +56,6 @@ async def main(reactor: ReactorProtocol, settings: HathorSettings, inbound_socke
         whitelist_only=False,
         capabilities=settings.get_default_capabilities(),
         sync_factories=SyncSupportLevel.get_factories(
-            tx_storage=tx_storage,
             dependencies=dependencies,
             sync_v1_support=SyncSupportLevel.UNAVAILABLE,
             sync_v2_support=SyncSupportLevel.ENABLED,

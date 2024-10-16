@@ -230,7 +230,7 @@ class ReadyState(BaseState):
         actual_n_blocks: int = n_blocks if n_blocks is not None else self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS
         self.send_message(ProtocolMessages.GET_BEST_BLOCKCHAIN, str(actual_n_blocks))
 
-    def handle_get_best_blockchain(self, payload: str) -> None:
+    async def handle_get_best_blockchain(self, payload: str) -> None:
         """ Executed when a GET-BEST-BLOCKCHAIN command is received.
         It just responds with a list with N blocks from the best blockchain
         in descending order.
@@ -249,7 +249,7 @@ class ReadyState(BaseState):
             )
             return
 
-        best_blockchain = self.dependencies.get_n_height_tips(n_blocks)
+        best_blockchain = await self.dependencies.get_n_height_tips(n_blocks)
         self.send_best_blockchain(best_blockchain)
 
     def send_best_blockchain(self, best_blockchain: list[HeightInfo]) -> None:

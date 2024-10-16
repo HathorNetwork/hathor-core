@@ -404,6 +404,9 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
 
     @cpu.profiler(key=lambda self: 'p2p!{}'.format(self.get_short_remote()))
     def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:
+        if self.inbound:
+            # TODO: Disabling p2p as a server
+            return
         assert self.transport is not None
 
         if self.aborting:

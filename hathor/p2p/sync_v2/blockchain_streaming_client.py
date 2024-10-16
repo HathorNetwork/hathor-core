@@ -107,7 +107,7 @@ class BlockchainStreamingClient:
 
         # Check for repeated blocks.
         is_duplicated = False
-        if self.dependencies.partial_vertex_exists(blk.hash):
+        if await self.dependencies.partial_vertex_exists(blk.hash):
             # We reached a block we already have. Skip it.
             self._blk_repeated += 1
             is_duplicated = True
@@ -132,7 +132,7 @@ class BlockchainStreamingClient:
         else:
             self.log.debug('block received', blk_id=blk.hash.hex())
 
-        if self.dependencies.can_validate_full(blk):
+        if await self.dependencies.can_validate_full(blk):
             try:
                 await self.dependencies.on_new_vertex(blk, fails_silently=False)
             except HathorError:

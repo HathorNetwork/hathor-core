@@ -99,7 +99,7 @@ class P2PDependencies(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_best_block(self) -> Block:
+    async def get_best_block(self) -> Block:
         raise NotImplementedError
 
     @abstractmethod

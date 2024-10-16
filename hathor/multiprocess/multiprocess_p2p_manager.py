@@ -31,12 +31,13 @@ from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.sync_version import SyncVersion
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction
+from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.vertex_handler import VertexHandler
 
 
 class MultiprocessP2PManager:
-    __slots__ = ('reactor', 'vertex_parser', 'vertex_handler', '_tmp_dir', '_subprocess')
+    __slots__ = ('reactor', 'vertex_parser', 'vertex_handler', 'tx_storage', '_tmp_dir', '_subprocess')
 
     def __init__(
         self,
@@ -44,10 +45,12 @@ class MultiprocessP2PManager:
         reactor: ReactorProtocol,
         vertex_parser: VertexParser,
         vertex_handler: VertexHandler,
+        tx_storage: TransactionStorage,
     ) -> None:
         self.reactor = reactor
         self.vertex_parser = vertex_parser
         self.vertex_handler = vertex_handler
+        self.tx_storage = tx_storage
         self._tmp_dir: tempfile.TemporaryDirectory | None = None
         self._subprocess: IProcessTransport | None = None
 
@@ -56,7 +59,7 @@ class MultiprocessP2PManager:
         outbound_socket = os.path.join(self._tmp_dir.name, 'out.sock')
         inbound_socket = os.path.join(self._tmp_dir.name, 'in.sock')
 
-        server_factory = NodeIpcServerFactor(vertex_parser=self.vertex_parser, vertex_handler=self.vertex_handler)
+        server_factory = NodeIpcServerFactor(vertex_parser=self.vertex_parser, vertex_handler=self.vertex_handler, tx_storage=self.tx_storage)
         server_endpoint = UNIXServerEndpoint(reactor=self.reactor, address=outbound_socket)
         server_endpoint.listen(server_factory)
 
@@ -69,7 +72,7 @@ class MultiprocessP2PManager:
         )
 
         client_endpoint = UNIXClientEndpoint(reactor=self.reactor, path=inbound_socket)
-        time.sleep(5)  # TODO: Couldn't use timeout in endpoint
+        time.sleep(3)  # TODO: Couldn't use timeout in endpoint
         client: amp.AMP = await connectProtocol(client_endpoint, amp.AMP())
         await client.callRemote(Start)
 

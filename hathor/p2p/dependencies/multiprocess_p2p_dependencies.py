@@ -11,7 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-import time
+
 from typing import Any
 
 from intervaltree import Interval
@@ -21,22 +21,19 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
 from hathor.indexes.timestamp_index import RangeIdx
-from hathor.multiprocess.node_ipc_server import OnNewVertex
+from hathor.multiprocess.node_ipc_server import *
 from hathor.p2p import P2PDependencies
 from hathor.pubsub import HathorEvents
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Block, Vertex
-from hathor.transaction.storage import TransactionStorage, TransactionCacheStorage
+from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
-from hathor.util import not_none
 
 
 class MultiprocessP2PDependencies(P2PDependencies):
     __slots__ = (
         '_client',
-        '_tx_storage',
-        '_indexes',
     )
 
     def __init__(
@@ -46,14 +43,9 @@ class MultiprocessP2PDependencies(P2PDependencies):
         settings: HathorSettings,
         client: amp.AMP,
         vertex_parser: VertexParser,
-        tx_storage: TransactionCacheStorage,
     ) -> None:
         super().__init__(reactor=reactor, settings=settings, vertex_parser=vertex_parser)
-        # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
         self._client = client
-        self._tx_storage = tx_storage
-        self._indexes = not_none(tx_storage.indexes)
 
     @override
     async def on_new_vertex(self, vertex: Vertex, *, fails_silently: bool = True) -> bool:
@@ -62,17 +54,7 @@ class MultiprocessP2PDependencies(P2PDependencies):
             vertex_bytes=bytes(vertex),
             fails_silently=fails_silently
         )
-        success = response['success']
-        count = 0
-        if success:
-            while not self._tx_storage.transaction_exists(vertex.hash):
-                print('catch up count', count)
-                count += 1
-                self._tx_storage.store._db.try_catch_up_with_primary()
-                time.sleep(1)
-        else:
-            print()
-        return success
+        return response['success']
 
     @override
     def verify_basic(self, vertex: Vertex) -> None:
@@ -86,72 +68,99 @@ class MultiprocessP2PDependencies(P2PDependencies):
 
     @override
     def get_genesis(self, vertex_id: VertexId) -> Vertex | None:
-        return self._tx_storage.get_genesis(vertex_id)
+        # return self._tx_storage.get_genesis(vertex_id)
+        raise NotImplementedError
 
     @override
     def get_vertex(self, vertex_id: VertexId) -> Vertex:
-        return self._tx_storage.get_vertex(vertex_id)
+        # return self._tx_storage.get_vertex(vertex_id)
+        raise NotImplementedError
 
     @override
     def get_block(self, block_id: VertexId) -> Block:
-        return self._tx_storage.get_block(block_id)
+        # return self._tx_storage.get_block(block_id)
+        raise NotImplementedError
 
     @override
     def get_latest_timestamp(self) -> int:
-        return self._tx_storage.latest_timestamp
+        # return self._tx_storage.latest_timestamp
+        raise NotImplementedError
 
     @override
     def get_first_timestamp(self) -> int:
-        return self._tx_storage.first_timestamp
+        # return self._tx_storage.first_timestamp
+        raise NotImplementedError
 
     @override
     def vertex_exists(self, vertex_id: VertexId) -> bool:
-        return self._tx_storage.transaction_exists(vertex_id)
+        # return self._tx_storage.transaction_exists(vertex_id)
+        raise NotImplementedError
 
     @override
-    def can_validate_full(self, vertex: Vertex) -> bool:
-        return self._tx_storage.can_validate_full(vertex)
+    async def can_validate_full(self, vertex: Vertex) -> bool:
+        # return self._tx_storage.can_validate_full(vertex)
+        response = await self._client.callRemote(CanValidateFull, vertex_bytes=bytes(vertex))
+        return response['can_validate_full']
 
     @override
     def get_merkle_tree(self, timestamp: int) -> tuple[bytes, list[bytes]]:
-        return self._tx_storage.get_merkle_tree(timestamp)
+        # return self._tx_storage.get_merkle_tree(timestamp)
+        raise NotImplementedError
 
     @override
     def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> tuple[list[bytes], RangeIdx | None]:
-        return self._indexes.sorted_all.get_hashes_and_next_idx(from_idx, count)
+        # return self._indexes.sorted_all.get_hashes_and_next_idx(from_idx, count)
+        raise NotImplementedError
 
     @override
     def compare_bytes_with_local_vertex(self, vertex: Vertex) -> bool:
-        return self._tx_storage.compare_bytes_with_local_tx(vertex)
+        # return self._tx_storage.compare_bytes_with_local_tx(vertex)
+        raise NotImplementedError
 
     @override
-    def get_best_block(self) -> Block:
-        return self._tx_storage.get_best_block()
+    async def get_best_block(self) -> Block:
+        # return self._tx_storage.get_best_block()
+        response = await self._client.callRemote(GetBestBlock)
+        vertex_bytes, static_metadata_bytes = response['vertex_bytes']
+        block = self.vertex_parser.deserialize(vertex_bytes)
+        static_metadata = VertexStaticMetadata.from_bytes(static_metadata_bytes, target=block)
+        block.set_static_metadata(static_metadata)
+        return block
 
     @override
-    def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
-        return self._tx_storage.get_n_height_tips(n_blocks)
+    async def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
+        # return self._tx_storage.get_n_height_tips(n_blocks)
+        response = await self._client.callRemote(GetNHeightTips, n_blocks=n_blocks)
+        return [HeightInfo(item['height'], item['id']) for item in response['tips']]
 
     @override
     def get_tx_tips(self, timestamp: float | None = None) -> set[Interval]:
-        return self._tx_storage.get_tx_tips(timestamp)
+        # return self._tx_storage.get_tx_tips(timestamp)
+        raise NotImplementedError
 
     @override
-    def get_mempool_tips(self) -> set[VertexId]:
-        return not_none(self._indexes.mempool_tips).get()
+    async def get_mempool_tips(self) -> set[VertexId]:
+        # return not_none(self._indexes.mempool_tips).get()
+        response = await self._client.callRemote(GetMempoolTips)
+        return response['mempool_tips']
 
     @override
     def height_index_get(self, height: int) -> VertexId | None:
-        return self._indexes.height.get(height)
+        # return self._indexes.height.get(height)
+        raise NotImplementedError
 
     @override
     def get_parent_block(self, block: Block) -> Block:
-        return self._tx_storage.get_parent_block(block)
+        # return self._tx_storage.get_parent_block(block)
+        raise NotImplementedError
 
     @override
     def get_best_block_tips(self) -> list[VertexId]:
-        return self._tx_storage.get_best_block_tips()
+        # return self._tx_storage.get_best_block_tips()
+        raise NotImplementedError
 
     @override
-    def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
-        return self._tx_storage.partial_vertex_exists(vertex_id)
+    async def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
+        # return self._tx_storage.partial_vertex_exists(vertex_id)
+        response = await self._client.callRemote(PartialVertexExists, vertex_id=vertex_id)
+        return response['exists']

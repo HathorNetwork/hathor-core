@@ -332,11 +332,11 @@ class NodeBlockSync(SyncAgent):
         is_mempool_synced = yield self.mempool_manager.run()
         self.update_synced_mempool(is_mempool_synced)
 
-    def get_my_best_block(self) -> _HeightInfo:
+    async def get_my_best_block(self) -> _HeightInfo:
         """Return my best block info."""
-        bestblock = self.dependencies.get_best_block()
-        meta = bestblock.get_metadata()
-        assert meta.validation.is_fully_connected()
+        bestblock = await self.dependencies.get_best_block()
+        # meta = bestblock.get_metadata()
+        # assert meta.validation.is_fully_connected()
         return _HeightInfo(height=bestblock.get_height(), id=bestblock.hash)
 
     @inlineCallbacks
@@ -348,7 +348,7 @@ class NodeBlockSync(SyncAgent):
         self.state = PeerState.SYNCING_BLOCKS
 
         # Get my best block.
-        my_best_block = self.get_my_best_block()
+        my_best_block = yield self.get_my_best_block()
 
         # Get peer's best block
         self.peer_best_block = yield self.get_peer_best_block()
@@ -442,7 +442,7 @@ class NodeBlockSync(SyncAgent):
         self.send_message(ProtocolMessages.GET_TIPS)
         self._receiving_tips = []
 
-    def handle_get_tips(self, _payload: str) -> None:
+    async def handle_get_tips(self, _payload: str) -> None:
         """ Handle a GET-TIPS message.
         """
         if self._is_streaming:
@@ -451,7 +451,7 @@ class NodeBlockSync(SyncAgent):
             return
         self.log.debug('handle_get_tips')
         # TODO Use a streaming of tips
-        for tx_id in self.dependencies.get_mempool_tips():
+        for tx_id in await self.dependencies.get_mempool_tips():
             self.send_tips(tx_id)
         self.log.debug('tips end')
         self.send_message(ProtocolMessages.TIPS_END)
@@ -461,7 +461,7 @@ class NodeBlockSync(SyncAgent):
         """
         self.send_message(ProtocolMessages.TIPS, json.dumps([tx_id.hex()]))
 
-    def handle_tips(self, payload: str) -> None:
+    async def handle_tips(self, payload: str) -> None:
         """ Handle a TIPS message.
         """
         self.log.debug('tips', receiving_tips=self._receiving_tips)
@@ -473,7 +473,7 @@ class NodeBlockSync(SyncAgent):
         # filter-out txs we already have
         try:
             self._receiving_tips.extend(
-                VertexId(tx_id) for tx_id in data if not self.dependencies.partial_vertex_exists(tx_id)
+                VertexId(tx_id) for tx_id in data if not await self.dependencies.partial_vertex_exists(tx_id)
             )
         except ValueError:
             self.protocol.send_error_and_close_connection('Invalid trasaction ID received')
@@ -820,12 +820,12 @@ class NodeBlockSync(SyncAgent):
         """
         self.send_message(ProtocolMessages.GET_BEST_BLOCK)
 
-    def handle_get_best_block(self, _payload: str) -> None:
+    async def handle_get_best_block(self, _payload: str) -> None:
         """ Handle a GET-BEST-BLOCK message.
         """
-        best_block = self.dependencies.get_best_block()
-        meta = best_block.get_metadata()
-        assert meta.validation.is_fully_connected()
+        best_block = await self.dependencies.get_best_block()
+        # meta = best_block.get_metadata()
+        # assert meta.validation.is_fully_connected()
         payload = BestBlockPayload(
             block=best_block.hash,
             height=best_block.static_metadata.height,
@@ -1137,7 +1137,7 @@ class NodeBlockSync(SyncAgent):
             # Will it reduce peer reputation score?
             return
 
-        if self.dependencies.partial_vertex_exists(tx.hash):
+        if await self.dependencies.partial_vertex_exists(tx.hash):
             # transaction already added to the storage, ignore it
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
             self.dependencies.compare_bytes_with_local_vertex(tx)
@@ -1145,7 +1145,7 @@ class NodeBlockSync(SyncAgent):
         else:
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            if self.dependencies.can_validate_full(tx):
+            if await self.dependencies.can_validate_full(tx):
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
                 try:
                     result = await self.dependencies.on_new_vertex(tx, fails_silently=False)

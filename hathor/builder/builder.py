@@ -67,7 +67,6 @@ class SyncSupportLevel(IntEnum):
     @classmethod
     def get_factories(
         cls,
-        tx_storage: TransactionStorage,
         dependencies: P2PDependencies,
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
@@ -92,9 +91,6 @@ class SyncSupportLevel(IntEnum):
                 factory=SyncV2Factory(dependencies),
                 enabled=sync_v2_support is cls.ENABLED
             )
-            log.debug('enable sync-v2 indexes')
-            assert tx_storage.indexes is not None
-            tx_storage.indexes.enable_mempool_index()
 
         return sync_factories
 

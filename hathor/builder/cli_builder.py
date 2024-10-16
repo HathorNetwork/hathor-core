@@ -367,6 +367,7 @@ class CliBuilder:
             reactor=reactor,
             vertex_parser=vertex_parser,
             vertex_handler=vertex_handler,
+            tx_storage=tx_storage,
         )
         tx_storage.indexes.enable_mempool_index()
 
