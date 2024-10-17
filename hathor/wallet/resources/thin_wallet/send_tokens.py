@@ -270,8 +270,6 @@ class SendTokensResource(Resource):
         if context.should_stop_mining_thread:
             raise CancelledError()
         context.tx.update_hash()
-        context.tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        self.manager.verification_service.verify(context.tx)
         return context
 
     def _cb_tx_resolve(self, context: _Context) -> None:
