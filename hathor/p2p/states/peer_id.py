@@ -42,6 +42,12 @@ class PeerIdState(BaseState):
         self.my_peer_ready = False
         self.other_peer_ready = False
 
+        # Common capabilities between the two peers
+        common_capabilities = protocol.capabilities & set(protocol.node.capabilities)
+
+        # whether to relay IPV6 entrypoints
+        self.should_relay_ipv6_entrypoints: bool = self._settings.CAPABILITY_IPV6 in common_capabilities
+
     def on_enter(self) -> None:
         self.send_peer_id()
 
@@ -68,10 +74,16 @@ class PeerIdState(BaseState):
         """
         protocol = self.protocol
         my_peer = protocol.my_peer
+
+        if not self.should_relay_ipv6_entrypoints:
+            entrypoints_as_str = my_peer.info.ipv4_entrypoints_as_str()
+        else:
+            entrypoints_as_str = my_peer.info.entrypoints_as_str()
+
         hello = {
             'id': str(my_peer.id),
             'pubKey': my_peer.get_public_key(),
-            'entrypoints': my_peer.info.entrypoints_as_str(),
+            'entrypoints': entrypoints_as_str,
         }
         self.send_message(ProtocolMessages.PEER_ID, json_dumps(hello))
 
@@ -89,7 +101,6 @@ class PeerIdState(BaseState):
         data = json_loads(payload)
 
         peer = PublicPeer.create_from_json(data)
-        peer.validate()
         assert peer.id is not None
 
         # If the connection URL had a peer-id parameter we need to check it's the same
