@@ -461,29 +461,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         return addresses
 
-    def can_validate_full(self) -> bool:
-        """ Check if this transaction is ready to be fully validated, either all deps are full-valid or one is invalid.
-        """
-        assert self.storage is not None
-        assert self._hash is not None
-        if self.is_genesis:
-            return True
-        deps = self.get_all_dependencies()
-        all_exist = True
-        all_valid = True
-        # either they all exist and are fully valid
-        for dep in deps:
-            meta = self.storage.get_metadata(dep)
-            if meta is None:
-                all_exist = False
-                continue
-            if not meta.validation.is_fully_connected():
-                all_valid = False
-            if meta.validation.is_invalid():
-                # or any of them is invalid (which would make this one invalid too)
-                return True
-        return all_exist and all_valid
-
     def set_validation(self, validation: ValidationState) -> None:
         """ This method will set the internal validation state AND the appropriate voided_by marker.
 
@@ -849,17 +826,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     @abstractmethod
     def get_token_uid(self, index: int) -> TokenUid:
         raise NotImplementedError
-
-    def is_ready_for_validation(self) -> bool:
-        """Check whether the transaction is ready to be validated: all dependencies exist and are fully connected."""
-        assert self.storage is not None
-        for dep_hash in self.get_all_dependencies():
-            dep_meta = self.storage.get_metadata(dep_hash)
-            if dep_meta is None:
-                return False
-            if not dep_meta.validation.is_fully_connected():
-                return False
-        return True
 
     @property
     def static_metadata(self) -> StaticMetadataT:

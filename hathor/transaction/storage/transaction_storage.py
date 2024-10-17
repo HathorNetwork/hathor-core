@@ -30,7 +30,7 @@ from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
-from hathor.transaction.base_transaction import BaseTransaction, TxOutput
+from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
 from hathor.transaction.block import Block
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.storage.exceptions import (
@@ -1132,6 +1132,27 @@ class TransactionStorage(ABC):
         Migrate metadata attributes to static metadata. This is only used for the `migrate_static_metadata` migration.
         """
         raise NotImplementedError
+
+    def can_validate_full(self, vertex: Vertex) -> bool:
+        """ Check if a vertex is ready to be fully validated, either all deps are full-valid or one is invalid.
+        """
+        if vertex.is_genesis:
+            return True
+        deps = vertex.get_all_dependencies()
+        all_exist = True
+        all_valid = True
+        # either they all exist and are fully valid
+        for dep in deps:
+            meta = self.get_metadata(dep)
+            if meta is None:
+                all_exist = False
+                continue
+            if not meta.validation.is_fully_connected():
+                all_valid = False
+            if meta.validation.is_invalid():
+                # or any of them is invalid (which would make this one invalid too)
+                return True
+        return all_exist and all_valid
 
 
 class BaseTransactionStorage(TransactionStorage):
