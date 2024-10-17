@@ -934,7 +934,7 @@ class HathorManager:
         if is_spending_voided_tx:
             raise SpendingVoidedError('Invalid transaction. At least one input is voided.')
 
-        if is_spent_reward_locked(tx):
+        if is_spent_reward_locked(self._settings, tx):
             raise RewardLockedError('Spent reward is locked.')
 
         # We are using here the method from lib because the property
