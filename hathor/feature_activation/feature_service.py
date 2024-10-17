@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, TypeAlias
 
@@ -22,7 +24,7 @@ from hathor.feature_activation.model.feature_state import FeatureState
 
 if TYPE_CHECKING:
     from hathor.feature_activation.bit_signaling_service import BitSignalingService
-    from hathor.transaction import Block
+    from hathor.transaction import Block, Vertex
     from hathor.transaction.storage import TransactionStorage
 
 
@@ -49,11 +51,20 @@ class FeatureService:
         self._tx_storage = tx_storage
         self.bit_signaling_service: Optional['BitSignalingService'] = None
 
-    def is_feature_active(self, *, block: 'Block', feature: Feature) -> bool:
-        """Returns whether a Feature is active at a certain block."""
+    def is_feature_active(self, *, vertex: Vertex, feature: Feature) -> bool:
+        """Return whether a Feature is active for a certain vertex."""
+        block = self._get_feature_activation_block(vertex)
         state = self.get_state(block=block, feature=feature)
+        return state.is_active()
 
-        return state == FeatureState.ACTIVE
+    def _get_feature_activation_block(self, vertex: Vertex) -> Block:
+        """Return the block used for feature activation depending on the vertex type."""
+        from hathor.transaction import Block, Transaction
+        if isinstance(vertex, Block):
+            return vertex
+        if isinstance(vertex, Transaction):
+            return self._tx_storage.get_block(vertex.static_metadata.closest_ancestor_block)
+        raise NotImplementedError
 
     def is_signaling_mandatory_features(self, block: 'Block') -> BlockSignalingState:
         """
@@ -64,7 +75,7 @@ class FeatureService:
         height = block.static_metadata.height
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         remaining_blocks = self._feature_settings.evaluation_interval - offset_to_boundary - 1
-        feature_infos = self.get_feature_infos(block=block)
+        feature_infos = self.get_feature_infos(vertex=block)
 
         must_signal_features = (
             feature for feature, feature_info in feature_infos.items()
@@ -194,14 +205,23 @@ class FeatureService:
 
         raise NotImplementedError(f'Unknown previous state: {previous_state}')
 
-    def get_feature_infos(self, *, block: 'Block') -> dict[Feature, FeatureInfo]:
-        """Returns the criteria definition and feature state for all features at a certain block."""
+    def get_feature_infos(self, *, vertex: Vertex) -> dict[Feature, FeatureInfo]:
+        """Return the criteria definition and feature state for all features for a certain vertex."""
+        block = self._get_feature_activation_block(vertex)
         return {
             feature: FeatureInfo(
                 criteria=criteria,
                 state=self.get_state(block=block, feature=feature)
             )
             for feature, criteria in self._feature_settings.features.items()
+        }
+
+    def get_feature_states(self, *, vertex: Vertex) -> dict[Feature, FeatureState]:
+        """Return the feature state for all features for a certain vertex."""
+        feature_infos = self.get_feature_infos(vertex=vertex)
+        return {
+            feature: info.state
+            for feature, info in feature_infos.items()
         }
 
     def _get_ancestor_at_height(self, *, block: 'Block', ancestor_height: int) -> 'Block':
