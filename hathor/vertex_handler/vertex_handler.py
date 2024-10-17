@@ -153,8 +153,6 @@ class VertexHandler:
 
         if not metadata.validation.is_fully_connected():
             try:
-                # TODO: Remove this from here after a refactor in metadata initialization
-                vertex.update_reward_lock_metadata()
                 self._verification_service.validate_full(vertex, reject_locked_reward=reject_locked_reward)
             except HathorError as e:
                 if not fails_silently:
@@ -191,7 +189,8 @@ class VertexHandler:
         assert self._verification_service.validate_full(
             vertex,
             skip_block_weight_verification=True,
-            reject_locked_reward=reject_locked_reward
+            reject_locked_reward=reject_locked_reward,
+            init_static_metadata=False,
         )
         self._tx_storage.indexes.update(vertex)
         if self._tx_storage.indexes.mempool_tips:
@@ -229,10 +228,10 @@ class VertexHandler:
         if tx.is_block:
             message = message_fmt.format('block')
             if isinstance(tx, Block):
-                feature_descriptions = self._feature_service.get_bits_description(block=tx)
+                feature_infos = self._feature_service.get_feature_infos(block=tx)
                 feature_states = {
-                    feature.value: description.state.value
-                    for feature, description in feature_descriptions.items()
+                    feature.value: info.state.value
+                    for feature, info in feature_infos.items()
                 }
                 kwargs['_height'] = tx.get_height()
                 kwargs['feature_states'] = feature_states

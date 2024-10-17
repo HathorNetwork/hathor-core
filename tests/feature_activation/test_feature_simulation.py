@@ -82,7 +82,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         manager = artifacts.manager
 
         feature_resource = FeatureResource(
-            feature_settings=feature_settings,
+            settings=settings,
             feature_service=feature_service,
             tx_storage=artifacts.tx_storage
         )
@@ -228,7 +228,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             non_signaling_block = manager.generate_mining_block()
             manager.cpu_mining_service.resolve(non_signaling_block)
             non_signaling_block.signal_bits = 0b10
-            non_signaling_block.update_reward_lock_metadata()
+            non_signaling_block.init_static_metadata_from_storage(settings, manager.tx_storage)
 
             with pytest.raises(BlockMustSignalError):
                 manager.verification_service.verify(non_signaling_block)
@@ -358,7 +358,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         manager = artifacts.manager
 
         feature_resource = FeatureResource(
-            feature_settings=feature_settings,
+            settings=settings,
             feature_service=feature_service,
             tx_storage=artifacts.tx_storage
         )
@@ -573,7 +573,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         manager1 = artifacts1.manager
 
         feature_resource = FeatureResource(
-            feature_settings=feature_settings,
+            settings=settings,
             feature_service=feature_service1,
             tx_storage=artifacts1.tx_storage
         )
@@ -626,7 +626,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         feature_service = artifacts2.feature_service
 
         feature_resource = FeatureResource(
-            feature_settings=feature_settings,
+            settings=settings,
             feature_service=feature_service,
             tx_storage=artifacts2.tx_storage
         )

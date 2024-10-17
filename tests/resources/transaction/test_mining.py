@@ -11,7 +11,7 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
 
     def setUp(self):
         super().setUp()
-        self.get_block_template = StubSite(mining.GetBlockTemplateResource(self.manager))
+        self.get_block_template = StubSite(mining.GetBlockTemplateResource(self.manager, self.manager._settings))
         self.submit_block = StubSite(mining.SubmitBlockResource(self.manager))
 
     @inlineCallbacks
@@ -38,9 +38,9 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
                 'accumulated_weight': 1.0,
                 'score': 0,
                 'height': 1,
-                'min_height': None,
+                'min_height': 0,
                 'first_block': None,
-                'feature_activation_bit_counts': None
+                'feature_activation_bit_counts': [0, 0, 0, 0]
             },
             'tokens': [],
             'data': '',
@@ -71,9 +71,9 @@ class BaseMiningApiTest(_BaseResourceTest._ResourceTest):
                 'accumulated_weight': 1.0,
                 'score': 0,
                 'height': 1,
-                'min_height': None,
+                'min_height': 0,
                 'first_block': None,
-                'feature_activation_bit_counts': None
+                'feature_activation_bit_counts': [0, 0, 0, 0]
             },
             'tokens': [],
             'data': '',

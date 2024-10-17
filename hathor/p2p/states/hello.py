@@ -52,7 +52,7 @@ class HelloState(BaseState):
         remote = protocol.transport.getPeer()
         data = {
             'app': self._app(),
-            'network': protocol.network,
+            'network': self._settings.NETWORK_NAME,
             'remote_address': format_address(remote),
             'genesis_short_hash': get_genesis_short_hash(),
             'timestamp': protocol.node.reactor.seconds(),
@@ -135,7 +135,7 @@ class HelloState(BaseState):
             # XXX: this used to be a warning, but it shouldn't be since it's perfectly normal
             self.log.debug('different versions', theirs=remote_app, ours=our_app)
 
-        if data['network'] != protocol.network:
+        if data['network'] != self._settings.NETWORK_NAME:
             protocol.send_error_and_close_connection('Wrong network.')
             return
 

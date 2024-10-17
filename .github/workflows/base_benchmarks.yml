@@ -1,0 +1,61 @@
+# yamllint disable rule:line-length
+name: benchmarking
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark_base_branch:
+    name: Continuous Benchmarking base branch
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bencherdev/bencher@main
+      - name: Install hyperfine
+        run: |
+          wget https://github.com/sharkdp/hyperfine/releases/download/v1.12.0/hyperfine_1.12.0_amd64.deb
+          sudo dpkg -i hyperfine_1.12.0_amd64.deb
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: 3.11
+          os: ubuntu-22.04
+      - name: Set env vars
+        run: cat ./extras/benchmarking/sync_v2/.env >> $GITHUB_ENV
+      - name: Download benchmark data
+        run: |
+          wget $BENCH_DATA_URL
+          tar -xzf $BENCH_DATA_FILE_NAME.tar.gz
+          mkdir $SERVER_DATA_DIR
+          poetry run hathor-cli load-from-logs \
+            --testnet \
+            --data $SERVER_DATA_DIR \
+            --cache \
+            --cache-size $CACHE_SIZE \
+            --x-localhost-only \
+            --log-dump $BENCH_DATA_FILE_NAME
+      - name: Run server node
+        run: |
+          poetry run hathor-cli run_node \
+            --testnet \
+            --data $SERVER_DATA_DIR \
+            --cache \
+            --cache-size $CACHE_SIZE \
+            --x-localhost-only \
+            --listen tcp:$TCP_PORT \
+            &
+      - name: Track base branch benchmarks with Bencher
+        run: |
+          bencher run \
+            --project hathor-core \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch master \
+            --testbed ubuntu-22.04 \
+            --adapter shell_hyperfine \
+            --err \
+            --file $BENCH_FILE \
+            './extras/benchmarking/sync_v2/benchmark_sync_v2.sh'

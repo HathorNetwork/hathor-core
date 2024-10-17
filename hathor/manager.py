@@ -17,7 +17,7 @@ import sys
 import time
 from cProfile import Profile
 from enum import Enum
-from typing import Iterator, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -46,6 +46,7 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -59,10 +60,13 @@ from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import Address, VertexId
-from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight, not_none
+from hathor.util import EnvironmentInfo, LogDuration, Random, calculate_min_significant_weight
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
+
+if TYPE_CHECKING:
+    from hathor.websocket.factory import HathorAdminWebsocketFactory
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -96,14 +100,13 @@ class HathorManager:
         pubsub: PubSubManager,
         consensus_algorithm: ConsensusAlgorithm,
         daa: DifficultyAdjustmentAlgorithm,
-        peer_id: PeerId,
+        peer: PrivatePeer,
         tx_storage: TransactionStorage,
         p2p_manager: ConnectionsManager,
         event_manager: EventManager,
         bit_signaling_service: BitSignalingService,
         verification_service: VerificationService,
         cpu_mining_service: CpuMiningService,
-        network: str,
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
@@ -116,12 +119,12 @@ class HathorManager:
         full_verification: bool = False,
         enable_event_queue: bool = False,
         poa_block_producer: PoaBlockProducer | None = None,
+        # Websocket factory
+        websocket_factory: Optional['HathorAdminWebsocketFactory'] = None
     ) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
-        :param peer_id: Id of this node.
-        :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
-        :type network: string
+        :param peer: Peer object, with peer-id of this node.
 
         :param tx_storage: Required storage backend.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
@@ -163,8 +166,8 @@ class HathorManager:
         # Remote address, which can be different from local address.
         self.remote_address = None
 
-        self.my_peer = peer_id
-        self.network = network
+        self.my_peer = peer
+        self.network = settings.NETWORK_NAME
 
         self.is_started: bool = False
 
@@ -198,12 +201,15 @@ class HathorManager:
         self.vertex_handler = vertex_handler
         self.vertex_parser = vertex_parser
 
+        self.websocket_factory = websocket_factory
+
         self.metrics = Metrics(
             pubsub=self.pubsub,
             avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
             connections=self.connections,
             tx_storage=self.tx_storage,
             reactor=self.reactor,
+            websocket_factory=self.websocket_factory,
         )
 
         self.wallet = wallet
@@ -225,7 +231,7 @@ class HathorManager:
         self._full_verification = full_verification
 
         # List of whitelisted peers
-        self.peers_whitelist: list[str] = []
+        self.peers_whitelist: list[PeerId] = []
 
         # List of capabilities of the peer
         if capabilities is not None:
@@ -297,7 +303,7 @@ class HathorManager:
                 sys.exit(-1)
 
         if self._enable_event_queue:
-            self._event_manager.start(not_none(self.my_peer.id))
+            self._event_manager.start(str(self.my_peer.id))
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
@@ -320,6 +326,10 @@ class HathorManager:
             self._initialize_components_new()
         self.tx_storage.set_allow_scope(TxAllowScope.VALID)
         self.tx_storage.enable_lock()
+
+        # Preferably start before self.metrics
+        if self.websocket_factory:
+            self.websocket_factory.start()
 
         # Metric starts to capture data
         self.metrics.start()
@@ -358,6 +368,9 @@ class HathorManager:
 
         # Metric stops to capture data
         self.metrics.stop()
+
+        if self.websocket_factory:
+            self.websocket_factory.stop()
 
         if self.lc_check_sync_state.running:
             self.lc_check_sync_state.stop()
@@ -448,7 +461,7 @@ class HathorManager:
             dt = LogDuration(t2 - t1)
             dcnt = cnt - cnt2
             tx_rate = '?' if dt == 0 else dcnt / dt
-            h = max(h, tx_meta.height or 0)
+            h = max(h, (tx.static_metadata.height if isinstance(tx, Block) else 0))
             if dt > 30:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
                 if h == 0:
@@ -468,12 +481,10 @@ class HathorManager:
 
             try:
                 # TODO: deal with invalid tx
-                tx.calculate_height()
                 tx._update_parents_children_metadata()
 
                 if tx.can_validate_full():
                     tx.update_initial_metadata()
-                    tx.calculate_min_height()
                     if tx.is_genesis:
                         assert tx.validate_checkpoint(self.checkpoints)
                     assert self.verification_service.validate_full(
@@ -660,31 +671,32 @@ class HathorManager:
         for checkpoint in expected_checkpoints:
             # XXX: query the database from checkpoint.hash and verify what comes out
             try:
-                tx = self.tx_storage.get_transaction(checkpoint.hash)
+                block = self.tx_storage.get_block(checkpoint.hash)
             except TransactionDoesNotExist as e:
                 raise InitializationError(f'Expected checkpoint does not exist in database: {checkpoint}') from e
-            tx_meta = tx.get_metadata()
-            if tx_meta.height != checkpoint.height:
+            meta = block.get_metadata()
+            height = block.static_metadata.height
+            if height != checkpoint.height:
                 raise InitializationError(
-                    f'Expected checkpoint of hash {tx.hash_hex} to have height {checkpoint.height}, but instead it has'
-                    f'height {tx_meta.height}'
+                    f'Expected checkpoint of hash {block.hash_hex} to have height {checkpoint.height},'
+                    f'but instead it has height {height}'
                 )
-            if tx_meta.voided_by:
-                pretty_voided_by = list(i.hex() for i in tx_meta.voided_by)
+            if meta.voided_by:
+                pretty_voided_by = list(i.hex() for i in meta.voided_by)
                 raise InitializationError(
                     f'Expected checkpoint {checkpoint} to *NOT* be voided, but it is being voided by: '
                     f'{pretty_voided_by}'
                 )
             # XXX: query the height index from checkpoint.height and check that the hash matches
-            tx_hash = self.tx_storage.indexes.height.get(checkpoint.height)
-            if tx_hash is None:
+            block_hash = self.tx_storage.indexes.height.get(checkpoint.height)
+            if block_hash is None:
                 raise InitializationError(
                     f'Expected checkpoint {checkpoint} to be found in the height index, but it was not found'
                 )
-            if tx_hash != tx.hash:
+            if block_hash != block.hash:
                 raise InitializationError(
                     f'Expected checkpoint {checkpoint} to be found in the height index, but it instead the block with '
-                    f'hash {tx_hash.hex()} was found'
+                    f'hash {block_hash.hex()} was found'
                 )
 
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
@@ -922,7 +934,7 @@ class HathorManager:
         if is_spending_voided_tx:
             raise SpendingVoidedError('Invalid transaction. At least one input is voided.')
 
-        if is_spent_reward_locked(tx):
+        if is_spent_reward_locked(self._settings, tx):
             raise RewardLockedError('Spent reward is locked.')
 
         # We are using here the method from lib because the property
@@ -976,7 +988,7 @@ class HathorManager:
     def has_sync_version_capability(self) -> bool:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
 
-    def add_peer_to_whitelist(self, peer_id):
+    def add_peer_to_whitelist(self, peer_id: PeerId) -> None:
         if not self._settings.ENABLE_PEER_WHITELIST:
             return
 
@@ -985,7 +997,7 @@ class HathorManager:
         else:
             self.peers_whitelist.append(peer_id)
 
-    def remove_peer_from_whitelist_and_disconnect(self, peer_id: str) -> None:
+    def remove_peer_from_whitelist_and_disconnect(self, peer_id: PeerId) -> None:
         if not self._settings.ENABLE_PEER_WHITELIST:
             return
 
