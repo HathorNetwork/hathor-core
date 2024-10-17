@@ -268,7 +268,8 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             else:
                 assert bit_counts is None or bit_counts == []
                 static_metadata = TransactionStaticMetadata(
-                    min_height=min_height
+                    min_height=min_height,
+                    closest_ancestor_block=b'',  # This will be set in its own migration
                 )
 
             # Save it manually to the CF

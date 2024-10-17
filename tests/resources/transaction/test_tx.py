@@ -88,7 +88,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                   '0248b9e7d6a626f45dec86975b00f4dd53f84f1f0091125250b044e49023fbbd0f74f6093cdd2226fdff3e09a1000002be')
         tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
         tx.get_metadata().validation = ValidationState.FULL
-        tx.set_static_metadata(TransactionStaticMetadata(min_height=0))
+        tx.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx)
 
         tx_parent1_hex = ('0001010102001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d001c382847d844'
@@ -101,7 +101,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                           '8fb080f53a0c9c57ddb000000120')
         tx_parent1 = Transaction.create_from_struct(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
         tx_parent1.get_metadata().validation = ValidationState.FULL
-        tx_parent1.set_static_metadata(TransactionStaticMetadata(min_height=0))
+        tx_parent1.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_parent1)
 
         tx_parent2_hex = ('0001000103001f16fe62e3433bcc74b262c11a1fa94fcb38484f4d8fb080f53a0c9c57ddb001006946304402'
@@ -114,7 +114,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                           'd57709926b76e64763bf19c3f13eeac30000016d')
         tx_parent2 = Transaction.create_from_struct(bytes.fromhex(tx_parent2_hex), self.manager.tx_storage)
         tx_parent2.get_metadata().validation = ValidationState.FULL
-        tx_parent2.set_static_metadata(TransactionStaticMetadata(min_height=0))
+        tx_parent2.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_parent2)
 
         tx_input_hex = ('0001010203007231eee3cb6160d95172a409d634d0866eafc8775f5729fff6a61e7850aba500b3ab76c5337b55'
@@ -130,7 +130,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                         'cfaf6e7ceb2ba91c9c84009c8174d4a46ebcc789d1989e3dec5b68cffeef239fd8cf86ef62728e2eacee000001b6')
         tx_input = Transaction.create_from_struct(bytes.fromhex(tx_input_hex), self.manager.tx_storage)
         tx_input.get_metadata().validation = ValidationState.FULL
-        tx_input.set_static_metadata(TransactionStaticMetadata(min_height=0))
+        tx_input.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_input)
 
         # XXX: this is completely dependant on MemoryTokensIndex implementation, hence use_memory_storage=True
@@ -198,7 +198,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                   '5114256caacfb8f6dd13db33000020393')
         tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
         tx.get_metadata().validation = ValidationState.FULL
-        tx.set_static_metadata(TransactionStaticMetadata(min_height=0))
+        tx.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx)
 
         tx_parent1_hex = ('0001010203000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330000023b318c91dcfd'
@@ -214,7 +214,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                           'd13db3300038c3d3b69ce90bb88c0c4d6a87b9f0c349e5b10c9b7ce6714f996e512ac16400021261')
         tx_parent1 = Transaction.create_from_struct(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
         tx_parent1.get_metadata().validation = ValidationState.FULL
-        tx_parent1.set_static_metadata(TransactionStaticMetadata(min_height=0))
+        tx_parent1.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_parent1)
 
         tx_parent2_hex = ('000201040000476810205cb3625d62897fcdad620e01d66649869329640f5504d77e960d01006a473045022100c'
@@ -229,7 +229,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         tx_parent2_bytes = bytes.fromhex(tx_parent2_hex)
         tx_parent2 = TokenCreationTransaction.create_from_struct(tx_parent2_bytes, self.manager.tx_storage)
         tx_parent2.get_metadata().validation = ValidationState.FULL
-        tx_parent2.set_static_metadata(TransactionStaticMetadata(min_height=0))
+        tx_parent2.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_parent2)
 
         # Both inputs are the same as the last parent, so no need to manually add them
@@ -522,7 +522,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                   '0248b9e7d6a626f45dec86975b00f4dd53f84f1f0091125250b044e49023fbbd0f74f6093cdd2226fdff3e09a1000002be')
         tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
         tx.set_validation(ValidationState.BASIC)
-        tx.set_static_metadata(TransactionStaticMetadata(min_height=0))
+        tx.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         with self.manager.tx_storage.allow_partially_validated_context():
             self.manager.tx_storage.save_transaction(tx)
 
