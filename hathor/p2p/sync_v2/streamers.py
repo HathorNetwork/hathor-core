@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-DEFAULT_STREAMING_LIMIT = 1000
+DEFAULT_STREAMING_LIMIT = 10000
 
 
 class StreamEnd(IntFlag):
