@@ -19,7 +19,7 @@ from itertools import chain, starmap, zip_longest
 from operator import add
 from typing import TYPE_CHECKING, Callable
 
-from typing_extensions import Self
+from typing_extensions import Self, override
 
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
@@ -57,6 +57,7 @@ class VertexStaticMetadata(ABC, BaseModel):
             return BlockStaticMetadata(**json_dict)
 
         if isinstance(target, Transaction):
+            json_dict['closest_ancestor_block'] = bytes.fromhex(json_dict['closest_ancestor_block'])
             return TransactionStaticMetadata(**json_dict)
 
         raise NotImplementedError
@@ -175,6 +176,10 @@ class BlockStaticMetadata(VertexStaticMetadata):
 
 
 class TransactionStaticMetadata(VertexStaticMetadata):
+    # The Block with the greatest height that is a direct or indirect dependency (ancestor) of the transaction,
+    # including both funds and verification DAGs. It's used by Feature Activation for Transactions.
+    closest_ancestor_block: VertexId
+
     @classmethod
     def create_from_storage(cls, tx: 'Transaction', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
         """Create a `TransactionStaticMetadata` using dependencies provided by a storage."""
@@ -189,14 +194,12 @@ class TransactionStaticMetadata(VertexStaticMetadata):
     ) -> Self:
         """Create a `TransactionStaticMetadata` using dependencies provided by a `vertex_getter`.
         This must be fast, ideally O(1)."""
-        min_height = cls._calculate_min_height(
-            tx,
-            settings,
-            vertex_getter=vertex_getter,
-        )
+        min_height = cls._calculate_min_height(tx, settings, vertex_getter)
+        closest_ancestor_block = cls._calculate_closest_ancestor_block(tx, settings, vertex_getter)
 
         return cls(
-            min_height=min_height
+            min_height=min_height,
+            closest_ancestor_block=closest_ancestor_block,
         )
 
     @classmethod
@@ -245,3 +248,47 @@ class TransactionStaticMetadata(VertexStaticMetadata):
             if isinstance(spent_tx, Block):
                 min_height = max(min_height, spent_tx.static_metadata.height + settings.REWARD_SPEND_MIN_BLOCKS + 1)
         return min_height
+
+    @staticmethod
+    def _calculate_closest_ancestor_block(
+        tx: 'Transaction',
+        settings: HathorSettings,
+        vertex_getter: Callable[[VertexId], 'BaseTransaction'],
+    ) -> VertexId:
+        """
+        Calculate the tx's closest_ancestor_block. It's calculated by propagating the metadata forward in the DAG.
+        """
+        from hathor.transaction import Block, Transaction
+        if tx.is_genesis:
+            return settings.GENESIS_BLOCK_HASH
+
+        closest_ancestor_block: Block | None = None
+
+        for vertex_id in tx.get_all_dependencies():
+            vertex = vertex_getter(vertex_id)
+            candidate_block: Block
+
+            if isinstance(vertex, Block):
+                candidate_block = vertex
+            elif isinstance(vertex, Transaction):
+                vertex_candidate = vertex_getter(vertex.static_metadata.closest_ancestor_block)
+                assert isinstance(vertex_candidate, Block)
+                candidate_block = vertex_candidate
+            else:
+                raise NotImplementedError
+
+            if (
+                not closest_ancestor_block
+                or candidate_block.static_metadata.height > closest_ancestor_block.static_metadata.height
+            ):
+                closest_ancestor_block = candidate_block
+
+        assert closest_ancestor_block is not None
+        return closest_ancestor_block.hash
+
+    @override
+    def json_dumpb(self) -> bytes:
+        from hathor.util import json_dumpb
+        json_dict = self.dict()
+        json_dict['closest_ancestor_block'] = json_dict['closest_ancestor_block'].hex()
+        return json_dumpb(json_dict)
