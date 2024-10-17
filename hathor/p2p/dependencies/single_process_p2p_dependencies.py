@@ -137,7 +137,7 @@ class SingleProcessP2PDependencies(P2PDependencies):
 
     @override
     def get_best_block_tips(self) -> list[VertexId]:
-        return self.get_best_block_tips()
+        return self._tx_storage.get_best_block_tips()
 
     @override
     def partial_vertex_exists(self, vertex_id: VertexId) -> bool:

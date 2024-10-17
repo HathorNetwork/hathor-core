@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional
 
 from pydantic import ValidationError
 from structlog import get_logger
+from twisted.internet.defer import Deferred
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -227,7 +228,7 @@ class RunNode:
             rng=self.manager.rng,
             reactor=self.manager.reactor,
             manager=self.manager,
-            p2p_manager=self.manager.connections,
+            p2p_manager=self.manager.p2p_manager,
             pubsub=self.manager.pubsub,
             consensus=self.manager.consensus_algorithm,
             tx_storage=self.manager.tx_storage,
@@ -262,7 +263,6 @@ class RunNode:
 
     def start_manager(self) -> None:
         self.start_sentry_if_possible()
-        self.manager.start()
 
     def register_signal_handlers(self) -> None:
         """Register signal handlers."""
@@ -280,7 +280,7 @@ class RunNode:
         """Called when USR1 signal is received."""
         try:
             self.log.warn('USR1 received.')
-            self.manager.connections.reload_entrypoints_and_connections()
+            self.manager.p2p_manager.reload_entrypoints_and_connections()
         except Exception:
             # see: https://docs.python.org/3/library/signal.html#note-on-signal-handlers-and-exceptions
             self.log.error('prevented exception from escaping the signal handler', exc_info=True)
@@ -543,6 +543,7 @@ class RunNode:
         return RunNodeArgs.parse_obj(args)
 
     def run(self) -> None:
+        self.reactor.callWhenRunning(lambda: Deferred.fromCoroutine(self.manager.start()))
         self.reactor.run()
 
 

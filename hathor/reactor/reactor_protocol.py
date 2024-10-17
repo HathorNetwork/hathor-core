@@ -15,6 +15,7 @@
 from typing import Protocol
 
 from hathor.reactor.reactor_core_protocol import ReactorCoreProtocol
+from hathor.reactor.reactor_process_protocol import ReactorProcessProtocol
 from hathor.reactor.reactor_tcp_protocol import ReactorTCPProtocol
 from hathor.reactor.reactor_time_protocol import ReactorTimeProtocol
 
@@ -23,6 +24,7 @@ class ReactorProtocol(
     ReactorCoreProtocol,
     ReactorTimeProtocol,
     ReactorTCPProtocol,
+    ReactorProcessProtocol,
     Protocol,
 ):
     """

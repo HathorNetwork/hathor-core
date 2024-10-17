@@ -35,6 +35,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocess.multiprocess_p2p_manager import MultiprocessP2PManager
 from hathor.p2p import P2PManager, SingleProcessP2PDependencies
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer import PrivatePeer
@@ -333,34 +334,42 @@ class CliBuilder:
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
-        p2p_dependencies = SingleProcessP2PDependencies(
+        # p2p_dependencies = SingleProcessP2PDependencies(
+        #     reactor=reactor,
+        #     settings=settings,
+        #     vertex_parser=vertex_parser,
+        #     tx_storage=tx_storage,
+        #     vertex_handler=vertex_handler,
+        #     verification_service=verification_service,
+        #     pubsub=pubsub,
+        # )
+        #
+        # capabilities = settings.get_default_capabilities()
+        # sync_factories = SyncSupportLevel.get_factories(
+        #     tx_storage,
+        #     p2p_dependencies,
+        #     sync_v1_support,
+        #     sync_v2_support,
+        # )
+        #
+        # p2p_manager = P2PManager(
+        #     dependencies=p2p_dependencies,
+        #     my_peer=peer,
+        #     ssl=True,
+        #     whitelist_only=False,
+        #     rng=Random(),
+        #     capabilities=capabilities,
+        #     sync_factories=sync_factories,
+        #     hostname=hostname,
+        # )
+
+        p2p_manager = MultiprocessP2PManager(
             reactor=reactor,
-            settings=settings,
             vertex_parser=vertex_parser,
-            tx_storage=tx_storage,
             vertex_handler=vertex_handler,
-            verification_service=verification_service,
-            pubsub=pubsub,
+            tx_storage=tx_storage,
         )
-
-        capabilities = settings.get_default_capabilities()
-        sync_factories = SyncSupportLevel.get_factories(
-            tx_storage,
-            p2p_dependencies,
-            sync_v1_support,
-            sync_v2_support,
-        )
-
-        p2p_manager = P2PManager(
-            dependencies=p2p_dependencies,
-            my_peer=peer,
-            ssl=True,
-            whitelist_only=False,
-            rng=Random(),
-            capabilities=capabilities,
-            sync_factories=sync_factories,
-            hostname=hostname,
-        )
+        tx_storage.indexes.enable_mempool_index()
 
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
         poa_block_producer: PoaBlockProducer | None = None
@@ -418,7 +427,7 @@ class CliBuilder:
             self.manager.allow_mining_without_peers()
 
         if self._args.x_localhost_only:
-            self.manager.connections.localhost_only = True
+            self.manager.p2p_manager.enable_localhost_only()
 
         dns_hosts = []
         if settings.BOOTSTRAP_DNS:

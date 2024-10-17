@@ -207,7 +207,7 @@ class PubSubManager:
                 fn, key, args = self.queue.popleft()
                 fn(key, args)
         except Exception:
-            self.log.error('event processing failed', key=key, args=args)
+            self.log.exception('event processing failed', key=key, args=args)
             raise
         finally:
             self._schedule_call_next()

@@ -86,11 +86,10 @@ class TransactionStreamingClient:
         self._db: dict[VertexId, BaseTransaction] = {}
         self._existing_deps: set[VertexId] = set()
 
-        self._prepare_block(self.partial_blocks[0])
-
-    def wait(self) -> Deferred[StreamEnd]:
+    async def wait(self) -> StreamEnd:
         """Return the deferred."""
-        return self._deferred
+        await self._prepare_block(self.partial_blocks[0])
+        return await self._deferred
 
     def resume(self) -> Deferred[StreamEnd]:
         """Resume receiving vertices."""
@@ -166,18 +165,18 @@ class TransactionStreamingClient:
             if tx.hash in self._db:
                 # This case might happen during a resume, so we just log and keep syncing.
                 self.log.debug('duplicated vertex received', tx_id=tx.hash.hex())
-                self._update_dependencies(tx)
+                await self._update_dependencies(tx)
             elif tx.hash in self._existing_deps:
                 # This case might happen if we already have the transaction from another sync.
                 self.log.debug('existing vertex received', tx_id=tx.hash.hex())
-                self._update_dependencies(tx)
+                await self._update_dependencies(tx)
             else:
                 self.log.info('unexpected vertex received', tx_id=tx.hash.hex())
                 self.fails(UnexpectedVertex(tx.hash.hex()))
             return
         self._waiting_for.remove(tx.hash)
 
-        self._update_dependencies(tx)
+        await self._update_dependencies(tx)
 
         self._db[tx.hash] = tx
 
@@ -193,10 +192,10 @@ class TransactionStreamingClient:
         if self._tx_received % 100 == 0:
             self.log.debug('tx streaming in progress', txs_received=self._tx_received)
 
-    def _update_dependencies(self, tx: BaseTransaction) -> None:
+    async def _update_dependencies(self, tx: BaseTransaction) -> None:
         """Update _existing_deps and _waiting_for with the dependencies."""
         for dep in tx.get_all_dependencies():
-            if self.dependencies.vertex_exists(dep) or dep in self._db:
+            if await self.dependencies.vertex_exists(dep) or dep in self._db:
                 self._existing_deps.add(dep)
             else:
                 self._waiting_for.add(dep)
@@ -238,13 +237,13 @@ class TransactionStreamingClient:
         if self._idx >= len(self.partial_blocks):
             return False
 
-        self._prepare_block(self.partial_blocks[self._idx])
+        await self._prepare_block(self.partial_blocks[self._idx])
         return True
 
-    def _prepare_block(self, blk: 'Block') -> None:
+    async def _prepare_block(self, blk: 'Block') -> None:
         """Reset everything for the next block. It also adds blocks that have no dependencies."""
         self._waiting_for.clear()
         self._db.clear()
         self._existing_deps.clear()
 
-        self._update_dependencies(blk)
+        await self._update_dependencies(blk)

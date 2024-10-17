@@ -1138,7 +1138,11 @@ class TransactionStorage(ABC):
         """
         if vertex.is_genesis:
             return True
-        deps = vertex.get_all_dependencies()
+        # TODO: temporarily removing the parent block from the validation to help async block streaming
+        # deps = vertex.get_all_dependencies()
+        deps = vertex.parents + [i.tx_id for i in vertex.inputs]
+        if vertex.is_block:
+            deps = deps[1:]
         all_exist = True
         all_valid = True
         # either they all exist and are fully valid

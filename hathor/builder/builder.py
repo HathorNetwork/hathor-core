@@ -36,6 +36,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p import P2PDependencies, P2PManager, SingleProcessP2PDependencies
 from hathor.p2p.p2p_manager import SyncFactoryConfig
+from hathor.p2p.p2p_manager_protocol import P2PManagerProtocol
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.sync_version import SyncVersion
 from hathor.pubsub import PubSubManager
@@ -66,7 +67,6 @@ class SyncSupportLevel(IntEnum):
     @classmethod
     def get_factories(
         cls,
-        tx_storage: TransactionStorage,
         dependencies: P2PDependencies,
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
@@ -91,9 +91,6 @@ class SyncSupportLevel(IntEnum):
                 factory=SyncV2Factory(dependencies),
                 enabled=sync_v2_support is cls.ENABLED
             )
-            log.debug('enable sync-v2 indexes')
-            assert tx_storage.indexes is not None
-            tx_storage.indexes.enable_mempool_index()
 
         return sync_factories
 
@@ -110,7 +107,7 @@ class BuildArtifacts(NamedTuple):
     rng: Random
     reactor: Reactor
     manager: HathorManager
-    p2p_manager: P2PManager
+    p2p_manager: P2PManagerProtocol
     pubsub: PubSubManager
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
@@ -202,7 +199,7 @@ class Builder:
         self._vertex_handler: VertexHandler | None = None
         self._vertex_parser: VertexParser | None = None
         self._consensus: ConsensusAlgorithm | None = None
-        self._p2p_manager: P2PManager | None = None
+        self._p2p_manager: P2PManagerProtocol | None = None
         self._poa_signer: PoaSigner | None = None
         self._poa_block_producer: PoaBlockProducer | None = None
 
@@ -412,7 +409,7 @@ class Builder:
 
         return self._rocksdb_storage
 
-    def _get_or_create_p2p_manager(self) -> P2PManager:
+    def _get_or_create_p2p_manager(self) -> P2PManagerProtocol:
         if self._p2p_manager:
             return self._p2p_manager
 

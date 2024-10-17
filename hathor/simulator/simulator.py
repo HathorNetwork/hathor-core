@@ -109,8 +109,8 @@ class Simulator:
         cpu_mining_service = SimulatorCpuMiningService()
         daa = DifficultyAdjustmentAlgorithm(settings=self.settings)
 
+        builder = builder.set_reactor(self._clock)  # type: ignore[arg-type]
         artifacts = builder \
-            .set_reactor(self._clock) \
             .set_rng(Random(self.rng.getrandbits(64))) \
             .set_wallet(wallet) \
             .set_vertex_verifiers_builder(_build_vertex_verifiers) \
@@ -118,7 +118,7 @@ class Simulator:
             .set_cpu_mining_service(cpu_mining_service) \
             .build()
 
-        artifacts.manager.start()
+        artifacts.manager.start()  # type: ignore[unused-coroutine]
         self._clock.run()
         self.run_to_completion()
 

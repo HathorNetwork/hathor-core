@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Iterable, NamedTuple, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -41,6 +43,9 @@ from hathor.p2p.utils import parse_whitelist
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
 from hathor.util import Random
+
+if TYPE_CHECKING:
+    from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
 
 logger = get_logger()
 
@@ -218,6 +223,18 @@ class P2PManager:
         # agent to perform HTTP requests
         self._http_agent = Agent(self.reactor)
 
+    def get_server_factory(self) -> HathorServerFactory:
+        return self.server_factory
+
+    def get_client_factory(self) -> HathorClientFactory:
+        return self.client_factory
+
+    def get_connections(self) -> set[HathorProtocol]:
+        return self.connections
+
+    def enable_localhost_only(self) -> None:
+        self.localhost_only = True
+
     def get_available_sync_versions(self) -> set[SyncVersion]:
         """What sync versions the manager is capable of using, they are not necessarily enabled."""
         return set(self._sync_factories.keys())
@@ -282,7 +299,7 @@ class P2PManager:
             window_seconds
         )
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Listen on the given address descriptions and start accepting and processing connections."""
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)

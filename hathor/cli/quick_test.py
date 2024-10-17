@@ -72,18 +72,11 @@ class QuickTest(RunNode):
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
-        from hathor.p2p import SingleProcessP2PDependencies
-        from hathor.p2p.sync_v2.factory import SyncV2Factory
-        from hathor.p2p.sync_version import SyncVersion
-
         super().prepare(register_resources=False)
         self._no_wait = self._args.no_wait
 
         self.log.info('patching vertex_handler.on_new_vertex to quit on success')
-        p2p_factory = self.manager.connections.get_sync_factory(SyncVersion.V2)
-        assert isinstance(p2p_factory, SyncV2Factory)
-        assert isinstance(p2p_factory.dependencies, SingleProcessP2PDependencies)
-        p2p_factory.dependencies._vertex_handler = VertexHandlerWrapper(
+        self.manager.vertex_handler = VertexHandlerWrapper(
             self.manager.vertex_handler,
             self.manager,
             self._args.quit_after_n_blocks,

@@ -79,12 +79,16 @@ class BlockchainStreamingClient:
 
     def fails(self, reason: 'StreamingError') -> None:
         """Fail the execution by resolving the deferred with an error."""
-        self._deferred.errback(reason)
+        if not self._deferred.called:
+            self._deferred.errback(reason)
 
     async def handle_blocks(self, blk: Block) -> None:
         """This method is called by the sync agent when a BLOCKS message is received."""
         if self._deferred.called:
             return
+
+        last_received_block = self._last_received_block
+        self._last_received_block = blk
 
         self._blk_received += 1
         if self._blk_received > self._blk_max_quantity:
@@ -106,23 +110,22 @@ class BlockchainStreamingClient:
 
         # Check for repeated blocks.
         is_duplicated = False
-        if self.dependencies.partial_vertex_exists(blk.hash):
+        if await self.dependencies.partial_vertex_exists(blk.hash):
             # We reached a block we already have. Skip it.
             self._blk_repeated += 1
             is_duplicated = True
             if self._blk_repeated > self.max_repeated_blocks:
                 self.log.info('too many repeated block received', total_repeated=self._blk_repeated)
                 self.fails(TooManyRepeatedVerticesError())
-            self._last_received_block = blk
             return
 
         # basic linearity validation, crucial for correctly predicting the next block's height
         if self._reverse:
-            if self._last_received_block and blk.hash != self._last_received_block.get_block_parent_hash():
+            if last_received_block and blk.hash != last_received_block.get_block_parent_hash():
                 self.fails(BlockNotConnectedToPreviousBlock())
                 return
         else:
-            if self._last_received_block and blk.get_block_parent_hash() != self._last_received_block.hash:
+            if last_received_block and blk.get_block_parent_hash() != last_received_block.hash:
                 self.fails(BlockNotConnectedToPreviousBlock())
                 return
 
@@ -131,7 +134,7 @@ class BlockchainStreamingClient:
         else:
             self.log.debug('block received', blk_id=blk.hash.hex())
 
-        if self.dependencies.can_validate_full(blk):
+        if await self.dependencies.can_validate_full(blk):
             try:
                 await self.dependencies.on_new_vertex(blk, fails_silently=False)
             except HathorError:
@@ -140,7 +143,6 @@ class BlockchainStreamingClient:
         else:
             self._partial_blocks.append(blk)
 
-        self._last_received_block = blk
         self._blk_repeated = 0
         # XXX: debugging log, maybe add timing info
         if self._blk_received % 500 == 0:

@@ -45,7 +45,7 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.p2p.p2p_manager import P2PManager
+from hathor.p2p.p2p_manager_protocol import P2PManagerProtocol
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -99,7 +99,7 @@ class HathorManager:
         daa: DifficultyAdjustmentAlgorithm,
         peer: PrivatePeer,
         tx_storage: TransactionStorage,
-        p2p_manager: P2PManager,
+        p2p_manager: P2PManagerProtocol,
         event_manager: EventManager,
         bit_signaling_service: BitSignalingService,
         verification_service: VerificationService,
@@ -187,7 +187,7 @@ class HathorManager:
 
         self.consensus_algorithm = consensus_algorithm
 
-        self.connections = p2p_manager
+        self.p2p_manager = p2p_manager
         self.vertex_handler = vertex_handler
         self.vertex_parser = vertex_parser
 
@@ -196,7 +196,7 @@ class HathorManager:
         self.metrics = Metrics(
             pubsub=self.pubsub,
             avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
-            connections=self.connections,
+            p2p_manager=self.p2p_manager,
             tx_storage=self.tx_storage,
             reactor=self.reactor,
             websocket_factory=self.websocket_factory,
@@ -230,7 +230,7 @@ class HathorManager:
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
         if self.is_started:
@@ -307,7 +307,7 @@ class HathorManager:
         # Metric starts to capture data
         self.metrics.start()
 
-        self.connections.start()
+        await self.p2p_manager.start()
 
         self.start_time = time.time()
 
@@ -334,7 +334,7 @@ class HathorManager:
 
         self.log.info('stop manager')
         self.tx_storage.stop_running_manager()
-        self.connections.stop()
+        self.p2p_manager.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
         if self.pow_thread_pool.started:
             self.pow_thread_pool.stop()
@@ -713,7 +713,7 @@ class HathorManager:
         """
         if self._allow_mining_without_peers:
             return True
-        return self.connections.has_synced_peer()
+        return self.p2p_manager.has_synced_peer()
 
     def get_block_templates(self, parent_block_hash: Optional[VertexId] = None,
                             timestamp: Optional[int] = None) -> BlockTemplates:
@@ -957,7 +957,7 @@ class HathorManager:
         )
 
         if propagate_to_peers and result:
-            self.connections.send_tx_to_peers(tx)
+            self.p2p_manager.send_tx_to_peers(tx)
 
         return result
 
@@ -981,7 +981,7 @@ class HathorManager:
         if not self.has_recent_activity():
             return False, HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY
 
-        if not self.connections.has_synced_peer():
+        if not self.p2p_manager.has_synced_peer():
             return False, HathorManager.UnhealthinessReason.NO_SYNCED_PEER
 
         return True, None
