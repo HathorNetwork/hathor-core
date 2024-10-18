@@ -334,7 +334,6 @@ class CliBuilder:
             tx_storage=tx_storage,
             verification_service=verification_service,
             consensus=consensus_algorithm,
-            p2p_manager=p2p_manager,
             feature_service=self.feature_service,
             pubsub=pubsub,
             wallet=self.wallet,
