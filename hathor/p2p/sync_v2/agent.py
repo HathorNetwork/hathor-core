@@ -27,6 +27,7 @@ from twisted.internet.task import LoopingCall, deferLater
 from hathor.conf.settings import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.states.base import CommandHandler
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
 from hathor.p2p.sync_v2.mempool import SyncMempoolManager
@@ -241,7 +242,7 @@ class NodeBlockSync(SyncAgent):
         if self._lc_run.running:
             self._lc_run.stop()
 
-    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, CommandHandler]:
         """ Return a dict of messages of the plugin.
 
         For further information about each message, see the RFC.

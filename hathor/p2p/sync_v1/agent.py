@@ -24,6 +24,7 @@ from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
+from hathor.p2p.states.base import CommandHandler
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.reactor import ReactorProtocol as Reactor
@@ -133,7 +134,7 @@ class NodeSyncTimestamp(SyncAgent):
             'synced_timestamp': self.synced_timestamp,
         }
 
-    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, CommandHandler]:
         """ Return a dict of messages.
         """
         return {
