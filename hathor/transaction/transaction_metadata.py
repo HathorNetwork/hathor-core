@@ -22,6 +22,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import json_dumpb, json_loadb, practically_equal
+from hathor.utils.weight import work_to_weight
 
 if TYPE_CHECKING:
     from weakref import ReferenceType  # noqa: F401
@@ -40,8 +41,8 @@ class TransactionMetadata:
     received_by: list[int]
     children: list[bytes]
     twins: list[bytes]
-    accumulated_weight: float
-    score: float
+    accumulated_weight: int
+    score: int
     first_block: Optional[bytes]
     validation: ValidationState
 
@@ -60,8 +61,8 @@ class TransactionMetadata:
         self,
         spent_outputs: Optional[dict[int, list[bytes]]] = None,
         hash: Optional[bytes] = None,
-        accumulated_weight: float = 0,
-        score: float = 0,
+        accumulated_weight: int = 0,
+        score: int = 0,
         settings: HathorSettings | None = None,
     ) -> None:
         from hathor.transaction.genesis import is_genesis
@@ -195,7 +196,7 @@ class TransactionMetadata:
 
         return True
 
-    def to_json(self) -> dict[str, Any]:
+    def to_storage_json(self) -> dict[str, Any]:
         data: dict[str, Any] = {}
         data['hash'] = self.hash and self.hash.hex()
         data['spent_outputs'] = []
@@ -206,8 +207,8 @@ class TransactionMetadata:
         data['conflict_with'] = [x.hex() for x in set(self.conflict_with)] if self.conflict_with else []
         data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else []
         data['twins'] = [x.hex() for x in self.twins]
-        data['accumulated_weight'] = self.accumulated_weight
-        data['score'] = self.score
+        data['accumulated_weight_raw'] = str(self.accumulated_weight)
+        data['score_raw'] = str(self.score)
 
         vertex = self.get_tx()
         data['min_height'] = vertex.static_metadata.min_height
@@ -230,6 +231,12 @@ class TransactionMetadata:
         else:
             data['first_block'] = None
         data['validation'] = self.validation.name.lower()
+        return data
+
+    def to_json(self) -> dict[str, Any]:
+        data = self.to_storage_json()
+        data['accumulated_weight'] = work_to_weight(self.accumulated_weight)
+        data['score'] = work_to_weight(self.score)
         return data
 
     def to_json_extended(self, tx_storage: 'TransactionStorage') -> dict[str, Any]:
@@ -268,8 +275,8 @@ class TransactionMetadata:
         else:
             meta.twins = []
 
-        meta.accumulated_weight = data['accumulated_weight']
-        meta.score = data.get('score', 0)
+        meta.accumulated_weight = int(data['accumulated_weight_raw'])
+        meta.score = int(data.get('score_raw', 0))
 
         feature_states_raw = data.get('feature_states')
         if feature_states_raw:
@@ -294,7 +301,7 @@ class TransactionMetadata:
 
     def to_bytes(self) -> bytes:
         """Serialize a TransactionMetadata instance to bytes. This should be used for storage."""
-        json_dict = self.to_json()
+        json_dict = self.to_storage_json()
 
         # The `to_json()` method includes these fields for backwards compatibility with APIs, but since they're not
         # part of metadata, they should not be serialized.
@@ -317,7 +324,7 @@ class TransactionMetadata:
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
         # XXX: using json serialization for simplicity, should it use pickle? manual fields? other alternative?
-        return self.create_from_json(self.to_json())
+        return self.create_from_json(self.to_storage_json())
 
     def add_voided_by(self, item: bytes) -> None:
         """Add `item` to `self.voided_by`. Note that this method does not save the change."""
