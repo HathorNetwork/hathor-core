@@ -18,7 +18,7 @@ import math
 import struct
 from collections import OrderedDict
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, Generator, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks

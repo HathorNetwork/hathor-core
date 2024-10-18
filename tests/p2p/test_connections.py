@@ -1,6 +1,7 @@
 import sys
 
 import pytest
+from twisted.internet.defer import Deferred
 
 from hathor.p2p.entrypoint import Entrypoint
 from tests import unittest
@@ -22,7 +23,7 @@ class ConnectionsTest(unittest.TestCase):
         manager = self.create_peer('testnet', enable_sync_v1=True, enable_sync_v2=False)
 
         endpoint = Entrypoint.parse('tcp://127.0.0.1:8005')
-        manager.connections.connect_to(endpoint, use_ssl=True)
+        Deferred.fromCoroutine(manager.connections.connect_to(endpoint, use_ssl=True))
 
         self.assertIn(endpoint, manager.connections.iter_not_ready_endpoints())
         self.assertNotIn(endpoint, manager.connections.iter_ready_connections())

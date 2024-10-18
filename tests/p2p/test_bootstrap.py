@@ -19,7 +19,7 @@ class MockPeerDiscovery(PeerDiscovery):
         self.mocked_host_ports = mocked_host_ports
 
     @override
-    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], None]) -> None:
+    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], Deferred[None]]) -> None:
         for host, port in self.mocked_host_ports:
             connect_to(Entrypoint(Protocol.TCP, host, port))
 
@@ -62,7 +62,7 @@ class BootstrapTestCase(unittest.TestCase):
         connections.add_peer_discovery(MockPeerDiscovery(host_ports2))
         connections.do_discovery()
         self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
+        connecting_entrypoints = {str(entrypoint) for entrypoint in connections.connecting_peers.values()}
         self.assertEqual(connecting_entrypoints, {
             'tcp://foobar:1234',
             'tcp://127.0.0.99:9999',
@@ -85,7 +85,7 @@ class BootstrapTestCase(unittest.TestCase):
         connections.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a))
         connections.do_discovery()
         self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
+        connecting_entrypoints = {str(entrypoint) for entrypoint in connections.connecting_peers.values()}
         self.assertEqual(connecting_entrypoints, {
             'tcp://127.0.0.99:40403',
             'tcp://127.0.0.88:40403',

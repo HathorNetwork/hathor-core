@@ -15,6 +15,7 @@
 from typing import Callable
 
 from structlog import get_logger
+from twisted.internet.defer import Deferred
 from typing_extensions import override
 
 from hathor.p2p.entrypoint import Entrypoint
@@ -37,6 +38,6 @@ class BootstrapPeerDiscovery(PeerDiscovery):
         self.entrypoints = entrypoints
 
     @override
-    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], None]) -> None:
+    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], Deferred[None]]) -> None:
         for entrypoint in self.entrypoints:
             connect_to(entrypoint)

@@ -16,6 +16,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
+from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 
 from hathor.conf.settings import HathorSettings
@@ -176,7 +177,7 @@ class ReadyState(BaseState):
         for data in received_peers:
             peer = UnverifiedPeer.create_from_json(data)
             if self.protocol.connections:
-                self.protocol.connections.on_receive_peer(peer, origin=self)
+                Deferred.fromCoroutine(self.protocol.connections.on_receive_peer(peer, origin=self))
         self.log.debug('received peers', payload=payload)
 
     def send_ping_if_necessary(self) -> None:
