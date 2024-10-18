@@ -1,9 +1,10 @@
 import pytest
 
-from hathor.crypto.util import get_address_from_public_key
+from hathor.crypto.util import get_address_b58_from_bytes, get_address_from_public_key
 from hathor.exception import InvalidNewTransaction
+from hathor.manager import HathorManager
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -15,7 +16,7 @@ from tests.utils import add_blocks_unlock_reward, get_genesis_key
 class BaseTransactionTest(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.wallet = Wallet()
 
@@ -32,19 +33,20 @@ class BaseTransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
-    def _add_reward_block(self):
+    def _add_reward_block(self) -> tuple[Block, int]:
         reward_block = self.manager.generate_mining_block(
             address=get_address_from_public_key(self.genesis_public_key)
         )
         self.manager.cpu_mining_service.resolve(reward_block)
         self.assertTrue(self.manager.propagate_tx(reward_block))
         # XXX: calculate unlock height AFTER adding the block so the height is correctly calculated
-        unlock_height = reward_block.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS + 1
+        unlock_height = reward_block.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS + 1
         return reward_block, unlock_height
 
-    def _spend_reward_tx(self, manager, reward_block):
+    def _spend_reward_tx(self, manager: HathorManager, reward_block: Block) -> tuple[Transaction, str]:
         value = reward_block.outputs[0].value
-        address = get_address_from_public_key(self.genesis_public_key)
+        assert manager.wallet is not None
+        address = manager.wallet.get_unused_address_bytes()
         script = P2PKH.create_output_script(address)
         input_ = TxInput(reward_block.hash, 0, b'')
         output = TxOutput(value, script)
@@ -61,26 +63,27 @@ class BaseTransactionTest(unittest.TestCase):
         input_.data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx)
         tx.update_initial_metadata(save=False)
-        return tx
+        tx.init_static_metadata_from_storage(self._settings, self.tx_storage)
+        return tx, get_address_b58_from_bytes(address)
 
-    def test_classic_reward_lock(self):
+    def test_classic_reward_lock(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
         # reward cannot be spent while not enough blocks are added
         for _ in range(self._settings.REWARD_SPEND_MIN_BLOCKS):
-            tx = self._spend_reward_tx(self.manager, reward_block)
-            self.assertEqual(tx.get_metadata().min_height, unlock_height)
+            tx, _ = self._spend_reward_tx(self.manager, reward_block)
+            self.assertEqual(tx.static_metadata.min_height, unlock_height)
             with self.assertRaises(RewardLocked):
                 self.manager.verification_service.verify(tx)
             add_new_blocks(self.manager, 1, advance_clock=1)
 
         # now it should be spendable
-        tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        tx, _ = self._spend_reward_tx(self.manager, reward_block)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.propagate_tx(tx, fails_silently=False))
 
-    def test_block_with_not_enough_height(self):
+    def test_block_with_not_enough_height(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
@@ -90,8 +93,8 @@ class BaseTransactionTest(unittest.TestCase):
         # add tx bypassing reward-lock verification
         # XXX: this situation is impossible in practice, but we force it to test that when a block tries to confirm a
         #      transaction before it can the RewardLocked exception is raised
-        tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        tx, _ = self._spend_reward_tx(self.manager, reward_block)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False, reject_locked_reward=False))
 
         # new block will try to confirm it and fail
@@ -104,7 +107,7 @@ class BaseTransactionTest(unittest.TestCase):
         all_blocks = [vertex for vertex in self.manager.tx_storage.get_all_transactions() if vertex.is_block]
         assert len(all_blocks) == 2 * self._settings.REWARD_SPEND_MIN_BLOCKS + 1
 
-    def test_block_with_enough_height(self):
+    def test_block_with_enough_height(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
@@ -112,14 +115,14 @@ class BaseTransactionTest(unittest.TestCase):
         add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward
-        tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        tx, _ = self._spend_reward_tx(self.manager, reward_block)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
 
         # new block will be able to confirm it
         add_new_blocks(self.manager, 1, advance_clock=1)
 
-    def test_mempool_tx_with_not_enough_height(self):
+    def test_mempool_tx_with_not_enough_height(self) -> None:
         from hathor.exception import InvalidNewTransaction
 
         # add block with a reward we can spend
@@ -129,14 +132,14 @@ class BaseTransactionTest(unittest.TestCase):
         add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS - 1, advance_clock=1)
 
         # add tx to mempool, must fail reward-lock verification
-        tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        tx, _ = self._spend_reward_tx(self.manager, reward_block)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
             self.manager.verification_service.verify(tx)
         with self.assertRaises(InvalidNewTransaction):
             self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
 
-    def test_mempool_tx_with_enough_height(self):
+    def test_mempool_tx_with_enough_height(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
@@ -144,11 +147,11 @@ class BaseTransactionTest(unittest.TestCase):
         add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward, must not fail
-        tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        tx, _ = self._spend_reward_tx(self.manager, reward_block)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
 
-    def test_mempool_tx_invalid_after_reorg(self):
+    def test_mempool_tx_invalid_after_reorg(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
@@ -156,9 +159,13 @@ class BaseTransactionTest(unittest.TestCase):
         blocks = add_new_blocks(self.manager, self._settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1)
 
         # add tx that spends the reward, must not fail
-        tx = self._spend_reward_tx(self.manager, reward_block)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        tx, tx_address = self._spend_reward_tx(self.manager, reward_block)
+        balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
+        assert tx_address not in balance_per_address
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
+        assert balance_per_address[tx_address] == 6400
 
         # re-org: replace last two blocks with one block, new height will be just one short of enough
         block_to_replace = blocks[-2]
@@ -167,6 +174,7 @@ class BaseTransactionTest(unittest.TestCase):
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
         self.manager.propagate_tx(b0, fails_silently=False)
+        self.clock.advance(1)
 
         # now the new tx should not pass verification considering the reward lock
         with self.assertRaises(RewardLocked):
@@ -178,6 +186,7 @@ class BaseTransactionTest(unittest.TestCase):
         # additionally the transaction should have been marked as invalid and removed from the storage after the re-org
         self.assertTrue(tx.get_metadata().validation.is_invalid())
         self.assertFalse(self.manager.tx_storage.transaction_exists(tx.hash))
+        self.assertTrue(bool(tx.get_metadata().voided_by))
 
         # assert that the tx has been removed from its dependencies' metadata
         for parent_id in tx.parents:
@@ -190,8 +199,12 @@ class BaseTransactionTest(unittest.TestCase):
             assert len(spent_outputs) == 1
             assert tx.hash not in spent_outputs[0]
 
+        # the balance for the tx_address must have been removed
+        balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
+        assert tx_address not in balance_per_address
+
     @pytest.mark.xfail(reason='this is no longer the case, timestamp will not matter', strict=True)
-    def test_classic_reward_lock_timestamp_expected_to_fail(self):
+    def test_classic_reward_lock_timestamp_expected_to_fail(self) -> None:
         # add block with a reward we can spend
         reward_block, unlock_height = self._add_reward_block()
 
@@ -200,10 +213,10 @@ class BaseTransactionTest(unittest.TestCase):
 
         # tx timestamp is equal to the block that unlock the spent rewards. It should
         # be greater, so it'll fail
-        tx = self._spend_reward_tx(self.manager, reward_block)
+        tx, _ = self._spend_reward_tx(self.manager, reward_block)
         tx.timestamp = blocks[-1].timestamp
         self.manager.cpu_mining_service.resolve(tx)
-        self.assertEqual(tx.get_metadata().min_height, unlock_height)
+        self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
             self.manager.verification_service.verify(tx)
 

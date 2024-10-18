@@ -185,7 +185,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         assert set(manager1_blocks_by_height[1]) == set(manager2_blocks_by_height[1])
 
         # but only the block from signer2 becomes non-voided, as it is in turn
-        non_voided_block1 = manager1.tx_storage.get_transaction_by_height(1)
+        non_voided_block1 = manager1.tx_storage.get_block_by_height(1)
         assert isinstance(non_voided_block1, PoaBlock)
         _assert_block_in_turn(non_voided_block1, signer2)
 

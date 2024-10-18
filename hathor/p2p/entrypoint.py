@@ -21,16 +21,12 @@ from twisted.internet.endpoints import TCP4ClientEndpoint
 from twisted.internet.interfaces import IStreamClientEndpoint
 from typing_extensions import Self
 
+from hathor.p2p.peer_id import PeerId
 from hathor.reactor import ReactorProtocol as Reactor
-from hathor.types import Hash
 
 
 class Protocol(Enum):
     TCP = 'tcp'
-
-
-class PeerId(Hash):
-    pass
 
 
 @dataclass(frozen=True, slots=True)

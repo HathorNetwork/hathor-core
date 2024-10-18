@@ -53,6 +53,7 @@ class HealthcheckResource(Resource):
             status_code = result.get_http_status_code()
             request.setResponseCode(status_code)
 
+        request.setHeader(b'content-type', b'application/json; charset=utf-8')
         request.write(json_dumpb(result.to_json()))
         request.finish()
 

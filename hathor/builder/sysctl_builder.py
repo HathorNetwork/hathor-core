@@ -38,7 +38,7 @@ class SysctlBuilder:
         root.put_child('core', core)
         root.put_child('p2p', ConnectionsManagerSysctl(self.artifacts.p2p_manager))
 
-        ws_factory = self.artifacts.manager.metrics.websocket_factory
+        ws_factory = self.artifacts.manager.websocket_factory
         if ws_factory is not None:
             root.put_child('ws', WebsocketManagerSysctl(ws_factory))
 

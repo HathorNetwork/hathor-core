@@ -30,6 +30,8 @@ DECIMAL_PLACES = 2
 GENESIS_TOKEN_UNITS = 1 * (10**9)  # 1B
 GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10**DECIMAL_PLACES)  # 100B
 
+HATHOR_TOKEN_UID = b'\x00'
+
 
 class HathorSettings(NamedTuple):
     # Version byte of the address in P2PKH
@@ -125,7 +127,7 @@ class HathorSettings(NamedTuple):
     MIN_TX_WEIGHT: int = 14
     MIN_SHARE_WEIGHT: int = 21
 
-    HATHOR_TOKEN_UID: bytes = b'\x00'
+    HATHOR_TOKEN_UID: bytes = HATHOR_TOKEN_UID
 
     # Maximum distance between two consecutive blocks (in seconds), except for genesis.
     # This prevent some DoS attacks exploiting the calculation of the score of a side chain.

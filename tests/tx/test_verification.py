@@ -54,7 +54,7 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH
             ]
         )
-        block.update_reward_lock_metadata()
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return block
 
     def _get_valid_merge_mined_block(self) -> MergeMinedBlock:
@@ -70,7 +70,7 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH
             ],
         )
-        block.update_reward_lock_metadata()
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return block
 
     def _get_valid_tx(self) -> Transaction:
@@ -95,7 +95,7 @@ class BaseVerificationTest(unittest.TestCase):
                 self._settings.GENESIS_TX2_HASH,
             ]
         )
-        tx.update_reward_lock_metadata()
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
 
         data_to_sign = tx.get_sighash_all()
         assert self.manager.wallet
@@ -108,7 +108,7 @@ class BaseVerificationTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager)
         assert self.manager.wallet
         tx = create_tokens(self.manager, self.manager.wallet.get_unused_address())
-        tx.update_reward_lock_metadata()
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return tx
 
     def test_block_verify_basic(self) -> None:
@@ -342,8 +342,6 @@ class BaseVerificationTest(unittest.TestCase):
         verify_data_wrapped = Mock(wraps=self.verifiers.block.verify_data)
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
 
-        verify_aux_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_aux_pow)
-
         with (
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
@@ -352,7 +350,6 @@ class BaseVerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
-            patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
         ):
             self.manager.verification_service.verify_without_storage(block)
 
@@ -366,9 +363,6 @@ class BaseVerificationTest(unittest.TestCase):
         verify_number_of_outputs_wrapped.assert_called_once()
         verify_data_wrapped.assert_called_once()
         verify_sigops_output_wrapped.assert_called_once()
-
-        # MergeMinedBlock methods
-        verify_aux_pow_wrapped.assert_called_once()
 
     def test_merge_mined_block_verify(self) -> None:
         block = self._get_valid_merge_mined_block()

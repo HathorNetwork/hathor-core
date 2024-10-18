@@ -47,7 +47,7 @@ class BasePoaVerificationTest(unittest.TestCase):
             ),
         )
 
-        builder = self.get_builder('network').set_settings(settings)
+        builder = self.get_builder().set_settings(settings)
         self.manager = self.create_peer_from_builder(builder)
         self.verifiers = self.manager.verification_service.verifiers
 
@@ -64,7 +64,7 @@ class BasePoaVerificationTest(unittest.TestCase):
             ],
         )
         self.signer.sign_block(block)
-        block.update_reward_lock_metadata()
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return block
 
     def test_poa_block_verify_basic(self) -> None:

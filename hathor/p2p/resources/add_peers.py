@@ -67,7 +67,7 @@ class AddPeersResource(Resource):
                 'message': 'Malformed entrypoint found.'
             })
 
-        known_peers = self.manager.connections.peer_storage.values()
+        known_peers = self.manager.connections.verified_peer_storage.values()
 
         def already_connected(entrypoint: Entrypoint) -> bool:
             # ignore peers that we're already trying to connect

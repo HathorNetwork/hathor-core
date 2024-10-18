@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
 import os
 from typing import TYPE_CHECKING
 
@@ -59,6 +60,14 @@ PEER_CONNECTION_METRICS = {
 
 TX_STORAGE_METRICS = {
     'total_sst_files_size': 'Storage size in bytes of all SST files of a certain column-family in RocksDB'
+}
+
+GC_METRICS = {
+    'objects': 'Number of objects tracked by the garbage collector',
+    'collections': 'Number of collections done by the garbage collector',
+    'collected': 'Number of objects collected by the garbage collector',
+    'uncollectable': 'Number of objects that could not be collected by the garbage collector',
+    'threshold': 'Current threshold of the garbage collector',
 }
 
 
@@ -112,6 +121,7 @@ class PrometheusMetricsExporter:
 
         self._initialize_peer_connection_metrics()
         self._initialize_tx_storage_metrics()
+        self._initialize_garbage_collection_metrics()
 
         for name, comment in METRIC_INFO.items():
             self.metric_gauges[name] = Gauge(self.metrics_prefix + name, comment, registry=self.registry)
@@ -147,6 +157,22 @@ class PrometheusMetricsExporter:
             ) for name, description in TX_STORAGE_METRICS.items()
         }
 
+    def _initialize_garbage_collection_metrics(self) -> None:
+        """Initializes the metrics related to garbage collection
+        """
+        gc_labels = ["generation"]
+
+        prefix = self.metrics_prefix + "python_gc_"
+
+        self.gc_metrics = {
+            name: Gauge(
+                prefix + name,
+                description,
+                labelnames=gc_labels,
+                registry=self.registry
+            ) for name, description in GC_METRICS.items()
+        }
+
     def start(self) -> None:
         """ Starts exporter
         """
@@ -161,6 +187,7 @@ class PrometheusMetricsExporter:
 
         self._set_rocksdb_tx_storage_metrics()
         self._set_new_peer_connection_metrics()
+        self._set_garbage_collection_metrics()
 
         write_to_textfile(self.filepath, self.registry)
 
@@ -178,6 +205,18 @@ class PrometheusMetricsExporter:
                     peer_id=connection_metric.peer_id,
                     connection_string=connection_metric.connection_string
                 ).set(getattr(connection_metric, name))
+
+    def _set_garbage_collection_metrics(self) -> None:
+        counts = gc.get_count()
+        stats = gc.get_stats()
+        threshold = gc.get_threshold()
+
+        for i in range(3):
+            self.gc_metrics['objects'].labels(generation=i).set(counts[i])
+            self.gc_metrics['collections'].labels(generation=i).set(stats[i]['collections'])
+            self.gc_metrics['collected'].labels(generation=i).set(stats[i]['collected'])
+            self.gc_metrics['uncollectable'].labels(generation=i).set(stats[i]['uncollectable'])
+            self.gc_metrics['threshold'].labels(generation=i).set(threshold[i])
 
     def _write_data(self) -> None:
         """ Update all metric data with new values
