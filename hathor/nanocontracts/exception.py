@@ -129,3 +129,20 @@ class NCContractCreationVoided(NCContractCreationNotFound):
     The two most common reasons to have a voided transaction is because it was voided by
     another transaction (e.g., double spending) or it has failed execution."""
     pass
+
+
+class OCBInvalidScript(NCError):
+    """Raised when an On-Chain Blueprint script does not pass our script restrictions check.
+    """
+    pass
+
+
+class OCBInvalidBlueprintVertexType(NCError):
+    """Raised when a vertex that is not an OnChainBlueprint is used as a blueprint-id.
+    """
+    pass
+
+
+class OCBBlueprintNotConfirmed(NCError):
+    """Raised when trying to use an OnChainBlueprint that is not confirmed by a block in the current best chain.
+    """

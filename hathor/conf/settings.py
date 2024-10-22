@@ -446,6 +446,10 @@ class HathorSettings(NamedTuple):
     # activate Nano Contracts through the Feature Activation.
     ENABLE_NANO_CONTRACTS: bool = False
 
+    # This should NEVER be enabled for mainnet and testnet, since both networks will
+    # activate Nano Contracts through the Feature Activation.
+    ENABLE_ON_CHAIN_BLUEPRINTS: bool = False
+
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, 'str'] = {}
 
@@ -461,6 +465,12 @@ class HathorSettings(NamedTuple):
 
     # Identifier used in metadata's voided_by when a Nano Contract method fails.
     NC_EXECUTION_FAIL_ID: bytes = b'nc-fail'
+
+    # Max length in bytes allowed for on-chain blueprint code after decompression, 240KB (not KiB)
+    NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_UNCOMPRESSED: int = 240_000
+
+    # Max length in bytes allowed for on-chain blueprint code inside the transaction, 24KB (not KiB)
+    NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_COMPRESSED: int = 24_000
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':

@@ -93,6 +93,7 @@ class TxVersion(IntEnum):
     MERGE_MINED_BLOCK = 3
     POA_BLOCK = 5
     NANO_CONTRACT = 4
+    ON_CHAIN_BLUEPRINT = 6
 
     @classmethod
     def _missing_(cls, value: Any) -> None:
@@ -116,11 +117,16 @@ class TxVersion(IntEnum):
             TxVersion.POA_BLOCK: PoaBlock
         }
 
-        if True:
-            # TODO Use a feature flag to control whether nano contracts are enabled or not.
+        settings = get_global_settings()
+        if settings.ENABLE_NANO_CONTRACTS:
             # XXX This code should not run on any network except nano-testnet.
             from hathor.nanocontracts.nanocontract import NanoContract
             cls_map[TxVersion.NANO_CONTRACT] = NanoContract
+
+            if settings.ENABLE_ON_CHAIN_BLUEPRINTS:
+                # XXX This code should not run on any network except nano-testnet.
+                from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
+                cls_map[TxVersion.ON_CHAIN_BLUEPRINT] = OnChainBlueprint
 
         cls = cls_map.get(self)
 
