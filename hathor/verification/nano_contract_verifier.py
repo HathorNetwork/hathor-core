@@ -54,7 +54,7 @@ class NanoContractVerifier:
         assert tx.storage is not None
         assert tx.storage.nc_catalog is not None
         if tx.nc_method == NC_INITIALIZE_METHOD:
-            blueprint_class = tx.storage.nc_catalog.get_blueprint_class(tx.nc_id)
+            blueprint_class = tx.get_blueprint_class()
             if not issubclass(blueprint_class, Blueprint):
                 raise NanoContractDoesNotExist
         else:

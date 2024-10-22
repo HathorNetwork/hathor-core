@@ -24,7 +24,7 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.types import ContractId, NCAction, NCActionType
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -102,27 +102,25 @@ class NanoContract(Transaction):
     def get_blueprint_class(self) -> Type[Blueprint]:
         """Return the blueprint class of the contract."""
         assert self.storage is not None
-        assert self.storage.nc_catalog is not None
         if self._blueprint_class is not None:
             return self._blueprint_class
-
         blueprint_id = self.get_blueprint_id()
-        blueprint_class = self.storage.nc_catalog.get_blueprint_class(blueprint_id)
+        blueprint_class = self.storage.get_blueprint_class(blueprint_id)
         self._blueprint_class = blueprint_class
         return blueprint_class
 
-    def get_blueprint_id(self) -> bytes:
+    def get_blueprint_id(self) -> BlueprintId:
         """Return the blueprint id."""
         assert self.storage is not None
         assert self.storage.nc_catalog is not None
         if self.nc_method == NC_INITIALIZE_METHOD:
-            return self.nc_id
+            return BlueprintId(self.nc_id)
         else:
             nanocontract_id = self.nc_id
             nanocontract = self.storage.get_transaction(nanocontract_id)
             assert isinstance(nanocontract, NanoContract)
             assert nanocontract.nc_method == NC_INITIALIZE_METHOD
-            return nanocontract.nc_id
+            return BlueprintId(nanocontract.nc_id)
 
     def execute(self, runner: 'Runner') -> None:
         """Execute the contract's method call."""

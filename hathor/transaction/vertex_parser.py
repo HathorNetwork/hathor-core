@@ -41,5 +41,5 @@ class VertexParser:
                 raise StructError(f"invalid vertex version: {tx_version}")
             cls = tx_version.get_cls()
             return cls.create_from_struct(data, storage=storage)
-        except ValueError:
-            raise StructError('Invalid bytes to create transaction subclass.')
+        except ValueError as e:
+            raise StructError('Invalid bytes to create transaction subclass.') from e
