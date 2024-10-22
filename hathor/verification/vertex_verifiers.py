@@ -20,6 +20,7 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
 from hathor.verification.nano_contract_verifier import NanoContractVerifier
+from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
 from hathor.verification.transaction_verifier import TransactionVerifier
@@ -35,6 +36,7 @@ class VertexVerifiers(NamedTuple):
     tx: TransactionVerifier
     token_creation_tx: TokenCreationTransactionVerifier
     nano_contract: NanoContractVerifier
+    on_chain_blueprint: OnChainBlueprintVerifier
 
     @classmethod
     def create_defaults(
@@ -75,6 +77,7 @@ class VertexVerifiers(NamedTuple):
         tx_verifier = TransactionVerifier(settings=settings, daa=daa)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
         nano_contract_verifier = NanoContractVerifier()
+        on_chain_blueprint_verifier = OnChainBlueprintVerifier()
 
         return VertexVerifiers(
             vertex=vertex_verifier,
@@ -84,4 +87,5 @@ class VertexVerifiers(NamedTuple):
             tx=tx_verifier,
             token_creation_tx=token_creation_tx_verifier,
             nano_contract=nano_contract_verifier,
+            on_chain_blueprint=on_chain_blueprint_verifier,
         )

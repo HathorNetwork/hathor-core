@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
+from hathor.nanocontracts.types import BlueprintId
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 if TYPE_CHECKING:
@@ -44,7 +45,7 @@ class BlueprintSourceCodeResource(Resource):
             return params.json_dumpb()
 
         try:
-            blueprint_id_bytes = bytes.fromhex(params.blueprint_id)
+            blueprint_id = BlueprintId(bytes.fromhex(params.blueprint_id))
         except ValueError:
             request.setResponseCode(400)
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.blueprint_id}')
@@ -53,7 +54,7 @@ class BlueprintSourceCodeResource(Resource):
         assert self.manager.tx_storage.nc_catalog is not None
 
         try:
-            blueprint_class = self.manager.tx_storage.nc_catalog.get_blueprint_class(blueprint_id_bytes)
+            blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
         except BlueprintDoesNotExist:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')

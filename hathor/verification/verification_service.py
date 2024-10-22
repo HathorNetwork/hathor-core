@@ -15,7 +15,7 @@
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.nanocontracts import NanoContract
+from hathor.nanocontracts import NanoContract, OnChainBlueprint
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.poa import PoaBlock
@@ -120,6 +120,9 @@ class VerificationService:
             case TxVersion.NANO_CONTRACT:
                 assert type(vertex) is NanoContract
                 self._verify_basic_nano_contract(vertex)
+            case TxVersion.ON_CHAIN_BLUEPRINT:
+                assert type(vertex) is OnChainBlueprint
+                self._verify_basic_on_chain_blueprint(vertex)
             case _:
                 assert_never(vertex.version)
 
@@ -152,6 +155,9 @@ class VerificationService:
     def _verify_basic_nano_contract(self, tx: NanoContract) -> None:
         self._verify_basic_tx(tx)
 
+    def _verify_basic_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
+        self._verify_basic_tx(tx)
+
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
 
@@ -176,6 +182,9 @@ class VerificationService:
             case TxVersion.NANO_CONTRACT:
                 assert type(vertex) is NanoContract
                 self._verify_nano_contract(vertex, reject_locked_reward=reject_locked_reward)
+            case TxVersion.ON_CHAIN_BLUEPRINT:
+                assert type(vertex) is OnChainBlueprint
+                self._verify_on_chain_blueprint(vertex)
             case _:
                 assert_never(vertex.version)
 
@@ -264,6 +273,10 @@ class VerificationService:
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 
+    def _verify_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
+        self._verify_common_tx(tx)
+        # TODO: on-chain blueprint verifications
+
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -285,6 +298,9 @@ class VerificationService:
             case TxVersion.NANO_CONTRACT:
                 assert type(vertex) is NanoContract
                 self._verify_without_storage_nano_contract(vertex)
+            case TxVersion.ON_CHAIN_BLUEPRINT:
+                assert type(vertex) is OnChainBlueprint
+                self._verify_without_storage_on_chain_blueprint(vertex)
             case _:
                 assert_never(vertex.version)
 
@@ -323,3 +339,8 @@ class VerificationService:
     def _verify_without_storage_nano_contract(self, tx: NanoContract) -> None:
         self._verify_without_storage_tx(tx)
         self.verifiers.nano_contract.verify_nc_signature(tx)
+
+    def _verify_without_storage_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
+        self._verify_without_storage_tx(tx)
+        self.verifiers.on_chain_blueprint.verify_script_restrictions(tx)
+        self.verifiers.on_chain_blueprint.verify_has_blueprint_object(tx)

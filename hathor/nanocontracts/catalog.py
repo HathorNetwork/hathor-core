@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Type
 
 from hathor.nanocontracts.blueprints import _blueprints_mapper
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
+from hathor.nanocontracts.types import BlueprintId
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -28,7 +29,7 @@ class NCBlueprintCatalog:
     def __init__(self, blueprints: dict[bytes, Type['Blueprint']]) -> None:
         self.blueprints = blueprints
 
-    def get_blueprint_class(self, blueprint_id: bytes) -> Type['Blueprint']:
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> Type['Blueprint']:
         """Return the blueprint class related to the given blueprint id."""
         blueprint_class = self.blueprints.get(blueprint_id, None)
         if blueprint_class is None:

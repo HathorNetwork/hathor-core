@@ -23,6 +23,7 @@ from hathor.types import Amount, TokenUid, VertexId
 TxOutputScript = bytes
 Timestamp = int
 ContractId = NewType('ContractId', VertexId)
+BlueprintId = NewType('BlueprintId', VertexId)
 
 T = TypeVar('T')
 
