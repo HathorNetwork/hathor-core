@@ -140,7 +140,9 @@ class SyncMempoolManager:
         if self.tx_storage.transaction_exists(tx.hash):
             return
         try:
-            self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+            success = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+            if success:
+                self.sync_agent.protocol.connections.send_tx_to_peers(tx)
         except InvalidNewTransaction:
             self.sync_agent.protocol.send_error_and_close_connection('invalid vertex received')
             raise

@@ -636,8 +636,10 @@ class NodeSyncTimestamp(SyncAgent):
             self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            result = self.manager.on_new_tx(tx, propagate_to_peers=True)
-            self.update_received_stats(tx, result)
+            success = self.manager.vertex_handler.on_new_vertex(tx)
+            if success:
+                self.protocol.connections.send_tx_to_peers(tx)
+            self.update_received_stats(tx, success)
 
     def update_received_stats(self, tx: 'BaseTransaction', result: bool) -> None:
         """ Update protocol metrics when receiving a new tx
@@ -685,7 +687,9 @@ class NodeSyncTimestamp(SyncAgent):
                 success = True
             else:
                 # Add tx to the DAG.
-                success = self.manager.on_new_tx(tx)
+                success = self.manager.vertex_handler.on_new_vertex(tx)
+                if success:
+                    self.protocol.connections.send_tx_to_peers(tx)
             # Updating stats data
             self.update_received_stats(tx, success)
         return tx
