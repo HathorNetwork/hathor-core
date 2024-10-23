@@ -102,7 +102,6 @@ class BlockchainStreamingClient:
         if self.tx_storage.partial_vertex_exists(blk.hash):
             # We reached a block we already have. Skip it.
             self._blk_repeated += 1
-            is_duplicated = True
             if self._blk_repeated > self.max_repeated_blocks:
                 self.log.info('too many repeated block received', total_repeated=self._blk_repeated)
                 self.fails(TooManyRepeatedVerticesError())

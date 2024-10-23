@@ -457,6 +457,14 @@ class HathorSettings(NamedTuple):
             validators=_VALIDATORS
         )
 
+    def get_default_capabilities(self) -> list[str]:
+        """Return the default capabilities."""
+        return [
+            self.CAPABILITY_WHITELIST,
+            self.CAPABILITY_SYNC_VERSION,
+            self.CAPABILITY_GET_BEST_BLOCKCHAIN
+        ]
+
 
 def _parse_checkpoints(checkpoints: Union[dict[int, str], list[Checkpoint]]) -> list[Checkpoint]:
     """Parse a dictionary of raw checkpoint data into a list of checkpoints."""

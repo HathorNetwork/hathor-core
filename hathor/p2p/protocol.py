@@ -14,7 +14,7 @@
 
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Coroutine, Generator, Optional, cast
+from typing import TYPE_CHECKING, Any, Coroutine, Generator, Iterable, Optional, cast
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
@@ -33,6 +33,7 @@ from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import format_address
 from hathor.profiler import get_cpu_profiler
+from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
@@ -389,6 +390,33 @@ class HathorProtocol:
         assert isinstance(self.state, ReadyState)
         self.log.info('disable sync')
         self.state.sync_agent.disable_sync()
+
+    def is_synced(self) -> bool:
+        assert isinstance(self.state, ReadyState)
+        return self.state.is_synced()
+
+    def send_tx_to_peer(self, tx: BaseTransaction) -> None:
+        assert isinstance(self.state, ReadyState)
+        return self.state.send_tx_to_peer(tx)
+
+    def get_peer(self) -> PublicPeer:
+        return self.peer
+
+    def get_peer_if_set(self) -> PublicPeer | None:
+        return self._peer
+
+    def send_peers(self, peers: Iterable[PublicPeer]) -> None:
+        assert isinstance(self.state, ReadyState)
+        self.state.send_peers(peers)
+
+    def get_entrypoint(self) -> Entrypoint | None:
+        return self.entrypoint
+
+    def is_inbound(self) -> bool:
+        return self.inbound
+
+    def get_metrics(self) -> 'ConnectionMetrics':
+        return self.metrics
 
 
 class HathorLineReceiver(LineReceiver, HathorProtocol):
