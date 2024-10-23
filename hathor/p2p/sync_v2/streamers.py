@@ -232,7 +232,9 @@ class TransactionsStreamingServer(_StreamingServerBase):
             assert tx.get_metadata().first_block == self.first_block.hash
 
         self.current_block: Optional[Block] = self.first_block
-        self.bfs = BFSOrderWalk(self.tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
+        self.bfs = BFSOrderWalk(
+            self.tx_storage.get_vertex, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False
+        )
         self.iter = self.get_iter()
 
     def _stop_streaming_server(self, response_code: StreamEnd) -> None:

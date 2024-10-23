@@ -343,7 +343,9 @@ class TransactionConsensusAlgorithm:
 
         self.log.debug('remove_voided_by', tx=tx.hash_hex, voided_hash=voided_hash.hex())
 
-        bfs = BFSTimestampWalk(tx.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+        bfs = BFSTimestampWalk(
+            tx.storage.get_vertex, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True
+        )
         check_list: list[BaseTransaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
@@ -399,7 +401,7 @@ class TransactionConsensusAlgorithm:
             is_dag_verifications = False
 
         from hathor.transaction.storage.traversal import BFSTimestampWalk
-        bfs = BFSTimestampWalk(tx.storage, is_dag_funds=True, is_dag_verifications=is_dag_verifications,
+        bfs = BFSTimestampWalk(tx.storage.get_vertex, is_dag_funds=True, is_dag_verifications=is_dag_verifications,
                                is_left_to_right=True)
         check_list: list[Transaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
