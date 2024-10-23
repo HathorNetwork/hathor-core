@@ -22,7 +22,6 @@ from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
 from structlog import get_logger
-from structlog.stdlib import BoundLogger
 
 from hathor.conf.settings import HathorSettings
 from hathor.execution_manager import ExecutionManager
@@ -38,17 +37,7 @@ from hathor.transaction.storage.exceptions import (
     TransactionIsNotABlock,
     TransactionNotInAllowedScopeError,
 )
-from hathor.transaction.storage.migrations import (
-    BaseMigration,
-    MigrationState,
-    add_feature_activation_bit_counts_metadata,
-    add_feature_activation_bit_counts_metadata2,
-    add_min_height_metadata,
-    change_score_acc_weight_metadata,
-    migrate_static_metadata,
-    remove_first_nop_features,
-    remove_second_nop_features,
-)
+from hathor.transaction.storage.migrations import BaseMigration, MigrationState, change_score_acc_weight_metadata
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -98,12 +87,6 @@ class TransactionStorage(ABC):
 
     # history of migrations that have to be applied in the order defined here
     _migration_factories: list[type[BaseMigration]] = [
-        add_min_height_metadata.Migration,
-        add_feature_activation_bit_counts_metadata.Migration,
-        remove_first_nop_features.Migration,
-        add_feature_activation_bit_counts_metadata2.Migration,
-        remove_second_nop_features.Migration,
-        migrate_static_metadata.Migration,
         change_score_acc_weight_metadata.Migration,
     ]
 
@@ -1127,13 +1110,6 @@ class TransactionStorage(ABC):
         block = self.get_vertex(block_id)
         assert isinstance(block, Block)
         return block
-
-    @abstractmethod
-    def migrate_static_metadata(self, log: BoundLogger) -> None:
-        """
-        Migrate metadata attributes to static metadata. This is only used for the `migrate_static_metadata` migration.
-        """
-        raise NotImplementedError
 
     def can_validate_full(self, vertex: Vertex) -> bool:
         """ Check if a vertex is ready to be fully validated, either all deps are full-valid or one is invalid.

@@ -14,7 +14,6 @@
 
 from typing import Any, Iterator, Optional, TypeVar
 
-from structlog.stdlib import BoundLogger
 from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
@@ -126,9 +125,3 @@ class TransactionMemoryStorage(BaseTransactionStorage):
 
     def get_value(self, key: str) -> Optional[str]:
         return self.attributes.get(key)
-
-    @override
-    def migrate_static_metadata(self, log: BoundLogger) -> None:
-        # This method is only ever used by the `migrate_static_metadata` migration, and therefore must not be
-        # implemented for the memory storage.
-        raise NotImplementedError
