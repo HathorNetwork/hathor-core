@@ -25,6 +25,7 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.p2p import P2PDependencies
+from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
@@ -77,10 +78,10 @@ class ConnectionsManager:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
 
     manager: Optional['HathorManager']
-    connections: set[HathorProtocol]
-    connected_peers: dict[PeerId, HathorProtocol]
+    connections: set[P2PConnectionProtocol]
+    connected_peers: dict[PeerId, P2PConnectionProtocol]
     connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
-    handshaking_peers: set[HathorProtocol]
+    handshaking_peers: set[P2PConnectionProtocol]
     unverified_peer_storage: UnverifiedPeerStorage
     verified_peer_storage: VerifiedPeerStorage
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
@@ -374,7 +375,7 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def on_peer_connect(self, protocol: HathorProtocol) -> None:
+    def on_peer_connect(self, protocol: P2PConnectionProtocol) -> None:
         """Called when a new connection is established."""
         if len(self.connections) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
@@ -389,7 +390,7 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def on_peer_ready(self, protocol: HathorProtocol) -> None:
+    def on_peer_ready(self, protocol: P2PConnectionProtocol) -> None:
         """Called when a peer is ready."""
         protocol_peer = protocol.get_peer()
         self.verified_peer_storage.add_or_replace(protocol_peer)
@@ -434,7 +435,7 @@ class ConnectionsManager:
                 continue
             conn.send_peers([peer])
 
-    def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
+    def on_peer_disconnect(self, protocol: P2PConnectionProtocol) -> None:
         """Called when a peer disconnect."""
         self.connections.discard(protocol)
         if protocol in self.handshaking_peers:
@@ -458,12 +459,12 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def iter_all_connections(self) -> Iterable[HathorProtocol]:
+    def iter_all_connections(self) -> Iterable[P2PConnectionProtocol]:
         """Iterate over all connections."""
         for conn in self.connections:
             yield conn
 
-    def iter_ready_connections(self) -> Iterable[HathorProtocol]:
+    def iter_ready_connections(self) -> Iterable[P2PConnectionProtocol]:
         """Iterate over ready connections."""
         for conn in self.connected_peers.values():
             yield conn
@@ -711,7 +712,7 @@ class ConnectionsManager:
         hostname_entrypoint = Entrypoint.from_hostname_address(hostname, address)
         self.my_peer.info.entrypoints.append(hostname_entrypoint)
 
-    def get_connection_to_drop(self, protocol: HathorProtocol) -> HathorProtocol:
+    def get_connection_to_drop(self, protocol: P2PConnectionProtocol) -> P2PConnectionProtocol:
         """ When there are duplicate connections, determine which one should be dropped.
 
         We keep the connection initiated by the peer with larger id. A simple (peer_id1 > peer_id2)
@@ -734,7 +735,7 @@ class ConnectionsManager:
             else:
                 return other_connection
 
-    def drop_connection(self, protocol: HathorProtocol) -> None:
+    def drop_connection(self, protocol: P2PConnectionProtocol) -> None:
         """ Drop a connection
         """
         protocol_peer = protocol.get_peer()
