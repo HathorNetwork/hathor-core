@@ -108,7 +108,6 @@ class HathorManager:
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
-        capabilities: list[str],
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         checkpoints: Optional[list[Checkpoint]] = None,
@@ -228,9 +227,6 @@ class HathorManager:
 
         # List of whitelisted peers
         self.peers_whitelist: list[PeerId] = []
-
-        # List of capabilities of the peer
-        self.capabilities = capabilities
 
         # This is included in some logs to provide more context
         self.environment_info = environment_info
@@ -972,9 +968,6 @@ class HathorManager:
             self.connections.send_tx_to_peers(tx)
 
         return success
-
-    def has_sync_version_capability(self) -> bool:
-        return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
 
     def add_peer_to_whitelist(self, peer_id: PeerId) -> None:
         if not self._settings.ENABLE_PEER_WHITELIST:

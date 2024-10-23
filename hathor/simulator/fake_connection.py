@@ -23,6 +23,7 @@ from twisted.internet.address import HostnameAddress
 from twisted.internet.testing import StringTransport
 
 from hathor.p2p.peer import PrivatePeer
+from hathor.transaction.storage import TransactionStorage
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -112,14 +113,18 @@ class FakeConnection:
             self.log.debug('peer not synced', peer1_synced=state1_is_synced, peer2_synced=state2_is_synced)
             errmsgs.append('peer not synced')
             return False
-        [best_block_info1] = state1.protocol.node.tx_storage.get_n_height_tips(1)
-        [best_block_info2] = state2.protocol.node.tx_storage.get_n_height_tips(1)
+        [best_block_info1] = state1.dependencies.tx_storage.get_n_height_tips(1)
+        [best_block_info2] = state2.dependencies.tx_storage.get_n_height_tips(1)
         if best_block_info1.id != best_block_info2.id:
             self.log.debug('best block is different')
             errmsgs.append('best block is different')
             return False
-        tips1 = {i.data for i in state1.protocol.node.tx_storage.get_tx_tips()}
-        tips2 = {i.data for i in state2.protocol.node.tx_storage.get_tx_tips()}
+        tx_storage1 = state1.dependencies.tx_storage
+        tx_storage2 = state2.dependencies.tx_storage
+        assert isinstance(tx_storage1, TransactionStorage)
+        assert isinstance(tx_storage2, TransactionStorage)
+        tips1 = {i.data for i in tx_storage1.get_tx_tips()}
+        tips2 = {i.data for i in tx_storage2.get_tx_tips()}
         if tips1 != tips2:
             self.log.debug('tx tips are different')
             errmsgs.append('tx tips are different')
