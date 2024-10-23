@@ -15,7 +15,6 @@
 from collections import OrderedDict
 from typing import Any, Iterator, Optional
 
-from structlog.stdlib import BoundLogger
 from twisted.internet import threads
 from typing_extensions import override
 
@@ -251,7 +250,3 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def flush(self):
         self._flush_to_storage(self.dirty_txs.copy())
-
-    @override
-    def migrate_static_metadata(self, log: BoundLogger) -> None:
-        return self.store.migrate_static_metadata(log)
