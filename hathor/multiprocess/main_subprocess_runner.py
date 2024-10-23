@@ -27,7 +27,7 @@ from hathor.reactor import ReactorProtocol, initialize_global_reactor
 logger = get_logger()
 
 
-def main_subprocess_runner(factory: Callable[[ReactorProtocol, str], Factory]) -> None:
+def main_subprocess_runner(factory: Callable[[ReactorProtocol], Factory]) -> None:
     # TODO: Correctly initialize log config
     setup_logging(
         logging_output=LoggingOutput.PRETTY,
@@ -43,7 +43,7 @@ def main_subprocess_runner(factory: Callable[[ReactorProtocol, str], Factory]) -
     wrapping_factory = SubprocessWrappingFactory(
         reactor=reactor,
         addr_str=addr,
-        wrapped_factory=factory(reactor, addr),
+        wrapped_factory=factory(reactor),
     )
 
     reactor.callWhenRunning(
