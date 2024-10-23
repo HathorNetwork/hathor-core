@@ -108,9 +108,9 @@ class HathorManager:
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
+        capabilities: list[str],
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
-        capabilities: Optional[list[str]] = None,
         checkpoints: Optional[list[Checkpoint]] = None,
         rng: Optional[Random] = None,
         environment_info: Optional[EnvironmentInfo] = None,
@@ -230,10 +230,7 @@ class HathorManager:
         self.peers_whitelist: list[PeerId] = []
 
         # List of capabilities of the peer
-        if capabilities is not None:
-            self.capabilities = capabilities
-        else:
-            self.capabilities = self.get_default_capabilities()
+        self.capabilities = capabilities
 
         # This is included in some logs to provide more context
         self.environment_info = environment_info
@@ -244,14 +241,6 @@ class HathorManager:
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
-
-    def get_default_capabilities(self) -> list[str]:
-        """Return the default capabilities for this manager."""
-        return [
-            self._settings.CAPABILITY_WHITELIST,
-            self._settings.CAPABILITY_SYNC_VERSION,
-            self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN
-        ]
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.

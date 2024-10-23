@@ -224,7 +224,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         protocol2 = connected_peers1[0]
         self.assertTrue(protocol2.capabilities.issuperset(set(cababilities_without_get_best_blockchain)))
         protocol1 = connected_peers2[0]
-        default_capabilities = manager2.get_default_capabilities()
+        default_capabilities = self._settings.get_default_capabilities()
         self.assertTrue(protocol1.capabilities.issuperset(set(default_capabilities)))
 
         # assert the peers don't engage in get_best_blockchain messages
