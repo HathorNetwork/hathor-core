@@ -65,9 +65,7 @@ class HelloState(BaseState):
 
     def _get_sync_versions(self) -> set[SyncVersion]:
         """Shortcut to ConnectionManager.get_enabled_sync_versions"""
-        connections_manager = self.protocol.connections
-        assert connections_manager is not None
-        return connections_manager.get_enabled_sync_versions()
+        return self.protocol.p2p_manager.get_enabled_sync_versions()
 
     def on_enter(self) -> None:
         # After a connection is made, we just send a HELLO message.
@@ -162,7 +160,6 @@ class HelloState(BaseState):
 
         context = NetfilterContext(
             protocol=protocol,
-            connections=protocol.connections,
             addr=protocol.transport.getPeer(),
         )
         verdict = get_table('filter').get_chain('post_hello').process(context)

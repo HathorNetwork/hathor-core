@@ -33,7 +33,6 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import UnverifiedPeerStorage, VerifiedPeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
-from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import parse_whitelist
@@ -486,7 +485,7 @@ class ConnectionsManager:
         """
         return peer_id in self.connected_peers
 
-    def on_receive_peer(self, peer: UnverifiedPeer, origin: Optional[ReadyState] = None) -> None:
+    def on_receive_peer(self, peer: UnverifiedPeer) -> None:
         """ Update a peer information in our storage, and instantly attempt to connect
         to it if it is not connected yet.
         """
@@ -677,7 +676,7 @@ class ConnectionsManager:
         else:
             factory = self.server_factory
 
-        factory = NetfilterFactory(self, factory)
+        factory = NetfilterFactory(factory)
 
         self.log.info('trying to listen on', endpoint=description)
         deferred: Deferred[IListeningPort] = endpoint.listen(factory)

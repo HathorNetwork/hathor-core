@@ -96,22 +96,18 @@ class ReadyState(BaseState):
                 ProtocolMessages.BEST_BLOCKCHAIN: self.handle_best_blockchain,
             })
 
-        # Initialize sync manager and add its commands to the list of available commands.
-        connections = self.protocol.connections
-        assert connections is not None
-
-        # Get the sync factory and create a sync manager from it
+        # Get the sync factory and create a sync agent from it
         sync_version = self.protocol.sync_version
         assert sync_version is not None
         self.log.debug(f'loading {sync_version}')
-        sync_factory = connections.get_sync_factory(sync_version)
+        sync_factory = self.protocol.p2p_manager.get_sync_factory(sync_version)
 
+        # Initialize sync agent and add its commands to the list of available commands.
         self.sync_agent: SyncAgent = sync_factory.create_sync_agent(self.protocol)
         self.cmd_map.update(self.sync_agent.get_cmd_dict())
 
     def on_enter(self) -> None:
-        if self.protocol.connections:
-            self.protocol.on_peer_ready()
+        self.protocol.on_peer_ready()
 
         self.lc_ping.start(1, now=False)
 
@@ -155,7 +151,7 @@ class ReadyState(BaseState):
         """ Executed when a GET-PEERS command is received. It just responds with
         a list of all known peers.
         """
-        for peer in self.protocol.connections.get_verified_peers():
+        for peer in self.protocol.p2p_manager.get_verified_peers():
             self.send_peers([peer])
 
     def send_peers(self, peer_list: Iterable[PublicPeer]) -> None:
@@ -175,8 +171,7 @@ class ReadyState(BaseState):
         received_peers = json_loads(payload)
         for data in received_peers:
             peer = UnverifiedPeer.create_from_json(data)
-            if self.protocol.connections:
-                self.protocol.connections.on_receive_peer(peer, origin=self)
+            self.protocol.p2p_manager.on_receive_peer(peer)
         self.log.debug('received peers', payload=payload)
 
     def send_ping_if_necessary(self) -> None:
@@ -195,7 +190,7 @@ class ReadyState(BaseState):
         """
         # Add a salt number to prevent peers from faking rtt.
         self.ping_start_time = self.reactor.seconds()
-        self.ping_salt = self.protocol.connections.get_randbytes(self.ping_salt_size).hex()
+        self.ping_salt = self.protocol.p2p_manager.get_randbytes(self.ping_salt_size).hex()
         self.send_message(ProtocolMessages.PING, self.ping_salt)
 
     def send_pong(self, salt: str) -> None:

@@ -12,11 +12,36 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Protocol
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Iterable, Protocol
 
 from hathor.indexes.height_index import HeightInfo
-from hathor.transaction import Block, Vertex
+from hathor.transaction import BaseTransaction, Block, Vertex
 from hathor.types import VertexId
+
+if TYPE_CHECKING:
+    from hathor.p2p.peer import PublicPeer, UnverifiedPeer
+    from hathor.p2p.peer_id import PeerId
+    from hathor.p2p.protocol import HathorProtocol
+    from hathor.p2p.sync_factory import SyncAgentFactory
+    from hathor.p2p.sync_version import SyncVersion
+
+
+class P2PManagerProtocol(Protocol):
+    """Abstract the P2PManager as a Python protocol to be used in P2P classes."""
+
+    def is_peer_whitelisted(self, peer_id: PeerId) -> bool: ...
+    def get_enabled_sync_versions(self) -> set[SyncVersion]: ...
+    def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory: ...
+    def get_verified_peers(self) -> Iterable[PublicPeer]: ...
+    def on_receive_peer(self, peer: UnverifiedPeer) -> None: ...
+    def on_peer_connect(self, protocol: HathorProtocol) -> None: ...
+    def on_peer_ready(self, protocol: HathorProtocol) -> None: ...
+    def on_peer_disconnect(self, protocol: HathorProtocol) -> None: ...
+    def get_randbytes(self, n: int) -> bytes: ...
+    def is_peer_connected(self, peer_id: PeerId) -> bool: ...
+    def send_tx_to_peers(self, tx: BaseTransaction) -> None: ...
 
 
 class P2PVertexHandlerProtocol(Protocol):
