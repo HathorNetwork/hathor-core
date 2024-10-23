@@ -15,32 +15,46 @@
 import os
 import sys
 from pathlib import Path
+from typing import Generic, TypeVar
 
 from structlog import get_logger
 from twisted.internet import tcp
 from twisted.internet.interfaces import IAddress, ITransport
 from twisted.internet.protocol import Protocol, ServerFactory
+from twisted.protocols.policies import ProtocolWrapper
+from twisted.protocols.tls import BufferingTLSTransport
 
 from hathor.multiprocess.subprocess_protocol import SubprocessProtocol
 from hathor.reactor import ReactorProtocol
+from hathor.utils.pydantic import BaseModel
 
 logger = get_logger()
 
+T = TypeVar('T', bound=BaseModel)
 
-class ConnectOnSubprocessProtocol(Protocol):
-    __slots__ = ('log', 'reactor', '_main_file', '_addr')
 
-    def __init__(self, *, reactor: ReactorProtocol, main_file: Path, addr: IAddress) -> None:
+class ConnectOnSubprocessProtocol(Protocol, Generic[T]):
+    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_serialized_subprocess_args')
+
+    def __init__(self, *, reactor: ReactorProtocol, main_file: Path, addr: IAddress, subprocess_args: T) -> None:
         self.log = logger.new(addr=addr)
         self.reactor = reactor
         self._main_file = main_file
         self._addr = addr
+        self._serialized_subprocess_args = subprocess_args.json_dumpb().hex()
 
     def makeConnection(self, transport: ITransport) -> None:
-        assert isinstance(transport, tcp.Server)
-        assert self._addr == transport.getPeer()
+        if isinstance(transport, BufferingTLSTransport):
+            wrapped_transport = transport.transport
+            assert isinstance(wrapped_transport, ProtocolWrapper)
+            connection = wrapped_transport.transport
+        else:
+            connection = transport
 
-        fileno = transport.fileno()
+        assert isinstance(connection, tcp.Connection)
+        assert self._addr == connection.getPeer()
+
+        fileno = connection.fileno()
         self.log.info('spawning new subprocess for connection', fileno=fileno, main_pid=os.getpid())
 
         # - We spawn the new subprocess by running python on self._main_file using the same python executable
@@ -56,6 +70,7 @@ class ConnectOnSubprocessProtocol(Protocol):
                 str(self._main_file.absolute()),
                 str(self._addr),
                 str(fileno),
+                self._serialized_subprocess_args,
             ],
             env=os.environ,
             path=os.getcwd(),
@@ -65,7 +80,7 @@ class ConnectOnSubprocessProtocol(Protocol):
         # Just after spawning the subprocess, the socket associated with the connection is made available in the
         # subprocess through its file descriptor. We must close it here as we (the main process) must never read
         # from it.
-        transport.socket.close()
+        connection.socket.close()
 
         self.log.info(
             'spawned subprocess for connection',
@@ -78,12 +93,18 @@ class ConnectOnSubprocessProtocol(Protocol):
         raise AssertionError('ConnectOnSubprocessProtocol.dataReceived should never be called!')
 
 
-class ConnectOnSubprocessFactory(ServerFactory):
-    __slots__ = ('reactor', '_main_file')
+class ConnectOnSubprocessFactory(ServerFactory, Generic[T]):
+    __slots__ = ('reactor', '_main_file', '_subprocess_args')
 
-    def __init__(self, *, reactor: ReactorProtocol, main_file: Path) -> None:
+    def __init__(self, *, reactor: ReactorProtocol, main_file: Path, subprocess_args: T) -> None:
         self.reactor = reactor
         self._main_file = main_file
+        self._subprocess_args = subprocess_args
 
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
-        return ConnectOnSubprocessProtocol(reactor=self.reactor, main_file=self._main_file, addr=addr)
+        return ConnectOnSubprocessProtocol(
+            reactor=self.reactor,
+            main_file=self._main_file,
+            addr=addr,
+            subprocess_args=self._subprocess_args,
+        )

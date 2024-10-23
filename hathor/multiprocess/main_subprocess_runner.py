@@ -21,29 +21,32 @@ from structlog import get_logger
 from twisted.internet.protocol import Factory
 
 from hathor.cli.util import LoggingOptions, LoggingOutput, setup_logging
+from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.multiprocess.subprocess_wrapper import SubprocessWrappingFactory
 from hathor.reactor import ReactorProtocol, initialize_global_reactor
 
 logger = get_logger()
 
 
-def main_subprocess_runner(factory: Callable[[ReactorProtocol], Factory]) -> None:
+def main_subprocess_runner(factory: Callable[[ReactorProtocol, HathorSettings, bytes], Factory]) -> None:
     # TODO: Correctly initialize log config
     setup_logging(
         logging_output=LoggingOutput.PRETTY,
         logging_options=LoggingOptions(debug=False, sentry=False)
     )
 
-    _, addr, fileno_str = sys.argv
+    _, addr, fileno_str, serialized_args = sys.argv
     fileno = int(fileno_str)
     log = logger.new(addr=addr, fileno=fileno, subprocess_pid=os.getpid())
     log.debug('running subprocess for connection')
 
     reactor = initialize_global_reactor()
+    settings = get_global_settings()
     wrapping_factory = SubprocessWrappingFactory(
         reactor=reactor,
         addr_str=addr,
-        wrapped_factory=factory(reactor),
+        wrapped_factory=factory(reactor, settings, bytes.fromhex(serialized_args)),
     )
 
     reactor.callWhenRunning(

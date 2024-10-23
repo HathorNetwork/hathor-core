@@ -37,6 +37,7 @@ from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p import P2PDependencies
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.multiprocess.main_p2p_server_connection import P2PServerConnectionArgs
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
@@ -50,8 +51,6 @@ from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
-
-DEFAULT_CACHE_SIZE: int = 100000
 
 
 class SyncChoice(Enum):
@@ -183,10 +182,14 @@ class CliBuilder:
                 self.log.warn('using --cache-interval with --memory-storage has no effect')
 
         if not self._args.disable_cache and not self._args.memory_storage:
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
-            tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
-            if self._args.cache_interval:
-                tx_storage.interval = self._args.cache_interval
+            tx_storage = TransactionCacheStorage(
+                reactor=reactor,
+                settings=settings,
+                store=tx_storage,
+                indexes=indexes,
+                capacity=self._args.cache_size,
+                interval=self._args.cache_interval,
+            )
             self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
 
         self.tx_storage = tx_storage
@@ -332,12 +335,37 @@ class CliBuilder:
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
+        whitelist_only = False
+        use_ssl = True
+        multiprocess_p2p: P2PServerConnectionArgs | None = None
+
         if self._args.x_multiprocess_p2p:
             self.check_or_raise(
                 self._args.x_remove_sync_v1,
                 'multiprocess support for P2P is only available if sync-v1 is removed (use --x-remove-sync-v1)'
             )
-            raise NotImplementedError('Multiprocess support for P2P is not yet implemented.')
+
+            self.check_or_raise(
+                (
+                    not self._args.memory_storage
+                    and bool(self._args.data)
+                    and not self._args.memory_indexes
+                    and not self._args.disable_cache
+                ),
+                'multiprocess support for P2P is only available if rocksdb is used, with cache and rocksdb indexes'
+            )
+            assert self._args.data is not None
+
+            multiprocess_p2p = P2PServerConnectionArgs(
+                capabilities=capabilities,
+                whitelist_only=whitelist_only,
+                use_ssl=use_ssl,
+                my_peer=peer.to_json(),
+                cache_capacity=self._args.cache_size,
+                cache_interval=self._args.cache_interval,
+                rocksdb_path=self._args.data,
+                rocksdb_cache_capacity=self._args.rocksdb_cache,
+            )
 
         p2p_dependencies = P2PDependencies(
             reactor=reactor,
@@ -346,7 +374,7 @@ class CliBuilder:
             tx_storage=tx_storage,
             vertex_handler=vertex_handler,
             verification_service=verification_service,
-            whitelist_only=False,
+            whitelist_only=whitelist_only,
             capabilities=capabilities,
         )
 
@@ -354,8 +382,9 @@ class CliBuilder:
             dependencies=p2p_dependencies,
             my_peer=peer,
             pubsub=pubsub,
-            ssl=True,
+            ssl=use_ssl,
             rng=Random(),
+            multiprocess=multiprocess_p2p,
         )
 
         SyncSupportLevel.add_factories(
