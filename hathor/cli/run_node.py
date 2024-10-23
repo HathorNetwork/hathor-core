@@ -58,6 +58,7 @@ class RunNode:
         ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue)),
         ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor)),
         ('--x-ipython-kernel', lambda args: bool(args.x_ipython_kernel)),
+        ('--x-multiprocess-p2p', lambda args: bool(args.x_multiprocess_p2p)),
     ]
 
     env_vars_prefix: str | None = None
@@ -162,6 +163,7 @@ class RunNode:
                             help='Log tx bytes for debugging')
         parser.add_argument('--disable-ws-history-streaming', action='store_true',
                             help='Disable websocket history streaming API')
+        parser.add_argument('--x-multiprocess-p2p', action='store_true', help='Enable multiprocess support for P2P.')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
