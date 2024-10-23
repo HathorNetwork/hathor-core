@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf.settings import HathorSettings
+from hathor.p2p import P2PDependencies
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PublicPeer
 from hathor.p2p.peer_id import PeerId
@@ -30,8 +30,8 @@ logger = get_logger()
 
 
 class PeerIdState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
-        super().__init__(protocol, settings)
+    def __init__(self, protocol: 'HathorProtocol', *, dependencies: P2PDependencies) -> None:
+        super().__init__(protocol, dependencies=dependencies)
         self.log = logger.new(remote=protocol.get_short_remote())
         self.cmd_map.update({
             ProtocolMessages.PEER_ID: self.handle_peer_id,
@@ -160,10 +160,8 @@ class PeerIdState(BaseState):
                     return True
 
         # otherwise we block non-whitelisted peers when on "whitelist-only mode"
-        if self.protocol.connections is not None:
-            protocol_is_whitelist_only = self.protocol.connections.whitelist_only
-            if protocol_is_whitelist_only and not peer_is_whitelisted:
-                return True
+        if self.dependencies.whitelist_only and not peer_is_whitelisted:
+            return True
 
         # default is not blocking, this will be sync-v2 peers not on whitelist when not on whitelist-only mode
         return False

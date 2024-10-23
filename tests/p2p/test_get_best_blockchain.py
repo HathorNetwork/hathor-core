@@ -204,11 +204,11 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         manager1 = self.create_peer()
         manager2 = self.create_peer()
 
-        cababilities_without_get_best_blockchain = [
+        capabilities_without_get_best_blockchain = [
             self._settings.CAPABILITY_WHITELIST,
             self._settings.CAPABILITY_SYNC_VERSION,
         ]
-        manager2.capabilities = cababilities_without_get_best_blockchain
+        manager2.connections.dependencies.capabilities = capabilities_without_get_best_blockchain
 
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
         self.simulator.add_connection(conn12)
@@ -222,7 +222,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # assert the peers have the proper capabilities
         protocol2 = connected_peers1[0]
-        self.assertTrue(protocol2.capabilities.issuperset(set(cababilities_without_get_best_blockchain)))
+        self.assertTrue(protocol2.capabilities.issuperset(set(capabilities_without_get_best_blockchain)))
         protocol1 = connected_peers2[0]
         default_capabilities = self._settings.get_default_capabilities()
         self.assertTrue(protocol1.capabilities.issuperset(set(default_capabilities)))

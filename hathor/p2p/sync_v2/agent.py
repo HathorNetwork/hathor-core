@@ -24,8 +24,8 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall, deferLater
 
-from hathor.conf.settings import HathorSettings
 from hathor.exception import InvalidNewTransaction
+from hathor.p2p import P2PDependencies
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
@@ -38,18 +38,14 @@ from hathor.p2p.sync_v2.streamers import (
     TransactionsStreamingServer,
 )
 from hathor.p2p.sync_v2.transaction_streaming_client import TransactionStreamingClient
-from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.genesis import is_genesis
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
 from hathor.util import collect_n
-from hathor.vertex_handler import VertexHandler
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
-    from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
 
@@ -89,30 +85,23 @@ class NodeBlockSync(SyncAgent):
 
     def __init__(
         self,
-        settings: HathorSettings,
         protocol: 'HathorProtocol',
-        reactor: Reactor,
         *,
-        vertex_parser: VertexParser,
-        vertex_handler: VertexHandler,
+        dependencies: P2PDependencies,
     ) -> None:
         """
         :param protocol: Protocol of the connection.
         :type protocol: HathorProtocol
-
-        :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
-        :type reactor: Reactor
         """
-        self._settings = settings
-        self.vertex_parser = vertex_parser
-        self.vertex_handler = vertex_handler
+        self.dependencies = dependencies
+        self._settings = dependencies.settings
+        self.vertex_parser = dependencies.vertex_parser
         self.protocol = protocol
-        self.tx_storage: 'TransactionStorage' = protocol.node.tx_storage
         self.state = PeerState.UNKNOWN
 
         self.DEFAULT_STREAMING_LIMIT = DEFAULT_STREAMING_LIMIT
 
-        self.reactor: Reactor = reactor
+        self.reactor = dependencies.reactor
         self._is_streaming: bool = False
 
         # Create logger with context
@@ -153,7 +142,7 @@ class NodeBlockSync(SyncAgent):
 
         # Saves if I am in the middle of a mempool sync
         # we don't execute any sync while in the middle of it
-        self.mempool_manager = SyncMempoolManager(self)
+        self.mempool_manager = SyncMempoolManager(self, dependencies=self.dependencies)
         self._receiving_tips: Optional[list[VertexId]] = None
         self.max_receiving_tips: int = self._settings.MAX_MEMPOOL_RECEIVING_TIPS
 
@@ -179,9 +168,7 @@ class NodeBlockSync(SyncAgent):
     def get_status(self) -> dict[str, Any]:
         """ Return the status of the sync.
         """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
-        tips = self.tx_storage.indexes.mempool_tips.get()
+        tips = self.dependencies.tx_storage.get_mempool_tips()
         tips_limited, tips_has_more = collect_n(iter(tips), MAX_MEMPOOL_STATUS_TIPS)
         res = {
             'is_enabled': self.is_sync_enabled(),
@@ -348,7 +335,7 @@ class NodeBlockSync(SyncAgent):
 
     def get_my_best_block(self) -> _HeightInfo:
         """Return my best block info."""
-        bestblock = self.tx_storage.get_best_block()
+        bestblock = self.dependencies.tx_storage.get_best_block()
         meta = bestblock.get_metadata()
         assert meta.validation.is_fully_connected()
         return _HeightInfo(height=bestblock.get_height(), id=bestblock.hash)
@@ -359,7 +346,6 @@ class NodeBlockSync(SyncAgent):
 
         Notice that we might already have all other peer's blocks while the other peer is still syncing.
         """
-        assert self.tx_storage.indexes is not None
         self.state = PeerState.SYNCING_BLOCKS
 
         # Get my best block.
@@ -382,7 +368,7 @@ class NodeBlockSync(SyncAgent):
         # Not synced but same blockchain?
         if self.peer_best_block.height <= my_best_block.height:
             # Is peer behind me at the same blockchain?
-            common_block_hash = self.tx_storage.get_block_id_by_height(self.peer_best_block.height)
+            common_block_hash = self.dependencies.tx_storage.get_block_id_by_height(self.peer_best_block.height)
             if common_block_hash == self.peer_best_block.id:
                 # If yes, nothing to sync from this peer.
                 if not self.is_synced():
@@ -466,7 +452,7 @@ class NodeBlockSync(SyncAgent):
             return
         self.log.debug('handle_get_tips')
         # TODO Use a streaming of tips
-        for tx_id in self.tx_storage.get_mempool_tips():
+        for tx_id in self.dependencies.tx_storage.get_mempool_tips():
             self.send_tips(tx_id)
         self.log.debug('tips end')
         self.send_message(ProtocolMessages.TIPS_END)
@@ -488,7 +474,7 @@ class NodeBlockSync(SyncAgent):
         # filter-out txs we already have
         try:
             self._receiving_tips.extend(
-                VertexId(tx_id) for tx_id in data if not self.tx_storage.partial_vertex_exists(tx_id)
+                VertexId(tx_id) for tx_id in data if not self.dependencies.tx_storage.partial_vertex_exists(tx_id)
             )
         except ValueError:
             self.protocol.send_error_and_close_connection('Invalid trasaction ID received')
@@ -532,7 +518,9 @@ class NodeBlockSync(SyncAgent):
                                    start_block: _HeightInfo,
                                    end_block: _HeightInfo) -> Deferred[StreamEnd]:
         """Request peer to start streaming blocks to us."""
-        self._blk_streaming_client = BlockchainStreamingClient(self, start_block, end_block)
+        self._blk_streaming_client = BlockchainStreamingClient(
+            self, start_block, end_block, dependencies=self.dependencies
+        )
         quantity = self._blk_streaming_client._blk_max_quantity
         self.log.info('requesting blocks streaming',
                       start_block=start_block,
@@ -596,7 +584,7 @@ class NodeBlockSync(SyncAgent):
             for info in block_info_list:
                 try:
                     # We must check only fully validated transactions.
-                    blk = self.tx_storage.get_transaction(info.id)
+                    blk = self.dependencies.tx_storage.get_vertex(info.id)
                 except TransactionDoesNotExist:
                     hi = info
                 else:
@@ -615,12 +603,12 @@ class NodeBlockSync(SyncAgent):
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         try:
             for tx in vertex_list:
-                if not self.tx_storage.transaction_exists(tx.hash):
-                    self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+                if not self.dependencies.tx_storage.transaction_exists(tx.hash):
+                    self.dependencies.vertex_handler.on_new_vertex(tx, fails_silently=False)
                 yield deferLater(self.reactor, 0, lambda: None)
 
-            if not self.tx_storage.transaction_exists(blk.hash):
-                self.vertex_handler.on_new_vertex(blk, fails_silently=False)
+            if not self.dependencies.tx_storage.transaction_exists(blk.hash):
+                self.dependencies.vertex_handler.on_new_vertex(blk, fails_silently=False)
         except InvalidNewTransaction:
             self.protocol.send_error_and_close_connection('invalid vertex received')
 
@@ -649,10 +637,10 @@ class NodeBlockSync(SyncAgent):
             return
         data = []
         for h in heights:
-            blk_hash = self.tx_storage.get_block_id_by_height(h)
+            blk_hash = self.dependencies.tx_storage.get_block_id_by_height(h)
             if blk_hash is None:
                 break
-            blk = self.tx_storage.get_transaction(blk_hash)
+            blk = self.dependencies.tx_storage.get_vertex(blk_hash)
             if blk.get_metadata().voided_by:
                 break
             data.append((h, blk_hash.hex()))
@@ -703,7 +691,7 @@ class NodeBlockSync(SyncAgent):
     def _validate_block(self, _hash: VertexId) -> Optional[Block]:
         """Validate block given in the GET-NEXT-BLOCKS and GET-TRANSACTIONS-BFS messages."""
         try:
-            blk = self.tx_storage.get_transaction(_hash)
+            blk = self.dependencies.tx_storage.get_vertex(_hash)
         except TransactionDoesNotExist:
             self.log.debug('requested block not found', blk_id=_hash.hex())
             self.send_message(ProtocolMessages.NOT_FOUND, _hash.hex())
@@ -780,7 +768,6 @@ class NodeBlockSync(SyncAgent):
         if not isinstance(blk, Block):
             # Not a block. Punish peer?
             return
-        blk.storage = self.tx_storage
 
         assert self._blk_streaming_client is not None
         self._blk_streaming_client.handle_blocks(blk)
@@ -841,7 +828,7 @@ class NodeBlockSync(SyncAgent):
     def handle_get_best_block(self, _payload: str) -> None:
         """ Handle a GET-BEST-BLOCK message.
         """
-        best_block = self.tx_storage.get_best_block()
+        best_block = self.dependencies.tx_storage.get_best_block()
         meta = best_block.get_metadata()
         assert meta.validation.is_fully_connected()
         payload = BestBlockPayload(
@@ -863,9 +850,9 @@ class NodeBlockSync(SyncAgent):
 
     def start_transactions_streaming(self, partial_blocks: list[Block]) -> Deferred[StreamEnd]:
         """Request peer to start streaming transactions to us."""
-        self._tx_streaming_client = TransactionStreamingClient(self,
-                                                               partial_blocks,
-                                                               limit=self.DEFAULT_STREAMING_LIMIT)
+        self._tx_streaming_client = TransactionStreamingClient(
+            self, partial_blocks, limit=self.DEFAULT_STREAMING_LIMIT, dependencies=self.dependencies
+        )
 
         start_from: list[bytes] = []
         first_block_hash = partial_blocks[0].hash
@@ -954,7 +941,7 @@ class NodeBlockSync(SyncAgent):
         start_from_txs = []
         for start_from_hash in data.start_from:
             try:
-                tx = self.tx_storage.get_transaction(start_from_hash)
+                tx = self.dependencies.tx_storage.get_vertex(start_from_hash)
             except TransactionDoesNotExist:
                 # In case the tx does not exist we send a NOT-FOUND message
                 self.log.debug('requested start_from_hash not found', start_from_hash=start_from_hash.hex())
@@ -980,11 +967,14 @@ class NodeBlockSync(SyncAgent):
         """
         if self._tx_streaming_server is not None and self._tx_streaming_server.is_running:
             self.stop_tx_streaming_server(StreamEnd.PER_REQUEST)
-        self._tx_streaming_server = TransactionsStreamingServer(self,
-                                                                start_from,
-                                                                first_block,
-                                                                last_block,
-                                                                limit=self.DEFAULT_STREAMING_LIMIT)
+        self._tx_streaming_server = TransactionsStreamingServer(
+            self,
+            start_from,
+            first_block,
+            last_block,
+            limit=self.DEFAULT_STREAMING_LIMIT,
+            dependencies=self.dependencies,
+        )
         self._tx_streaming_server.start()
 
     def send_transaction(self, tx: Transaction) -> None:
@@ -1031,7 +1021,6 @@ class NodeBlockSync(SyncAgent):
             self.log.warn('not a transaction', hash=tx.hash_hex)
             # Not a transaction. Punish peer?
             return
-        tx.storage = self.tx_storage
 
         assert self._tx_streaming_client is not None
         self._tx_streaming_client.handle_transaction(tx)
@@ -1045,7 +1034,7 @@ class NodeBlockSync(SyncAgent):
             self.log.debug('tx in cache', tx=tx_id.hex())
             return tx
         try:
-            tx = self.tx_storage.get_transaction(tx_id)
+            tx = self.dependencies.tx_storage.get_vertex(tx_id)
         except TransactionDoesNotExist:
             tx = yield self.get_data(tx_id, 'mempool')
             assert tx is not None
@@ -1115,7 +1104,7 @@ class NodeBlockSync(SyncAgent):
         origin = data.get('origin', '')
         # self.log.debug('handle_get_data', payload=hash_hex)
         try:
-            tx = self.protocol.node.tx_storage.get_transaction(bytes.fromhex(txid_hex))
+            tx = self.dependencies.tx_storage.get_vertex(bytes.fromhex(txid_hex))
             self.send_data(tx, origin=origin)
         except TransactionDoesNotExist:
             # In case the tx does not exist we send a NOT-FOUND message
@@ -1150,25 +1139,23 @@ class NodeBlockSync(SyncAgent):
             return
 
         assert tx is not None
-        if is_genesis(tx.hash, settings=self._settings):
+        if is_genesis(tx.hash, settings=self.dependencies.settings):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return
 
-        tx.storage = self.protocol.node.tx_storage
-
-        if self.tx_storage.partial_vertex_exists(tx.hash):
+        if self.dependencies.tx_storage.partial_vertex_exists(tx.hash):
             # transaction already added to the storage, ignore it
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
-            self.tx_storage.compare_bytes_with_local_tx(tx)
+            self.dependencies.tx_storage.compare_bytes_with_local_tx(tx)
             return
         else:
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            if self.tx_storage.can_validate_full(tx):
+            if self.dependencies.tx_storage.can_validate_full(tx):
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
                 try:
-                    success = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+                    success = self.dependencies.vertex_handler.on_new_vertex(tx, fails_silently=False)
                     if success:
                         self.protocol.connections.send_tx_to_peers(tx)
                 except InvalidNewTransaction:

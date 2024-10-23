@@ -12,13 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import os
 from argparse import ArgumentParser
-from typing import Any
+from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
 from hathor.cli.run_node import RunNode
+
+if TYPE_CHECKING:
+    from hathor.transaction import Vertex
 
 logger = get_logger()
 
@@ -30,18 +35,17 @@ class VertexHandlerWrapper:
         self._manager = manager
         self._n_blocks = n_blocks
 
-    def on_new_vertex(self, *args: Any, **kwargs: Any) -> bool:
+    def on_new_vertex(self, vertex: Vertex, *, fails_silently: bool) -> bool:
         from hathor.transaction import Block
         from hathor.transaction.base_transaction import GenericVertex
 
         msg: str | None = None
-        res = self._vertex_handler.on_new_vertex(*args, **kwargs)
+        res = self._vertex_handler.on_new_vertex(vertex=vertex, fails_silently=fails_silently)
 
         if self._n_blocks is None:
             should_quit = res
             msg = 'added a tx'
         else:
-            vertex = args[0]
             should_quit = False
             assert isinstance(vertex, GenericVertex)
 
@@ -77,7 +81,7 @@ class QuickTest(RunNode):
         self.log.info('patching vertex_handler.on_new_vertex to quit on success')
         p2p_factory = self.manager.connections.get_sync_factory(SyncVersion.V2)
         assert isinstance(p2p_factory, SyncV2Factory)
-        p2p_factory.vertex_handler = VertexHandlerWrapper(
+        p2p_factory.dependencies.vertex_handler = VertexHandlerWrapper(
             self.manager.vertex_handler,
             self.manager,
             self._args.quit_after_n_blocks,
