@@ -111,7 +111,7 @@ class CliBuilder:
         self.log.info(
             'hathor-core v{hathor}',
             hathor=hathor.__version__,
-            pid=os.getpid(),
+            main_pid=os.getpid(),
             genesis=get_genesis_short_hash(),
             my_peer_id=str(peer.id),
             python=python,
