@@ -18,11 +18,10 @@ import heapq
 from abc import ABC, abstractmethod
 from collections import deque
 from itertools import chain
-from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Callable, Iterable, Iterator, Optional, Union
 
 if TYPE_CHECKING:
-    from hathor.transaction import BaseTransaction  # noqa: F401
-    from hathor.transaction.storage import VertexStorageProtocol
+    from hathor.transaction import BaseTransaction, Vertex  # noqa: F401
     from hathor.types import VertexId
 
 
@@ -50,7 +49,7 @@ class GenericWalk(ABC):
 
     def __init__(
         self,
-        storage: VertexStorageProtocol,
+        vertex_getter: Callable[[VertexId], Vertex],
         *,
         is_dag_funds: bool = False,
         is_dag_verifications: bool = False,
@@ -64,7 +63,7 @@ class GenericWalk(ABC):
         :param is_dag_verifications: Add neighbors from the DAG of verifications
         :param is_left_to_right: Decide which side of the DAG we will walk to
         """
-        self.storage = storage
+        self.vertex_getter = vertex_getter
         self.seen = set()
 
         self.is_dag_funds = is_dag_funds
@@ -119,7 +118,7 @@ class GenericWalk(ABC):
         for _hash in it:
             if _hash not in self.seen:
                 self.seen.add(_hash)
-                neighbor = self.storage.get_vertex(_hash)
+                neighbor = self.vertex_getter(_hash)
                 self._push_visit(neighbor)
 
     def skip_neighbors(self, tx: 'BaseTransaction') -> None:
@@ -164,14 +163,14 @@ class BFSTimestampWalk(GenericWalk):
 
     def __init__(
         self,
-        storage: VertexStorageProtocol,
+        vertex_getter: Callable[[VertexId], Vertex],
         *,
         is_dag_funds: bool = False,
         is_dag_verifications: bool = False,
         is_left_to_right: bool = True,
     ) -> None:
         super().__init__(
-            storage,
+            vertex_getter=vertex_getter,
             is_dag_funds=is_dag_funds,
             is_dag_verifications=is_dag_verifications,
             is_left_to_right=is_left_to_right
@@ -200,14 +199,14 @@ class BFSOrderWalk(GenericWalk):
 
     def __init__(
         self,
-        storage: VertexStorageProtocol,
+        vertex_getter: Callable[[VertexId], Vertex],
         *,
         is_dag_funds: bool = False,
         is_dag_verifications: bool = False,
         is_left_to_right: bool = True,
     ) -> None:
         super().__init__(
-            storage,
+            vertex_getter=vertex_getter,
             is_dag_funds=is_dag_funds,
             is_dag_verifications=is_dag_verifications,
             is_left_to_right=is_left_to_right
@@ -231,14 +230,14 @@ class DFSWalk(GenericWalk):
 
     def __init__(
         self,
-        storage: VertexStorageProtocol,
+        vertex_getter: Callable[[VertexId], Vertex],
         *,
         is_dag_funds: bool = False,
         is_dag_verifications: bool = False,
         is_left_to_right: bool = True,
     ) -> None:
         super().__init__(
-            storage,
+            vertex_getter=vertex_getter,
             is_dag_funds=is_dag_funds,
             is_dag_verifications=is_dag_verifications,
             is_left_to_right=is_left_to_right

@@ -89,7 +89,7 @@ class _TraversalTestCase(unittest.TestCase):
 
 class BaseBFSTimestampWalkTestCase(_TraversalTestCase):
     def gen_walk(self, **kwargs):
-        return BFSTimestampWalk(self.manager.tx_storage, **kwargs)
+        return BFSTimestampWalk(self.manager.tx_storage.get_vertex, **kwargs)
 
     def _run_lr(self, walk, skip_root=True):
         seen = set()
@@ -120,7 +120,7 @@ class SyncV2BFSTimestampWalkTestCase(unittest.SyncV2Params, BaseBFSTimestampWalk
 
 class BaseBFSOrderWalkTestCase(_TraversalTestCase):
     def gen_walk(self, **kwargs):
-        return BFSOrderWalk(self.manager.tx_storage, **kwargs)
+        return BFSOrderWalk(self.manager.tx_storage.get_vertex, **kwargs)
 
     def _run_lr(self, walk, skip_root=True):
         seen = set()
@@ -168,7 +168,7 @@ class SyncBridgeBFSOrderWalkTestCase(unittest.SyncBridgeParams, SyncV2BFSOrderWa
 
 class BaseDFSWalkTestCase(_TraversalTestCase):
     def gen_walk(self, **kwargs):
-        return DFSWalk(self.manager.tx_storage, **kwargs)
+        return DFSWalk(self.manager.tx_storage.get_vertex, **kwargs)
 
     def _run_lr(self, walk, skip_root=True):
         seen = set()

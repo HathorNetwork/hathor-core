@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from hathor.conf.settings import HathorSettings
@@ -19,11 +21,11 @@ from hathor.transaction import Block
 from hathor.util import not_none
 
 if TYPE_CHECKING:
-    from hathor.transaction.storage.vertex_storage_protocol import VertexStorageProtocol
+    from hathor.transaction.storage import TransactionStorage
     from hathor.transaction.transaction import RewardLockedInfo, Transaction
 
 
-def iter_spent_rewards(tx: 'Transaction', storage: 'VertexStorageProtocol') -> Iterator[Block]:
+def iter_spent_rewards(tx: 'Transaction', storage: TransactionStorage) -> Iterator[Block]:
     """Iterate over all the rewards being spent, assumes tx has been verified."""
     for input_tx in tx.inputs:
         spent_tx = storage.get_vertex(input_tx.tx_id)
@@ -41,7 +43,7 @@ def is_spent_reward_locked(settings: HathorSettings, tx: 'Transaction') -> bool:
 def get_spent_reward_locked_info(
     settings: HathorSettings,
     tx: 'Transaction',
-    storage: 'VertexStorageProtocol',
+    storage: TransactionStorage,
 ) -> Optional['RewardLockedInfo']:
     """Check if any input block reward is locked, returning the locked information if any, or None if they are all
     unlocked."""
@@ -54,7 +56,7 @@ def get_spent_reward_locked_info(
     return None
 
 
-def get_minimum_best_height(storage: 'VertexStorageProtocol') -> int:
+def get_minimum_best_height(storage: TransactionStorage) -> int:
     """Return the height of the current best block that shall be used for `min_height` verification."""
     import math
 
