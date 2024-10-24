@@ -22,3 +22,6 @@ extras/docker/envvars
 /dist/
 /requirements.txt
 *.egg-info
+
+# Nix
+.direnv/

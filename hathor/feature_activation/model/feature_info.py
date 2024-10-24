@@ -18,7 +18,7 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_state import FeatureState
 
 
-class FeatureDescription(NamedTuple):
+class FeatureInfo(NamedTuple):
     """Represents all information related to one feature, that is, its criteria and state."""
     criteria: Criteria
     state: FeatureState

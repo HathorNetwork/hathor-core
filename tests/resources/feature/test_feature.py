@@ -16,28 +16,34 @@ from unittest.mock import Mock
 
 import pytest
 
+from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.model.feature_description import FeatureDescription
+from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.storage import TransactionStorage
 from tests.resources.base_resource import StubSite
 
 
 @pytest.fixture
-def web():
-    block_mock = Mock(wraps=Block(), spec_set=Block)
-    block_mock.get_feature_activation_bit_counts = Mock(return_value=[0, 1, 0, 0])
-    block_mock.hash_hex = 'some_hash'
-    block_mock.get_height = Mock(return_value=123)
+def web() -> StubSite:
+    block = Block(hash=b'some_hash')
+    static_metadata = BlockStaticMetadata(
+        height=123,
+        min_height=0,
+        feature_activation_bit_counts=[0, 1, 0, 0],
+        feature_states={},
+    )
+    block.set_static_metadata(static_metadata)
 
     tx_storage = Mock(spec_set=TransactionStorage)
-    tx_storage.get_best_block = Mock(return_value=block_mock)
-    tx_storage.get_transaction = Mock(return_value=block_mock)
+    tx_storage.get_best_block = Mock(return_value=block)
+    tx_storage.get_transaction = Mock(return_value=block)
 
     def get_state(*, block: Block, feature: Feature) -> FeatureState:
         return FeatureState.ACTIVE if feature is Feature.NOP_FEATURE_1 else FeatureState.STARTED
@@ -58,22 +64,24 @@ def web():
 
     feature_service = Mock(spec_set=FeatureService)
     feature_service.get_state = Mock(side_effect=get_state)
-    feature_service.get_bits_description = Mock(return_value={
-        Feature.NOP_FEATURE_1: FeatureDescription(state=FeatureState.DEFINED, criteria=nop_feature_1_criteria),
-        Feature.NOP_FEATURE_2: FeatureDescription(state=FeatureState.LOCKED_IN, criteria=nop_feature_2_criteria),
+    feature_service.get_feature_infos = Mock(return_value={
+        Feature.NOP_FEATURE_1: FeatureInfo(state=FeatureState.DEFINED, criteria=nop_feature_1_criteria),
+        Feature.NOP_FEATURE_2: FeatureInfo(state=FeatureState.LOCKED_IN, criteria=nop_feature_2_criteria),
     })
 
-    feature_settings = FeatureSettings(
-        evaluation_interval=4,
-        default_threshold=3,
-        features={
-            Feature.NOP_FEATURE_1: nop_feature_1_criteria,
-            Feature.NOP_FEATURE_2: nop_feature_2_criteria
-        }
+    settings = get_global_settings()._replace(
+        FEATURE_ACTIVATION=FeatureSettings(
+            evaluation_interval=4,
+            default_threshold=3,
+            features={
+                Feature.NOP_FEATURE_1: nop_feature_1_criteria,
+                Feature.NOP_FEATURE_2: nop_feature_2_criteria
+            }
+        )
     )
 
     feature_resource = FeatureResource(
-        feature_settings=feature_settings,
+        settings=settings,
         feature_service=feature_service,
         tx_storage=tx_storage
     )
@@ -81,16 +89,16 @@ def web():
     return StubSite(feature_resource)
 
 
-def test_get_features(web):
+def test_get_features(web: StubSite) -> None:
     response = web.get('feature')
     result = response.result.json_value()
     expected = dict(
-        block_hash='some_hash',
+        block_hash=b'some_hash'.hex(),
         block_height=123,
         features=[
             dict(
                 name='NOP_FEATURE_1',
-                state='ACTIVE',
+                state='DEFINED',
                 acceptance=None,
                 threshold=0.75,
                 start_height=0,
@@ -101,8 +109,8 @@ def test_get_features(web):
             ),
             dict(
                 name='NOP_FEATURE_2',
-                state='STARTED',
-                acceptance=0.25,
+                state='LOCKED_IN',
+                acceptance=None,
                 threshold=0.5,
                 start_height=200,
                 minimum_activation_height=0,
@@ -116,7 +124,7 @@ def test_get_features(web):
     assert result == expected
 
 
-def test_get_block_features(web):
+def test_get_block_features(web: StubSite) -> None:
     response = web.get('feature', args={b'block': b'1234'})
     result = response.result.json_value()
     expected = dict(

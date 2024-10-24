@@ -26,7 +26,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import PrivatePeer
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.patches import SimulatorCpuMiningService, SimulatorVertexVerifier
@@ -55,7 +55,6 @@ class Simulator:
         self.seed = seed
         self.rng = Random(self.seed)
         self.settings = get_global_settings()._replace(AVG_TIME_BETWEEN_BLOCKS=SIMULATOR_AVG_TIME_BETWEEN_BLOCKS)
-        self._network = 'testnet'
         self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
         self._connections: list['FakeConnection'] = []
@@ -80,8 +79,7 @@ class Simulator:
         Returns a builder with default configuration, for convenience when using create_peer() or create_artifacts()
         """
         return Builder() \
-            .set_network(self._network) \
-            .set_peer_id(PeerId()) \
+            .set_peer(PrivatePeer.auto_generated()) \
             .set_soft_voided_tx_ids(set()) \
             .enable_full_verification() \
             .enable_sync_v1() \
@@ -105,7 +103,7 @@ class Simulator:
         assert self._started, 'Simulator is not started.'
         builder = builder or self.get_default_builder()
 
-        wallet = HDWallet(gap_limit=2)
+        wallet = HDWallet(gap_limit=2, settings=self.settings)
         wallet._manually_initialize()
 
         cpu_mining_service = SimulatorCpuMiningService()

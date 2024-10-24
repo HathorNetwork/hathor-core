@@ -217,6 +217,8 @@ class Metrics:
         """ Set websocket metrics data. Connections and addresses subscribed.
         """
         if self.websocket_factory:
+            assert self.websocket_factory.is_running, 'Websocket factory has not been started'
+
             self.websocket_connections = len(self.websocket_factory.connections)
             self.subscribed_addresses = len(self.websocket_factory.address_connections)
 
@@ -246,15 +248,15 @@ class Metrics:
         self.peer_connection_metrics.clear()
 
         for connection in self.connections.connections:
-            if not connection.peer or not connection.peer.id:
+            if not connection._peer:
                 # A connection without peer will not be able to communicate
                 # So we can just discard it for the sake of the metrics
                 continue
 
             metric = PeerConnectionMetrics(
                 connection_string=str(connection.entrypoint) if connection.entrypoint else "",
-                peer_id=connection.peer.id,
-                network=connection.network,
+                peer_id=str(connection.peer.id),
+                network=settings.NETWORK_NAME,
                 received_messages=connection.metrics.received_messages,
                 sent_messages=connection.metrics.sent_messages,
                 received_bytes=connection.metrics.received_bytes,

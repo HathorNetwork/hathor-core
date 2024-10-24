@@ -49,8 +49,9 @@ class MiningInfoResource(Resource):
             self._settings.P2PKH_VERSION_BYTE.hex() + 'acbfb94571417423c1ed66f706730c4aea516ac5762cccb8'
         )
         block = self.manager.generate_mining_block(address=burn_address)
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
 
-        height = block.calculate_height() - 1
+        height = block.static_metadata.height - 1
         difficulty = max(int(Weight(block.weight).to_pdiff()), 1)
 
         parent = block.get_block_parent()
