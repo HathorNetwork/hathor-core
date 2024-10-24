@@ -23,15 +23,9 @@ class Feature(str, Enum):
     should NOT be changed either, as configuration uses them for setting feature activation criteria.
     """
 
-    # Mainnet Phased Testing features
+    # These NOP features are used in tests
     NOP_FEATURE_1 = 'NOP_FEATURE_1'
     NOP_FEATURE_2 = 'NOP_FEATURE_2'
     NOP_FEATURE_3 = 'NOP_FEATURE_3'
-
-    # TODO: Those can be removed in a future PR
-    # Testnet Phased Testing features
-    NOP_FEATURE_4 = 'NOP_FEATURE_4'
-    NOP_FEATURE_5 = 'NOP_FEATURE_5'
-    NOP_FEATURE_6 = 'NOP_FEATURE_6'
 
     INCREASE_MAX_MERKLE_PATH_LENGTH = 'INCREASE_MAX_MERKLE_PATH_LENGTH'
