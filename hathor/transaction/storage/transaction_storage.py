@@ -1132,6 +1132,11 @@ class TransactionStorage(ABC):
                 return True
         return all_exist and all_valid
 
+    def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
+        """Return true if the vertex exists no matter its validation state."""
+        with self.allow_partially_validated_context():
+            return self.transaction_exists(vertex_id)
+
 
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]

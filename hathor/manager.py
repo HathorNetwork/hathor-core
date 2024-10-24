@@ -48,7 +48,6 @@ from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
-from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
@@ -70,7 +69,6 @@ if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory
 
 logger = get_logger()
-cpu = get_cpu_profiler()
 
 
 class HathorManager:
@@ -171,8 +169,6 @@ class HathorManager:
         self.network = settings.NETWORK_NAME
 
         self.is_started: bool = False
-
-        self.cpu = cpu
 
         # XXX: first checkpoint must be genesis (height=0)
         self.checkpoints: list[Checkpoint] = checkpoints or []
@@ -962,7 +958,6 @@ class HathorManager:
 
         return self.on_new_tx(tx, fails_silently=fails_silently, propagate_to_peers=True)
 
-    @cpu.profiler('on_new_tx')
     def on_new_tx(
         self,
         tx: BaseTransaction,
@@ -979,13 +974,17 @@ class HathorManager:
         :param fails_silently: if False will raise an exception when tx cannot be added
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        return self.vertex_handler.on_new_vertex(
+        success = self.vertex_handler.on_new_vertex(
             tx,
             quiet=quiet,
             fails_silently=fails_silently,
-            propagate_to_peers=propagate_to_peers,
             reject_locked_reward=reject_locked_reward,
         )
+
+        if propagate_to_peers and success:
+            self.connections.send_tx_to_peers(tx)
+
+        return success
 
     def has_sync_version_capability(self) -> bool:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
