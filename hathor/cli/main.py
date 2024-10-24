@@ -162,11 +162,16 @@ class CliManager:
             capture_stdout = False
 
         pre_setup_logging = getattr(module, 'PRE_SETUP_LOGGING', True)
+        receive_logging_args = getattr(module, 'RECEIVE_LOGGING_ARGS', False)
         if pre_setup_logging:
             output = process_logging_output(sys.argv)
             options = process_logging_options(sys.argv)
             setup_logging(logging_output=output, logging_options=options, capture_stdout=capture_stdout)
-            module.main()
+
+            if receive_logging_args:
+                module.main(logging_args=(output, options, capture_stdout))
+            else:
+                module.main()
         else:
             module.main(capture_stdout=capture_stdout)
 

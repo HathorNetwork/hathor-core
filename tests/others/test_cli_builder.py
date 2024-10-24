@@ -29,7 +29,7 @@ class BuilderTestCase(unittest.TestCase):
     def _build_with_error(self, cmd_args: list[str], err_msg: str) -> None:
         raw_args = self.parser.parse_args(cmd_args)
         args = RunNodeArgs.parse_obj(vars(raw_args))
-        builder = CliBuilder(args)
+        builder = CliBuilder(args, None)
         with self.assertRaises(BuilderError) as cm:
             manager = builder.create_manager(self.reactor)
             self.resources_builder = ResourcesBuilder(manager, args, builder.event_ws_factory, Mock())
@@ -39,7 +39,7 @@ class BuilderTestCase(unittest.TestCase):
     def _build(self, cmd_args: list[str]) -> HathorManager:
         raw_args = self.parser.parse_args(cmd_args)
         args = RunNodeArgs.parse_obj(vars(raw_args))
-        builder = CliBuilder(args)
+        builder = CliBuilder(args, None)
         manager = builder.create_manager(self.reactor)
         self.assertIsNotNone(manager)
         self.resources_builder = ResourcesBuilder(manager, args, builder.event_ws_factory, Mock())

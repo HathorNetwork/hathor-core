@@ -24,6 +24,7 @@ from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
+from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.multiprocess.connect_on_subprocess import ConnectOnSubprocessFactory
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
@@ -99,7 +100,7 @@ class ConnectionsManager:
         ssl: bool,
         rng: Random,
         *,
-        multiprocess: P2PServerConnectionArgs | None,
+        multiprocess: tuple[P2PServerConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None,
     ) -> None:
         self.log = logger.new()
         self.dependencies = dependencies
@@ -676,11 +677,16 @@ class ConnectionsManager:
         if use_ssl is None:
             use_ssl = self.use_ssl
 
-        factory: IProtocolFactory = self.server_factory if not self._multiprocess else ConnectOnSubprocessFactory(
-            reactor=self.reactor,
-            main_file=MAIN_P2P_SERVER_CONNECTION_FILE,
-            subprocess_args=self._multiprocess,
-        )
+        factory: IProtocolFactory = self.server_factory
+
+        if self._multiprocess:
+            subprocess_args, logging_args = self._multiprocess
+            factory = ConnectOnSubprocessFactory(
+                reactor=self.reactor,
+                main_file=MAIN_P2P_SERVER_CONNECTION_FILE,
+                logging_args=logging_args,
+                subprocess_args=subprocess_args,
+            )
 
         if use_ssl:
             factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, False, factory)
