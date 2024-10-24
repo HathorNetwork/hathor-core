@@ -27,7 +27,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.p2p.peer import PrivatePeer
-from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
+from hathor.simulator.heap_clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.patches import SimulatorCpuMiningService, SimulatorVertexVerifier
 from hathor.simulator.tx_generator import RandomTransactionGenerator

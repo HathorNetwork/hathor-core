@@ -21,7 +21,7 @@ from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
-from hathor.simulator.clock import MemoryReactorHeapClock
+from hathor.simulator.heap_clock import MemoryReactorHeapClock
 from tests.utils import EventMocker
 
 

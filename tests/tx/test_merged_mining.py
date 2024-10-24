@@ -25,7 +25,7 @@ class BaseMergedMiningTest(unittest.TestCase):
         from cryptography.hazmat.primitives.asymmetric import ec
 
         from hathor.crypto.util import get_address_b58_from_public_key
-        from hathor.simulator.clock import MemoryReactorHeapClock
+        from hathor.simulator.heap_clock import MemoryReactorHeapClock
 
         super().setUp()
         self.manager = self.create_peer('testnet')

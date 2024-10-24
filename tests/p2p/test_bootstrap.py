@@ -10,8 +10,8 @@ from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, PeerDiscovery
 from hathor.p2p.peer_discovery.dns import LookupResult
 from hathor.pubsub import PubSubManager
+from hathor.reactor.memory_reactor import MemoryReactorClock
 from tests import unittest
-from tests.test_memory_reactor_clock import TestMemoryReactorClock
 
 
 class MockPeerDiscovery(PeerDiscovery):
@@ -25,7 +25,7 @@ class MockPeerDiscovery(PeerDiscovery):
 
 
 class MockDNSPeerDiscovery(DNSPeerDiscovery):
-    def __init__(self, reactor: TestMemoryReactorClock, bootstrap_txt: list[tuple[str, int]], bootstrap_a: list[str]):
+    def __init__(self, reactor: MemoryReactorClock, bootstrap_txt: list[tuple[str, int]], bootstrap_a: list[str]):
         super().__init__(['test.example'])
         self.reactor = reactor
         self.mocked_lookup_a = [RRHeader(type=A, payload=Record_A(address)) for address in bootstrap_a]

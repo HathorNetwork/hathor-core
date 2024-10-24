@@ -17,13 +17,13 @@ from unittest.mock import Mock
 from hathor.cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
 from hathor.cli.events_simulator.events_simulator import create_parser, execute
 from hathor.conf.get_settings import get_global_settings
-from tests.test_memory_reactor_clock import TestMemoryReactorClock
+from hathor.reactor.memory_reactor import MemoryReactorClock
 
 
 def test_events_simulator() -> None:
     parser = create_parser()
     args = parser.parse_args(['--scenario', 'ONLY_LOAD'])
-    reactor = TestMemoryReactorClock()
+    reactor = MemoryReactorClock()
 
     execute(args, reactor)
     reactor.advance(1)
