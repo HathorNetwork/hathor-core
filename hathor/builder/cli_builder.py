@@ -23,6 +23,7 @@ from structlog import get_logger
 
 from hathor.cli.run_node_args import RunNodeArgs
 from hathor.cli.side_dag import SideDagArgs
+from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
@@ -65,9 +66,10 @@ class CliBuilder:
 
     TODO Refactor to use Builder. It could even be ported to a Builder.from_args classmethod.
     """
-    def __init__(self, args: RunNodeArgs) -> None:
+    def __init__(self, args: RunNodeArgs, logging_args: tuple[LoggingOutput, LoggingOptions, bool] | None) -> None:
         self.log = logger.new()
         self._args = args
+        self._logging_args = logging_args
 
     def check_or_raise(self, condition: bool, message: str) -> None:
         """Will exit printing `message` if `condition` is False."""
@@ -337,7 +339,7 @@ class CliBuilder:
 
         whitelist_only = False
         use_ssl = True
-        multiprocess_p2p: P2PServerConnectionArgs | None = None
+        multiprocess_p2p: tuple[P2PServerConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None = None
 
         if self._args.x_multiprocess_p2p:
             self.check_or_raise(
@@ -354,18 +356,22 @@ class CliBuilder:
                 ),
                 'multiprocess support for P2P is only available if rocksdb is used, with cache and rocksdb indexes'
             )
-            assert self._args.data is not None
 
-            multiprocess_p2p = P2PServerConnectionArgs(
+            assert self._args.data is not None
+            assert self._logging_args is not None
+
+            server_args = P2PServerConnectionArgs(
                 capabilities=capabilities,
                 whitelist_only=whitelist_only,
                 use_ssl=use_ssl,
-                my_peer=peer.to_json(),
+                my_peer=peer.to_json_private(),
                 cache_capacity=self._args.cache_size,
                 cache_interval=self._args.cache_interval,
                 rocksdb_path=self._args.data,
                 rocksdb_cache_capacity=self._args.rocksdb_cache,
             )
+
+            multiprocess_p2p = server_args, self._logging_args
 
         p2p_dependencies = P2PDependencies(
             reactor=reactor,

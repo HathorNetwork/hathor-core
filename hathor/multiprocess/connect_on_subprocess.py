@@ -12,10 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import json
 import os
 import sys
 from pathlib import Path
-from typing import Generic, TypeVar
 
 from structlog import get_logger
 from twisted.internet import tcp
@@ -24,24 +24,32 @@ from twisted.internet.protocol import Protocol, ServerFactory
 from twisted.protocols.policies import ProtocolWrapper
 from twisted.protocols.tls import BufferingTLSTransport
 
+from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.multiprocess.subprocess_protocol import SubprocessProtocol
 from hathor.reactor import ReactorProtocol
 from hathor.utils.pydantic import BaseModel
 
 logger = get_logger()
 
-T = TypeVar('T', bound=BaseModel)
 
+class ConnectOnSubprocessProtocol(Protocol):
+    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_logging_args', '_subprocess_args')
 
-class ConnectOnSubprocessProtocol(Protocol, Generic[T]):
-    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_serialized_subprocess_args')
-
-    def __init__(self, *, reactor: ReactorProtocol, main_file: Path, addr: IAddress, subprocess_args: T) -> None:
+    def __init__(
+        self,
+        *,
+        reactor: ReactorProtocol,
+        main_file: Path,
+        addr: IAddress,
+        logging_args: str,
+        subprocess_args: str,
+    ) -> None:
         self.log = logger.new(addr=addr)
         self.reactor = reactor
         self._main_file = main_file
         self._addr = addr
-        self._serialized_subprocess_args = subprocess_args.json_dumpb().hex()
+        self._logging_args = logging_args
+        self._subprocess_args = subprocess_args
 
     def makeConnection(self, transport: ITransport) -> None:
         if isinstance(transport, BufferingTLSTransport):
@@ -70,7 +78,8 @@ class ConnectOnSubprocessProtocol(Protocol, Generic[T]):
                 str(self._main_file.absolute()),
                 str(self._addr),
                 str(fileno),
-                self._serialized_subprocess_args,
+                self._logging_args,
+                self._subprocess_args,
             ],
             env=os.environ,
             path=os.getcwd(),
@@ -93,18 +102,27 @@ class ConnectOnSubprocessProtocol(Protocol, Generic[T]):
         raise AssertionError('ConnectOnSubprocessProtocol.dataReceived should never be called!')
 
 
-class ConnectOnSubprocessFactory(ServerFactory, Generic[T]):
-    __slots__ = ('reactor', '_main_file', '_subprocess_args')
+class ConnectOnSubprocessFactory(ServerFactory):
+    __slots__ = ('reactor', '_main_file', '_serialized_logging_args', '_serialized_subprocess_args')
 
-    def __init__(self, *, reactor: ReactorProtocol, main_file: Path, subprocess_args: T) -> None:
+    def __init__(
+        self,
+        *,
+        reactor: ReactorProtocol,
+        main_file: Path,
+        logging_args: tuple[LoggingOutput, LoggingOptions, bool],
+        subprocess_args: BaseModel,
+    ) -> None:
         self.reactor = reactor
         self._main_file = main_file
-        self._subprocess_args = subprocess_args
+        self._serialized_logging_args = json.dumps(logging_args)
+        self._serialized_subprocess_args = subprocess_args.json_dumpb().hex()
 
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
         return ConnectOnSubprocessProtocol(
             reactor=self.reactor,
             main_file=self._main_file,
             addr=addr,
-            subprocess_args=self._subprocess_args,
+            logging_args=self._serialized_logging_args,
+            subprocess_args=self._serialized_subprocess_args,
         )

@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 import os
 
 from structlog import get_logger
@@ -50,12 +51,15 @@ class SubprocessProtocolWrapper(ProtocolWrapper):
         super().dataReceived(data)
 
     def connectionLost(self, reason: Failure) -> None:  # type: ignore[override]
-        super().connectionLost(reason)
-        if not self.reactor.running:
-            return
+        try:
+            super().connectionLost(reason)
+        except:
+            self.log.exception('exception while calling wrapped connectionLost')
 
-        log_connection_closed(log=self.log, reason=reason, message='connection lost, stopping subprocess reactor')
-        self.reactor.stop()
+        if self.reactor.running:
+            self.reactor.stop()
+
+        log_connection_closed(log=self.log, reason=reason, message='connection lost, stopping subprocess')
 
 
 class SubprocessWrappingFactory(WrappingFactory):
@@ -70,7 +74,15 @@ class SubprocessWrappingFactory(WrappingFactory):
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
         assert self._addr_str == str(addr)
         self.log.debug('building protocol for subprocess wrapper')
-        wrapped_protocol = self.wrappedFactory.buildProtocol(addr)
+
+        try:
+            wrapped_protocol = self.wrappedFactory.buildProtocol(addr)
+        except:
+            self.log.exception('exception while calling wrapped buildProtocol')
+            if self.reactor.running:
+                self.reactor.stop()
+            return None
+
         return SubprocessProtocolWrapper(
             reactor=self.reactor,
             factory=self,
