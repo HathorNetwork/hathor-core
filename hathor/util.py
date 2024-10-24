@@ -805,12 +805,6 @@ def get_hathor_core_version():
     return hathor.__version__
 
 
-def calculate_min_significant_weight(score: float, tol: float) -> float:
-    """ This function will return the min significant weight to increase score by tol.
-    """
-    return score + math.log2(2 ** tol - 1)
-
-
 def bytes_to_vertexid(data: bytes) -> VertexId:
     # XXX: using raw string for the docstring so we can more easily write byte literals
     r""" Function to validate bytes and return a VertexId, raises ValueError if not valid.

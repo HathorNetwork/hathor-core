@@ -264,7 +264,7 @@ class BaseIndexesTest(unittest.TestCase):
                                                     address=decode_address(address))
         block2.parents[1:] = [txA2.hash, txB2.hash]
         block2.timestamp = block1.timestamp
-        block2.weight = 1.2
+        block2.weight = 4
         self.manager.cpu_mining_service.resolve(block2)
         self.manager.propagate_tx(block2, fails_silently=False)
         self.graphviz.labels[block2.hash] = 'block2'

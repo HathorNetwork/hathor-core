@@ -2,8 +2,9 @@ from typing import Any
 
 from hathor.mining import BlockTemplate
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import Block, sum_weights
+from hathor.transaction import Block
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.utils.weight import weight_to_work
 from tests import unittest
 
 
@@ -51,7 +52,7 @@ class BaseMiningTest(unittest.TestCase):
             parents=block_templates[0].parents,
             parents_any=[],
             height=1,  # genesis is 0
-            score=sum_weights(self.genesis_blocks[0].weight, 1.0),
+            score=weight_to_work(self.genesis_blocks[0].weight) + weight_to_work(1),
             signal_bits=0
         ))
 
@@ -80,7 +81,7 @@ class BaseMiningTest(unittest.TestCase):
             parents=block_templates[0].parents,
             parents_any=[],
             height=101,  # genesis is 0
-            score=sum_weights(blocks[-1].get_metadata().score, 1.0),
+            score=blocks[-1].get_metadata().score + weight_to_work(1),
             signal_bits=0
         ))
 

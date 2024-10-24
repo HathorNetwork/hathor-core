@@ -55,6 +55,8 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     twins: list[str]
     accumulated_weight: float
     score: float
+    accumulated_weight_raw: str
+    score_raw: str
     first_block: Optional[str]
     height: int
     validation: str

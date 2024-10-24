@@ -37,6 +37,7 @@ from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpac
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
+from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
     from _hashlib import HASH
@@ -602,11 +603,12 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
-            score = self.weight if self.is_genesis else 0
+            score = weight_to_work(self.weight) if self.is_genesis else 0
+            accumulated_weight = weight_to_work(self.weight)
             metadata = TransactionMetadata(
                 settings=self._settings,
                 hash=self._hash,
-                accumulated_weight=self.weight,
+                accumulated_weight=accumulated_weight,
                 score=score,
             )
             self._metadata = metadata
@@ -621,10 +623,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """
         from hathor.transaction.transaction_metadata import ValidationState
         assert self.storage is not None
-        score = self.weight if self.is_genesis else 0
+        score = weight_to_work(self.weight) if self.is_genesis else 0
+        accumulated_weight = weight_to_work(self.weight)
         self._metadata = TransactionMetadata(hash=self._hash,
                                              score=score,
-                                             accumulated_weight=self.weight)
+                                             accumulated_weight=accumulated_weight)
         if self.is_genesis:
             self._metadata.validation = ValidationState.CHECKPOINT_FULL
             self._metadata.voided_by = set()
@@ -656,7 +659,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         if metadata.accumulated_weight > stop_value:
             return metadata
 
-        accumulated_weight = self.weight
+        accumulated_weight = weight_to_work(self.weight)
 
         # TODO Another optimization is that, when we calculate the acc weight of a transaction, we
         # also partially calculate the acc weight of its descendants. If it were a DFS, when returning
@@ -671,7 +674,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         from hathor.transaction.storage.traversal import BFSTimestampWalk
         bfs_walk = BFSTimestampWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         for tx in bfs_walk.run(self, skip_root=True):
-            accumulated_weight = sum_weights(accumulated_weight, tx.weight)
+            accumulated_weight += weight_to_work(tx.weight)
             if accumulated_weight > stop_value:
                 break
 
@@ -706,7 +709,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def _update_initial_accumulated_weight(self) -> None:
         """Update the vertex initial accumulated_weight."""
         metadata = self.get_metadata()
-        metadata.accumulated_weight = self.weight
+        metadata.accumulated_weight = weight_to_work(self.weight)
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
