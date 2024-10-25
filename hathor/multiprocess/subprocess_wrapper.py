@@ -53,7 +53,7 @@ class SubprocessProtocolWrapper(ProtocolWrapper):
     def connectionLost(self, reason: Failure) -> None:  # type: ignore[override]
         try:
             super().connectionLost(reason)
-        except:
+        except Exception:
             self.log.exception('exception while calling wrapped connectionLost')
 
         if self.reactor.running:
@@ -77,7 +77,7 @@ class SubprocessWrappingFactory(WrappingFactory):
 
         try:
             wrapped_protocol = self.wrappedFactory.buildProtocol(addr)
-        except:
+        except Exception:
             self.log.exception('exception while calling wrapped buildProtocol')
             if self.reactor.running:
                 self.reactor.stop()

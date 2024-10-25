@@ -18,7 +18,7 @@ from structlog import get_logger
 from twisted.internet import endpoints
 from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IListeningPort, IProtocol, IProtocolFactory, IStreamClientEndpoint
+from twisted.internet.interfaces import IAddress, IListeningPort, IProtocol, IProtocolFactory, IStreamClientEndpoint
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
@@ -136,12 +136,14 @@ class ConnectionsManager:
             p2p_manager=self,
             dependencies=dependencies,
             use_ssl=self.use_ssl,
+            build_protocol_callback=self._on_build_protocol,
         )
         self.client_factory = HathorClientFactory(
             my_peer=self.my_peer,
             p2p_manager=self,
             dependencies=dependencies,
             use_ssl=self.use_ssl,
+            build_protocol_callback=self._on_build_protocol,
         )
 
         # Global maximum number of connections.
@@ -150,6 +152,8 @@ class ConnectionsManager:
         # Global rate limiter for all connections.
         self.rate_limiter = RateLimiter(self.reactor)
         self.enable_rate_limiter()
+
+        self._protocols: dict[str, P2PConnectionProtocol] = {}
 
         # All connections.
         self.connections = set()
@@ -381,8 +385,9 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def on_peer_connect(self, protocol: P2PConnectionProtocol) -> None:
+    def on_peer_connect(self, addr: str) -> None:
         """Called when a new connection is established."""
+        protocol = self._protocols[addr]
         if len(self.connections) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
@@ -396,8 +401,9 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def on_peer_ready(self, protocol: P2PConnectionProtocol) -> None:
+    def on_peer_ready(self, addr: str) -> None:
         """Called when a peer is ready."""
+        protocol = self._protocols[addr]
         protocol_peer = protocol.get_peer()
         self.verified_peer_storage.add_or_replace(protocol_peer)
         self.handshaking_peers.remove(protocol)
@@ -441,8 +447,9 @@ class ConnectionsManager:
                 continue
             conn.send_peers([peer])
 
-    def on_peer_disconnect(self, protocol: P2PConnectionProtocol) -> None:
+    def on_peer_disconnect(self, addr: str) -> None:
         """Called when a peer disconnect."""
+        protocol = self._protocols.pop(addr)
         self.connections.discard(protocol)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
@@ -711,6 +718,11 @@ class ConnectionsManager:
         assert self.manager is not None
         if self.manager.hostname:
             self._add_hostname_entrypoint(self.manager.hostname, address)
+
+    def _on_build_protocol(self, addr: IAddress, protocol: P2PConnectionProtocol) -> None:
+        addr_str = str(addr)
+        assert addr_str not in self._protocols
+        self._protocols[addr_str] = protocol
 
     def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:
         """Add new hostname entrypoints according to the listen addresses, and remove any old entrypoint."""

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Coroutine, Generator, Iterable, Optional,
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IDelayedCall, ITCPTransport, ITransport
+from twisted.internet.interfaces import IAddress, IDelayedCall, ITCPTransport, ITransport
 from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
@@ -104,6 +104,7 @@ class HathorProtocol:
         dependencies: P2PDependencies,
         use_ssl: bool,
         inbound: bool,
+        addr: IAddress,
     ) -> None:
         self.dependencies = dependencies
         self._settings = dependencies.settings
@@ -126,6 +127,7 @@ class HathorProtocol:
 
         # The peer on the other side of the connection.
         self._peer = None
+        self._addr = addr
 
         # The last time a message has been received from this peer.
         self.last_message = 0
@@ -248,7 +250,7 @@ class HathorProtocol:
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
-        self.p2p_manager.on_peer_connect(self)
+        self.p2p_manager.on_peer_connect(str(self._addr))
 
     def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
@@ -258,7 +260,7 @@ class HathorProtocol:
     def on_peer_ready(self) -> None:
         assert self.peer is not None
         self.update_log_context()
-        self.p2p_manager.on_peer_ready(self)
+        self.p2p_manager.on_peer_ready(str(self._addr))
         self.log.info('peer connected', peer_id=self.peer.id)
 
     def on_disconnect(self, reason: Failure) -> None:
@@ -276,7 +278,7 @@ class HathorProtocol:
         if self.state:
             self.state.on_exit()
             self.state = None
-        self.p2p_manager.on_peer_disconnect(self)
+        self.p2p_manager.on_peer_disconnect(str(self._addr))
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message
@@ -417,6 +419,10 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
     It is simply a TCP connection which sends one message per line.
     """
     MAX_LENGTH = 65536
+
+    def makeConnection(self, transport: ITransport) -> None:
+        super().makeConnection(transport)
+        assert self._addr == transport.getPeer()
 
     def connectionMade(self) -> None:
         super(HathorLineReceiver, self).connectionMade()

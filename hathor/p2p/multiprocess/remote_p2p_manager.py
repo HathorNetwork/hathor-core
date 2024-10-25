@@ -14,7 +14,6 @@
 
 from typing import Iterable
 
-from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
 from hathor.p2p.peer import PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_factory import SyncAgentFactory
@@ -38,13 +37,13 @@ class RemoteP2PManager:
     def on_receive_peer(self, peer: UnverifiedPeer) -> None:
         raise NotImplementedError
 
-    def on_peer_connect(self, protocol: P2PConnectionProtocol) -> None:
+    def on_peer_connect(self, addr: str) -> None:
         raise NotImplementedError
 
-    def on_peer_ready(self, protocol: P2PConnectionProtocol) -> None:
+    def on_peer_ready(self, addr: str) -> None:
         raise NotImplementedError
 
-    def on_peer_disconnect(self, protocol: P2PConnectionProtocol) -> None:
+    def on_peer_disconnect(self, addr: str) -> None:
         raise NotImplementedError
 
     def get_randbytes(self, n: int) -> bytes:

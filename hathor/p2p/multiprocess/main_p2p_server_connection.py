@@ -96,6 +96,7 @@ def build_p2p_server_factory(
         p2p_manager=p2p_manager,
         dependencies=dependencies,
         use_ssl=args.use_ssl,
+        build_protocol_callback=None,
     )
 
 

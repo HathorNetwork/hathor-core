@@ -13,12 +13,13 @@
 # limitations under the License.
 
 from abc import ABC
+from typing import Callable
 
 from twisted.internet import protocol
 from twisted.internet.interfaces import IAddress
 
 from hathor.p2p import P2PDependencies
-from hathor.p2p.dependencies.protocols import P2PManagerProtocol
+from hathor.p2p.dependencies.protocols import P2PConnectionProtocol, P2PManagerProtocol
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorLineReceiver
 
@@ -33,12 +34,14 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
         *,
         dependencies: P2PDependencies,
         use_ssl: bool,
+        build_protocol_callback: Callable[[IAddress, P2PConnectionProtocol], None] | None,
     ):
         super().__init__()
         self.my_peer = my_peer
         self.p2p_manager = p2p_manager
         self.dependencies = dependencies
         self.use_ssl = use_ssl
+        self._build_protocol_callback = build_protocol_callback
 
     def buildProtocol(self, addr: IAddress) -> HathorLineReceiver:
         p = HathorLineReceiver(
@@ -47,8 +50,11 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
             dependencies=self.dependencies,
             use_ssl=self.use_ssl,
             inbound=self.inbound,
+            addr=addr,
         )
         p.factory = self
+        if self._build_protocol_callback:
+            self._build_protocol_callback(addr, p)
         return p
 
 

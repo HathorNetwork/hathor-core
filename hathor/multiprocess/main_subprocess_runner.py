@@ -21,7 +21,7 @@ from typing import Callable
 from structlog import get_logger
 from twisted.internet.protocol import Factory
 
-from hathor.cli.util import setup_logging, LoggingOptions, LoggingOutput
+from hathor.cli.util import LoggingOptions, LoggingOutput, setup_logging
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.multiprocess.subprocess_wrapper import SubprocessWrappingFactory
