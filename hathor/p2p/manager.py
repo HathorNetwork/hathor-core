@@ -30,6 +30,7 @@ from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.multiprocess.main_p2p_server_connection import MAIN_P2P_SERVER_CONNECTION_FILE, P2PServerConnectionArgs
+from hathor.p2p.multiprocess.remote_p2p_connection import RemoteP2PConnection
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -499,10 +500,11 @@ class ConnectionsManager:
         """
         return peer_id in self.connected_peers
 
-    def on_receive_peer(self, peer: UnverifiedPeer) -> None:
+    def on_receive_peer(self, data: dict[str, Any]) -> None:
         """ Update a peer information in our storage, and instantly attempt to connect
         to it if it is not connected yet.
         """
+        peer = UnverifiedPeer.create_from_json(data)
         if peer.id == self.my_peer.id:
             return
         peer = self.unverified_peer_storage.add_or_merge(peer)
@@ -693,6 +695,7 @@ class ConnectionsManager:
                 main_file=MAIN_P2P_SERVER_CONNECTION_FILE,
                 logging_args=logging_args,
                 subprocess_args=subprocess_args,
+                build_protocol_callback=self._on_build_subprocess_protocol,
             )
 
         if use_ssl:
@@ -723,6 +726,10 @@ class ConnectionsManager:
         addr_str = str(addr)
         assert addr_str not in self._protocols
         self._protocols[addr_str] = protocol
+
+    def _on_build_subprocess_protocol(self, addr: IAddress, hosting_on: str) -> None:
+        protocol = RemoteP2PConnection(hosting_on=hosting_on)
+        self._on_build_protocol(addr, protocol)
 
     def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:
         """Add new hostname entrypoints according to the listen addresses, and remove any old entrypoint."""

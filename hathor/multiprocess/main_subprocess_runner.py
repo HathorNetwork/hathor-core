@@ -15,6 +15,7 @@
 import json
 import os
 import sys
+from dataclasses import dataclass
 from socket import AF_INET
 from typing import Callable
 
@@ -30,8 +31,16 @@ from hathor.reactor import ReactorProtocol, initialize_global_reactor
 logger = get_logger()
 
 
-def main_subprocess_runner(factory: Callable[[ReactorProtocol, HathorSettings, bytes], Factory]) -> None:
-    _, addr, fileno_str, serialized_logging_args, serialized_subprocess_args = sys.argv
+@dataclass(slots=True, kw_only=True, frozen=True)
+class SubprocessFactoryArgs:
+    reactor: ReactorProtocol
+    settings: HathorSettings
+    serialized_subprocess_args: bytes
+    host_on: str
+
+
+def main_subprocess_runner(factory: Callable[[SubprocessFactoryArgs], Factory]) -> None:
+    _, addr, fileno_str, serialized_logging_args, serialized_subprocess_args, host_on = sys.argv
     logging_output, logging_options, capture_stdout = json.loads(serialized_logging_args)
     fileno = int(fileno_str)
 
@@ -46,10 +55,17 @@ def main_subprocess_runner(factory: Callable[[ReactorProtocol, HathorSettings, b
 
     reactor = initialize_global_reactor()
     settings = get_global_settings()
+    factory_args = SubprocessFactoryArgs(
+        reactor=reactor,
+        settings=settings,
+        serialized_subprocess_args=bytes.fromhex(serialized_subprocess_args),
+        host_on=host_on,
+    )
+
     wrapping_factory = SubprocessWrappingFactory(
         reactor=reactor,
         addr_str=addr,
-        wrapped_factory=factory(reactor, settings, bytes.fromhex(serialized_subprocess_args)),
+        wrapped_factory=factory(factory_args),
     )
 
     reactor.callWhenRunning(

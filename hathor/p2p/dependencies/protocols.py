@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterable, Protocol
+from typing import TYPE_CHECKING, Any, Iterable, Protocol
 
 from hathor.indexes.height_index import HeightInfo
 from hathor.transaction import BaseTransaction, Block, Vertex
@@ -22,7 +22,7 @@ from hathor.types import VertexId
 
 if TYPE_CHECKING:
     from hathor.p2p.entrypoint import Entrypoint
-    from hathor.p2p.peer import PublicPeer, UnverifiedPeer
+    from hathor.p2p.peer import PublicPeer
     from hathor.p2p.peer_id import PeerId
     from hathor.p2p.protocol import ConnectionMetrics
     from hathor.p2p.sync_factory import SyncAgentFactory
@@ -54,7 +54,7 @@ class P2PManagerProtocol(Protocol):
     def get_enabled_sync_versions(self) -> set[SyncVersion]: ...
     def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory: ...
     def get_verified_peers(self) -> Iterable[PublicPeer]: ...
-    def on_receive_peer(self, peer: UnverifiedPeer) -> None: ...
+    def on_receive_peer(self, peer: dict[str, Any]) -> None: ...
     def on_peer_connect(self, addr: str) -> None: ...
     def on_peer_ready(self, addr: str) -> None: ...
     def on_peer_disconnect(self, addr: str) -> None: ...

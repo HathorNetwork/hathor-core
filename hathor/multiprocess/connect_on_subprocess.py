@@ -16,6 +16,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Callable
 
 from structlog import get_logger
 from twisted.internet import tcp
@@ -33,7 +34,7 @@ logger = get_logger()
 
 
 class ConnectOnSubprocessProtocol(Protocol):
-    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_logging_args', '_subprocess_args')
+    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_logging_args', '_subprocess_args', '_host_on')
 
     def __init__(
         self,
@@ -43,6 +44,7 @@ class ConnectOnSubprocessProtocol(Protocol):
         addr: IAddress,
         logging_args: str,
         subprocess_args: str,
+        host_on: str,
     ) -> None:
         self.log = logger.new(addr=addr)
         self.reactor = reactor
@@ -50,6 +52,7 @@ class ConnectOnSubprocessProtocol(Protocol):
         self._addr = addr
         self._logging_args = logging_args
         self._subprocess_args = subprocess_args
+        self._host_on = host_on
 
     def makeConnection(self, transport: ITransport) -> None:
         if isinstance(transport, BufferingTLSTransport):
@@ -76,10 +79,12 @@ class ConnectOnSubprocessProtocol(Protocol):
             args=[
                 sys.executable,
                 str(self._main_file.absolute()),
+                # TODO: Serialize all args together in a single class
                 str(self._addr),
                 str(fileno),
                 self._logging_args,
                 self._subprocess_args,
+                self._host_on,
             ],
             env=os.environ,
             path=os.getcwd(),
@@ -103,7 +108,13 @@ class ConnectOnSubprocessProtocol(Protocol):
 
 
 class ConnectOnSubprocessFactory(ServerFactory):
-    __slots__ = ('reactor', '_main_file', '_serialized_logging_args', '_serialized_subprocess_args')
+    __slots__ = (
+        'reactor',
+        '_main_file',
+        '_serialized_logging_args',
+        '_serialized_subprocess_args',
+        '_build_protocol_callback'
+    )
 
     def __init__(
         self,
@@ -112,17 +123,25 @@ class ConnectOnSubprocessFactory(ServerFactory):
         main_file: Path,
         logging_args: tuple[LoggingOutput, LoggingOptions, bool],
         subprocess_args: BaseModel,
+        build_protocol_callback: Callable[[IAddress, str], None] | None,
     ) -> None:
         self.reactor = reactor
         self._main_file = main_file
         self._serialized_logging_args = json.dumps(logging_args)
         self._serialized_subprocess_args = subprocess_args.json_dumpb().hex()
+        self._build_protocol_callback = build_protocol_callback
 
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
+        host_on = '/tmp/protocol_conn.sock'  # TODO: Use temp file and cleanup. Maybe use a socket and pass FD instead?
+
+        if self._build_protocol_callback:
+            self._build_protocol_callback(addr, host_on)
+
         return ConnectOnSubprocessProtocol(
             reactor=self.reactor,
             main_file=self._main_file,
             addr=addr,
             logging_args=self._serialized_logging_args,
             subprocess_args=self._serialized_subprocess_args,
+            host_on=host_on,
         )

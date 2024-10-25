@@ -15,16 +15,14 @@
 from pathlib import Path
 from typing import Any
 
-from hathor.conf.settings import HathorSettings
 from hathor.indexes import RocksDBIndexesManager
-from hathor.multiprocess.main_subprocess_runner import main_subprocess_runner
+from hathor.multiprocess.main_subprocess_runner import SubprocessFactoryArgs, main_subprocess_runner
 from hathor.p2p import P2PDependencies
 from hathor.p2p.factory import HathorServerFactory
 from hathor.p2p.multiprocess.remote_p2p_manager import RemoteP2PManager
 from hathor.p2p.multiprocess.remote_verification_service import RemoteVerificationService
 from hathor.p2p.multiprocess.remote_vertex_handler import RemoteVertexHandler
 from hathor.p2p.peer import PrivatePeer
-from hathor.reactor import ReactorProtocol
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
@@ -45,13 +43,9 @@ class P2PServerConnectionArgs(BaseModel):
     rocksdb_cache_capacity: int | None
 
 
-def build_p2p_server_factory(
-    reactor: ReactorProtocol,
-    settings: HathorSettings,
-    serialized_args: bytes
-) -> HathorServerFactory:
-    args = P2PServerConnectionArgs.parse_raw(serialized_args)
-    vertex_parser = VertexParser(settings=settings)
+def build_p2p_server_factory(factory_args: SubprocessFactoryArgs) -> HathorServerFactory:
+    args = P2PServerConnectionArgs.parse_raw(factory_args.serialized_subprocess_args)
+    vertex_parser = VertexParser(settings=factory_args.settings)
     vertex_handler = RemoteVertexHandler()
     verification_service = RemoteVerificationService()
     p2p_manager = RemoteP2PManager()
@@ -66,14 +60,14 @@ def build_p2p_server_factory(
     indexes = RocksDBIndexesManager(rocksdb_storage=rocksdb_storage)
 
     tx_storage: BaseTransactionStorage = TransactionRocksDBStorage(
-        settings=settings,
+        settings=factory_args.settings,
         vertex_parser=vertex_parser,
         rocksdb_storage=rocksdb_storage,
     )
 
     tx_storage = TransactionCacheStorage(
-        reactor=reactor,
-        settings=settings,
+        reactor=factory_args.reactor,
+        settings=factory_args.settings,
         store=tx_storage,
         indexes=indexes,
         capacity=args.cache_capacity,
@@ -81,8 +75,8 @@ def build_p2p_server_factory(
     )
 
     dependencies = P2PDependencies(
-        reactor=reactor,
-        settings=settings,
+        reactor=factory_args.reactor,
+        settings=factory_args.settings,
         vertex_parser=vertex_parser,
         vertex_handler=vertex_handler,
         verification_service=verification_service,

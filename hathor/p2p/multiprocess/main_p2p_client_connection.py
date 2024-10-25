@@ -16,18 +16,12 @@ from pathlib import Path
 
 from twisted.internet.protocol import Factory
 
-from hathor.conf.settings import HathorSettings
-from hathor.multiprocess.main_subprocess_runner import main_subprocess_runner
-from hathor.reactor import ReactorProtocol
+from hathor.multiprocess.main_subprocess_runner import SubprocessFactoryArgs, main_subprocess_runner
 
 MAIN_P2P_CLIENT_CONNECTION_FILE = Path(__file__)
 
 
-def build_hathor_client_factory(
-    reactor: ReactorProtocol,
-    settings: HathorSettings,
-    serialized_args: bytes,
-) -> Factory:
+def build_hathor_client_factory(factory_args: SubprocessFactoryArgs) -> Factory:
     raise NotImplementedError
 
 

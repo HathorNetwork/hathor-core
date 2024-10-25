@@ -147,3 +147,7 @@ docker-push: docker
 docker-push-aws: docker
 	docker tag $(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_subtag)
 	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_subtag)
+
+.PHONY: grpc
+grpc:
+	poetry run python -m grpc_tools.protoc --proto_path=. --python_out=. --pyi_out=. --grpc_python_out=. ./protos/*

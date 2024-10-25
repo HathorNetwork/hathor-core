@@ -39,6 +39,7 @@ from hathor.p2p import P2PDependencies
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.multiprocess.main_p2p_server_connection import P2PServerConnectionArgs
+from hathor.p2p.multiprocess.servers import P2PManagerServicer
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
@@ -411,6 +412,9 @@ class CliBuilder:
                     reactor=reactor,
                     poa_signer=poa_signer_file.get_signer(),
                 )
+
+        servicer = P2PManagerServicer(p2p_manager=p2p_manager)
+        servicer.serve()
 
         self.manager = HathorManager(
             reactor,
