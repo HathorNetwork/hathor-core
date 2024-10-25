@@ -165,7 +165,10 @@ class RunNode:
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
+        import resource
+
         from setproctitle import setproctitle
+
         setproctitle('{}hathor-core'.format(self._args.procname_prefix))
 
         if self._args.recursion_limit:
@@ -173,12 +176,10 @@ class RunNode:
         else:
             sys.setrecursionlimit(5000)
 
-        if sys.platform != 'win32':
-            import resource
-            (nofile_soft, _) = resource.getrlimit(resource.RLIMIT_NOFILE)
-            if nofile_soft < 256:
-                print('Maximum number of open file descriptors is too low. Minimum required is 256.')
-                sys.exit(-2)
+        (nofile_soft, _) = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if nofile_soft < 256:
+            print('Maximum number of open file descriptors is too low. Minimum required is 256.')
+            sys.exit(-2)
 
         self.check_unsafe_arguments()
         self.check_python_version()
