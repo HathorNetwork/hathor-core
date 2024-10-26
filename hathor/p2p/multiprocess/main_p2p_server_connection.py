@@ -19,9 +19,7 @@ from hathor.indexes import RocksDBIndexesManager
 from hathor.multiprocess.main_subprocess_runner import SubprocessFactoryArgs, main_subprocess_runner
 from hathor.p2p import P2PDependencies
 from hathor.p2p.factory import HathorServerFactory
-from hathor.p2p.multiprocess.remote_p2p_manager import RemoteP2PManagerClient
-from hathor.p2p.multiprocess.remote_verification_service import RemoteVerificationService
-from hathor.p2p.multiprocess.remote_vertex_handler import RemoteVertexHandler
+from hathor.p2p.multiprocess.remote_ipc import RemoteIpcClient, IpcProxyType
 from hathor.p2p.peer import PrivatePeer
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
@@ -46,9 +44,9 @@ class P2PServerConnectionArgs(BaseModel):
 def build_p2p_server_factory(factory_args: SubprocessFactoryArgs) -> tuple[HathorServerFactory, Callable[[], None]]:
     args = P2PServerConnectionArgs.parse_raw(factory_args.serialized_subprocess_args)
     vertex_parser = VertexParser(settings=factory_args.settings)
-    vertex_handler = RemoteVertexHandler()
-    verification_service = RemoteVerificationService()
-    p2p_manager = RemoteP2PManagerClient()
+    vertex_handler = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER)
+    verification_service = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER)
+    remote_p2p_manager = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER)
     my_peer = PrivatePeer.create_from_json(args.my_peer)
 
     rocksdb_storage = RocksDBStorage(
@@ -86,11 +84,11 @@ def build_p2p_server_factory(factory_args: SubprocessFactoryArgs) -> tuple[Hatho
     )
 
     def exit_callback():
-        p2p_manager.stop()
+        remote_p2p_manager.stop()
 
     factory = HathorServerFactory(
         my_peer=my_peer,
-        p2p_manager=p2p_manager,
+        p2p_manager=remote_p2p_manager,
         dependencies=dependencies,
         use_ssl=args.use_ssl,
         build_protocol_callback=None,

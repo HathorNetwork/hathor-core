@@ -15,6 +15,11 @@
 from structlog import BoundLogger
 from twisted.internet.error import ConnectionDone, ConnectionLost
 from twisted.python.failure import Failure
+from twisted.internet.address import IPv4Address, IPv6Address
+
+
+def addr_to_str(addr: IPv4Address | IPv6Address) -> str:
+    return f'{addr.type}:{addr.host}:{addr.port}'
 
 
 def log_connection_closed(*, log: BoundLogger, reason: Failure, message: str) -> None:
@@ -25,3 +30,4 @@ def log_connection_closed(*, log: BoundLogger, reason: Failure, message: str) ->
         log_func = log.error
 
     log_func(message, reason=reason.getErrorMessage())
+

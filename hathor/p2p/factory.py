@@ -14,8 +14,9 @@
 
 from abc import ABC
 from typing import Callable
+from twisted.internet.address import IPv4Address, IPv6Address
 
-from twisted.internet import protocol
+from twisted.internet.protocol import Factory, ServerFactory, ClientFactory
 from twisted.internet.interfaces import IAddress
 
 from hathor.p2p import P2PDependencies
@@ -24,7 +25,7 @@ from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorLineReceiver
 
 
-class _HathorLineReceiverFactory(ABC, protocol.Factory):
+class _HathorLineReceiverFactory(ABC, Factory):
     inbound: bool
 
     def __init__(
@@ -34,7 +35,7 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
         *,
         dependencies: P2PDependencies,
         use_ssl: bool,
-        build_protocol_callback: Callable[[IAddress, P2PConnectionProtocol], None] | None,
+        build_protocol_callback: Callable[[IPv4Address | IPv6Address, P2PConnectionProtocol], None] | None,
     ):
         super().__init__()
         self.my_peer = my_peer
@@ -44,7 +45,8 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
         self._build_protocol_callback = build_protocol_callback
 
     def buildProtocol(self, addr: IAddress) -> HathorLineReceiver:
-        p = HathorLineReceiver(
+        assert isinstance(addr, (IPv4Address, IPv6Address))
+        protocol = HathorLineReceiver(
             my_peer=self.my_peer,
             p2p_manager=self.p2p_manager,
             dependencies=self.dependencies,
@@ -52,19 +54,18 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
             inbound=self.inbound,
             addr=addr,
         )
-        p.factory = self
         if self._build_protocol_callback:
-            self._build_protocol_callback(addr, p)
-        return p
+            self._build_protocol_callback(addr, protocol)
+        return protocol
 
 
-class HathorServerFactory(_HathorLineReceiverFactory, protocol.ServerFactory):
+class HathorServerFactory(_HathorLineReceiverFactory, ServerFactory):
     """ HathorServerFactory is used to generate HathorProtocol objects when a new connection arrives.
     """
     inbound = True
 
 
-class HathorClientFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
+class HathorClientFactory(_HathorLineReceiverFactory, ClientFactory):
     """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
     """
     inbound = False

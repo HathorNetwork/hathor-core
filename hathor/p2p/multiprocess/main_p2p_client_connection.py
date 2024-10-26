@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 from pathlib import Path
+from typing import Callable
 
 from twisted.internet.protocol import Factory
 
@@ -21,7 +22,7 @@ from hathor.multiprocess.main_subprocess_runner import SubprocessFactoryArgs, ma
 MAIN_P2P_CLIENT_CONNECTION_FILE = Path(__file__)
 
 
-def build_hathor_client_factory(factory_args: SubprocessFactoryArgs) -> Factory:
+def build_hathor_client_factory(factory_args: SubprocessFactoryArgs) -> tuple[Factory, Callable[[], None]]:
     raise NotImplementedError
 
 

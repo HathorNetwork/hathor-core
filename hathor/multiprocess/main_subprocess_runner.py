@@ -36,11 +36,10 @@ class SubprocessFactoryArgs:
     reactor: ReactorProtocol
     settings: HathorSettings
     serialized_subprocess_args: bytes
-    host_on: str
 
 
 def main_subprocess_runner(build: Callable[[SubprocessFactoryArgs], tuple[Factory, Callable[[], None]]]) -> None:
-    _, addr, fileno_str, serialized_logging_args, serialized_subprocess_args, host_on = sys.argv
+    _, addr, fileno_str, serialized_logging_args, serialized_subprocess_args = sys.argv
     logging_output, logging_options, capture_stdout = json.loads(serialized_logging_args)
     fileno = int(fileno_str)
 
@@ -59,7 +58,6 @@ def main_subprocess_runner(build: Callable[[SubprocessFactoryArgs], tuple[Factor
         reactor=reactor,
         settings=settings,
         serialized_subprocess_args=bytes.fromhex(serialized_subprocess_args),
-        host_on=host_on,
     )
 
     factory, exit_callback = build(factory_args)

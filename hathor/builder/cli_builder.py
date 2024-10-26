@@ -39,7 +39,7 @@ from hathor.p2p import P2PDependencies
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.multiprocess.main_p2p_server_connection import P2PServerConnectionArgs
-from hathor.p2p.multiprocess.remote_p2p_manager import RemoteP2PManagerServer
+from hathor.p2p.multiprocess.remote_ipc import RemoteIpcServer, IpcProxyType
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
@@ -414,8 +414,12 @@ class CliBuilder:
                 )
 
         if self._args.x_multiprocess_p2p:
-            servicer = RemoteP2PManagerServer(reactor=reactor, p2p_manager=p2p_manager)
-            servicer.start()
+            remote_p2p_manager = RemoteIpcServer(
+                reactor=reactor,
+                proxy_type=IpcProxyType.P2P_MANAGER,
+                proxy_obj=p2p_manager,
+            )
+            remote_p2p_manager.start()
 
         self.manager = HathorManager(
             reactor,

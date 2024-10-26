@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import os
+from twisted.internet.address import IPv4Address, IPv6Address
 
 from structlog import get_logger
 from twisted.internet.interfaces import IAddress, IProtocol
@@ -20,10 +21,16 @@ from twisted.internet.protocol import Factory, Protocol
 from twisted.protocols.policies import ProtocolWrapper, WrappingFactory
 from twisted.python.failure import Failure
 
-from hathor.multiprocess.utils import log_connection_closed
+from hathor.multiprocess.utils import log_connection_closed, addr_to_str
+from hathor.p2p.multiprocess.remote_ipc import RemoteIpcServer, IpcProxyType
 from hathor.reactor import ReactorProtocol
 
 logger = get_logger()
+
+
+def get_subprocess_protocol_server_addr(addr: IPv4Address | IPv6Address | str) -> str:
+    addr_str = addr_to_str(addr) if isinstance(addr, (IPv4Address, IPv6Address)) else addr
+    return f'/tmp/p2p_connection:{addr_str}.sock'
 
 
 class SubprocessProtocolWrapper(ProtocolWrapper):
@@ -63,15 +70,17 @@ class SubprocessProtocolWrapper(ProtocolWrapper):
 
 
 class SubprocessWrappingFactory(WrappingFactory):
-    __slots__ = ('log', 'reactor', '_addr_str')
+    __slots__ = ('log', 'reactor', '_addr_str', '_built_protocol')
 
     def __init__(self, *, reactor: ReactorProtocol, addr_str: str, wrapped_factory: Factory) -> None:
         super().__init__(wrapped_factory)
         self.log = logger.new(addr=addr_str, subprocess_pid=os.getpid())
         self.reactor = reactor
         self._addr_str = addr_str
+        self._built_protocol = False
 
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
+        assert not self._built_protocol, 'there must be only one subprocess protocol per factory'
         assert self._addr_str == str(addr)
         self.log.debug('building protocol for subprocess wrapper')
 
@@ -83,6 +92,14 @@ class SubprocessWrappingFactory(WrappingFactory):
                 self.reactor.stop()
             return None
 
+        protocol_server = RemoteIpcServer(
+            reactor=self.reactor,
+            proxy_type=IpcProxyType.P2P_CONNECTION,  # TODO: This class shouldn't know anything about P2P, improve this
+            proxy_obj=wrapped_protocol,
+        )
+        protocol_server.start()  # TODO: Move somewhere else.
+
+        self._built_protocol = True
         return SubprocessProtocolWrapper(
             reactor=self.reactor,
             factory=self,

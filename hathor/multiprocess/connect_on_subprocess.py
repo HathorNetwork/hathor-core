@@ -24,7 +24,7 @@ from twisted.internet.interfaces import IAddress, ITransport
 from twisted.internet.protocol import Protocol, ServerFactory
 from twisted.protocols.policies import ProtocolWrapper
 from twisted.protocols.tls import BufferingTLSTransport
-from twisted.internet.address import IPv4Address
+from twisted.internet.address import IPv4Address, IPv6Address
 
 from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.multiprocess.subprocess_protocol import SubprocessProtocol
@@ -35,7 +35,7 @@ logger = get_logger()
 
 
 class ConnectOnSubprocessProtocol(Protocol):
-    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_logging_args', '_subprocess_args', '_host_on')
+    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_logging_args', '_subprocess_args')
 
     def __init__(
         self,
@@ -45,7 +45,6 @@ class ConnectOnSubprocessProtocol(Protocol):
         addr: IAddress,
         logging_args: str,
         subprocess_args: str,
-        host_on: str,
     ) -> None:
         self.log = logger.new(addr=addr)
         self.reactor = reactor
@@ -53,7 +52,6 @@ class ConnectOnSubprocessProtocol(Protocol):
         self._addr = addr
         self._logging_args = logging_args
         self._subprocess_args = subprocess_args
-        self._host_on = host_on
 
     def makeConnection(self, transport: ITransport) -> None:
         if isinstance(transport, BufferingTLSTransport):
@@ -85,7 +83,6 @@ class ConnectOnSubprocessProtocol(Protocol):
                 str(fileno),
                 self._logging_args,
                 self._subprocess_args,
-                self._host_on,
             ],
             env=os.environ,
             path=os.getcwd(),
@@ -124,7 +121,7 @@ class ConnectOnSubprocessFactory(ServerFactory):
         main_file: Path,
         logging_args: tuple[LoggingOutput, LoggingOptions, bool],
         subprocess_args: BaseModel,
-        build_protocol_callback: Callable[[IAddress, str], None] | None,
+        build_protocol_callback: Callable[[IPv4Address | IPv6Address], None] | None,
     ) -> None:
         self.reactor = reactor
         self._main_file = main_file
@@ -133,12 +130,9 @@ class ConnectOnSubprocessFactory(ServerFactory):
         self._build_protocol_callback = build_protocol_callback
 
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
-        # TODO: Use temp file and cleanup. Maybe use a socket and pass FD instead?
-        assert isinstance(addr, IPv4Address)
-        host_on = f'/tmp/p2p_connection:{addr.type}:{addr.host}:{addr.port}.sock'
-
+        assert isinstance(addr, (IPv4Address, IPv6Address))
         if self._build_protocol_callback:
-            self._build_protocol_callback(addr, host_on)
+            self._build_protocol_callback(addr)
 
         return ConnectOnSubprocessProtocol(
             reactor=self.reactor,
@@ -146,5 +140,4 @@ class ConnectOnSubprocessFactory(ServerFactory):
             addr=addr,
             logging_args=self._serialized_logging_args,
             subprocess_args=self._serialized_subprocess_args,
-            host_on=host_on,
         )

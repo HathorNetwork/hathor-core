@@ -14,21 +14,38 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
+from enum import Enum
+from typing import Any
 
 import zmq
 from twisted.internet.task import LoopingCall
 
+from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.protocol import HathorProtocol
 from hathor.reactor import ReactorProtocol
 from structlog import get_logger
 
-if TYPE_CHECKING:
-    from hathor.p2p.manager import ConnectionsManager
+from hathor.verification.verification_service import VerificationService
+from hathor.vertex_handler import VertexHandler
+
+# TODO: Move out of p2p package
 
 
 logger = get_logger()
+
+IPC_SERVER_LOOP_INTERVAL = 0.01
+
+
+class IpcProxyType(Enum):
+    P2P_MANAGER = ConnectionsManager
+    P2P_CONNECTION = HathorProtocol
+    VERTEX_HANDLER = VertexHandler
+    VERIFICATION_SERVICE = VerificationService
+
+    def addr(self) -> str:
+        assert self is not IpcProxyType.P2P_CONNECTION  # TODO: Improve this addr handling.
+        return f'ipc:///tmp/{self.name}.sock'
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -43,20 +60,24 @@ class IpcError:
     exception: Exception
 
 
-class RemoteP2PManagerServer:
-    __slots__ = ('log', '_p2p_manager', '_socket', '_lc')
+class RemoteIpcServer:
+    __slots__ = ('log', '_proxy_type', '_proxy_obj', '_socket', '_lc')
 
-    def __init__(self, *, reactor: ReactorProtocol, p2p_manager: ConnectionsManager) -> None:
-        self.log = logger.new()
-        self._p2p_manager = p2p_manager
+    def __init__(self, *, reactor: ReactorProtocol, proxy_type: IpcProxyType, proxy_obj: Any) -> None:
+        assert isinstance(proxy_obj, proxy_type.value)
+        self.log = logger.new(name=proxy_type.name)
+        self._proxy_type = proxy_type
+        self._proxy_obj = proxy_obj
+
         context = zmq.Context()
         self._socket = context.socket(zmq.REP)
         self._lc = LoopingCall(self._safe_run)
         self._lc.clock = reactor
 
     def start(self) -> None:
-        self._socket.bind(f'ipc:///tmp/p2p_manager.sock')  # TODO: addr
-        self._lc.start(0.1)
+        addr = self._proxy_type.addr()
+        self._socket.bind(addr)
+        self._lc.start(IPC_SERVER_LOOP_INTERVAL)
 
     def stop(self) -> None:
         self._lc.stop()
@@ -82,7 +103,7 @@ class RemoteP2PManagerServer:
         assert isinstance(request, IpcRequest)
 
         try:
-            method = getattr(self._p2p_manager, request.method)
+            method = getattr(self._proxy_obj, request.method)
             result = method(*request.args, **request.kwargs)
         except Exception as e:
             self.log.exception('error when processing IPC request', request=request)
@@ -93,14 +114,15 @@ class RemoteP2PManagerServer:
         self._socket.send_pyobj(result)
 
 
-class RemoteP2PManagerClient:
-    __slots__ = ('log', '_socket',)
+class RemoteIpcClient:
+    __slots__ = ('log', '_socket')
 
-    def __init__(self) -> None:
-        self.log = logger.new()
+    def __init__(self, *, proxy_type: IpcProxyType, addr: str | None = None) -> None:
+        self.log = logger.new(name=proxy_type.name)
+
         context = zmq.Context()
         self._socket = context.socket(zmq.REQ)
-        self._socket.connect(f'ipc:///tmp/p2p_manager.sock')  # TODO: addr
+        self._socket.connect(addr if addr else proxy_type.addr())  # TODO: Improve this addr handling.
 
     def stop(self) -> None:
         self._socket.close(linger=0)
