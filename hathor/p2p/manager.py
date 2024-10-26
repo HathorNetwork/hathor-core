@@ -29,7 +29,6 @@ from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.multiprocess.main_p2p_server_connection import MAIN_P2P_SERVER_CONNECTION_FILE, P2PServerConnectionArgs
-
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -738,7 +737,7 @@ class ConnectionsManager:
     def _on_build_subprocess_protocol(self, addr: IPv4Address | IPv6Address) -> None:
         from hathor.multiprocess.subprocess_wrapper import get_subprocess_protocol_server_addr
         server_addr = get_subprocess_protocol_server_addr(addr)
-        from hathor.multiprocess.remote_ipc import RemoteIpcClient, IpcProxyType
+        from hathor.multiprocess.remote_ipc import IpcProxyType, RemoteIpcClient
         protocol = RemoteIpcClient(proxy_type=IpcProxyType.P2P_CONNECTION, addr=server_addr)
         self._on_build_protocol(addr, protocol)
 

@@ -13,9 +13,9 @@
 #  limitations under the License.
 
 from structlog import BoundLogger
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.error import ConnectionDone, ConnectionLost
 from twisted.python.failure import Failure
-from twisted.internet.address import IPv4Address, IPv6Address
 
 
 def addr_to_str(addr: IPv4Address | IPv6Address) -> str:

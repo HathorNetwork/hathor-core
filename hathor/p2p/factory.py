@@ -14,10 +14,10 @@
 
 from abc import ABC
 from typing import Callable
-from twisted.internet.address import IPv4Address, IPv6Address
 
-from twisted.internet.protocol import Factory, ServerFactory, ClientFactory
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.interfaces import IAddress
+from twisted.internet.protocol import ClientFactory, Factory, ServerFactory
 
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import P2PConnectionProtocol, P2PManagerProtocol

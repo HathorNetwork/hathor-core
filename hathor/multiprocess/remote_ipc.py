@@ -31,17 +31,16 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum
-from twisted.internet.address import IPv4Address, IPv6Address
 from typing import Any
 
 import zmq
+from structlog import get_logger
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.task import LoopingCall
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.protocol import HathorProtocol
 from hathor.reactor import ReactorProtocol
-from structlog import get_logger
-
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 
@@ -50,7 +49,8 @@ from hathor.vertex_handler import VertexHandler
 
 logger = get_logger()
 
-IPC_SERVER_LOOP_INTERVAL = 0.01
+SOCKET_TIMEOUT = 5.0
+IPC_SERVER_LOOP_INTERVAL = 0.0
 
 
 class IpcProxyType(Enum):
@@ -122,7 +122,7 @@ class RemoteIpcServer:
             return
         except Exception as e:
             self.log.exception('error when receiving IPC request')
-            self._socket.send_pyobj(IpcError(e))
+            self._socket.send_pyobj(IpcError(e), flags=zmq.NOBLOCK)
             return
 
         self.log.debug('received IPC request', request=request)
@@ -133,18 +133,18 @@ class RemoteIpcServer:
             result = method(*request.args, **request.kwargs)
         except Exception as e:
             self.log.exception('error when processing IPC request', request=request)
-            self._socket.send_pyobj(IpcError(e))
+            self._socket.send_pyobj(IpcError(e), flags=zmq.NOBLOCK)
             return
 
-        self.log.debug('sending IPC response', response=result)
-        self._socket.send_pyobj(result)
+        self._socket.send_pyobj(result, flags=zmq.NOBLOCK)
 
 
 class RemoteIpcClient:
-    __slots__ = ('log', '_socket')
+    __slots__ = ('log', '_socket', '_blocking')
 
-    def __init__(self, *, proxy_type: IpcProxyType, addr: str | None = None) -> None:
-        self.log = logger.new(name=proxy_type.name, pid=os.getpid())
+    def __init__(self, *, proxy_type: IpcProxyType, blocking: bool = False, addr: str | None = None) -> None:
+        self.log = logger.new(name=proxy_type.name, pid=os.getpid(), blocking=blocking)
+        self._blocking = blocking
 
         context = zmq.Context()
         self._socket = context.socket(zmq.REQ)
@@ -157,8 +157,7 @@ class RemoteIpcClient:
         def call_remote(*args: Any, **kwargs: Any) -> Any:
             self.log.debug('sending IPC request', method=name, args=args, kwargs=kwargs)
             request = IpcRequest(method=name, args=args, kwargs=kwargs)
-            self._socket.send_pyobj(request)
-            response = self._socket.recv_pyobj()  # TODO: non-block
+            response = self._send_request(request)
             self.log.debug('received IPC response', response=response)
 
             if isinstance(response, IpcError):
@@ -167,3 +166,23 @@ class RemoteIpcClient:
             return response
 
         return call_remote
+
+    def _send_request(self, request: IpcRequest) -> Any:
+        timeout = SOCKET_TIMEOUT if self._blocking else 0
+        _, wlist, _ = zmq.select([], [self._socket], [], timeout=timeout)
+        timeout_message = 'timeout while {}. This is likely caused by a deadlock. Check tracebacks below'
+
+        if not wlist:
+            self.log.error(timeout_message.format('sending request'), request=request)
+            raise TimeoutError
+
+        assert wlist == [self._socket]
+        self._socket.send_pyobj(request)
+
+        rlist, _, _ = zmq.select([self._socket], [], [], timeout=timeout)
+        if not rlist:
+            self.log.error(timeout_message.format('receiving response'), request=request)
+            raise TimeoutError
+
+        assert rlist == [self._socket]
+        return self._socket.recv_pyobj()

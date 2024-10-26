@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from hathor.indexes import RocksDBIndexesManager
 from hathor.p2p import P2PDependencies
@@ -45,12 +45,12 @@ class P2PServerConnectionArgs(BaseModel):
 
 
 def build_p2p_server_factory(factory_args: SubprocessFactoryArgs) -> tuple[HathorServerFactory, Callable[[], None]]:
-    from hathor.multiprocess.remote_ipc import RemoteIpcClient, IpcProxyType
+    from hathor.multiprocess.remote_ipc import IpcProxyType, RemoteIpcClient
     args = P2PServerConnectionArgs.parse_raw(factory_args.serialized_subprocess_args)
     vertex_parser = VertexParser(settings=factory_args.settings)
-    vertex_handler = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER)
-    verification_service = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER)
-    remote_p2p_manager = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER)
+    vertex_handler = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER, blocking=True)
+    verification_service = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER, blocking=True)
+    remote_p2p_manager = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER, blocking=True)
     my_peer = PrivatePeer.create_from_json(args.my_peer)
 
     rocksdb_storage = RocksDBStorage(

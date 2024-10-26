@@ -35,11 +35,11 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocess.remote_ipc import IpcProxyType, RemoteIpcServer
 from hathor.p2p import P2PDependencies
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.multiprocess.main_p2p_server_connection import P2PServerConnectionArgs
-from hathor.multiprocess.remote_ipc import RemoteIpcServer, IpcProxyType
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager

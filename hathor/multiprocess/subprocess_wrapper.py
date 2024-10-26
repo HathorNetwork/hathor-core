@@ -13,16 +13,16 @@
 #  limitations under the License.
 
 import os
-from twisted.internet.address import IPv4Address, IPv6Address
 
 from structlog import get_logger
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.interfaces import IAddress, IProtocol
 from twisted.internet.protocol import Factory, Protocol
 from twisted.protocols.policies import ProtocolWrapper, WrappingFactory
 from twisted.python.failure import Failure
 
-from hathor.multiprocess.utils import log_connection_closed, addr_to_str
-from hathor.multiprocess.remote_ipc import RemoteIpcServer, IpcProxyType
+from hathor.multiprocess.remote_ipc import IpcProxyType, RemoteIpcServer
+from hathor.multiprocess.utils import addr_to_str, log_connection_closed
 from hathor.reactor import ReactorProtocol
 
 logger = get_logger()

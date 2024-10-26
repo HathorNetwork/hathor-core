@@ -20,11 +20,11 @@ from typing import Callable
 
 from structlog import get_logger
 from twisted.internet import tcp
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.interfaces import IAddress, ITransport
 from twisted.internet.protocol import Protocol, ServerFactory
 from twisted.protocols.policies import ProtocolWrapper
 from twisted.protocols.tls import BufferingTLSTransport
-from twisted.internet.address import IPv4Address, IPv6Address
 
 from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.multiprocess.subprocess_protocol import SubprocessProtocol
