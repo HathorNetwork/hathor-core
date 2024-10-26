@@ -638,6 +638,14 @@ class ConnectionsManager:
                 self.log.debug('skipping because we are already connecting to this endpoint', entrypoint=entrypoint)
                 return
 
+        # TODO: This is a dumb temporary fix for a bug in master
+        for connection in self.connections:
+            addr1 = IPv4Address(type='TCP', host=entrypoint.host, port=entrypoint.port)
+            addr2 = IPv4Address(type='TCP', host='localhost', port=entrypoint.port)
+            addr3 = IPv4Address(type='TCP', host='127.0.0.1', port=entrypoint.port)
+            if connection.get_addr() in [str(addr1), str(addr2), str(addr3)]:
+                return
+
         if self.localhost_only and not entrypoint.is_localhost():
             self.log.debug('skip because of simple localhost check', entrypoint=entrypoint)
             return

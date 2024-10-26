@@ -161,6 +161,17 @@ class CliManager:
             pudb.set_trace(paused=False)
             capture_stdout = False
 
+        if '--dbg1' in sys.argv:
+            import pydevd_pycharm
+            sys.argv.remove('--dbg1')
+            pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
+        if '--dbg2' in sys.argv:
+            import pydevd_pycharm
+            sys.argv.remove('--dbg2')
+            pydevd_pycharm.settrace('localhost', port=8091, stdoutToServer=True, stderrToServer=True)
+
+
+
         pre_setup_logging = getattr(module, 'PRE_SETUP_LOGGING', True)
         receive_logging_args = getattr(module, 'RECEIVE_LOGGING_ARGS', False)
         if pre_setup_logging:

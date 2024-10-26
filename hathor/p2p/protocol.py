@@ -109,6 +109,7 @@ class HathorProtocol:
         self.dependencies = dependencies
         self._settings = dependencies.settings
         self.my_peer = my_peer
+        self.addr = addr
         self.p2p_manager: P2PManagerProtocol = p2p_manager
 
         self.reactor = self.dependencies.reactor
@@ -127,7 +128,6 @@ class HathorProtocol:
 
         # The peer on the other side of the connection.
         self._peer = None
-        self._addr = addr
 
         # The last time a message has been received from this peer.
         self.last_message = 0
@@ -169,6 +169,9 @@ class HathorProtocol:
         self.log = logger.new()
 
         self.capabilities = set()
+
+    def get_addr(self) -> str:
+        return str(self.addr)
 
     def change_state(self, state_enum: PeerState) -> None:
         """Called to change the state of the connection."""
@@ -250,7 +253,7 @@ class HathorProtocol:
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
-        self.p2p_manager.on_peer_connect(str(self._addr))
+        self.p2p_manager.on_peer_connect(str(self.addr))
 
     def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
@@ -260,7 +263,7 @@ class HathorProtocol:
     def on_peer_ready(self) -> None:
         assert self.peer is not None
         self.update_log_context()
-        self.p2p_manager.on_peer_ready(str(self._addr))
+        self.p2p_manager.on_peer_ready(str(self.addr))
         self.log.info('peer connected', peer_id=self.peer.id)
 
     def on_disconnect(self, reason: Failure) -> None:
@@ -278,7 +281,7 @@ class HathorProtocol:
         if self.state:
             self.state.on_exit()
             self.state = None
-        self.p2p_manager.on_peer_disconnect(str(self._addr))
+        self.p2p_manager.on_peer_disconnect(str(self.addr))
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message
@@ -422,7 +425,7 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
 
     def makeConnection(self, transport: ITransport) -> None:
         super().makeConnection(transport)
-        assert self._addr == transport.getPeer()
+        assert self.addr == transport.getPeer()
 
     def connectionMade(self) -> None:
         super(HathorLineReceiver, self).connectionMade()

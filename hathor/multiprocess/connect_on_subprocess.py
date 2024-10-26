@@ -24,6 +24,7 @@ from twisted.internet.interfaces import IAddress, ITransport
 from twisted.internet.protocol import Protocol, ServerFactory
 from twisted.protocols.policies import ProtocolWrapper
 from twisted.protocols.tls import BufferingTLSTransport
+from twisted.internet.address import IPv4Address
 
 from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.multiprocess.subprocess_protocol import SubprocessProtocol
@@ -132,7 +133,9 @@ class ConnectOnSubprocessFactory(ServerFactory):
         self._build_protocol_callback = build_protocol_callback
 
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
-        host_on = '/tmp/protocol_conn.sock'  # TODO: Use temp file and cleanup. Maybe use a socket and pass FD instead?
+        # TODO: Use temp file and cleanup. Maybe use a socket and pass FD instead?
+        assert isinstance(addr, IPv4Address)
+        host_on = f'/tmp/p2p_connection:{addr.type}:{addr.host}:{addr.port}.sock'
 
         if self._build_protocol_callback:
             self._build_protocol_callback(addr, host_on)

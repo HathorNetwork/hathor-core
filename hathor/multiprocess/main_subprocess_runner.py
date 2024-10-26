@@ -39,7 +39,7 @@ class SubprocessFactoryArgs:
     host_on: str
 
 
-def main_subprocess_runner(factory: Callable[[SubprocessFactoryArgs], Factory]) -> None:
+def main_subprocess_runner(build: Callable[[SubprocessFactoryArgs], tuple[Factory, Callable[[], None]]]) -> None:
     _, addr, fileno_str, serialized_logging_args, serialized_subprocess_args, host_on = sys.argv
     logging_output, logging_options, capture_stdout = json.loads(serialized_logging_args)
     fileno = int(fileno_str)
@@ -62,10 +62,11 @@ def main_subprocess_runner(factory: Callable[[SubprocessFactoryArgs], Factory]) 
         host_on=host_on,
     )
 
+    factory, exit_callback = build(factory_args)
     wrapping_factory = SubprocessWrappingFactory(
         reactor=reactor,
         addr_str=addr,
-        wrapped_factory=factory(factory_args),
+        wrapped_factory=factory,
     )
 
     reactor.callWhenRunning(
@@ -75,3 +76,4 @@ def main_subprocess_runner(factory: Callable[[SubprocessFactoryArgs], Factory]) 
         factory=wrapping_factory,
     )
     reactor.run()
+    exit_callback()
