@@ -22,15 +22,14 @@ from twisted.protocols.policies import ProtocolWrapper, WrappingFactory
 from twisted.python.failure import Failure
 
 from hathor.multiprocess.utils import log_connection_closed, addr_to_str
-from hathor.p2p.multiprocess.remote_ipc import RemoteIpcServer, IpcProxyType
+from hathor.multiprocess.remote_ipc import RemoteIpcServer, IpcProxyType
 from hathor.reactor import ReactorProtocol
 
 logger = get_logger()
 
 
-def get_subprocess_protocol_server_addr(addr: IPv4Address | IPv6Address | str) -> str:
-    addr_str = addr_to_str(addr) if isinstance(addr, (IPv4Address, IPv6Address)) else addr
-    return f'/tmp/p2p_connection:{addr_str}.sock'
+def get_subprocess_protocol_server_addr(addr: IPv4Address | IPv6Address) -> str:
+    return f'ipc:///tmp/p2p_connection:{addr_to_str(addr)}.sock'
 
 
 class SubprocessProtocolWrapper(ProtocolWrapper):
@@ -81,7 +80,8 @@ class SubprocessWrappingFactory(WrappingFactory):
 
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
         assert not self._built_protocol, 'there must be only one subprocess protocol per factory'
-        assert self._addr_str == str(addr)
+        assert isinstance(addr, (IPv4Address, IPv6Address))
+        assert self._addr_str == addr_to_str(addr)
         self.log.debug('building protocol for subprocess wrapper')
 
         try:
@@ -96,6 +96,7 @@ class SubprocessWrappingFactory(WrappingFactory):
             reactor=self.reactor,
             proxy_type=IpcProxyType.P2P_CONNECTION,  # TODO: This class shouldn't know anything about P2P, improve this
             proxy_obj=wrapped_protocol,
+            addr=addr
         )
         protocol_server.start()  # TODO: Move somewhere else.
 

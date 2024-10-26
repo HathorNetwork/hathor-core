@@ -12,20 +12,23 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
 
 from hathor.indexes import RocksDBIndexesManager
-from hathor.multiprocess.main_subprocess_runner import SubprocessFactoryArgs, main_subprocess_runner
 from hathor.p2p import P2PDependencies
 from hathor.p2p.factory import HathorServerFactory
-from hathor.p2p.multiprocess.remote_ipc import RemoteIpcClient, IpcProxyType
 from hathor.p2p.peer import PrivatePeer
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.utils.pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from hathor.multiprocess.main_subprocess_runner import SubprocessFactoryArgs
 
 MAIN_P2P_SERVER_CONNECTION_FILE = Path(__file__)
 
@@ -42,6 +45,7 @@ class P2PServerConnectionArgs(BaseModel):
 
 
 def build_p2p_server_factory(factory_args: SubprocessFactoryArgs) -> tuple[HathorServerFactory, Callable[[], None]]:
+    from hathor.multiprocess.remote_ipc import RemoteIpcClient, IpcProxyType
     args = P2PServerConnectionArgs.parse_raw(factory_args.serialized_subprocess_args)
     vertex_parser = VertexParser(settings=factory_args.settings)
     vertex_handler = RemoteIpcClient(proxy_type=IpcProxyType.P2P_MANAGER)
@@ -98,4 +102,5 @@ def build_p2p_server_factory(factory_args: SubprocessFactoryArgs) -> tuple[Hatho
 
 
 if __name__ == '__main__':
+    from hathor.multiprocess.main_subprocess_runner import main_subprocess_runner
     main_subprocess_runner(build_p2p_server_factory)

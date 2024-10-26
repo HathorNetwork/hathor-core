@@ -12,10 +12,26 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+#  Copyright 2024 Hathor Labs
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import Enum
+from twisted.internet.address import IPv4Address, IPv6Address
 from typing import Any
 
 import zmq
@@ -61,13 +77,21 @@ class IpcError:
 
 
 class RemoteIpcServer:
-    __slots__ = ('log', '_proxy_type', '_proxy_obj', '_socket', '_lc')
+    __slots__ = ('log', '_proxy_type', '_proxy_obj', '_socket', '_lc', '_addr')
 
-    def __init__(self, *, reactor: ReactorProtocol, proxy_type: IpcProxyType, proxy_obj: Any) -> None:
+    def __init__(
+        self,
+        *,
+        reactor: ReactorProtocol,
+        proxy_type: IpcProxyType,
+        proxy_obj: Any,
+        addr: IPv4Address | IPv6Address | None = None,
+    ) -> None:
         assert isinstance(proxy_obj, proxy_type.value)
-        self.log = logger.new(name=proxy_type.name)
+        self.log = logger.new(name=proxy_type.name, pid=os.getpid())
         self._proxy_type = proxy_type
         self._proxy_obj = proxy_obj
+        self._addr = addr
 
         context = zmq.Context()
         self._socket = context.socket(zmq.REP)
@@ -75,7 +99,9 @@ class RemoteIpcServer:
         self._lc.clock = reactor
 
     def start(self) -> None:
-        addr = self._proxy_type.addr()
+        from hathor.multiprocess.subprocess_wrapper import get_subprocess_protocol_server_addr
+        # TODO: Improve addr handling.
+        addr = get_subprocess_protocol_server_addr(self._addr) if self._addr else self._proxy_type.addr()
         self._socket.bind(addr)
         self._lc.start(IPC_SERVER_LOOP_INTERVAL)
 
@@ -118,7 +144,7 @@ class RemoteIpcClient:
     __slots__ = ('log', '_socket')
 
     def __init__(self, *, proxy_type: IpcProxyType, addr: str | None = None) -> None:
-        self.log = logger.new(name=proxy_type.name)
+        self.log = logger.new(name=proxy_type.name, pid=os.getpid())
 
         context = zmq.Context()
         self._socket = context.socket(zmq.REQ)

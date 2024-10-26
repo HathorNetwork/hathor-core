@@ -28,6 +28,7 @@ from twisted.internet.address import IPv4Address, IPv6Address
 
 from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.multiprocess.subprocess_protocol import SubprocessProtocol
+from hathor.multiprocess.utils import addr_to_str
 from hathor.reactor import ReactorProtocol
 from hathor.utils.pydantic import BaseModel
 
@@ -42,7 +43,7 @@ class ConnectOnSubprocessProtocol(Protocol):
         *,
         reactor: ReactorProtocol,
         main_file: Path,
-        addr: IAddress,
+        addr: IPv4Address | IPv6Address,
         logging_args: str,
         subprocess_args: str,
     ) -> None:
@@ -79,7 +80,7 @@ class ConnectOnSubprocessProtocol(Protocol):
                 sys.executable,
                 str(self._main_file.absolute()),
                 # TODO: Serialize all args together in a single class
-                str(self._addr),
+                addr_to_str(self._addr),
                 str(fileno),
                 self._logging_args,
                 self._subprocess_args,

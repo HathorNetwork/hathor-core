@@ -25,14 +25,11 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.cli.util import LoggingOptions, LoggingOutput
-from hathor.multiprocess.connect_on_subprocess import ConnectOnSubprocessFactory
-from hathor.multiprocess.subprocess_wrapper import get_subprocess_protocol_server_addr
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
 from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.multiprocess.main_p2p_server_connection import MAIN_P2P_SERVER_CONNECTION_FILE, P2PServerConnectionArgs
 
-from hathor.p2p.multiprocess.remote_ipc import RemoteIpcClient, IpcProxyType
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -700,6 +697,7 @@ class ConnectionsManager:
 
         if self._multiprocess:
             subprocess_args, logging_args = self._multiprocess
+            from hathor.multiprocess.connect_on_subprocess import ConnectOnSubprocessFactory
             factory = ConnectOnSubprocessFactory(
                 reactor=self.reactor,
                 main_file=MAIN_P2P_SERVER_CONNECTION_FILE,
@@ -738,7 +736,9 @@ class ConnectionsManager:
         self._protocols[addr_str] = protocol
 
     def _on_build_subprocess_protocol(self, addr: IPv4Address | IPv6Address) -> None:
+        from hathor.multiprocess.subprocess_wrapper import get_subprocess_protocol_server_addr
         server_addr = get_subprocess_protocol_server_addr(addr)
+        from hathor.multiprocess.remote_ipc import RemoteIpcClient, IpcProxyType
         protocol = RemoteIpcClient(proxy_type=IpcProxyType.P2P_CONNECTION, addr=server_addr)
         self._on_build_protocol(addr, protocol)
 
