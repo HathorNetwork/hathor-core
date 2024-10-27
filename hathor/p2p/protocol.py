@@ -281,7 +281,7 @@ class HathorProtocol:
         if self.state:
             self.state.on_exit()
             self.state = None
-        self.p2p_manager.on_peer_disconnect(str(self.addr))
+        self.p2p_manager.on_peer_disconnect(str(self.addr), self.get_peer_id())
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message

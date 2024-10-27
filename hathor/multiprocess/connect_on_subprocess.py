@@ -55,14 +55,14 @@ class ConnectOnSubprocessProtocol(Protocol):
         self._subprocess_args = subprocess_args
 
     def makeConnection(self, transport: ITransport) -> None:
+        wrapped_transport = transport.transport
         if isinstance(transport, BufferingTLSTransport):
-            wrapped_transport = transport.transport
             assert isinstance(wrapped_transport, ProtocolWrapper)
             connection = wrapped_transport.transport
         else:
-            connection = transport
+            connection = wrapped_transport
 
-        assert isinstance(connection, tcp.Connection)
+        assert isinstance(connection, tcp.Connection), connection
         assert self._addr == connection.getPeer()
 
         fileno = connection.fileno()

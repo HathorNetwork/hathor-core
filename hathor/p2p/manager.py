@@ -446,15 +446,14 @@ class ConnectionsManager:
                 continue
             conn.send_peers([peer])
 
-    def on_peer_disconnect(self, addr: str) -> None:
+    def on_peer_disconnect(self, addr: str, peer_id: PeerId | None) -> None:
         """Called when a peer disconnect."""
         protocol = self._protocols.pop(addr)
         self.connections.discard(protocol)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
-        protocol_peer = protocol.get_peer_if_set()
-        if protocol_peer is not None:
-            existing_protocol = self.connected_peers.pop(protocol_peer.id, None)
+        if peer_id is not None:
+            existing_protocol = self.connected_peers.pop(peer_id, None)
             if existing_protocol is None:
                 # in this case, the connection was closed before it got to READY state
                 return
@@ -464,7 +463,7 @@ class ConnectionsManager:
                 # A check for duplicate connections is done during PEER_ID state, but there's still a
                 # chance it can happen if both connections start at the same time and none of them has
                 # reached READY state while the other is on PEER_ID state
-                self.connected_peers[protocol_peer.id] = existing_protocol
+                self.connected_peers[peer_id] = existing_protocol
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_DISCONNECTED,
             protocol=protocol,
