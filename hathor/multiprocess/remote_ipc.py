@@ -169,6 +169,7 @@ class RemoteIpcClient:
 
     def _send_request(self, request: IpcRequest) -> Any:
         timeout = SOCKET_TIMEOUT if self._blocking else 0
+        timeout = None
         _, wlist, _ = zmq.select([], [self._socket], [], timeout=timeout)
         timeout_message = 'timeout while {}. This is likely caused by a deadlock. Check tracebacks below'
 

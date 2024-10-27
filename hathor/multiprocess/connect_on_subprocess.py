@@ -55,6 +55,7 @@ class ConnectOnSubprocessProtocol(Protocol):
         self._subprocess_args = subprocess_args
 
     def makeConnection(self, transport: ITransport) -> None:
+        assert isinstance(transport, ProtocolWrapper)
         wrapped_transport = transport.transport
         if isinstance(transport, BufferingTLSTransport):
             assert isinstance(wrapped_transport, ProtocolWrapper)

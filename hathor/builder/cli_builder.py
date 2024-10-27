@@ -339,7 +339,7 @@ class CliBuilder:
         )
 
         whitelist_only = False
-        use_ssl = True
+        use_ssl = False
         multiprocess_p2p: tuple[P2PServerConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None = None
 
         if self._args.x_multiprocess_p2p:
@@ -394,9 +394,8 @@ class CliBuilder:
             multiprocess=multiprocess_p2p,
         )
 
-        SyncSupportLevel.add_factories(
+        SyncSupportLevel.add_versions(
             p2p_manager,
-            p2p_dependencies,
             sync_v1_support,
             sync_v2_support,
         )

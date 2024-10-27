@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import deque
 from typing import TYPE_CHECKING, Iterable, Optional
 
@@ -30,6 +32,7 @@ from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+    from hathor.p2p.sync_version import SyncVersion
 
 logger = get_logger()
 
@@ -100,11 +103,32 @@ class ReadyState(BaseState):
         sync_version = self.protocol.sync_version
         assert sync_version is not None
         self.log.debug(f'loading {sync_version}')
-        sync_factory = self.protocol.p2p_manager.get_sync_factory(sync_version)
 
         # Initialize sync agent and add its commands to the list of available commands.
-        self.sync_agent: SyncAgent = sync_factory.create_sync_agent(self.protocol)
+        self.sync_agent = self._create_sync_agent(sync_version)
         self.cmd_map.update(self.sync_agent.get_cmd_dict())
+
+    def _create_sync_agent(self, sync_version: SyncVersion) -> SyncAgent:
+        from hathor.p2p.sync_version import SyncVersion
+        if sync_version not in self.protocol.p2p_manager.get_enabled_sync_versions():
+            raise ValueError(f'sync version {sync_version} is not enabled')
+
+        match sync_version:
+            case SyncVersion.V1_1:
+                from hathor.p2p.sync_v1.downloader import Downloader
+                from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
+                downloader = Downloader(self.dependencies)
+                return NodeSyncTimestamp(
+                    protocol=self.protocol,
+                    downloader=downloader,
+                    dependencies=self.dependencies,
+                )
+            case SyncVersion.V2:
+                from hathor.p2p.sync_v2.agent import NodeBlockSync
+                return NodeBlockSync(
+                    protocol=self.protocol,
+                    dependencies=self.dependencies,
+                )
 
     def on_enter(self) -> None:
         self.protocol.on_peer_ready()

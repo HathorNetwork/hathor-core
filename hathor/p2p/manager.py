@@ -18,7 +18,7 @@ from structlog import get_logger
 from twisted.internet import endpoints
 from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IAddress, IListeningPort, IProtocol, IProtocolFactory, IStreamClientEndpoint
+from twisted.internet.interfaces import IListeningPort, IProtocol, IProtocolFactory, IStreamClientEndpoint
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
@@ -36,7 +36,6 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import UnverifiedPeerStorage, VerifiedPeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
-from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -86,7 +85,6 @@ class ConnectionsManager:
     handshaking_peers: set[P2PConnectionProtocol]
     unverified_peer_storage: UnverifiedPeerStorage
     verified_peer_storage: VerifiedPeerStorage
-    _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
 
     rate_limiter: RateLimiter
@@ -203,27 +201,27 @@ class ConnectionsManager:
         self._last_discovery: float = 0.
 
         # sync-manager factories
-        self._sync_factories = {}
+        self._available_sync_versions: set[SyncVersion] = set()
         self._enabled_sync_versions = set()
 
         # agent to perform HTTP requests
         self._http_agent = Agent(self.reactor)
 
-    def add_sync_factory(self, sync_version: SyncVersion, sync_factory: SyncAgentFactory) -> None:
-        """Add factory for the given sync version, must use a sync version that does not already exist."""
-        # XXX: to allow code in `set_manager` to safely use the the available sync versions, we add this restriction:
+    def add_sync_version(self, sync_version: SyncVersion) -> None:
+        """Add a sync version, must be one that does not already exist."""
+        # XXX: to allow code in `set_manager` to safely use the available sync versions, we add this restriction:
         assert self.manager is None, 'Cannot modify sync factories after a manager is set'
-        if sync_version in self._sync_factories:
+        if sync_version in self._available_sync_versions:
             raise ValueError('sync version already exists')
-        self._sync_factories[sync_version] = sync_factory
+        self._available_sync_versions.add(sync_version)
 
     def get_available_sync_versions(self) -> set[SyncVersion]:
         """What sync versions the manager is capable of using, they are not necessarily enabled."""
-        return set(self._sync_factories.keys())
+        return self._available_sync_versions
 
     def is_sync_version_available(self, sync_version: SyncVersion) -> bool:
         """Whether the given sync version is available for use, is not necessarily enabled."""
-        return sync_version in self._sync_factories
+        return sync_version in self._available_sync_versions
 
     def get_enabled_sync_versions(self) -> set[SyncVersion]:
         """What sync versions are enabled for use, it is necessarily a subset of the available versions."""
@@ -235,7 +233,7 @@ class ConnectionsManager:
 
     def enable_sync_version(self, sync_version: SyncVersion) -> None:
         """Enable using the given sync version on new connections, it must be available before being enabled."""
-        assert sync_version in self._sync_factories
+        assert sync_version in self._available_sync_versions
         if sync_version in self._enabled_sync_versions:
             self.log.info('tried to enable a sync verison that was already enabled, nothing to do')
             return
@@ -336,11 +334,6 @@ class ConnectionsManager:
             len(self.connected_peers),
             len(self.verified_peer_storage)
         )
-
-    def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
-        """Get the sync factory for a given version, MUST be available or it will raise an assert."""
-        assert sync_version in self._sync_factories, f'sync_version {sync_version} is not available'
-        return self._sync_factories[sync_version]
 
     def has_synced_peer(self) -> bool:
         """ Return whether we are synced to at least one peer.
