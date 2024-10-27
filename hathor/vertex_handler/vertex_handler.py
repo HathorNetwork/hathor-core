@@ -79,17 +79,21 @@ class VertexHandler:
         quiet: bool = False,
         fails_silently: bool = True,
         reject_locked_reward: bool = True,
+        init_static_metadata: bool = True,
     ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param vertex: transaction to be added
         :param quiet: if True will not log when a new tx is accepted
         :param fails_silently: if False will raise an exception when tx cannot be added
+        :param init_static_metadata: if True will initialize the static metadata. It should mostly be True, and False
+            mainly in some tests.
         """
         is_valid = self._validate_vertex(
             vertex,
             fails_silently=fails_silently,
-            reject_locked_reward=reject_locked_reward
+            reject_locked_reward=reject_locked_reward,
+            init_static_metadata=init_static_metadata,
         )
 
         if not is_valid:
@@ -110,6 +114,7 @@ class VertexHandler:
         *,
         fails_silently: bool,
         reject_locked_reward: bool,
+        init_static_metadata: bool,
     ) -> bool:
         assert self._tx_storage.is_only_valid_allowed()
         already_exists = False
@@ -149,6 +154,8 @@ class VertexHandler:
 
         if not metadata.validation.is_fully_connected():
             try:
+                if init_static_metadata:
+                    vertex.init_static_metadata_from_storage(self._settings, self._tx_storage)
                 self._verification_service.validate_full(vertex, reject_locked_reward=reject_locked_reward)
             except HathorError as e:
                 if not fails_silently:
@@ -185,7 +192,6 @@ class VertexHandler:
             vertex,
             skip_block_weight_verification=True,
             reject_locked_reward=reject_locked_reward,
-            init_static_metadata=False,
         )
         self._tx_storage.indexes.update(vertex)
         if self._tx_storage.indexes.mempool_tips:
