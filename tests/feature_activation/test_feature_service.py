@@ -447,7 +447,7 @@ def test_is_feature_active(block_height: int) -> None:
     service.bit_signaling_service = Mock()
     block = not_none(storage.get_block_by_height(block_height))
 
-    result = service.is_feature_active(block=block, feature=Feature.NOP_FEATURE_1)
+    result = service.is_feature_active(vertex=block, feature=Feature.NOP_FEATURE_1)
 
     assert result is True
 
@@ -505,7 +505,7 @@ def test_get_feature_info() -> None:
         return states[feature]
 
     with patch('hathor.feature_activation.feature_service.FeatureService.get_state', get_state):
-        result = service.get_feature_infos(block=Mock())
+        result = service.get_feature_infos(vertex=Mock(spec_set=Block))
 
     expected = {
         Feature.NOP_FEATURE_1: FeatureInfo(criteria_mock_1, FeatureState.STARTED),
