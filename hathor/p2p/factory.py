@@ -41,15 +41,14 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
         self.use_ssl = use_ssl
 
     def buildProtocol(self, addr: IAddress) -> HathorLineReceiver:
-        p = HathorLineReceiver(
+        return HathorLineReceiver(
             my_peer=self.my_peer,
             p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
             inbound=self.inbound,
-            settings=self._settings
+            settings=self._settings,
+            addr=addr,
         )
-        p.factory = self
-        return p
 
 
 class HathorServerFactory(_HathorLineReceiverFactory, protocol.ServerFactory):

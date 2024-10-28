@@ -2,8 +2,8 @@ import os
 import shutil
 import tempfile
 from typing import cast
-from unittest.mock import Mock
 
+from twisted.internet.address import IPv4Address
 from twisted.internet.interfaces import ITransport
 
 from hathor.p2p.entrypoint import Entrypoint
@@ -148,7 +148,7 @@ class PeerIdTest(unittest.TestCase):
     def test_validate_certificate(self) -> None:
         builder = TestBuilder()
         artifacts = builder.build()
-        protocol = artifacts.p2p_manager.server_factory.buildProtocol(Mock())
+        protocol = artifacts.p2p_manager.server_factory.buildProtocol(IPv4Address('TCP', 'localhost', 40403))
 
         peer = PrivatePeer.auto_generated()
 
@@ -214,7 +214,7 @@ class BasePeerIdTest(unittest.TestCase):
         peer.info.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
 
         # we consider that we are starting the connection to the peer
-        protocol = manager.connections.client_factory.buildProtocol('127.0.0.1')
+        protocol = manager.connections.client_factory.buildProtocol(IPv4Address('TCP', 'localhost', 40403))
         protocol.entrypoint = Entrypoint.parse('tcp://127.0.0.1:40403')
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)

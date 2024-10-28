@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from twisted.web.http import Request
+
 import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -34,7 +36,7 @@ class StatusResource(Resource):
         self.manager = manager
         self.reactor = manager.reactor
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
@@ -42,14 +44,12 @@ class StatusResource(Resource):
 
         connecting_peers = []
         # TODO: refactor as not to use a private item
-        for endpoint, deferred in self.manager.connections.connecting_peers.items():
-            host = getattr(endpoint, '_host', '')
-            port = getattr(endpoint, '_port', '')
-            connecting_peers.append({'deferred': str(deferred), 'address': '{}:{}'.format(host, port)})
+        for address in self.manager.connections.connecting_outbound_peers:
+            connecting_peers.append({'address': str(address)})
 
         handshaking_peers = []
         # TODO: refactor as not to use a private item
-        for conn in self.manager.connections.handshaking_peers:
+        for conn in self.manager.connections.handshaking_peers.values():
             remote = conn.transport.getPeer()
             handshaking_peers.append({
                 'address': '{}:{}'.format(remote.host, remote.port),

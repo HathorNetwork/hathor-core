@@ -195,6 +195,44 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.conn.tr1.disconnecting)
         self.assertFalse(self.conn.tr2.disconnecting)
 
+    def test_invalid_duplicate_addr(self) -> None:
+        """
+        We try to connect to an already connected entrypoint in each state,
+        and it should never add the new connection to connecting_outbound_peers.
+        """
+        # We also specifically compare localhost with 127.0.0.1, because they are considered the same.
+        assert self.conn.addr2.type == 'TCP' and self.conn.addr2.host == '127.0.0.1'
+        entrypoint = Entrypoint.parse(f'tcp://localhost:{self.conn.addr2.port}')
+
+        self.manager1.connections.connect_to_entrypoint(entrypoint)
+        assert self.manager1.connections.connecting_outbound_peers == set()
+        assert self.manager1.connections.handshaking_peers == {self.conn.addr2: self.conn.proto1}
+        assert self.manager1.connections.ready_peers == {}
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'HELLO')
+
+        self.conn.run_one_step()  # HELLO
+        self.manager1.connections.connect_to_entrypoint(entrypoint)
+        assert self.manager1.connections.connecting_outbound_peers == set()
+        assert self.manager1.connections.handshaking_peers == {self.conn.addr2: self.conn.proto1}
+        assert self.manager1.connections.ready_peers == {}
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEER-ID')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEER-ID')
+
+        self.conn.run_one_step()  # PEER-ID
+        self.manager1.connections.connect_to_entrypoint(entrypoint)
+        assert self.manager1.connections.connecting_outbound_peers == set()
+        assert self.manager1.connections.handshaking_peers == {self.conn.addr2: self.conn.proto1}
+        assert self.manager1.connections.ready_peers == {}
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'READY')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'READY')
+
+        self.conn.run_one_step()  # READY
+        self.manager1.connections.connect_to_entrypoint(entrypoint)
+        assert self.manager1.connections.connecting_outbound_peers == set()
+        assert self.manager1.connections.handshaking_peers == {}
+        assert self.manager1.connections.ready_peers == {self.peer2.id: self.conn.proto1}
+
     def test_invalid_same_peer_id(self) -> None:
         manager3 = self.create_peer(self.network, peer=self.peer1)
         conn = FakeConnection(self.manager1, manager3)
@@ -257,7 +295,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         # at this point, the connection must be closing as the error was detected on READY state
         self.assertIn(True, [conn_dead.tr1.disconnecting, conn_dead.tr2.disconnecting])
         # check connected_peers
-        connected_peers = list(self.manager1.connections.connected_peers.values())
+        connected_peers = list(self.manager1.connections.ready_peers.values())
         self.assertEquals(1, len(connected_peers))
         self.assertIn(connected_peers[0], [conn_alive.proto1, conn_alive.proto2])
         # connection is still up
@@ -277,32 +315,32 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_on_disconnect(self) -> None:
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
         self.conn.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
 
     def test_on_disconnect_after_hello(self) -> None:
         self.conn.run_one_step()  # HELLO
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
         self.conn.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
 
     def test_on_disconnect_after_peer(self) -> None:
         self.conn.run_one_step()  # HELLO
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
         # No peer id in the peer_storage (known_peers)
         self.assertNotIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
         # The peer READY now depends on a message exchange from both peers, so we need one more step
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
-        self.assertIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+        self.assertIn(self.conn.proto1, self.manager1.connections.ready_peers.values())
         # Peer id 2 in the peer_storage (known_peers) after connection
         self.assertIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
         self.conn.disconnect(Failure(Exception('testing')))
         # Peer id 2 in the peer_storage (known_peers) after disconnection but before looping call
         self.assertIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.ready_peers.values())
 
         self.clock.advance(10)
         # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call

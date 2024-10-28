@@ -172,7 +172,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         peer_id = '0e2bd0d8cd1fb6d040801c32ec27e8986ce85eb8810b6c878dcad15bce3b5b1e'
         conn = MagicMock()
-        p2p_manager.connected_peers[PeerId(peer_id)] = conn
+        p2p_manager.ready_peers[PeerId(peer_id)] = conn
         self.assertEqual(conn.disconnect.call_count, 0)
         sysctl.unsafe_set('kill_connection', peer_id)
         self.assertEqual(conn.disconnect.call_count, 1)

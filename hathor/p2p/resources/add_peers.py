@@ -85,7 +85,7 @@ class AddPeersResource(Resource):
 
         pd = BootstrapPeerDiscovery(filtered_peers)
         # this fires and forget the coroutine, which is compatible with the original behavior
-        coro = pd.discover_and_connect(self.manager.connections.connect_to)
+        coro = pd.discover_and_connect(self.manager.connections.connect_to_entrypoint)
         Deferred.fromCoroutine(coro)
 
         ret = {'success': True, 'peers': [str(p) for p in filtered_peers]}

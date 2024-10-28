@@ -31,7 +31,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         manager2.connections.disable_rate_limiter()
         manager2.connections.enable_rate_limiter(8, 2)
 
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.ready_peers.values())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         assert isinstance(protocol1.state, ReadyState)
@@ -64,7 +64,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         connections.rate_limiter.reset(connections.GlobalRateLimiter.SEND_TIPS)
         connections.enable_rate_limiter(1, 1)
 
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.ready_peers.values())
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
@@ -114,7 +114,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         connections.rate_limiter.reset(connections.GlobalRateLimiter.SEND_TIPS)
         connections.enable_rate_limiter(1, 1)
 
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.ready_peers.values())
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
@@ -154,7 +154,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         connections.rate_limiter.reset(connections.GlobalRateLimiter.SEND_TIPS)
         connections.enable_rate_limiter(1, 1)
 
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.ready_peers.values())
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]

@@ -62,8 +62,8 @@ class BootstrapTestCase(unittest.TestCase):
         connections.add_peer_discovery(MockPeerDiscovery(host_ports2))
         connections.do_discovery()
         self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
-        self.assertEqual(connecting_entrypoints, {
+        connecting_addrs = {str(addr) for addr in connections.connecting_outbound_peers}
+        self.assertEqual(connecting_addrs, {
             'tcp://foobar:1234',
             'tcp://127.0.0.99:9999',
             'tcp://baz:456',
@@ -85,8 +85,8 @@ class BootstrapTestCase(unittest.TestCase):
         connections.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a))
         connections.do_discovery()
         self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
-        self.assertEqual(connecting_entrypoints, {
+        connecting_addrs = {str(addr) for addr in connections.connecting_outbound_peers}
+        self.assertEqual(connecting_addrs, {
             'tcp://127.0.0.99:40403',
             'tcp://127.0.0.88:40403',
             'tcp://foobar:1234',

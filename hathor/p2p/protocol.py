@@ -18,13 +18,13 @@ from typing import TYPE_CHECKING, Any, Coroutine, Generator, Optional, cast
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IDelayedCall, ITCPTransport, ITransport
+from twisted.internet.interfaces import IAddress, IDelayedCall, ITCPTransport, ITransport
 from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.entrypoint import Entrypoint, PeerAddress
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer, PublicPeer
 from hathor.p2p.peer_id import PeerId
@@ -104,10 +104,12 @@ class HathorProtocol:
         settings: HathorSettings,
         use_ssl: bool,
         inbound: bool,
+        addr: IAddress,
     ) -> None:
         self._settings = settings
         self.my_peer = my_peer
         self.connections = p2p_manager
+        self.addr = PeerAddress.from_address(addr)
 
         assert p2p_manager.manager is not None
         self.node = p2p_manager.manager
@@ -256,7 +258,9 @@ class HathorProtocol:
 
     def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
-        # Save the used entrypoint in protocol so we can validate that it matches the entrypoints data
+        # Save the used entrypoint in protocol so we can validate that it matches the entrypoints data.
+        # We set it again because now it may contain the peer_id.
+        assert self.addr == entrypoint.addr
         self.entrypoint = entrypoint
 
     def on_peer_ready(self) -> None:
@@ -396,6 +400,10 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
     It is simply a TCP connection which sends one message per line.
     """
     MAX_LENGTH = 65536
+
+    def makeConnection(self, transport: ITransport) -> None:
+        super().makeConnection(transport)
+        assert self.addr == PeerAddress.from_address(transport.getPeer())
 
     def connectionMade(self) -> None:
         super(HathorLineReceiver, self).connectionMade()

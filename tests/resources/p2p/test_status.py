@@ -1,9 +1,9 @@
-from twisted.internet import endpoints
+from twisted.internet.address import IPv4Address
 from twisted.internet.defer import inlineCallbacks
 
 import hathor
 from hathor.conf.unittests import SETTINGS
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.entrypoint import Entrypoint, PeerAddress
 from hathor.p2p.resources import StatusResource
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -98,17 +98,15 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_connecting_peers(self):
-        address = '192.168.1.1:54321'
-        endpoint = endpoints.clientFromString(self.manager.reactor, 'tcp:{}'.format(address))
-        deferred = endpoint.connect
-        self.manager.connections.connecting_peers[endpoint] = deferred
+        address = IPv4Address('TCP', '192.168.1.1', 54321)
+        peer_address = PeerAddress.from_address(address)
+        self.manager.connections.connecting_outbound_peers.add(peer_address)
 
         response = yield self.web.get("status")
         data = response.json_value()
         connecting = data['connections']['connecting_peers']
         self.assertEqual(len(connecting), 1)
-        self.assertEqual(connecting[0]['address'], address)
-        self.assertIsNotNone(connecting[0]['deferred'])
+        self.assertEqual(connecting[0]['address'], str(peer_address))
 
 
 class SyncV1StatusTest(unittest.SyncV1Params, BaseStatusTest):
