@@ -24,9 +24,9 @@ from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer, PublicPeer
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
@@ -83,7 +83,6 @@ class HathorProtocol:
     state: Optional[BaseState]
     connection_time: float
     _state_instances: dict[PeerState, BaseState]
-    entrypoint: Optional[Entrypoint]
     warning_flags: set[str]
     aborting: bool
     diff_timestamp: Optional[int]
@@ -104,10 +103,12 @@ class HathorProtocol:
         settings: HathorSettings,
         use_ssl: bool,
         inbound: bool,
+        addr: PeerAddress,
     ) -> None:
         self._settings = settings
         self.my_peer = my_peer
         self.connections = p2p_manager
+        self.addr = addr
 
         assert p2p_manager.manager is not None
         self.node = p2p_manager.manager
@@ -147,12 +148,8 @@ class HathorProtocol:
         self.ratelimit: RateLimiter = RateLimiter(self.reactor)
         # self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
-        # Connection string of the peer
-        # Used to validate if entrypoints has this string
-        self.entrypoint: Optional[Entrypoint] = None
-
         # Peer id sent in the connection url that is expected to connect (optional)
-        self.expected_peer_id: Optional[str] = None
+        self.expected_peer_id: Optional[str] = None  # TODO: This is unused?? Check if there's test covering
 
         # Set of warning flags that may be added during the connection process
         self.warning_flags: set[str] = set()
@@ -253,11 +250,6 @@ class HathorProtocol:
 
         if self.connections:
             self.connections.on_peer_connect(self)
-
-    def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
-        """Called when we successfully establish an outbound connection to a peer."""
-        # Save the used entrypoint in protocol so we can validate that it matches the entrypoints data
-        self.entrypoint = entrypoint
 
     def on_peer_ready(self) -> None:
         assert self.connections is not None
@@ -396,6 +388,10 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
     It is simply a TCP connection which sends one message per line.
     """
     MAX_LENGTH = 65536
+
+    def makeConnection(self, transport: ITransport) -> None:
+        assert self.addr == PeerAddress.from_address(transport.getPeer())
+        super().makeConnection(transport)
 
     def connectionMade(self) -> None:
         super(HathorLineReceiver, self).connectionMade()

@@ -1,9 +1,9 @@
-from twisted.internet import endpoints
+from twisted.internet.address import IPv4Address
 from twisted.internet.defer import inlineCallbacks
 
 import hathor
 from hathor.conf.unittests import SETTINGS
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.resources import StatusResource
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -16,14 +16,15 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(StatusResource(self.manager))
-        self.entrypoint = Entrypoint.parse('tcp://192.168.1.1:54321')
-        self.manager.connections.my_peer.info.entrypoints.append(self.entrypoint)
+        address1 = IPv4Address('TCP', '192.168.1.1', 54321)
+        self.manager.connections.my_peer.info.entrypoints.append(PeerAddress.from_address(address1))
         self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
         self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
 
         self.manager2 = self.create_peer('testnet')
-        self.manager2.connections.my_peer.info.entrypoints.append(self.entrypoint)
-        self.conn1 = FakeConnection(self.manager, self.manager2)
+        address2 = IPv4Address('TCP', '192.168.1.1', 54322)
+        self.manager2.connections.my_peer.info.entrypoints.append(PeerAddress.from_address(address2))
+        self.conn1 = FakeConnection(self.manager, self.manager2, addr1=address1, addr2=address2)
 
     @inlineCallbacks
     def test_get(self):
@@ -98,17 +99,14 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_connecting_peers(self):
-        address = '192.168.1.1:54321'
-        endpoint = endpoints.clientFromString(self.manager.reactor, 'tcp:{}'.format(address))
-        deferred = endpoint.connect
-        self.manager.connections.connecting_peers[endpoint] = deferred
+        peer_address = PeerAddress.parse('tcp://192.168.1.1:54321')
+        self.manager.connections.connecting_peers.add(peer_address)
 
         response = yield self.web.get("status")
         data = response.json_value()
         connecting = data['connections']['connecting_peers']
         self.assertEqual(len(connecting), 1)
-        self.assertEqual(connecting[0]['address'], address)
-        self.assertIsNotNone(connecting[0]['deferred'])
+        self.assertEqual(connecting[0]['address'], str(peer_address))
 
 
 class SyncV1StatusTest(unittest.SyncV1Params, BaseStatusTest):

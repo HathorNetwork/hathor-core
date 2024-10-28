@@ -2,10 +2,11 @@ import tempfile
 from unittest.mock import Mock
 
 import pytest
+from twisted.internet.address import IPv4Address
 
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
@@ -66,13 +67,19 @@ class BaseMetricsTest(unittest.TestCase):
             "2": PrivatePeer.auto_generated(),
             "3": PrivatePeer.auto_generated(),
         })
-        manager.connections.connected_peers.update({"1": Mock(), "2": Mock()})
-        manager.connections.handshaking_peers.update({Mock()})
+        peer1 = Mock()
+        peer1.addr = IPv4Address('TCP', 'localhost', 40403)
+        peer2 = Mock()
+        peer2.addr = IPv4Address('TCP', 'localhost', 40404)
+        peer3 = Mock()
+        peer3.addr = IPv4Address('TCP', 'localhost', 40405)
+        manager.connections.connected_peers.update({"1": peer1, "2": peer2})
+        manager.connections.handshaking_peers.update({'3': peer3})
 
         # Execution
-        endpoint = Entrypoint.parse('tcp://127.0.0.1:8005')
+        endpoint = PeerAddress.parse('tcp://127.0.0.1:8005')
         # This will trigger sending to the pubsub one of the network events
-        manager.connections.connect_to(endpoint, use_ssl=True)
+        manager.connections.connect_to_addr(endpoint)
 
         self.run_to_completion()
 
@@ -224,7 +231,8 @@ class BaseMetricsTest(unittest.TestCase):
                 p2p_manager=manager.connections,
                 use_ssl=False,
                 inbound=False,
-                settings=self._settings
+                settings=self._settings,
+                addr=IPv4Address('TCP', 'localhost', 40403),
             )
             protocol._peer = PrivatePeer.auto_generated().to_public_peer()
 
@@ -246,9 +254,9 @@ class BaseMetricsTest(unittest.TestCase):
         fake_peers[2].metrics.discarded_blocks = 3
         fake_peers[2].metrics.discarded_txs = 3
 
-        manager.connections.connections.add(fake_peers[0])
-        manager.connections.connections.add(fake_peers[1])
-        manager.connections.connections.add(fake_peers[2])
+        manager.connections.connections[fake_peers[0].peer.id] = fake_peers[0]
+        manager.connections.connections[fake_peers[1].peer.id] = fake_peers[1]
+        manager.connections.connections[fake_peers[2].peer.id] = fake_peers[2]
 
         # Execution
         manager.metrics._collect_data()

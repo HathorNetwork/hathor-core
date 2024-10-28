@@ -55,7 +55,7 @@ from typing_extensions import Self
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_dns, generate_certificate
 from hathor.util import not_none
@@ -72,14 +72,6 @@ class InvalidPeerIdException(Exception):
 
 class PeerFlags(str, Enum):
     RETRIES_EXCEEDED = 'retries_exceeded'
-
-
-def _parse_entrypoint(entrypoint_string: str) -> Entrypoint:
-    """ Helper function to parse an entrypoint from string."""
-    entrypoint = Entrypoint.parse(entrypoint_string)
-    if entrypoint.peer_id is not None:
-        raise ValueError('do not add id= to peer.json entrypoints')
-    return entrypoint
 
 
 def _parse_pubkey(pubkey_string: str) -> rsa.RSAPublicKey:
@@ -114,7 +106,7 @@ class PeerInfo:
     """ Stores entrypoint and connection attempts information.
     """
 
-    entrypoints: list[Entrypoint] = field(default_factory=list)
+    entrypoints: list[PeerAddress] = field(default_factory=list)
     retry_timestamp: int = 0   # should only try connecting to this peer after this timestamp
     retry_interval: int = 5     # how long to wait for next connection retry. It will double for each failure
     retry_attempts: int = 0     # how many retries were made
@@ -136,58 +128,26 @@ class PeerInfo:
     async def validate_entrypoint(self, protocol: HathorProtocol) -> bool:
         """ Validates if connection entrypoint is one of the peer entrypoints
         """
-        found_entrypoint = False
-
         # If has no entrypoints must be behind a NAT, so we add the flag to the connection
         if len(self.entrypoints) == 0:
             protocol.warning_flags.add(protocol.WarningFlags.NO_ENTRYPOINTS)
             # If there are no entrypoints, we don't need to validate it
-            found_entrypoint = True
+            return True
 
         # Entrypoint validation with connection string and connection host
         # Entrypoints have the format tcp://IP|name:port
         for entrypoint in self.entrypoints:
-            if protocol.entrypoint is not None:
-                # Connection string has the format tcp://IP:port
-                # So we must consider that the entrypoint could be in name format
-                if protocol.entrypoint.equals_ignore_peer_id(entrypoint):
-                    # XXX: wrong peer-id should not make it into self.entrypoints
-                    assert not protocol.entrypoint.peer_id_conflicts_with(entrypoint), 'wrong peer-id was added before'
-                    # Found the entrypoint
-                    found_entrypoint = True
-                    break
-                # TODO: don't use `daa.TEST_MODE` for this
-                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
-                result = await discover_dns(entrypoint.host, test_mode)
-                if protocol.entrypoint in result:
-                    # Found the entrypoint
-                    found_entrypoint = True
-                    break
-            else:
-                # When the peer is the server part of the connection we don't have the full entrypoint description
-                # So we can only validate the host from the protocol
-                assert protocol.transport is not None
-                connection_remote = protocol.transport.getPeer()
-                connection_host = getattr(connection_remote, 'host', None)
-                if connection_host is None:
-                    continue
-                # Connection host has only the IP
-                # So we must consider that the entrypoint could be in name format and we just validate the host
-                if connection_host == entrypoint.host:
-                    found_entrypoint = True
-                    break
-                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
-                result = await discover_dns(entrypoint.host, test_mode)
-                if connection_host in [entrypoint.host for entrypoint in result]:
-                    # Found the entrypoint
-                    found_entrypoint = True
-                    break
+            # Connection string has the format tcp://IP:port
+            # So we must consider that the entrypoint could be in name format
+            if protocol.addr == entrypoint:
+                return True
+            # TODO: don't use `daa.TEST_MODE` for this
+            test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
+            result = await discover_dns(entrypoint.host, test_mode)
+            if protocol.addr in result:
+                return True
 
-        if not found_entrypoint:
-            # In case the validation fails
-            return False
-
-        return True
+        return False
 
     def increment_retry_attempt(self, now: int) -> None:
         """ Updates timestamp for next retry.
@@ -244,7 +204,7 @@ class UnverifiedPeer:
         """
         return cls(
             id=PeerId(data['id']),
-            info=PeerInfo(entrypoints=[_parse_entrypoint(e) for e in data.get('entrypoints', [])]),
+            info=PeerInfo(entrypoints=[PeerAddress.parse(addr) for addr in data.get('entrypoints', [])]),
         )
 
     def merge(self, other: UnverifiedPeer) -> None:

@@ -19,10 +19,11 @@ from typing import TYPE_CHECKING, Optional
 
 from OpenSSL.crypto import X509
 from structlog import get_logger
-from twisted.internet.address import HostnameAddress
+from twisted.internet.address import IPv4Address
 from twisted.internet.testing import StringTransport
 
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_address import PeerAddress
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -32,8 +33,8 @@ logger = get_logger()
 
 
 class HathorStringTransport(StringTransport):
-    def __init__(self, peer: PrivatePeer):
-        super().__init__()
+    def __init__(self, peer: PrivatePeer, *, peer_address: IPv4Address):
+        super().__init__(peerAddress=peer_address)
         self._peer = peer
 
     @property
@@ -46,8 +47,19 @@ class HathorStringTransport(StringTransport):
 
 
 class FakeConnection:
-    def __init__(self, manager1: 'HathorManager', manager2: 'HathorManager', *, latency: float = 0,
-                 autoreconnect: bool = False):
+    _next_port: int = 49000
+    _port_per_manager: dict['HathorManager', int] = {}
+
+    def __init__(
+        self,
+        manager1: 'HathorManager',
+        manager2: 'HathorManager',
+        *,
+        latency: float = 0,
+        autoreconnect: bool = False,
+        addr1: IPv4Address | None = None,
+        addr2: IPv4Address | None = None,
+    ):
         """
         :param: latency: Latency between nodes in seconds
         """
@@ -64,7 +76,17 @@ class FakeConnection:
         self._buf1: deque[str] = deque()
         self._buf2: deque[str] = deque()
 
+        self.addr1 = addr1 or IPv4Address('TCP', '127.0.0.1', self._get_port(manager1))
+        self.addr2 = addr2 or IPv4Address('TCP', '127.0.0.1', self._get_port(manager2))
         self.reconnect()
+
+    @classmethod
+    def _get_port(cls, manager: 'HathorManager') -> int:
+        port = cls._port_per_manager.get(manager)
+        if port is None:
+            port = cls._next_port
+            cls._next_port += 1
+        return port
 
     @property
     def proto1(self):
@@ -234,10 +256,11 @@ class FakeConnection:
             self.disconnect(Failure(Exception('forced reconnection')))
         self._buf1.clear()
         self._buf2.clear()
-        self._proto1 = self.manager1.connections.server_factory.buildProtocol(HostnameAddress(b'fake', 0))
-        self._proto2 = self.manager2.connections.client_factory.buildProtocol(HostnameAddress(b'fake', 0))
-        self.tr1 = HathorStringTransport(self._proto2.my_peer)
-        self.tr2 = HathorStringTransport(self._proto1.my_peer)
+        self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
+        self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
+        self.manager2.connections.connecting_peers.add(PeerAddress.from_address(self.addr1))
+        self.tr1 = HathorStringTransport(self._proto2.my_peer, peer_address=self.addr2)
+        self.tr2 = HathorStringTransport(self._proto1.my_peer, peer_address=self.addr1)
         self._proto1.makeConnection(self.tr1)
         self._proto2.makeConnection(self.tr2)
         self.is_connected = True

@@ -247,14 +247,14 @@ class Metrics:
         """
         self.peer_connection_metrics.clear()
 
-        for connection in self.connections.connections:
+        for connection in self.connections.connections.values():
             if not connection._peer:
                 # A connection without peer will not be able to communicate
                 # So we can just discard it for the sake of the metrics
                 continue
 
             metric = PeerConnectionMetrics(
-                connection_string=str(connection.entrypoint) if connection.entrypoint else "",
+                connection_string=str(connection.addr),
                 peer_id=str(connection.peer.id),
                 network=settings.NETWORK_NAME,
                 received_messages=connection.metrics.received_messages,

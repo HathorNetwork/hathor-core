@@ -4,9 +4,9 @@ from twisted.internet.defer import Deferred
 from twisted.names.dns import TXT, A, Record_A, Record_TXT, RRHeader
 from typing_extensions import override
 
-from hathor.p2p.entrypoint import Entrypoint, Protocol
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_address import PeerAddress, Protocol
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, PeerDiscovery
 from hathor.p2p.peer_discovery.dns import LookupResult
 from hathor.pubsub import PubSubManager
@@ -19,9 +19,9 @@ class MockPeerDiscovery(PeerDiscovery):
         self.mocked_host_ports = mocked_host_ports
 
     @override
-    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], None]) -> None:
+    async def discover_and_connect(self, connect_to: Callable[[PeerAddress], None]) -> None:
         for host, port in self.mocked_host_ports:
-            connect_to(Entrypoint(Protocol.TCP, host, port))
+            connect_to(PeerAddress(Protocol.TCP, host, port))
 
 
 class MockDNSPeerDiscovery(DNSPeerDiscovery):
@@ -62,8 +62,8 @@ class BootstrapTestCase(unittest.TestCase):
         connections.add_peer_discovery(MockPeerDiscovery(host_ports2))
         connections.do_discovery()
         self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
-        self.assertEqual(connecting_entrypoints, {
+        connecting_addrs = {str(addr) for addr in connections.connecting_peers}
+        self.assertEqual(connecting_addrs, {
             'tcp://foobar:1234',
             'tcp://127.0.0.99:9999',
             'tcp://baz:456',
@@ -85,8 +85,8 @@ class BootstrapTestCase(unittest.TestCase):
         connections.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a))
         connections.do_discovery()
         self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
-        self.assertEqual(connecting_entrypoints, {
+        connecting_addrs = {str(addr) for addr in connections.connecting_peers}
+        self.assertEqual(connecting_addrs, {
             'tcp://127.0.0.99:40403',
             'tcp://127.0.0.88:40403',
             'tcp://foobar:1234',

@@ -18,16 +18,16 @@ from structlog import get_logger
 from twisted.internet import endpoints
 from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IListeningPort, IProtocol, IProtocolFactory, IStreamClientEndpoint
+from twisted.internet.interfaces import IListeningPort, IProtocol, IProtocolFactory
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import UnverifiedPeerStorage, VerifiedPeerStorage
@@ -59,11 +59,6 @@ class _SyncRotateInfo(NamedTuple):
     to_enable: set[PeerId]
 
 
-class _ConnectingPeer(NamedTuple):
-    entrypoint: Entrypoint
-    endpoint_deferred: Deferred
-
-
 class PeerConnectionsMetrics(NamedTuple):
     connecting_peers_count: int
     handshaking_peers_count: int
@@ -79,10 +74,10 @@ class ConnectionsManager:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
 
     manager: Optional['HathorManager']
-    connections: set[HathorProtocol]
+    connections: dict[PeerAddress, HathorProtocol]
     connected_peers: dict[PeerId, HathorProtocol]
-    connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
-    handshaking_peers: set[HathorProtocol]
+    connecting_peers: set[PeerAddress]
+    handshaking_peers: dict[PeerAddress, HathorProtocol]
     whitelist_only: bool
     unverified_peer_storage: UnverifiedPeerStorage
     verified_peer_storage: VerifiedPeerStorage
@@ -143,13 +138,13 @@ class ConnectionsManager:
         self.enable_rate_limiter()
 
         # All connections.
-        self.connections = set()
+        self.connections = {}
 
         # List of pending connections.
-        self.connecting_peers = {}
+        self.connecting_peers = set()
 
         # List of peers connected but still not ready to communicate.
-        self.handshaking_peers = set()
+        self.handshaking_peers = {}
 
         # List of peers connected and ready to communicate.
         self.connected_peers = {}
@@ -264,7 +259,7 @@ class ConnectionsManager:
         Do a discovery and connect on all discovery strategies.
         """
         for peer_discovery in self.peer_discoveries:
-            coro = peer_discovery.discover_and_connect(self.connect_to)
+            coro = peer_discovery.discover_and_connect(self.connect_to_addr)
             Deferred.fromCoroutine(coro)
 
     def disable_rate_limiter(self) -> None:
@@ -367,11 +362,9 @@ class ConnectionsManager:
             conn.disconnect(force=force)
 
     def on_connection_failure(self, failure: Failure, peer: Optional[UnverifiedPeer | PublicPeer],
-                              endpoint: IStreamClientEndpoint) -> None:
-        connecting_peer = self.connecting_peers[endpoint]
-        entrypoint = connecting_peer.entrypoint
-        self.log.warn('connection failure', entrypoint=entrypoint, failure=failure.getErrorMessage())
-        self.connecting_peers.pop(endpoint)
+                              addr: PeerAddress) -> None:
+        self.log.warn('connection failure', addr=str(addr), failure=failure.getErrorMessage())
+        self.connecting_peers.remove(addr)
 
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTION_FAILED,
@@ -385,8 +378,8 @@ class ConnectionsManager:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
-        self.connections.add(protocol)
-        self.handshaking_peers.add(protocol)
+        self.connections[protocol.addr] = protocol
+        self.handshaking_peers[protocol.addr] = protocol
 
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
@@ -400,7 +393,7 @@ class ConnectionsManager:
         self.verified_peer_storage.add_or_replace(protocol.peer)
         assert protocol.peer.id is not None
 
-        self.handshaking_peers.remove(protocol)
+        self.handshaking_peers.pop(protocol.addr)
         self.unverified_peer_storage.pop(protocol.peer.id, None)
 
         # we emit the event even if it's a duplicate peer as a matching
@@ -444,9 +437,8 @@ class ConnectionsManager:
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
-        self.connections.discard(protocol)
-        if protocol in self.handshaking_peers:
-            self.handshaking_peers.remove(protocol)
+        self.connections.pop(protocol.addr)
+        self.handshaking_peers.pop(protocol.addr, None)
         if protocol._peer is not None:
             existing_protocol = self.connected_peers.pop(protocol.peer.id, None)
             if existing_protocol is None:
@@ -467,23 +459,16 @@ class ConnectionsManager:
 
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""
-        for conn in self.connections:
-            yield conn
+        yield from self.connections.values()
 
     def iter_ready_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over ready connections."""
-        for conn in self.connected_peers.values():
-            yield conn
+        yield from self.connected_peers.values()
 
-    def iter_not_ready_endpoints(self) -> Iterable[Entrypoint]:
+    def iter_not_ready_connections(self) -> Iterable[PeerAddress]:
         """Iterate over not-ready connections."""
-        for connecting_peer in self.connecting_peers.values():
-            yield connecting_peer.entrypoint
-        for protocol in self.handshaking_peers:
-            if protocol.entrypoint is not None:
-                yield protocol.entrypoint
-            else:
-                self.log.warn('handshaking protocol has empty connection string', protocol=protocol)
+        yield from self.connecting_peers
+        yield from self.handshaking_peers.keys()
 
     def is_peer_connected(self, peer_id: PeerId) -> bool:
         """
@@ -589,27 +574,23 @@ class ConnectionsManager:
 
         assert peer.id is not None
         if peer.info.can_retry(now):
-            self.connect_to(self.rng.choice(peer.info.entrypoints), peer)
+            self.connect_to_addr(self.rng.choice(peer.info.entrypoints), peer)
 
-    def _connect_to_callback(
-        self,
-        protocol: IProtocol,
-        peer: Optional[UnverifiedPeer | PublicPeer],
-        endpoint: IStreamClientEndpoint,
-        entrypoint: Entrypoint,
-    ) -> None:
+    def _connect_to_callback(self, protocol: IProtocol, expected_addr: PeerAddress) -> None:
         """Called when we successfully connect to a peer."""
+        hathor_protocol: HathorProtocol
         if isinstance(protocol, HathorProtocol):
-            protocol.on_outbound_connect(entrypoint)
+            hathor_protocol = protocol
         else:
             assert isinstance(protocol, TLSMemoryBIOProtocol)
             assert isinstance(protocol.wrappedProtocol, HathorProtocol)
-            protocol.wrappedProtocol.on_outbound_connect(entrypoint)
-        self.connecting_peers.pop(endpoint)
+            hathor_protocol = protocol.wrappedProtocol
+        assert hathor_protocol.addr == expected_addr
+        self.connecting_peers.remove(expected_addr)
 
-    def connect_to(
+    def connect_to_addr(
         self,
-        entrypoint: Entrypoint,
+        addr: PeerAddress,
         peer: UnverifiedPeer | PublicPeer | None = None,
         use_ssl: bool | None = None,
     ) -> None:
@@ -618,24 +599,18 @@ class ConnectionsManager:
 
         If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
-        if entrypoint.peer_id is not None and peer is not None and str(entrypoint.peer_id) != peer.id:
-            self.log.debug('skipping because the entrypoint peer_id does not match the actual peer_id',
-                           entrypoint=entrypoint)
+        if addr in self.connected_peers:
+            self.log.debug('skipping because we are already connecting to this address', addr=str(addr))
             return
 
-        for connecting_peer in self.connecting_peers.values():
-            if connecting_peer.entrypoint.equals_ignore_peer_id(entrypoint):
-                self.log.debug('skipping because we are already connecting to this endpoint', entrypoint=entrypoint)
-                return
-
-        if self.localhost_only and not entrypoint.is_localhost():
-            self.log.debug('skip because of simple localhost check', entrypoint=entrypoint)
+        if self.localhost_only and not addr.is_localhost():
+            self.log.debug('skip because of simple localhost check', addr=str(addr))
             return
 
         if use_ssl is None:
             use_ssl = self.use_ssl
 
-        endpoint = entrypoint.to_client_endpoint(self.reactor)
+        endpoint = addr.to_client_endpoint(self.reactor)
 
         factory: IProtocolFactory
         if use_ssl:
@@ -648,11 +623,11 @@ class ConnectionsManager:
             peer.info.increment_retry_attempt(now)
 
         deferred = endpoint.connect(factory)
-        self.connecting_peers[endpoint] = _ConnectingPeer(entrypoint, deferred)
+        self.connecting_peers.add(addr)
 
-        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)  # type: ignore
-        deferred.addErrback(self.on_connection_failure, peer, endpoint)  # type: ignore
-        self.log.info('connect to', entrypoint=str(entrypoint), peer=str(peer))
+        deferred.addCallback(self._connect_to_callback, addr)
+        deferred.addErrback(self.on_connection_failure, peer, addr)
+        self.log.info('connecting to', addr=str(addr), peer=str(peer))
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTING,
             peer=peer,
@@ -708,13 +683,13 @@ class ConnectionsManager:
         assert self.manager is not None
         for address in self._listen_addresses:
             if old_hostname is not None:
-                old_entrypoint = Entrypoint.from_hostname_address(old_hostname, address)
+                old_entrypoint = PeerAddress.from_hostname_address(old_hostname, address)
                 if old_entrypoint in self.my_peer.info.entrypoints:
                     self.my_peer.info.entrypoints.remove(old_entrypoint)
             self._add_hostname_entrypoint(new_hostname, address)
 
     def _add_hostname_entrypoint(self, hostname: str, address: IPv4Address | IPv6Address) -> None:
-        hostname_entrypoint = Entrypoint.from_hostname_address(hostname, address)
+        hostname_entrypoint = PeerAddress.from_hostname_address(hostname, address)
         self.my_peer.info.entrypoints.append(hostname_entrypoint)
 
     def get_connection_to_drop(self, protocol: HathorProtocol) -> HathorProtocol:

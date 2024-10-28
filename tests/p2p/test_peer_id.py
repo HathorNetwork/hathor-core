@@ -2,12 +2,12 @@ import os
 import shutil
 import tempfile
 from typing import cast
-from unittest.mock import Mock
 
+from twisted.internet.address import IPv4Address
 from twisted.internet.interfaces import ITransport
 
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer import InvalidPeerIdException, PrivatePeer, PublicPeer, UnverifiedPeer
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import VerifiedPeerStorage
 from tests import unittest
@@ -87,9 +87,9 @@ class PeerIdTest(unittest.TestCase):
         self.assertEqual(peer.public_key, p1.public_key)
         self.assertEqual(peer.info.entrypoints, [])
 
-        ep1 = Entrypoint.parse('tcp://127.0.0.1:1001')
-        ep2 = Entrypoint.parse('tcp://127.0.0.1:1002')
-        ep3 = Entrypoint.parse('tcp://127.0.0.1:1003')
+        ep1 = PeerAddress.parse('tcp://127.0.0.1:1001')
+        ep2 = PeerAddress.parse('tcp://127.0.0.1:1002')
+        ep3 = PeerAddress.parse('tcp://127.0.0.1:1003')
 
         p3 = PrivatePeer.auto_generated().to_public_peer()
         p3.info.entrypoints.append(ep1)
@@ -148,7 +148,7 @@ class PeerIdTest(unittest.TestCase):
     def test_validate_certificate(self) -> None:
         builder = TestBuilder()
         artifacts = builder.build()
-        protocol = artifacts.p2p_manager.server_factory.buildProtocol(Mock())
+        protocol = artifacts.p2p_manager.server_factory.buildProtocol(IPv4Address('TCP', 'localhost', 40403))
 
         peer = PrivatePeer.auto_generated()
 
@@ -211,37 +211,24 @@ class BasePeerIdTest(unittest.TestCase):
     async def test_validate_entrypoint(self) -> None:
         manager = self.create_peer('testnet', unlock_wallet=False)
         peer = manager.my_peer
-        peer.info.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
+        peer.info.entrypoints = [PeerAddress.parse('tcp://127.0.0.1:40403')]
 
         # we consider that we are starting the connection to the peer
-        protocol = manager.connections.client_factory.buildProtocol('127.0.0.1')
-        protocol.entrypoint = Entrypoint.parse('tcp://127.0.0.1:40403')
+        protocol = manager.connections.client_factory.buildProtocol(IPv4Address('TCP', 'localhost', 40403))
+        protocol.addr = PeerAddress.parse('tcp://127.0.0.1:40403')
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
         # if entrypoint is an URI
-        peer.info.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
+        peer.info.entrypoints = [PeerAddress.parse('tcp://uri_name:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
         # test invalid. DNS in test mode will resolve to '127.0.0.1:40403'
-        protocol.entrypoint = Entrypoint.parse('tcp://45.45.45.45:40403')
+        protocol.addr = PeerAddress.parse('tcp://45.45.45.45:40403')
         result = await peer.info.validate_entrypoint(protocol)
         self.assertFalse(result)
 
-        # now test when receiving the connection - i.e. the peer starts it
-        protocol.entrypoint = None
-        peer.info.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
-
-        from collections import namedtuple
-        DummyPeer = namedtuple('DummyPeer', 'host')
-
-        class FakeTransport:
-            def getPeer(self) -> DummyPeer:
-                return DummyPeer(host='127.0.0.1')
-        protocol.transport = FakeTransport()
-        result = await peer.info.validate_entrypoint(protocol)
-        self.assertTrue(result)
         # if entrypoint is an URI
-        peer.info.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
+        peer.info.entrypoints = [PeerAddress.parse('tcp://uri_name:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
 

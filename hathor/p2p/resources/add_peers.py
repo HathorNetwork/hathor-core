@@ -20,7 +20,7 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.peer_discovery import BootstrapPeerDiscovery
 from hathor.util import json_dumpb, json_loadb
 
@@ -60,7 +60,7 @@ class AddPeersResource(Resource):
             })
 
         try:
-            entrypoints = list(map(Entrypoint.parse, raw_entrypoints))
+            entrypoints = list(map(PeerAddress.parse, raw_entrypoints))
         except ValueError:
             return json_dumpb({
                 'success': False,
@@ -69,14 +69,14 @@ class AddPeersResource(Resource):
 
         known_peers = self.manager.connections.verified_peer_storage.values()
 
-        def already_connected(entrypoint: Entrypoint) -> bool:
+        def already_connected(addr: PeerAddress) -> bool:
             # ignore peers that we're already trying to connect
-            if entrypoint in self.manager.connections.iter_not_ready_endpoints():
+            if addr in self.manager.connections.iter_not_ready_connections():
                 return True
 
             # remove peers we already know about
             for peer in known_peers:
-                if entrypoint in peer.entrypoints:
+                if addr in peer.info.entrypoints:
                     return True
 
             return False
@@ -85,7 +85,7 @@ class AddPeersResource(Resource):
 
         pd = BootstrapPeerDiscovery(filtered_peers)
         # this fires and forget the coroutine, which is compatible with the original behavior
-        coro = pd.discover_and_connect(self.manager.connections.connect_to)
+        coro = pd.discover_and_connect(self.manager.connections.connect_to_addr)
         Deferred.fromCoroutine(coro)
 
         ret = {'success': True, 'peers': [str(p) for p in filtered_peers]}

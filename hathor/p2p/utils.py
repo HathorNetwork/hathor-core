@@ -29,7 +29,7 @@ from twisted.internet.interfaces import IAddress
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.transaction.genesis import get_representation_for_all_genesis
@@ -78,7 +78,7 @@ def get_settings_hello_dict(settings: HathorSettings) -> dict[str, Any]:
     return settings_dict
 
 
-async def discover_dns(host: str, test_mode: int = 0) -> list[Entrypoint]:
+async def discover_dns(host: str, test_mode: int = 0) -> list[PeerAddress]:
     """ Start a DNS peer discovery object and execute a search for the host
 
         Returns the DNS string from the requested host

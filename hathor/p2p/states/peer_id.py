@@ -94,6 +94,7 @@ class PeerIdState(BaseState):
 
         # If the connection URL had a peer-id parameter we need to check it's the same
         if protocol.expected_peer_id and peer.id != protocol.expected_peer_id:
+            # TODO: this is untested
             protocol.send_error_and_close_connection('Peer id different from the requested one.')
             return
 

@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 from twisted.internet.protocol import Protocol
 from twisted.python.failure import Failure
 
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_address import PeerAddress
 from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
 from hathor.simulator import FakeConnection
 from hathor.util import json_dumps, json_loadb
@@ -72,7 +72,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
 
     def test_peer_with_entrypoint(self) -> None:
         entrypoint_str = 'tcp://192.168.1.1:54321'
-        entrypoint = Entrypoint.parse(entrypoint_str)
+        entrypoint = PeerAddress.parse(entrypoint_str)
         self.peer1.info.entrypoints.append(entrypoint)
         self.peer2.info.entrypoints.append(entrypoint)
         self.conn.run_one_step()  # HELLO
@@ -277,19 +277,19 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_on_disconnect(self) -> None:
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
         self.conn.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
 
     def test_on_disconnect_after_hello(self) -> None:
         self.conn.run_one_step()  # HELLO
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
         self.conn.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
 
     def test_on_disconnect_after_peer(self) -> None:
         self.conn.run_one_step()  # HELLO
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
         # No peer id in the peer_storage (known_peers)
         self.assertNotIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
         # The peer READY now depends on a message exchange from both peers, so we need one more step
@@ -298,7 +298,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
         # Peer id 2 in the peer_storage (known_peers) after connection
         self.assertIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers.values())
         self.conn.disconnect(Failure(Exception('testing')))
         # Peer id 2 in the peer_storage (known_peers) after disconnection but before looping call
         self.assertIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
