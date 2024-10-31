@@ -21,17 +21,19 @@ from tests import unittest
 settings = HathorSettings()
 
 
-def _load_nc_code(filename: str) -> bytes:
-    cur_dir = os.path.dirname(__file__)
+def _load_bultin_nc_code(filename: str, blueprint_name: str) -> bytes:
+    from hathor.nanocontracts import blueprints
+    cur_dir = os.path.dirname(blueprints.__file__)
     filepath = os.path.join(cur_dir, filename)
     code_bytes = bytearray()
     with open(filepath, 'rb') as nc_file:
         for line in nc_file.readlines():
             code_bytes.extend(line)
+    code_bytes.extend(b'__blueprint__ = ' + blueprint_name.encode())
     return bytes(code_bytes)
 
 
-ON_CHAIN_BET_NC_CODE: bytes = _load_nc_code('bet.py')
+ON_CHAIN_BET_NC_CODE: bytes = _load_bultin_nc_code('bet.py', 'Bet')
 
 
 class OnChainBet(NamedTuple):
