@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ast
 import zlib
 from enum import Enum
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
@@ -21,6 +22,7 @@ from typing_extensions import Self, override
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts.blueprint import Blueprint
+from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
@@ -38,166 +40,40 @@ ON_CHAIN_BLUEPRINT_VERSION: int = 1
 # this is the name we expect the source code to expose for the Blueprint class
 BLUEPRINT_CLASS_NAME: str = '__blueprint__'
 
-# list of allowed builtins during execution of an on-chain blueprint code
-EXEC_ALLOWED_BUILTINS: set[str] = {
-    'False',
-    'None',
-    'True',
-    '__build_class__',
+# source compatibility with Python 3.10
+PYTHON_CODE_COMPAT_VERSION = (3, 10)
+
+# this is what's allowed to be imported, to be checked in the AST and in runtime
+ALLOWED_IMPORTS = {
+    # globals
+    'math': {'ceil', 'floor'},
+    'typing': {'Optional', 'NamedTuple', 'TypeAlias'},
+    # hathor
+    'hathor.nanocontracts': {'Blueprint'},
+    'hathor.nanocontracts.blueprint': {'Blueprint'},
+    'hathor.nanocontracts.context': {'Context'},
+    'hathor.nanocontracts.exception': {'NCFail'},
+    'hathor.nanocontracts.types': {'NCAction', 'NCActionType', 'SignedData', 'public', 'view', 'Address', 'Amount',
+                                   'Timestamp', 'TokenUid', 'TxOutputScript', 'BlueprintId', 'ContractId', 'VertexId'},
+}
+
+# these names aren't allowed in the code, to be checked in the AST only
+AST_NAME_BLACKLIST = {
+    '__builtins__',
     '__import__',
-    '__name__',
-    'abs',
-    'all',
-    'any',
-    'ascii',
-    'bin',
-    'bool',
-    'bytearray',
-    'bytes',
-    'classmethod',
-    'complex',
-    'dict',
-    'divmod',
-    'enumerate',
-    'filter',
-    'float',
-    'format',
-    'hex',
-    'int',
-    'iter',
-    'len',
-    'list',
-    'max',
-    'min',
-    'next',
-    'pow',
-    'property',
-    'range',
-    'round',
-    'set',
-    'slice',
-    'staticmethod',
-    'str',
-    'sum',
-    'super',
-    'tuple',
-    'type',
-    'zip',
-    'sorted',
-    'oct',
-    'ord',
-    'frozenset',
-    'chr',
-    'map',
-    'hash',
-    'callable',
-    # These are the ones that were omitted:
-    # 'ArithmeticError',
-    # 'AssertionError',
-    # 'AttributeError',
-    # 'BaseException',
-    # 'BaseExceptionGroup',
-    # 'BlockingIOError',
-    # 'BrokenPipeError',
-    # 'BufferError',
-    # 'BytesWarning',
-    # 'ChildProcessError',
-    # 'ConnectionAbortedError',
-    # 'ConnectionError',
-    # 'ConnectionRefusedError',
-    # 'ConnectionResetError',
-    # 'DeprecationWarning',
-    # 'EOFError',
-    # 'Ellipsis',
-    # 'EncodingWarning',
-    # 'EnvironmentError',
-    # 'Exception',
-    # 'ExceptionGroup',
-    # 'FileExistsError',
-    # 'FileNotFoundError',
-    # 'FloatingPointError',
-    # 'FutureWarning',
-    # 'GeneratorExit',
-    # 'IOError',
-    # 'ImportError',
-    # 'ImportWarning',
-    # 'IndentationError',
-    # 'IndexError',
-    # 'InterruptedError',
-    # 'IsADirectoryError',
-    # 'KeyError',
-    # 'KeyboardInterrupt',
-    # 'LookupError',
-    # 'MemoryError',
-    # 'ModuleNotFoundError',
-    # 'NameError',
-    # 'NotADirectoryError',
-    # 'NotImplemented',
-    # 'NotImplementedError',
-    # 'OSError',
-    # 'OverflowError',
-    # 'PendingDeprecationWarning',
-    # 'PermissionError',
-    # 'ProcessLookupError',
-    # 'RecursionError',
-    # 'ReferenceError',
-    # 'ResourceWarning',
-    # 'RuntimeError',
-    # 'RuntimeWarning',
-    # 'StopAsyncIteration',
-    # 'StopIteration',
-    # 'SyntaxError',
-    # 'SyntaxWarning',
-    # 'SystemError',
-    # 'SystemExit',
-    # 'TabError',
-    # 'TimeoutError',
-    # 'TypeError',
-    # 'UnboundLocalError',
-    # 'UnicodeDecodeError',
-    # 'UnicodeEncodeError',
-    # 'UnicodeError',
-    # 'UnicodeTranslateError',
-    # 'UnicodeWarning',
-    # 'UserWarning',
-    # 'ValueError',
-    # 'Warning',
-    # 'ZeroDivisionError',
-    # '__debug__',
-    # '__doc__',
-    # '__loader__',
-    # '__package__',
-    # '__spec__',
-    # 'aiter',
-    # 'anext',
-    # 'breakpoint',
-    # 'compile',
-    # 'copyright',
-    # 'credits',
-    # 'delattr',
-    # 'dir',
-    # 'eval',
-    # 'exec',
-    # 'exit',
-    # 'getattr',
-    # 'globals',
-    # 'hasattr',
-    # 'help',
-    # 'id',
-    # 'input',
-    # 'isinstance',
-    # 'issubclass',
-    # 'license',
-    # 'locals',
-    # 'memoryview',
-    # 'object',
-    # 'open',
-    # 'print',
-    # 'quit',
-    # 'repr',
-    # 'reversed',
-    # 'setattr',
-    # 'vars',
+    'compile',
+    'delattr',
+    'dir',
+    'eval',
+    'exec',
+    'getattr',
+    'globals',
+    'hasattr',
+    'input',
+    'locals',
+    'open',
+    'setattr',
+    'vars',
 }
 
 
@@ -300,6 +176,7 @@ class OnChainBlueprint(Transaction):
         self.nc_signature: bytes = b''
 
         self.code: Code = code if code is not None else Code(CodeKind.PYTHON_GZIP, b'')
+        self._ast_cache: Optional[ast.Module] = None
         self._blueprint_loaded_env: Optional[tuple[type[Blueprint], dict[str, object]]] = None
 
     def blueprint_id(self) -> BlueprintId:
@@ -308,16 +185,21 @@ class OnChainBlueprint(Transaction):
 
     def _load_blueprint_code_exec(self) -> tuple[type[Blueprint], dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""
-        import builtins
-        env: dict[str, object] = {
-            '__builtins__': {attr: getattr(builtins, attr) for attr in EXEC_ALLOWED_BUILTINS},
-        }
-        # XXX: SECURITY: "exec" MUST NOT BE USED IN ANY CODE THAT ACCEPTS DATA FROM THE INTERNET
-        exec(self.code.text(), env)
+        from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
+        fuel = self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE
+        memory_limit = self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE
+        metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
+        try:
+            env = metered_executor.exec(self.code.text())
+        except OutOfFuelError as e:
+            self.log.error('loading blueprint module failed, fuel limit exceeded')
+            raise OCBOutOfFuelDuringLoading from e
+        except OutOfMemoryError as e:
+            self.log.error('loading blueprint module failed, memory limit exceeded')
+            raise OCBOutOfMemoryDuringLoading from e
         blueprint_class = env[BLUEPRINT_CLASS_NAME]
         assert isinstance(blueprint_class, type)
         assert issubclass(blueprint_class, Blueprint)
-        del env['__builtins__']
         return blueprint_class, env
 
     def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:

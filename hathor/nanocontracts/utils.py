@@ -12,17 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable
+from __future__ import annotations
 
-from hathor.nanocontracts.exception import (
-    NCContractCreationAtMempool,
-    NCContractCreationNotFound,
-    NCContractCreationVoided,
-)
-from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD, NanoContract
+from typing import TYPE_CHECKING, Callable
+
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
+
+if TYPE_CHECKING:
+    from hathor.nanocontracts.nanocontract import NanoContract
 
 
 def is_nc_public_method(method: Callable) -> bool:
@@ -41,6 +40,13 @@ def get_nano_contract_creation(tx_storage: TransactionStorage,
                                allow_mempool: bool = False,
                                allow_voided: bool = False) -> NanoContract:
     """Return a NanoContract creation vertex. Raise NCContractCreationNotFound otherwise."""
+    from hathor.nanocontracts.exception import (
+        NCContractCreationAtMempool,
+        NCContractCreationNotFound,
+        NCContractCreationVoided,
+    )
+    from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD, NanoContract
+
     try:
         nc = tx_storage.get_transaction(tx_id)
     except TransactionDoesNotExist as e:
