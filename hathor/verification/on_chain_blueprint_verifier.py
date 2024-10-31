@@ -22,57 +22,40 @@ from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_from_bytes_compressed
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
-from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
-
-ALLOWED_IMPORTS = {
-    # globals
-    'math': {'ceil', 'floor'},
-    'typing': {'Optional', 'NamedTuple', 'TypeAlias'},
-    # hathor
-    'hathor.nanocontracts': {'Blueprint'},
-    'hathor.nanocontracts.blueprint': {'Blueprint'},
-    'hathor.nanocontracts.context': {'Context'},
-    'hathor.nanocontracts.exception': {'NCFail'},
-    'hathor.nanocontracts.types': {'NCAction', 'NCActionType', 'SignedData', 'public', 'view', 'Address', 'Amount',
-                                   'Timestamp', 'TokenUid', 'TxOutputScript', 'BlueprintId', 'ContractId', 'VertexId'},
-}
-
-NAME_BLACKLIST = {
-    '__builtins__',
-    '__import__',
-    'compile',
-    'delattr',
-    'dir',
-    'eval',
-    'exec',
-    'getattr',
-    'globals',
-    'hasattr',
-    'input',
-    'locals',
-    'open',
-    'setattr',
-    'vars',
-}
+from hathor.nanocontracts.on_chain_blueprint import (
+    ALLOWED_IMPORTS,
+    AST_NAME_BLACKLIST,
+    BLUEPRINT_CLASS_NAME,
+    PYTHON_CODE_COMPAT_VERSION,
+)
 
 
 class _RestrictionsVisitor(ast.NodeVisitor):
+    def visit_Interactive(self, node: ast.Interactive) -> None:
+        raise AssertionError('mode="single" must not be used for parsing')
+
+    def visit_Expression(self, node: ast.Expression) -> None:
+        raise AssertionError('mode="eval" must not be used for parsing')
+
+    def visit_FunctionType(self, node: ast.Expression) -> None:
+        raise AssertionError('mode="func_type" must not be used for parsing')
+
     def visit_Import(self, node: ast.Import) -> None:
         raise SyntaxError('Import statements are not allowed.')
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.module not in ALLOWED_IMPORTS:
             raise SyntaxError(f'Import from "{node.module}" is not allowed.')
-        allowed_aliases = ALLOWED_IMPORTS[node.module]
-        for alias in node.names:
-            if alias.name not in allowed_aliases:
-                raise SyntaxError(f'Import from "{node.module}.{alias.name}" is not allowed.')
+        allowed_fromlist = ALLOWED_IMPORTS[node.module]
+        for import_what in node.names:
+            if import_what.name not in allowed_fromlist:
+                raise SyntaxError(f'Import from "{node.module}.{import_what.name}" is not allowed.')
 
     def visit_Try(self, node: ast.Try) -> None:
         raise SyntaxError('Try/Except blocks are not allowed.')
 
     def visit_Name(self, node: ast.Name) -> None:
-        if node.id in NAME_BLACKLIST:
+        if node.id in AST_NAME_BLACKLIST:
             raise SyntaxError(f'Usage or reference to {node.id} is not allowed.')
         self.generic_visit(node)
 
@@ -81,6 +64,18 @@ class _RestrictionsVisitor(ast.NodeVisitor):
             if node.attr.startswith('__'):
                 raise SyntaxError('Access to internal attributes and methods is not allowed.')
         self.generic_visit(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        raise SyntaxError('Async functions are not allowed.')
+
+    def visit_Await(self, node: ast.Await) -> None:
+        raise SyntaxError('Await is not allowed.')
+
+    def visit_AsyncFor(self, node: ast.AsyncFor) -> None:
+        raise SyntaxError('Async loops are not allowed.')
+
+    def visit_AsyncWith(self, node: ast.AsyncWith) -> None:
+        raise SyntaxError('Async contexts are not allowed.')
 
 
 class _SearchName(ast.NodeVisitor):
@@ -122,18 +117,77 @@ class OnChainBlueprintVerifier:
         except InvalidSignature as e:
             raise NCInvalidSignature from e
 
+    def _get_python_code_ast(self, tx: OnChainBlueprint) -> ast.Module:
+        from hathor.nanocontracts.on_chain_blueprint import CodeKind
+        assert tx.code.kind is CodeKind.PYTHON_GZIP, 'only Python+Gzip is supported'
+        if tx._ast_cache is not None:
+            return tx._ast_cache
+        # XXX: feature_version is a best-effort compatibility, some subtle cases could break, which is important to
+        # deal with, so this isn't a definitive solution
+        # XXX: consider this:
+        # Signature:
+        # ast.parse(
+        #     source,
+        #     filename='<unknown>',
+        #     mode='exec',
+        #     *,
+        #     type_comments=False,
+        #     feature_version=None,
+        # )
+        # Source:
+        # def parse(source, filename='<unknown>', mode='exec', *,
+        #           type_comments=False, feature_version=None):
+        #     """
+        #     Parse the source into an AST node.
+        #     Equivalent to compile(source, filename, mode, PyCF_ONLY_AST).
+        #     Pass type_comments=True to get back type comments where the syntax allows.
+        #     """
+        #     flags = PyCF_ONLY_AST
+        #     if type_comments:
+        #         flags |= PyCF_TYPE_COMMENTS
+        #     if feature_version is None:
+        #         feature_version = -1
+        #     elif isinstance(feature_version, tuple):
+        #         major, minor = feature_version  # Should be a 2-tuple.
+        #         if major != 3:
+        #             raise ValueError(f"Unsupported major version: {major}")
+        #         feature_version = minor
+        #     # Else it should be an int giving the minor version for 3.x.
+        #     return compile(source, filename, mode, flags,
+        #                    _feature_version=feature_version)
+        # XXX: in practice we want to use ast.parse, but we need specify `dont_inherit=True` to prevent the current
+        #      module's `from __future__ ...` imports from affecting the compilation, `_feature_version` is a private
+        #      argument, so we have to be mindful of this whenever there's an update to Python's version
+        parsed_tree = compile(
+            source=tx.code.text(),
+            filename=f'<{tx.hash.hex()}.code>',
+            mode='exec',
+            flags=ast.PyCF_ONLY_AST,
+            dont_inherit=True,
+            optimize=0,
+            _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
+        )
+        assert isinstance(parsed_tree, ast.Module)
+        tx._ast_cache = parsed_tree
+        return parsed_tree
+
+    def verify_python_script(self, tx: OnChainBlueprint) -> None:
+        """Verify that the script can be parsed at all."""
+        try:
+            self._get_python_code_ast(tx)
+        except SyntaxError as e:
+            raise OCBInvalidScript('Could not correctly parse the script') from e
+
     def verify_script_restrictions(self, tx: OnChainBlueprint) -> None:
         """Verify that the script does not use any forbidden syntax."""
-        parsed_tree = ast.parse(tx.code.text())
-        restrictions_visitor = _RestrictionsVisitor()
         try:
-            restrictions_visitor.visit(parsed_tree)
+            _RestrictionsVisitor().visit(self._get_python_code_ast(tx))
         except SyntaxError as e:
             raise OCBInvalidScript from e
 
     def verify_has_blueprint_object(self, tx: OnChainBlueprint) -> None:
-        parsed_tree = ast.parse(tx.code.text())
+        """Verify that the script defines a __blueprint__ class object."""
         search_name = _SearchName(BLUEPRINT_CLASS_NAME)
-        search_name.visit(parsed_tree)
+        search_name.visit(self._get_python_code_ast(tx))
         if not search_name.found:
             raise OCBInvalidScript(f'Could not find {BLUEPRINT_CLASS_NAME} object')

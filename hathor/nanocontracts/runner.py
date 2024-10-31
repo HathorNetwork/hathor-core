@@ -34,9 +34,11 @@ from hathor.nanocontracts.exception import (
     NCRecursionError,
     NCUninitializedContractError,
 )
+from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
 from hathor.nanocontracts.storage import NCChangesTracker, NCStorage, NCStorageFactory
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import ContractId, NCAction, NCActionType
+from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.transaction.storage import TransactionStorage
 from hathor.types import Amount, TokenUid
 
@@ -129,14 +131,19 @@ class _SingleCallRunner:
     You should not use this class unless you know what you are doing.
     """
 
-    def __init__(self,
-                 blueprint_class: Type[Blueprint],
-                 nanocontract_id: bytes,
-                 changes_tracker: NCChangesTracker) -> None:
+    def __init__(
+        self,
+        blueprint_class: Type[Blueprint],
+        nanocontract_id: bytes,
+        changes_tracker: NCChangesTracker,
+        metered_executor: MeteredExecutor,
+    ) -> None:
         self.blueprint_class = blueprint_class
         self.nanocontract_id = nanocontract_id
         self.changes_tracker = changes_tracker
+        self.metered_executor = metered_executor
         self._has_been_called = False
+        self._settings = get_global_settings()
 
     def get_nc_balance(self, token_id: bytes) -> int:
         """Return a Nano Contract balance for a given token."""
@@ -169,11 +176,11 @@ class _SingleCallRunner:
 
     def call_public_method(self, method_name: str, ctx: Context, *args: Any, **kwargs: Any) -> Any:
         """Call a contract public method. If it fails, no change is saved."""
+
         if self._has_been_called:
             raise RuntimeError('only one call to a public method per instance')
         self._has_been_called = True
 
-        from hathor.nanocontracts.utils import is_nc_public_method
         self.validate_context(ctx)
 
         blueprint = self.blueprint_class(self.changes_tracker)
@@ -188,9 +195,13 @@ class _SingleCallRunner:
             # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
             # impact the original context. Since the runner relies on the context for other critical checks, any
             # unauthorized modification would pose a serious security risk.
-            ret = method(ctx.copy(), *args, **kwargs)
+            ret = self.metered_executor.call(method, ctx.copy(), *args, **kwargs)
         except NCFail:
             raise
+        except OutOfFuelError as e:
+            raise NCFail from e
+        except OutOfMemoryError as e:
+            raise NCFail from e
         except Exception as e:
             # Convert any other exception to NCFail.
             raise NCFail from e
@@ -200,16 +211,18 @@ class _SingleCallRunner:
 
     def call_view_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a contract view method. It cannot change the state."""
-        from hathor.nanocontracts.utils import is_nc_view_method
         blueprint = self.blueprint_class(self.changes_tracker)
         method = getattr(blueprint, method_name)
         if method is None:
             raise NCMethodNotFound(method_name)
         if not is_nc_view_method(method):
             raise NCError('not a view method')
-        ret = method(*args, **kwargs)
+
+        ret = self.metered_executor.call(method, *args, **kwargs)
+
         if not self.changes_tracker.is_empty():
             raise NCPrivateMethodError('private methods cannot change the state')
+
         return ret
 
 
@@ -219,16 +232,23 @@ class Runner:
     MAX_RECURSION_DEPTH: int = 100
     MAX_CALL_COUNTER: int = 250
 
-    def __init__(self,
-                 tx_storage: TransactionStorage,
-                 storage_factory: NCStorageFactory,
-                 block_trie: PatriciaTrie) -> None:
+    def __init__(
+        self,
+        tx_storage: TransactionStorage,
+        storage_factory: NCStorageFactory,
+        block_trie: PatriciaTrie,
+    ) -> None:
         self.tx_storage = tx_storage
         self.storage_factory = storage_factory
         self.block_trie = block_trie
         self._storages: dict[ContractId, NCStorage] = {}
         self._change_trackers: dict[ContractId, NCChangesTracker] = {}
         self._settings = get_global_settings()
+
+        # For tracking fuel and memory usage
+        self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
+        self._memory_limit = self._settings.NC_MEMORY_LIMIT_TO_CALL_METHOD
+        self._metered_executor: MeteredExecutor | None = None
 
         # Flag indicating to keep record of all calls.
         self._enable_call_trace = False
@@ -294,9 +314,11 @@ class Runner:
 
     def _get_single_runner(self, nanocontract_id: ContractId) -> _SingleCallRunner:
         """Return a single runner for a contract."""
+        assert self._metered_executor is not None
         blueprint_class = self.get_blueprint_class(nanocontract_id)
         change_tracker = self._get_changes_tracker(nanocontract_id)
-        return _SingleCallRunner(blueprint_class, nanocontract_id, change_tracker)
+        metered_executor = self._metered_executor
+        return _SingleCallRunner(blueprint_class, nanocontract_id, change_tracker, metered_executor)
 
     def _build_call_info(self) -> CallInfo:
         return CallInfo(
@@ -322,6 +344,7 @@ class Runner:
 
         assert self._call_info is None
         self._call_info = self._build_call_info()
+        self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
         try:
             ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
         except NCFail:
@@ -444,8 +467,11 @@ class Runner:
         """Call a contract view method."""
         if self._call_info is None:
             self._call_info = self._build_call_info()
+        if self._metered_executor is None:
+            self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
 
         assert self._call_info is not None
+        assert self._metered_executor is not None
 
         call_record = CallRecord(
             type=CallType.PRIVATE,

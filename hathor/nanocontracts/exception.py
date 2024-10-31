@@ -151,3 +151,18 @@ class OCBBlueprintNotConfirmed(NCError):
 class OCBPubKeyNotAllowed(NCError):
     """Raised when an OnChainBlueprint transaction uses a pubkey that is not explicitly allowed in the settings.
     """
+
+
+class OCBOutOfFuelDuringLoading(NCError):
+    """Raised when loading an On-chain Blueprint and the execution exceeds the fuel limit.
+    """
+
+
+class OCBOutOfMemoryDuringLoading(NCError):
+    """Raised when loading an On-chain Blueprint and the execution exceeds the memory limit.
+    """
+
+
+class NCDisabledBuiltinError(NCError):
+    """Raised when a disabled builtin is used during creation or execution of a nanocontract.
+    """
