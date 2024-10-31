@@ -58,6 +58,7 @@ class CliManager:
             shell,
             side_dag,
             stratum_mining,
+            top,
             twin_tx,
             tx_generator,
             wallet,
@@ -70,9 +71,7 @@ class CliManager:
         self.add_cmd('mining', 'run_stratum_miner', stratum_mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
-        if sys.platform != 'win32':
-            from . import top
-            self.add_cmd('hathor', 'top', top, 'CPU profiler viewer')
+        self.add_cmd('hathor', 'top', top, 'CPU profiler viewer')
         self.add_cmd('side-dag', 'run_node_with_side_dag', side_dag, 'Run a side-dag')
         self.add_cmd('side-dag', 'gen_poa_keys', generate_poa_keys, 'Generate a private/public key pair and its '
                                                                     'address to be used in Proof-of-Authority')
