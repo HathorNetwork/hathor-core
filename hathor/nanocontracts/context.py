@@ -14,11 +14,13 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCInvalidContext
 from hathor.nanocontracts.types import ContractId, NCAction
+from hathor.nanocontracts.vertex_data import VertexData
 from hathor.transaction import BaseTransaction
 from hathor.types import Address, Amount, TokenUid
 
@@ -37,18 +39,23 @@ class Context:
 
     def __init__(self,
                  actions: list[NCAction],
-                 tx: BaseTransaction,
+                 vertex: BaseTransaction | VertexData,
                  address: Address | ContractId, timestamp: int) -> None:
         # Dict of action where the key is the token_uid.
         # If empty, it is a method call without deposits and withdrawals.
-        self.actions: dict[TokenUid, NCAction] = {}
+        actions_map: dict[TokenUid, NCAction] = {}
         for action in actions:
-            if action.token_uid in self.actions:
+            if action.token_uid in actions_map:
                 raise NCInvalidContext('Two or more actions with the same token uid')
-            self.actions[action.token_uid] = action
+            actions_map[action.token_uid] = action
+        self.actions = MappingProxyType(actions_map)
 
-        # Transaction calling the method.
-        self.tx = tx
+        # Vertex calling the method.
+        self.vertex: VertexData
+        if isinstance(vertex, VertexData):
+            self.vertex = vertex
+        else:
+            self.vertex = VertexData.create_from_vertex(vertex)
 
         # Address calling the method.
         self.address = address
@@ -58,6 +65,18 @@ class Context:
 
         # Runner can only be set by the runner itself.
         self._runner = None
+
+    def copy(self) -> 'Context':
+        """Return a copy of the context."""
+        ctx = Context(
+            actions=[],
+            vertex=self.vertex,
+            address=self.address,
+            timestamp=self.timestamp,
+        )
+        ctx.actions = MappingProxyType(self.actions)
+        ctx._runner = self._runner
+        return ctx
 
     def to_json(self) -> dict[str, Any]:
         """Return a JSON representation of the context."""

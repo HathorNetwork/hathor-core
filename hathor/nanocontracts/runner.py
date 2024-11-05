@@ -184,7 +184,11 @@ class _SingleCallRunner:
             raise NCError('not a public method')
 
         try:
-            ret = method(ctx, *args, **kwargs)
+            # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
+            # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
+            # impact the original context. Since the runner relies on the context for other critical checks, any
+            # unauthorized modification would pose a serious security risk.
+            ret = method(ctx.copy(), *args, **kwargs)
         except NCFail:
             raise
         except Exception as e:
@@ -361,7 +365,7 @@ class Runner:
         # Call the other contract method.
         ctx = Context(
             actions=actions,
-            tx=first_ctx.tx,
+            vertex=first_ctx.vertex,
             address=last_nanocontract_id,
             timestamp=first_ctx.timestamp,
         )
