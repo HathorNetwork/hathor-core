@@ -1,12 +1,16 @@
-from json import JSONDecodeError
+import json
 from typing import Optional
 from unittest.mock import Mock, patch
 
+from twisted.internet import defer
 from twisted.internet.protocol import Protocol
 from twisted.python.failure import Failure
 
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.manager import HathorManager
+from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
 from hathor.simulator import FakeConnection
 from hathor.util import json_dumps, json_loadb
@@ -72,7 +76,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
 
     def test_peer_with_entrypoint(self) -> None:
         entrypoint_str = 'tcp://192.168.1.1:54321'
-        entrypoint = Entrypoint.parse(entrypoint_str)
+        entrypoint = PeerAddress.parse(entrypoint_str)
         self.peer1.info.entrypoints.append(entrypoint)
         self.peer2.info.entrypoints.append(entrypoint)
         self.conn.run_one_step()  # HELLO
@@ -144,8 +148,10 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
-        with self.assertRaises(JSONDecodeError):
-            self._send_cmd(self.conn.proto1, 'PEERS', 'abc')
+        self.conn.tr1.clear()
+        self._send_cmd(self.conn.proto1, 'PEERS', 'abc')
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "PEERS" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_invalid_hello1(self) -> None:
         self.conn.tr1.clear()
@@ -263,6 +269,68 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         # connection is still up
         self.assertIsConnected(conn_alive)
 
+    def test_invalid_peer_id1(self) -> None:
+        """Test no payload"""
+        self.conn.run_one_step()
+        self.conn.tr1.clear()
+        self._send_cmd(self.conn.proto1, 'PEER-ID')
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "PEER-ID" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
+
+    def test_invalid_peer_id2(self) -> None:
+        """Test invalid json payload"""
+        self.conn.run_one_step()
+        self.conn.tr1.clear()
+        self._send_cmd(self.conn.proto1, 'PEER-ID', 'invalid_payload')
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "PEER-ID" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
+
+    def test_invalid_peer_id3(self) -> None:
+        """Test empty payload"""
+        self.conn.run_one_step()
+        self.conn.tr1.clear()
+        self._send_cmd(self.conn.proto1, 'PEER-ID', '{}')
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "PEER-ID" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
+
+    def test_invalid_peer_id4(self) -> None:
+        """Test payload with missing property"""
+        self.conn.run_one_step()
+        self.conn.tr1.clear()
+        data = self.conn.proto2.state._get_peer_id_data()
+        del data['pubKey']
+        self._send_cmd(
+            self.conn.proto1,
+            'PEER-ID',
+            json.dumps(data)
+        )
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "PEER-ID" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
+        self.assertTrue(self.conn.tr1.disconnecting)
+
+    def test_invalid_peer_id5(self) -> None:
+        """Test payload with peer id not matching public key"""
+        self.conn.run_one_step()
+        self.conn.tr1.clear()
+        data = self.conn.proto2.state._get_peer_id_data()
+        new_peer = PrivatePeer.auto_generated()
+        data['id'] = str(new_peer.id)
+        self._send_cmd(
+            self.conn.proto1,
+            'PEER-ID',
+            json.dumps(data)
+        )
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "PEER-ID" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
+
+    def test_valid_peer_id(self) -> None:
+        self.conn.run_one_step()
+        self.conn.run_one_step()
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'READY')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'READY')
+        self.assertFalse(self.conn.tr1.disconnecting)
+        self.assertFalse(self.conn.tr2.disconnecting)
+
     def test_invalid_different_network(self) -> None:
         manager3 = self.create_peer(network='mainnet')
         conn = FakeConnection(self.manager1, manager3)
@@ -313,6 +381,129 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertIsConnected(self.conn)
         self.clock.advance(15)
         self.assertIsNotConnected(self.conn)
+
+    def test_invalid_expected_peer_id(self) -> None:
+        p2p_manager: ConnectionsManager = self.manager2.connections
+
+        # Initially, manager1 and manager2 are handshaking, from the setup
+        assert p2p_manager.connecting_peers == {}
+        assert p2p_manager.handshaking_peers == {self.conn.proto2}
+        assert p2p_manager.connected_peers == {}
+
+        # We change our peer id (on manager1)
+        new_peer = PrivatePeer.auto_generated()
+        self.conn.proto1.my_peer = new_peer
+        self.conn.tr2._peer = new_peer
+
+        # We advance the states and fail in the PEER-ID step (on manager2)
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'HELLO')
+        self.conn.run_one_step()
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEER-ID')
+        self.conn.run_one_step()
+        assert self.conn.peek_tr2_value() == b'ERROR Peer id different from the requested one.\r\n'
+
+    def test_invalid_expected_peer_id_bootstrap(self) -> None:
+        p2p_manager: ConnectionsManager = self.manager1.connections
+
+        # Initially, manager1 and manager2 are handshaking, from the setup
+        assert p2p_manager.connecting_peers == {}
+        assert p2p_manager.handshaking_peers == {self.conn.proto1}
+        assert p2p_manager.connected_peers == {}
+
+        # We create a new manager3, and use it as a bootstrap in manager1
+        peer3 = PrivatePeer.auto_generated()
+        manager3: HathorManager = self.create_peer(self.network, peer3)
+        conn = FakeConnection(manager1=manager3, manager2=self.manager1, fake_bootstrap_id=peer3.id)
+
+        # Now manager1 and manager3 are handshaking
+        assert p2p_manager.connecting_peers == {}
+        assert p2p_manager.handshaking_peers == {self.conn.proto1, conn.proto2}
+        assert p2p_manager.connected_peers == {}
+
+        # We change our peer id (on manager3)
+        new_peer = PrivatePeer.auto_generated()
+        conn.proto1.my_peer = new_peer
+        conn.tr2._peer = new_peer
+
+        # We advance the states and fail in the PEER-ID step (on manager1)
+        self._check_result_only_cmd(conn.peek_tr2_value(), b'HELLO')
+        conn.run_one_step()
+        self._check_result_only_cmd(conn.peek_tr2_value(), b'PEER-ID')
+        conn.run_one_step()
+        assert conn.peek_tr2_value() == b'ERROR Peer id different from the requested one.\r\n'
+
+    def test_valid_unset_peer_id_bootstrap(self) -> None:
+        p2p_manager: ConnectionsManager = self.manager1.connections
+
+        # Initially, manager1 and manager2 are handshaking, from the setup
+        assert p2p_manager.connecting_peers == {}
+        assert p2p_manager.handshaking_peers == {self.conn.proto1}
+        assert p2p_manager.connected_peers == {}
+
+        # We create a new manager3, and use it as a bootstrap in manager1, but without the peer_id
+        manager3: HathorManager = self.create_peer(self.network)
+        conn = FakeConnection(manager1=manager3, manager2=self.manager1, fake_bootstrap_id=None)
+
+        # Now manager1 and manager3 are handshaking
+        assert p2p_manager.connecting_peers == {}
+        assert p2p_manager.handshaking_peers == {self.conn.proto1, conn.proto2}
+        assert p2p_manager.connected_peers == {}
+
+        # We change our peer id (on manager3)
+        new_peer = PrivatePeer.auto_generated()
+        conn.proto1.my_peer = new_peer
+        conn.tr2._peer = new_peer
+
+        # We advance the states and in this case succeed (on manager1), because
+        # even though the peer_id was changed, it wasn't initially set.
+        self._check_result_only_cmd(conn.peek_tr2_value(), b'HELLO')
+        conn.run_one_step()
+        self._check_result_only_cmd(conn.peek_tr2_value(), b'PEER-ID')
+        conn.run_one_step()
+        self._check_result_only_cmd(conn.peek_tr2_value(), b'READY')
+
+    def test_exception_on_synchronous_cmd_handler(self) -> None:
+        self.conn.run_one_step()
+        self.conn.run_one_step()
+
+        def error() -> None:
+            raise Exception('some error')
+
+        self.conn.proto1.state.cmd_map = {
+            ProtocolMessages.READY: error
+        }
+
+        self.conn.run_one_step()
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "READY" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
+
+    def test_exception_on_deferred_cmd_handler(self) -> None:
+        self.conn.run_one_step()
+        self.conn.run_one_step()
+
+        self.conn.proto1.state.cmd_map = {
+            ProtocolMessages.READY: lambda: defer.fail(Exception('some error')),
+        }
+
+        self.conn.run_one_step()
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "READY" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
+
+    def test_exception_on_asynchronous_cmd_handler(self) -> None:
+        self.conn.run_one_step()
+        self.conn.run_one_step()
+
+        async def error() -> None:
+            raise Exception('some error')
+
+        self.conn.proto1.state.cmd_map = {
+            ProtocolMessages.READY: error
+        }
+
+        self.conn.run_one_step()
+        self.clock.advance(1)
+        assert self.conn.peek_tr1_value() == b'ERROR Error processing "READY" command\r\n'
+        self.assertTrue(self.conn.tr1.disconnecting)
 
 
 class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTestCase):

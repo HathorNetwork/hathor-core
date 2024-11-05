@@ -3,9 +3,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
@@ -70,7 +70,7 @@ class BaseMetricsTest(unittest.TestCase):
         manager.connections.handshaking_peers.update({Mock()})
 
         # Execution
-        endpoint = Entrypoint.parse('tcp://127.0.0.1:8005')
+        endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
         # This will trigger sending to the pubsub one of the network events
         manager.connections.connect_to(endpoint, use_ssl=True)
 

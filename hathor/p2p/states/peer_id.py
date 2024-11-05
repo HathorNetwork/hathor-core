@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from structlog import get_logger
 
@@ -63,17 +63,19 @@ class PeerIdState(BaseState):
             # So it was just waiting for the ready message from the other peer to change the state to READY
             self.protocol.change_state(self.protocol.PeerState.READY)
 
+    def _get_peer_id_data(self) -> dict[str, Any]:
+        my_peer = self.protocol.my_peer
+        return dict(
+            id=str(my_peer.id),
+            pubKey=my_peer.get_public_key(),
+            entrypoints=my_peer.info.entrypoints_as_str(),
+        )
+
     def send_peer_id(self) -> None:
         """ Send a PEER-ID message, identifying the peer.
         """
-        protocol = self.protocol
-        my_peer = protocol.my_peer
-        hello = {
-            'id': str(my_peer.id),
-            'pubKey': my_peer.get_public_key(),
-            'entrypoints': my_peer.info.entrypoints_as_str(),
-        }
-        self.send_message(ProtocolMessages.PEER_ID, json_dumps(hello))
+        data = self._get_peer_id_data()
+        self.send_message(ProtocolMessages.PEER_ID, json_dumps(data))
 
     async def handle_peer_id(self, payload: str) -> None:
         """ Executed when a PEER-ID is received. It basically checks
@@ -89,7 +91,6 @@ class PeerIdState(BaseState):
         data = json_loads(payload)
 
         peer = PublicPeer.create_from_json(data)
-        peer.validate()
         assert peer.id is not None
 
         # If the connection URL had a peer-id parameter we need to check it's the same
@@ -118,6 +119,9 @@ class PeerIdState(BaseState):
         if not entrypoint_valid:
             protocol.send_error_and_close_connection('Connection string is not in the entrypoints.')
             return
+
+        if protocol.entrypoint is not None and protocol.entrypoint.peer_id is not None:
+            assert protocol.entrypoint.peer_id == peer.id
 
         if protocol.use_ssl:
             certificate_valid = peer.validate_certificate(protocol)

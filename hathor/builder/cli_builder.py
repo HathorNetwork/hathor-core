@@ -34,9 +34,9 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -420,7 +420,7 @@ class CliBuilder:
             p2p_manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
 
         if self._args.bootstrap:
-            entrypoints = [Entrypoint.parse(desc) for desc in self._args.bootstrap]
+            entrypoints = [PeerEndpoint.parse(desc) for desc in self._args.bootstrap]
             p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(entrypoints))
 
         if self._args.x_rocksdb_indexes:

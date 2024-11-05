@@ -4,10 +4,11 @@ import tempfile
 from typing import cast
 from unittest.mock import Mock
 
+import pytest
 from twisted.internet.interfaces import ITransport
 
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer import InvalidPeerIdException, PrivatePeer, PublicPeer, UnverifiedPeer
+from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import VerifiedPeerStorage
 from tests import unittest
@@ -87,9 +88,9 @@ class PeerIdTest(unittest.TestCase):
         self.assertEqual(peer.public_key, p1.public_key)
         self.assertEqual(peer.info.entrypoints, [])
 
-        ep1 = Entrypoint.parse('tcp://127.0.0.1:1001')
-        ep2 = Entrypoint.parse('tcp://127.0.0.1:1002')
-        ep3 = Entrypoint.parse('tcp://127.0.0.1:1003')
+        ep1 = PeerAddress.parse('tcp://127.0.0.1:1001')
+        ep2 = PeerAddress.parse('tcp://127.0.0.1:1002')
+        ep3 = PeerAddress.parse('tcp://127.0.0.1:1003')
 
         p3 = PrivatePeer.auto_generated().to_public_peer()
         p3.info.entrypoints.append(ep1)
@@ -204,6 +205,59 @@ class PeerIdTest(unittest.TestCase):
         peer.info.reset_retry_timestamp()
         self.assertTrue(peer.info.can_retry(0))
 
+    def test_unverified_peer_to_json_roundtrip(self) -> None:
+        peer_id = PrivatePeer.auto_generated().id
+        addr1 = 'tcp://localhost:40403'
+        addr2 = 'tcp://192.168.0.1:40404'
+        addr3 = 'tcp://foo.bar:80'
+
+        peer_json_simple = dict(
+            id=str(peer_id),
+            entrypoints=[addr1, addr2, addr3]
+        )
+        result = UnverifiedPeer.create_from_json(peer_json_simple)
+
+        assert result.id == peer_id
+        assert result.info.entrypoints == [
+            PeerAddress.parse(addr1),
+            PeerAddress.parse(addr2),
+            PeerAddress.parse(addr3),
+        ]
+        assert result.to_json() == peer_json_simple
+
+        # We support this for compatibility with old peers that may send ids in the URLs
+        peer_json_with_ids = dict(
+            id=str(peer_id),
+            entrypoints=[
+                f'{addr1}/?id={peer_id}',
+                f'{addr2}/?id={peer_id}',
+                addr3,
+            ]
+        )
+        result = UnverifiedPeer.create_from_json(peer_json_with_ids)
+
+        assert result.id == peer_id
+        assert result.info.entrypoints == [
+            PeerAddress.parse(addr1),
+            PeerAddress.parse(addr2),
+            PeerAddress.parse(addr3),
+        ]
+        assert result.to_json() == peer_json_simple  # the roundtrip erases the ids from the URLs
+
+        other_peer_id = PrivatePeer.auto_generated().id
+        peer_json_with_conflicting_ids = dict(
+            id=str(peer_id),
+            entrypoints=[
+                f'{addr1}/?id={peer_id}',
+                f'{addr2}/?id={other_peer_id}',
+                addr3,
+            ]
+        )
+
+        with pytest.raises(ValueError) as e:
+            UnverifiedPeer.create_from_json(peer_json_with_conflicting_ids)
+        assert str(e.value) == f'conflicting peer_id: {other_peer_id} != {peer_id}'
+
 
 class BasePeerIdTest(unittest.TestCase):
     __test__ = False
@@ -211,25 +265,25 @@ class BasePeerIdTest(unittest.TestCase):
     async def test_validate_entrypoint(self) -> None:
         manager = self.create_peer('testnet', unlock_wallet=False)
         peer = manager.my_peer
-        peer.info.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
+        peer.info.entrypoints = [PeerAddress.parse('tcp://127.0.0.1:40403')]
 
         # we consider that we are starting the connection to the peer
         protocol = manager.connections.client_factory.buildProtocol('127.0.0.1')
-        protocol.entrypoint = Entrypoint.parse('tcp://127.0.0.1:40403')
+        protocol.entrypoint = PeerEndpoint.parse('tcp://127.0.0.1:40403')
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
         # if entrypoint is an URI
-        peer.info.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
+        peer.info.entrypoints = [PeerAddress.parse('tcp://uri_name:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
         # test invalid. DNS in test mode will resolve to '127.0.0.1:40403'
-        protocol.entrypoint = Entrypoint.parse('tcp://45.45.45.45:40403')
+        protocol.entrypoint = PeerEndpoint.parse('tcp://45.45.45.45:40403')
         result = await peer.info.validate_entrypoint(protocol)
         self.assertFalse(result)
 
         # now test when receiving the connection - i.e. the peer starts it
         protocol.entrypoint = None
-        peer.info.entrypoints = [Entrypoint.parse('tcp://127.0.0.1:40403')]
+        peer.info.entrypoints = [PeerAddress.parse('tcp://127.0.0.1:40403')]
 
         from collections import namedtuple
         DummyPeer = namedtuple('DummyPeer', 'host')
@@ -241,7 +295,7 @@ class BasePeerIdTest(unittest.TestCase):
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
         # if entrypoint is an URI
-        peer.info.entrypoints = [Entrypoint.parse('tcp://uri_name:40403')]
+        peer.info.entrypoints = [PeerAddress.parse('tcp://uri_name:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
 

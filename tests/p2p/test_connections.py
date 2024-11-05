@@ -1,4 +1,5 @@
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.manager import HathorManager
+from hathor.p2p.peer_endpoint import PeerEndpoint
 from tests import unittest
 from tests.utils import run_server
 
@@ -14,9 +15,9 @@ class ConnectionsTest(unittest.TestCase):
         process3.terminate()
 
     def test_manager_connections(self) -> None:
-        manager = self.create_peer('testnet', enable_sync_v1=True, enable_sync_v2=False)
+        manager: HathorManager = self.create_peer('testnet', enable_sync_v1=True, enable_sync_v2=False)
 
-        endpoint = Entrypoint.parse('tcp://127.0.0.1:8005')
+        endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
         manager.connections.connect_to(endpoint, use_ssl=True)
 
         self.assertIn(endpoint, manager.connections.iter_not_ready_endpoints())
