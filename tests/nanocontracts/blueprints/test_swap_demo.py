@@ -32,7 +32,7 @@ class SwapDemoTestCase(BlueprintTestCase):
         deposit_b = NCAction(NCActionType.DEPOSIT, token_b, amount_b)
         context = Context(
             actions=[deposit_a, deposit_b],
-            tx=self.tx,
+            vertex=self.tx,
             address=self.address,
             timestamp=self.now
         )
@@ -58,7 +58,7 @@ class SwapDemoTestCase(BlueprintTestCase):
         swap_b = NCAction(self.get_action_type(value_b), token_b, abs(value_b))
         context = Context(
             actions=[swap_a, swap_b],
-            tx=self.tx,
+            vertex=self.tx,
             address=self.address,
             timestamp=self.now
         )
