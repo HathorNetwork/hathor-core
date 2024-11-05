@@ -178,7 +178,7 @@ class NanoContract(Transaction):
         address = get_address_from_public_key_bytes(self.nc_pubkey)
         context = Context(
             actions=action_list,
-            tx=self,
+            vertex=self,
             address=address,
             timestamp=timestamp,
         )
