@@ -11,7 +11,7 @@ from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
+from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput, Vertex
 from hathor.transaction.exceptions import (
     BlockWithInputs,
     ConflictingInputs,
@@ -343,11 +343,11 @@ class BaseTransactionTest(unittest.TestCase):
 
         patch_path = 'hathor.feature_activation.feature_service.FeatureService.is_feature_active'
 
-        def is_feature_active_false(self: FeatureService, *, block: Block, feature: Feature) -> bool:
+        def is_feature_active_false(self: FeatureService, *, vertex: Vertex, feature: Feature) -> bool:
             assert feature == Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
             return False
 
-        def is_feature_active_true(self: FeatureService, *, block: Block, feature: Feature) -> bool:
+        def is_feature_active_true(self: FeatureService, *, vertex: Vertex, feature: Feature) -> bool:
             assert feature == Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
             return True
 

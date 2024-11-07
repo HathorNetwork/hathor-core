@@ -208,24 +208,22 @@ class VertexHandler:
         """
         metadata = tx.get_metadata()
         now = datetime.datetime.fromtimestamp(self._reactor.seconds())
+        feature_states = self._feature_service.get_feature_states(vertex=tx)
         kwargs = {
             'tx': tx,
             'ts_date': datetime.datetime.fromtimestamp(tx.timestamp),
             'time_from_now': tx.get_time_from_now(now),
             'validation': metadata.validation.name,
+            'feature_states': {
+                feature.value: state.value
+                for feature, state in feature_states.items()
+            }
         }
         if self._log_vertex_bytes:
             kwargs['bytes'] = bytes(tx).hex()
-        if tx.is_block:
+        if isinstance(tx, Block):
             message = message_fmt.format('block')
-            if isinstance(tx, Block):
-                feature_infos = self._feature_service.get_feature_infos(block=tx)
-                feature_states = {
-                    feature.value: info.state.value
-                    for feature, info in feature_infos.items()
-                }
-                kwargs['_height'] = tx.get_height()
-                kwargs['feature_states'] = feature_states
+            kwargs['_height'] = tx.get_height()
         else:
             message = message_fmt.format('tx')
         if not quiet:
