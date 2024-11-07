@@ -47,6 +47,19 @@ class BlockConsensusAlgorithm:
 
     def update_consensus(self, block: Block) -> None:
         self.update_voided_info(block)
+        self.assert_valid_consensus(block)
+
+    def assert_valid_consensus(self, block: Block) -> None:
+        """Assert that all transactions confirmed by the block are valid.
+
+        This assertion might be slow because it runs in O(n) where n is number of transactions confirmed
+        by the block."""
+        for tx in block.iter_transactions_in_this_block():
+            # Since this is the last step in the consensus, the conflict resolution has already been resolved.
+            # Hence, at this point, all transactins confirmed by a block must be non-voided.
+            if tx_meta.voided_by and bool(self.context.consensus.soft_voided_tx_ids & tx_meta.voided_by):
+                continue
+            assert tx_meta.voided_by is None
 
     def update_voided_info(self, block: Block) -> None:
         """ This method is called only once when a new block arrives.
