@@ -18,7 +18,7 @@ from hathor.transaction.scripts.construct import (
     get_sigops_count,
     parse_address_script,
 )
-from hathor.transaction.scripts.execute import ScriptExtras, script_eval
+from hathor.transaction.scripts.execute import ScriptExtras, evaluate_scripts
 from hathor.transaction.scripts.hathor_script import HathorScript
 from hathor.transaction.scripts.multi_sig import MultiSig
 from hathor.transaction.scripts.nano_contract_match_values import NanoContractMatchValues
@@ -35,6 +35,6 @@ __all__ = [
     'parse_address_script',
     'create_base_script',
     'create_output_script',
-    'script_eval',
+    'evaluate_scripts',
     'get_sigops_count',
 ]
