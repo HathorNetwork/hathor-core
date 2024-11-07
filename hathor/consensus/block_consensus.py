@@ -103,8 +103,7 @@ class BlockConsensusAlgorithm:
             self._nc_execute_calls(current, is_reorg=is_reorg)
 
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
-        """Internal method to Execute the method calls for transactions confirmed by this block
-        without handling reorgs.
+        """Internal method to execute the method calls for transactions confirmed by this block.
         """
         from hathor.nanocontracts import NanoContract, NCFail
 
@@ -133,16 +132,17 @@ class BlockConsensusAlgorithm:
                 assert self.context.reorg_common_block is not None
                 # Clear the NC_EXECUTION_FAIL_ID flag if this is the only reason the transaction was voided.
                 # This case might only happen when handling reorgs.
+                assert tx.storage is not None
                 if tx_meta.voided_by == {tx.hash, self._settings.NC_EXECUTION_FAIL_ID}:
-                    if not tx_meta.conflict_with:
-                        tx_meta.voided_by = None
-                        self.context.save(tx)
-                    else:
-                        # TODO Properly handle transactions with UTXO conflicts during reorgs.
-                        raise NotImplementedError
-            if tx_meta.voided_by:
-                # Skip voided transactions.
-                continue
+                    if tx_meta.conflict_with:
+                        for tx_conflict_id in tx_meta.conflict_with:
+                            tx_conflict = tx.storage.get_transaction(tx_conflict_id)
+                            tx_conflict_meta = tx_conflict.get_metadata()
+                            assert tx_conflict_meta.first_block is None
+                            assert tx_conflict_meta.voided_by
+                    tx_meta.voided_by = None
+                    self.context.save(tx)
+            assert tx_meta.voided_by is None
             nc_calls.append(tx)
 
         if not nc_calls:
