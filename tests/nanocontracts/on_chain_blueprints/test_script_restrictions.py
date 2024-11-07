@@ -1,8 +1,13 @@
 import os
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.exception import OCBInvalidScript
+from hathor.wallet import KeyPair
 from tests import unittest
 
 
@@ -29,6 +34,18 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         self.manager = self.create_peer('testnet')
         self.verification_service = self.manager.verification_service
 
+    def _ocb_sign(self, blueprint: OnChainBlueprint) -> None:
+        key = KeyPair(unittest.OCB_TEST_PRIVKEY)
+        privkey = key.get_private_key(unittest.OCB_TEST_PASSWORD)
+        pubkey = privkey.public_key()
+        blueprint.nc_pubkey = get_public_key_bytes_compressed(pubkey)
+        data = blueprint.get_sighash_all_data()
+        blueprint.nc_signature = privkey.sign(data, ec.ECDSA(hashes.SHA256()))
+
+    def _ocb_mine(self, blueprint: OnChainBlueprint) -> None:
+        self.manager.cpu_mining_service.resolve(blueprint)
+        self.manager.reactor.advance(2)
+
     def _create_on_chain_blueprint(self, nc_code: bytes) -> OnChainBlueprint:
         from hathor.nanocontracts.on_chain_blueprint import Code, CodeKind
 
@@ -45,8 +62,8 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             code=code,
         )
         blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
-        self.manager.cpu_mining_service.resolve(blueprint)
-        self.manager.reactor.advance(2)
+        self._ocb_sign(blueprint)
+        self._ocb_mine(blueprint)
         return blueprint
 
     def test_forbid_eval(self) -> None:
