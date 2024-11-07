@@ -295,6 +295,10 @@ class OnChainBlueprint(Transaction):
             assert self._settings.ENABLE_NANO_CONTRACTS, 'OnChainBlueprints require NanoContracts to be enabled'
             raise RuntimeError('OnChainBlueprints are disabled')
 
+        # Pubkey and signature of the transaction owner / caller.
+        self.nc_pubkey: bytes = b''
+        self.nc_signature: bytes = b''
+
         self.code: Code = code if code is not None else Code(CodeKind.PYTHON_GZIP, b'')
         self._blueprint_loaded_env: Optional[tuple[type[Blueprint], dict[str, object]]] = None
 
@@ -340,25 +344,53 @@ class OnChainBlueprint(Transaction):
     def deserialize_code(_cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple[Code, bytes]:
         """Parses the self.code field, returns the parse result and the remaining bytes."""
         settings = get_global_settings()
-        (on_chain_blueprint_version,), buf = unpack('!B', buf)
-        if on_chain_blueprint_version != ON_CHAIN_BLUEPRINT_VERSION:
-            raise ValueError(f'unknown on-chain blueprint version: {on_chain_blueprint_version}')
+
+        (ocb_version,), buf = unpack('!B', buf)
+        if verbose:
+            verbose('ocb_version', ocb_version)
+        if ocb_version != ON_CHAIN_BLUEPRINT_VERSION:
+            raise ValueError(f'unknown on-chain blueprint version: {ocb_version}')
+
         (serialized_code_len,), buf = unpack('!L', buf)
+        if verbose:
+            verbose('serialized_code_len', serialized_code_len)
         max_serialized_code_len = settings.NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_COMPRESSED
         if serialized_code_len > max_serialized_code_len:
             raise ValueError(f'compressed code data is too large: {serialized_code_len} > {max_serialized_code_len}')
         serialized_code, buf = unpack_len(serialized_code_len, buf)
+        if verbose:
+            verbose('serialized_code', serialized_code)
         code = Code.from_bytes(
             serialized_code,
             max_length=settings.NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_UNCOMPRESSED,
         )
         return code, buf
 
+    def _serialize_ocb(self, *, skip_signature: bool = True) -> bytes:
+        buf = bytearray()
+        buf += self.serialize_code()
+        buf += int_to_bytes(len(self.nc_pubkey), 1)
+        buf += self.nc_pubkey
+        if not skip_signature:
+            buf += int_to_bytes(len(self.nc_signature), 1)
+            buf += self.nc_signature
+        else:
+            buf += int_to_bytes(0, 1)
+        return bytes(buf)
+
     @override
     def get_funds_struct(self) -> bytes:
-        """"""
         struct_bytes = super().get_funds_struct()
-        struct_bytes += self.serialize_code()
+        struct_bytes += self._serialize_ocb()
+        return struct_bytes
+
+    @override
+    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
+        if not skip_cache and self._sighash_cache:
+            return self._sighash_cache
+        struct_bytes = super().get_sighash_all(skip_cache=True)
+        struct_bytes += self._serialize_ocb(skip_signature=True)
+        self._sighash_cache = struct_bytes
         return struct_bytes
 
     @override
@@ -368,6 +400,19 @@ class OnChainBlueprint(Transaction):
         code, buf = OnChainBlueprint.deserialize_code(buf, verbose=verbose)
         self.code = code
 
+        (nc_pubkey_len,), buf = unpack('!B', buf)
+        if verbose:
+            verbose('nc_pubkey_len', nc_pubkey_len)
+        self.nc_pubkey, buf = unpack_len(nc_pubkey_len, buf)
+        if verbose:
+            verbose('nc_pubkey', self.nc_pubkey)
+        (nc_signature_len,), buf = unpack('!B', buf)
+        if verbose:
+            verbose('nc_signature_len', nc_signature_len)
+        self.nc_signature, buf = unpack_len(nc_signature_len, buf)
+        if verbose:
+            verbose('nc_signature', self.nc_signature)
+
         return buf
 
     @override
@@ -375,6 +420,7 @@ class OnChainBlueprint(Transaction):
         return {
             **super().to_json(decode_script=decode_script, include_metadata=include_metadata),
             'on_chain_blueprint_code': self.code.to_json(),
+            'nc_pubkey': self.nc_pubkey.hex(),
         }
 
     @override
@@ -382,6 +428,8 @@ class OnChainBlueprint(Transaction):
         return {
             **super().to_json_extended(),
             'on_chain_blueprint_code': self.code.to_json_extended(),
+            'nc_pubkey': self.nc_pubkey.hex(),
+            'nc_signature': self.nc_signature.hex(),
         }
 
     @override

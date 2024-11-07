@@ -14,8 +14,14 @@
 
 import ast
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from hathor.conf.settings import HathorSettings
+from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_from_bytes_compressed
 from hathor.nanocontracts import OnChainBlueprint
-from hathor.nanocontracts.exception import OCBInvalidScript
+from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
 from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
 
 ALLOWED_IMPORTS = {
@@ -90,7 +96,31 @@ class _SearchName(ast.NodeVisitor):
 
 
 class OnChainBlueprintVerifier:
-    __slots__ = ()
+    __slots__ = ('_settings',)
+
+    def __init__(self, *, settings: HathorSettings):
+        self._settings = settings
+
+    def verify_pubkey_is_allowed(self, tx: OnChainBlueprint) -> None:
+        """Verify if the on-chain blueprint's pubkey is allowed."""
+        address = get_address_b58_from_public_key_bytes(tx.nc_pubkey)
+        if address not in self._settings.NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
+            raise OCBPubKeyNotAllowed(f'nc_pubkey with address {address} is not allowed')
+
+    def verify_nc_signature(self, tx: OnChainBlueprint) -> None:
+        """Verify if the creatos's signature is valid."""
+        data = tx.get_sighash_all_data()
+
+        try:
+            pubkey = get_public_key_from_bytes_compressed(tx.nc_pubkey)
+        except ValueError as e:
+            # pubkey is not compressed public key
+            raise NCInvalidPubKey('nc_pubkey is not a public key') from e
+
+        try:
+            pubkey.verify(tx.nc_signature, data, ec.ECDSA(hashes.SHA256()))
+        except InvalidSignature as e:
+            raise NCInvalidSignature from e
 
     def verify_script_restrictions(self, tx: OnChainBlueprint) -> None:
         """Verify that the script does not use any forbidden syntax."""

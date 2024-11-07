@@ -342,5 +342,7 @@ class VerificationService:
 
     def _verify_without_storage_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
         self._verify_without_storage_tx(tx)
+        self.verifiers.on_chain_blueprint.verify_pubkey_is_allowed(tx)
+        self.verifiers.on_chain_blueprint.verify_nc_signature(tx)
         self.verifiers.on_chain_blueprint.verify_script_restrictions(tx)
         self.verifiers.on_chain_blueprint.verify_has_blueprint_object(tx)
