@@ -24,7 +24,7 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.transaction import Block
+from hathor.transaction import Block, Vertex
 from hathor.transaction.storage import TransactionStorage
 
 
@@ -169,7 +169,7 @@ def _test_generate_signal_bits(
     settings = Mock(spec_set=HathorSettings)
     settings.FEATURE_ACTIVATION = FeatureSettings()
     feature_service = Mock(spec_set=FeatureService)
-    feature_service.get_feature_infos = lambda block: feature_infos
+    feature_service.get_feature_infos = lambda vertex: feature_infos
 
     service = BitSignalingService(
         settings=settings,
@@ -264,8 +264,8 @@ def test_non_signaling_features_warning(
     tx_storage = Mock(spec_set=TransactionStorage)
     tx_storage.get_best_block = lambda: best_block
 
-    def get_feature_infos_mock(block: Block) -> dict[Feature, FeatureInfo]:
-        if block == best_block:
+    def get_feature_infos_mock(vertex: Vertex) -> dict[Feature, FeatureInfo]:
+        if vertex == best_block:
             return {}
         raise NotImplementedError
 

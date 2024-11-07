@@ -68,7 +68,7 @@ class FeatureResource(Resource):
             return error.json_dumpb()
 
         signal_bits = []
-        feature_infos = self._feature_service.get_feature_infos(block=block)
+        feature_infos = self._feature_service.get_feature_infos(vertex=block)
 
         for feature, feature_info in feature_infos.items():
             if feature_info.state not in FeatureState.get_signaling_states():
@@ -90,7 +90,7 @@ class FeatureResource(Resource):
     def get_features(self) -> bytes:
         best_block = self.tx_storage.get_best_block()
         bit_counts = best_block.static_metadata.feature_activation_bit_counts
-        feature_infos = self._feature_service.get_feature_infos(block=best_block)
+        feature_infos = self._feature_service.get_feature_infos(vertex=best_block)
         features = []
 
         for feature, feature_info in feature_infos.items():
