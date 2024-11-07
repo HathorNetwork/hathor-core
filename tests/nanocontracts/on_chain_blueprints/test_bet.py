@@ -2,8 +2,11 @@ import hashlib
 import os
 from typing import NamedTuple, Optional
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+
 from hathor.conf import HathorSettings
-from hathor.crypto.util import decode_address
+from hathor.crypto.util import decode_address, get_public_key_bytes_compressed
 from hathor.nanocontracts import NanoContract, OnChainBlueprint
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
@@ -108,9 +111,20 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         context = Context([action], tx, address, timestamp=self.get_current_timestamp())
         self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
+    def _ocb_sign(self, blueprint: OnChainBlueprint) -> None:
+        key = KeyPair(unittest.OCB_TEST_PRIVKEY)
+        privkey = key.get_private_key(unittest.OCB_TEST_PASSWORD)
+        pubkey = privkey.public_key()
+        blueprint.nc_pubkey = get_public_key_bytes_compressed(pubkey)
+        data = blueprint.get_sighash_all_data()
+        blueprint.nc_signature = privkey.sign(data, ec.ECDSA(hashes.SHA256()))
+
+    def _ocb_mine(self, blueprint: OnChainBlueprint) -> None:
+        self.manager.cpu_mining_service.resolve(blueprint)
+        self.manager.reactor.advance(2)
+
     def _create_on_chain_blueprint(self, nc_code: bytes) -> OnChainBlueprint:
         from hathor.nanocontracts.on_chain_blueprint import Code, CodeKind
-
         code = Code(CodeKind.PYTHON_GZIP, nc_code)
         timestamp = self.manager.tx_storage.latest_timestamp + 1
         parents = self.manager.get_new_tx_parents(timestamp)
@@ -124,8 +138,8 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
             code=code,
         )
         blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
-        self.manager.cpu_mining_service.resolve(blueprint)
-        self.manager.reactor.advance(2)
+        self._ocb_sign(blueprint)
+        self._ocb_mine(blueprint)
         return blueprint
 
     def _gen_nc_initialize_tx(self, blueprint, nc_args):

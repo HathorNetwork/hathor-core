@@ -146,3 +146,8 @@ class OCBInvalidBlueprintVertexType(NCError):
 class OCBBlueprintNotConfirmed(NCError):
     """Raised when trying to use an OnChainBlueprint that is not confirmed by a block in the current best chain.
     """
+
+
+class OCBPubKeyNotAllowed(NCError):
+    """Raised when an OnChainBlueprint transaction uses a pubkey that is not explicitly allowed in the settings.
+    """
