@@ -1,4 +1,5 @@
 import hashlib
+from typing import cast
 
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
@@ -695,3 +696,179 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(deposit_amount_2 - withdrawal_amount_1, nc_storage.get_balance(self.token_uid))
+
+    def _prepare_nc_consensus_conflict(self, *, conflict_with_nano: bool) -> tuple[Transaction, ...]:
+        nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
+        self.manager.cpu_mining_service.resolve(nc)
+        self.manager.on_new_tx(nc, fails_silently=False)
+        self.assertIsNone(nc.get_metadata().voided_by)
+
+        # Find some blocks.
+        self.assertTrue(self.simulator.run(600))
+
+        # tx0 is a regular transaction with one output
+        address = self.wallet.get_unused_address_bytes()
+        _outputs = [
+            WalletOutputInfo(address, 10, None),
+        ]
+        tx0 = self.wallet.prepare_transaction_compute_inputs(Transaction, _outputs, self.manager.tx_storage)
+        self._finish_preparing_tx(tx0)
+        self.manager.cpu_mining_service.resolve(tx0)
+        self.manager.reactor.advance(60)
+
+        # tx1 is a NanoContract transaction and will fail execution.
+        tx1 = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)], cls=NanoContract)
+        self.assertEqual(len(tx1.outputs), 1)
+        tx1.outputs[0].value = 3  # sum(inputs) = 10, sum(outputs) = 3, deposit=7
+        tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1)
+        self.manager.cpu_mining_service.resolve(tx1)
+
+        # tx2 is a NanoContract transaction that spends tx1.
+        tx2 = gen_custom_base_tx(self.manager, tx_inputs=[(tx1, 0)], cls=NanoContract)
+        tx2 = self._gen_nc_tx(nc.hash, 'nop', [1], nc=tx2)
+        self.manager.cpu_mining_service.resolve(tx2)
+
+        # tx1b is in conflict with tx1
+        if conflict_with_nano:
+            tx1b = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)], cls=NanoContract)
+            self._gen_nc_tx(nc.hash, 'nop', [1], nc=tx1b)
+        else:
+            tx1b = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)])
+        self.manager.cpu_mining_service.resolve(tx1b)
+
+        # propagate both tx1 and tx2
+        self.assertTrue(self.manager.on_new_tx(tx0, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx1, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx1b, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx2, fails_silently=False))
+
+        return cast(tuple[Transaction, ...], (tx0, tx1, tx1b, tx2))
+
+    def _run_nc_consensus_conflict_block_voided_1(self, *, conflict_with_nano: bool) -> None:
+        tx0, tx1, tx1b, tx2 = self._prepare_nc_consensus_conflict(conflict_with_nano=conflict_with_nano)
+
+        # this block must be voided because it confirms both tx1 and tx1b.
+        block = self.manager.generate_mining_block()
+        block.parents = [
+            block.parents[0],
+            tx1.hash,
+            tx1b.hash,
+        ]
+        self.manager.cpu_mining_service.resolve(block)
+        self.assertTrue(self.manager.on_new_tx(block, fails_silently=False))
+        self.assertTrue(block.get_metadata().voided_by)
+
+    def test_nc_consensus_conflict_block_voided_1(self) -> None:
+        self._run_nc_consensus_conflict_block_voided_1(conflict_with_nano=False)
+
+    def test_nc_consensus_nano_conflict_block_voided_1(self) -> None:
+        self._run_nc_consensus_conflict_block_voided_1(conflict_with_nano=True)
+
+    def _run_nc_consensus_conflict_block_voided_2(self, *, conflict_with_nano: bool) -> None:
+        tx0, tx1, tx1b, tx2 = self._prepare_nc_consensus_conflict(conflict_with_nano=conflict_with_nano)
+
+        # this block will be executed.
+        b0 = self.manager.generate_mining_block()
+        b0.parents = [
+            b0.parents[0],
+            tx1.hash,
+            tx2.hash,
+        ]
+        self.manager.cpu_mining_service.resolve(b0)
+        self.assertTrue(self.manager.on_new_tx(b0, fails_silently=False))
+        self.assertIsNone(b0.get_metadata().voided_by)
+
+        # this block will be voided because it confirms tx1b.
+        b1 = self.manager.generate_mining_block()
+        b1.parents = [
+            b1.parents[0],
+            tx1b.hash,
+            tx1b.parents[0],
+        ]
+        self.manager.cpu_mining_service.resolve(b1)
+        self.assertTrue(self.manager.on_new_tx(b1, fails_silently=False))
+        self.assertIsNotNone(b1.get_metadata().voided_by)
+
+    def test_nc_consensus_conflict_block_voided_2(self) -> None:
+        self._run_nc_consensus_conflict_block_voided_2(conflict_with_nano=False)
+
+    def test_nc_consensus_nano_conflict_block_voided_2(self) -> None:
+        self._run_nc_consensus_conflict_block_voided_2(conflict_with_nano=True)
+
+    def _run_nc_consensus_conflict_block_executed_1(self, *, conflict_with_nano: bool) -> None:
+        tx0, tx1, tx1b, tx2 = self._prepare_nc_consensus_conflict(conflict_with_nano=conflict_with_nano)
+
+        # this block will be confirmed first.
+        b0 = self.manager.generate_mining_block()
+        b0.parents = [
+            b0.parents[0],
+            tx1.hash,
+            tx2.hash,
+        ]
+        self.manager.cpu_mining_service.resolve(b0)
+
+        # this block will cause a reorg.
+        b1 = self.manager.generate_mining_block()
+        b1.weight += 1
+        b1.parents = [
+            b1.parents[0],
+            tx1.hash,
+            tx2.hash,
+        ]
+        self.manager.cpu_mining_service.resolve(b1)
+
+        self.assertTrue(self.manager.on_new_tx(b0, fails_silently=False))
+        self.assertIsNone(b0.get_metadata().voided_by)
+        self.assertTrue(self.manager.on_new_tx(b1, fails_silently=False))
+        self.assertIsNotNone(b0.get_metadata().voided_by)
+        self.assertIsNone(b1.get_metadata().voided_by)
+        self.assertIsNone(tx1.get_metadata().voided_by)
+        self.assertIsNone(tx2.get_metadata().voided_by)
+        self.assertIsNotNone(tx1b.get_metadata().voided_by)
+
+    def test_nc_consensus_conflict_block_executed_1(self) -> None:
+        self._run_nc_consensus_conflict_block_executed_1(conflict_with_nano=False)
+
+    def test_nc_consensus_nano_conflict_block_executed_1(self) -> None:
+        self._run_nc_consensus_conflict_block_executed_1(conflict_with_nano=True)
+
+    def _run_nc_consensus_conflict_block_executed_2(self, *, conflict_with_nano: bool) -> None:
+        tx0, tx1, tx1b, tx2 = self._prepare_nc_consensus_conflict(conflict_with_nano=conflict_with_nano)
+
+        # this block is executed.
+        b0 = self.manager.generate_mining_block()
+        b0.parents = [
+            b0.parents[0],
+            tx1b.hash,
+            tx1b.parents[0],
+        ]
+        self.manager.cpu_mining_service.resolve(b0)
+
+        # this block will cause a reorg.
+        b1 = self.manager.generate_mining_block()
+        b1.weight += 1
+        b1.parents = [
+            b1.parents[0],
+            tx1.hash,
+            tx2.hash,
+        ]
+        self.manager.cpu_mining_service.resolve(b1)
+
+        self.assertTrue(self.manager.on_new_tx(b0, fails_silently=False))
+        self.assertIsNone(b0.get_metadata().voided_by)
+        self.assertIsNotNone(tx1.get_metadata().voided_by)
+        self.assertIsNotNone(tx2.get_metadata().voided_by)
+        self.assertIsNone(tx1b.get_metadata().voided_by)
+
+        self.assertTrue(self.manager.on_new_tx(b1, fails_silently=False))
+        self.assertIsNotNone(b0.get_metadata().voided_by)
+        self.assertIsNone(b1.get_metadata().voided_by)
+        self.assertIsNone(tx1.get_metadata().voided_by)
+        self.assertIsNone(tx2.get_metadata().voided_by)
+        self.assertIsNotNone(tx1b.get_metadata().voided_by)
+
+    def test_nc_consensus_conflict_block_executed_2(self) -> None:
+        self._run_nc_consensus_conflict_block_executed_2(conflict_with_nano=False)
+
+    def test_nc_consensus_nano_conflict_block_executed_2(self) -> None:
+        self._run_nc_consensus_conflict_block_executed_2(conflict_with_nano=True)
