@@ -55,7 +55,7 @@ from typing_extensions import Self
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_dns, generate_certificate
 from hathor.util import not_none
@@ -72,14 +72,6 @@ class InvalidPeerIdException(Exception):
 
 class PeerFlags(str, Enum):
     RETRIES_EXCEEDED = 'retries_exceeded'
-
-
-def _parse_entrypoint(entrypoint_string: str) -> Entrypoint:
-    """ Helper function to parse an entrypoint from string."""
-    entrypoint = Entrypoint.parse(entrypoint_string)
-    if entrypoint.peer_id is not None:
-        raise ValueError('do not add id= to peer.json entrypoints')
-    return entrypoint
 
 
 def _parse_pubkey(pubkey_string: str) -> rsa.RSAPublicKey:
@@ -114,7 +106,7 @@ class PeerInfo:
     """ Stores entrypoint and connection attempts information.
     """
 
-    entrypoints: list[Entrypoint] = field(default_factory=list)
+    entrypoints: list[PeerAddress] = field(default_factory=list)
     retry_timestamp: int = 0   # should only try connecting to this peer after this timestamp
     retry_interval: int = 5     # how long to wait for next connection retry. It will double for each failure
     retry_attempts: int = 0     # how many retries were made
@@ -136,13 +128,11 @@ class PeerInfo:
     async def validate_entrypoint(self, protocol: HathorProtocol) -> bool:
         """ Validates if connection entrypoint is one of the peer entrypoints
         """
-        found_entrypoint = False
-
         # If has no entrypoints must be behind a NAT, so we add the flag to the connection
         if len(self.entrypoints) == 0:
             protocol.warning_flags.add(protocol.WarningFlags.NO_ENTRYPOINTS)
             # If there are no entrypoints, we don't need to validate it
-            found_entrypoint = True
+            return True
 
         # Entrypoint validation with connection string and connection host
         # Entrypoints have the format tcp://IP|name:port
@@ -150,19 +140,13 @@ class PeerInfo:
             if protocol.entrypoint is not None:
                 # Connection string has the format tcp://IP:port
                 # So we must consider that the entrypoint could be in name format
-                if protocol.entrypoint.equals_ignore_peer_id(entrypoint):
-                    # XXX: wrong peer-id should not make it into self.entrypoints
-                    assert not protocol.entrypoint.peer_id_conflicts_with(entrypoint), 'wrong peer-id was added before'
-                    # Found the entrypoint
-                    found_entrypoint = True
-                    break
+                if protocol.entrypoint.addr == entrypoint:
+                    return True
                 # TODO: don't use `daa.TEST_MODE` for this
                 test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
                 result = await discover_dns(entrypoint.host, test_mode)
-                if protocol.entrypoint in result:
-                    # Found the entrypoint
-                    found_entrypoint = True
-                    break
+                if protocol.entrypoint.addr in [endpoint.addr for endpoint in result]:
+                    return True
             else:
                 # When the peer is the server part of the connection we don't have the full entrypoint description
                 # So we can only validate the host from the protocol
@@ -174,20 +158,13 @@ class PeerInfo:
                 # Connection host has only the IP
                 # So we must consider that the entrypoint could be in name format and we just validate the host
                 if connection_host == entrypoint.host:
-                    found_entrypoint = True
-                    break
+                    return True
                 test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
                 result = await discover_dns(entrypoint.host, test_mode)
-                if connection_host in [entrypoint.host for entrypoint in result]:
-                    # Found the entrypoint
-                    found_entrypoint = True
-                    break
+                if connection_host in [entrypoint.addr.host for entrypoint in result]:
+                    return True
 
-        if not found_entrypoint:
-            # In case the validation fails
-            return False
-
-        return True
+        return False
 
     def increment_retry_attempt(self, now: int) -> None:
         """ Updates timestamp for next retry.
@@ -242,9 +219,20 @@ class UnverifiedPeer:
 
         It is to create an UnverifiedPeer from a peer connection.
         """
+        peer_id = PeerId(data['id'])
+        endpoints = []
+
+        for endpoint_str in data.get('entrypoints', []):
+            # We have to parse using PeerEndpoint to be able to support older peers that still
+            # send the id in entrypoints, but we validate that they're sending the correct id.
+            endpoint = PeerEndpoint.parse(endpoint_str)
+            if endpoint.peer_id is not None and endpoint.peer_id != peer_id:
+                raise ValueError(f'conflicting peer_id: {endpoint.peer_id} != {peer_id}')
+            endpoints.append(endpoint.addr)
+
         return cls(
-            id=PeerId(data['id']),
-            info=PeerInfo(entrypoints=[_parse_entrypoint(e) for e in data.get('entrypoints', [])]),
+            id=peer_id,
+            info=PeerInfo(entrypoints=endpoints),
         )
 
     def merge(self, other: UnverifiedPeer) -> None:
@@ -364,12 +352,7 @@ class PublicPeer:
             return True
 
     def validate(self) -> None:
-        """ Return `True` if the following conditions are valid:
-          (i) public key and private key matches;
-         (ii) the id matches with the public key.
-
-         TODO(epnichols): Update docs.  Only raises exceptions; doesn't return anything.
-        """
+        """Calculate the PeerId based on the public key and raise an exception if it does not match."""
         if self.id != self.calculate_id():
             raise InvalidPeerIdException('id does not match public key')
 

@@ -4,11 +4,11 @@ from twisted.internet.defer import Deferred
 from twisted.names.dns import TXT, A, Record_A, Record_TXT, RRHeader
 from typing_extensions import override
 
-from hathor.p2p.entrypoint import Entrypoint, Protocol
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, PeerDiscovery
 from hathor.p2p.peer_discovery.dns import LookupResult
+from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint, Protocol
 from hathor.pubsub import PubSubManager
 from tests import unittest
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
@@ -19,9 +19,10 @@ class MockPeerDiscovery(PeerDiscovery):
         self.mocked_host_ports = mocked_host_ports
 
     @override
-    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], None]) -> None:
+    async def discover_and_connect(self, connect_to: Callable[[PeerEndpoint], None]) -> None:
         for host, port in self.mocked_host_ports:
-            connect_to(Entrypoint(Protocol.TCP, host, port))
+            addr = PeerAddress(Protocol.TCP, host, port)
+            connect_to(addr.with_id())
 
 
 class MockDNSPeerDiscovery(DNSPeerDiscovery):
