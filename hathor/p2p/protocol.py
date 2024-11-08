@@ -26,8 +26,8 @@ from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
-from hathor.p2p.peer_endpoint import PeerEndpoint
+from hathor.p2p.peer import PrivatePeer, PublicPeer
+from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
@@ -83,7 +83,6 @@ class HathorProtocol:
     state: Optional[BaseState]
     connection_time: float
     _state_instances: dict[PeerState, BaseState]
-    entrypoint: Optional[PeerEndpoint]
     warning_flags: set[str]
     aborting: bool
     diff_timestamp: Optional[int]
@@ -104,10 +103,12 @@ class HathorProtocol:
         settings: HathorSettings,
         use_ssl: bool,
         inbound: bool,
+        addr: PeerAddress,
     ) -> None:
         self._settings = settings
         self.my_peer = my_peer
         self.connections = p2p_manager
+        self.addr = addr
 
         assert p2p_manager.manager is not None
         self.node = p2p_manager.manager
@@ -146,10 +147,6 @@ class HathorProtocol:
         # Default rate limit
         self.ratelimit: RateLimiter = RateLimiter(self.reactor)
         # self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
-
-        # Connection string of the peer
-        # Used to validate if entrypoints has this string
-        self.entrypoint: Optional[PeerEndpoint] = None
 
         # Peer id sent in the connection url that is expected to connect (optional)
         self.expected_peer_id: PeerId | None = None
@@ -254,14 +251,11 @@ class HathorProtocol:
         if self.connections:
             self.connections.on_peer_connect(self)
 
-    def on_outbound_connect(self, entrypoint: PeerEndpoint, peer: UnverifiedPeer | PublicPeer | None) -> None:
+    def on_outbound_connect(self, peer_id: PeerId | None) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
-        # Save the used entrypoint in protocol so we can validate that it matches the entrypoints data
-        if entrypoint.peer_id is not None and peer is not None:
-            assert entrypoint.peer_id == peer.id
-
-        self.expected_peer_id = peer.id if peer else entrypoint.peer_id
-        self.entrypoint = entrypoint
+        # Save the peer_id so we can validate that it matches the one we'll receive in the PEER-ID state
+        assert not self.inbound
+        self.expected_peer_id = peer_id
 
     def on_peer_ready(self) -> None:
         assert self.connections is not None
@@ -282,11 +276,33 @@ class HathorProtocol:
             self._idle_timeout_call_later = None
         self.aborting = True
         self.update_log_context()
-        if self.state:
-            self.state.on_exit()
+
+        if not self.state:
+            # TODO: This should never happen, it can only happen if an exception was raised in the middle of our
+            #  connection callback (connectionMade/on_connect). In that case, we may have not initialized our state
+            #  yet. We should improve this by making an initial non-None state.
+            self.log.error(
+                'disconnecting protocol with no state. check for previous exceptions',
+                addr=str(self.addr),
+                peer_id=str(self.get_peer_id()),
+            )
+            self.connections.on_unknown_disconnect(addr=self.addr)
+            return
+        self.state.on_exit()
+        state_name = self.state.state_name
+
+        if self.is_state(self.PeerState.HELLO) or self.is_state(self.PeerState.PEER_ID):
             self.state = None
-        if self.connections:
-            self.connections.on_peer_disconnect(self)
+            self.connections.on_handshake_disconnect(addr=self.addr)
+            return
+
+        if self.is_state(self.PeerState.READY):
+            self.state = None
+            self.connections.on_ready_disconnect(addr=self.addr, peer_id=self.peer.id)
+            return
+
+        self.state = None
+        raise AssertionError(f'disconnected in unexpected state: {state_name or "unknown"}')
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message
@@ -400,6 +416,10 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
     It is simply a TCP connection which sends one message per line.
     """
     MAX_LENGTH = 65536
+
+    def makeConnection(self, transport: ITransport) -> None:
+        assert self.addr == PeerAddress.from_address(transport.getPeer())
+        super().makeConnection(transport)
 
     def connectionMade(self) -> None:
         super(HathorLineReceiver, self).connectionMade()

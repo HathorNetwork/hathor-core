@@ -18,8 +18,8 @@ class ConnectionsTest(unittest.TestCase):
         manager: HathorManager = self.create_peer('testnet', enable_sync_v1=True, enable_sync_v2=False)
 
         endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
-        manager.connections.connect_to(endpoint, use_ssl=True)
+        manager.connections.connect_to(endpoint)
 
-        self.assertIn(endpoint, manager.connections.iter_not_ready_endpoints())
-        self.assertNotIn(endpoint, manager.connections.iter_ready_connections())
-        self.assertNotIn(endpoint, manager.connections.iter_all_connections())
+        self.assertIn(endpoint.addr, manager.connections.iter_not_ready_endpoints())
+        self.assertNotIn(endpoint.addr, [conn.addr for conn in manager.connections.iter_ready_connections()])
+        self.assertNotIn(endpoint.addr, [conn.addr for conn in manager.connections.get_connected_peers()])
