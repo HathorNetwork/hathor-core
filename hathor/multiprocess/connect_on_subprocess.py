@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import os
+import pickle
 import signal
 import sys
 from pathlib import Path
@@ -27,6 +28,7 @@ from twisted.protocols.policies import ProtocolWrapper
 from twisted.protocols.tls import BufferingTLSTransport
 from twisted.python.failure import Failure
 
+from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.multiprocess.subprocess_runner import SubprocessSpawnArgs
 from hathor.multiprocess.utils import log_connection_closed
 from hathor.p2p.peer_endpoint import PeerAddress
@@ -47,6 +49,7 @@ class ConnectOnSubprocessFactory(ServerFactory, Generic[T]):
     __slots__ = (
         'reactor',
         '_main_file',
+        '_serialized_logging_args',
         '_custom_args',
         '_built_protocol_callback'
     )
@@ -56,6 +59,7 @@ class ConnectOnSubprocessFactory(ServerFactory, Generic[T]):
         *,
         reactor: ReactorProtocol,
         main_file: Path,
+        logging_args: tuple[LoggingOutput, LoggingOptions, bool],
         custom_args: T,
         built_protocol_callback: Callable[[PeerAddress], None] | None,
     ) -> None:
@@ -74,6 +78,7 @@ class ConnectOnSubprocessFactory(ServerFactory, Generic[T]):
         """
         self.reactor = reactor
         self._main_file = main_file
+        self._serialized_logging_args = pickle.dumps(logging_args).hex()
         self._custom_args = custom_args
         self._built_protocol_callback = built_protocol_callback
 
@@ -86,6 +91,7 @@ class ConnectOnSubprocessFactory(ServerFactory, Generic[T]):
             reactor=self.reactor,
             main_file=self._main_file,
             addr=peer_addr,
+            logging_args=self._serialized_logging_args,
             custom_args=self._custom_args,
         )
 
@@ -97,7 +103,7 @@ class _ConnectOnSubprocessProtocol(Protocol, Generic[T]):
     specified in a `main_file` defined in its factory, above.
     """
 
-    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_custom_args')
+    __slots__ = ('log', 'reactor', '_main_file', '_addr', '_logging_args', '_custom_args')
 
     def __init__(
         self,
@@ -105,12 +111,14 @@ class _ConnectOnSubprocessProtocol(Protocol, Generic[T]):
         reactor: ReactorProtocol,
         main_file: Path,
         addr: PeerAddress,
+        logging_args: str,
         custom_args: T,
     ) -> None:
         self.log = logger.new(addr=addr)
         self.reactor = reactor
         self._main_file = main_file
         self._addr = addr
+        self._logging_args = logging_args
         self._custom_args = custom_args
 
     def makeConnection(self, transport: ITransport) -> None:
@@ -143,7 +151,7 @@ class _ConnectOnSubprocessProtocol(Protocol, Generic[T]):
         subprocess_transport = self.reactor.spawnProcess(
             processProtocol=_SubprocessProtocol(addr=self._addr),
             executable=sys.executable,
-            args=[sys.executable, main_file_path, subprocess_args.json_dumpb().hex()],
+            args=[sys.executable, main_file_path, self._logging_args, subprocess_args.json_dumpb().hex()],
             env=os.environ,
             path=os.getcwd(),
             childFDs={1: 1, 2: 2, fileno: fileno},

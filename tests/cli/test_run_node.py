@@ -1,4 +1,4 @@
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, Mock, patch
 
 from hathor.cli.run_node import RunNode
 from tests import unittest
@@ -15,7 +15,7 @@ class RunNodeTest(unittest.TestCase):
             def register_signal_handlers(self) -> None:
                 pass
 
-        run_node = CustomRunNode(argv=['--memory-storage'])
+        run_node = CustomRunNode(argv=['--memory-storage'], logging_args=Mock())
         self.assertTrue(run_node is not None)
 
     @patch('twisted.internet.reactor.listenTCP')
@@ -27,7 +27,7 @@ class RunNodeTest(unittest.TestCase):
             def register_signal_handlers(self) -> None:
                 pass
 
-        run_node = CustomRunNode(argv=['--memory-storage', '--status', '1234'])
+        run_node = CustomRunNode(argv=['--memory-storage', '--status', '1234'], logging_args=Mock())
         self.assertTrue(run_node is not None)
 
         mock_listenTCP.assert_called_with(1234, ANY)

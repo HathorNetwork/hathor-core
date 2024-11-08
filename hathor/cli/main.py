@@ -165,7 +165,11 @@ class CliManager:
             output = process_logging_output(sys.argv)
             options = process_logging_options(sys.argv)
             setup_logging(logging_output=output, logging_options=options, capture_stdout=capture_stdout)
-            module.main()
+            try:
+                module.main(logging_args=(output, options, capture_stdout))
+            except TypeError:
+                # TODO: Temporary workaround for calling main() functions that do not take `logging_args`.
+                module.main()
         else:
             module.main(capture_stdout=capture_stdout)
 

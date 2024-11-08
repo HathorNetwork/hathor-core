@@ -23,6 +23,7 @@ from structlog import get_logger
 from hathor.cli.run_node import RunNode
 
 if TYPE_CHECKING:
+    from hathor.cli.util import LoggingOptions, LoggingOutput
     from hathor.transaction import Vertex
 
 logger = get_logger()
@@ -100,5 +101,5 @@ class QuickTest(RunNode):
         super().run()
 
 
-def main():
-    QuickTest().run()
+def main(*, logging_args: tuple[LoggingOutput, LoggingOptions, bool]) -> None:
+    QuickTest(logging_args=logging_args).run()

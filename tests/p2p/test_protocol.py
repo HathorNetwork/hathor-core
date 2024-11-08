@@ -235,7 +235,9 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.manager1.connections.connect_to(entrypoint)
         assert self.manager1.connections._connections.connecting_outbound_peers() == set()
         assert self.manager1.connections._connections.handshaking_peers() == {}
-        assert self.manager1.connections._connections.ready_peers() == {self.conn.peer_addr2: self.conn.proto1}
+        assert self.manager1.connections._connections.ready_peers() == {
+            self.conn.peer_addr2: (self.conn.proto1, self.conn.proto1.peer)
+        }
 
     def test_invalid_same_peer_id(self) -> None:
         manager3 = self.create_peer(self.network, peer=self.peer1)

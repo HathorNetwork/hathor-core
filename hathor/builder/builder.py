@@ -388,7 +388,7 @@ class Builder:
         if self._rocksdb_storage is not None:
             return self._rocksdb_storage
 
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if self._rocksdb_cache_capacity is not None:
             kwargs = dict(cache_capacity=self._rocksdb_cache_capacity)
 

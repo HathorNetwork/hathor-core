@@ -292,7 +292,7 @@ def _run_node(args: _RunNodeArgs) -> None:
             extra_log_info=_get_extra_log_info(args.name)
         )
         logger.info(f'initializing node "{args.name}"')
-        node = args.runner(argv=args.argv)
+        node = args.runner(argv=args.argv, logging_args=(args.logging_output, log_options, args.capture_stdout))
     except KeyboardInterrupt:
         logger.warn(f'{args.name} node interrupted by user')
         return
