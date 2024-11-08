@@ -23,6 +23,7 @@ from twisted.internet.defer import CancelledError, Deferred, inlineCallbacks
 from twisted.internet.interfaces import IDelayedCall
 
 from hathor.p2p import P2PDependencies
+from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v1.downloader import Downloader
@@ -86,9 +87,9 @@ class NodeSyncTimestamp(SyncAgent):
         self.tx_storage = self.dependencies.tx_storage
 
         # Rate limit for this connection.
-        assert protocol.connections is not None
-        self.global_rate_limiter: 'RateLimiter' = protocol.connections.rate_limiter
-        self.GlobalRateLimiter = protocol.connections.GlobalRateLimiter
+        assert isinstance(self.protocol.p2p_manager, ConnectionsManager)
+        self.global_rate_limiter: 'RateLimiter' = self.protocol.p2p_manager.rate_limiter
+        self.GlobalRateLimiter = self.protocol.p2p_manager.GlobalRateLimiter
 
         self.call_later_id: Optional[IDelayedCall] = None
         self.call_later_interval: int = 1  # seconds
@@ -639,7 +640,7 @@ class NodeSyncTimestamp(SyncAgent):
             # in the network, thus, we propagate it as well.
             success = self.dependencies.vertex_handler.on_new_vertex(tx)
             if success:
-                self.protocol.connections.send_tx_to_peers(tx)
+                self.protocol.p2p_manager.send_tx_to_peers(tx)
             self.update_received_stats(tx, success)
 
     def update_received_stats(self, tx: 'BaseTransaction', result: bool) -> None:
@@ -690,7 +691,7 @@ class NodeSyncTimestamp(SyncAgent):
                 # Add tx to the DAG.
                 success = self.dependencies.vertex_handler.on_new_vertex(tx)
                 if success:
-                    self.protocol.connections.send_tx_to_peers(tx)
+                    self.protocol.p2p_manager.send_tx_to_peers(tx)
             # Updating stats data
             self.update_received_stats(tx, success)
         return tx

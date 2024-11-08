@@ -110,10 +110,9 @@ class PeerIdState(BaseState):
             protocol.send_error_and_close_connection('Are you my clone?!')
             return
 
-        if protocol.connections is not None:
-            if protocol.connections.is_peer_ready(peer.id):
-                protocol.send_error_and_close_connection('We are already connected.')
-                return
+        if self.protocol.p2p_manager.is_peer_ready(peer.id):
+            protocol.send_error_and_close_connection('We are already connected.')
+            return
 
         entrypoint_valid = await peer.info.validate_entrypoint(protocol)
         if not entrypoint_valid:
@@ -131,7 +130,6 @@ class PeerIdState(BaseState):
 
         context = NetfilterContext(
             protocol=protocol,
-            connections=protocol.connections,
             addr=protocol.transport.getPeer(),
         )
         verdict = get_table('filter').get_chain('post_peerid').process(context)
@@ -146,7 +144,7 @@ class PeerIdState(BaseState):
 
         Currently this is only because the peer is not in a whitelist and whitelist blocking is active.
         """
-        peer_is_whitelisted = self.protocol.connections.is_peer_whitelisted(peer_id)
+        peer_is_whitelisted = self.protocol.p2p_manager.is_peer_whitelisted(peer_id)
         # never block whitelisted peers
         if peer_is_whitelisted:
             return False

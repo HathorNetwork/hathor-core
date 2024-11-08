@@ -1,5 +1,3 @@
-from unittest.mock import Mock
-
 from twisted.internet.address import IPv4Address
 
 from hathor.p2p.netfilter import get_table
@@ -22,7 +20,7 @@ class NetfilterFactoryTest(unittest.TestCase):
         builder = TestBuilder()
         artifacts = builder.build()
         wrapped_factory = artifacts.p2p_manager.server_factory
-        factory = NetfilterFactory(connections=Mock(), wrappedFactory=wrapped_factory)
+        factory = NetfilterFactory(wrappedFactory=wrapped_factory)
 
         ret = factory.buildProtocol(IPv4Address('TCP', '192.168.0.1', 1234))
         self.assertIsNone(ret)
