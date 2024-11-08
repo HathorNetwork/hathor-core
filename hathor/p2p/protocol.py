@@ -31,7 +31,7 @@ from hathor.p2p.peer import PrivatePeer, PublicPeer
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
-from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
+from hathor.p2p.states import BaseState, HelloState, InitialState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import format_address
 from hathor.profiler import get_cpu_profiler
@@ -64,11 +64,6 @@ class HathorProtocol:
     The available commands are listed in the ProtocolMessages class.
     """
 
-    class PeerState(Enum):
-        HELLO = HelloState
-        PEER_ID = PeerIdState
-        READY = ReadyState
-
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'
 
@@ -80,9 +75,7 @@ class HathorProtocol:
     last_message: float
     _peer: Optional[PublicPeer]
     transport: Optional[ITransport]
-    state: Optional[BaseState]
     connection_time: float
-    _state_instances: dict[PeerState, BaseState]
     warning_flags: set[str]
     aborting: bool
     diff_timestamp: Optional[int]
@@ -120,8 +113,6 @@ class HathorProtocol:
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT
         self._idle_timeout_call_later: Optional[IDelayedCall] = None
 
-        self._state_instances = {}
-
         self.app_version = 'Unknown'
         self.diff_timestamp = None
 
@@ -139,7 +130,7 @@ class HathorProtocol:
         self.connection_time = 0.0
 
         # The current state of the connection.
-        self.state: Optional[BaseState] = None
+        self.state: BaseState = InitialState(dependencies=dependencies)
 
         # Default rate limit
         self.ratelimit: RateLimiter = RateLimiter(self.reactor)
@@ -165,24 +156,14 @@ class HathorProtocol:
 
         self.capabilities = set()
 
-    def change_state(self, state_enum: PeerState) -> None:
-        """Called to change the state of the connection."""
-        if state_enum not in self._state_instances:
-            state_cls = state_enum.value
-            instance = state_cls(self, dependencies=self.dependencies)
-            instance.state_name = state_enum.name
-            self._state_instances[state_enum] = instance
-        new_state = self._state_instances[state_enum]
-        if new_state != self.state:
-            if self.state:
-                self.state.on_exit()
-            self.state = new_state
-            if self.state:
-                self.state.on_enter()
-
-    def is_state(self, state_enum: PeerState) -> bool:
-        """Checks whether current state is `state_enum`."""
-        return isinstance(self.state, state_enum.value)
+    def advance_state(self) -> None:
+        """Called to advance the state of the connection."""
+        new_state_type = self.state.next_state_type()
+        assert new_state_type is not None
+        new_state: BaseState = new_state_type(dependencies=self.dependencies, protocol=self)
+        self.state.on_exit()
+        self.state = new_state
+        self.state.on_enter()
 
     def get_short_remote(self) -> str:
         """Get remote for logging."""
@@ -242,8 +223,8 @@ class HathorProtocol:
 
         self.reset_idle_timeout()
 
-        # The initial state is HELLO.
-        self.change_state(self.PeerState.HELLO)
+        # The first state after INITIAL is HELLO.
+        self.advance_state()
 
         self.p2p_manager.on_peer_connect(self)
 
@@ -262,7 +243,7 @@ class HathorProtocol:
     def on_disconnect(self, reason: Failure) -> None:
         """ Executed when the connection is lost.
         """
-        if self.is_state(self.PeerState.READY):
+        if isinstance(self.state, ReadyState):
             self.log.info('disconnected', reason=reason.getErrorMessage())
         else:
             self.log.debug('disconnected', reason=reason.getErrorMessage())
@@ -271,33 +252,21 @@ class HathorProtocol:
             self._idle_timeout_call_later = None
         self.aborting = True
         self.update_log_context()
-
-        if not self.state:
-            # TODO: This should never happen, it can only happen if an exception was raised in the middle of our
-            #  connection callback (connectionMade/on_connect). In that case, we may have not initialized our state
-            #  yet. We should improve this by making an initial non-None state.
-            self.log.error(
-                'disconnecting protocol with no state. check for previous exceptions',
-                addr=str(self.addr),
-                peer_id=str(self.get_peer_id()),
-            )
-            self.p2p_manager.on_unknown_disconnect(addr=self.addr)
-            return
         self.state.on_exit()
-        state_name = self.state.state_name
 
-        if self.is_state(self.PeerState.HELLO) or self.is_state(self.PeerState.PEER_ID):
-            self.state = None
+        if isinstance(self.state, InitialState):
+            self.p2p_manager.on_initial_disconnect(addr=self.addr)
+            return
+
+        if isinstance(self.state, HelloState) or isinstance(self.state, PeerIdState):
             self.p2p_manager.on_handshake_disconnect(addr=self.addr)
             return
 
-        if self.is_state(self.PeerState.READY):
-            self.state = None
+        if isinstance(self.state, ReadyState):
             self.p2p_manager.on_ready_disconnect(addr=self.addr, peer_id=self.peer.id)
             return
 
-        self.state = None
-        raise AssertionError(f'disconnected in unexpected state: {state_name or "unknown"}')
+        raise AssertionError(f'disconnected in unexpected state: {self.state.name}')
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message
@@ -338,13 +307,13 @@ class HathorProtocol:
             .addErrback(self._on_cmd_handler_error, cmd)
 
     def _on_cmd_handler_error(self, failure: Failure, cmd: ProtocolMessages) -> None:
-        self.log.warn('recv_message processing error', reason=failure.getErrorMessage(), exc_info=True)
+        self.log.warn('recv_message processing error', reason=failure.getErrorMessage())
         self.send_error_and_close_connection(f'Error processing "{cmd.value}" command')
 
     def send_error(self, msg: str) -> None:
         """ Send an error message to the peer.
         """
-        if self.is_state(self.PeerState.READY):
+        if isinstance(self.state, ReadyState):
             self.log.warn('send error', msg=msg)
         else:
             self.log.debug('send error', msg=msg)
@@ -386,21 +355,18 @@ class HathorProtocol:
 
     def is_sync_enabled(self) -> bool:
         """Return true if sync is enabled for this connection."""
-        if not self.is_state(self.PeerState.READY):
+        if not isinstance(self.state, ReadyState):
             return False
-        assert isinstance(self.state, ReadyState)
         return self.state.sync_agent.is_sync_enabled()
 
     def enable_sync(self) -> None:
         """Enable sync for this connection."""
-        assert self.is_state(self.PeerState.READY)
         assert isinstance(self.state, ReadyState)
         self.log.info('enable sync')
         self.state.sync_agent.enable_sync()
 
     def disable_sync(self) -> None:
         """Disable sync for this connection."""
-        assert self.is_state(self.PeerState.READY)
         assert isinstance(self.state, ReadyState)
         self.log.info('disable sync')
         self.state.sync_agent.disable_sync()

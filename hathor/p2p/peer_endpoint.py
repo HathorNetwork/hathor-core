@@ -118,6 +118,10 @@ instead, compare the addr attribute explicitly, and if relevant, the peer_id too
     def __ne__(self, other: Any) -> bool:
         return not self == other
 
+    def __hash__(self):
+        host = 'localhost' if self.is_localhost() else self.host
+        return hash((self.protocol, host, self.port))
+
     @classmethod
     def parse(cls, description: str) -> Self:
         protocol, host, port, query = _parse_address_parts(description)

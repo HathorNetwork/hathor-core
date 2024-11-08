@@ -21,8 +21,8 @@ class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase)
         # Even if we don't have the capability we must connect because the whitelist url conf is None
         assert isinstance(conn._proto1.state, ReadyState)
         assert isinstance(conn._proto2.state, ReadyState)
-        self.assertEqual(conn._proto1.state.state_name, 'READY')
-        self.assertEqual(conn._proto2.state.state_name, 'READY')
+        self.assertEqual(conn._proto1.state.name, 'READY')
+        self.assertEqual(conn._proto2.state.name, 'READY')
         self.assertIsInstance(conn._proto1.state.sync_agent, NodeSyncTimestamp)
         self.assertIsInstance(conn._proto2.state.sync_agent, NodeSyncTimestamp)
 
@@ -38,8 +38,8 @@ class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase)
 
         assert isinstance(conn2._proto1.state, ReadyState)
         assert isinstance(conn2._proto2.state, ReadyState)
-        self.assertEqual(conn2._proto1.state.state_name, 'READY')
-        self.assertEqual(conn2._proto2.state.state_name, 'READY')
+        self.assertEqual(conn2._proto1.state.name, 'READY')
+        self.assertEqual(conn2._proto2.state.name, 'READY')
         self.assertIsInstance(conn2._proto1.state.sync_agent, NodeSyncTimestamp)
         self.assertIsInstance(conn2._proto2.state.sync_agent, NodeSyncTimestamp)
 
@@ -61,8 +61,8 @@ class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase)
         # Even if we don't have the capability we must connect because the whitelist url conf is None
         assert isinstance(conn._proto1.state, ReadyState)
         assert isinstance(conn._proto2.state, ReadyState)
-        self.assertEqual(conn._proto1.state.state_name, 'READY')
-        self.assertEqual(conn._proto2.state.state_name, 'READY')
+        self.assertEqual(conn._proto1.state.name, 'READY')
+        self.assertEqual(conn._proto2.state.name, 'READY')
         self.assertIsInstance(conn._proto1.state.sync_agent, NodeBlockSync)
         self.assertIsInstance(conn._proto2.state.sync_agent, NodeBlockSync)
 
@@ -80,8 +80,8 @@ class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase)
 
         assert isinstance(conn2._proto1.state, ReadyState)
         assert isinstance(conn2._proto2.state, ReadyState)
-        self.assertEqual(conn2._proto1.state.state_name, 'READY')
-        self.assertEqual(conn2._proto2.state.state_name, 'READY')
+        self.assertEqual(conn2._proto1.state.name, 'READY')
+        self.assertEqual(conn2._proto2.state.name, 'READY')
         self.assertIsInstance(conn2._proto1.state.sync_agent, NodeBlockSync)
         self.assertIsInstance(conn2._proto2.state.sync_agent, NodeBlockSync)
 

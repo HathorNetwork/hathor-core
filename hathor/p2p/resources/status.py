@@ -52,7 +52,7 @@ class StatusResource(Resource):
         for conn in self.manager.connections.iter_handshaking_peers():
             handshaking_peers.append({
                 'address': str(conn.addr),
-                'state': conn.state.state_name,
+                'state': conn.state.name,
                 'uptime': now - conn.connection_time,
                 'app_version': conn.app_version,
             })
@@ -67,7 +67,7 @@ class StatusResource(Resource):
                 'current_time': now,
                 'uptime': now - conn.connection_time,
                 'address': str(conn.addr),
-                'state': conn.state.state_name,
+                'state': conn.state.name,
                 # 'received_bytes': conn.received_bytes,
                 'rtt': list(conn.state.rtt_window),
                 'last_message': now - conn.last_message,

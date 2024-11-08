@@ -67,17 +67,17 @@ class BaseMetricsTest(unittest.TestCase):
             "2": PrivatePeer.auto_generated(),
             "3": PrivatePeer.auto_generated(),
         })
-        peer1 = Mock()
-        peer1.addr = PeerAddress.parse('tcp://localhost:40403')
-        peer2 = Mock()
-        peer2.addr = PeerAddress.parse('tcp://localhost:40404')
-        peer3 = Mock()
-        peer3.addr = PeerAddress.parse('tcp://localhost:40405')
-        p2p_manager._connections.on_connected(protocol=peer1)
-        p2p_manager._connections.on_connected(protocol=peer2)
-        p2p_manager._connections.on_connected(protocol=peer3)
-        p2p_manager._connections.on_ready(addr=peer1.addr, peer_id=Mock())
-        p2p_manager._connections.on_ready(addr=peer2.addr, peer_id=Mock())
+        addr1 = PeerAddress.parse('tcp://localhost:40403')
+        addr2 = PeerAddress.parse('tcp://localhost:40404')
+        addr3 = PeerAddress.parse('tcp://localhost:40405')
+        p2p_manager._connections.on_built_protocol(addr=addr1, protocol=Mock())
+        p2p_manager._connections.on_built_protocol(addr=addr2, protocol=Mock())
+        p2p_manager._connections.on_built_protocol(addr=addr3, protocol=Mock())
+        p2p_manager._connections.on_connected(addr=addr1, inbound=True)
+        p2p_manager._connections.on_connected(addr=addr2, inbound=True)
+        p2p_manager._connections.on_connected(addr=addr3, inbound=True)
+        p2p_manager._connections.on_ready(addr=addr1, peer_id=Mock())
+        p2p_manager._connections.on_ready(addr=addr2, peer_id=Mock())
 
         # Execution
         endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')

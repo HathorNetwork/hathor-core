@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import deque
 from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
+from typing_extensions import override
 
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p import P2PDependencies
@@ -29,14 +32,16 @@ from hathor.transaction import BaseTransaction
 from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+    from hathor.p2p.protocol import HathorProtocol
 
 logger = get_logger()
 
 
 class ReadyState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', *, dependencies: P2PDependencies) -> None:
-        super().__init__(protocol, dependencies=dependencies)
+    name: str = 'READY'
+
+    def __init__(self, dependencies: P2PDependencies, protocol: HathorProtocol):
+        super().__init__(dependencies=dependencies, protocol=protocol)
 
         self.log = logger.new(**self.protocol.get_logger_context())
 
@@ -271,3 +276,8 @@ class ReadyState(BaseState):
             )
             return
         self.peer_best_blockchain = best_blockchain
+
+    @staticmethod
+    @override
+    def next_state_type() -> type[BaseState] | None:
+        return None

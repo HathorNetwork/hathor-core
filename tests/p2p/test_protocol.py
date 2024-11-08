@@ -2,8 +2,8 @@ import json
 from typing import Optional
 from unittest.mock import Mock, patch
 
-import pytest
 from twisted.internet import defer
+from twisted.internet.address import IPv4Address
 from twisted.internet.protocol import Protocol
 from twisted.python.failure import Failure
 
@@ -13,7 +13,9 @@ from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
+from hathor.p2p.states import InitialState
 from hathor.simulator import FakeConnection
+from hathor.simulator.fake_connection import HathorStringTransport
 from hathor.util import json_dumps, json_loadb
 from tests import unittest
 
@@ -115,14 +117,6 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         )
 
         self.conn.proto1.state.handle_throttle(b'')
-
-        # Test empty disconnect
-        self.conn.proto1.state = None
-        with pytest.raises(AssertionError):
-            # TODO: This raises because we are trying to disconnect a protocol with no state, but it's not possible
-            #  for a protocol to have no state after it's handshaking. We have to update this when we introduce the
-            #  new non-None initial state for protocols.
-            self.conn.proto1.on_disconnect(Failure(Exception()))
 
     def test_invalid_size(self) -> None:
         self.conn.tr1.clear()
@@ -389,7 +383,24 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.proto1.dataReceived(b'\xff\r\n')
         self.assertTrue(self.conn.tr1.disconnecting)
 
-    def test_on_disconnect(self) -> None:
+    def test_on_disconnect_initial(self) -> None:
+        manager3 = self.create_peer(self.network)
+        addr = IPv4Address('TCP', '127.0.0.1', 40403)
+        peer_addr = PeerAddress.from_address(addr)
+        peer_endpoint = peer_addr.with_id(self.manager1.my_peer.id)
+        deferred = manager3.connections.connect_to(peer_endpoint, self.manager1.my_peer)
+        assert deferred is not None
+
+        proto = manager3.connections.client_factory.buildProtocol(addr)
+        proto.transport = HathorStringTransport(self.manager1.my_peer, peer_address=addr)
+        deferred.callback(proto)
+        assert peer_addr in manager3.connections.iter_not_ready_endpoints()
+        assert isinstance(proto.state, InitialState)
+
+        proto.connectionLost(Failure(Exception()))
+        assert peer_addr not in manager3.connections._connections.all_peers()
+
+    def test_on_disconnect_before_hello(self) -> None:
         self.assertIn(self.conn.proto1, self.manager1.connections.iter_handshaking_peers())
         self.conn.disconnect(Failure(Exception('testing')))
         self.assertNotIn(self.conn.proto1, self.manager1.connections.iter_handshaking_peers())

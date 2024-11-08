@@ -12,6 +12,7 @@ from hathor.p2p.netfilter.matches import (
     NetfilterMatchPeerId,
 )
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.states import HelloState, PeerIdState, ReadyState
 from hathor.simulator import FakeConnection
 from tests import unittest
 
@@ -208,20 +209,20 @@ class BaseNetfilterMatchTest(unittest.TestCase):
         manager2 = self.create_peer(network, peer=peer2)
 
         conn = FakeConnection(manager1, manager2)
-        self.assertTrue(conn.proto2.is_state(conn.proto2.PeerState.HELLO))
+        self.assertTrue(isinstance(conn.proto2.state, HelloState))
 
         matcher = NetfilterMatchPeerId(str(peer1.id))
         context = NetfilterContext(protocol=conn.proto2)
         self.assertFalse(matcher.match(context))
 
         conn.run_one_step()
-        self.assertTrue(conn.proto2.is_state(conn.proto2.PeerState.PEER_ID))
+        self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
         self.assertFalse(matcher.match(context))
 
         # Success because the connection is ready and proto2 is connected to proto1.
         conn.run_one_step()
         conn.run_one_step()
-        self.assertTrue(conn.proto2.is_state(conn.proto2.PeerState.READY))
+        self.assertTrue(isinstance(conn.proto2.state, ReadyState))
         self.assertTrue(matcher.match(context))
 
         # Fail because proto1 is connected to proto2, and the peer id cannot match.
