@@ -25,6 +25,7 @@ from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.p2p import P2PDependencies
+from hathor.p2p.dependencies.protocols import P2PManagerProtocol
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer, PublicPeer
 from hathor.p2p.peer_endpoint import PeerAddress
@@ -75,8 +76,6 @@ class HathorProtocol:
         NO_ENTRYPOINTS = 'no_entrypoints'
 
     my_peer: PrivatePeer
-    connections: 'ConnectionsManager'
-    node: 'HathorManager'
     app_version: str
     last_message: float
     _peer: Optional[PublicPeer]
@@ -99,7 +98,7 @@ class HathorProtocol:
     def __init__(
         self,
         my_peer: PrivatePeer,
-        p2p_manager: 'ConnectionsManager',
+        p2p_manager: P2PManagerProtocol,
         *,
         dependencies: P2PDependencies,
         use_ssl: bool,
@@ -109,14 +108,10 @@ class HathorProtocol:
         self.dependencies = dependencies
         self._settings = dependencies.settings
         self.my_peer = my_peer
-        self.connections = p2p_manager
+        self.p2p_manager: P2PManagerProtocol = p2p_manager
         self.addr = addr
 
-        assert p2p_manager.manager is not None
-        self.node = p2p_manager.manager
-
-        assert self.connections.reactor is not None
-        self.reactor = self.connections.reactor
+        self.reactor = self.dependencies.reactor
 
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
         self.inbound = inbound
@@ -250,8 +245,7 @@ class HathorProtocol:
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
-        if self.connections:
-            self.connections.on_peer_connect(self)
+        self.p2p_manager.on_peer_connect(self)
 
     def on_outbound_connect(self, peer_id: PeerId | None) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
@@ -260,10 +254,9 @@ class HathorProtocol:
         self.expected_peer_id = peer_id
 
     def on_peer_ready(self) -> None:
-        assert self.connections is not None
         assert self.peer is not None
         self.update_log_context()
-        self.connections.on_peer_ready(self)
+        self.p2p_manager.on_peer_ready(self)
         self.log.info('peer connected', peer_id=self.peer.id)
 
     def on_disconnect(self, reason: Failure) -> None:
@@ -288,19 +281,19 @@ class HathorProtocol:
                 addr=str(self.addr),
                 peer_id=str(self.get_peer_id()),
             )
-            self.connections.on_unknown_disconnect(addr=self.addr)
+            self.p2p_manager.on_unknown_disconnect(addr=self.addr)
             return
         self.state.on_exit()
         state_name = self.state.state_name
 
         if self.is_state(self.PeerState.HELLO) or self.is_state(self.PeerState.PEER_ID):
             self.state = None
-            self.connections.on_handshake_disconnect(addr=self.addr)
+            self.p2p_manager.on_handshake_disconnect(addr=self.addr)
             return
 
         if self.is_state(self.PeerState.READY):
             self.state = None
-            self.connections.on_ready_disconnect(addr=self.addr, peer_id=self.peer.id)
+            self.p2p_manager.on_ready_disconnect(addr=self.addr, peer_id=self.peer.id)
             return
 
         self.state = None
