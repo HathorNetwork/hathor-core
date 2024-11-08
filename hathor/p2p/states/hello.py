@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 from structlog import get_logger
+from typing_extensions import override
 
 import hathor
 from hathor.conf.get_settings import get_global_settings
@@ -27,14 +30,16 @@ from hathor.p2p.utils import format_address, get_genesis_short_hash, get_setting
 from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+    from hathor.p2p.protocol import HathorProtocol
 
 logger = get_logger()
 
 
 class HelloState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', *, dependencies: P2PDependencies) -> None:
-        super().__init__(protocol, dependencies=dependencies)
+    name: str = 'HELLO'
+
+    def __init__(self, dependencies: P2PDependencies, protocol: HathorProtocol):
+        super().__init__(dependencies=dependencies, protocol=protocol)
         self.log = logger.new(**protocol.get_logger_context())
         self.cmd_map.update({
             ProtocolMessages.HELLO: self.handle_hello,
@@ -167,7 +172,13 @@ class HelloState(BaseState):
             self.protocol.disconnect('rejected by netfilter: filter post_hello', force=True)
             return
 
-        protocol.change_state(protocol.PeerState.PEER_ID)
+        protocol.advance_state()
+
+    @staticmethod
+    @override
+    def next_state_type() -> type[BaseState] | None:
+        from hathor.p2p.states import PeerIdState
+        return PeerIdState
 
 
 def _parse_sync_versions(hello_data: dict[str, Any]) -> set[SyncVersion]:

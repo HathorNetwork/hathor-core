@@ -1,3 +1,4 @@
+from hathor.p2p.states import ReadyState
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
 from tests import unittest
@@ -52,7 +53,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         self.simulator.run(600)
 
-        ready = set(conn for conn in connections if conn.proto1.is_state(conn.proto1.PeerState.READY))
+        ready = set(conn for conn in connections if isinstance(conn.proto1.state, ReadyState))
         self.assertEqual(len(ready), len(other_managers))
 
         enabled = set(conn for conn in connections if conn.proto1.is_sync_enabled())

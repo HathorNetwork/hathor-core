@@ -123,12 +123,14 @@ class ConnectionsManager:
             p2p_manager=self,
             dependencies=dependencies,
             use_ssl=self.use_ssl,
+            built_protocol_callback=self._on_built_protocol,
         )
         self.client_factory = HathorClientFactory(
             my_peer=self.my_peer,
             p2p_manager=self,
             dependencies=dependencies,
             use_ssl=self.use_ssl,
+            built_protocol_callback=self._on_built_protocol,
         )
 
         # Global maximum number of connections.
@@ -360,7 +362,7 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
 
-        self._connections.on_connected(protocol=protocol)
+        self._connections.on_connected(addr=protocol.addr, inbound=protocol.inbound)
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
             protocol=protocol,
@@ -423,9 +425,9 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def on_unknown_disconnect(self, *, addr: PeerAddress) -> None:
-        """Called when a peer disconnects from an unknown state (None)."""
-        self._connections.on_unknown_disconnect(addr=addr)
+    def on_initial_disconnect(self, *, addr: PeerAddress) -> None:
+        """Called when a peer disconnects from the initial state."""
+        self._connections.on_initial_disconnect(addr=addr)
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_DISCONNECTED,
             peers_count=self._get_peers_count()
@@ -575,7 +577,7 @@ class ConnectionsManager:
         if endpoint.peer_id is not None and peer is not None:
             assert endpoint.peer_id == peer.id, 'the entrypoint peer_id does not match the actual peer_id'
 
-        already_exists = self._connections.on_connecting(addr=endpoint.addr)
+        already_exists = self._connections.on_start_connection(addr=endpoint.addr)
         if already_exists:
             self.log.debug('skipping because we are already connected(ing) to this endpoint', endpoint=str(endpoint))
             return None
@@ -642,6 +644,9 @@ class ConnectionsManager:
         assert self.manager is not None
         if self.manager.hostname:
             self._add_hostname_entrypoint(self.manager.hostname, address)
+
+    def _on_built_protocol(self, addr: PeerAddress, protocol: HathorProtocol) -> None:
+        self._connections.on_built_protocol(addr=addr, protocol=protocol)
 
     def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:
         """Add new hostname entrypoints according to the listen addresses, and remove any old entrypoint."""

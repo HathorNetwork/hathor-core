@@ -285,13 +285,13 @@ class FakeConnection:
         self._buf1.clear()
         self._buf2.clear()
 
-        self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
-        self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
-
         # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls connect_to()
-        peer = self._proto1.my_peer.to_unverified_peer() if self._fake_bootstrap_id is False else None
+        peer = self.manager1.my_peer.to_unverified_peer() if self._fake_bootstrap_id is False else None
         deferred = self.manager2.connections.connect_to(self.entrypoint, peer)
         assert deferred is not None
+
+        self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
+        self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
         deferred.callback(self._proto2)
 
         self.tr1 = HathorStringTransport(self._proto2.my_peer, peer_address=self.addr2)

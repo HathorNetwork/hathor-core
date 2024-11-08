@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 from structlog import get_logger
+from typing_extensions import override
 
 from hathor.p2p import P2PDependencies
 from hathor.p2p.messages import ProtocolMessages
@@ -24,14 +27,16 @@ from hathor.p2p.states.base import BaseState
 from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+    from hathor.p2p.protocol import HathorProtocol
 
 logger = get_logger()
 
 
 class PeerIdState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', *, dependencies: P2PDependencies) -> None:
-        super().__init__(protocol, dependencies=dependencies)
+    name: str = 'PEER_ID'
+
+    def __init__(self, dependencies: P2PDependencies, protocol: HathorProtocol):
+        super().__init__(dependencies=dependencies, protocol=protocol)
         self.log = logger.new(remote=protocol.get_short_remote())
         self.cmd_map.update({
             ProtocolMessages.PEER_ID: self.handle_peer_id,
@@ -52,7 +57,7 @@ class PeerIdState(BaseState):
         self.send_message(ProtocolMessages.READY)
         if self.other_peer_ready:
             # In case both peers are already ready, we change the state to READY
-            self.protocol.change_state(self.protocol.PeerState.READY)
+            self.protocol.advance_state()
 
     def handle_ready(self, payload: str) -> None:
         """ Handles a received READY message
@@ -61,7 +66,7 @@ class PeerIdState(BaseState):
         if self.my_peer_ready:
             # In this case this peer already completed the peer-id validation
             # So it was just waiting for the ready message from the other peer to change the state to READY
-            self.protocol.change_state(self.protocol.PeerState.READY)
+            self.protocol.advance_state()
 
     def _get_peer_id_data(self) -> dict[str, Any]:
         my_peer = self.protocol.my_peer
@@ -164,3 +169,9 @@ class PeerIdState(BaseState):
 
         # default is not blocking, this will be sync-v2 peers not on whitelist when not on whitelist-only mode
         return False
+
+    @staticmethod
+    @override
+    def next_state_type() -> type[BaseState] | None:
+        from hathor.p2p.states import ReadyState
+        return ReadyState

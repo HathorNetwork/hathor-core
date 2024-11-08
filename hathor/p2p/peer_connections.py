@@ -33,13 +33,16 @@ class PeerConnections:
     It's also responsible for reacting for state changes on those connections.
     """
 
-    __slots__ = ('_connecting_outbound', '_handshaking', '_ready', '_addr_by_id')
+    __slots__ = ('_connecting_outbound', '_built', '_handshaking', '_ready', '_addr_by_id')
 
     def __init__(self) -> None:
         # Peers that are in the "connecting" state, between starting a connection and Twisted calling `connectionMade`.
         # This is only for outbound peers, that is, connections initiated by us.
         # They're uniquely identified by the address we're connecting to.
         self._connecting_outbound: set[PeerAddress] = set()
+
+        # Peers that had their protocol instances built, before getting connected.
+        self._built: dict[PeerAddress, HathorProtocol] = {}
 
         # Peers that are handshaking, in a state after being connected and before reaching the READY state.
         # They're uniquely identified by the address we're connected to.
@@ -71,7 +74,7 @@ class PeerConnections:
 
     def not_ready_peers(self) -> list[PeerAddress]:
         """Get not ready peers, that is, peers that are either connecting or handshaking."""
-        return list(self._connecting_outbound) + list(self._handshaking)
+        return list(self._built) + list(self._connecting_outbound) + list(self._handshaking)
 
     def connected_peers(self) -> dict[PeerAddress, HathorProtocol]:
         """
@@ -104,15 +107,22 @@ class PeerConnections:
         """Return whether a peer is ready, by its PeerId."""
         return peer_id in self._addr_by_id
 
-    def on_connecting(self, *, addr: PeerAddress) -> bool:
+    def on_start_connection(self, *, addr: PeerAddress) -> bool:
         """
         Callback for when an outbound connection is initiated.
-        Returns True if this address already exists, either connecting or connected, and False otherwise."""
+        Returns True if this address already exists, either connecting or connected, and False otherwise.
+        """
         if addr in self.all_peers():
             return True
 
         self._connecting_outbound.add(addr)
         return False
+
+    def on_built_protocol(self, *, addr: PeerAddress, protocol: HathorProtocol) -> None:
+        """Callback for when a HathorProtocol instance is built."""
+        assert addr not in self._built
+        assert addr not in self.connected_peers()
+        self._built[addr] = protocol
 
     def on_failed_to_connect(self, *, addr: PeerAddress) -> None:
         """Callback for when an outbound connection fails before getting connected."""
@@ -120,23 +130,26 @@ class PeerConnections:
         assert addr not in self.connected_peers()
         self._connecting_outbound.remove(addr)
 
-    def on_connected(self, *, protocol: HathorProtocol) -> None:
-        """Callback for when an outbound connection gets connected."""
-        assert protocol.addr not in self.connected_peers()
+    def on_connected(self, *, addr: PeerAddress, inbound: bool) -> None:
+        """Callback for when a connection is made from both inbound and outbound peers."""
+        assert addr in self._built
+        assert addr not in self.connected_peers()
 
-        if protocol.inbound:
-            assert protocol.addr not in self._connecting_outbound
+        if inbound:
+            assert addr not in self._connecting_outbound
         else:
-            assert protocol.addr in self._connecting_outbound
-            self._connecting_outbound.remove(protocol.addr)
+            assert addr in self._connecting_outbound
+            self._connecting_outbound.remove(addr)
 
-        self._handshaking[protocol.addr] = protocol
+        protocol = self._built.pop(addr)
+        self._handshaking[addr] = protocol
 
     def on_handshake_disconnect(self, *, addr: PeerAddress) -> None:
         """
         Callback for when a connection is closed during a handshaking state, that is,
         after getting connected and before getting READY.
         """
+        assert addr not in self._built
         assert addr not in self._connecting_outbound
         assert addr in self._handshaking
         assert addr not in self._ready
@@ -148,6 +161,7 @@ class PeerConnections:
         If the PeerId of this connection is duplicate, return the protocol that we should disconnect.
         Return None otherwise.
         """
+        assert addr not in self._built
         assert addr not in self._connecting_outbound
         assert addr in self._handshaking
         assert addr not in self._ready
@@ -173,6 +187,7 @@ class PeerConnections:
 
     def on_ready_disconnect(self, *, addr: PeerAddress, peer_id: PeerId) -> None:
         """Callback for when a connection is closed during the READY state."""
+        assert addr not in self._built
         assert addr not in self._connecting_outbound
         assert addr not in self._handshaking
         assert addr in self._ready
@@ -181,10 +196,13 @@ class PeerConnections:
         if self._addr_by_id[peer_id] == addr:
             self._addr_by_id.pop(peer_id)
 
-    def on_unknown_disconnect(self, *, addr: PeerAddress) -> None:
-        """Callback for when a connection is closed during an unknown state."""
+    def on_initial_disconnect(self, *, addr: PeerAddress) -> None:
+        """Callback for when a connection is closed during the initial state."""
+        assert addr in self._built
         assert addr not in self._handshaking
         assert addr not in self._ready
+
+        self._built.pop(addr)
         if addr in self._connecting_outbound:
             self._connecting_outbound.remove(addr)
 

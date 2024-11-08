@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
@@ -29,24 +31,26 @@ logger = get_logger()
 
 
 class BaseState:
-    protocol: 'HathorProtocol'
+    name: str
     cmd_map: dict[
         ProtocolMessages,
         Callable[[str], None] | Callable[[str], Deferred[None]] | Callable[[str], Coroutine[Deferred[None], Any, None]]
     ]
 
-    def __init__(self, protocol: 'HathorProtocol', *, dependencies: P2PDependencies):
-        self.log = logger.new(**protocol.get_logger_context())
+    def __init__(self, dependencies: P2PDependencies, protocol: HathorProtocol | None = None):
+        self.log = logger.new(**protocol.get_logger_context()) if protocol else logger.new()
         self.dependencies = dependencies
         self._settings: HathorSettings = dependencies.settings
-        self.protocol = protocol
+        self._protocol = protocol
         self.cmd_map = {
             ProtocolMessages.ERROR: self.handle_error,
             ProtocolMessages.THROTTLE: self.handle_throttle,
         }
 
-        # This variable is set by HathorProtocol after instantiating the state
-        self.state_name = None
+    @property
+    def protocol(self) -> HathorProtocol:
+        assert self._protocol is not None
+        return self._protocol
 
     def handle_error(self, payload: str) -> None:
         self.protocol.handle_error(payload)
@@ -66,7 +70,7 @@ class BaseState:
         self.protocol.send_message(ProtocolMessages.THROTTLE, payload)
 
     def on_enter(self) -> None:
-        raise NotImplementedError
+        pass
 
     def on_exit(self) -> None:
         pass
@@ -74,3 +78,7 @@ class BaseState:
     def prepare_to_disconnect(self) -> None:
         """Called when we will disconnect with the peer."""
         pass
+
+    @staticmethod
+    def next_state_type() -> type[BaseState] | None:
+        return None
