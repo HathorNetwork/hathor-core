@@ -146,7 +146,7 @@ class PeerIdState(BaseState):
 
         Currently this is only because the peer is not in a whitelist and whitelist blocking is active.
         """
-        peer_is_whitelisted = peer_id in self.protocol.node.peers_whitelist
+        peer_is_whitelisted = self.protocol.connections.is_peer_whitelisted(peer_id)
         # never block whitelisted peers
         if peer_is_whitelisted:
             return False
