@@ -2,6 +2,7 @@ from twisted.internet.protocol import Protocol
 
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.resources import StatusResource
 from hathor.p2p.states import ReadyState
 from hathor.p2p.utils import to_height_info
@@ -41,6 +42,8 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         # HelloState is responsible to transmite to protocol the capabilities
         protocol1 = connected_peers2[0]
         protocol2 = connected_peers1[0]
+        assert isinstance(protocol1, HathorProtocol)
+        assert isinstance(protocol2, HathorProtocol)
         self.assertIsNotNone(protocol1.capabilities)
         self.assertIsNotNone(protocol2.capabilities)
 
@@ -97,12 +100,14 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         connected_peers1 = list(manager1.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
+        assert isinstance(protocol2, HathorProtocol)
         state2 = protocol2.state
         assert isinstance(state2, ReadyState)
 
         connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         state1 = protocol1.state
         assert isinstance(state1, ReadyState)
 
@@ -137,6 +142,7 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         state1 = protocol1.state
         assert isinstance(state1, ReadyState)
 
@@ -156,12 +162,14 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         connected_peers1 = list(manager1.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
+        assert isinstance(protocol2, HathorProtocol)
         state2 = protocol2.state
         assert isinstance(state2, ReadyState)
 
         connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         state1 = protocol1.state
         assert isinstance(state1, ReadyState)
 
@@ -222,8 +230,10 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
 
         # assert the peers have the proper capabilities
         protocol2 = connected_peers1[0]
+        assert isinstance(protocol2, HathorProtocol)
         self.assertTrue(protocol2.capabilities.issuperset(set(capabilities_without_get_best_blockchain)))
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         default_capabilities = self._settings.get_default_capabilities()
         self.assertTrue(protocol1.capabilities.issuperset(set(default_capabilities)))
 
@@ -316,12 +326,14 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         connected_peers1 = list(manager1.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
+        assert isinstance(protocol2, HathorProtocol)
         state2 = protocol2.state
         assert isinstance(state2, ReadyState)
 
         connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         state1 = protocol1.state
         assert isinstance(state1, ReadyState)
 

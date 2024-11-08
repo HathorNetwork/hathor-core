@@ -4,7 +4,6 @@ from hathor.checkpoint import Checkpoint as cp
 from hathor.crypto.util import decode_address
 from hathor.p2p import P2PDependencies
 from hathor.p2p.protocol import PeerIdState
-from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from hathor.transaction import Block, Transaction
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
@@ -267,7 +266,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
         self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
 
-        downloader = conn.proto2.p2p_manager.get_sync_factory(SyncVersion.V1_1).get_downloader()
+        downloader = conn.proto2.p2p_manager.get_sync_v1_downloader()
 
         p2p_dependencies1 = P2PDependencies(
             reactor=self.manager1.reactor,
@@ -350,8 +349,6 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
 
     def _downloader_bug_setup(self) -> None:
         """ This is an auxiliary method to setup a bug scenario."""
-        from hathor.p2p.sync_version import SyncVersion
-
         # ## premise setup
         #
         # - peer_X will be self.manager
@@ -380,7 +377,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
 
         # create the peer that will experience the bug
         self.manager_bug = self.create_peer(self.network)
-        self.downloader = self.manager_bug.connections.get_sync_factory(SyncVersion.V1_1).get_downloader()
+        self.downloader = self.manager_bug.connections.get_sync_v1_downloader()
         self.downloader.window_size = 1
         self.conn1 = FakeConnection(self.manager_bug, self.manager1)
         self.conn2 = FakeConnection(self.manager_bug, self.manager2)

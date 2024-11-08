@@ -2,6 +2,7 @@ from unittest.mock import Mock, patch
 
 from twisted.python.failure import Failure
 
+from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 from hathor.simulator import FakeConnection
@@ -34,6 +35,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         assert isinstance(protocol1.state, ReadyState)
         sync2 = protocol1.state.sync_agent
         assert isinstance(sync2, NodeSyncTimestamp)
@@ -68,6 +70,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         assert isinstance(protocol1.state, ReadyState)
         sync1 = protocol1.state.sync_agent
         assert isinstance(sync1, NodeSyncTimestamp)
@@ -118,6 +121,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         assert isinstance(protocol1.state, ReadyState)
         sync1 = protocol1.state.sync_agent
         assert isinstance(sync1, NodeSyncTimestamp)
@@ -158,6 +162,7 @@ class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
         self.assertEqual(1, len(connected_peers2))
 
         protocol1 = connected_peers2[0]
+        assert isinstance(protocol1, HathorProtocol)
         assert isinstance(protocol1.state, ReadyState)
         sync1 = protocol1.state.sync_agent
         assert isinstance(sync1, NodeSyncTimestamp)

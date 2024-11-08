@@ -137,7 +137,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         self.assertEqual(sysctl.get('available_sync_versions'), ['v1', 'v2'])
 
-        del connections._sync_factories[SyncVersion.V2]
+        connections._available_sync_versions.remove(SyncVersion.V2)
         self.assertEqual(sysctl.get('available_sync_versions'), ['v1'])
 
     def _default_enabled_sync_versions(self) -> list[str]:

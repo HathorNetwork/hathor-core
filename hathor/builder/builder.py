@@ -63,26 +63,23 @@ class SyncSupportLevel(IntEnum):
     ENABLED = 2  # available and enabled by default, possible to disable at runtime
 
     @classmethod
-    def add_factories(
+    def add_versions(
         cls,
         p2p_manager: ConnectionsManager,
-        dependencies: P2PDependencies,
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
     ) -> None:
-        """Adds the sync factory to the manager according to the support level."""
-        from hathor.p2p.sync_v1.factory import SyncV11Factory
-        from hathor.p2p.sync_v2.factory import SyncV2Factory
+        """Adds the sync version to the manager according to the support level."""
         from hathor.p2p.sync_version import SyncVersion
 
         # sync-v1 support:
         if sync_v1_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(dependencies))
+            p2p_manager.add_sync_version(SyncVersion.V1_1)
         if sync_v1_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(dependencies))
+            p2p_manager.add_sync_version(SyncVersion.V2)
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
@@ -427,9 +424,8 @@ class Builder:
             ssl=enable_ssl,
             rng=self._rng,
         )
-        SyncSupportLevel.add_factories(
+        SyncSupportLevel.add_versions(
             self._p2p_manager,
-            dependencies,
             self._sync_v1_support,
             self._sync_v2_support,
         )
