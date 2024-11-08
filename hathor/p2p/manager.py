@@ -27,8 +27,10 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 from typing_extensions import assert_never
 
+from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
+from hathor.p2p.multiprocess.main_p2p_server_connection import MAIN_P2P_SERVER_CONNECTION_FILE, P2PServerConnectionArgs
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_connections import PeerConnections
@@ -90,12 +92,15 @@ class ConnectionsManager:
         pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
+        *,
+        multiprocess: tuple[P2PServerConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None,
     ) -> None:
         self.log = logger.new()
         self.dependencies = dependencies
         self._settings = dependencies.settings
         self.rng = rng
         self.manager = None
+        self._multiprocess = multiprocess
 
         self.MAX_ENABLED_SYNC = self._settings.MAX_ENABLED_SYNC
         self.SYNC_UPDATE_INTERVAL = self._settings.SYNC_UPDATE_INTERVAL
@@ -627,6 +632,18 @@ class ConnectionsManager:
         endpoint = endpoints.serverFromString(self.reactor, description)
 
         factory: IProtocolFactory = self.server_factory
+
+        if self._multiprocess:
+            subprocess_args, logging_args = self._multiprocess
+            from hathor.multiprocess.connect_on_subprocess import ConnectOnSubprocessFactory
+            factory = ConnectOnSubprocessFactory(
+                reactor=self.reactor,
+                main_file=MAIN_P2P_SERVER_CONNECTION_FILE,
+                logging_args=logging_args,
+                subprocess_args=subprocess_args,
+                build_protocol_callback=self._on_build_subprocess_protocol,
+            )
+
         if self.use_ssl:
             factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, False, factory)
 
@@ -653,6 +670,13 @@ class ConnectionsManager:
 
     def _on_built_protocol(self, addr: PeerAddress, protocol: P2PConnectionProtocol) -> None:
         self._connections.on_built_protocol(addr=addr, protocol=protocol)
+
+    def _on_build_subprocess_protocol(self, addr: IPv4Address | IPv6Address) -> None:
+        from hathor.multiprocess.subprocess_wrapper import get_subprocess_protocol_server_addr
+        server_addr = get_subprocess_protocol_server_addr(addr)
+        from hathor.multiprocess.remote_ipc import IpcProxyType, RemoteIpcClient
+        protocol = RemoteIpcClient(proxy_type=IpcProxyType.P2P_CONNECTION, addr=server_addr)
+        self._on_built_protocol(addr, protocol)
 
     def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:
         """Add new hostname entrypoints according to the listen addresses, and remove any old entrypoint."""

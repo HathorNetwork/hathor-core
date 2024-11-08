@@ -68,6 +68,7 @@ class BootstrapTestCase(unittest.TestCase):
             pubsub=pubsub,
             rng=self.rng,
             ssl=True,
+            multiprocess=None,
         )
         host_ports1 = [
             ('foobar', 1234, None),
@@ -102,6 +103,7 @@ class BootstrapTestCase(unittest.TestCase):
             pubsub=pubsub,
             rng=self.rng,
             ssl=True,
+            multiprocess=None,
         )
         bootstrap_a = [
             '127.0.0.99',

@@ -146,6 +146,14 @@ class _SubprocessWrappingFactory(WrappingFactory):
                 self.reactor.stop()
             return None
 
+        protocol_server = RemoteIpcServer(
+            reactor=self.reactor,
+            proxy_type=IpcProxyType.P2P_CONNECTION,  # TODO: This class shouldn't know anything about P2P, improve this
+            proxy_obj=wrapped_protocol,
+            addr=addr
+        )
+        protocol_server.start()  # TODO: Move somewhere else.
+
         self._built_protocol = True
         return _SubprocessProtocolWrapper(
             reactor=self.reactor,
@@ -195,3 +203,7 @@ class _SubprocessProtocolWrapper(ProtocolWrapper):
             self.reactor.stop()
 
         log_connection_closed(log=self.log, reason=reason, message='connection lost, exiting subprocess')
+
+
+def get_subprocess_protocol_server_addr(addr: IPv4Address | IPv6Address) -> str:
+    return f'ipc:///tmp/p2p_connection:{addr_to_str(addr)}.sock'

@@ -211,6 +211,7 @@ class PeerConnections:
         self._addr_by_id[peer.id] = addr
         return addr_to_drop
 
+    # TODO: I don't need the peer_id here, I can get it from the popped _ready
     def on_ready_disconnect(self, *, addr: PeerAddress, peer_id: PeerId) -> None:
         """Callback for when a connection is closed during the READY state."""
         assert addr not in self._built

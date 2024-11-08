@@ -35,8 +35,10 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocess.remote_ipc import IpcProxyType, RemoteIpcServer
 from hathor.p2p import P2PDependencies
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.multiprocess.main_p2p_server_connection import P2PServerConnectionArgs
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
@@ -338,6 +340,7 @@ class CliBuilder:
 
         whitelist_only = False
         use_ssl = True
+        multiprocess_p2p: tuple[P2PServerConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None = None
 
         if self._args.x_multiprocess_p2p:
             self.check_or_raise(
@@ -354,7 +357,22 @@ class CliBuilder:
                 ),
                 'multiprocess support for P2P is only available if rocksdb is used, with cache and rocksdb indexes'
             )
-            raise NotImplementedError('Multiprocess support for P2P is not yet implemented.')
+
+            assert self._args.data is not None
+            assert self._logging_args is not None
+
+            server_args = P2PServerConnectionArgs(
+                capabilities=capabilities,
+                whitelist_only=whitelist_only,
+                use_ssl=use_ssl,
+                my_peer=peer.to_json_private(),
+                cache_capacity=self._args.cache_size,
+                cache_interval=self._args.cache_interval,
+                rocksdb_path=self._args.data,
+                rocksdb_cache_capacity=self._args.rocksdb_cache,
+            )
+
+            multiprocess_p2p = server_args, self._logging_args
 
         p2p_dependencies = P2PDependencies(
             reactor=reactor,
@@ -373,6 +391,7 @@ class CliBuilder:
             pubsub=pubsub,
             ssl=use_ssl,
             rng=Random(),
+            multiprocess=multiprocess_p2p,
         )
 
         SyncSupportLevel.add_versions(
@@ -392,6 +411,14 @@ class CliBuilder:
                     reactor=reactor,
                     poa_signer=poa_signer_file.get_signer(),
                 )
+
+        if self._args.x_multiprocess_p2p:
+            remote_p2p_manager = RemoteIpcServer(
+                reactor=reactor,
+                proxy_type=IpcProxyType.P2P_MANAGER,
+                proxy_obj=p2p_manager,
+            )
+            remote_p2p_manager.start()
 
         self.manager = HathorManager(
             reactor,
