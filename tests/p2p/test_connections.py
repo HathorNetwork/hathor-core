@@ -21,5 +21,5 @@ class ConnectionsTest(unittest.TestCase):
         manager.connections.connect_to(endpoint)
 
         self.assertIn(endpoint.addr, manager.connections.iter_not_ready_endpoints())
-        self.assertNotIn(endpoint.addr, [conn.addr for conn in manager.connections.iter_ready_connections()])
-        self.assertNotIn(endpoint.addr, [conn.addr for conn in manager.connections.get_connected_peers()])
+        self.assertNotIn(endpoint.addr, manager.connections._connections.ready_peers())
+        self.assertNotIn(endpoint.addr, manager.connections.get_connected_peers())

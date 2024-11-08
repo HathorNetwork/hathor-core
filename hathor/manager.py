@@ -987,7 +987,7 @@ class HathorManager:
         if peer_id in self.peers_whitelist:
             self.peers_whitelist.remove(peer_id)
             # disconnect from node
-            self.connections.drop_connection_by_peer_id(peer_id)
+            self.connections.drop_connection(peer_id)
 
     def has_recent_activity(self) -> bool:
         current_timestamp = time.time()

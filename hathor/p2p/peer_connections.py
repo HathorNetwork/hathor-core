@@ -95,6 +95,12 @@ class PeerConnections:
         addr = self._addr_by_id.get(peer_id)
         return self._ready[addr] if addr else None
 
+    def get_peer_by_address(self, addr: PeerAddress) -> HathorProtocol:
+        """Get a peer by its address. Should only be called for peers that must exist."""
+        peer = self._built.get(addr) or self._handshaking.get(addr) or self._ready.get(addr)
+        assert peer is not None
+        return peer
+
     def get_peer_counts(self) -> PeerCounts:
         """Return the peer counts, for metrics."""
         return PeerCounts(
@@ -155,10 +161,10 @@ class PeerConnections:
         assert addr not in self._ready
         self._handshaking.pop(addr)
 
-    def on_ready(self, *, addr: PeerAddress, peer_id: PeerId) -> HathorProtocol | None:
+    def on_ready(self, *, addr: PeerAddress, peer_id: PeerId) -> PeerAddress | None:
         """
         Callback for when a connection gets to the READY state.
-        If the PeerId of this connection is duplicate, return the protocol that we should disconnect.
+        If the PeerId of this connection is duplicate, return the address of the protocol that we should disconnect.
         Return None otherwise.
         """
         assert addr not in self._built
@@ -169,7 +175,7 @@ class PeerConnections:
         protocol = self._handshaking.pop(addr)
         self._ready[addr] = protocol  # We always index it by address, even if its PeerId is duplicate.
 
-        connection_to_drop: HathorProtocol | None = None
+        addr_to_drop: PeerAddress | None = None
 
         # If there's an existing connection with the same PeerId, this is a duplicate connection
         if old_connection := self.get_ready_peer_by_id(protocol.peer.id):
@@ -177,13 +183,13 @@ class PeerConnections:
             if self._should_drop_new_connection(protocol):
                 # We return early when we drop the new connection,
                 # so we don't override the old connection in _addr_by_id with it below.
-                return protocol
+                return protocol.addr
 
             # When dropping the old connection, we do override it in _addr_by_id below.
-            connection_to_drop = old_connection
+            addr_to_drop = old_connection.addr
 
         self._addr_by_id[peer_id] = addr
-        return connection_to_drop
+        return addr_to_drop
 
     def on_ready_disconnect(self, *, addr: PeerAddress, peer_id: PeerId) -> None:
         """Callback for when a connection is closed during the READY state."""

@@ -226,7 +226,7 @@ class HathorProtocol:
         # The first state after INITIAL is HELLO.
         self.advance_state()
 
-        self.p2p_manager.on_peer_connect(self)
+        self.p2p_manager.on_peer_connect(addr=self.addr, inbound=self.inbound)
 
     def on_outbound_connect(self, peer_id: PeerId | None) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
@@ -237,7 +237,7 @@ class HathorProtocol:
     def on_peer_ready(self) -> None:
         assert self.peer is not None
         self.update_log_context()
-        self.p2p_manager.on_peer_ready(self)
+        self.p2p_manager.on_peer_ready(addr=self.addr, peer=self.peer)
         self.log.info('peer connected', peer_id=self.peer.id)
 
     def on_disconnect(self, reason: Failure) -> None:

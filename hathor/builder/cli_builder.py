@@ -332,6 +332,13 @@ class CliBuilder:
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
+        if self._args.x_multiprocess_p2p:
+            self.check_or_raise(
+                self._args.x_remove_sync_v1,
+                'multiprocess support for P2P is only available if sync-v1 is removed (use --x-remove-sync-v1)'
+            )
+            raise NotImplementedError('Multiprocess support for P2P is not yet implemented.')
+
         p2p_dependencies = P2PDependencies(
             reactor=reactor,
             settings=settings,
@@ -351,9 +358,8 @@ class CliBuilder:
             rng=Random(),
         )
 
-        SyncSupportLevel.add_factories(
+        SyncSupportLevel.add_versions(
             p2p_manager,
-            p2p_dependencies,
             sync_v1_support,
             sync_v2_support,
         )

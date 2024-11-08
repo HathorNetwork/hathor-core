@@ -34,7 +34,6 @@ class BaseMetricsTest(unittest.TestCase):
         # Execution
         pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
-            protocol=Mock(),
             peers_count=PeerConnectionsMetrics(3, 4, 5, 6)
         )
         self.run_to_completion()

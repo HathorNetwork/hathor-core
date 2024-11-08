@@ -24,7 +24,7 @@ from typing_extensions import override
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p import P2PDependencies
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer import PublicPeer, UnverifiedPeer
+from hathor.p2p.peer import PublicPeer
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.utils import to_height_info, to_serializable_best_blockchain
@@ -105,10 +105,9 @@ class ReadyState(BaseState):
         sync_version = self.protocol.sync_version
         assert sync_version is not None
         self.log.debug(f'loading {sync_version}')
-        sync_factory = self.protocol.p2p_manager.get_sync_factory(sync_version)
 
         # Initialize sync agent and add its commands to the list of available commands.
-        self.sync_agent: SyncAgent = sync_factory.create_sync_agent(self.protocol)
+        self.sync_agent = SyncAgent.create(sync_version=sync_version, protocol=protocol, dependencies=dependencies)
         self.cmd_map.update(self.sync_agent.get_cmd_dict())
 
     def on_enter(self) -> None:
@@ -175,8 +174,7 @@ class ReadyState(BaseState):
         """
         received_peers = json_loads(payload)
         for data in received_peers:
-            peer = UnverifiedPeer.create_from_json(data)
-            self.protocol.p2p_manager.on_receive_peer(peer)
+            self.protocol.p2p_manager.on_receive_peer(data)
         self.log.debug('received peers', payload=payload)
 
     def send_ping_if_necessary(self) -> None:

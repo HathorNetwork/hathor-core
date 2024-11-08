@@ -25,8 +25,10 @@ from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
+from typing_extensions import assert_never
 
 from hathor.p2p import P2PDependencies
+from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_connections import PeerConnections
@@ -36,7 +38,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import UnverifiedPeerStorage, VerifiedPeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
-from hathor.p2p.sync_factory import SyncAgentFactory
+from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -77,7 +79,6 @@ class ConnectionsManager:
     manager: Optional['HathorManager']
     unverified_peer_storage: UnverifiedPeerStorage
     verified_peer_storage: VerifiedPeerStorage
-    _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
 
     rate_limiter: RateLimiter
@@ -179,27 +180,29 @@ class ConnectionsManager:
         self._last_discovery: float = 0.
 
         # sync-manager factories
-        self._sync_factories = {}
+        self._available_sync_versions: set[SyncVersion] = set()
         self._enabled_sync_versions = set()
 
         # agent to perform HTTP requests
         self._http_agent = Agent(self.reactor)
 
-    def add_sync_factory(self, sync_version: SyncVersion, sync_factory: SyncAgentFactory) -> None:
-        """Add factory for the given sync version, must use a sync version that does not already exist."""
-        # XXX: to allow code in `set_manager` to safely use the the available sync versions, we add this restriction:
+        self._sync_v1_downloader: Downloader | None = None
+
+    def add_sync_version(self, sync_version: SyncVersion) -> None:
+        """Add a sync version, must use one that is not already set."""
+        # XXX: to allow code in `set_manager` to safely use the available sync versions, we add this restriction:
         assert self.manager is None, 'Cannot modify sync factories after a manager is set'
-        if sync_version in self._sync_factories:
+        if sync_version in self._available_sync_versions:
             raise ValueError('sync version already exists')
-        self._sync_factories[sync_version] = sync_factory
+        self._available_sync_versions.add(sync_version)
 
     def get_available_sync_versions(self) -> set[SyncVersion]:
         """What sync versions the manager is capable of using, they are not necessarily enabled."""
-        return set(self._sync_factories.keys())
+        return self._available_sync_versions
 
     def is_sync_version_available(self, sync_version: SyncVersion) -> bool:
         """Whether the given sync version is available for use, is not necessarily enabled."""
-        return sync_version in self._sync_factories
+        return sync_version in self._available_sync_versions
 
     def get_enabled_sync_versions(self) -> set[SyncVersion]:
         """What sync versions are enabled for use, it is necessarily a subset of the available versions."""
@@ -211,7 +214,7 @@ class ConnectionsManager:
 
     def enable_sync_version(self, sync_version: SyncVersion) -> None:
         """Enable using the given sync version on new connections, it must be available before being enabled."""
-        assert sync_version in self._sync_factories
+        assert sync_version in self._available_sync_versions
         if sync_version in self._enabled_sync_versions:
             self.log.info('tried to enable a sync verison that was already enabled, nothing to do')
             return
@@ -223,6 +226,12 @@ class ConnectionsManager:
             self.log.info('tried to disable a sync verison that was already disabled, nothing to do')
             return
         self._enabled_sync_versions.discard(sync_version)
+
+    def get_sync_v1_downloader(self) -> Downloader:
+        assert self.is_sync_version_enabled(SyncVersion.V1_1)
+        if self._sync_v1_downloader is None:
+            self._sync_v1_downloader = Downloader(self.dependencies)
+        return self._sync_v1_downloader
 
     def set_manager(self, manager: 'HathorManager') -> None:
         """Set the manager. This method must be called before start()."""
@@ -313,11 +322,6 @@ class ConnectionsManager:
             known_peers_count=len(self.verified_peer_storage)
         )
 
-    def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
-        """Get the sync factory for a given version, MUST be available or it will raise an assert."""
-        assert sync_version in self._sync_factories, f'sync_version {sync_version} is not available'
-        return self._sync_factories[sync_version]
-
     def has_synced_peer(self) -> bool:
         """ Return whether we are synced to at least one peer.
         """
@@ -340,11 +344,11 @@ class ConnectionsManager:
         connections = list(self.iter_ready_connections())
         self.rng.shuffle(connections)
         for conn in connections:
-            conn.send_tx_to_peer(tx)
+            self.reactor.callLater(0, conn.send_tx_to_peer, tx)
 
     def disconnect_all_peers(self, *, force: bool = False) -> None:
         """Disconnect all peers."""
-        for conn in self.get_connected_peers():
+        for conn in self.get_connected_peers().values():
             conn.disconnect(force=force)
 
     def on_connection_failure(self, failure: Failure, endpoint: PeerEndpoint) -> None:
@@ -355,52 +359,52 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def on_peer_connect(self, protocol: HathorProtocol) -> None:
+    def on_peer_connect(self, *, addr: PeerAddress, inbound: bool) -> None:
         """Called when a new connection is established from both inbound and outbound peers."""
         if len(self._connections.connected_peers()) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
-            protocol.disconnect(force=True)
+            protocol = self._connections.get_peer_by_address(addr)
+            self.reactor.callLater(0, protocol.disconnect, force=True)
             return
 
-        self._connections.on_connected(addr=protocol.addr, inbound=protocol.inbound)
+        self._connections.on_connected(addr=addr, inbound=inbound)
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
-            protocol=protocol,
             peers_count=self._get_peers_count()
         )
 
-    def on_peer_ready(self, protocol: HathorProtocol) -> None:
+    def on_peer_ready(self, *, addr: PeerAddress, peer: PublicPeer) -> None:
         """Called when a peer is ready."""
-        self.verified_peer_storage.add_or_replace(protocol.peer)
-        self.unverified_peer_storage.pop(protocol.peer.id, None)
-        connection_to_drop = self._connections.on_ready(addr=protocol.addr, peer_id=protocol.peer.id)
+        self.verified_peer_storage.add_or_replace(peer)
+        self.unverified_peer_storage.pop(peer.id, None)
+        address_to_drop = self._connections.on_ready(addr=addr, peer_id=peer.id)
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emitted regardless
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_READY,
-            protocol=protocol,
             peers_count=self._get_peers_count()
         )
 
-        if connection_to_drop:
+        if address_to_drop:
             # connected twice to same peer
-            self.log.warn('duplicate connection to peer', addr=str(protocol.addr), peer_id=str(protocol.peer.id))
-            self.reactor.callLater(0, self.drop_connection, connection_to_drop)
-            if connection_to_drop == protocol:
+            self.log.warn('duplicate connection to peer', addr=str(addr), peer_id=str(peer.id))
+            self.reactor.callLater(0, self.drop_connection, address_to_drop)
+            if address_to_drop == addr:
                 return
 
         # In case it was a retry, we must reset the data only here, after it gets ready
-        protocol.peer.info.reset_retry_timestamp()
+        peer.info.reset_retry_timestamp()
+        protocol = self._connections.get_peer_by_address(addr)
 
         if len(self._connections.ready_peers()) <= self.MAX_ENABLED_SYNC:
             protocol.enable_sync()
 
-        if protocol.peer.id in self.always_enable_sync:
+        if peer.id in self.always_enable_sync:
             protocol.enable_sync()
 
         # Notify other peers about this new peer connection.
-        self.relay_peer_to_ready_connections(protocol.peer)
+        self.relay_peer_to_ready_connections(peer)
 
     def relay_peer_to_ready_connections(self, peer: PublicPeer) -> None:
         """Relay peer to all ready connections."""
@@ -436,10 +440,10 @@ class ConnectionsManager:
     def iter_connecting_outbound_peers(self) -> Iterable[PeerAddress]:
         yield from self._connections.connecting_outbound_peers()
 
-    def iter_handshaking_peers(self) -> Iterable[HathorProtocol]:
+    def iter_handshaking_peers(self) -> Iterable[P2PConnectionProtocol]:
         yield from self._connections.handshaking_peers().values()
 
-    def iter_ready_connections(self) -> Iterable[HathorProtocol]:
+    def iter_ready_connections(self) -> Iterable[P2PConnectionProtocol]:
         """Iterate over ready connections."""
         yield from self._connections.ready_peers().values()
 
@@ -447,8 +451,8 @@ class ConnectionsManager:
         """Iterate over not-ready connections."""
         yield from self._connections.not_ready_peers()
 
-    def get_connected_peers(self) -> Iterable[HathorProtocol]:
-        yield from self._connections.connected_peers().values()
+    def get_connected_peers(self) -> dict[PeerAddress, HathorProtocol]:
+        return self._connections.connected_peers()
 
     def get_ready_peer_by_id(self, peer_id: PeerId) -> HathorProtocol | None:
         return self._connections.get_ready_peer_by_id(peer_id)
@@ -459,10 +463,11 @@ class ConnectionsManager:
         """
         return self._connections.is_peer_ready(peer_id)
 
-    def on_receive_peer(self, peer: UnverifiedPeer) -> None:
+    def on_receive_peer(self, peer_data: dict[str, Any]) -> None:
         """ Update a peer information in our storage, and instantly attempt to connect
         to it if it is not connected yet.
         """
+        peer = UnverifiedPeer.create_from_json(peer_data)
         if peer.id == self.my_peer.id:
             return
         peer = self.unverified_peer_storage.add_or_merge(peer)
@@ -600,7 +605,7 @@ class ConnectionsManager:
             .addCallback(self._connect_to_callback, endpoint.addr, peer_id) \
             .addErrback(self.on_connection_failure, endpoint)
 
-        self.log.info('connecting to', endpoint=str(endpoint), peer_id=str(peer_id))
+        self.log.info('connecting to', addr=str(endpoint.addr), peer_id=str(peer_id))
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTING,
             peer=peer,
@@ -662,19 +667,22 @@ class ConnectionsManager:
         hostname_entrypoint = PeerAddress.from_hostname_address(hostname, address)
         self.my_peer.info.entrypoints.append(hostname_entrypoint)
 
-    def drop_connection(self, protocol: HathorProtocol) -> None:
+    def drop_connection(self, peer_addr_or_id: PeerAddress | PeerId) -> None:
         """ Drop a connection
         """
+        match peer_addr_or_id:
+            case PeerId():
+                protocol = self.get_ready_peer_by_id(peer_addr_or_id)
+                if not protocol:
+                    return
+            case PeerAddress():
+                protocol = self._connections.get_peer_by_address(peer_addr_or_id)
+            case _:
+                assert_never(peer_addr_or_id)
+
         protocol_peer = protocol.get_peer()
         self.log.debug('dropping connection', peer_id=protocol_peer.id, protocol=type(protocol).__name__)
         protocol.send_error_and_close_connection('Connection droped')
-
-    def drop_connection_by_peer_id(self, peer_id: PeerId) -> None:
-        """ Drop a connection by peer id
-        """
-        protocol = self.get_ready_peer_by_id(peer_id)
-        if protocol:
-            self.drop_connection(protocol)
 
     def sync_update(self) -> None:
         """Update the subset of connections that running the sync algorithm."""

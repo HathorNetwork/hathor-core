@@ -247,7 +247,7 @@ class Metrics:
         """
         self.peer_connection_metrics.clear()
 
-        for connection in self.connections.get_connected_peers():
+        for addr, connection in self.connections.get_connected_peers().items():
             peer = connection.get_peer_if_set()
             if not peer:
                 # A connection without peer will not be able to communicate
@@ -256,8 +256,8 @@ class Metrics:
 
             metrics = connection.get_metrics()
             metric = PeerConnectionMetrics(
-                connection_string=str(connection.addr),
-                peer_id=str(connection.peer.id),
+                connection_string=str(addr),
+                peer_id=str(peer.id),
                 network=settings.NETWORK_NAME,
                 received_messages=metrics.received_messages,
                 sent_messages=metrics.sent_messages,
