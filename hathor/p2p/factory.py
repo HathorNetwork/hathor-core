@@ -17,7 +17,7 @@ from abc import ABC
 from twisted.internet import protocol
 from twisted.internet.interfaces import IAddress
 
-from hathor.conf.settings import HathorSettings
+from hathor.p2p import P2PDependencies
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerAddress
@@ -32,13 +32,13 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
         my_peer: PrivatePeer,
         p2p_manager: ConnectionsManager,
         *,
-        settings: HathorSettings,
+        dependencies: P2PDependencies,
         use_ssl: bool,
     ):
         super().__init__()
-        self._settings = settings
         self.my_peer = my_peer
         self.p2p_manager = p2p_manager
+        self.dependencies = dependencies
         self.use_ssl = use_ssl
 
     def buildProtocol(self, addr: IAddress) -> HathorLineReceiver:
@@ -46,9 +46,9 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
             addr=PeerAddress.from_address(addr),
             my_peer=self.my_peer,
             p2p_manager=self.p2p_manager,
+            dependencies=self.dependencies,
             use_ssl=self.use_ssl,
             inbound=self.inbound,
-            settings=self._settings,
         )
 
 

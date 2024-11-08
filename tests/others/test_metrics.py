@@ -234,8 +234,8 @@ class BaseMetricsTest(unittest.TestCase):
                 p2p_manager=manager.connections,
                 use_ssl=False,
                 inbound=False,
-                settings=self._settings,
-                addr=PeerAddress.parse(f'tcp://localhost:{port}')
+                addr=PeerAddress.parse(f'tcp://localhost:{port}'),
+                dependencies=Mock(),
             )
             protocol._peer = PrivatePeer.auto_generated().to_public_peer()
             port += 1

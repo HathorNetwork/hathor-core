@@ -1,4 +1,5 @@
 from typing import Callable
+from unittest.mock import Mock
 
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IProtocol
@@ -61,7 +62,13 @@ class BootstrapTestCase(unittest.TestCase):
     def test_mock_discovery(self) -> None:
         pubsub = PubSubManager(self.clock)
         peer = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(self._settings, self.clock, peer, pubsub, True, self.rng, True)
+        connections = ConnectionsManager(
+            dependencies=Mock(),
+            my_peer=peer,
+            pubsub=pubsub,
+            rng=self.rng,
+            ssl=True,
+        )
         host_ports1 = [
             ('foobar', 1234, None),
             ('127.0.0.99', 9999, None),
@@ -89,7 +96,13 @@ class BootstrapTestCase(unittest.TestCase):
     def test_dns_discovery(self) -> None:
         pubsub = PubSubManager(self.clock)
         peer = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(self._settings, self.clock, peer, pubsub, True, self.rng, True)
+        connections = ConnectionsManager(
+            dependencies=Mock(),
+            my_peer=peer,
+            pubsub=pubsub,
+            rng=self.rng,
+            ssl=True,
+        )
         bootstrap_a = [
             '127.0.0.99',
             '127.0.0.88',
