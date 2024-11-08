@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import io
 import struct
 import sys
@@ -21,6 +23,7 @@ from typing import TYPE_CHECKING, Iterator
 from hathor.cli.run_node import RunNode
 
 if TYPE_CHECKING:
+    from hathor.cli.util import LoggingOptions, LoggingOutput
     from hathor.transaction import BaseTransaction
 
 
@@ -94,5 +97,5 @@ class DbImport(RunNode):
             yield tx
 
 
-def main():
-    DbImport().run()
+def main(*, logging_args: tuple[LoggingOutput, LoggingOptions, bool]) -> None:
+    DbImport(logging_args=logging_args).run()

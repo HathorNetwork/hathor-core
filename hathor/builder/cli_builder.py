@@ -23,6 +23,7 @@ from structlog import get_logger
 
 from hathor.cli.run_node_args import RunNodeArgs
 from hathor.cli.side_dag import SideDagArgs
+from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
@@ -51,8 +52,6 @@ from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
 
-DEFAULT_CACHE_SIZE: int = 100000
-
 
 class SyncChoice(Enum):
     V1_DEFAULT = auto()  # v1 enabled, v2 disabled but can be enabled in runtime
@@ -66,9 +65,10 @@ class CliBuilder:
 
     TODO Refactor to use Builder. It could even be ported to a Builder.from_args classmethod.
     """
-    def __init__(self, args: RunNodeArgs) -> None:
+    def __init__(self, args: RunNodeArgs, logging_args: tuple[LoggingOutput, LoggingOptions, bool]) -> None:
         self.log = logger.new()
         self._args = args
+        self._logging_args = logging_args
 
     def check_or_raise(self, condition: bool, message: str) -> None:
         """Will exit printing `message` if `condition` is False."""
@@ -183,10 +183,14 @@ class CliBuilder:
                 self.log.warn('using --cache-interval with --memory-storage has no effect')
 
         if not self._args.disable_cache and not self._args.memory_storage:
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
-            tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
-            if self._args.cache_interval:
-                tx_storage.interval = self._args.cache_interval
+            tx_storage = TransactionCacheStorage(
+                reactor=reactor,
+                settings=settings,
+                store=tx_storage,
+                indexes=indexes,
+                capacity=self._args.cache_size,
+                interval=self._args.cache_interval,
+            )
             self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
 
         self.tx_storage = tx_storage
@@ -332,10 +336,23 @@ class CliBuilder:
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
+        whitelist_only = False
+        use_ssl = True
+
         if self._args.x_multiprocess_p2p:
             self.check_or_raise(
                 self._args.x_remove_sync_v1,
                 'multiprocess support for P2P is only available if sync-v1 is removed (use --x-remove-sync-v1)'
+            )
+
+            self.check_or_raise(
+                (
+                    not self._args.memory_storage
+                    and bool(self._args.data)
+                    and not self._args.memory_indexes
+                    and not self._args.disable_cache
+                ),
+                'multiprocess support for P2P is only available if rocksdb is used, with cache and rocksdb indexes'
             )
             raise NotImplementedError('Multiprocess support for P2P is not yet implemented.')
 
@@ -346,7 +363,7 @@ class CliBuilder:
             tx_storage=tx_storage,
             vertex_handler=vertex_handler,
             verification_service=verification_service,
-            whitelist_only=False,
+            whitelist_only=whitelist_only,
             capabilities=capabilities,
         )
 
@@ -354,7 +371,7 @@ class CliBuilder:
             dependencies=p2p_dependencies,
             my_peer=peer,
             pubsub=pubsub,
-            ssl=True,
+            ssl=use_ssl,
             rng=Random(),
         )
 

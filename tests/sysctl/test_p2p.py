@@ -172,11 +172,13 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         sysctl = ConnectionsManagerSysctl(p2p_manager)
 
         peer_id = '0e2bd0d8cd1fb6d040801c32ec27e8986ce85eb8810b6c878dcad15bce3b5b1e'
+        peer = MagicMock()
+        peer.id = PeerId(peer_id)
         conn = MagicMock()
         conn.addr = PeerAddress.parse('tcp://localhost:40403')
         p2p_manager._connections.on_built_protocol(addr=conn.addr, protocol=conn)
         p2p_manager._connections.on_connected(addr=conn.addr, inbound=True)
-        p2p_manager._connections.on_ready(addr=conn.addr, peer_id=PeerId(peer_id))
+        p2p_manager._connections.on_ready(addr=conn.addr, peer=peer)
         self.assertEqual(conn.disconnect.call_count, 0)
         sysctl.unsafe_set('kill_connection', peer_id)
         self.assertEqual(conn.disconnect.call_count, 1)

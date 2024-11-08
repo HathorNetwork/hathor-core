@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import io
 import struct
 from argparse import ArgumentParser, FileType
@@ -20,6 +22,7 @@ from typing import TYPE_CHECKING, Iterator, Optional
 from hathor.cli.run_node import RunNode
 
 if TYPE_CHECKING:
+    from hathor.cli.util import LoggingOptions, LoggingOutput
     from hathor.transaction import BaseTransaction
 
 MAGIC_HEADER = b'HathDB'
@@ -139,5 +142,5 @@ class DbExport(RunNode):
         self.log.info('exported', tx_count=tx_count, block_count=block_count)
 
 
-def main():
-    DbExport().run()
+def main(*, logging_args: tuple[LoggingOutput, LoggingOptions, bool]) -> None:
+    DbExport(logging_args=logging_args).run()

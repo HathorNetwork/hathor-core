@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from argparse import Namespace
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from hathor.cli.run_node import RunNode
+
+if TYPE_CHECKING:
+    from hathor.cli.util import LoggingOptions, LoggingOutput
 
 
 def get_ipython(extra_args: list[Any], imported_objects: dict[str, Any]) -> Callable[[], None]:
@@ -65,5 +70,5 @@ class Shell(RunNode):
         self.shell()
 
 
-def main():
-    Shell().run()
+def main(*, logging_args: tuple[LoggingOutput, LoggingOptions, bool]) -> None:
+    Shell(logging_args=logging_args).run()

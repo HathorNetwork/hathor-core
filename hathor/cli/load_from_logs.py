@@ -12,13 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import sys
 from argparse import ArgumentParser, FileType
+from typing import TYPE_CHECKING
 
 from twisted.internet.defer import Deferred
 from twisted.internet.task import deferLater
 
 from hathor.cli.run_node import RunNode
+
+if TYPE_CHECKING:
+    from hathor.cli.util import LoggingOptions, LoggingOutput
 
 
 class LoadFromLogs(RunNode):
@@ -54,5 +60,5 @@ class LoadFromLogs(RunNode):
         self.reactor.fireSystemEvent('shutdown')
 
 
-def main():
-    LoadFromLogs().run()
+def main(*, logging_args: tuple[LoggingOutput, LoggingOptions, bool]) -> None:
+    LoadFromLogs(logging_args=logging_args).run()

@@ -75,8 +75,8 @@ class BaseMetricsTest(unittest.TestCase):
         p2p_manager._connections.on_connected(addr=addr1, inbound=True)
         p2p_manager._connections.on_connected(addr=addr2, inbound=True)
         p2p_manager._connections.on_connected(addr=addr3, inbound=True)
-        p2p_manager._connections.on_ready(addr=addr1, peer_id=Mock())
-        p2p_manager._connections.on_ready(addr=addr2, peer_id=Mock())
+        p2p_manager._connections.on_ready(addr=addr1, peer=Mock())
+        p2p_manager._connections.on_ready(addr=addr2, peer=Mock())
 
         # Execution
         endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
@@ -260,9 +260,9 @@ class BaseMetricsTest(unittest.TestCase):
         manager.connections._connections._addr_by_id[fake_peers[0].peer.id] = fake_peers[0].addr
         manager.connections._connections._addr_by_id[fake_peers[1].peer.id] = fake_peers[1].addr
         manager.connections._connections._addr_by_id[fake_peers[2].peer.id] = fake_peers[2].addr
-        manager.connections._connections._ready[fake_peers[0].addr] = fake_peers[0]
-        manager.connections._connections._ready[fake_peers[1].addr] = fake_peers[1]
-        manager.connections._connections._ready[fake_peers[2].addr] = fake_peers[2]
+        manager.connections._connections._ready[fake_peers[0].addr] = fake_peers[0], Mock()
+        manager.connections._connections._ready[fake_peers[1].addr] = fake_peers[1], Mock()
+        manager.connections._connections._ready[fake_peers[2].addr] = fake_peers[2], Mock()
 
         # Execution
         manager.metrics._collect_data()

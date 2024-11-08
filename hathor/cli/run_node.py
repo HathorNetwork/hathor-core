@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import os
 import sys
 import tempfile
@@ -27,6 +29,7 @@ logger = get_logger()
 
 if TYPE_CHECKING:
     from hathor.cli.run_node_args import RunNodeArgs
+    from hathor.cli.util import LoggingOptions, LoggingOutput
     from hathor.sysctl.runner import SysctlRunner
 
 
@@ -192,7 +195,7 @@ class RunNode:
 
         from hathor.builder import CliBuilder, ResourcesBuilder
         from hathor.exception import BuilderError
-        builder = CliBuilder(self._args)
+        builder = CliBuilder(self._args, self.logging_args)
         try:
             self.manager = builder.create_manager(reactor)
         except BuilderError as err:
@@ -467,10 +470,14 @@ class RunNode:
                 '',
             ]))
 
-    def __init__(self, *, argv=None):
+    def __init__(self, *, logging_args, argv=None):
         from hathor.conf import NANO_TESTNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH
         from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
+
+        # TODO: We should correctly type the method definition so this comment wouldn't be necessary,
+        #  but it breaks the linter in multiple other places. Will do it later.
+        self.logging_args = logging_args  # tuple[LoggingOutput, LoggingOptions, bool]
 
         if argv is None:
             import sys
@@ -549,5 +556,5 @@ class RunNode:
         self.reactor.run()
 
 
-def main():
-    RunNode().run()
+def main(*, logging_args: tuple[LoggingOutput, LoggingOptions, bool]) -> None:
+    RunNode(logging_args=logging_args).run()

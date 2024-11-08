@@ -141,7 +141,7 @@ class ConnectionsManager:
         self.rate_limiter = RateLimiter(self.reactor)
         self.enable_rate_limiter()
 
-        self._connections = PeerConnections()
+        self._connections = PeerConnections(my_peer)
 
         # List of peers received from the network.
         # We cannot trust their identity before we connect to them.
@@ -377,7 +377,7 @@ class ConnectionsManager:
         """Called when a peer is ready."""
         self.verified_peer_storage.add_or_replace(peer)
         self.unverified_peer_storage.pop(peer.id, None)
-        address_to_drop = self._connections.on_ready(addr=addr, peer_id=peer.id)
+        address_to_drop = self._connections.on_ready(addr=addr, peer=peer)
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emitted regardless
@@ -445,16 +445,17 @@ class ConnectionsManager:
 
     def iter_ready_connections(self) -> Iterable[P2PConnectionProtocol]:
         """Iterate over ready connections."""
-        yield from self._connections.ready_peers().values()
+        for conn, _peer in self._connections.ready_peers().values():
+            yield conn
 
     def iter_not_ready_endpoints(self) -> Iterable[PeerAddress]:
         """Iterate over not-ready connections."""
         yield from self._connections.not_ready_peers()
 
-    def get_connected_peers(self) -> dict[PeerAddress, HathorProtocol]:
+    def get_connected_peers(self) -> dict[PeerAddress, P2PConnectionProtocol]:
         return self._connections.connected_peers()
 
-    def get_ready_peer_by_id(self, peer_id: PeerId) -> HathorProtocol | None:
+    def get_ready_peer_by_id(self, peer_id: PeerId) -> P2PConnectionProtocol | None:
         return self._connections.get_ready_peer_by_id(peer_id)
 
     def is_peer_ready(self, peer_id: PeerId) -> bool:
@@ -650,7 +651,7 @@ class ConnectionsManager:
         if self.manager.hostname:
             self._add_hostname_entrypoint(self.manager.hostname, address)
 
-    def _on_built_protocol(self, addr: PeerAddress, protocol: HathorProtocol) -> None:
+    def _on_built_protocol(self, addr: PeerAddress, protocol: P2PConnectionProtocol) -> None:
         self._connections.on_built_protocol(addr=addr, protocol=protocol)
 
     def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:
@@ -682,7 +683,7 @@ class ConnectionsManager:
 
         protocol_peer = protocol.get_peer()
         self.log.debug('dropping connection', peer_id=protocol_peer.id, protocol=type(protocol).__name__)
-        protocol.send_error_and_close_connection('Connection droped')
+        protocol.send_error_and_close_connection('Connection dropped')
 
     def sync_update(self) -> None:
         """Update the subset of connections that running the sync algorithm."""
@@ -718,11 +719,11 @@ class ConnectionsManager:
         """Calculate new sync rotation."""
         ready_peers = self._connections.ready_peers().values()
         current_enabled: set[PeerId] = set()
-        for conn in ready_peers:
+        for conn, peer in ready_peers:
             if conn.is_sync_enabled():
-                current_enabled.add(conn.peer.id)
+                current_enabled.add(peer.id)
 
-        candidates = [conn.peer.id for conn in ready_peers]
+        candidates = [peer.id for _conn, peer in ready_peers]
         self.rng.shuffle(candidates)
         selected_peers: set[PeerId] = set(candidates[:self.MAX_ENABLED_SYNC])
 

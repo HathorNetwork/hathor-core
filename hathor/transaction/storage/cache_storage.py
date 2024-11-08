@@ -26,6 +26,9 @@ from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 
+DEFAULT_CACHE_CAPACITY: int = 100000
+DEFAULT_CACHE_INTERVAL: int = 5
+
 
 class TransactionCacheStorage(BaseTransactionStorage):
     """Caching storage to be used 'on top' of other storages.
@@ -38,8 +41,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self,
         store: 'BaseTransactionStorage',
         reactor: Reactor,
-        interval: int = 5,
-        capacity: int = 10000,
+        interval: int | None = None,
+        capacity: int | None = None,
         *,
         settings: HathorSettings,
         indexes: Optional[IndexesManager],
@@ -68,8 +71,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
         store.remove_cache()
         self.store = store
         self.reactor = reactor
-        self.interval = interval
-        self.capacity = capacity
+        self.interval = interval if interval is not None else DEFAULT_CACHE_INTERVAL
+        self.capacity = capacity if capacity is not None else DEFAULT_CACHE_CAPACITY
         self.flush_deferred = None
         self._clone_if_needed = _clone_if_needed
         self.cache = OrderedDict()

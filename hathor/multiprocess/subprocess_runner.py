@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import os
+import pickle
 import sys
 from dataclasses import dataclass
 from socket import AF_INET
@@ -69,15 +70,20 @@ def setup_subprocess_runner(
     - A twisted Factory that will be used to create the actual underlying protocol in the subprocess.
     - A callback to be called when the subprocess exits.
     """
-    _file_name, serialized_subprocess_args = sys.argv
+    _file_name, serialized_logging_args, serialized_subprocess_args = sys.argv
+    logging_output, logging_options, capture_stdout = pickle.loads(bytes.fromhex(serialized_logging_args))
     subprocess_args_bytes = bytes.fromhex(serialized_subprocess_args)
     subprocess_args = SubprocessSpawnArgs(**json_loadb(subprocess_args_bytes))
+
+    assert isinstance(logging_output, LoggingOutput)
+    assert isinstance(logging_options, LoggingOptions)
+    assert isinstance(capture_stdout, bool)
     assert isinstance(subprocess_args.custom_args, custom_args_type)
 
-    # TODO(p2p-mp): Correctly initialize log config
     setup_logging(
-        logging_output=LoggingOutput.PRETTY,
-        logging_options=LoggingOptions(debug=False, sentry=False)
+        logging_output=logging_output,
+        logging_options=logging_options,
+        capture_stdout=capture_stdout,
     )
 
     log = logger.new(addr=str(subprocess_args.addr), fileno=subprocess_args.fileno, subprocess_pid=os.getpid())
