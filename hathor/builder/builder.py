@@ -34,6 +34,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.p2p import P2PDependencies
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
@@ -64,12 +65,10 @@ class SyncSupportLevel(IntEnum):
     @classmethod
     def add_factories(
         cls,
-        settings: HathorSettingsType,
         p2p_manager: ConnectionsManager,
+        dependencies: P2PDependencies,
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
-        vertex_parser: VertexParser,
-        vertex_handler: VertexHandler,
     ) -> None:
         """Adds the sync factory to the manager according to the support level."""
         from hathor.p2p.sync_v1.factory import SyncV11Factory
@@ -78,18 +77,12 @@ class SyncSupportLevel(IntEnum):
 
         # sync-v1 support:
         if sync_v1_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager, vertex_parser=vertex_parser))
+            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(dependencies))
         if sync_v1_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            sync_v2_factory = SyncV2Factory(
-                settings,
-                p2p_manager,
-                vertex_parser=vertex_parser,
-                vertex_handler=vertex_handler,
-            )
-            p2p_manager.add_sync_factory(SyncVersion.V2, sync_v2_factory)
+            p2p_manager.add_sync_factory(SyncVersion.V2, SyncV2Factory(dependencies))
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
@@ -232,7 +225,6 @@ class Builder:
         vertex_handler = self._get_or_create_vertex_handler()
         vertex_parser = self._get_or_create_vertex_parser()
         poa_block_producer = self._get_or_create_poa_block_producer()
-        capabilities = self._get_or_create_capabilities()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -264,7 +256,6 @@ class Builder:
             wallet=wallet,
             rng=self._rng,
             checkpoints=self._checkpoints,
-            capabilities=capabilities,
             environment_info=get_environment_info(self._cmdline, str(peer.id)),
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
@@ -416,25 +407,31 @@ class Builder:
             return self._p2p_manager
 
         enable_ssl = True
-        reactor = self._get_reactor()
         my_peer = self._get_peer()
 
-        self._p2p_manager = ConnectionsManager(
+        dependencies = P2PDependencies(
+            reactor=self._get_reactor(),
             settings=self._get_or_create_settings(),
-            reactor=reactor,
+            vertex_parser=self._get_or_create_vertex_parser(),
+            tx_storage=self._get_or_create_tx_storage(),
+            vertex_handler=self._get_or_create_vertex_handler(),
+            verification_service=self._get_or_create_verification_service(),
+            capabilities=self._get_or_create_capabilities(),
+            whitelist_only=False,
+        )
+
+        self._p2p_manager = ConnectionsManager(
+            dependencies=dependencies,
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
-            whitelist_only=False,
             rng=self._rng,
         )
         SyncSupportLevel.add_factories(
-            self._get_or_create_settings(),
             self._p2p_manager,
+            dependencies,
             self._sync_v1_support,
             self._sync_v2_support,
-            self._get_or_create_vertex_parser(),
-            self._get_or_create_vertex_handler(),
         )
         return self._p2p_manager
 

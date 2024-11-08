@@ -34,6 +34,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.p2p import P2PDependencies
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -319,16 +320,6 @@ class CliBuilder:
         cpu_mining_service = CpuMiningService()
         capabilities = settings.get_default_capabilities()
 
-        p2p_manager = ConnectionsManager(
-            settings=settings,
-            reactor=reactor,
-            my_peer=peer,
-            pubsub=pubsub,
-            ssl=True,
-            whitelist_only=False,
-            rng=Random(),
-        )
-
         vertex_handler = VertexHandler(
             reactor=reactor,
             settings=settings,
@@ -341,13 +332,30 @@ class CliBuilder:
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
+        p2p_dependencies = P2PDependencies(
+            reactor=reactor,
+            settings=settings,
+            vertex_parser=vertex_parser,
+            tx_storage=tx_storage,
+            vertex_handler=vertex_handler,
+            verification_service=verification_service,
+            whitelist_only=False,
+            capabilities=capabilities,
+        )
+
+        p2p_manager = ConnectionsManager(
+            dependencies=p2p_dependencies,
+            my_peer=peer,
+            pubsub=pubsub,
+            ssl=True,
+            rng=Random(),
+        )
+
         SyncSupportLevel.add_factories(
-            settings,
             p2p_manager,
+            p2p_dependencies,
             sync_v1_support,
             sync_v2_support,
-            vertex_parser,
-            vertex_handler,
         )
 
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
@@ -385,7 +393,6 @@ class CliBuilder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
-            capabilities=capabilities,
         )
 
         if self._args.x_ipython_kernel:

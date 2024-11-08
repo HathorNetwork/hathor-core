@@ -19,6 +19,7 @@ from structlog import get_logger
 from twisted.internet.interfaces import IConsumer, IDelayedCall, IPushProducer
 from zope.interface import implementer
 
+from hathor.p2p import P2PDependencies
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.traversal import BFSOrderWalk
 from hathor.util import not_none
@@ -68,7 +69,6 @@ class StreamEnd(IntFlag):
 class _StreamingServerBase:
     def __init__(self, sync_agent: 'NodeBlockSync', *, limit: int = DEFAULT_STREAMING_LIMIT):
         self.sync_agent = sync_agent
-        self.tx_storage = self.sync_agent.tx_storage
         self.protocol: 'HathorProtocol' = sync_agent.protocol
 
         assert self.protocol.transport is not None
@@ -212,16 +212,20 @@ class TransactionsStreamingServer(_StreamingServerBase):
     should there be interruptions or issues.
     """
 
-    def __init__(self,
-                 sync_agent: 'NodeBlockSync',
-                 start_from: list[BaseTransaction],
-                 first_block: Block,
-                 last_block: Block,
-                 *,
-                 limit: int = DEFAULT_STREAMING_LIMIT) -> None:
+    def __init__(
+        self,
+        sync_agent: 'NodeBlockSync',
+        start_from: list[BaseTransaction],
+        first_block: Block,
+        last_block: Block,
+        *,
+        limit: int = DEFAULT_STREAMING_LIMIT,
+        dependencies: P2PDependencies,
+    ) -> None:
         # XXX: is limit needed for tx streaming? Or let's always send all txs for
         # a block? Very unlikely we'll reach this limit
         super().__init__(sync_agent, limit=limit)
+        self.dependencies = dependencies
 
         self.first_block: Block = first_block
         self.last_block: Block = last_block
@@ -233,7 +237,10 @@ class TransactionsStreamingServer(_StreamingServerBase):
 
         self.current_block: Optional[Block] = self.first_block
         self.bfs = BFSOrderWalk(
-            self.tx_storage.get_vertex, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False
+            self.dependencies.tx_storage.get_vertex,
+            is_dag_verifications=True,
+            is_dag_funds=True,
+            is_left_to_right=False,
         )
         self.iter = self.get_iter()
 
@@ -298,7 +305,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
         # Check if tx is confirmed by the `self.current_block` or any next block.
         assert cur_metadata.first_block is not None
         assert self.current_block is not None
-        first_block = self.tx_storage.get_block(cur_metadata.first_block)
+        first_block = self.dependencies.tx_storage.get_block(cur_metadata.first_block)
         if not_none(first_block.static_metadata.height) < not_none(self.current_block.static_metadata.height):
             self.log.debug('skipping tx: out of current block')
             self.bfs.skip_neighbors(cur)
