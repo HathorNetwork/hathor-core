@@ -68,6 +68,20 @@ SETTINGS = HathorSettings(
                 lock_in_on_timeout=False,
                 version='0.59.0',
                 signal_support_by_default=True,
+            ),
+
+            # NOP feature to test Feature Activation for Transactions
+            Feature.NOP_FEATURE_1: Criteria(
+                bit=0,
+                # N = 4_354_560
+                # Expected to be reached around Sunday, 2024-11-17.
+                # Right now the best block is 4_326_600 on testnet (2024-11-07).
+                start_height=4_354_560,  # N
+                timeout_height=4_394_880,  # N + 2 * 20160 (2 weeks after the start)
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.63.0',
+                signal_support_by_default=True,
             )
         }
     )
