@@ -143,7 +143,7 @@ class ConsensusAlgorithm:
         txs_to_remove: list[BaseTransaction] = []
         new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
 
-        if context.reorg_common_block is not None:
+        if context.reorg_info is not None:
             if new_best_height < best_height:
                 self.log.warn(
                     'height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
@@ -162,16 +162,21 @@ class ConsensusAlgorithm:
                 self._remove_transactions(txs_to_remove, storage, context)
 
         # emit the reorg started event if needed
-        if context.reorg_common_block is not None:
+        if context.reorg_info is not None:
             assert isinstance(old_best_block, Block)
             new_best_block = base.storage.get_transaction(new_best_tip)
-            reorg_size = old_best_block.get_height() - context.reorg_common_block.get_height()
+            reorg_size = old_best_block.get_height() - context.reorg_info.common_block.get_height()
             assert old_best_block != new_best_block
             assert reorg_size > 0
-            context.pubsub.publish(HathorEvents.REORG_STARTED, old_best_height=best_height,
-                                   old_best_block=old_best_block, new_best_height=new_best_height,
-                                   new_best_block=new_best_block, common_block=context.reorg_common_block,
-                                   reorg_size=reorg_size)
+            context.pubsub.publish(
+                HathorEvents.REORG_STARTED,
+                old_best_height=best_height,
+                old_best_block=old_best_block,
+                new_best_height=new_best_height,
+                new_best_block=new_best_block,
+                common_block=context.reorg_info.common_block,
+                reorg_size=reorg_size,
+            )
 
         # finally signal an index update for all affected transactions
         for tx_affected in _sorted_affected_txs(context.txs_affected):
@@ -195,7 +200,7 @@ class ConsensusAlgorithm:
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx=tx_removed)
 
         # and also emit the reorg finished event if needed
-        if context.reorg_common_block is not None:
+        if context.reorg_info is not None:
             context.pubsub.publish(HathorEvents.REORG_FINISHED)
 
     def filter_out_voided_by_entries_from_parents(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
