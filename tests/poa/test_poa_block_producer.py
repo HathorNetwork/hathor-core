@@ -22,14 +22,14 @@ from hathor.consensus.consensus_settings import PoaSettings, PoaSignerSettings
 from hathor.consensus.poa import PoaBlockProducer
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.manager import HathorManager
+from hathor.reactor.memory_reactor import MemoryReactorClock
 from hathor.transaction.poa import PoaBlock
 from tests.poa.utils import get_settings, get_signer
-from tests.test_memory_reactor_clock import TestMemoryReactorClock
 from tests.unittest import TestBuilder
 
 
 def _get_manager(settings: HathorSettings) -> HathorManager:
-    reactor = TestMemoryReactorClock()
+    reactor = MemoryReactorClock()
     reactor.advance(settings.GENESIS_BLOCK_TIMESTAMP)
 
     artifacts = TestBuilder() \
@@ -45,7 +45,7 @@ def test_poa_block_producer_one_signer() -> None:
     settings = get_settings(signer, time_between_blocks=10)
     manager = _get_manager(settings)
     reactor = manager.reactor
-    assert isinstance(reactor, TestMemoryReactorClock)
+    assert isinstance(reactor, MemoryReactorClock)
     manager = Mock(wraps=manager)
     producer = PoaBlockProducer(settings=settings, reactor=reactor, poa_signer=signer)
     producer.manager = manager
@@ -103,7 +103,7 @@ def test_poa_block_producer_two_signers() -> None:
     settings = get_settings(signer1, signer2, time_between_blocks=10)
     manager = _get_manager(settings)
     reactor = manager.reactor
-    assert isinstance(reactor, TestMemoryReactorClock)
+    assert isinstance(reactor, MemoryReactorClock)
     manager = Mock(wraps=manager)
     producer = PoaBlockProducer(settings=settings, reactor=reactor, poa_signer=signer1)
     producer.manager = manager

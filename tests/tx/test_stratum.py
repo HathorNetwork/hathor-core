@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from twisted.internet.testing import StringTransportWithDisconnection
 
-from hathor.simulator.clock import MemoryReactorHeapClock
+from hathor.simulator.heap_clock import MemoryReactorHeapClock
 from hathor.stratum import (
     INVALID_PARAMS,
     INVALID_REQUEST,
