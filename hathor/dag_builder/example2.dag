@@ -1,0 +1,10 @@
+# blockchains:
+
+blockchain genesis b[0..10]
+blockchain b4 c[0..20]
+
+b4 --> tx1
+
+tx1 <-- tx2
+
+tx1.out[0] <<< tx3

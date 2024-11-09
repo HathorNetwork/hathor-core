@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import sys
 from argparse import ArgumentParser, FileType
 
@@ -39,16 +40,37 @@ class LoadFromLogs(RunNode):
         settings = get_global_settings()
         parser = VertexParser(settings=settings)
 
+        last_comment = ''
+        labels = {}
+
         while True:
             line_with_break = self._args.log_dump.readline()
             if not line_with_break:
                 break
-            if line_with_break.startswith('//'):
-                continue
             line = line_with_break.strip()
+            if not line:
+                continue
+            if line.startswith('//'):
+                last_comment = line[2:].strip()
+                continue
             vertex_bytes = bytes.fromhex(line)
             vertex = parser.deserialize(vertex_bytes)
+            labels[vertex.hash] = last_comment
             await deferLater(self.reactor, 0, self.manager.on_new_tx, vertex)
+
+        print('---> graphviz')
+        from hathor.graphviz import GraphvizVisualizer
+        tx_storage = self.manager.tx_storage
+        graphviz = GraphvizVisualizer(tx_storage, include_verifications=True, include_funds=True, only_with_labels=True)
+        graphviz.labels[self.manager._settings.GENESIS_BLOCK_HASH] = 'g_block'
+        graphviz.labels[self.manager._settings.GENESIS_TX1_HASH] = 'g_tx1'
+        graphviz.labels[self.manager._settings.GENESIS_TX2_HASH] = 'g_tx2'
+        for k, v in labels.items():
+            if re.match(r'^a[0-9]+$', v):
+                continue
+            graphviz.labels[k] = v
+        dot = graphviz.dot()
+        dot.render('dot0')
 
         self.manager.connections.disconnect_all_peers(force=True)
         self.reactor.fireSystemEvent('shutdown')

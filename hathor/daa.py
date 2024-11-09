@@ -57,7 +57,7 @@ class DifficultyAdjustmentAlgorithm:
         self.TEST_MODE = test_mode
         DifficultyAdjustmentAlgorithm.singleton = self
 
-    @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
+    @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex() if block._hash else None))
     def calculate_block_difficulty(self, block: 'Block', parent_block_getter: Callable[['Block'], 'Block']) -> float:
         """ Calculate block weight according to the ascendants of `block`, using calculate_next_weight."""
         if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:

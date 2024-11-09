@@ -25,7 +25,8 @@ from hathor.transaction.storage import TransactionStorage
 
 class GraphvizVisualizer:
     def __init__(self, storage: TransactionStorage, include_funds: bool = False,
-                 include_verifications: bool = False, only_blocks: bool = False):
+                 include_verifications: bool = False, only_blocks: bool = False,
+                 only_transactions: bool = False, only_with_labels: bool = False):
         self._settings = get_global_settings()
         self.storage = storage
 
@@ -37,6 +38,9 @@ class GraphvizVisualizer:
 
         # Indicate whether it should only show blocks
         self.only_blocks = only_blocks
+
+        self.only_transactions = only_transactions
+        self.only_with_labels = only_with_labels
 
         # Show weights in node's label
         self.show_weight = False
@@ -147,6 +151,12 @@ class GraphvizVisualizer:
             nodes_iter = self.get_nodes_iterator()
             for i, tx in enumerate(nodes_iter):
                 if self.only_blocks and not tx.is_block:
+                    continue
+
+                if self.only_transactions and tx.is_block and not tx.is_genesis:
+                    continue
+
+                if self.only_with_labels and tx.hash not in self.labels:
                     continue
 
                 name = tx.hash.hex()
