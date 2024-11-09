@@ -6,6 +6,7 @@ from typing import Any, Optional
 import pytest
 
 from hathor.conf import HathorSettings
+from hathor.dag_builder.artifacts import DAGArtifacts
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint, Context, NanoContract, NCFail, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
@@ -133,7 +134,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         v = [node.name for node, _ in vertices.list]
         self.assertTrue(v.index('b35') < v.index('tx3'))
 
-    def _run_test_remove_voided_nano_tx_from_parents(self, order: str):
+    def _run_test_remove_voided_nano_tx_from_parents(self, order: str) -> DAGArtifacts:
         builder = self.get_dag_builder(self.manager)
         vertices = builder.build_from_str(f'''
             blockchain genesis b[0..40]
