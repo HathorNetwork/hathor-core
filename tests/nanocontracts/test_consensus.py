@@ -895,3 +895,59 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
 
     def test_nc_consensus_nano_conflict_block_executed_2(self) -> None:
         self._run_nc_consensus_conflict_block_executed_2(conflict_with_nano=True)
+
+    def test_nc_consensus_voided_tx_at_mempool(self) -> None:
+        dag_builder = self.get_dag_builder(self.manager)
+        vertices = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..40]
+            b30 < dummy
+
+            tx1.nc_id = "{self.myblueprint_id.hex()}"
+            tx1.nc_method = initialize("00")
+
+            # tx2 will fail because it does not have a deposit
+            tx2.nc_id = tx1
+            tx2.nc_method = deposit()
+            tx2.out[0] <<< tx3
+
+            # tx3 will be voided because tx2 failed execution
+            tx3.nc_id = tx1
+            tx3.nc_method = nop(1)
+
+            b31 --> tx1
+            b32 --> tx2
+            b33 --> tx3
+        ''')
+
+        for node, vertex in vertices.list:
+            print()
+            print(node.name)
+            print()
+            self.manager.on_new_tx(vertex, fails_silently=False)
+
+        b31 = vertices.by_name['b31'].vertex
+        b32 = vertices.by_name['b32'].vertex
+        b33 = vertices.by_name['b33'].vertex
+
+        self.assertIsInstance(b31, Block)
+        self.assertIsInstance(b32, Block)
+        self.assertIsInstance(b33, Block)
+        self.assertIsNone(b31.get_metadata().voided_by)
+        self.assertIsNone(b32.get_metadata().voided_by)
+        self.assertIsNone(b33.get_metadata().voided_by)
+
+        tx1 = vertices.by_name['tx1'].vertex
+        tx2 = vertices.by_name['tx2'].vertex
+        tx3 = vertices.by_name['tx3'].vertex
+
+        meta1 = tx1.get_metadata()
+        meta2 = tx2.get_metadata()
+        meta3 = tx3.get_metadata()
+
+        self.assertEqual(meta1.first_block, b31.hash)
+        self.assertEqual(meta2.first_block, b32.hash)
+        self.assertEqual(meta3.first_block, b33.hash)
+
+        self.assertIsNone(meta1.voided_by)
+        self.assertEqual(meta2.voided_by, {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(meta3.voided_by, {tx2.hash})

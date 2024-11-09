@@ -142,7 +142,8 @@ class BlockConsensusAlgorithm:
                             assert tx_conflict_meta.voided_by
                     tx_meta.voided_by = None
                     self.context.save(tx)
-            assert tx_meta.voided_by is None
+            if tx_meta.voided_by:
+                continue
             nc_calls.append(tx)
 
         if not nc_calls:
