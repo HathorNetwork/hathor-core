@@ -247,6 +247,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         ]
         tokens = [b'token-a', b'token-b']
         tx = Transaction(outputs=outputs, tokens=tokens)
+        tx.parents = [tx.hash for tx in self.genesis_txs]
         tx.get_metadata().validation = ValidationState.FULL
         tx.update_hash()
         tx.init_static_metadata_from_storage(self._settings, tx_storage)
@@ -308,6 +309,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         ]
         tokens = [b'token-a']
         tx = Transaction(inputs=inputs, outputs=outputs, tokens=tokens)
+        tx.parents = [tx.hash for tx in self.genesis_txs]
         tx.get_metadata().validation = ValidationState.FULL
         tx.update_hash()
         tx.init_static_metadata_from_storage(self._settings, tx_storage)
