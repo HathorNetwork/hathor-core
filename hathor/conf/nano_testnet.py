@@ -34,6 +34,10 @@ SETTINGS = HathorSettings(
     MIN_TX_WEIGHT=8,
     CHECKPOINTS=[],
     ENABLE_NANO_CONTRACTS=True,
+    ENABLE_ON_CHAIN_BLUEPRINTS=True,
+    NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES = [
+        'WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK',
+    ],
     BLUEPRINTS={
         bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'): 'Bet',
         bytes.fromhex('27db2b0b1a943c2714fb19d190ce87dc0094bba463b26452dd98de21a42e96a0'): 'Dozer_Pool',
