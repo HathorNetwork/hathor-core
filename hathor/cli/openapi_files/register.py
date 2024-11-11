@@ -45,5 +45,6 @@ def get_registered_resources() -> list[type[Resource]]:
     import hathor.wallet.resources.nano_contracts  # noqa: 401
     import hathor.wallet.resources.thin_wallet  # noqa: 401
     import hathor.websocket  # noqa: 401
+    import hathor.nanocontracts.resources  # noqa: 401
     global _registered_resources
     return _registered_resources
