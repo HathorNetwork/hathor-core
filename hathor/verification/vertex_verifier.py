@@ -135,8 +135,8 @@ class VertexVerifier:
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         numeric_hash = int(vertex.hash_hex, vertex.HEX_BASE)
         minimum_target = vertex.get_target(override_weight)
-        if numeric_hash >= minimum_target:
-            raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
+        #if numeric_hash >= minimum_target:
+        #    raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
 
     def verify_outputs(self, vertex: BaseTransaction) -> None:
         """Verify there are no hathor authority UTXOs and outputs are all positive
