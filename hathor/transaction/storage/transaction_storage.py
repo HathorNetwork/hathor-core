@@ -1069,7 +1069,8 @@ class TransactionStorage(ABC):
         )
         block.update_hash()
 
-        assert block.hash == self._settings.GENESIS_BLOCK_HASH
+        assert block.hash == self._settings.GENESIS_BLOCK_HASH, \
+               f'{block.hash.hex()} != {self._settings.GENESIS_BLOCK_HASH.hex()}'
         return block
 
     def _construct_genesis_tx1(self) -> Transaction:

@@ -8,12 +8,13 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 import requests
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
 from hathorlib.scripts import DataScript
 from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
-from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
+from hathor.crypto.util import decode_address, get_address_b58_from_public_key
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import TxData, TxMetadata
 from hathor.event.model.event_type import EventType
@@ -349,14 +350,20 @@ def execute_tx_gen(
     execute(args)
 
 
-def get_genesis_key() -> ec.EllipticCurvePrivateKeyWithSerialization:
-    private_key_bytes = base64.b64decode(
-        'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgOCgCddzDZsfKgiMJLOt97eov9RLwHeePyBIK2WPF8MChRA'
-        'NCAAQ/XSOK+qniIY0F3X+lDrb55VQx5jWeBLhhzZnH6IzGVTtlAj9Ki73DVBm5+VXK400Idd6ddzS7FahBYYC7IaTl'
+def get_genesis_key() -> ec.EllipticCurvePrivateKey:
+    from hathor.wallet import HDWallet
+    wallet = HDWallet(words=GENESIS_SEED)
+    wallet._manually_initialize()
+    key = wallet.get_key_at_index(0)
+    return ec.derive_private_key(
+        int.from_bytes(key.secret_exponent().to_bytes(32, 'big'), 'big'),
+        ec.SECP256K1(),
+        backend=default_backend()
     )
-    return get_private_key_from_bytes(private_key_bytes)
 
 
+GENESIS_SEED = ('coral light army gather adapt blossom school alcohol coral light army gather '
+                'adapt blossom school alcohol coral light army gather adapt blossom school awesome')
 GENESIS_PRIVATE_KEY = get_genesis_key()
 GENESIS_PUBLIC_KEY = GENESIS_PRIVATE_KEY.public_key()
 GENESIS_ADDRESS_B58 = get_address_b58_from_public_key(GENESIS_PUBLIC_KEY)
