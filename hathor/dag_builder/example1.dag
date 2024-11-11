@@ -1,0 +1,50 @@
+# blockchains:
+
+blockchain genesis a[0..300]
+blockchain a300 b[0..20]
+blockchain b4 c[0..10]
+
+# reward lock
+
+a300 < dummy
+
+# confirmations:
+
+b11 --> tx1
+b11 --> tx2
+
+b14 --> tx1
+b14 --> tx3
+
+c3 --> tx1
+c3 --> tx2
+
+# parents:
+
+tx1 <-- tx2 <-- tx3
+
+tx3 --> tx5 --> tx6
+
+# spending:
+
+tx1.out[0] <<< tx2 tx3
+tx1.out[0] <<< tx4
+
+a0.out[0] <<< tx1
+
+# outputs:
+
+tx1.out[0] = 100 HTR [wallet1]
+tx1.out[1] = 50 TK1  [wallet2]
+tx2.out[0] = 75 USDC [wallet1]
+
+USDC.out[0] = 100000 HTR
+
+# others:
+
+USDC.supply = 300
+
+b5 < c0 < c10 < b20
+b6 < tx3
+
+b16 < tx4
