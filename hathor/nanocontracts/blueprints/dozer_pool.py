@@ -3,8 +3,16 @@ from typing import NamedTuple
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import NCAction, NCActionType, public, view
-from hathor.types import Address, Amount, Timestamp, TokenUid
+from hathor.nanocontracts.types import (
+    Address,
+    Amount,
+    Timestamp,
+    TokenUid,
+    NCAction,
+    NCActionType,
+    public,
+    view,
+)
 
 PRECISION = 10**20
 
@@ -670,6 +678,7 @@ class Dozer_Pool(Blueprint):
             "fee": str(self.fee_numerator / 10),
         }
 
+    @view
     def user_info(
         self,
         address: Address,
@@ -688,6 +697,7 @@ class Dozer_Pool(Blueprint):
             "max_withdraw_b": max_withdraw_b,
         }
 
+    @view
     def pool_data(
         self,
     ) -> dict[str, float]:
