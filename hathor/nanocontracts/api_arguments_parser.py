@@ -13,10 +13,14 @@
 # limitations under the License.
 
 import inspect
+import json
 from types import GenericAlias
 from typing import Any, NamedTuple, Optional, Type, TypeVar, Union, get_args, get_origin
 
 from hathor.crypto.util import decode_address
+from hathor.nanocontracts.blueprint import Blueprint
+from hathor.nanocontracts.exception import NCMethodNotFound
+from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.types import SignedData
 
 # This is a workaround, so mypy doesn't complain about Optional type checking
@@ -32,6 +36,38 @@ def get_supertype(_type: Type) -> Type:
     if hasattr(_type, '__supertype__'):
         return _type.__supertype__
     return _type
+
+
+def parse_nc_method_call(blueprint_class: Type[Blueprint], call_info: str) -> tuple[str, Any]:
+    """Parse a string that represents an invokation to a Nano Contract method.
+
+    The string must be in the following format: `method(arg1, arg2, arg3)`.
+
+    The arguments must be in JSON format; tuples and namedtuples should be replaced by a list.
+
+    Here are some examples:
+    - add(1, 2)
+    - set_result("1x2")
+    """
+    if not call_info.endswith(')'):
+        raise ValueError
+
+    method_name, _, arguments = call_info[:-1].partition('(')
+    method = getattr(blueprint_class, method_name, None)
+    if method is None:
+        raise NCMethodNotFound(f'{blueprint_class} {method_name}')
+
+    parser = NCMethodParser(method)
+    method_args = parser.get_method_args()
+
+    args_array = json.loads(f'[{arguments}]')
+    assert len(args_array) == len(method_args), f'{len(args_array)} != {len(method_args)} ({method_args})'
+
+    parsed_args = []
+    for (_, arg_type), arg_value in zip(method_args, args_array):
+        parsed_args.append(parse_arg(arg_value, arg_type))
+
+    return method_name, parsed_args
 
 
 def parse_arg(arg: Any, expected_type: Type) -> Any:
