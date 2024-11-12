@@ -166,12 +166,15 @@ class TestCase(unittest.TestCase):
         genesis_wallet = HDWallet(words=GENESIS_SEED)
         genesis_wallet._manually_initialize()
 
+        assert manager.tx_storage.nc_catalog
+
         return DAGBuilder(
             settings=manager._settings,
             daa=manager.daa,
             genesis_wallet=genesis_wallet,
             wallet_factory=self.get_wallet,
             vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
+            nc_catalog=manager.tx_storage.nc_catalog,
         )
 
     def get_builder(self) -> TestBuilder:

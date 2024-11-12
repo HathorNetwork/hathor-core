@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 from typing import Iterator
 
 from hathor.conf.settings import HathorSettings
@@ -19,11 +20,15 @@ from hathor.crypto.util import decode_address
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import DAGBuilder, DAGNode
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
+from hathor.dag_builder.utils import get_literal, is_literal
+from hathor.nanocontracts import NanoContract
+from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.wallet import BaseWallet
+from hathor.wallet import BaseWallet, HDWallet
 
 
 class VertexExporter:
@@ -38,6 +43,7 @@ class VertexExporter:
         genesis_wallet: BaseWallet,
         wallet_factory: WalletFactoryType,
         vertex_resolver: VertexResolverType,
+        nc_catalog: NCBlueprintCatalog | None,
     ) -> None:
         self._builder = builder
         self._vertices: dict[str, BaseTransaction] = {}
@@ -49,6 +55,7 @@ class VertexExporter:
         self._daa = daa
         self._wallet_factory = wallet_factory
         self._vertex_resolver = vertex_resolver
+        self._nc_catalog = nc_catalog
 
         self._wallets['genesis'] = genesis_wallet
         self._wallets['main'] = self._wallet_factory()
@@ -56,6 +63,11 @@ class VertexExporter:
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
         return self._builder._get_node(name)
+
+    def get_wallet(self, name: str) -> BaseWallet:
+        if name not in self._wallets:
+            self._wallets[name] = self._wallet_factory()
+        return self._wallets[name]
 
     def get_vertex_id(self, name: str) -> bytes:
         """Get the vertex id given its node name."""
@@ -167,6 +179,8 @@ class VertexExporter:
                     break
                 except KeyError:
                     pass
+            else:
+                raise ValueError('private key not found')
 
             public_key_bytes, signature = wallet.get_input_aux_data(data_to_sign, private_key)
             txin.data = P2PKH.create_input_data(public_key_bytes, signature)
@@ -218,6 +232,58 @@ class VertexExporter:
         self.update_vertex_hash(blk)
         self._block_height[blk.hash] = height
         return blk
+
+    def create_vertex_nanocontract(self, node: DAGNode) -> NanoContract:
+        block_parents, txs_parents = self._create_vertex_parents(node)
+        inputs = self._create_vertex_txin(node)
+        tokens, outputs = self._create_vertex_txout(node)
+
+        assert len(block_parents) == 0
+        nc = NanoContract(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+
+        nc_id_raw = node.attrs['nc_id']
+        if is_literal(nc_id_raw):
+            nc.nc_id = bytes.fromhex(get_literal(nc_id_raw))
+        else:
+            nc.nc_id = self.get_vertex_id(nc_id_raw)
+
+        nc_method_raw = node.attrs['nc_method']
+
+        if nc_method_raw.startswith('initialize('):
+            blueprint_id = BlueprintId(VertexId(nc.nc_id))
+        else:
+            contract_creation_vertex = self._vertices[nc_id_raw]
+            assert isinstance(contract_creation_vertex, NanoContract)
+            blueprint_id = BlueprintId(VertexId(contract_creation_vertex.nc_id))
+
+        assert self._nc_catalog is not None
+        blueprint_class = self._nc_catalog.get_blueprint_class(blueprint_id)
+
+        from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
+        nc.nc_method, nc_args = parse_nc_method_call(blueprint_class, nc_method_raw)
+
+        from hathor.nanocontracts.method_parser import NCMethodParser
+        method_parser = NCMethodParser(getattr(blueprint_class, nc.nc_method))
+        nc.nc_args_bytes = method_parser.serialize_args(nc_args)
+
+        nc.timestamp = self.get_min_timestamp(node)
+        self.sign_all_inputs(node, nc)
+
+        wallet_name = node.attrs.get('nc_address', 'main')
+        wallet = self.get_wallet(wallet_name)
+        assert isinstance(wallet, HDWallet)
+        privkey = wallet.get_key_at_index(0)
+        nc.nc_pubkey = privkey.sec()
+
+        data = nc.get_sighash_all()
+        data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
+        nc.nc_signature = privkey.sign(data_hash)
+        if 'weight' in node.attrs:
+            nc.weight = float(node.attrs['weight'])
+        else:
+            nc.weight = self._daa.minimum_tx_weight(nc)
+        self.update_vertex_hash(nc)
+        return nc
 
     def create_vertex_transaction(self, node: DAGNode) -> Transaction:
         """Create a Transaction given a node."""
@@ -276,6 +342,9 @@ class VertexExporter:
 
             case DAGNodeType.Token:
                 vertex = self.create_vertex_token(node)
+
+            case DAGNodeType.NanoContract:
+                vertex = self.create_vertex_nanocontract(node)
 
             case DAGNodeType.Transaction:
                 vertex = self.create_vertex_transaction(node)
