@@ -30,6 +30,7 @@ WalletFactoryType: TypeAlias = Callable[[], BaseWallet]
 class DAGNodeType(Enum):
     Unknown = 'unknown'
     Block = 'block'
+    NanoContract = 'nanocontract'
     Transaction = 'transaction'
     Token = 'token'
     Genesis = 'genesis'
@@ -45,6 +46,12 @@ class DAGNode:
     outputs: list[DAGOutput | None] = field(default_factory=list)
     parents: set[str] = field(default_factory=set)
     deps: set[str] = field(default_factory=set)
+
+    # expected balance of inputs and outputs per token
+    #   =0 means sum(txouts) = sum(txins)
+    #   >0 means sum(txouts) > sum(txins), e.g., withdrawal
+    #   <0 means sum(txouts) < sum(txins), e.g., deposit
+    balances: dict[str, int] = field(default_factory=dict)
 
     def get_all_dependencies(self) -> Iterator[str]:
         yield from self.parents

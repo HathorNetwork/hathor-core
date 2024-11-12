@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import Field
@@ -20,15 +19,13 @@ from pydantic import Field
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
-from hathor.nanocontracts.api_arguments_parser import parse_arg
+from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
 from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
     NCContractCreationAtMempool,
     NCContractCreationNotFound,
     NCContractCreationVoided,
-    NCMethodNotFound,
 )
-from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.nanocontract import NanoContract
 from hathor.nanocontracts.types import ContractId, VertexId
 from hathor.nanocontracts.utils import get_nano_contract_creation
@@ -213,25 +210,8 @@ class NanoContractStateResource(Resource):
 
         The expected string format is "method_name(arg1, arg2, arg3, ...)".
         """
-        if not call_info.endswith(')'):
-            raise ValueError
-        method_name, _, arguments = call_info[:-1].partition('(')
-
         blueprint_class = nanocontract.get_blueprint_class()
-        method = getattr(blueprint_class, method_name, None)
-        if method is None:
-            raise NCMethodNotFound
-
-        parser = NCMethodParser(method)
-        method_args = parser.get_method_args()
-
-        args_array = json.loads(f'[{arguments}]')
-        assert len(args_array) == len(method_args), f'{len(args_array)} != {len(method_args)} ({method_args})'
-
-        parsed_args = []
-        for (_, arg_type), arg_value in zip(method_args, args_array):
-            parsed_args.append(parse_arg(arg_value, arg_type))
-
+        method_name, parsed_args = parse_nc_method_call(blueprint_class, call_info)
         return method_name, parsed_args
 
     def get_key_for_field(self, field: str) -> Optional[str]:
