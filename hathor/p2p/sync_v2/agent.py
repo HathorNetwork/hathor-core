@@ -55,6 +55,8 @@ logger = get_logger()
 MAX_GET_TRANSACTIONS_BFS_LEN: int = 8
 MAX_MEMPOOL_STATUS_TIPS: int = 20
 
+RUN_SYNC_MAIN_LOOP_INTERVAL = 1  # second(s)
+
 
 class _HeightInfo(NamedTuple):
     height: int
@@ -232,7 +234,7 @@ class NodeBlockSync(SyncAgent):
         if self._started:
             raise Exception('NodeSyncBlock is already running')
         self._started = True
-        self._lc_run.start(5)
+        self._lc_run.start(RUN_SYNC_MAIN_LOOP_INTERVAL)
 
     def stop(self) -> None:
         if not self._started:
