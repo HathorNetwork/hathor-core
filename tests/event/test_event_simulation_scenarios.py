@@ -43,6 +43,25 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
 
     seed_config = 6946502462188444706
 
+    def assert_response_equal(self, responses: list[EventResponse], expected: list[EventResponse]) -> None:
+        """Compare responses and expected responses.
+        """
+        self.assertEqual(len(responses), len(expected))
+
+        for a, b in zip(responses, expected):
+            self.assertEqual(type(a), type(b))
+            self.assertEqual(a.__fields__, b.__fields__)
+            self.assertEqual(a.event.__fields__, b.event.__fields__)
+            self.assertEqual(a.event.data.__fields__, b.event.data.__fields__)
+
+            for field in ['type', 'peer_id', 'network', 'latest_event_id', 'stream_id']:
+                self.assertEqual(getattr(a, field), getattr(b, field))
+
+            for field in ['id', 'type', 'group_id']:
+                self.assertEqual(getattr(a.event, field), getattr(b.event, field))
+
+            self.assertEqual(type(a.event.data), type(b.event.data))
+
     def test_only_load(self) -> None:
         stream_id = self.manager._event_manager._stream_id
         assert stream_id is not None
@@ -62,9 +81,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=4, timestamp=1578878880.0, type=EventType.LOAD_FINISHED, data=EmptyData(), group_id=None), latest_event_id=4, stream_id=stream_id)  # noqa: E501
         ]
 
-        responses = _remove_timestamp(responses)
-        expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+        self.assert_response_equal(responses, expected)
 
     def test_single_chain_one_block(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -91,9 +108,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=8, timestamp=1578878910.25, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='9b83e5dbc7145a5a161c34da4bec4e1a64dc02a3f2495a2db78457426c9ee6bf', nonce=0, timestamp=1578878910, signal_bits=0, version=0, weight=2.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUPXOcGnrN0ZB2WrnPVcjdCCcacL+IrA==', decoded=DecodedTxOutput(type='P2PKH', address='HC846khX278aM1utqAgPzkKAxBTfftaRDm', timelock=None))], parents=['339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792', '16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952', '33e14cb555a96967841dcbe0f95e9eab5810481d01de8f4f73afb8cce365e869'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='9b83e5dbc7145a5a161c34da4bec4e1a64dc02a3f2495a2db78457426c9ee6bf', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=2.0, score=4.0, accumulated_weight_raw="4", score_raw="16", first_block=None, height=1, validation='full'), aux_pow=None), group_id=None), latest_event_id=8, stream_id=stream_id)  # noqa: E501
         ]
 
-        responses = _remove_timestamp(responses)
-        expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+        self.assert_response_equal(responses, expected)
 
     def test_single_chain_blocks_and_transactions(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -157,9 +172,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=38, timestamp=1578879091.0, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='7c7449a44a6adf26fb9b68f8c2b7751905c788b417946c43b8a999d0b66f76d9', nonce=0, timestamp=1578879090, signal_bits=0, version=0, weight=8.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUTisHvpM4sDeINzxF5auK/8bP6UaIrA==', decoded=DecodedTxOutput(type='P2PKH', address='HDeSe6qKqjSLwtnjLBV84NddtZQyNb9HUU', timelock=None))], parents=['f349fc0f570a636a440ed3853cc533faa2c4616160e1d9eb6f5d656a90da30fb', 'd2bd5f83fcbfa5dee2b602ddc18ebd4f7714e1ecf928824f862efb0559dcb4d6', '5453759e15a6413a06390868cbb56509704c6f3f7d25f443556d8d6b2dacc650'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='7c7449a44a6adf26fb9b68f8c2b7751905c788b417946c43b8a999d0b66f76d9', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=8.0, score=19.576585834390443, accumulated_weight_raw="256", score_raw="781879", first_block=None, height=12, validation='full'), aux_pow=None), group_id=None), latest_event_id=38, stream_id=stream_id)  # noqa: E501
         ]
 
-        responses = _remove_timestamp(responses)
-        expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+        self.assert_response_equal(responses, expected)
 
     def test_reorg(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -206,9 +219,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=20, timestamp=1578879064.25, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='38e7f91420ae78ae01707f80c29abe692beebf9d5575cc7c9248e9bdc78169c1', nonce=0, timestamp=1578879001, signal_bits=0, version=0, weight=2.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUgQrqLefPfPVpkXlfvvAp943epyOIrA==', decoded=DecodedTxOutput(type='P2PKH', address='HJHSdTickduA1MF9PTbzBQi6Z7stNAzwAu', timelock=None))], parents=['1204b8c30f0236ae6f1841d0c4805a47089c4d5e3ccd0dcab8aa65f0e4991533', '16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952', '33e14cb555a96967841dcbe0f95e9eab5810481d01de8f4f73afb8cce365e869'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='38e7f91420ae78ae01707f80c29abe692beebf9d5575cc7c9248e9bdc78169c1', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=2.0, score=4.321928094887363, accumulated_weight_raw="4", score_raw="20", first_block=None, height=2, validation='full'), aux_pow=None), group_id=None), latest_event_id=20, stream_id=stream_id)  # noqa: E501
         ]
 
-        responses = _remove_timestamp(responses)
-        expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+        self.assert_response_equal(responses, expected)
 
     def test_unvoided_transaction(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -274,9 +285,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=39, type=EventType.NEW_VERTEX_ACCEPTED, timestamp=0, data=TxData(hash='24707288e7c72c5e74c68241ee32d64239902533e64946de6e6cddb66ef3432a', nonce=0, timestamp=1578879090, signal_bits=0, version=0, weight=8.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUFgE9a6rVMusN303z18sYfjdpYGqIrA==', decoded=DecodedTxOutput(type='P2PKH', address='H8XUjiUx24WLXUN63da34hX6bEs29GJjSs', timelock=None))], parents=['f349fc0f570a636a440ed3853cc533faa2c4616160e1d9eb6f5d656a90da30fb', '16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952', '0639e93ff22647ed06af3ac3a3bc7dd2ca8db18c67fdd9a039318b4d6bf51a88'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='24707288e7c72c5e74c68241ee32d64239902533e64946de6e6cddb66ef3432a', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=8.0, score=19.000858282039708, accumulated_weight_raw="256", score_raw="524600", first_block=None, height=12, validation='full'), aux_pow=None), group_id=None), latest_event_id=39, stream_id=stream_id),  # noqa: E501
         ]
 
-        responses = _remove_timestamp(responses)
-        expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+        self.assert_response_equal(responses, expected)
 
     def test_invalid_mempool(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -347,9 +356,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=41, timestamp=0, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='2e3122412eb129c7f0d03e37d8a5637da9354df980a2259332b2b14e7a340d94', nonce=0, timestamp=1578879030, signal_bits=0, version=0, weight=10.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='', decoded=None)], parents=['eb3c4684dfad95a5b9d1c88f3463b91fe44bbe7b00e4b810648ca9e9ff5685a6', '16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952', '33e14cb555a96967841dcbe0f95e9eab5810481d01de8f4f73afb8cce365e869'], tokens=[], token_name=None, token_symbol=None, metadata=TxMetadata(hash='2e3122412eb129c7f0d03e37d8a5637da9354df980a2259332b2b14e7a340d94', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=10.0, score=10.066089190457772, accumulated_weight_raw="1024", score_raw="1072", first_block=None, height=10, validation='full'), aux_pow=None), group_id=None), latest_event_id=41, stream_id=stream_id)  # noqa: E501
         ]
 
-        responses = _remove_timestamp(responses)
-        expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+        self.assert_response_equal(responses, expected)
 
     def test_empty_script(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -412,9 +419,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             # One NEW_VERTEX_ACCEPTED for a new block
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=38, timestamp=0, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='da38db48836d99beec10aece24c41f6d9f6a55ab5566d7ef5851af2952fb607d', nonce=0, timestamp=1578879090, signal_bits=0, version=0, weight=8.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUmkey79Rbhjq4BtHYCm2mT8hDprWIrA==', decoded=DecodedTxOutput(type='P2PKH', address='HLatLcoaATFMqECb5fD5rdW2nF9WGyw9os', timelock=None))], parents=['f349fc0f570a636a440ed3853cc533faa2c4616160e1d9eb6f5d656a90da30fb', '3cd0d6caa93fcb179cfcd68c2faca1be2cca20cafa339bac10c57e64b9404f11', 'ea8f1b24846331047e73a33c23210ac2af1d812f14f0225a26337e52aab2435d'], tokens=[], token_name=None, token_symbol=None, aux_pow=None, metadata=TxMetadata(hash='da38db48836d99beec10aece24c41f6d9f6a55ab5566d7ef5851af2952fb607d', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=8.0, score=18.691576556156242, accumulated_weight_raw="256", score_raw="423375", first_block=None, height=12, validation='full')), group_id=None), latest_event_id=38, stream_id=stream_id)]  # noqa: E501
 
-        responses = _remove_timestamp(responses)
-        expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+        self.assert_response_equal(responses, expected)
 
     def test_custom_script(self) -> None:
         stream_id = self.manager._event_manager._stream_id
@@ -478,9 +483,7 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
             EventResponse(type='EVENT', peer_id=self.peer_id, network='unittests', event=BaseEvent(id=38, timestamp=0, type=EventType.NEW_VERTEX_ACCEPTED, data=TxData(hash='99d29ec48a3a088dbd786b411daabbc7111974b97abc271a2e338cf46c081302', nonce=0, timestamp=1578879090, signal_bits=0, version=0, weight=8.0, inputs=[], outputs=[TxOutput(value=6400, token_data=0, script='dqkUTisHvpM4sDeINzxF5auK/8bP6UaIrA==', decoded=DecodedTxOutput(type='P2PKH', address='HDeSe6qKqjSLwtnjLBV84NddtZQyNb9HUU', timelock=None))], parents=['8fa74324107529b23223b1639a9c8a37cb8bdbb25aa8c5476a49c1095d152218', '3fbdad9949edf66d099421003ec68bde17d5240305baecf2432a8e1bc2ff47a3', 'cd2ef92d046cbd5bbcedc60f1bfb412dca1b3e3352a9ac80e9d92679d38715ec'], tokens=[], token_name=None, token_symbol=None, aux_pow=None, metadata=TxMetadata(hash='99d29ec48a3a088dbd786b411daabbc7111974b97abc271a2e338cf46c081302', spent_outputs=[], conflict_with=[], voided_by=[], received_by=[], children=[], twins=[], accumulated_weight=8.0, score=18.79789262729119, accumulated_weight_raw="256", score_raw="455753", first_block=None, height=12, validation='full')), group_id=None), latest_event_id=38, stream_id=stream_id)  # noqa: E501
         ]
 
-        responses = _remove_timestamp(responses)
-        expected = _remove_timestamp(expected)
-        assert responses == expected, f'expected: {expected}\n\nactual: {responses}'
+        self.assert_response_equal(responses, expected)
 
     def _start_stream(self) -> None:
         start_stream = StartStreamRequest(type='START_STREAM', window_size=1_000_000, last_ack_event_id=None)
