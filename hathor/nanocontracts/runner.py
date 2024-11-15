@@ -399,9 +399,9 @@ class Runner:
 
     def _commit_all_changes_to_storage(self) -> None:
         """Commit all change trackers."""
-        for change_tracker in self._change_trackers.values():
+        for nc_id, change_tracker in self._change_trackers.items():
+            nc_storage = self._storages[nc_id]
             change_tracker.commit()
-        for nc_id, nc_storage in self._storages.items():
             self.block_trie.update(nc_id, nc_storage.get_root_id())
         self._reset_all_change_trackers()
 
