@@ -32,6 +32,7 @@ class VertexExporter:
     def __init__(
         self,
         *,
+        node_iter: Iterator[DAGNode],
         builder: DAGBuilder,
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
@@ -39,6 +40,7 @@ class VertexExporter:
         wallet_factory: WalletFactoryType,
         vertex_resolver: VertexResolverType,
     ) -> None:
+        self._node_iter = node_iter
         self._builder = builder
         self._vertices: dict[str, BaseTransaction] = {}
         self._wallets: dict[str, BaseWallet] = {}
@@ -287,7 +289,7 @@ class VertexExporter:
 
         vertex: BaseTransaction | None
 
-        for node in self._builder.topological_sorting():
+        for node in self._node_iter:
             vertex = self.create_vertex(node)
             if node.type is not DAGNodeType.Genesis:
                 yield node, vertex
