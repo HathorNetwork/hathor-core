@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Literal, Optional
 
 from OpenSSL.crypto import X509
 from structlog import get_logger
-from twisted.internet.address import IPv4Address
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.testing import StringTransport
 
 from hathor.p2p.peer import PrivatePeer
@@ -34,7 +34,7 @@ logger = get_logger()
 
 
 class HathorStringTransport(StringTransport):
-    def __init__(self, peer: PrivatePeer, *, peer_address: IPv4Address):
+    def __init__(self, peer: PrivatePeer, *, peer_address: IPv4Address | IPv6Address):
         super().__init__(peerAddress=peer_address)
         self._peer = peer
 
@@ -58,8 +58,8 @@ class FakeConnection:
         *,
         latency: float = 0,
         autoreconnect: bool = False,
-        addr1: IPv4Address | None = None,
-        addr2: IPv4Address | None = None,
+        addr1: IPv4Address | IPv6Address | None = None,
+        addr2: IPv4Address | IPv6Address | None = None,
         fake_bootstrap_id: PeerId | None | Literal[False] = False,
     ):
         """
