@@ -55,14 +55,9 @@ def initialize_global_reactor(*, use_asyncio_reactor: bool = False) -> ReactorPr
 
     if use_asyncio_reactor:
         import asyncio
-        import sys
 
         from twisted.internet import asyncioreactor
         from twisted.internet.error import ReactorAlreadyInstalledError
-
-        if sys.platform == 'win32':
-            # See: https://docs.twistedmatrix.com/en/twisted-22.10.0/api/twisted.internet.asyncioreactor.AsyncioSelectorReactor.html  # noqa: E501
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
         try:
             asyncioreactor.install(asyncio.get_event_loop())

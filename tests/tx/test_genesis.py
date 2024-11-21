@@ -20,7 +20,7 @@ def get_genesis_output():
     elif settings.NETWORK_NAME.startswith('testnet'):
         address = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX'
     elif settings.NETWORK_NAME == 'unittests':
-        address = 'HVayMofEDh4XGsaQJeRJKhutYxYodYNop6'
+        address = 'HRXVDmLVdq8pgok1BCUKpiFWdAVAy4a5AJ'
     else:
         raise ValueError('Network unknown.')
 

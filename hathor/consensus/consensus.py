@@ -159,7 +159,7 @@ class ConsensusAlgorithm:
 
         # And emit events for txs that were removed
         for tx_removed in txs_to_remove:
-            context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, vertex_id=tx_removed.hash)
+            context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx=tx_removed)
 
         # and also emit the reorg finished event if needed
         if context.reorg_common_block is not None:
@@ -210,6 +210,7 @@ class ConsensusAlgorithm:
         for tx in txs:
             tx_meta = tx.get_metadata()
             assert not tx_meta.validation.is_checkpoint()
+            assert bool(tx_meta.voided_by), 'removed txs must be voided'
             for parent in set(tx.parents) - txset:
                 parents_to_update[parent].append(tx.hash)
             dangling_children.update(set(tx_meta.children) - txset)

@@ -45,8 +45,8 @@ class TransactionStreamingClient:
         self.sync_agent = sync_agent
         self.protocol = self.sync_agent.protocol
         self.tx_storage = self.sync_agent.tx_storage
-        self.manager = self.sync_agent.manager
-        self.reactor = self.manager.reactor
+        self.verification_service = self.protocol.node.verification_service
+        self.reactor = sync_agent.reactor
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
 
@@ -153,7 +153,7 @@ class TransactionStreamingClient:
         # Run basic verification.
         if not tx.is_genesis:
             try:
-                self.manager.verification_service.verify_basic(tx)
+                self.verification_service.verify_basic(tx)
             except TxValidationError as e:
                 self.fails(InvalidVertexError(repr(e)))
                 return

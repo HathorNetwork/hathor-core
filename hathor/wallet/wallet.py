@@ -17,11 +17,11 @@ import json
 import os
 from typing import Any, Optional
 
-from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.interfaces import IDelayedCall
 
+from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.pubsub import HathorEvents
 from hathor.wallet import BaseWallet
@@ -31,7 +31,8 @@ from hathor.wallet.keypair import KeyPair
 
 class Wallet(BaseWallet):
     def __init__(self, keys: Optional[Any] = None, directory: str = './', filename: str = 'keys.json',
-                 pubsub: Optional[Any] = None, reactor: Optional[Any] = None) -> None:
+                 pubsub: Optional[Any] = None, reactor: Optional[Any] = None, settings: HathorSettings | None = None
+                 ) -> None:
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -50,7 +51,7 @@ class Wallet(BaseWallet):
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
         """
-        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
+        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor, settings=settings)
 
         self.filepath = os.path.join(directory, filename)
         self.keys: dict[str, Any] = keys or {}  # dict[string(b58_address), KeyPair]
@@ -179,7 +180,7 @@ class Wallet(BaseWallet):
         # Publish to pubsub that new keys were generated
         self.publish_update(HathorEvents.WALLET_KEYS_GENERATED, keys_count=count)
 
-    def get_private_key(self, address58: str) -> _EllipticCurvePrivateKey:
+    def get_private_key(self, address58: str) -> ec.EllipticCurvePrivateKey:
         """ Get private key from the address58
 
             :param address58: address in base58
@@ -204,7 +205,7 @@ class Wallet(BaseWallet):
     def is_locked(self):
         return self.password is None
 
-    def get_input_aux_data(self, data_to_sign: bytes, private_key: _EllipticCurvePrivateKey) -> tuple[bytes, bytes]:
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: ec.EllipticCurvePrivateKey) -> tuple[bytes, bytes]:
         """ Sign the data to be used in input and get public key compressed in bytes
 
             :param data_to_sign: Data to be signed

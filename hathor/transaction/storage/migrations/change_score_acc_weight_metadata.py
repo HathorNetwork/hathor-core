@@ -25,11 +25,9 @@ class Migration(BaseMigration):
         return True
 
     def get_db_name(self) -> str:
-        return 'add_min_height_metadata'
+        return 'change_score_acc_weight_metadata'
 
     def run(self, storage: 'TransactionStorage') -> None:
-        # XXX: this migration assumes all existing metadata is currently complete (up to the point before the
-        # migration) and correct, which could not be the case if we're on a full_verification initialization, maybe
-        # migrations shouldn't run on full_verification?
-        for tx in storage.topological_iterator():
-            tx.update_initial_metadata()
+        raise Exception('Cannot migrate your database due to an incompatible change in the metadata. '
+                        'Please, delete your data folder and use the latest available snapshot or sync '
+                        'from beginning.')

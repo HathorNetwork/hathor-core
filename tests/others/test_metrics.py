@@ -3,9 +3,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import PeerConnectionsMetrics
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
@@ -61,12 +61,16 @@ class BaseMetricsTest(unittest.TestCase):
         wallet.unlock(b'teste')
         manager = self.create_peer('testnet', tx_storage=tx_storage, wallet=wallet)
 
-        manager.connections.peer_storage.update({"1": PeerId(), "2": PeerId(), "3": PeerId()})
+        manager.connections.verified_peer_storage.update({
+            "1": PrivatePeer.auto_generated(),
+            "2": PrivatePeer.auto_generated(),
+            "3": PrivatePeer.auto_generated(),
+        })
         manager.connections.connected_peers.update({"1": Mock(), "2": Mock()})
         manager.connections.handshaking_peers.update({Mock()})
 
         # Execution
-        endpoint = Entrypoint.parse('tcp://127.0.0.1:8005')
+        endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
         # This will trigger sending to the pubsub one of the network events
         manager.connections.connect_to(endpoint, use_ssl=True)
 
@@ -92,7 +96,7 @@ class BaseMetricsTest(unittest.TestCase):
         self.tmpdirs.append(path)
 
         def _init_manager():
-            builder = self.get_builder('testnet') \
+            builder = self.get_builder() \
                 .use_rocksdb(path, cache_capacity=100) \
                 .force_memory_index() \
                 .set_wallet(self._create_test_wallet(unlocked=True))
@@ -108,6 +112,7 @@ class BaseMetricsTest(unittest.TestCase):
             b'meta': 0.0,
             b'attr': 0.0,
             b'migrations': 0.0,
+            b'static-meta': 0.0,
             b'event': 0.0,
             b'event-metadata': 0.0,
             b'feature-activation-metadata': 0.0,
@@ -143,7 +148,7 @@ class BaseMetricsTest(unittest.TestCase):
         self.tmpdirs.append(path)
 
         def _init_manager():
-            builder = self.get_builder('testnet') \
+            builder = self.get_builder() \
                 .use_rocksdb(path, cache_capacity=100) \
                 .force_memory_index() \
                 .set_wallet(self._create_test_wallet(unlocked=True)) \
@@ -161,6 +166,7 @@ class BaseMetricsTest(unittest.TestCase):
             b'meta': 0.0,
             b'attr': 0.0,
             b'migrations': 0.0,
+            b'static-meta': 0.0,
             b'event': 0.0,
             b'event-metadata': 0.0,
             b'feature-activation-metadata': 0.0,
@@ -214,14 +220,13 @@ class BaseMetricsTest(unittest.TestCase):
 
         def build_hathor_protocol():
             protocol = HathorProtocol(
-                network="testnet",
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
                 inbound=False,
                 settings=self._settings
             )
-            protocol.peer = PeerId()
+            protocol._peer = PrivatePeer.auto_generated().to_public_peer()
 
             return protocol
 

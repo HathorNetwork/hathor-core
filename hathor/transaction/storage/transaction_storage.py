@@ -29,7 +29,7 @@ from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
-from hathor.transaction.base_transaction import BaseTransaction, TxOutput
+from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
 from hathor.transaction.block import Block
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.storage.exceptions import (
@@ -40,11 +40,9 @@ from hathor.transaction.storage.exceptions import (
 from hathor.transaction.storage.migrations import (
     BaseMigration,
     MigrationState,
-    add_feature_activation_bit_counts_metadata,
-    add_feature_activation_bit_counts_metadata2,
-    add_min_height_metadata,
-    remove_first_nop_features,
-    remove_second_nop_features,
+    add_closest_ancestor_block,
+    change_score_acc_weight_metadata,
+    include_funds_for_first_block,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -95,11 +93,9 @@ class TransactionStorage(ABC):
 
     # history of migrations that have to be applied in the order defined here
     _migration_factories: list[type[BaseMigration]] = [
-        add_min_height_metadata.Migration,
-        add_feature_activation_bit_counts_metadata.Migration,
-        remove_first_nop_features.Migration,
-        add_feature_activation_bit_counts_metadata2.Migration,
-        remove_second_nop_features.Migration,
+        change_score_acc_weight_metadata.Migration,
+        add_closest_ancestor_block.Migration,
+        include_funds_for_first_block.Migration,
     ]
 
     _migrations: list[BaseMigration]
@@ -331,6 +327,7 @@ class TransactionStorage(ABC):
         ]
 
         for tx in genesis_txs:
+            tx.init_static_metadata_from_storage(self._settings, self)
             try:
                 tx2 = self.get_transaction(tx.hash)
                 assert tx == tx2
@@ -424,6 +421,12 @@ class TransactionStorage(ABC):
         """
         meta = tx.get_metadata()
         self.pre_save_validation(tx, meta)
+        self._save_static_metadata(tx)
+
+    @abstractmethod
+    def _save_static_metadata(self, vertex: BaseTransaction) -> None:
+        """Save a vertex's static metadata to this storage."""
+        raise NotImplementedError
 
     def pre_save_validation(self, tx: BaseTransaction, tx_meta: TransactionMetadata) -> None:
         """ Must be run before every save, will raise AssertionError or TransactionNotInAllowedScopeError
@@ -438,7 +441,6 @@ class TransactionStorage(ABC):
         assert tx.hash == tx_meta.hash, f'{tx.hash.hex()} != {tx_meta.hash.hex()}'
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
-        self._validate_block_height_metadata(tx)
 
     def post_get_validation(self, tx: BaseTransaction) -> None:
         """ Must be run before every save, will raise AssertionError or TransactionNotInAllowedScopeError
@@ -449,7 +451,6 @@ class TransactionStorage(ABC):
         tx_meta = tx.get_metadata()
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
-        self._validate_block_height_metadata(tx)
 
     def _validate_partial_marker_consistency(self, tx_meta: TransactionMetadata) -> None:
         voided_by = tx_meta.get_frozen_voided_by()
@@ -463,11 +464,6 @@ class TransactionStorage(ABC):
         if not self.get_allow_scope().is_allowed(tx):
             tx_meta = tx.get_metadata()
             raise TransactionNotInAllowedScopeError(tx.hash_hex, self.get_allow_scope().name, tx_meta.validation.name)
-
-    def _validate_block_height_metadata(self, tx: BaseTransaction) -> None:
-        if tx.is_block:
-            tx_meta = tx.get_metadata()
-            assert tx_meta.height is not None
 
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:
@@ -545,12 +541,12 @@ class TransactionStorage(ABC):
         self.post_get_validation(tx)
         return tx
 
-    def get_transaction_by_height(self, height: int) -> Optional[BaseTransaction]:
-        """Returns a transaction from the height index. This is fast."""
+    def get_block_by_height(self, height: int) -> Optional[Block]:
+        """Return a block in the best blockchain from the height index. This is fast."""
         assert self.indexes is not None
         ancestor_hash = self.indexes.height.get(height)
 
-        return None if ancestor_hash is None else self.get_transaction(ancestor_hash)
+        return None if ancestor_hash is None else self.get_block(ancestor_hash)
 
     def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
         """Returns the transaction metadata with hash `hash_bytes`.
@@ -608,7 +604,7 @@ class TransactionStorage(ABC):
         if timestamp is None and not skip_cache and self._best_block_tips_cache is not None:
             return self._best_block_tips_cache[:]
 
-        best_score = 0.0
+        best_score: int = 0
         best_tip_blocks: list[bytes] = []
 
         for block_hash in (x.data for x in self.get_block_tips(timestamp)):
@@ -617,7 +613,7 @@ class TransactionStorage(ABC):
             if meta.voided_by and meta.voided_by != set([block_hash]):
                 # If anyone but the block itself is voiding this block, then it must be skipped.
                 continue
-            if abs(meta.score - best_score) < 1e-10:
+            if meta.score == best_score:
                 best_tip_blocks.append(block_hash)
             elif meta.score > best_score:
                 best_score = meta.score
@@ -1060,7 +1056,7 @@ class TransactionStorage(ABC):
         for tx in self.iter_mempool_from_best_index():
             try:
                 TransactionVerifier.verify_reward_locked_for_height(
-                    tx, new_best_height, assert_min_height_verification=False
+                    self._settings, tx, new_best_height, assert_min_height_verification=False
                 )
             except RewardLocked:
                 tx.set_validation(ValidationState.INVALID)
@@ -1081,7 +1077,8 @@ class TransactionStorage(ABC):
         )
         block.update_hash()
 
-        assert block.hash == self._settings.GENESIS_BLOCK_HASH
+        assert block.hash == self._settings.GENESIS_BLOCK_HASH, \
+               f'{block.hash.hex()} != {self._settings.GENESIS_BLOCK_HASH.hex()}'
         return block
 
     def _construct_genesis_tx1(self) -> Transaction:
@@ -1122,6 +1119,32 @@ class TransactionStorage(ABC):
         block = self.get_vertex(block_id)
         assert isinstance(block, Block)
         return block
+
+    def can_validate_full(self, vertex: Vertex) -> bool:
+        """ Check if a vertex is ready to be fully validated, either all deps are full-valid or one is invalid.
+        """
+        if vertex.is_genesis:
+            return True
+        deps = vertex.get_all_dependencies()
+        all_exist = True
+        all_valid = True
+        # either they all exist and are fully valid
+        for dep in deps:
+            meta = self.get_metadata(dep)
+            if meta is None:
+                all_exist = False
+                continue
+            if not meta.validation.is_fully_connected():
+                all_valid = False
+            if meta.validation.is_invalid():
+                # or any of them is invalid (which would make this one invalid too)
+                return True
+        return all_exist and all_valid
+
+    def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
+        """Return true if the vertex exists no matter its validation state."""
+        with self.allow_partially_validated_context():
+            return self.transaction_exists(vertex_id)
 
 
 class BaseTransactionStorage(TransactionStorage):

@@ -20,8 +20,8 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer_discovery import BootstrapPeerDiscovery
+from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.util import json_dumpb, json_loadb
 
 
@@ -60,23 +60,24 @@ class AddPeersResource(Resource):
             })
 
         try:
-            entrypoints = list(map(Entrypoint.parse, raw_entrypoints))
+            entrypoints = list(map(PeerEndpoint.parse, raw_entrypoints))
         except ValueError:
             return json_dumpb({
                 'success': False,
                 'message': 'Malformed entrypoint found.'
             })
 
-        known_peers = self.manager.connections.peer_storage.values()
+        known_peers = self.manager.connections.verified_peer_storage.values()
 
-        def already_connected(entrypoint: Entrypoint) -> bool:
+        def already_connected(endpoint: PeerEndpoint) -> bool:
             # ignore peers that we're already trying to connect
-            if entrypoint in self.manager.connections.iter_not_ready_endpoints():
-                return True
+            for ready_endpoint in self.manager.connections.iter_not_ready_endpoints():
+                if endpoint.addr == ready_endpoint.addr:
+                    return True
 
             # remove peers we already know about
             for peer in known_peers:
-                if entrypoint in peer.entrypoints:
+                if endpoint.addr in peer.info.entrypoints:
                     return True
 
             return False

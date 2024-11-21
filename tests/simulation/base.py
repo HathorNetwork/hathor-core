@@ -48,7 +48,7 @@ class SimulatorTestCase(unittest.TestCase):
             simulator = self.simulator
 
         builder = simulator.get_default_builder() \
-            .set_peer_id(self.get_random_peer_id_from_pool(rng=simulator.rng)) \
+            .set_peer(self.get_random_peer_from_pool(rng=simulator.rng)) \
             .set_soft_voided_tx_ids(soft_voided_tx_ids) \
             .set_sync_v1_support(sync_v1_support) \
             .set_sync_v2_support(sync_v2_support)

@@ -35,7 +35,7 @@ from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesM
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
@@ -47,7 +47,7 @@ from hathor.transaction.storage import (
     TransactionStorage,
 )
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import Random, get_environment_info, not_none
+from hathor.util import Random, get_environment_info
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
@@ -69,6 +69,7 @@ class SyncSupportLevel(IntEnum):
         sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
         vertex_parser: VertexParser,
+        vertex_handler: VertexHandler,
     ) -> None:
         """Adds the sync factory to the manager according to the support level."""
         from hathor.p2p.sync_v1.factory import SyncV11Factory
@@ -82,9 +83,13 @@ class SyncSupportLevel(IntEnum):
             p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(
-                SyncVersion.V2, SyncV2Factory(settings, p2p_manager, vertex_parser=vertex_parser)
+            sync_v2_factory = SyncV2Factory(
+                settings,
+                p2p_manager,
+                vertex_parser=vertex_parser,
+                vertex_handler=vertex_handler,
             )
+            p2p_manager.add_sync_factory(SyncVersion.V2, sync_v2_factory)
         if sync_v2_support is cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
@@ -96,7 +101,7 @@ class StorageType(Enum):
 
 class BuildArtifacts(NamedTuple):
     """Artifacts created by a builder."""
-    peer_id: PeerId
+    peer: PrivatePeer
     settings: HathorSettingsType
     rng: Random
     reactor: Reactor
@@ -137,8 +142,7 @@ class Builder:
         self._checkpoints: Optional[list[Checkpoint]] = None
         self._capabilities: Optional[list[str]] = None
 
-        self._peer_id: Optional[PeerId] = None
-        self._network: Optional[str] = None
+        self._peer: Optional[PrivatePeer] = None
         self._cmdline: str = ''
 
         self._storage_type: StorageType = StorageType.MEMORY
@@ -202,9 +206,6 @@ class Builder:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
 
-        if self._network is None:
-            raise TypeError('you must set a network')
-
         if SyncSupportLevel.ENABLED not in {self._sync_v1_support, self._sync_v2_support}:
             raise TypeError('you must enable at least one sync version')
 
@@ -212,7 +213,7 @@ class Builder:
         reactor = self._get_reactor()
         pubsub = self._get_or_create_pubsub()
 
-        peer_id = self._get_peer_id()
+        peer = self._get_peer()
 
         execution_manager = self._get_or_create_execution_manager()
         consensus_algorithm = self._get_or_create_consensus()
@@ -252,11 +253,10 @@ class Builder:
         manager = HathorManager(
             reactor,
             settings=settings,
-            network=self._network,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
             daa=daa,
-            peer_id=peer_id,
+            peer=peer,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
             event_manager=event_manager,
@@ -264,7 +264,7 @@ class Builder:
             rng=self._rng,
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
-            environment_info=get_environment_info(self._cmdline, peer_id.id),
+            environment_info=get_environment_info(self._cmdline, str(peer.id)),
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
@@ -284,7 +284,7 @@ class Builder:
             stratum_factory = self._create_stratum_server(manager)
 
         self.artifacts = BuildArtifacts(
-            peer_id=peer_id,
+            peer=peer,
             settings=settings,
             rng=self._rng,
             reactor=reactor,
@@ -337,9 +337,9 @@ class Builder:
         self._capabilities = capabilities
         return self
 
-    def set_peer_id(self, peer_id: PeerId) -> 'Builder':
+    def set_peer(self, peer: PrivatePeer) -> 'Builder':
         self.check_if_can_modify()
-        self._peer_id = peer_id
+        self._peer = peer
         return self
 
     def _get_or_create_settings(self) -> HathorSettingsType:
@@ -361,10 +361,10 @@ class Builder:
 
         return set(settings.SOFT_VOIDED_TX_IDS)
 
-    def _get_peer_id(self) -> PeerId:
-        if self._peer_id is not None:
-            return self._peer_id
-        raise ValueError('peer_id not set')
+    def _get_peer(self) -> PrivatePeer:
+        if self._peer is not None:
+            return self._peer
+        raise ValueError('peer not set')
 
     def _get_or_create_execution_manager(self) -> ExecutionManager:
         if self._execution_manager is None:
@@ -416,14 +416,11 @@ class Builder:
 
         enable_ssl = True
         reactor = self._get_reactor()
-        my_peer = self._get_peer_id()
-
-        assert self._network is not None
+        my_peer = self._get_peer()
 
         self._p2p_manager = ConnectionsManager(
             settings=self._get_or_create_settings(),
             reactor=reactor,
-            network=self._network,
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
@@ -436,6 +433,7 @@ class Builder:
             self._sync_v1_support,
             self._sync_v2_support,
             self._get_or_create_vertex_parser(),
+            self._get_or_create_vertex_handler(),
         )
         return self._p2p_manager
 
@@ -510,13 +508,13 @@ class Builder:
 
     def _get_or_create_event_manager(self) -> EventManager:
         if self._event_manager is None:
-            peer_id = self._get_peer_id()
+            peer = self._get_peer()
             settings = self._get_or_create_settings()
             reactor = self._get_reactor()
             storage = self._get_or_create_event_storage()
             factory = EventWebsocketFactory(
-                peer_id=not_none(peer_id.id),
-                network=settings.NETWORK_NAME,
+                peer_id=str(peer.id),
+                settings=settings,
                 reactor=reactor,
                 event_storage=storage,
             )
@@ -535,10 +533,7 @@ class Builder:
         if self._feature_service is None:
             settings = self._get_or_create_settings()
             tx_storage = self._get_or_create_tx_storage()
-            self._feature_service = FeatureService(
-                feature_settings=settings.FEATURE_ACTIVATION,
-                tx_storage=tx_storage
-            )
+            self._feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
         return self._feature_service
 
@@ -549,7 +544,7 @@ class Builder:
             feature_service = self._get_or_create_feature_service()
             feature_storage = self._get_or_create_feature_storage()
             self._bit_signaling_service = BitSignalingService(
-                feature_settings=settings.FEATURE_ACTIVATION,
+                settings=settings,
                 feature_service=feature_service,
                 tx_storage=tx_storage,
                 support_features=self._support_features,
@@ -563,7 +558,12 @@ class Builder:
         if self._verification_service is None:
             settings = self._get_or_create_settings()
             verifiers = self._get_or_create_vertex_verifiers()
-            self._verification_service = VerificationService(settings=settings, verifiers=verifiers)
+            storage = self._get_or_create_tx_storage()
+            self._verification_service = VerificationService(
+                settings=settings,
+                verifiers=verifiers,
+                tx_storage=storage,
+            )
 
         return self._verification_service
 
@@ -614,7 +614,6 @@ class Builder:
                 tx_storage=self._get_or_create_tx_storage(),
                 verification_service=self._get_or_create_verification_service(),
                 consensus=self._get_or_create_consensus(),
-                p2p_manager=self._get_or_create_p2p_manager(),
                 feature_service=self._get_or_create_feature_service(),
                 pubsub=self._get_or_create_pubsub(),
                 wallet=self._get_or_create_wallet(),
@@ -676,7 +675,7 @@ class Builder:
 
         if self._wallet_directory is None:
             return None
-        self._wallet = Wallet(directory=self._wallet_directory)
+        self._wallet = Wallet(directory=self._wallet_directory, settings=self._get_or_create_settings())
         if self._wallet_unlock is not None:
             self._wallet.unlock(self._wallet_unlock)
         return self._wallet
@@ -766,11 +765,6 @@ class Builder:
     def set_pubsub(self, pubsub: PubSubManager) -> 'Builder':
         self.check_if_can_modify()
         self._pubsub = pubsub
-        return self
-
-    def set_network(self, network: str) -> 'Builder':
-        self.check_if_can_modify()
-        self._network = network
         return self
 
     def set_sync_v1_support(self, support_level: SyncSupportLevel) -> 'Builder':

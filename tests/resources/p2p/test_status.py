@@ -1,9 +1,10 @@
 from twisted.internet import endpoints
+from twisted.internet.address import IPv4Address
 from twisted.internet.defer import inlineCallbacks
 
 import hathor
 from hathor.conf.unittests import SETTINGS
-from hathor.p2p.entrypoint import Entrypoint
+from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.resources import StatusResource
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -16,12 +17,15 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(StatusResource(self.manager))
-        self.entrypoint = Entrypoint.parse('tcp://192.168.1.1:54321')
-        self.manager.connections.my_peer.entrypoints.append(self.entrypoint)
+        address1 = IPv4Address('TCP', '192.168.1.1', 54321)
+        self.manager.connections.my_peer.info.entrypoints.append(PeerAddress.from_address(address1))
+        self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
+        self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
 
         self.manager2 = self.create_peer('testnet')
-        self.manager2.connections.my_peer.entrypoints.append(self.entrypoint)
-        self.conn1 = FakeConnection(self.manager, self.manager2)
+        address2 = IPv4Address('TCP', '192.168.1.1', 54322)
+        self.manager2.connections.my_peer.info.entrypoints.append(PeerAddress.from_address(address2))
+        self.conn1 = FakeConnection(self.manager, self.manager2, addr1=address1, addr2=address2)
 
     @inlineCallbacks
     def test_get(self):
@@ -89,10 +93,10 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
         self.assertGreater(server_data['uptime'], 0)
 
         self.assertEqual(len(known_peers), 1)
-        self.assertEqual(known_peers[0]['id'], self.manager2.my_peer.id)
+        self.assertEqual(known_peers[0]['id'], str(self.manager2.my_peer.id))
 
         self.assertEqual(len(connections['connected_peers']), 1)
-        self.assertEqual(connections['connected_peers'][0]['id'], self.manager2.my_peer.id)
+        self.assertEqual(connections['connected_peers'][0]['id'], str(self.manager2.my_peer.id))
 
     @inlineCallbacks
     def test_connecting_peers(self):

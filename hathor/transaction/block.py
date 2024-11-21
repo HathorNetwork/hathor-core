@@ -15,20 +15,19 @@
 from __future__ import annotations
 
 import base64
-from itertools import starmap, zip_longest
-from operator import add
 from struct import pack
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
-from typing_extensions import Self
+from typing_extensions import Self, override
 
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
+from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import CheckpointError
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
-from hathor.util import not_none
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
@@ -42,7 +41,7 @@ _FUNDS_FORMAT_STRING = '!BBB'
 _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 
 
-class Block(BaseTransaction):
+class Block(GenericVertex[BlockStaticMetadata]):
     SERIALIZATION_NONCE_SIZE = 16
 
     def __init__(
@@ -103,64 +102,6 @@ class Block(BaseTransaction):
         blc.storage = storage
 
         return blc
-
-    def calculate_height(self) -> int:
-        """Return the height of the block, i.e., the number of blocks since genesis"""
-        if self.is_genesis:
-            return 0
-        assert self.storage is not None
-        parent_block = self.get_block_parent()
-        return parent_block.get_height() + 1
-
-    def calculate_min_height(self) -> int:
-        """The minimum height the next block needs to have, basically the maximum min-height of this block's parents.
-        """
-        assert self.storage is not None
-        # maximum min-height of any parent tx
-        min_height = 0
-        for tx_hash in self.get_tx_parents():
-            tx = self.storage.get_transaction(tx_hash)
-            tx_min_height = tx.get_metadata().min_height
-            min_height = max(min_height, not_none(tx_min_height))
-
-        return min_height
-
-    def get_feature_activation_bit_counts(self) -> list[int]:
-        """
-        Lazily calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation
-        bit counts. After it's calculated for the first time, it's persisted in block metadata and must not be changed.
-
-        Each list index corresponds to a bit position, and its respective value is the rolling count of active bits
-        from the previous boundary block up to this block, including it. LSB is on the left.
-        """
-        metadata = self.get_metadata()
-
-        if metadata.feature_activation_bit_counts is not None:
-            return metadata.feature_activation_bit_counts
-
-        previous_counts = self._get_previous_feature_activation_bit_counts()
-        bit_list = self._get_feature_activation_bit_list()
-
-        count_and_bit_pairs = zip_longest(previous_counts, bit_list, fillvalue=0)
-        updated_counts = starmap(add, count_and_bit_pairs)
-        metadata.feature_activation_bit_counts = list(updated_counts)
-
-        return metadata.feature_activation_bit_counts
-
-    def _get_previous_feature_activation_bit_counts(self) -> list[int]:
-        """
-        Returns the feature_activation_bit_counts metadata attribute from the parent block,
-        or no previous counts if this is a boundary block.
-        """
-        evaluation_interval = self._settings.FEATURE_ACTIVATION.evaluation_interval
-        is_boundary_block = self.calculate_height() % evaluation_interval == 0
-
-        if is_boundary_block:
-            return []
-
-        parent_block = self.get_block_parent()
-
-        return parent_block.get_feature_activation_bit_counts()
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
         """Return the hash of the next block in the best blockchain. The blockchain is
@@ -318,7 +259,7 @@ class Block(BaseTransaction):
 
     def to_json_extended(self) -> dict[str, Any]:
         json = super().to_json_extended()
-        json['height'] = self.get_metadata().height
+        json['height'] = self.static_metadata.height
 
         return json
 
@@ -354,10 +295,8 @@ class Block(BaseTransaction):
         return sha256d_hash(self.get_header_without_nonce())
 
     def get_height(self) -> int:
-        """Returns the block's height."""
-        meta = self.get_metadata()
-        assert meta.height is not None
-        return meta.height
+        """Return this block's height."""
+        return self.static_metadata.height
 
     def _get_feature_activation_bit_list(self) -> list[int]:
         """
@@ -420,6 +359,7 @@ class Block(BaseTransaction):
     def iter_transactions_in_this_block(self) -> Iterator[BaseTransaction]:
         """Return an iterator of the transactions that have this block as meta.first_block."""
         from hathor.transaction.storage.traversal import BFSOrderWalk
+        assert self.storage is not None
         bfs = BFSOrderWalk(self.storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
         for tx in bfs.run(self, skip_root=True):
             tx_meta = tx.get_metadata()
@@ -427,3 +367,8 @@ class Block(BaseTransaction):
                 bfs.skip_neighbors(tx)
                 continue
             yield tx
+
+    @override
+    def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
+        static_metadata = BlockStaticMetadata.create_from_storage(self, settings, storage)
+        self.set_static_metadata(static_metadata)

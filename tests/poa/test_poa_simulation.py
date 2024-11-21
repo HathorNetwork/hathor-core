@@ -26,6 +26,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings, PoaSignerSettings
 from hathor.consensus.poa import PoaSigner
+from hathor.consensus.poa.poa_signer import PoaSignerId
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_bytes_compressed
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
@@ -61,7 +62,7 @@ def _assert_block_in_turn(block: PoaBlock, signer: PoaSigner) -> None:
 
 def _assert_height_weight_signer_id(
     vertices: Iterator[BaseTransaction],
-    expected: list[tuple[int, float, bytes]]
+    expected: list[tuple[int, float, PoaSignerId]]
 ) -> None:
     non_voided_blocks: list[tuple[int, float, bytes]] = []
 
@@ -185,7 +186,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         assert set(manager1_blocks_by_height[1]) == set(manager2_blocks_by_height[1])
 
         # but only the block from signer2 becomes non-voided, as it is in turn
-        non_voided_block1 = manager1.tx_storage.get_transaction_by_height(1)
+        non_voided_block1 = manager1.tx_storage.get_block_by_height(1)
         assert isinstance(non_voided_block1, PoaBlock)
         _assert_block_in_turn(non_voided_block1, signer2)
 
@@ -248,21 +249,66 @@ class BasePoaSimulationTest(SimulatorTestCase):
         signer_id1, signer_id2 = signer1._signer_id, signer2._signer_id
         self.simulator.settings = get_settings(signer1, signer2, time_between_blocks=10)
 
+        expected = [
+            # Before manager2 joins, only manager1 produces blocks
+            (1, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
+            (2, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            (3, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
+            # When manager2 joins, both of them start taking turns
+            # But manager2 must sync first.
+            (4, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            # Here manager2 has already synced.
+            (5, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
+            (6, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            (7, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
+            (8, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            (9, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
+            (10, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            (11, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
+            (12, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            # manager2 leaves so manager1 produces all the next blocks
+            (13, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
+            (14, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            (15, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
+            # manager2 comes back again, so both of them take turns again
+            (16, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+            (17, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
+            (18, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
+        ]
+
         # here we create a situation with an intermittent producer, testing that the other producer produces blocks
         # out of turn
         manager1 = self._get_manager(signer1)
         manager1.allow_mining_without_peers()
         self.simulator.run(50)
 
+        assert manager1.tx_storage.get_block_count() == 4
+        _assert_height_weight_signer_id(
+            manager1.tx_storage.get_all_transactions(),
+            expected[:3],
+        )
+
         manager2 = self._get_manager(signer2)
         connection = FakeConnection(manager1, manager2)
         self.simulator.add_connection(connection)
         self.simulator.run(80)
 
+        assert manager1.tx_storage.get_block_count() == 14
+        _assert_height_weight_signer_id(
+            manager1.tx_storage.get_all_transactions(),
+            expected[:12],
+        )
+
         manager2.stop()
         connection.disconnect(Failure(Exception('testing')))
         self.simulator.remove_connection(connection)
         self.simulator.run(70)
+
+        assert manager1.tx_storage.get_block_count() == 17
+        _assert_height_weight_signer_id(
+            manager1.tx_storage.get_all_transactions(),
+            expected[:15],
+        )
 
         assert not manager2.can_start_mining()
         self.simulator.add_connection(connection)
@@ -270,36 +316,13 @@ class BasePoaSimulationTest(SimulatorTestCase):
         manager2.start()
         self.simulator.run(30)
 
-        assert manager1.tx_storage.get_block_count() == 19
-        assert manager2.tx_storage.get_block_count() == 19
+        assert manager1.tx_storage.get_block_count() == 20
+        assert manager2.tx_storage.get_block_count() == 20
         assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()
 
         _assert_height_weight_signer_id(
             manager1.tx_storage.get_all_transactions(),
-            [
-                # Before manager2 joins, only manager1 produces blocks
-                (1, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
-                (2, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-                (3, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
-                (4, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-                (5, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
-                (6, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-                # When manager2 joins, both of them start taking turns
-                (7, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
-                (8, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-                (9, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
-                (10, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-                (11, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
-                (12, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-                # manager2 leaves so manager1 produces all the next blocks
-                (13, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
-                (14, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-                (15, poa.BLOCK_WEIGHT_OUT_OF_TURN, signer_id1),
-                # manager2 comes back again, so both of them take turns again
-                (16, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-                (17, poa.BLOCK_WEIGHT_IN_TURN, signer_id2),
-                (18, poa.BLOCK_WEIGHT_IN_TURN, signer_id1),
-            ]
+            expected,
         )
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
