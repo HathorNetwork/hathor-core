@@ -49,20 +49,29 @@ class DAGBuilder:
     ) -> None:
         from hathor.dag_builder.default_filler import DefaultFiller
         from hathor.dag_builder.tokenizer import tokenize
-        from hathor.dag_builder.vertex_exporter import VertexExporter
 
         self.log = logger.new()
 
         self._nodes: dict[str, DAGNode] = {}
         self._tokenize = tokenize
         self._filler = DefaultFiller(self, settings, daa)
-        self._exporter = VertexExporter(
+
+        self._settings=settings
+        self._daa=daa
+        self._genesis_wallet=genesis_wallet
+        self._wallet_factory=wallet_factory
+        self._vertex_resolver=vertex_resolver
+
+    def _build_exporter(self, node_iter: Iterator[DAGNode]) -> 'VertexExporter':
+        from hathor.dag_builder.vertex_exporter import VertexExporter
+        return VertexExporter(
+            node_iter=node_iter,
             builder=self,
-            settings=settings,
-            daa=daa,
-            genesis_wallet=genesis_wallet,
-            wallet_factory=wallet_factory,
-            vertex_resolver=vertex_resolver,
+            settings=self._settings,
+            daa=self._daa,
+            genesis_wallet=self._genesis_wallet,
+            wallet_factory=self._wallet_factory,
+            vertex_resolver=self._vertex_resolver,
         )
 
     def parse_tokens(self, tokens: Iterator[Token]) -> None:
@@ -199,12 +208,82 @@ class DAGBuilder:
             node = self._get_node(name)
             yield node
 
+    def all_topological_sortings(self):
+        for perm in self._all_valid_permutations():
+            yield [self._nodes[x] for x in perm]
+
+    def _all_valid_permutations(self):
+        self._rev_deps: dict[str, set[str]] = defaultdict(set)
+        for name, node in self._nodes.items():
+            for neighbor in node.get_all_dependencies():
+                self._rev_deps[neighbor].add(name)
+
+        self._in_degree = {name: 0 for name in self._nodes.keys()}
+        for name in self._nodes.keys():
+            for neighbor in self._rev_deps[name]:
+                self._in_degree[neighbor] += 1
+
+        self._stack = [
+            'genesis_block',
+            'genesis_1',
+            'genesis_2',
+        ]
+        for name in self._stack:
+            for neighbor in self._rev_deps[name]:
+                self._in_degree[neighbor] -= 1
+            del self._rev_deps[name]
+            del self._in_degree[name]
+
+        self._zero_in_degree = set(name for name, degree in self._in_degree.items() if degree == 0)
+        yield from self._dfs()
+
+    def _dfs(self) -> None:
+        if len(self._stack) == len(self._nodes):
+            assert len(self._zero_in_degree) == 0
+            yield list(self._stack)
+            return
+
+        assert len(self._zero_in_degree) > 0
+        for name in list(self._zero_in_degree):
+            self._zero_in_degree.remove(name)
+            self._stack.append(name)
+
+            for neighbor in self._rev_deps[name]:
+                assert self._in_degree[neighbor] > 0
+                self._in_degree[neighbor] -= 1
+                if self._in_degree[neighbor] == 0:
+                    self._zero_in_degree.add(neighbor)
+
+            yield from self._dfs()
+
+            self._stack.pop()
+
+            for neighbor in self._rev_deps[name]:
+                if self._in_degree[neighbor] == 0:
+                    self._zero_in_degree.remove(neighbor)
+                self._in_degree[neighbor] += 1
+
+            self._zero_in_degree.add(name)
+
     def build(self) -> DAGArtifacts:
         """Build all the transactions based on the DAG."""
         self._filler.run()
-        return DAGArtifacts(self._exporter.export())
+        exporter = self._build_exporter(self.topological_sorting())
+        return DAGArtifacts(exporter.export())
 
     def build_from_str(self, content: str) -> DAGArtifacts:
         """Run build() after creating an initial DAG from a string."""
         self.parse_tokens(self._tokenize(content))
         return self.build()
+
+    def build_all(self) -> Iterator[DAGArtifacts]:
+        """Build all the transactions based on the DAG."""
+        self._filler.run()
+        for perm in self.all_topological_sortings():
+            exporter = self._build_exporter(perm)
+            yield DAGArtifacts(exporter.export())
+
+    def build_all_from_str(self, content: str) -> Iterator[DAGArtifacts]:
+        """Run build() after creating an initial DAG from a string."""
+        self.parse_tokens(self._tokenize(content))
+        yield from self.build_all()
