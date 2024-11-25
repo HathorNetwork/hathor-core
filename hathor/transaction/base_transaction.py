@@ -672,7 +672,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         # directly verified by a block.
 
         from hathor.transaction.storage.traversal import BFSTimestampWalk
-        bfs_walk = BFSTimestampWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+        bfs_walk = BFSTimestampWalk(
+            self.storage.get_vertex, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True
+        )
         for tx in bfs_walk.run(self, skip_root=True):
             accumulated_weight += weight_to_work(tx.weight)
             if accumulated_weight > stop_value:

@@ -197,7 +197,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         blk = manager1.tx_storage.get_best_block()
         tx_parents = [manager1.tx_storage.get_transaction(x) for x in blk.parents[1:]]
         self.assertEqual(len(tx_parents), 2)
-        dfs = DFSWalk(manager1.tx_storage, is_dag_verifications=True, is_left_to_right=False)
+        dfs = DFSWalk(manager1.tx_storage.get_vertex, is_dag_verifications=True, is_left_to_right=False)
         cnt = 0
         for tx in dfs.run(tx_parents):
             if tx.get_metadata().first_block == blk.hash:
