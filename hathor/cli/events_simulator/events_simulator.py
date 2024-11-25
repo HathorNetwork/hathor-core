@@ -88,6 +88,8 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
 
     forwarding_ws_factory.start(stream_id='simulator_stream_id')
     scenario.simulate(simulator, manager)
+    assert manager.wallet is not None
+    log.info('final result', balances=manager.wallet.get_balance_per_address(simulator.settings.HATHOR_TOKEN_UID))
     reactor.listenTCP(args.port, site)
     reactor.run()
 
