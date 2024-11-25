@@ -15,6 +15,8 @@
 from typing import Protocol
 
 from hathor.reactor.reactor_core_protocol import ReactorCoreProtocol
+from hathor.reactor.reactor_process_protocol import ReactorProcessProtocol
+from hathor.reactor.reactor_socket_protocol import ReactorSocketProtocol
 from hathor.reactor.reactor_tcp_protocol import ReactorTCPProtocol
 from hathor.reactor.reactor_time_protocol import ReactorTimeProtocol
 
@@ -23,9 +25,10 @@ class ReactorProtocol(
     ReactorCoreProtocol,
     ReactorTimeProtocol,
     ReactorTCPProtocol,
+    ReactorProcessProtocol,
+    ReactorSocketProtocol,
     Protocol,
 ):
     """
-    A Python protocol that represents the intersection of Twisted's IReactorCore+IReactorTime+IReactorTCP interfaces.
+    A Python protocol that represents an intersection of the Twisted reactor interfaces that we use.
     """
-    pass
