@@ -123,7 +123,7 @@ class PeerIdState(BaseState):
             return
 
         if protocol.connections is not None:
-            if protocol.connections.is_peer_connected(peer.id):
+            if protocol.connections.is_peer_ready(peer.id):
                 protocol.send_error_and_close_connection('We are already connected.')
                 return
 
@@ -131,9 +131,6 @@ class PeerIdState(BaseState):
         if not entrypoint_valid:
             protocol.send_error_and_close_connection('Connection string is not in the entrypoints.')
             return
-
-        if protocol.entrypoint is not None and protocol.entrypoint.peer_id is not None:
-            assert protocol.entrypoint.peer_id == peer.id
 
         if protocol.use_ssl:
             certificate_valid = peer.validate_certificate(protocol)

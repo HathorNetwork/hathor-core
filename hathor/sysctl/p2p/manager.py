@@ -235,7 +235,7 @@ class ConnectionsManagerSysctl(Sysctl):
             peer_id_obj = PeerId(peer_id)
         except ValueError:
             raise SysctlException('invalid peer-id')
-        conn = self.connections.connected_peers.get(peer_id_obj, None)
+        conn = self.connections.get_ready_peer_by_id(peer_id_obj)
         if conn is None:
             self.log.warn('Killing connection', peer_id=peer_id)
             raise SysctlException('peer-id is not connected')
