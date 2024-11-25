@@ -235,6 +235,7 @@ class Builder:
         vertex_handler = self._get_or_create_vertex_handler()
         vertex_parser = self._get_or_create_vertex_parser()
         poa_block_producer = self._get_or_create_poa_block_producer()
+        capabilities = self._get_or_create_capabilities()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -266,7 +267,7 @@ class Builder:
             wallet=wallet,
             rng=self._rng,
             checkpoints=self._checkpoints,
-            capabilities=self._capabilities,
+            capabilities=capabilities,
             environment_info=get_environment_info(self._cmdline, str(peer.id)),
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
@@ -646,6 +647,13 @@ class Builder:
             )
 
         return self._poa_block_producer
+
+    def _get_or_create_capabilities(self) -> list[str]:
+        if self._capabilities is None:
+            settings = self._get_or_create_settings()
+            self._capabilities = settings.get_default_capabilities()
+
+        return self._capabilities
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()

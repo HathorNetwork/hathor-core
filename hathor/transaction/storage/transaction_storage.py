@@ -541,12 +541,14 @@ class TransactionStorage(ABC):
         self.post_get_validation(tx)
         return tx
 
+    def get_block_id_by_height(self, height: int) -> VertexId | None:
+        assert self.indexes is not None
+        return self.indexes.height.get(height)
+
     def get_block_by_height(self, height: int) -> Optional[Block]:
         """Return a block in the best blockchain from the height index. This is fast."""
-        assert self.indexes is not None
-        ancestor_hash = self.indexes.height.get(height)
-
-        return None if ancestor_hash is None else self.get_block(ancestor_hash)
+        block_id = self.get_block_id_by_height(height)
+        return None if block_id is None else self.get_block(block_id)
 
     def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
         """Returns the transaction metadata with hash `hash_bytes`.
@@ -1145,6 +1147,11 @@ class TransactionStorage(ABC):
         """Return true if the vertex exists no matter its validation state."""
         with self.allow_partially_validated_context():
             return self.transaction_exists(vertex_id)
+
+    def get_mempool_tips(self) -> set[VertexId]:
+        assert self.indexes is not None
+        assert self.indexes.mempool_tips is not None
+        return self.indexes.mempool_tips.get()
 
 
 class BaseTransactionStorage(TransactionStorage):

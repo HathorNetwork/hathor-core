@@ -330,9 +330,7 @@ class ConnectionsManager:
         """
         connections = list(self.iter_ready_connections())
         for conn in connections:
-            assert conn.state is not None
-            assert isinstance(conn.state, ReadyState)
-            if conn.state.is_synced():
+            if conn.is_synced():
                 return True
         return False
 
@@ -349,9 +347,7 @@ class ConnectionsManager:
         connections = list(self.iter_ready_connections())
         self.rng.shuffle(connections)
         for conn in connections:
-            assert conn.state is not None
-            assert isinstance(conn.state, ReadyState)
-            conn.state.send_tx_to_peer(tx)
+            conn.send_tx_to_peer(tx)
 
     def disconnect_all_peers(self, *, force: bool = False) -> None:
         """Disconnect all peers."""
@@ -416,10 +412,9 @@ class ConnectionsManager:
     def relay_peer_to_ready_connections(self, peer: PublicPeer) -> None:
         """Relay peer to all ready connections."""
         for conn in self.iter_ready_connections():
-            if conn.peer == peer:
+            if conn.get_peer() == peer:
                 continue
-            assert isinstance(conn.state, ReadyState)
-            conn.state.send_peers([peer])
+            conn.send_peers([peer])
 
     def on_handshake_disconnect(self, *, addr: PeerAddress) -> None:
         """Called when a peer disconnects from a handshaking state (HELLO or PEER-ID)."""
@@ -694,9 +689,9 @@ class ConnectionsManager:
     def drop_connection(self, protocol: HathorProtocol) -> None:
         """ Drop a connection
         """
-        assert protocol.peer is not None
-        self.log.debug('dropping connection', peer_id=protocol.peer.id, protocol=type(protocol).__name__)
-        protocol.send_error_and_close_connection('Connection dropped')
+        protocol_peer = protocol.get_peer()
+        self.log.debug('dropping connection', peer_id=protocol_peer.id, protocol=type(protocol).__name__)
+        protocol.send_error_and_close_connection('Connection droped')
 
     def drop_connection_by_peer_id(self, peer_id: PeerId) -> None:
         """ Drop a connection by peer id
@@ -795,3 +790,17 @@ class ConnectionsManager:
         self.log.warn('Killing all connections and resetting entrypoints...')
         self.disconnect_all_peers(force=True)
         self.my_peer.reload_entrypoints_from_source_file()
+
+    def get_peers_whitelist(self) -> list[PeerId]:
+        assert self.manager is not None
+        return self.manager.peers_whitelist
+
+    def get_verified_peers(self) -> Iterable[PublicPeer]:
+        return self.verified_peer_storage.values()
+
+    def get_randbytes(self, n: int) -> bytes:
+        return self.rng.randbytes(n)
+
+    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
+        assert self.manager is not None
+        return peer_id in self.manager.peers_whitelist
