@@ -432,7 +432,9 @@ class BlockConsensusAlgorithm:
         storage = block.storage
 
         from hathor.transaction.storage.traversal import BFSTimestampWalk
-        bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
+        bfs = BFSTimestampWalk(
+            storage.get_vertex, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False
+        )
         for tx in bfs.run(block, skip_root=True):
             if tx.is_block:
                 bfs.skip_neighbors(tx)
@@ -469,7 +471,9 @@ class BlockConsensusAlgorithm:
 
             else:
                 from hathor.transaction.storage.traversal import BFSTimestampWalk
-                bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
+                bfs = BFSTimestampWalk(
+                    storage.get_vertex, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False
+                )
                 for tx in bfs.run(parent, skip_root=False):
                     assert tx.hash is not None
                     if tx.is_block:
