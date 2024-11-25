@@ -16,9 +16,9 @@ from typing import Any, Callable
 from unittest.mock import Mock, patch
 
 import pytest
-from twisted.internet.testing import MemoryReactorClock
 
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.reactor.memory_reactor import MemoryReactorClock
 
 
 @pytest.mark.parametrize('is_in_main_thread', [False, True])

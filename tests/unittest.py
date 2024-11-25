@@ -24,13 +24,13 @@ from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.p2p.sync_version import SyncVersion
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
-from hathor.simulator.clock import MemoryReactorHeapClock
+from hathor.reactor.memory_reactor import MemoryReactorClock
+from hathor.simulator.heap_clock import MemoryReactorHeapClock
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.types import VertexId
 from hathor.util import Random, not_none
 from hathor.wallet import BaseWallet, HDWallet, Wallet
-from tests.test_memory_reactor_clock import TestMemoryReactorClock
 from tests.utils import GENESIS_SEED
 
 logger = get_logger()
@@ -117,7 +117,7 @@ class TestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         self.tmpdirs: list[str] = []
-        self.clock = TestMemoryReactorClock()
+        self.clock = MemoryReactorClock()
         self.clock.advance(time.time())
         self.reactor = self.clock
         self.log = logger.new()

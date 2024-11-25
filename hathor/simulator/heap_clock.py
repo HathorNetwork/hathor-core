@@ -17,8 +17,9 @@ from typing import Any, Callable
 
 from twisted.internet.base import DelayedCall
 from twisted.internet.interfaces import IDelayedCall, IReactorTime
-from twisted.internet.testing import MemoryReactor
 from zope.interface import implementer
+
+from hathor.reactor.memory_reactor import MemoryReactor
 
 
 @implementer(IReactorTime)
@@ -94,10 +95,3 @@ class MemoryReactorHeapClock(MemoryReactor, HeapClock):
     def __init__(self):
         MemoryReactor.__init__(self)
         HeapClock.__init__(self)
-
-    def run(self):
-        """
-        We have to override MemoryReactor.run() because the original Twisted implementation weirdly calls stop() inside
-        run(), and we need the reactor running during our tests.
-        """
-        self.running = True
