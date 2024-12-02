@@ -307,7 +307,7 @@ class HathorProtocol:
             .addErrback(self._on_cmd_handler_error, cmd)
 
     def _on_cmd_handler_error(self, failure: Failure, cmd: ProtocolMessages) -> None:
-        self.log.warn('recv_message processing error', reason=failure.getErrorMessage())
+        self.log.error(f'recv_message processing error:\n{failure.getTraceback()}', reason=failure.getErrorMessage())
         self.send_error_and_close_connection(f'Error processing "{cmd.value}" command')
 
     def send_error(self, msg: str) -> None:
@@ -381,9 +381,6 @@ class HathorProtocol:
 
     def get_peer(self) -> PublicPeer:
         return self.peer
-
-    def get_peer_if_set(self) -> PublicPeer | None:
-        return self._peer
 
     def send_peers(self, peers: Iterable[PublicPeer]) -> None:
         assert isinstance(self.state, ReadyState)

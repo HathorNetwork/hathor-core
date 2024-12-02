@@ -35,8 +35,11 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocess.ipc import IpcConnection
 from hathor.p2p import P2PDependencies
+from hathor.p2p.dependencies.protocols import P2PManagerProtocol
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.multiprocess.p2p_subprocess_connection_main import P2PSubprocessConnectionArgs
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
@@ -337,7 +340,8 @@ class CliBuilder:
         )
 
         whitelist_only = False
-        use_ssl = True
+        use_ssl = False  # TODO: I have to move the TLS factory to the subprocess
+        multiprocess_p2p: tuple[P2PSubprocessConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None = None
 
         if self._args.x_multiprocess_p2p:
             self.check_or_raise(
@@ -354,7 +358,22 @@ class CliBuilder:
                 ),
                 'multiprocess support for P2P is only available if rocksdb is used, with cache and rocksdb indexes'
             )
-            raise NotImplementedError('Multiprocess support for P2P is not yet implemented.')
+
+            assert self._args.data is not None
+            assert self._logging_args is not None
+
+            server_args = P2PSubprocessConnectionArgs(
+                capabilities=capabilities,
+                whitelist_only=whitelist_only,
+                use_ssl=use_ssl,
+                my_peer=peer.to_json_private(),
+                cache_capacity=self._args.cache_size,
+                cache_interval=self._args.cache_interval,
+                rocksdb_path=self._args.data,
+                rocksdb_cache_capacity=self._args.rocksdb_cache,
+            )
+
+            multiprocess_p2p = server_args, self._logging_args
 
         p2p_dependencies = P2PDependencies(
             reactor=reactor,
@@ -373,6 +392,7 @@ class CliBuilder:
             pubsub=pubsub,
             ssl=use_ssl,
             rng=Random(),
+            multiprocess=multiprocess_p2p,
         )
 
         SyncSupportLevel.add_versions(
@@ -417,6 +437,13 @@ class CliBuilder:
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
         )
+
+        # TODO: Move this somewhere else
+        if self._args.x_multiprocess_p2p:
+            ipc_server = IpcConnection(reactor=reactor, socket_path='/tmp/test2.sock', server=True)
+            ipc_server.register_service(p2p_manager, as_protocol=P2PManagerProtocol)  # type: ignore[type-abstract]
+            ipc_server.start()
+            p2p_manager.ipc_server = ipc_server  # type: ignore[attr-defined]
 
         if self._args.x_ipython_kernel:
             self.check_or_raise(self._args.x_asyncio_reactor,

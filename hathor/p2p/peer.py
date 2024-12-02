@@ -58,7 +58,8 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_dns, generate_certificate
-from hathor.util import not_none
+from hathor.util import json_dumpb, json_loadb, not_none
+from hathor.utils.pickle import register_custom_pickler
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -262,6 +263,10 @@ class PublicPeer:
             'pubKey': base64.b64encode(public_der).decode('utf-8'),
         }
 
+    def to_bytes(self) -> bytes:
+        json_dict = self.to_json()
+        return json_dumpb(json_dict)
+
     @classmethod
     def create_from_json(cls, data: dict[str, Any]) -> Self:
         """ Create a new PublicPeer from JSON data.
@@ -276,6 +281,11 @@ class PublicPeer:
         )
         obj.validate()
         return obj
+
+    @classmethod
+    def create_from_bytes(cls, data: bytes) -> Self:
+        json_dict = json_loadb(data)
+        return cls.create_from_json(json_dict)
 
     def calculate_id(self) -> PeerId:
         """ Calculate and return the id based on the public key.
@@ -535,3 +545,6 @@ class PrivatePeer:
         fp = open(path, 'w')
         json.dump(data, fp, indent=4)
         fp.close()
+
+
+register_custom_pickler(PublicPeer, serializer=PublicPeer.to_bytes, deserializer=PublicPeer.create_from_bytes)

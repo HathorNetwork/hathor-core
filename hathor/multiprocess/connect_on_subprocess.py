@@ -33,10 +33,11 @@ from hathor.multiprocess.subprocess_runner import SubprocessSpawnArgs
 from hathor.multiprocess.utils import log_connection_closed
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.reactor import ReactorProtocol
+from hathor.utils.pydantic import BaseModel
 
 logger = get_logger()
 
-T = TypeVar('T')
+T = TypeVar('T', bound=BaseModel)
 
 
 class ConnectOnSubprocessFactory(ServerFactory, Generic[T]):
@@ -192,6 +193,7 @@ class _SubprocessProtocol(ProcessProtocol):
         assert self.transport and self.transport.pid is not None
         self.log = self.log.bind(subprocess_pid=self.transport.pid)
         self.log.debug('subprocess connection made')
+        # TODO: Setup RPC here? And then ping/wait for ping?
 
     def childDataReceived(self, childFD: int, data: bytes) -> None:
         """

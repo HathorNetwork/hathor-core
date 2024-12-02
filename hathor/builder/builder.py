@@ -423,6 +423,7 @@ class Builder:
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
             rng=self._rng,
+            multiprocess=None,
         )
         SyncSupportLevel.add_versions(
             self._p2p_manager,

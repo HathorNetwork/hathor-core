@@ -25,7 +25,7 @@ class MockPeerDiscovery(PeerDiscovery):
     async def discover_and_connect(self, connect_to: Callable[[PeerEndpoint], Deferred[IProtocol] | None]) -> None:
         for host, port, peer_id_str in self.mocked_addrs:
             peer_id = PeerId(peer_id_str) if peer_id_str is not None else None
-            connect_to(PeerAddress(Protocol.TCP, host, port).with_id(peer_id))
+            connect_to(PeerAddress(protocol=Protocol.TCP, host=host, port=port).with_id(peer_id))
 
 
 class MockDNSPeerDiscovery(DNSPeerDiscovery):
@@ -41,7 +41,7 @@ class MockDNSPeerDiscovery(DNSPeerDiscovery):
         txt_entries = []
         for host, port, peer_id_str in bootstrap_txt:
             peer_id = PeerId(peer_id_str) if peer_id_str is not None else None
-            addr_and_id = PeerAddress(Protocol.TCP, host, port).with_id(peer_id)
+            addr_and_id = PeerAddress(protocol=Protocol.TCP, host=host, port=port).with_id(peer_id)
             txt_entries.append(str(addr_and_id).encode())
         self.mocked_lookup_txt = [RRHeader(type=TXT, payload=Record_TXT(*txt_entries))]
 
@@ -68,6 +68,7 @@ class BootstrapTestCase(unittest.TestCase):
             pubsub=pubsub,
             rng=self.rng,
             ssl=True,
+            multiprocess=None,
         )
         host_ports1 = [
             ('foobar', 1234, None),
@@ -102,6 +103,7 @@ class BootstrapTestCase(unittest.TestCase):
             pubsub=pubsub,
             rng=self.rng,
             ssl=True,
+            multiprocess=None,
         )
         bootstrap_a = [
             '127.0.0.99',

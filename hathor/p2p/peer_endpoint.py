@@ -26,6 +26,7 @@ from typing_extensions import Self
 
 from hathor.p2p.peer_id import PeerId
 from hathor.reactor import ReactorProtocol as Reactor
+from hathor.utils.pydantic import BaseModel
 
 COMPARISON_ERROR_MESSAGE = (
     'never compare PeerAddress with PeerEndpoint or two PeerEndpoint instances directly! '
@@ -33,12 +34,11 @@ COMPARISON_ERROR_MESSAGE = (
 )
 
 
-class Protocol(Enum):
+class Protocol(str, Enum):
     TCP = 'tcp'
 
 
-@dataclass(frozen=True, slots=True)
-class PeerAddress:
+class PeerAddress(BaseModel):
     """Peer address as received when a connection is made."""
 
     protocol: Protocol
@@ -127,7 +127,7 @@ instead, compare the addr attribute explicitly, and if relevant, the peer_id too
         protocol, host, port, query = _parse_address_parts(description)
         if query:
             raise ValueError(f'unexpected query: "{description}". did you incorrectly add an id=?')
-        return cls(protocol, host, port)
+        return cls(protocol=protocol, host=host, port=port)
 
     @classmethod
     def from_hostname_address(cls, hostname: str, address: IPv4Address | IPv6Address) -> Self:
@@ -263,7 +263,7 @@ peer_id=None)
                     raise ValueError(f'unexpected id count: {len(ids)}')
                 peer_id = PeerId(ids[0])
 
-        return PeerAddress(protocol, host, port).with_id(peer_id)
+        return PeerAddress(protocol=protocol, host=host, port=port).with_id(peer_id)
 
 
 def _parse_address_parts(description: str) -> tuple[Protocol, str, int, str]:

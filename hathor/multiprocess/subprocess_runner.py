@@ -32,11 +32,11 @@ from hathor.multiprocess.utils import log_connection_closed
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.reactor import ReactorProtocol, initialize_global_reactor
 from hathor.util import json_loadb
-from hathor.utils.pydantic import GenericModel
+from hathor.utils.pydantic import BaseModel, GenericModel
 
 logger = get_logger()
 
-T = TypeVar('T')
+T = TypeVar('T', bound=BaseModel)
 
 
 class SubprocessSpawnArgs(GenericModel, Generic[T]):
@@ -46,20 +46,21 @@ class SubprocessSpawnArgs(GenericModel, Generic[T]):
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
-class SubprocessFactoryArgs(Generic[T]):
+class SubprocessBuildArgs(Generic[T]):
     reactor: ReactorProtocol
     settings: HathorSettings
+    addr: PeerAddress
     custom_args: T
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
-class SubprocessFactoryAndExitCallback:
+class SubprocessBuildArtifacts:
     factory: Factory
     exit_callback: Callable[[], None]
 
 
 def setup_subprocess_runner(
-    build: Callable[[SubprocessFactoryArgs[T]], SubprocessFactoryAndExitCallback],
+    build: Callable[[SubprocessBuildArgs[T]], SubprocessBuildArtifacts],
     custom_args_type: type[T],
 ) -> None:
     """
@@ -72,8 +73,8 @@ def setup_subprocess_runner(
     """
     _file_name, serialized_logging_args, serialized_subprocess_args = sys.argv
     logging_output, logging_options, capture_stdout = pickle.loads(bytes.fromhex(serialized_logging_args))
-    subprocess_args_bytes = bytes.fromhex(serialized_subprocess_args)
-    subprocess_args = SubprocessSpawnArgs(**json_loadb(subprocess_args_bytes))
+    subprocess_args_dict = json_loadb(bytes.fromhex(serialized_subprocess_args))
+    subprocess_args = SubprocessSpawnArgs[custom_args_type](**subprocess_args_dict)  # type: ignore[valid-type]
 
     assert isinstance(logging_output, LoggingOutput)
     assert isinstance(logging_options, LoggingOptions)
@@ -91,17 +92,18 @@ def setup_subprocess_runner(
 
     reactor = initialize_global_reactor()
     settings = get_global_settings()
-    factory_args = SubprocessFactoryArgs(
+    factory_args = SubprocessBuildArgs(
         reactor=reactor,
         settings=settings,
+        addr=subprocess_args.addr,
         custom_args=subprocess_args.custom_args,
     )
 
-    factory_and_exit_callback = build(factory_args)
+    artifacts = build(factory_args)
     wrapping_factory = _SubprocessWrappingFactory(
         reactor=reactor,
         addr=subprocess_args.addr,
-        wrapped_factory=factory_and_exit_callback.factory,
+        wrapped_factory=artifacts.factory,
     )
 
     reactor.callWhenRunning(
@@ -111,7 +113,7 @@ def setup_subprocess_runner(
         factory=wrapping_factory,
     )
     reactor.run()
-    factory_and_exit_callback.exit_callback()
+    artifacts.exit_callback()
 
 
 class _SubprocessWrappingFactory(WrappingFactory):
@@ -135,7 +137,8 @@ class _SubprocessWrappingFactory(WrappingFactory):
 
     def buildProtocol(self, addr: IAddress) -> Protocol | None:
         assert not self._built_protocol, 'there must be only one subprocess protocol per factory'
-        assert self._addr == PeerAddress.from_address(addr)
+        peer_addr = PeerAddress.from_address(addr)
+        assert self._addr == peer_addr
         self.log.debug('building protocol for subprocess wrapper')
 
         try:

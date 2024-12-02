@@ -27,8 +27,13 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 from typing_extensions import assert_never
 
+from hathor.cli.util import LoggingOptions, LoggingOutput
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
+from hathor.p2p.multiprocess.p2p_subprocess_connection_main import (
+    P2P_SUBPROCESS_CONNECTION_MAIN_FILE,
+    P2PSubprocessConnectionArgs,
+)
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_connections import PeerConnections
@@ -90,12 +95,15 @@ class ConnectionsManager:
         pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
+        *,
+        multiprocess: tuple[P2PSubprocessConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None,
     ) -> None:
         self.log = logger.new()
         self.dependencies = dependencies
         self._settings = dependencies.settings
         self.rng = rng
         self.manager = None
+        self._multiprocess = multiprocess
 
         self.MAX_ENABLED_SYNC = self._settings.MAX_ENABLED_SYNC
         self.SYNC_UPDATE_INTERVAL = self._settings.SYNC_UPDATE_INTERVAL
@@ -216,14 +224,14 @@ class ConnectionsManager:
         """Enable using the given sync version on new connections, it must be available before being enabled."""
         assert sync_version in self._available_sync_versions
         if sync_version in self._enabled_sync_versions:
-            self.log.info('tried to enable a sync verison that was already enabled, nothing to do')
+            self.log.info('tried to enable a sync version that was already enabled, nothing to do')
             return
         self._enabled_sync_versions.add(sync_version)
 
     def disable_sync_version(self, sync_version: SyncVersion) -> None:
         """Disable using the given sync version, it WILL NOT close connections using the given version."""
         if sync_version not in self._enabled_sync_versions:
-            self.log.info('tried to disable a sync verison that was already disabled, nothing to do')
+            self.log.info('tried to disable a sync version that was already disabled, nothing to do')
             return
         self._enabled_sync_versions.discard(sync_version)
 
@@ -445,8 +453,11 @@ class ConnectionsManager:
 
     def iter_ready_connections(self) -> Iterable[P2PConnectionProtocol]:
         """Iterate over ready connections."""
-        for conn, _peer in self._connections.ready_peers().values():
+        for conn, _peer in self.get_ready_connections().values():
             yield conn
+
+    def get_ready_connections(self) -> dict[PeerAddress, tuple[P2PConnectionProtocol, PublicPeer]]:
+        return self._connections.ready_peers()
 
     def iter_not_ready_endpoints(self) -> Iterable[PeerAddress]:
         """Iterate over not-ready connections."""
@@ -627,6 +638,18 @@ class ConnectionsManager:
         endpoint = endpoints.serverFromString(self.reactor, description)
 
         factory: IProtocolFactory = self.server_factory
+
+        if self._multiprocess:
+            custom_args, logging_args = self._multiprocess
+            from hathor.multiprocess.connect_on_subprocess import ConnectOnSubprocessFactory
+            factory = ConnectOnSubprocessFactory(
+                reactor=self.reactor,
+                main_file=P2P_SUBPROCESS_CONNECTION_MAIN_FILE,
+                logging_args=logging_args,
+                custom_args=custom_args,
+                built_protocol_callback=self._on_built_subprocess_protocol,
+            )
+
         if self.use_ssl:
             factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, False, factory)
 
@@ -653,6 +676,12 @@ class ConnectionsManager:
 
     def _on_built_protocol(self, addr: PeerAddress, protocol: P2PConnectionProtocol) -> None:
         self._connections.on_built_protocol(addr=addr, protocol=protocol)
+
+    def _on_built_subprocess_protocol(self, addr: PeerAddress) -> None:
+        from hathor.multiprocess.ipc import IpcConnection
+        assert isinstance(self.ipc_server, IpcConnection)  # type: ignore[attr-defined]
+        protocol = self.ipc_server.get_proxy(P2PConnectionProtocol, client_id=str(addr))  # type: ignore
+        self._on_built_protocol(addr, protocol)
 
     def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:
         """Add new hostname entrypoints according to the listen addresses, and remove any old entrypoint."""
@@ -781,7 +810,7 @@ class ConnectionsManager:
         return self.manager.peers_whitelist
 
     def get_verified_peers(self) -> Iterable[PublicPeer]:
-        return self.verified_peer_storage.values()
+        return list(self.verified_peer_storage.values())
 
     def get_randbytes(self, n: int) -> bytes:
         return self.rng.randbytes(n)

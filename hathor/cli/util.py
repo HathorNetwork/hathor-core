@@ -261,7 +261,7 @@ def setup_logging(
                 # set twisted verbosity one level lower than hathor's
                 'twisted': {
                     'handlers': handlers,
-                    'level': 'INFO' if logging_options.debug else 'WARN',
+                    'level': 'WARN' if logging_options.debug else 'WARN',
                     'propagate': False,
                 },
                 'tornado': {  # used by ipykernel's zmq
