@@ -17,6 +17,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from twisted.internet.protocol import Factory
+from twisted.protocols.tls import TLSMemoryBIOFactory
+
 from hathor.indexes import RocksDBIndexesManager
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import (
@@ -26,6 +29,7 @@ from hathor.p2p.dependencies.protocols import (
     P2PVertexHandlerProtocol,
 )
 from hathor.p2p.factory import HathorServerFactory
+from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.storage import RocksDBStorage
@@ -105,13 +109,16 @@ def build(args: SubprocessBuildArgs[P2PSubprocessConnectionArgs]) -> SubprocessB
     def built_protocol_callback(_addr: PeerAddress, protocol: P2PConnectionProtocol) -> None:
         ipc_client.register_service(protocol, as_protocol=P2PConnectionProtocol)  # type: ignore[type-abstract]
 
-    factory = HathorServerFactory(
+    factory: Factory = HathorServerFactory(
         my_peer=my_peer,
         p2p_manager=remote_p2p_manager,
         dependencies=dependencies,
         use_ssl=args.custom_args.use_ssl,
         built_protocol_callback=built_protocol_callback,
     )
+
+    if args.custom_args.use_ssl:
+        factory = TLSMemoryBIOFactory(my_peer.certificate_options, False, factory)
 
     return SubprocessBuildArtifacts(factory=factory, exit_callback=exit_callback)
 

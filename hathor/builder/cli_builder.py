@@ -340,7 +340,7 @@ class CliBuilder:
         )
 
         whitelist_only = False
-        use_ssl = False  # TODO: I have to move the TLS factory to the subprocess
+        use_ssl = True
         multiprocess_p2p: tuple[P2PSubprocessConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None = None
 
         if self._args.x_multiprocess_p2p:

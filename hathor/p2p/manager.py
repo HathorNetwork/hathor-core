@@ -649,11 +649,11 @@ class ConnectionsManager:
                 custom_args=custom_args,
                 built_protocol_callback=self._on_built_subprocess_protocol,
             )
+        else:
+            if self.use_ssl:
+                factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, False, factory)
 
-        if self.use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, False, factory)
-
-        factory = NetfilterFactory(factory)
+        factory = NetfilterFactory(factory)  # TODO: Not sure if this should be here or in the subprocess
 
         self.log.info('trying to listen on', endpoint=description)
         deferred: Deferred[IListeningPort] = endpoint.listen(factory)
