@@ -76,6 +76,7 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_localhost_only: bool
     x_rocksdb_indexes: bool
     x_enable_event_queue: bool
+    enable_event_queue: bool
     peer_id_blacklist: list[str]
     config_yaml: Optional[str]
     signal_support: set[Feature]

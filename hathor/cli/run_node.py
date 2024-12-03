@@ -55,7 +55,6 @@ class RunNode:
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
         ('--x-sync-v1-only', lambda args: bool(args.x_sync_v1_only)),
         ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
-        ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue)),
         ('--x-asyncio-reactor', lambda args: bool(args.x_asyncio_reactor)),
         ('--x-ipython-kernel', lambda args: bool(args.x_ipython_kernel)),
     ]
@@ -146,7 +145,9 @@ class RunNode:
         sync_args.add_argument('--x-sync-bridge', action='store_true', help='Enable running both sync protocols.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
-        parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
+        parser.add_argument('--x-enable-event-queue', action='store_true',
+                            help='Deprecated: use --enable-event-queue instead.')
+        parser.add_argument('--enable-event-queue', action='store_true', help='Enable event queue mechanism')
         parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
                             help='Peer IDs to forbid connection')
         parser.add_argument('--config-yaml', type=str, help='Configuration yaml filepath')
