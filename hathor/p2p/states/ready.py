@@ -151,11 +151,11 @@ class ReadyState(BaseState):
         """
         self.send_message(ProtocolMessages.GET_PEERS)
 
-    def handle_get_peers(self, payload: str) -> None:
+    async def handle_get_peers(self, payload: str) -> None:
         """ Executed when a GET-PEERS command is received. It just responds with
         a list of all known peers.
         """
-        for peer in self.protocol.p2p_manager.get_verified_peers():
+        for peer in await self.protocol.p2p_manager.get_verified_peers():
             self.send_peers([peer])
 
     def send_peers(self, peer_list: Iterable[PublicPeer]) -> None:

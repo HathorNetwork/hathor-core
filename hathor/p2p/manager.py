@@ -406,18 +406,18 @@ class ConnectionsManager:
         protocol = self._connections.get_peer_by_address(addr)
 
         if len(self._connections.ready_peers()) <= self.MAX_ENABLED_SYNC:
-            protocol.enable_sync()
+            self.reactor.callLater(0, protocol.enable_sync)
 
         if peer.id in self.always_enable_sync:
-            protocol.enable_sync()
+            self.reactor.callLater(0, protocol.enable_sync)
 
         # Notify other peers about this new peer connection.
-        self.relay_peer_to_ready_connections(peer)
+        self.reactor.callLater(0, self.relay_peer_to_ready_connections, peer)
 
     def relay_peer_to_ready_connections(self, peer: PublicPeer) -> None:
         """Relay peer to all ready connections."""
-        for conn in self.iter_ready_connections():
-            if conn.get_peer() == peer:
+        for conn, conn_peer in self.get_ready_connections().values():
+            if conn_peer == peer:
                 continue
             conn.send_peers([peer])
 
@@ -710,8 +710,7 @@ class ConnectionsManager:
             case _:
                 assert_never(peer_addr_or_id)
 
-        protocol_peer = protocol.get_peer()
-        self.log.debug('dropping connection', peer_id=protocol_peer.id, protocol=type(protocol).__name__)
+        self.log.debug('dropping connection', peer=peer_addr_or_id, protocol=type(protocol).__name__)
         protocol.send_error_and_close_connection('Connection dropped')
 
     def sync_update(self) -> None:
@@ -809,7 +808,7 @@ class ConnectionsManager:
         assert self.manager is not None
         return self.manager.peers_whitelist
 
-    def get_verified_peers(self) -> Iterable[PublicPeer]:
+    async def get_verified_peers(self) -> Iterable[PublicPeer]:
         return list(self.verified_peer_storage.values())
 
     def get_randbytes(self, n: int) -> bytes:

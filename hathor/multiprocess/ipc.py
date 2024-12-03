@@ -14,7 +14,6 @@
 
 import inspect
 import os
-import pickle
 import time
 import typing
 import uuid
@@ -30,6 +29,7 @@ from twisted.python.failure import Failure
 from typing_extensions import Self
 
 from hathor.reactor import ReactorProtocol
+from hathor.utils import pickle
 
 logger = get_logger()
 

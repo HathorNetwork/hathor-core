@@ -379,9 +379,6 @@ class HathorProtocol:
         assert isinstance(self.state, ReadyState)
         return self.state.send_tx_to_peer(tx)
 
-    def get_peer(self) -> PublicPeer:
-        return self.peer
-
     def send_peers(self, peers: Iterable[PublicPeer]) -> None:
         assert isinstance(self.state, ReadyState)
         self.state.send_peers(peers)

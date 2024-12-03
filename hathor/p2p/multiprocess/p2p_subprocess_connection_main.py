@@ -29,7 +29,6 @@ from hathor.p2p.dependencies.protocols import (
     P2PVertexHandlerProtocol,
 )
 from hathor.p2p.factory import HathorServerFactory
-from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.storage import RocksDBStorage
