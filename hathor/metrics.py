@@ -241,14 +241,14 @@ class Metrics:
         self.blocks_found = blocks_found
         self.estimated_hash_rate = estimated_hash_rate
 
-    def collect_peer_connection_metrics(self) -> None:
+    async def collect_peer_connection_metrics(self) -> None:
         """Collect metrics for each connected peer.
             The list is cleared every time to avoid memory leak.
         """
         self.peer_connection_metrics.clear()
 
         for addr, (connection, peer) in self.connections.get_ready_connections().items():
-            metrics = connection.get_metrics()
+            metrics = await connection.get_metrics()
             metric = PeerConnectionMetrics(
                 connection_string=str(addr),
                 peer_id=str(peer.id),
@@ -297,11 +297,11 @@ class Metrics:
 
         self.rocksdb_cfs_sizes = store.get_sst_files_sizes_by_cf()
 
-    def _collect_data(self) -> None:
+    async def _collect_data(self) -> None:
         """ Call methods that collect data to metrics
         """
         self.set_websocket_data()
         self.set_stratum_data()
         self.set_cache_data()
-        self.collect_peer_connection_metrics()
+        await self.collect_peer_connection_metrics()
         self.set_tx_storage_data()

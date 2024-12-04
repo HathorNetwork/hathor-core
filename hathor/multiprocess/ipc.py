@@ -207,7 +207,11 @@ class IpcConnection:
     def _send_message(self, message: _IpcRequest | _IpcResponse, client_id: bytes | str | None) -> None:
         if isinstance(client_id, str):
             client_id = client_id.encode('utf-8')
-        message_data = pickle.dumps(message)
+        try:
+            message_data = pickle.dumps(message)
+        except Exception:
+            self.log.exception('pickling error', message=message)
+            return
         multipart = [client_id, message_data] if self.server else [message_data]
         self._socket.send_multipart(multipart, flags=zmq.NOBLOCK)
 

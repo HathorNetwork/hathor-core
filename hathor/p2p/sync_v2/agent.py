@@ -289,8 +289,7 @@ class NodeBlockSync(SyncAgent):
             self.log.warn('stale syncing detected, closing connection')
             self.protocol.send_error_and_close_connection('stale syncing')
 
-    @inlineCallbacks
-    def run_sync(self) -> Generator[Any, Any, None]:
+    async def run_sync(self) -> None:
         """ Async step of the sync algorithm.
 
         This is the entrypoint for the sync. It is always safe to call this method.
@@ -306,29 +305,27 @@ class NodeBlockSync(SyncAgent):
         self._is_running = True
         self._sync_started_at = self.reactor.seconds()
         try:
-            yield self._run_sync()
+            await self._run_sync()
         except Exception:
             self.protocol.send_error_and_close_connection('internal error')
-            self.log.error('unhandled exception', exc_info=True)
+            self.log.exception('unhandled exception')
         finally:
             self._is_running = False
 
-    @inlineCallbacks
-    def _run_sync(self) -> Generator[Any, Any, None]:
+    async def _run_sync(self) -> None:
         """ Actual implementation of the sync step logic in run_sync.
         """
         assert not self.receiving_stream
         assert not self.mempool_manager.is_running()
 
-        is_block_synced = yield self.run_sync_blocks()
+        is_block_synced = await self.run_sync_blocks()
         if is_block_synced:
             # our blocks are synced, so sync the mempool
-            yield self.run_sync_mempool()
+            await self.run_sync_mempool()
 
-    @inlineCallbacks
-    def run_sync_mempool(self) -> Generator[Any, Any, None]:
+    async def run_sync_mempool(self) -> None:
         self.state = PeerState.SYNCING_MEMPOOL
-        is_mempool_synced = yield self.mempool_manager.run()
+        is_mempool_synced = await self.mempool_manager.run()
         self.update_synced_mempool(is_mempool_synced)
 
     def get_my_best_block(self) -> _HeightInfo:
@@ -338,8 +335,7 @@ class NodeBlockSync(SyncAgent):
         assert meta.validation.is_fully_connected()
         return _HeightInfo(height=bestblock.get_height(), id=bestblock.hash)
 
-    @inlineCallbacks
-    def run_sync_blocks(self) -> Generator[Any, Any, bool]:
+    async def run_sync_blocks(self) -> bool:
         """Async step of the block syncing phase. Return True if we already have all other peer's blocks.
 
         Notice that we might already have all other peer's blocks while the other peer is still syncing.
@@ -350,7 +346,7 @@ class NodeBlockSync(SyncAgent):
         my_best_block = self.get_my_best_block()
 
         # Get peer's best block
-        self.peer_best_block = yield self.get_peer_best_block()
+        self.peer_best_block = await self.get_peer_best_block()
         assert self.peer_best_block is not None
 
         # Are we synced?
@@ -382,7 +378,7 @@ class NodeBlockSync(SyncAgent):
         self.send_relay(enable=False)
 
         # Find best common block
-        self.synced_block = yield self.find_best_common_block(my_best_block, self.peer_best_block)
+        self.synced_block = await self.find_best_common_block(my_best_block, self.peer_best_block)
         if self.synced_block is None:
             # Find best common block failed. Try again soon.
             # This might happen if a reorg occurs during the search.
@@ -396,7 +392,7 @@ class NodeBlockSync(SyncAgent):
 
         # Sync from common block
         try:
-            yield self.start_blockchain_streaming(self.synced_block,
+            await self.start_blockchain_streaming(self.synced_block,
                                                   self.peer_best_block)
         except StreamingError as e:
             self.log.info('block streaming failed', reason=repr(e))
@@ -409,7 +405,7 @@ class NodeBlockSync(SyncAgent):
         if partial_blocks:
             self.state = PeerState.SYNCING_TRANSACTIONS
             try:
-                reason = yield self.start_transactions_streaming(partial_blocks)
+                reason = await self.start_transactions_streaming(partial_blocks)
             except StreamingError as e:
                 self.log.info('tx streaming failed', reason=repr(e))
                 self.send_stop_transactions_streaming()
@@ -418,7 +414,7 @@ class NodeBlockSync(SyncAgent):
 
             self.log.info('tx streaming finished', reason=reason)
             while reason == StreamEnd.LIMIT_EXCEEDED:
-                reason = yield self.resume_transactions_streaming()
+                reason = await self.resume_transactions_streaming()
 
         self._blk_streaming_client = None
         self._tx_streaming_client = None
@@ -540,10 +536,11 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.state is not None
         self.protocol.state.send_message(cmd, payload)
 
-    @inlineCallbacks
-    def find_best_common_block(self,
-                               my_best_block: _HeightInfo,
-                               peer_best_block: _HeightInfo) -> Generator[Any, Any, Optional[_HeightInfo]]:
+    async def find_best_common_block(
+        self,
+        my_best_block: _HeightInfo,
+        peer_best_block: _HeightInfo,
+    ) -> Optional[_HeightInfo]:
         """ Search for the highest block/height where we're synced.
         """
         self.log.debug('find_best_common_block', peer_best_block=peer_best_block, my_best_block=my_best_block)
@@ -560,7 +557,7 @@ class NodeBlockSync(SyncAgent):
             heights = list(range(lo.height, hi.height, step))
             heights.append(hi.height)
 
-            block_info_list = yield self.get_peer_block_hashes(heights)
+            block_info_list = await self.get_peer_block_hashes(heights)
             block_info_list.sort(key=lambda x: x.height, reverse=True)
 
             # As we are supposed to be always synced at `lo`, we expect to receive a response

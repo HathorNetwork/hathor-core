@@ -18,6 +18,9 @@ from struct import error as StructError
 from typing import TYPE_CHECKING
 
 from hathor.conf.settings import HathorSettings
+from hathor.transaction.static_metadata import VertexStaticMetadata
+from hathor.utils import pickle
+from hathor.utils.pickle import register_custom_pickler
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -29,6 +32,14 @@ class VertexParser:
 
     def __init__(self, *, settings: HathorSettings) -> None:
         self._settings = settings
+        from hathor.transaction import Block, MergeMinedBlock, Transaction
+        from hathor.transaction.base_transaction import GenericVertex
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        for vertex_type in [Block, MergeMinedBlock, Transaction, TokenCreationTransaction]:
+            assert issubclass(vertex_type, GenericVertex)
+            register_custom_pickler(
+                vertex_type, serializer=self._custom_vertex_pickler, deserializer=self._custom_vertex_unpickler
+            )
 
     def deserialize(self, data: bytes, storage: TransactionStorage | None = None) -> BaseTransaction:
         """ Creates the correct tx subclass from a sequence of bytes
@@ -44,3 +55,16 @@ class VertexParser:
             return cls.create_from_struct(data, storage=storage)
         except ValueError:
             raise StructError('Invalid bytes to create transaction subclass.')
+
+    @staticmethod
+    def _custom_vertex_pickler(vertex: BaseTransaction) -> bytes:
+        data = vertex.get_struct(), vertex.static_metadata.json_dumpb() if vertex._static_metadata else None
+        return pickle.dumps(data)
+
+    def _custom_vertex_unpickler(self, data: bytes) -> BaseTransaction:
+        vertex_bytes, static_metadata_bytes = pickle.loads(data)
+        vertex = self.deserialize(vertex_bytes)
+        if static_metadata_bytes is not None:
+            static_metadata = VertexStaticMetadata.from_bytes(static_metadata_bytes, target=vertex)
+            vertex.set_static_metadata(static_metadata)
+        return vertex

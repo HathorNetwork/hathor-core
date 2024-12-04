@@ -383,7 +383,7 @@ class HathorProtocol:
         assert isinstance(self.state, ReadyState)
         self.state.send_peers(peers)
 
-    def get_metrics(self) -> 'ConnectionMetrics':
+    async def get_metrics(self) -> 'ConnectionMetrics':
         return self.metrics
 
 

@@ -14,19 +14,19 @@
 
 import io
 import pickle
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 T = TypeVar('T')
 
 
-def dumps(obj: object) -> bytes:
+def dumps(obj: Any) -> bytes:
     """Like pickle.dumps, but using the custom Hathor pickler."""
     f = io.BytesIO()
     _HathorPickler(f).dump(obj)
     return f.getvalue()
 
 
-def loads(data: bytes) -> object:
+def loads(data: bytes) -> Any:
     """Like pickle.loads, but using the custom Hathor pickler."""
     # We can actually use the Python unpickler itself because the unpickle function is embedded in the data,
     # so this is just an alias for convenience.
