@@ -20,20 +20,17 @@ from typing import TYPE_CHECKING, Any
 from twisted.internet.protocol import Factory
 from twisted.protocols.tls import TLSMemoryBIOFactory
 
-from hathor.indexes import RocksDBIndexesManager
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import (
     P2PConnectionProtocol,
     P2PManagerProtocol,
+    P2PTransactionStorageProtocol,
     P2PVerificationServiceProtocol,
     P2PVertexHandlerProtocol,
 )
 from hathor.p2p.factory import HathorServerFactory
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerAddress
-from hathor.storage import RocksDBStorage
-from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.utils.pydantic import BaseModel
 
@@ -64,32 +61,8 @@ def build(args: SubprocessBuildArgs[P2PSubprocessConnectionArgs]) -> SubprocessB
     vertex_handler = ipc_client.get_proxy(P2PVertexHandlerProtocol)  # type: ignore[type-abstract]
     verification_service = ipc_client.get_proxy(P2PVerificationServiceProtocol)  # type: ignore[type-abstract]
     remote_p2p_manager = ipc_client.get_proxy(P2PManagerProtocol)  # type: ignore[type-abstract]
+    tx_storage = ipc_client.get_proxy(P2PTransactionStorageProtocol)  # type: ignore[type-abstract]
     my_peer = PrivatePeer.create_from_json(args.custom_args.my_peer)
-
-    # TODO: use a remote ipc client instead of secondary
-    rocksdb_storage = RocksDBStorage(
-        path=args.custom_args.rocksdb_path,
-        cache_capacity=args.custom_args.rocksdb_cache_capacity,
-        secondary_path=f'{args.custom_args.rocksdb_path}/secondary_db/'
-    )
-
-    indexes = RocksDBIndexesManager(rocksdb_storage=rocksdb_storage)
-    indexes.enable_mempool_index()
-
-    tx_storage: BaseTransactionStorage = TransactionRocksDBStorage(
-        settings=args.settings,
-        vertex_parser=vertex_parser,
-        rocksdb_storage=rocksdb_storage,
-    )
-
-    tx_storage = TransactionCacheStorage(
-        reactor=args.reactor,
-        settings=args.settings,
-        store=tx_storage,
-        indexes=indexes,
-        capacity=args.custom_args.cache_capacity,
-        interval=args.custom_args.cache_interval,
-    )
 
     dependencies = P2PDependencies(
         reactor=args.reactor,
@@ -117,6 +90,7 @@ def build(args: SubprocessBuildArgs[P2PSubprocessConnectionArgs]) -> SubprocessB
     )
 
     if args.custom_args.use_ssl:
+        # TODO: When implementing the client (connect_to), I'll have to review this
         factory = TLSMemoryBIOFactory(my_peer.certificate_options, False, factory)
 
     return SubprocessBuildArtifacts(factory=factory, exit_callback=exit_callback)

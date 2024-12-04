@@ -37,7 +37,12 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.multiprocess.ipc import IpcConnection
 from hathor.p2p import P2PDependencies
-from hathor.p2p.dependencies.protocols import P2PManagerProtocol
+from hathor.p2p.dependencies.protocols import (
+    P2PManagerProtocol,
+    P2PTransactionStorageProtocol,
+    P2PVerificationServiceProtocol,
+    P2PVertexHandlerProtocol,
+)
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.multiprocess.p2p_subprocess_connection_main import P2PSubprocessConnectionArgs
 from hathor.p2p.peer import PrivatePeer
@@ -442,6 +447,18 @@ class CliBuilder:
         if self._args.x_multiprocess_p2p:
             ipc_server = IpcConnection(reactor=reactor, socket_path='/tmp/test2.sock', server=True)
             ipc_server.register_service(p2p_manager, as_protocol=P2PManagerProtocol)  # type: ignore[type-abstract]
+            ipc_server.register_service(
+                vertex_handler,
+                as_protocol=P2PVertexHandlerProtocol,  # type: ignore[type-abstract]
+            )
+            ipc_server.register_service(
+                verification_service,
+                as_protocol=P2PVerificationServiceProtocol,   # type: ignore[type-abstract]
+            )
+            ipc_server.register_service(
+                tx_storage,
+                as_protocol=P2PTransactionStorageProtocol,   # type: ignore[type-abstract]
+            )
             ipc_server.start()
             p2p_manager.ipc_server = ipc_server  # type: ignore[attr-defined]
 

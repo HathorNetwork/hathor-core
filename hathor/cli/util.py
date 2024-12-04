@@ -180,8 +180,8 @@ def setup_logging(
     import logging
     import logging.config
 
-    import twisted
     from twisted.logger import LogLevel
+    from twisted.python import log as twisted_log
 
     # Mappings to Python's logging module
     twisted_to_logging_level = {
@@ -338,7 +338,7 @@ def setup_logging(
         try:
             level = twisted_to_logging_level.get(event.get('log_level'), logging.INFO)
             kwargs = {}
-            msg = ''
+            msg = twisted_log.textFromEventDict(event)
             if not msg and event.get('log_format', None):
                 msg = event['log_format'].format(**event)
             if not msg and event.get('format', None):
@@ -357,7 +357,7 @@ def setup_logging(
             print(new_event_json, file=sys.stderr)
 
     # start logging to std logger so structlog can catch it
-    twisted.python.log.startLoggingWithObserver(twisted_structlog_observer, setStdout=capture_stdout)
+    twisted_log.startLoggingWithObserver(twisted_structlog_observer, setStdout=capture_stdout)
 
     if _test_logging:
         logger = structlog.get_logger()

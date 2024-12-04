@@ -184,7 +184,8 @@ class _SubprocessProtocolWrapper(ProtocolWrapper):
         super().connectionMade()
 
     def dataReceived(self, data: bytes) -> None:
-        self.log.debug('data received', data=data)
+        # This is too verbose even for debug mode, but I'm leaving it here as it may be useful sometimes
+        # self.log.debug('data received', data=data)
         super().dataReceived(data)
 
     def connectionLost(self, reason: Failure) -> None:  # type: ignore[override]
