@@ -23,7 +23,7 @@ from hathor.utils import pickle
 from hathor.utils.pickle import register_custom_pickler
 
 if TYPE_CHECKING:
-    from hathor.transaction import BaseTransaction, TransactionMetadata
+    from hathor.transaction import BaseTransaction
     from hathor.transaction.storage import TransactionStorage
 
 
@@ -58,9 +58,10 @@ class VertexParser:
 
     @staticmethod
     def _custom_vertex_pickler(vertex: BaseTransaction) -> bytes:
+        metadata = getattr(vertex, '_metadata', None)
         data = (
             vertex.get_struct(),
-            vertex._metadata.to_bytes() if getattr(vertex, '_metadata', None) else None,
+            metadata.to_bytes() if metadata else None,
             vertex.static_metadata.json_dumpb() if vertex._static_metadata else None,
         )
         return pickle.dumps(data)

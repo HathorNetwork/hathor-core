@@ -14,7 +14,6 @@
 
 import inspect
 import os
-import time
 import typing
 import uuid
 from collections import defaultdict
@@ -33,8 +32,8 @@ from hathor.utils import pickle
 
 logger = get_logger()
 
-IPC_POLLING_INTERVAL = 0.1  # seconds
-IPC_BLOCKING_TIMEOUT = 1  # seconds
+IPC_POLLING_INTERVAL = 0.001  # seconds
+IPC_BLOCKING_TIMEOUT = 1.0  # seconds
 
 T = TypeVar('T')
 
@@ -86,7 +85,7 @@ class IpcConnection:
         self._socket_addr = f'ipc://{socket_path}'
         self.server = server
         self._services: dict[str, dict[str, _IpcMethod]] = defaultdict(dict)
-        self._lc = LoopingCall(self._safe_run)
+        self._lc = LoopingCall(self._safe_run)  # TODO: Try to register a reader in the reactor instead of using LC
         self._lc.clock = reactor
         self._deferreds: dict[str, Deferred[Any]] = {}
 
@@ -196,8 +195,8 @@ class IpcConnection:
 
         deferred.callback(response.result)
 
-    def _recv_message(self) -> tuple[_IpcRequest | _IpcResponse, bytes | None]:
-        multipart = self._socket.recv_multipart(flags=zmq.NOBLOCK)
+    def _recv_message(self, *, blocking: bool = False) -> tuple[_IpcRequest | _IpcResponse, bytes | None]:
+        multipart = self._socket.recv_multipart(flags=0 if blocking else zmq.NOBLOCK)
         client_id, message_data = multipart if self.server else (None, multipart[0])
         assert isinstance(message_data, bytes)
         message = pickle.loads(message_data)
@@ -222,24 +221,30 @@ class IpcConnection:
     def call_blocking(self, request: _IpcRequest, *, client_id: str | None) -> _IpcResponse:
         assert not request.is_async
         self._send_message(request, client_id if client_id else None)
-        now = self.reactor.seconds()
+        remaining_time = IPC_BLOCKING_TIMEOUT
+
         while True:
-            if self.reactor.seconds() > now + IPC_BLOCKING_TIMEOUT:
+            if remaining_time <= 0:
                 self.log.error('timeout while waiting response', request=request)
                 raise TimeoutError
 
-            try:
-                message, msg_client_id = self._recv_message()
-            except zmq.Again:
-                time.sleep(IPC_POLLING_INTERVAL)
-                continue
+            time_before = self.reactor.seconds()
+            rlist, _, _ = zmq.select([self._socket], [], [], timeout=remaining_time)
+            elapsed_time = self.reactor.seconds() - time_before
+            remaining_time -= elapsed_time
+
+            if not rlist:
+                self.log.error('timeout while waiting response', request=request)
+                raise TimeoutError
+
+            assert rlist == [self._socket]
+            message, msg_client_id = self._recv_message(blocking=True)
 
             if isinstance(message, _IpcResponse) and message.request_id == request.request_id:
                 return message
 
             # TODO: call_coro_later
             self.reactor.callLater(0, lambda: Deferred.fromCoroutine(self._handle_message(message, client_id)))
-            time.sleep(IPC_POLLING_INTERVAL)
 
     def call_async(self, request: _IpcRequest, *, client_id: str | None) -> Deferred[Any]:
         assert request.is_async
