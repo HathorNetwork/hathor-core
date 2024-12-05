@@ -72,7 +72,7 @@ class AddPeersResource(Resource):
         def already_connected(endpoint: PeerEndpoint) -> bool:
             # ignore peers that we're already trying to connect
             for ready_endpoint in self.manager.connections.iter_not_ready_endpoints():
-                if endpoint.addr == ready_endpoint.addr:
+                if endpoint.addr == ready_endpoint:
                     return True
 
             # remove peers we already know about
