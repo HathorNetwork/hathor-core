@@ -97,7 +97,5 @@ def build(args: SubprocessBuildArgs[P2PSubprocessConnectionArgs]) -> SubprocessB
 
 
 if __name__ == '__main__':
-    # import pydevd_pycharm
-    # pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
     from hathor.multiprocess.subprocess_runner import setup_subprocess_runner
     setup_subprocess_runner(build, P2PSubprocessConnectionArgs)
