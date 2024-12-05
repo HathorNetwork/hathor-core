@@ -28,6 +28,7 @@ from twisted.web.client import Agent
 from typing_extensions import assert_never
 
 from hathor.cli.util import LoggingOptions, LoggingOutput
+from hathor.multiprocess.ipc import IpcConnection
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import P2PConnectionProtocol
 from hathor.p2p.multiprocess.p2p_subprocess_connection_main import (
@@ -96,14 +97,15 @@ class ConnectionsManager:
         ssl: bool,
         rng: Random,
         *,
-        multiprocess: tuple[P2PSubprocessConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None,
+        multiprocess_args: tuple[P2PSubprocessConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None,
     ) -> None:
         self.log = logger.new()
         self.dependencies = dependencies
         self._settings = dependencies.settings
         self.rng = rng
         self.manager = None
-        self._multiprocess = multiprocess
+        self._multiprocess_args = multiprocess_args
+        self._ipc_server: IpcConnection | None = None
 
         self.MAX_ENABLED_SYNC = self._settings.MAX_ENABLED_SYNC
         self.SYNC_UPDATE_INTERVAL = self._settings.SYNC_UPDATE_INTERVAL
@@ -252,6 +254,11 @@ class ConnectionsManager:
             indexes = self.manager.tx_storage.indexes
             self.log.debug('enable sync-v2 indexes')
             indexes.enable_mempool_index()
+
+    def set_ipc_server(self, ipc_server: IpcConnection) -> None:
+        assert self._multiprocess_args is not None
+        assert self._ipc_server is None
+        self._ipc_server = ipc_server
 
     def add_listen_address_description(self, addr: str) -> None:
         """Add address to listen for incoming connections."""
@@ -639,8 +646,8 @@ class ConnectionsManager:
 
         factory: IProtocolFactory = self.server_factory
 
-        if self._multiprocess:
-            custom_args, logging_args = self._multiprocess
+        if self._multiprocess_args:
+            custom_args, logging_args = self._multiprocess_args
             from hathor.multiprocess.connect_on_subprocess import ConnectOnSubprocessFactory
             factory = ConnectOnSubprocessFactory(
                 reactor=self.reactor,
@@ -678,9 +685,10 @@ class ConnectionsManager:
         self._connections.on_built_protocol(addr=addr, protocol=protocol)
 
     def _on_built_subprocess_protocol(self, addr: PeerAddress) -> None:
-        from hathor.multiprocess.ipc import IpcConnection
-        assert isinstance(self.ipc_server, IpcConnection)  # type: ignore[attr-defined]
-        protocol = self.ipc_server.get_proxy(P2PConnectionProtocol, client_id=str(addr))  # type: ignore
+        assert self._ipc_server is not None
+        protocol = self._ipc_server.get_proxy(
+            P2PConnectionProtocol, client_id=str(addr)  # type: ignore[type-abstract]
+        )
         self._on_built_protocol(addr, protocol)
 
     def update_hostname_entrypoints(self, *, old_hostname: str | None, new_hostname: str) -> None:

@@ -35,7 +35,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.multiprocess.ipc import IpcConnection
+from hathor.multiprocess.ipc import IPC_SERVER_PATH, IpcConnection
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import (
     P2PManagerProtocol,
@@ -346,7 +346,9 @@ class CliBuilder:
 
         whitelist_only = False
         use_ssl = True
-        multiprocess_p2p: tuple[P2PSubprocessConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None = None
+        multiprocess_p2p_args: (
+            tuple[P2PSubprocessConnectionArgs, tuple[LoggingOutput, LoggingOptions, bool]] | None
+        ) = None
 
         if self._args.x_multiprocess_p2p:
             self.check_or_raise(
@@ -378,7 +380,7 @@ class CliBuilder:
                 rocksdb_cache_capacity=self._args.rocksdb_cache,
             )
 
-            multiprocess_p2p = server_args, self._logging_args
+            multiprocess_p2p_args = server_args, self._logging_args
 
         p2p_dependencies = P2PDependencies(
             reactor=reactor,
@@ -397,7 +399,7 @@ class CliBuilder:
             pubsub=pubsub,
             ssl=use_ssl,
             rng=Random(),
-            multiprocess=multiprocess_p2p,
+            multiprocess_args=multiprocess_p2p_args,
         )
 
         SyncSupportLevel.add_versions(
@@ -417,6 +419,24 @@ class CliBuilder:
                     reactor=reactor,
                     poa_signer=poa_signer_file.get_signer(),
                 )
+
+        ipc_server: IpcConnection | None = None
+        if self._args.x_multiprocess_p2p:
+            ipc_server = IpcConnection(reactor=reactor, socket_path=IPC_SERVER_PATH, server=True)
+            ipc_server.register_service(p2p_manager, as_protocol=P2PManagerProtocol)  # type: ignore[type-abstract]
+            ipc_server.register_service(
+                vertex_handler,
+                as_protocol=P2PVertexHandlerProtocol,  # type: ignore[type-abstract]
+            )
+            ipc_server.register_service(
+                verification_service,
+                as_protocol=P2PVerificationServiceProtocol,   # type: ignore[type-abstract]
+            )
+            ipc_server.register_service(
+                tx_storage,
+                as_protocol=P2PTransactionStorageProtocol,   # type: ignore[type-abstract]
+            )
+            p2p_manager.set_ipc_server(ipc_server)
 
         self.manager = HathorManager(
             reactor,
@@ -441,26 +461,8 @@ class CliBuilder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            ipc_server=ipc_server,
         )
-
-        # TODO: Move this somewhere else
-        if self._args.x_multiprocess_p2p:
-            ipc_server = IpcConnection(reactor=reactor, socket_path='/tmp/test2.sock', server=True)
-            ipc_server.register_service(p2p_manager, as_protocol=P2PManagerProtocol)  # type: ignore[type-abstract]
-            ipc_server.register_service(
-                vertex_handler,
-                as_protocol=P2PVertexHandlerProtocol,  # type: ignore[type-abstract]
-            )
-            ipc_server.register_service(
-                verification_service,
-                as_protocol=P2PVerificationServiceProtocol,   # type: ignore[type-abstract]
-            )
-            ipc_server.register_service(
-                tx_storage,
-                as_protocol=P2PTransactionStorageProtocol,   # type: ignore[type-abstract]
-            )
-            ipc_server.start()
-            p2p_manager.ipc_server = ipc_server  # type: ignore[attr-defined]
 
         if self._args.x_ipython_kernel:
             self.check_or_raise(self._args.x_asyncio_reactor,

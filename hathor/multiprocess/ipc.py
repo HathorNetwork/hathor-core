@@ -32,6 +32,7 @@ from hathor.utils import pickle
 
 logger = get_logger()
 
+IPC_SERVER_PATH = '/tmp/hathor_ipc_server.sock'
 IPC_POLLING_INTERVAL = 0.001  # seconds
 IPC_BLOCKING_TIMEOUT = 1.0  # seconds
 
@@ -116,7 +117,6 @@ class IpcConnection:
         self._lc.start(IPC_POLLING_INTERVAL)
 
     def stop(self) -> None:
-        # TODO Remove socket file in disk?
         self._lc.stop()
         self._socket.close(linger=0)
         self._context.term()

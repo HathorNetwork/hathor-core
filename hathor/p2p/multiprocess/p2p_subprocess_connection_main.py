@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from twisted.internet.protocol import Factory
 from twisted.protocols.tls import TLSMemoryBIOFactory
 
+from hathor.multiprocess.ipc import IPC_SERVER_PATH
 from hathor.p2p import P2PDependencies
 from hathor.p2p.dependencies.protocols import (
     P2PConnectionProtocol,
@@ -55,7 +56,7 @@ def build(args: SubprocessBuildArgs[P2PSubprocessConnectionArgs]) -> SubprocessB
     from hathor.multiprocess.ipc import IpcConnection
     from hathor.multiprocess.subprocess_runner import SubprocessBuildArtifacts
     vertex_parser = VertexParser(settings=args.settings)
-    ipc_client = IpcConnection(reactor=args.reactor, socket_path='/tmp/test2.sock') \
+    ipc_client = IpcConnection(reactor=args.reactor, socket_path=IPC_SERVER_PATH) \
         .set_custom_identity(str(args.addr))
     ipc_client.start()
     vertex_handler = ipc_client.get_proxy(P2PVertexHandlerProtocol)  # type: ignore[type-abstract]

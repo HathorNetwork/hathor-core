@@ -45,6 +45,7 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.multiprocess.ipc import IpcConnection
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
@@ -117,6 +118,7 @@ class HathorManager:
         full_verification: bool = False,
         enable_event_queue: bool = False,
         poa_block_producer: PoaBlockProducer | None = None,
+        ipc_server: IpcConnection | None = None,
         # Websocket factory
         websocket_factory: Optional['HathorAdminWebsocketFactory'] = None
     ) -> None:
@@ -233,6 +235,7 @@ class HathorManager:
         self.environment_info = environment_info
 
         self.poa_block_producer = poa_block_producer
+        self._ipc_server = ipc_server
 
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
@@ -331,6 +334,9 @@ class HathorManager:
         if self.poa_block_producer:
             self.poa_block_producer.start()
 
+        if self._ipc_server:
+            self._ipc_server.start()
+
         # Start running
         self.tx_storage.start_running_manager(self._execution_manager)
 
@@ -370,6 +376,9 @@ class HathorManager:
 
         if self.poa_block_producer:
             self.poa_block_producer.stop()
+
+        if self._ipc_server:
+            self._ipc_server.stop()
 
         self.tx_storage.flush()
 
