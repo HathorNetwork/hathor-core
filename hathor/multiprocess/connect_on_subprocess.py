@@ -124,13 +124,17 @@ class _ConnectOnSubprocessProtocol(Protocol, Generic[T]):
 
     def makeConnection(self, transport: ITransport) -> None:
         """Spawn a subprocess and transfer the connection's file descriptor to it."""
-        assert isinstance(transport, ProtocolWrapper)
-        wrapped_transport = transport.transport
-        if isinstance(transport, BufferingTLSTransport):
-            assert isinstance(wrapped_transport, ProtocolWrapper)
-            connection = wrapped_transport.transport
-        else:
-            connection = wrapped_transport
+        # Depending on whether we're a server or a client, and whether we're using TLS or not,
+        # we have to extract the underlying TCP connection in different ways.
+        connection = transport
+        if not isinstance(connection, tcp.Connection):
+            assert isinstance(connection, ProtocolWrapper)
+            wrapped_transport = connection.transport
+            if isinstance(connection, BufferingTLSTransport):
+                assert isinstance(wrapped_transport, ProtocolWrapper)
+                connection = wrapped_transport.transport
+            else:
+                connection = wrapped_transport
 
         assert isinstance(connection, tcp.Connection), connection
         assert self._addr == PeerAddress.from_address(transport.getPeer())

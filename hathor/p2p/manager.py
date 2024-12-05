@@ -367,7 +367,11 @@ class ConnectionsManager:
             conn.disconnect(force=force)
 
     def on_connection_failure(self, failure: Failure, endpoint: PeerEndpoint) -> None:
-        self.log.warn('connection failure', endpoint=str(endpoint), failure=failure.getErrorMessage())
+        self.log.warn(
+            f'connection failure:\n{failure.getTraceback()}',
+            endpoint=str(endpoint),
+            reason=failure.getErrorMessage(),
+        )
         self._connections.on_failed_to_connect(addr=endpoint.addr)
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTION_FAILED,
@@ -588,6 +592,9 @@ class ConnectionsManager:
         """Called when we successfully connect to an outbound peer."""
         if isinstance(protocol, TLSMemoryBIOProtocol):
             protocol = protocol.wrappedProtocol
+        import pydevd_pycharm
+        pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
+        # TODO: This is being called with the connect on subprocess protocol.
         assert isinstance(protocol, HathorProtocol)
         assert protocol.addr == addr
         protocol.on_outbound_connect(peer_id)
@@ -611,8 +618,20 @@ class ConnectionsManager:
             return None
 
         factory: IProtocolFactory = self.client_factory
-        if self.use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
+
+        if self._multiprocess_args:
+            custom_args, logging_args = self._multiprocess_args
+            from hathor.multiprocess.connect_on_subprocess import ConnectOnSubprocessFactory
+            factory = ConnectOnSubprocessFactory(
+                reactor=self.reactor,
+                main_file=P2P_SUBPROCESS_CONNECTION_MAIN_FILE,
+                logging_args=logging_args,
+                custom_args=custom_args,
+                built_protocol_callback=self._on_built_subprocess_protocol,
+            )
+        else:
+            if self.use_ssl:
+                factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
 
         if peer is not None:
             now = int(self.reactor.seconds())
