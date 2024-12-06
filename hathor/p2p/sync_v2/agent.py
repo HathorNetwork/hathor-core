@@ -25,6 +25,7 @@ from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall, deferLater
 
 from hathor.conf.settings import HathorSettings
+from hathor.exception import InvalidNewTransaction
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient, StreamingError
@@ -42,7 +43,8 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
-from hathor.util import collect_n, not_none
+from hathor.util import collect_n
+from hathor.vertex_handler import VertexHandler
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -52,6 +54,8 @@ logger = get_logger()
 
 MAX_GET_TRANSACTIONS_BFS_LEN: int = 8
 MAX_MEMPOOL_STATUS_TIPS: int = 20
+
+RUN_SYNC_MAIN_LOOP_INTERVAL = 1  # second(s)
 
 
 class _HeightInfo(NamedTuple):
@@ -91,6 +95,7 @@ class NodeBlockSync(SyncAgent):
         reactor: Reactor,
         *,
         vertex_parser: VertexParser,
+        vertex_handler: VertexHandler,
     ) -> None:
         """
         :param protocol: Protocol of the connection.
@@ -101,8 +106,8 @@ class NodeBlockSync(SyncAgent):
         """
         self._settings = settings
         self.vertex_parser = vertex_parser
+        self.vertex_handler = vertex_handler
         self.protocol = protocol
-        self.manager = protocol.node
         self.tx_storage: 'TransactionStorage' = protocol.node.tx_storage
         self.state = PeerState.UNKNOWN
 
@@ -229,7 +234,7 @@ class NodeBlockSync(SyncAgent):
         if self._started:
             raise Exception('NodeSyncBlock is already running')
         self._started = True
-        self._lc_run.start(5)
+        self._lc_run.start(RUN_SYNC_MAIN_LOOP_INTERVAL)
 
     def stop(self) -> None:
         if not self._started:
@@ -485,7 +490,9 @@ class NodeBlockSync(SyncAgent):
         data = [bytes.fromhex(x) for x in data]
         # filter-out txs we already have
         try:
-            self._receiving_tips.extend(VertexId(tx_id) for tx_id in data if not self.partial_vertex_exists(tx_id))
+            self._receiving_tips.extend(
+                VertexId(tx_id) for tx_id in data if not self.tx_storage.partial_vertex_exists(tx_id)
+            )
         except ValueError:
             self.protocol.send_error_and_close_connection('Invalid trasaction ID received')
         # XXX: it's OK to do this *after* the extend because the payload is limited by the line protocol
@@ -550,12 +557,6 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.state is not None
         self.protocol.state.send_message(cmd, payload)
 
-    def partial_vertex_exists(self, vertex_id: VertexId) -> bool:
-        """ Return true if the vertex exists no matter its validation state.
-        """
-        with self.tx_storage.allow_partially_validated_context():
-            return self.tx_storage.transaction_exists(vertex_id)
-
     @inlineCallbacks
     def find_best_common_block(self,
                                my_best_block: _HeightInfo,
@@ -615,13 +616,16 @@ class NodeBlockSync(SyncAgent):
     def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> Generator[Any, Any, None]:
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
-        for tx in vertex_list:
-            if not self.tx_storage.transaction_exists(tx.hash):
-                self.manager.on_new_tx(tx, propagate_to_peers=False, fails_silently=False)
-            yield deferLater(self.reactor, 0, lambda: None)
+        try:
+            for tx in vertex_list:
+                if not self.tx_storage.transaction_exists(tx.hash):
+                    self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+                yield deferLater(self.reactor, 0, lambda: None)
 
-        if not self.tx_storage.transaction_exists(blk.hash):
-            self.manager.on_new_tx(blk, propagate_to_peers=False, fails_silently=False)
+            if not self.tx_storage.transaction_exists(blk.hash):
+                self.vertex_handler.on_new_vertex(blk, fails_silently=False)
+        except InvalidNewTransaction:
+            self.protocol.send_error_and_close_connection('invalid vertex received')
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
@@ -846,7 +850,7 @@ class NodeBlockSync(SyncAgent):
         assert meta.validation.is_fully_connected()
         payload = BestBlockPayload(
             block=best_block.hash,
-            height=not_none(meta.height),
+            height=best_block.static_metadata.height,
         )
         self.send_message(ProtocolMessages.BEST_BLOCK, payload.json())
 
@@ -1157,17 +1161,22 @@ class NodeBlockSync(SyncAgent):
 
         tx.storage = self.protocol.node.tx_storage
 
-        if self.partial_vertex_exists(tx.hash):
+        if self.tx_storage.partial_vertex_exists(tx.hash):
             # transaction already added to the storage, ignore it
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
-            self.manager.tx_storage.compare_bytes_with_local_tx(tx)
+            self.tx_storage.compare_bytes_with_local_tx(tx)
             return
         else:
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            if tx.can_validate_full():
+            if self.tx_storage.can_validate_full(tx):
                 self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                self.manager.on_new_tx(tx, propagate_to_peers=True)
+                try:
+                    success = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+                    if success:
+                        self.protocol.connections.send_tx_to_peers(tx)
+                except InvalidNewTransaction:
+                    self.protocol.send_error_and_close_connection('invalid vertex received')
             else:
                 self.log.debug('skipping tx received in real time from peer',
                                tx=tx.hash_hex, peer=self.protocol.get_peer_id())

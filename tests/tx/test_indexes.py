@@ -264,7 +264,7 @@ class BaseIndexesTest(unittest.TestCase):
                                                     address=decode_address(address))
         block2.parents[1:] = [txA2.hash, txB2.hash]
         block2.timestamp = block1.timestamp
-        block2.weight = 1.2
+        block2.weight = 4
         self.manager.cpu_mining_service.resolve(block2)
         self.manager.propagate_tx(block2, fails_silently=False)
         self.graphviz.labels[block2.hash] = 'block2'
@@ -307,7 +307,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[:1]
             ]
         )
@@ -322,7 +322,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[4:1:-1]
             ]
         )
@@ -337,7 +337,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[::-1]
             ]
         )
@@ -352,7 +352,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                 ) for b in blocks[::-1]
             ]
         )
@@ -464,7 +464,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                     ) for b in blocks
             ]
         )
@@ -536,7 +536,7 @@ class BaseIndexesTest(unittest.TestCase):
                     address=address,
                     amount=6400,
                     timelock=None,
-                    heightlock=b.get_metadata().height + self._settings.REWARD_SPEND_MIN_BLOCKS,
+                    heightlock=b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
                     ) for b in blocks
             ]
         )

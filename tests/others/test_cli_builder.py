@@ -53,7 +53,8 @@ class BuilderTestCase(unittest.TestCase):
     def test_all_default(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
+        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
+        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
@@ -64,33 +65,34 @@ class BuilderTestCase(unittest.TestCase):
         self.assertFalse(manager._enable_event_queue)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-    def test_cache_storage(self):
+    def test_disable_cache_storage(self):
         data_dir = self.mkdtemp()
-        manager = self._build(['--cache', '--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
-        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
+        manager = self._build(['--disable-cache', '--data', data_dir])
+        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
-        self.assertIsNone(manager.tx_storage.store.indexes)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_default_storage_memory_indexes(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--memory-indexes', '--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
+        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
+        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
         self.assertIsInstance(manager.tx_storage.indexes, MemoryIndexesManager)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_default_storage_with_rocksdb_indexes(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--x-rocksdb-indexes', '--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
+        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
+        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_rocksdb_storage(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--rocksdb-storage', '--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
+        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
+        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
 
     def test_memory_storage(self):
@@ -190,4 +192,4 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_event_queue_with_full_verification(self):
         args = ['--x-enable-event-queue', '--memory-storage', '--x-full-verification']
-        self._build_with_error(args, '--x-full-verification cannot be used with --x-enable-event-queue')
+        self._build_with_error(args, '--x-full-verification cannot be used with --enable-event-queue')

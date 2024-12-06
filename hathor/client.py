@@ -251,8 +251,7 @@ class MiningChannel(IMiningChannel):
         resp: Union[bool, dict] = await self._do_request('mining.submit', {
             'hexdata': bytes(block).hex(),
         })
-        if resp:
-            assert isinstance(resp, dict)
+        if isinstance(resp, dict):
             error = resp.get('error')
             if error:
                 raise APIError(error)

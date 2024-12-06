@@ -14,12 +14,14 @@
 
 from typing import Any, Iterator, Optional, TypeVar
 
+from typing_extensions import override
+
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
+from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
-from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
 _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
@@ -83,6 +85,11 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         if meta:
             self.metadata[tx.hash] = self._clone(meta)
 
+    @override
+    def _save_static_metadata(self, tx: BaseTransaction) -> None:
+        # We do not need to explicitly save the static metadata as the tx object already holds it in memory
+        pass
+
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         return hash_bytes in self.transactions
 
@@ -92,6 +99,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
             if hash_bytes in self.metadata:
                 tx._metadata = self._clone(self.metadata[hash_bytes])
             assert tx._metadata is not None
+            assert tx._static_metadata is not None
             return tx
         else:
             raise TransactionDoesNotExist(hash_bytes.hex())

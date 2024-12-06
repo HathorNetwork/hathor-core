@@ -29,9 +29,9 @@ class Migration(BaseMigration):
         return True
 
     def get_db_name(self) -> str:
-        return 'add_feature_activation_bit_counts_metadata'
+        return 'include_funds_for_first_block'
 
     def run(self, storage: 'TransactionStorage') -> None:
-        # We can skip this migration as it will run again in `add_feature_activation_bit_counts_metadata2`.
-        log = logger.new()
-        log.info('Skipping unnecessary migration.')
+        raise Exception('Cannot migrate your database due to an incompatible change in the metadata. '
+                        'Please, delete your data folder and use the latest available snapshot or sync '
+                        'from beginning.')

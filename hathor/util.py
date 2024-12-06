@@ -478,9 +478,9 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
             log.warn('iterator was slow to yield', took_sec=dt_next)
 
         # XXX: this is only informative and made to work with either partially/fully validated blocks/transactions
-        meta = tx.get_metadata()
-        if meta.height:
-            h = max(h, meta.height)
+        from hathor.transaction import Block
+        if isinstance(tx, Block):
+            h = max(h, tx.static_metadata.height)
         ts_tx = max(ts_tx, tx.timestamp)
 
         t_log = time.time()
@@ -803,12 +803,6 @@ def get_environment_info(args: str, peer_id: Optional[str]) -> EnvironmentInfo:
 
 def get_hathor_core_version():
     return hathor.__version__
-
-
-def calculate_min_significant_weight(score: float, tol: float) -> float:
-    """ This function will return the min significant weight to increase score by tol.
-    """
-    return score + math.log2(2 ** tol - 1)
 
 
 def bytes_to_vertexid(data: bytes) -> VertexId:

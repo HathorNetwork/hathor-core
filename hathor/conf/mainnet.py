@@ -72,6 +72,20 @@ SETTINGS = HathorSettings(
         cp(3_400_000, bytes.fromhex('000000000000000077242c961a0c6f708bc671a8372eb8b095311f091fddc6c3')),
         cp(3_500_000, bytes.fromhex('000000000000000a34ba20552c3cae9549b9c5ca07f644cf005328c948aa54d8')),
         cp(3_600_000, bytes.fromhex('000000000000000011031d9ff030cd9e6fe8a3766bbeda6f6337c40dd30fa65f')),
+        cp(3_700_000, bytes.fromhex('0000000000000006c6e7295efcf0929173cc47ece41afc652410b72f36cbeeda')),
+        cp(3_800_000, bytes.fromhex('00000000000000122f57d59c7f6736a83483dcf71c34978102d7e04ce4dc9a5d')),
+        cp(3_900_000, bytes.fromhex('00000000000000069edf3300d6c41451485d7aabdbea34425a2411b880e8a976')),
+        cp(4_000_000, bytes.fromhex('00000000000000043b11a6c86c3cdaf773a5183737f136e196e816f862e1e3ba')),
+        cp(4_100_000, bytes.fromhex('0000000000000020822d529b6fcd8611f5a174b1f44a6c478a2fec64a80233ad')),
+        cp(4_200_000, bytes.fromhex('00000000000000052ffc34875fab4e545bc9dc76f1212c4fdafab3b6d7a026cd')),
+        cp(4_300_000, bytes.fromhex('000000000000000e1ea2af0e25087c0977e944dd0ffdae5fdff54dda85ed95be')),
+        cp(4_400_000, bytes.fromhex('0000000000000000020dab883c57e21829b590ef61ff5230f5fdc9d572300945')),
+        cp(4_500_000, bytes.fromhex('00000000000000034d5ddf802a8ac8fbf17cf50747041e433d28d9f2bcb6ef02')),
+        cp(4_600_000, bytes.fromhex('000000000000000055bb4e5b6d942da13cb631f318cfdc292793f28ef8a338ca')),
+        cp(4_700_000, bytes.fromhex('000000000000000002ae1d75811b1050fc98ee7ef30c48cde117ebbb42f47e22')),
+        cp(4_800_000, bytes.fromhex('00000000000000000716b8d9e96591ba7cb2d02c3d2d1d98d514f41c240fdff7')),
+        cp(4_900_000, bytes.fromhex('0000000000000000079b1c1ebf48d351a7d31dcc55c5b4cf79ade79089a20f5a')),
+        cp(5_000_000, bytes.fromhex('000000000000000006c9167db1cc7e93fcf1c3014da6c6221390d03d1640c9b3')),
     ],
     SOFT_VOIDED_TX_IDS=list(map(bytes.fromhex, [
         '0000000012a922a6887497bed9c41e5ed7dc7213cae107db295602168266cd02',
@@ -201,42 +215,6 @@ SETTINGS = HathorSettings(
     ])),
     FEATURE_ACTIVATION=FeatureActivationSettings(
         features={
-            Feature.NOP_FEATURE_1: Criteria(
-                bit=0,
-                start_height=4_213_440,  # N
-                timeout_height=4_253_760,  # N + 2 * 20160 (2 weeks after the start)
-                minimum_activation_height=4_273_920,  # N + 3 * 20160 (3 weeks after the start)
-                lock_in_on_timeout=False,
-                version='0.59.0',
-                signal_support_by_default=True,
-            ),
-            Feature.NOP_FEATURE_2: Criteria(
-                bit=1,
-                start_height=4_213_440,  # N
-                timeout_height=4_253_760,  # N + 2 * 20160 (2 weeks after the start)
-                minimum_activation_height=0,
-                lock_in_on_timeout=False,
-                version='0.59.0',
-                signal_support_by_default=False,
-            ),
-            Feature.NOP_FEATURE_3: Criteria(
-                bit=2,
-                start_height=4_273_920,  # N (on 2024/02/22, the best block is 4_251_000 on mainnet)
-                timeout_height=4_475_520,  # N + 10 * 20160 (10 weeks after the start)
-                minimum_activation_height=4_495_680,  # N + 11 * 20160 (11 weeks after the start)
-                lock_in_on_timeout=False,
-                version='0.59.0',
-                signal_support_by_default=True,
-            ),
-            Feature.NOP_FEATURE_4: Criteria(
-                bit=3,
-                start_height=4_273_920,  # N (on 2024/02/22, the best block is 4_251_000 on mainnet)
-                timeout_height=4_475_520,  # N + 10 * 20160 (10 weeks after the start)
-                minimum_activation_height=0,
-                lock_in_on_timeout=False,
-                version='0.59.0',
-                signal_support_by_default=False,
-            ),
             Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: Criteria(
                 bit=0,
                 # N = 4_475_520

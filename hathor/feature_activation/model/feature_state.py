@@ -12,10 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from enum import Enum
+from enum import Enum, unique
 
 
-class FeatureState(Enum):
+@unique
+class FeatureState(str, Enum):
     """
     Possible states a feature can be in, for each block.
 
@@ -34,6 +35,10 @@ class FeatureState(Enum):
     LOCKED_IN = 'LOCKED_IN'
     ACTIVE = 'ACTIVE'
     FAILED = 'FAILED'
+
+    def is_active(self) -> bool:
+        """Return whether the state is active."""
+        return self is FeatureState.ACTIVE
 
     @staticmethod
     def get_signaling_states() -> set['FeatureState']:

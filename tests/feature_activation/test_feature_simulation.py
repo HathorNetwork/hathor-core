@@ -22,10 +22,11 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
+from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.simulator import FakeConnection
-from hathor.simulator.utils import add_new_blocks
+from hathor.simulator.utils import add_new_blocks, gen_new_tx
 from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.util import not_none
 from tests import unittest
@@ -75,14 +76,17 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings, REWARD_SPEND_MIN_BLOCKS=0)
+        self.simulator.settings = settings
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
         feature_service = artifacts.feature_service
         manager = artifacts.manager
+        assert manager.wallet is not None
+        address = manager.wallet.get_unused_address(mark_as_used=False)
 
         feature_resource = FeatureResource(
-            feature_settings=feature_settings,
+            settings=settings,
             feature_service=feature_service,
             tx_storage=artifacts.tx_storage
         )
@@ -95,9 +99,16 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             patch.object(FeatureService, '_calculate_new_state', calculate_new_state_mock),
             patch.object(FeatureService, '_get_ancestor_iteratively', get_ancestor_iteratively_mock),
         ):
+            assert artifacts.bit_signaling_service.get_support_features() == []
+            assert artifacts.bit_signaling_service.get_not_support_features() == []
+
             # at the beginning, the feature is DEFINED:
-            add_new_blocks(manager, 10)
+            [*_, last_block] = add_new_blocks(manager, 10)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*10)
+            tx.weight = 25
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=10,
@@ -121,9 +132,21 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
 
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.DEFINED}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == []
+            assert artifacts.bit_signaling_service.get_not_support_features() == []
+
             # at block 19, the feature is DEFINED, just before becoming STARTED:
-            add_new_blocks(manager, 9)
+            [*_, last_block] = add_new_blocks(manager, 9)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*19)
+            tx.weight = 25
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=19,
@@ -146,9 +169,21 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
 
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.DEFINED}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == []
+            assert artifacts.bit_signaling_service.get_not_support_features() == []
+
             # at block 20, the feature becomes STARTED:
-            add_new_blocks(manager, 1)
+            [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*20)
+            tx.weight = 25
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=20,
@@ -169,13 +204,25 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 20
             assert get_ancestor_iteratively_mock.call_count == 0
 
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.STARTED}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == []
+            assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
             # we add one block before resetting the mock, just to make sure block 20 gets a chance to be saved
             add_new_blocks(manager, 1)
             calculate_new_state_mock.reset_mock()
 
             # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
-            add_new_blocks(manager, 34)
+            [*_, last_block] = add_new_blocks(manager, 34)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*55)
+            tx.weight = 30
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=55,
@@ -197,9 +244,21 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
 
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.STARTED}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == []
+            assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
             # at block 56, the feature becomes MUST_SIGNAL:
-            add_new_blocks(manager, 1)
+            [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*56)
+            tx.weight = 30
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=56,
@@ -220,6 +279,14 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 56
             assert get_ancestor_iteratively_mock.call_count == 0
 
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.MUST_SIGNAL}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == [Feature.NOP_FEATURE_1]
+            assert artifacts.bit_signaling_service.get_not_support_features() == []
+
             # we add one block before resetting the mock, just to make sure block 56 gets a chance to be saved
             add_new_blocks(manager, 1, signal_bits=0b1)
             calculate_new_state_mock.reset_mock()
@@ -228,7 +295,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             non_signaling_block = manager.generate_mining_block()
             manager.cpu_mining_service.resolve(non_signaling_block)
             non_signaling_block.signal_bits = 0b10
-            non_signaling_block.update_reward_lock_metadata()
+            non_signaling_block.init_static_metadata_from_storage(settings, manager.tx_storage)
 
             with pytest.raises(BlockMustSignalError):
                 manager.verification_service.verify(non_signaling_block)
@@ -236,8 +303,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert not manager.propagate_tx(non_signaling_block)
 
             # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
-            add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
+            [*_, last_block] = add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*59)
+            tx.weight = 30
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=59,
@@ -260,9 +331,21 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
 
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.MUST_SIGNAL}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == [Feature.NOP_FEATURE_1]
+            assert artifacts.bit_signaling_service.get_not_support_features() == []
+
             # at block 60, the feature becomes LOCKED_IN:
-            add_new_blocks(manager, 1)
+            [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*60)
+            tx.weight = 30
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=60,
@@ -283,13 +366,25 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 60
             assert get_ancestor_iteratively_mock.call_count == 0
 
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.LOCKED_IN}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == [Feature.NOP_FEATURE_1]
+            assert artifacts.bit_signaling_service.get_not_support_features() == []
+
             # we add one block before resetting the mock, just to make sure block 60 gets a chance to be saved
             add_new_blocks(manager, 1)
             calculate_new_state_mock.reset_mock()
 
             # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
-            add_new_blocks(manager, 10)
+            [*_, last_block] = add_new_blocks(manager, 10)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*71)
+            tx.weight = 30
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=71,
@@ -311,9 +406,21 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
 
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.LOCKED_IN}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == [Feature.NOP_FEATURE_1]
+            assert artifacts.bit_signaling_service.get_not_support_features() == []
+
             # at block 72, the feature becomes ACTIVE, forever:
-            add_new_blocks(manager, 1)
+            [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
+            tx = gen_new_tx(manager, address, 6400*72)
+            tx.weight = 30
+            tx.update_hash()
+            assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=72,
@@ -334,6 +441,14 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 72
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
+
+            expected_states = {Feature.NOP_FEATURE_1: FeatureState.ACTIVE}
+            assert feature_service.get_feature_states(vertex=last_block) == expected_states
+            assert feature_service.get_feature_states(vertex=tx) == expected_states
+            assert tx.static_metadata.closest_ancestor_block == last_block.hash
+
+            assert artifacts.bit_signaling_service.get_support_features() == []
+            assert artifacts.bit_signaling_service.get_not_support_features() == []
 
     def test_reorg(self) -> None:
         feature_settings = FeatureSettings(
@@ -358,11 +473,14 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         manager = artifacts.manager
 
         feature_resource = FeatureResource(
-            feature_settings=feature_settings,
+            settings=settings,
             feature_service=feature_service,
             tx_storage=artifacts.tx_storage
         )
         web_client = StubSite(feature_resource)
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # at the beginning, the feature is DEFINED:
         self.simulator.run(60)
@@ -383,6 +501,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # at block 4, the feature becomes STARTED with 0% acceptance
         add_new_blocks(manager, 4)
@@ -405,6 +526,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
         # at block 7, acceptance is 25% (we're signaling 1 block out of 4)
         add_new_blocks(manager, 2)
         add_new_blocks(manager, 1, signal_bits=0b10)
@@ -426,6 +550,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
 
         # at block 11, acceptance is 75% (we're signaling 3 blocks out of 4),
         # so the feature will be locked-in in the next block
@@ -450,6 +577,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
         # at block 12, the feature is locked-in
         add_new_blocks(manager, 1)
         self.simulator.run(60)
@@ -471,6 +601,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             ]
         )
 
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
+
         # at block 16, the feature is activated
         add_new_blocks(manager, 4)
         self.simulator.run(60)
@@ -491,6 +624,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == []
 
         # We then create a new manager with one more block (17 vs 16), so its blockchain wins when
         # both managers are connected. This causes a reorg and the feature goes back to the STARTED state.
@@ -522,6 +658,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 )
             ]
         )
+
+        assert artifacts.bit_signaling_service.get_support_features() == []
+        assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
 
 
 class BaseMemoryStorageFeatureSimulationTest(BaseFeatureSimulationTest):
@@ -573,7 +712,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         manager1 = artifacts1.manager
 
         feature_resource = FeatureResource(
-            feature_settings=feature_settings,
+            settings=settings,
             feature_service=feature_service1,
             tx_storage=artifacts1.tx_storage
         )
@@ -626,7 +765,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         feature_service = artifacts2.feature_service
 
         feature_resource = FeatureResource(
-            feature_settings=feature_settings,
+            settings=settings,
             feature_service=feature_service,
             tx_storage=artifacts2.tx_storage
         )

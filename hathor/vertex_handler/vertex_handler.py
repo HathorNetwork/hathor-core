@@ -20,7 +20,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.feature_activation.feature_service import FeatureService
-from hathor.p2p.manager import ConnectionsManager
+from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block
@@ -30,6 +30,7 @@ from hathor.verification.verification_service import VerificationService
 from hathor.wallet import BaseWallet
 
 logger = get_logger()
+cpu = get_cpu_profiler()
 
 
 class VertexHandler:
@@ -40,7 +41,6 @@ class VertexHandler:
         '_tx_storage',
         '_verification_service',
         '_consensus',
-        '_p2p_manager',
         '_feature_service',
         '_pubsub',
         '_wallet',
@@ -55,7 +55,6 @@ class VertexHandler:
         tx_storage: TransactionStorage,
         verification_service: VerificationService,
         consensus: ConsensusAlgorithm,
-        p2p_manager: ConnectionsManager,
         feature_service: FeatureService,
         pubsub: PubSubManager,
         wallet: BaseWallet | None,
@@ -67,19 +66,18 @@ class VertexHandler:
         self._tx_storage = tx_storage
         self._verification_service = verification_service
         self._consensus = consensus
-        self._p2p_manager = p2p_manager
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._wallet = wallet
         self._log_vertex_bytes = log_vertex_bytes
 
+    @cpu.profiler('on_new_vertex')
     def on_new_vertex(
         self,
         vertex: BaseTransaction,
         *,
         quiet: bool = False,
         fails_silently: bool = True,
-        propagate_to_peers: bool = True,
         reject_locked_reward: bool = True,
     ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
@@ -87,7 +85,6 @@ class VertexHandler:
         :param vertex: transaction to be added
         :param quiet: if True will not log when a new tx is accepted
         :param fails_silently: if False will raise an exception when tx cannot be added
-        :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
         is_valid = self._validate_vertex(
             vertex,
@@ -102,7 +99,6 @@ class VertexHandler:
         self._post_consensus(
             vertex,
             quiet=quiet,
-            propagate_to_peers=propagate_to_peers,
             reject_locked_reward=reject_locked_reward
         )
 
@@ -153,8 +149,6 @@ class VertexHandler:
 
         if not metadata.validation.is_fully_connected():
             try:
-                # TODO: Remove this from here after a refactor in metadata initialization
-                vertex.update_reward_lock_metadata()
                 self._verification_service.validate_full(vertex, reject_locked_reward=reject_locked_reward)
             except HathorError as e:
                 if not fails_silently:
@@ -179,7 +173,6 @@ class VertexHandler:
         vertex: BaseTransaction,
         *,
         quiet: bool,
-        propagate_to_peers: bool,
         reject_locked_reward: bool,
     ) -> None:
         """ Handle operations that need to happen once the tx becomes fully validated.
@@ -191,7 +184,8 @@ class VertexHandler:
         assert self._verification_service.validate_full(
             vertex,
             skip_block_weight_verification=True,
-            reject_locked_reward=reject_locked_reward
+            reject_locked_reward=reject_locked_reward,
+            init_static_metadata=False,
         )
         self._tx_storage.indexes.update(vertex)
         if self._tx_storage.indexes.mempool_tips:
@@ -209,33 +203,27 @@ class VertexHandler:
 
         self._log_new_object(vertex, 'new {}', quiet=quiet)
 
-        if propagate_to_peers:
-            # Propagate to our peers.
-            self._p2p_manager.send_tx_to_peers(vertex)
-
     def _log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
         """ A shortcut for logging additional information for block/txs.
         """
         metadata = tx.get_metadata()
         now = datetime.datetime.fromtimestamp(self._reactor.seconds())
+        feature_states = self._feature_service.get_feature_states(vertex=tx)
         kwargs = {
             'tx': tx,
             'ts_date': datetime.datetime.fromtimestamp(tx.timestamp),
             'time_from_now': tx.get_time_from_now(now),
             'validation': metadata.validation.name,
+            'feature_states': {
+                feature.value: state.value
+                for feature, state in feature_states.items()
+            }
         }
         if self._log_vertex_bytes:
             kwargs['bytes'] = bytes(tx).hex()
-        if tx.is_block:
+        if isinstance(tx, Block):
             message = message_fmt.format('block')
-            if isinstance(tx, Block):
-                feature_descriptions = self._feature_service.get_bits_description(block=tx)
-                feature_states = {
-                    feature.value: description.state.value
-                    for feature, description in feature_descriptions.items()
-                }
-                kwargs['_height'] = tx.get_height()
-                kwargs['feature_states'] = feature_states
+            kwargs['_height'] = tx.get_height()
         else:
             message = message_fmt.format('tx')
         if not quiet:

@@ -14,10 +14,11 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.dag_builder import DAGBuilder
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.manager import HathorManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.p2p.sync_version import SyncVersion
@@ -30,6 +31,7 @@ from hathor.types import VertexId
 from hathor.util import Random, not_none
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
+from tests.utils import GENESIS_SEED
 
 logger = get_logger()
 main = ut_main
@@ -40,7 +42,7 @@ def short_hashes(container: Collection[bytes]) -> Iterable[str]:
     return map(lambda hash_bytes: hash_bytes[-2:].hex(), container)
 
 
-def _load_peer_id_pool(file_path: Optional[str] = None) -> Iterator[PeerId]:
+def _load_peer_pool(file_path: Optional[str] = None) -> Iterator[PrivatePeer]:
     import json
 
     if file_path is None:
@@ -49,7 +51,7 @@ def _load_peer_id_pool(file_path: Optional[str] = None) -> Iterator[PeerId]:
     with open(file_path) as peer_id_pool_file:
         peer_id_pool_dict = json.load(peer_id_pool_file)
         for peer_id_dict in peer_id_pool_dict:
-            yield PeerId.create_from_json(peer_id_dict)
+            yield PrivatePeer.create_from_json(peer_id_dict)
 
 
 def _get_default_peer_id_pool_filepath() -> str:
@@ -60,7 +62,7 @@ def _get_default_peer_id_pool_filepath() -> str:
     return file_path
 
 
-PEER_ID_POOL = list(_load_peer_id_pool())
+PEER_ID_POOL = list(_load_peer_pool())
 
 # XXX: Sync*Params classes should be inherited before the TestCase class when a sync version is needed
 
@@ -85,7 +87,6 @@ class TestBuilder(Builder):
 
     def __init__(self, settings: HathorSettings | None = None) -> None:
         super().__init__()
-        self.set_network('testnet')
         # default builder has sync-v2 enabled for tests
         self.enable_sync_v2()
         self.set_settings(settings or get_global_settings())
@@ -97,10 +98,10 @@ class TestBuilder(Builder):
         artifacts.manager.connections.disable_rate_limiter()
         return artifacts
 
-    def _get_peer_id(self) -> PeerId:
-        if self._peer_id is not None:
-            return self._peer_id
-        return PeerId()
+    def _get_peer(self) -> PrivatePeer:
+        if self._peer is not None:
+            return self._peer
+        return PrivatePeer.auto_generated()
 
     def _get_reactor(self) -> Reactor:
         if self._reactor is None:
@@ -120,7 +121,7 @@ class TestCase(unittest.TestCase):
         self.clock.advance(time.time())
         self.reactor = self.clock
         self.log = logger.new()
-        self.reset_peer_id_pool()
+        self.reset_peer_pool()
         self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config
         self.log.info('set seed', seed=self.seed)
         self.rng = Random(self.seed)
@@ -132,23 +133,26 @@ class TestCase(unittest.TestCase):
         for fn in self._pending_cleanups:
             fn()
 
-    def reset_peer_id_pool(self) -> None:
-        self._free_peer_id_pool = self.new_peer_id_pool()
+    def reset_peer_pool(self) -> None:
+        self._free_peer_pool = self.new_peer_pool()
 
-    def new_peer_id_pool(self) -> list[PeerId]:
+    def new_peer_pool(self) -> list[PrivatePeer]:
         return PEER_ID_POOL.copy()
 
-    def get_random_peer_id_from_pool(self, pool: Optional[list[PeerId]] = None,
-                                     rng: Optional[Random] = None) -> PeerId:
+    def get_random_peer_from_pool(
+        self,
+        pool: Optional[list[PrivatePeer]] = None,
+        rng: Optional[Random] = None,
+    ) -> PrivatePeer:
         if pool is None:
-            pool = self._free_peer_id_pool
+            pool = self._free_peer_pool
         if not pool:
             raise RuntimeError('no more peer ids on the pool')
         if rng is None:
             rng = self.rng
-        peer_id = self.rng.choice(pool)
-        pool.remove(peer_id)
-        return peer_id
+        peer = self.rng.choice(pool)
+        pool.remove(peer)
+        return peer
 
     def mkdtemp(self) -> str:
         tmpdir = tempfile.mkdtemp()
@@ -168,11 +172,22 @@ class TestCase(unittest.TestCase):
             wallet.lock()
         return wallet
 
-    def get_builder(self, network: str) -> TestBuilder:
+    def get_dag_builder(self, manager: HathorManager) -> DAGBuilder:
+        genesis_wallet = HDWallet(words=GENESIS_SEED)
+        genesis_wallet._manually_initialize()
+
+        return DAGBuilder(
+            settings=manager._settings,
+            daa=manager.daa,
+            genesis_wallet=genesis_wallet,
+            wallet_factory=self.get_wallet,
+            vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
+        )
+
+    def get_builder(self) -> TestBuilder:
         builder = TestBuilder()
         builder.set_rng(self.rng) \
-            .set_reactor(self.clock) \
-            .set_network(network)
+            .set_reactor(self.clock)
         return builder
 
     def create_peer_from_builder(self, builder: Builder, start_manager: bool = True) -> HathorManager:
@@ -194,7 +209,7 @@ class TestCase(unittest.TestCase):
     def create_peer(  # type: ignore[no-untyped-def]
         self,
         network: str,
-        peer_id: PeerId | None = None,
+        peer: PrivatePeer | None = None,
         wallet: BaseWallet | None = None,
         tx_storage: TransactionStorage | None = None,
         unlock_wallet: bool = True,
@@ -211,13 +226,16 @@ class TestCase(unittest.TestCase):
         pubsub: PubSubManager | None = None,
         event_storage: EventStorage | None = None,
         enable_event_queue: bool | None = None,
-        use_memory_storage: bool | None = None
+        use_memory_storage: bool | None = None,
+        enable_ipv6: bool = False,
+        disable_ipv4: bool = False,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
         enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
-        builder = self.get_builder(network) \
+        settings = self._settings._replace(NETWORK_NAME=network)
+        builder = self.get_builder() \
             .set_full_verification(full_verification) \
-            .set_settings(self._settings)
+            .set_settings(settings)
 
         if checkpoints is not None:
             builder.set_checkpoints(checkpoints)
@@ -225,9 +243,9 @@ class TestCase(unittest.TestCase):
         if pubsub:
             builder.set_pubsub(pubsub)
 
-        if peer_id is None:
-            peer_id = PeerId()
-        builder.set_peer_id(peer_id)
+        if peer is None:
+            peer = PrivatePeer.auto_generated()
+        builder.set_peer(peer)
 
         if not wallet:
             wallet = self._create_test_wallet()
@@ -273,6 +291,15 @@ class TestCase(unittest.TestCase):
 
         if utxo_index:
             builder.enable_utxo_index()
+
+        if capabilities is not None:
+            builder.set_capabilities(capabilities)
+
+        if enable_ipv6:
+            builder.enable_ipv6()
+
+        if disable_ipv4:
+            builder.disable_ipv4()
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)

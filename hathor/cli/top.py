@@ -24,8 +24,8 @@ from collections import defaultdict
 from math import floor
 from typing import Any, Callable, Optional
 
-# XXX: as annoying as it is, a simple `if: raise` is not enough, but putting the whole module inside works
-if sys.platform != 'win32':
+# XXX: support for Windows removed, this should be un-indented
+if True:
     import curses
     import curses.ascii
 

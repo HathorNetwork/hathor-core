@@ -48,6 +48,7 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     os.environ['HATHOR_CONFIG_YAML'] = UNITTESTS_SETTINGS_FILEPATH
     from hathor.cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
     from hathor.cli.events_simulator.scenario import Scenario
+    from hathor.conf.get_settings import get_global_settings
     from hathor.simulator import Simulator
 
     try:
@@ -70,7 +71,7 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     forwarding_ws_factory = EventForwardingWebsocketFactory(
         simulator=simulator,
         peer_id='simulator_peer_id',
-        network='simulator_network',
+        settings=get_global_settings(),
         reactor=reactor,
         event_storage=event_ws_factory._event_storage
     )
@@ -87,6 +88,8 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
 
     forwarding_ws_factory.start(stream_id='simulator_stream_id')
     scenario.simulate(simulator, manager)
+    assert manager.wallet is not None
+    log.info('final result', balances=manager.wallet.get_balance_per_address(simulator.settings.HATHOR_TOKEN_UID))
     reactor.listenTCP(args.port, site)
     reactor.run()
 

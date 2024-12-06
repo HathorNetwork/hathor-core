@@ -1,10 +1,8 @@
 import os
 import re
 import shutil
-import sys
 import tempfile
 
-import pytest
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.profiler.resources import ProfilerResource
@@ -19,7 +17,6 @@ class BaseProfilerTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(ProfilerResource(self.manager))
 
-    @pytest.mark.skipif(sys.platform == 'win32', reason='shutil.rmtree fails on Windows')
     @inlineCallbacks
     def test_post(self):
         # Options
