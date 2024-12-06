@@ -140,7 +140,7 @@ class Builder:
         self._settings: Optional[HathorSettingsType] = None
         self._rng: Random = Random()
         self._checkpoints: Optional[list[Checkpoint]] = None
-        self._capabilities: Optional[list[str]] = None
+        self._capabilities: Optional[tuple[str, ...]] = None
 
         self._peer: Optional[PrivatePeer] = None
         self._cmdline: str = ''
@@ -336,7 +336,7 @@ class Builder:
         self._checkpoints = checkpoints
         return self
 
-    def set_capabilities(self, capabilities: list[str]) -> 'Builder':
+    def set_capabilities(self, capabilities: tuple[str, ...]) -> 'Builder':
         self.check_if_can_modify()
         self._capabilities = capabilities
         return self
@@ -648,7 +648,7 @@ class Builder:
 
         return self._poa_block_producer
 
-    def _get_or_create_capabilities(self) -> list[str]:
+    def _get_or_create_capabilities(self) -> tuple[str, ...]:
         if self._capabilities is None:
             settings = self._get_or_create_settings()
             self._capabilities = settings.get_default_capabilities()

@@ -109,7 +109,7 @@ class HathorManager:
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
-        capabilities: list[str],
+        capabilities: tuple[str, ...],
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         checkpoints: Optional[list[Checkpoint]] = None,

@@ -542,6 +542,7 @@ class TransactionStorage(ABC):
         return tx
 
     def get_block_id_by_height(self, height: int) -> VertexId | None:
+        """Return a block id in the best blockchain from the height index. This is fast."""
         assert self.indexes is not None
         return self.indexes.height.get(height)
 
@@ -1149,6 +1150,7 @@ class TransactionStorage(ABC):
             return self.transaction_exists(vertex_id)
 
     def get_mempool_tips(self) -> set[VertexId]:
+        """Return the mempool tips from the mempool tips index, assuming it exists."""
         assert self.indexes is not None
         assert self.indexes.mempool_tips is not None
         return self.indexes.mempool_tips.get()

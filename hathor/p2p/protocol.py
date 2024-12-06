@@ -412,24 +412,48 @@ class HathorProtocol:
         self.state.sync_agent.disable_sync()
 
     def is_synced(self) -> bool:
+        """
+        Return whether this protocol is synced.
+        This is implemented to conform with the P2PConnectionProtocol.
+        """
         assert isinstance(self.state, ReadyState)
         return self.state.is_synced()
 
     def send_tx_to_peer(self, tx: BaseTransaction) -> None:
+        """
+        Send a tx to the peer in this protocol, assuming it's ready.
+        This is implemented to conform with the P2PConnectionProtocol.
+        """
         assert isinstance(self.state, ReadyState)
         return self.state.send_tx_to_peer(tx)
 
     def get_peer(self) -> PublicPeer:
+        """
+        Return this protocol's `PublicPeer`.
+        This is implemented to conform with the P2PConnectionProtocol.
+        """
         return self.peer
 
     def get_peer_if_set(self) -> PublicPeer | None:
+        """
+        Return this protocol's `PublicPeer` if it's set, `None` otherwise.
+        This is implemented to conform with the P2PConnectionProtocol.
+        """
         return self._peer
 
     def send_peers(self, peers: Iterable[PublicPeer]) -> None:
+        """
+        Send peers to the peer in this protocol, assuming it's ready.
+        This is implemented to conform with the P2PConnectionProtocol.
+        """
         assert isinstance(self.state, ReadyState)
         self.state.send_peers(peers)
 
     def get_metrics(self) -> 'ConnectionMetrics':
+        """
+        Return this protocol's metrics.
+        This is implemented to conform with the P2PConnectionProtocol.
+        """
         return self.metrics
 
 

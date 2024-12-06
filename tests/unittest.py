@@ -214,7 +214,7 @@ class TestCase(unittest.TestCase):
         tx_storage: TransactionStorage | None = None,
         unlock_wallet: bool = True,
         wallet_index: bool = False,
-        capabilities: list[str] | None = None,
+        capabilities: tuple[str, ...] | None = None,
         full_verification: bool = True,
         enable_sync_v1: bool | None = None,
         enable_sync_v2: bool | None = None,

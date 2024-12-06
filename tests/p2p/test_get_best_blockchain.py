@@ -204,10 +204,10 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
         manager1 = self.create_peer()
         manager2 = self.create_peer()
 
-        cababilities_without_get_best_blockchain = [
+        cababilities_without_get_best_blockchain = (
             self._settings.CAPABILITY_WHITELIST,
             self._settings.CAPABILITY_SYNC_VERSION,
-        ]
+        )
         manager2.capabilities = cababilities_without_get_best_blockchain
 
         conn12 = FakeConnection(manager1, manager2, latency=0.05)

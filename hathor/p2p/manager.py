@@ -792,15 +792,31 @@ class ConnectionsManager:
         self.my_peer.reload_entrypoints_from_source_file()
 
     def get_peers_whitelist(self) -> list[PeerId]:
+        """
+        Return a list of `PeerId`s in the whitelist.
+        This is implemented to conform with the P2PManagerProtocol.
+        """
         assert self.manager is not None
         return self.manager.peers_whitelist
 
     def get_verified_peers(self) -> Iterable[PublicPeer]:
+        """
+        Return an iterable of `PublicPeer`s that are verified.
+        This is implemented to conform with the P2PManagerProtocol.
+        """
         return self.verified_peer_storage.values()
 
     def get_randbytes(self, n: int) -> bytes:
+        """
+        Generate `n` random bytes.
+        This is implemented to conform with the P2PManagerProtocol.
+        """
         return self.rng.randbytes(n)
 
     def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
+        """
+        Return whether `peer_id_` is whitelisted.
+        This is implemented to conform with the P2PManagerProtocol.
+        """
         assert self.manager is not None
         return peer_id in self.manager.peers_whitelist
