@@ -248,23 +248,25 @@ class Metrics:
         self.peer_connection_metrics.clear()
 
         for connection in self.connections.get_connected_peers():
-            if not connection._peer:
+            peer = connection.get_peer_if_set()
+            if not peer:
                 # A connection without peer will not be able to communicate
                 # So we can just discard it for the sake of the metrics
                 continue
 
+            metrics = connection.get_metrics()
             metric = PeerConnectionMetrics(
                 connection_string=str(connection.addr),
                 peer_id=str(connection.peer.id),
                 network=settings.NETWORK_NAME,
-                received_messages=connection.metrics.received_messages,
-                sent_messages=connection.metrics.sent_messages,
-                received_bytes=connection.metrics.received_bytes,
-                sent_bytes=connection.metrics.sent_bytes,
-                received_txs=connection.metrics.received_txs,
-                discarded_txs=connection.metrics.discarded_txs,
-                received_blocks=connection.metrics.received_blocks,
-                discarded_blocks=connection.metrics.discarded_blocks,
+                received_messages=metrics.received_messages,
+                sent_messages=metrics.sent_messages,
+                received_bytes=metrics.received_bytes,
+                sent_bytes=metrics.sent_bytes,
+                received_txs=metrics.received_txs,
+                discarded_txs=metrics.discarded_txs,
+                received_blocks=metrics.received_blocks,
+                discarded_blocks=metrics.discarded_blocks,
             )
 
             self.peer_connection_metrics.append(metric)

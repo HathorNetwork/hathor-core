@@ -40,6 +40,7 @@ from hathor.p2p.sync_v2.streamers import (
 from hathor.p2p.sync_v2.transaction_streaming_client import TransactionStreamingClient
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction, Block, Transaction
+from hathor.transaction.genesis import is_genesis
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
@@ -383,7 +384,7 @@ class NodeBlockSync(SyncAgent):
         # Not synced but same blockchain?
         if self.peer_best_block.height <= my_best_block.height:
             # Is peer behind me at the same blockchain?
-            common_block_hash = self.tx_storage.indexes.height.get(self.peer_best_block.height)
+            common_block_hash = self.tx_storage.get_block_id_by_height(self.peer_best_block.height)
             if common_block_hash == self.peer_best_block.id:
                 # If yes, nothing to sync from this peer.
                 if not self.is_synced():
@@ -461,15 +462,13 @@ class NodeBlockSync(SyncAgent):
     def handle_get_tips(self, _payload: str) -> None:
         """ Handle a GET-TIPS message.
         """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
         if self._is_streaming:
             self.log.warn('can\'t send while streaming')  # XXX: or can we?
             self.send_message(ProtocolMessages.MEMPOOL_END)
             return
         self.log.debug('handle_get_tips')
         # TODO Use a streaming of tips
-        for tx_id in self.tx_storage.indexes.mempool_tips.get():
+        for tx_id in self.tx_storage.get_mempool_tips():
             self.send_tips(tx_id)
         self.log.debug('tips end')
         self.send_message(ProtocolMessages.TIPS_END)
@@ -645,7 +644,6 @@ class NodeBlockSync(SyncAgent):
     def handle_get_peer_block_hashes(self, payload: str) -> None:
         """ Handle a GET-PEER-BLOCK-HASHES message.
         """
-        assert self.tx_storage.indexes is not None
         heights = json.loads(payload)
         if len(heights) > 20:
             self.log.info('too many heights', heights_qty=len(heights))
@@ -653,7 +651,7 @@ class NodeBlockSync(SyncAgent):
             return
         data = []
         for h in heights:
-            blk_hash = self.tx_storage.indexes.height.get(h)
+            blk_hash = self.tx_storage.get_block_id_by_height(h)
             if blk_hash is None:
                 break
             blk = self.tx_storage.get_transaction(blk_hash)
@@ -1154,7 +1152,7 @@ class NodeBlockSync(SyncAgent):
             return
 
         assert tx is not None
-        if self.protocol.node.tx_storage.get_genesis(tx.hash):
+        if is_genesis(tx.hash, settings=self._settings):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return

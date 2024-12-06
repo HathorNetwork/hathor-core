@@ -158,7 +158,7 @@ class ReadyState(BaseState):
         """ Executed when a GET-PEERS command is received. It just responds with
         a list of all known peers.
         """
-        for peer in self.protocol.connections.verified_peer_storage.values():
+        for peer in self.protocol.connections.get_verified_peers():
             self.send_peers([peer])
 
     def send_peers(self, peer_list: Iterable[PublicPeer]) -> None:
@@ -206,8 +206,7 @@ class ReadyState(BaseState):
         """
         # Add a salt number to prevent peers from faking rtt.
         self.ping_start_time = self.reactor.seconds()
-        rng = self.protocol.connections.rng
-        self.ping_salt = rng.randbytes(self.ping_salt_size).hex()
+        self.ping_salt = self.protocol.connections.get_randbytes(self.ping_salt_size).hex()
         self.send_message(ProtocolMessages.PING, self.ping_salt)
 
     def send_pong(self, salt: str) -> None:

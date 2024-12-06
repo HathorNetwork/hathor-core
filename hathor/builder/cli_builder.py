@@ -317,6 +317,7 @@ class CliBuilder:
         )
 
         cpu_mining_service = CpuMiningService()
+        capabilities = settings.get_default_capabilities()
 
         p2p_manager = ConnectionsManager(
             settings=settings,
@@ -386,6 +387,7 @@ class CliBuilder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            capabilities=capabilities,
         )
 
         if self._args.x_ipython_kernel:

@@ -8,8 +8,8 @@ from tests import unittest
 class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase):
     def test_capabilities(self) -> None:
         network = 'testnet'
-        manager1 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST])
-        manager2 = self.create_peer(network, capabilities=[])
+        manager1 = self.create_peer(network, capabilities=(self._settings.CAPABILITY_WHITELIST,))
+        manager2 = self.create_peer(network, capabilities=())
 
         conn = FakeConnection(manager1, manager2)
 
@@ -26,8 +26,8 @@ class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase)
         self.assertIsInstance(conn._proto1.state.sync_agent, NodeSyncTimestamp)
         self.assertIsInstance(conn._proto2.state.sync_agent, NodeSyncTimestamp)
 
-        manager3 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST])
-        manager4 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST])
+        manager3 = self.create_peer(network, capabilities=(self._settings.CAPABILITY_WHITELIST,))
+        manager4 = self.create_peer(network, capabilities=(self._settings.CAPABILITY_WHITELIST,))
 
         conn2 = FakeConnection(manager3, manager4)
 
@@ -47,9 +47,9 @@ class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase)
 class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase):
     def test_capabilities(self) -> None:
         network = 'testnet'
-        manager1 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
-                                                           self._settings.CAPABILITY_SYNC_VERSION])
-        manager2 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_SYNC_VERSION])
+        manager1 = self.create_peer(network, capabilities=(self._settings.CAPABILITY_WHITELIST,
+                                                           self._settings.CAPABILITY_SYNC_VERSION))
+        manager2 = self.create_peer(network, capabilities=(self._settings.CAPABILITY_SYNC_VERSION,))
 
         conn = FakeConnection(manager1, manager2)
 
@@ -66,10 +66,10 @@ class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase)
         self.assertIsInstance(conn._proto1.state.sync_agent, NodeBlockSync)
         self.assertIsInstance(conn._proto2.state.sync_agent, NodeBlockSync)
 
-        manager3 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
-                                                           self._settings.CAPABILITY_SYNC_VERSION])
-        manager4 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
-                                                           self._settings.CAPABILITY_SYNC_VERSION])
+        manager3 = self.create_peer(network, capabilities=(self._settings.CAPABILITY_WHITELIST,
+                                                           self._settings.CAPABILITY_SYNC_VERSION))
+        manager4 = self.create_peer(network, capabilities=(self._settings.CAPABILITY_WHITELIST,
+                                                           self._settings.CAPABILITY_SYNC_VERSION))
 
         conn2 = FakeConnection(manager3, manager4)
 
