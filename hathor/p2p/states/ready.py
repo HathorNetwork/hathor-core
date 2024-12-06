@@ -96,6 +96,9 @@ class ReadyState(BaseState):
                 ProtocolMessages.BEST_BLOCKCHAIN: self.handle_best_blockchain,
             })
 
+        # whether to relay IPV6 entrypoints
+        self.should_relay_ipv6_entrypoints: bool = self._settings.CAPABILITY_IPV6 in common_capabilities
+
         # Initialize sync manager and add its commands to the list of available commands.
         connections = self.protocol.connections
         assert connections is not None
@@ -163,8 +166,16 @@ class ReadyState(BaseState):
         """
         data = []
         for peer in peer_list:
-            if peer.info.entrypoints:
-                data.append(peer.to_unverified_peer().to_json())
+            if self.should_relay_ipv6_entrypoints and not peer.info.entrypoints:
+                self.log.debug('no entrypoints to relay', peer=str(peer.id))
+                continue
+
+            if not self.should_relay_ipv6_entrypoints and not peer.info.get_ipv4_only_entrypoints():
+                self.log.debug('no ipv4 entrypoints to relay', peer=str(peer.id))
+                continue
+
+            data.append(peer.to_unverified_peer().to_json(
+                only_ipv4_entrypoints=not self.should_relay_ipv6_entrypoints))
         self.send_message(ProtocolMessages.PEERS, json_dumps(data))
         self.log.debug('send peers', peers=data)
 
@@ -176,7 +187,7 @@ class ReadyState(BaseState):
         for data in received_peers:
             peer = UnverifiedPeer.create_from_json(data)
             if self.protocol.connections:
-                self.protocol.connections.on_receive_peer(peer, origin=self)
+                self.protocol.on_receive_peer(peer)
         self.log.debug('received peers', payload=payload)
 
     def send_ping_if_necessary(self) -> None:

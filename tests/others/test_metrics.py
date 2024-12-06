@@ -72,7 +72,7 @@ class BaseMetricsTest(unittest.TestCase):
         # Execution
         endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
         # This will trigger sending to the pubsub one of the network events
-        manager.connections.connect_to(endpoint, use_ssl=True)
+        manager.connections.connect_to_endpoint(endpoint, use_ssl=True)
 
         self.run_to_completion()
 

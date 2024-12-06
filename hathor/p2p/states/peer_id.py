@@ -42,6 +42,12 @@ class PeerIdState(BaseState):
         self.my_peer_ready = False
         self.other_peer_ready = False
 
+        # Common capabilities between the two peers
+        common_capabilities = protocol.capabilities & set(protocol.node.capabilities)
+
+        # whether to relay IPV6 entrypoints
+        self.should_relay_ipv6_entrypoints: bool = self._settings.CAPABILITY_IPV6 in common_capabilities
+
     def on_enter(self) -> None:
         self.send_peer_id()
 
@@ -65,10 +71,16 @@ class PeerIdState(BaseState):
 
     def _get_peer_id_data(self) -> dict[str, Any]:
         my_peer = self.protocol.my_peer
+
+        if not self.should_relay_ipv6_entrypoints:
+            entrypoints_as_str = my_peer.info.ipv4_entrypoints_as_str()
+        else:
+            entrypoints_as_str = my_peer.info.entrypoints_as_str()
+
         return dict(
             id=str(my_peer.id),
             pubKey=my_peer.get_public_key(),
-            entrypoints=my_peer.info.entrypoints_as_str(),
+            entrypoints=entrypoints_as_str,
         )
 
     def send_peer_id(self) -> None:

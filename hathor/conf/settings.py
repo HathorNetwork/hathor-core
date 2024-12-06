@@ -288,6 +288,9 @@ class HathorSettings(NamedTuple):
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
 
+    # Maximum number of entrypoints that we accept that a peer broadcasts
+    PEER_MAX_ENTRYPOINTS: int = 30
+
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
 
@@ -364,6 +367,7 @@ class HathorSettings(NamedTuple):
     CAPABILITY_WHITELIST: str = 'whitelist'
     CAPABILITY_SYNC_VERSION: str = 'sync-version'
     CAPABILITY_GET_BEST_BLOCKCHAIN: str = 'get-best-blockchain'
+    CAPABILITY_IPV6: str = 'ipv6'  # peers announcing this capability will be relayed ipv6 entrypoints from other peers
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None
@@ -429,6 +433,12 @@ class HathorSettings(NamedTuple):
     # Maximum number of tx tips to accept in the initial phase of the mempool sync 1000 is arbitrary, but it should be
     # more than enough for the forseeable future
     MAX_MEMPOOL_RECEIVING_TIPS: int = 1000
+
+    # Max number of peers simultanously stored in the node
+    MAX_VERIFIED_PEERS: int = 10_000
+
+    # Max number of peers simultanously stored per-connection
+    MAX_UNVERIFIED_PEERS_PER_CONN: int = 100
 
     # Used to enable nano contracts.
     #

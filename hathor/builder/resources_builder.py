@@ -307,7 +307,7 @@ class ResourcesBuilder:
         ws_factory.subscribe(self.manager.pubsub)
 
         # Event websocket resource
-        if self._args.x_enable_event_queue:
+        if self._args.x_enable_event_queue or self._args.enable_event_queue:
             root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
             root.putChild(b'event', EventResource(self.manager._event_manager))
 

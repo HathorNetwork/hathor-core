@@ -242,6 +242,9 @@ class CliBuilder:
         pubsub = PubSubManager(reactor)
 
         if self._args.x_enable_event_queue:
+            self.log.warn('--x-enable-event-queue is deprecated and will be removed, use --enable-event-queue instead')
+
+        if self._args.x_enable_event_queue or self._args.enable_event_queue:
             self.event_ws_factory = EventWebsocketFactory(
                 peer_id=str(peer.id),
                 settings=settings,
@@ -270,8 +273,8 @@ class CliBuilder:
         full_verification = False
         if self._args.x_full_verification:
             self.check_or_raise(
-                not self._args.x_enable_event_queue,
-                '--x-full-verification cannot be used with --x-enable-event-queue'
+                not self._args.x_enable_event_queue and not self._args.enable_event_queue,
+                '--x-full-verification cannot be used with --enable-event-queue'
             )
             full_verification = True
 
@@ -282,8 +285,8 @@ class CliBuilder:
             execution_manager=execution_manager
         )
 
-        if self._args.x_enable_event_queue:
-            self.log.info('--x-enable-event-queue flag provided. '
+        if self._args.x_enable_event_queue or self._args.enable_event_queue:
+            self.log.info('--enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
         self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
@@ -326,6 +329,8 @@ class CliBuilder:
             ssl=True,
             whitelist_only=False,
             rng=Random(),
+            enable_ipv6=self._args.x_enable_ipv6,
+            disable_ipv4=self._args.x_disable_ipv4,
         )
 
         vertex_handler = VertexHandler(
@@ -376,7 +381,7 @@ class CliBuilder:
             checkpoints=settings.CHECKPOINTS,
             environment_info=get_environment_info(args=str(self._args), peer_id=str(peer.id)),
             full_verification=full_verification,
-            enable_event_queue=self._args.x_enable_event_queue,
+            enable_event_queue=self._args.x_enable_event_queue or self._args.enable_event_queue,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,

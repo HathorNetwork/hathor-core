@@ -202,6 +202,9 @@ class Builder:
         self._poa_signer: PoaSigner | None = None
         self._poa_block_producer: PoaBlockProducer | None = None
 
+        self._enable_ipv6: bool = False
+        self._disable_ipv4: bool = False
+
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
@@ -426,6 +429,8 @@ class Builder:
             ssl=enable_ssl,
             whitelist_only=False,
             rng=self._rng,
+            enable_ipv6=self._enable_ipv6,
+            disable_ipv4=self._disable_ipv4,
         )
         SyncSupportLevel.add_factories(
             self._get_or_create_settings(),
@@ -810,6 +815,16 @@ class Builder:
     def disable_full_verification(self) -> 'Builder':
         self.check_if_can_modify()
         self._full_verification = False
+        return self
+
+    def enable_ipv6(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_ipv6 = True
+        return self
+
+    def disable_ipv4(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._disable_ipv4 = True
         return self
 
     def set_soft_voided_tx_ids(self, soft_voided_tx_ids: set[bytes]) -> 'Builder':

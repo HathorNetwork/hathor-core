@@ -19,10 +19,10 @@ class MockPeerDiscovery(PeerDiscovery):
         self.mocked_host_ports = mocked_host_ports
 
     @override
-    async def discover_and_connect(self, connect_to: Callable[[PeerEndpoint], None]) -> None:
+    async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
         for host, port in self.mocked_host_ports:
             addr = PeerAddress(Protocol.TCP, host, port)
-            connect_to(addr.with_id())
+            connect_to_endpoint(addr.with_id())
 
 
 class MockDNSPeerDiscovery(DNSPeerDiscovery):
@@ -50,7 +50,18 @@ class BootstrapTestCase(unittest.TestCase):
     def test_mock_discovery(self) -> None:
         pubsub = PubSubManager(self.clock)
         peer = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(self._settings, self.clock, peer, pubsub, True, self.rng, True)
+        connections = ConnectionsManager(
+            self._settings,
+            self.clock,
+            peer,
+            pubsub,
+            True,
+            self.rng,
+            True,
+            enable_ipv6=False,
+            disable_ipv4=False
+        )
+
         host_ports1 = [
             ('foobar', 1234),
             ('127.0.0.99', 9999),
@@ -74,7 +85,18 @@ class BootstrapTestCase(unittest.TestCase):
     def test_dns_discovery(self) -> None:
         pubsub = PubSubManager(self.clock)
         peer = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(self._settings, self.clock, peer, pubsub, True, self.rng, True)
+        connections = ConnectionsManager(
+            self._settings,
+            self.clock,
+            peer,
+            pubsub,
+            True,
+            self.rng,
+            True,
+            enable_ipv6=False,
+            disable_ipv4=False
+        )
+
         bootstrap_a = [
             '127.0.0.99',
             '127.0.0.88',

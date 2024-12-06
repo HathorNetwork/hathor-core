@@ -106,24 +106,33 @@ class PeerInfo:
     """ Stores entrypoint and connection attempts information.
     """
 
-    entrypoints: list[PeerAddress] = field(default_factory=list)
-    retry_timestamp: int = 0   # should only try connecting to this peer after this timestamp
-    retry_interval: int = 5     # how long to wait for next connection retry. It will double for each failure
-    retry_attempts: int = 0     # how many retries were made
-    last_seen: float = inf        # last time this peer was seen
+    entrypoints: set[PeerAddress] = field(default_factory=set)
+    retry_timestamp: int = 0  # should only try connecting to this peer after this timestamp
+    retry_interval: int = 5  # how long to wait for next connection retry. It will double for each failure
+    retry_attempts: int = 0  # how many retries were made
+    last_seen: float = inf  # last time this peer was seen
     flags: set[str] = field(default_factory=set)
     _settings: HathorSettings = field(default_factory=get_global_settings, repr=False)
 
+    def get_ipv4_only_entrypoints(self) -> list[PeerAddress]:
+        return list(filter(lambda e: not e.is_ipv6(), self.entrypoints))
+
+    def get_ipv6_only_entrypoints(self) -> list[PeerAddress]:
+        return list(filter(lambda e: e.is_ipv6(), self.entrypoints))
+
+    def ipv4_entrypoints_as_str(self) -> list[str]:
+        return sorted(map(str, self.get_ipv4_only_entrypoints()))
+
+    def ipv6_entrypoints_as_str(self) -> list[str]:
+        return sorted(map(str, self.get_ipv6_only_entrypoints()))
+
     def entrypoints_as_str(self) -> list[str]:
         """Return a list of entrypoints serialized as str"""
-        return list(map(str, self.entrypoints))
+        return sorted(map(str, self.entrypoints))
 
     def _merge(self, other: PeerInfo) -> None:
         """Actual merge execution, must only be made after verifications."""
-        # Merge entrypoints.
-        for ep in other.entrypoints:
-            if ep not in self.entrypoints:
-                self.entrypoints.append(ep)
+        self.entrypoints.update(other.entrypoints)
 
     async def validate_entrypoint(self, protocol: HathorProtocol) -> bool:
         """ Validates if connection entrypoint is one of the peer entrypoints
@@ -203,14 +212,19 @@ class UnverifiedPeer:
     id: PeerId
     info: PeerInfo = field(default_factory=PeerInfo)
 
-    def to_json(self) -> dict[str, Any]:
+    def to_json(self, only_ipv4_entrypoints: bool = True) -> dict[str, Any]:
         """ Return a JSON serialization of the object.
 
         This format is compatible with libp2p.
         """
+        if only_ipv4_entrypoints:
+            entrypoints_as_str = self.info.ipv4_entrypoints_as_str()
+        else:
+            entrypoints_as_str = self.info.entrypoints_as_str()
+
         return {
             'id': str(self.id),
-            'entrypoints': self.info.entrypoints_as_str(),
+            'entrypoints': entrypoints_as_str,
         }
 
     @classmethod
@@ -220,7 +234,7 @@ class UnverifiedPeer:
         It is to create an UnverifiedPeer from a peer connection.
         """
         peer_id = PeerId(data['id'])
-        endpoints = []
+        endpoints = set()
 
         for endpoint_str in data.get('entrypoints', []):
             # We have to parse using PeerEndpoint to be able to support older peers that still
@@ -228,12 +242,14 @@ class UnverifiedPeer:
             endpoint = PeerEndpoint.parse(endpoint_str)
             if endpoint.peer_id is not None and endpoint.peer_id != peer_id:
                 raise ValueError(f'conflicting peer_id: {endpoint.peer_id} != {peer_id}')
-            endpoints.append(endpoint.addr)
+            endpoints.add(endpoint.addr)
 
-        return cls(
+        obj = cls(
             id=peer_id,
             info=PeerInfo(entrypoints=endpoints),
         )
+        obj.validate()
+        return obj
 
     def merge(self, other: UnverifiedPeer) -> None:
         """ Merge two UnverifiedPeer objects, checking that they have the same
@@ -242,6 +258,12 @@ class UnverifiedPeer:
         """
         assert self.id == other.id
         self.info._merge(other.info)
+        self.validate()
+
+    def validate(self) -> None:
+        """Check if there are too many entrypoints."""
+        if len(self.info.entrypoints) > self.info._settings.PEER_MAX_ENTRYPOINTS:
+            raise InvalidPeerIdException('too many entrypoints')
 
 
 @dataclass(slots=True)

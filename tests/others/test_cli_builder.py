@@ -192,4 +192,4 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_event_queue_with_full_verification(self):
         args = ['--x-enable-event-queue', '--memory-storage', '--x-full-verification']
-        self._build_with_error(args, '--x-full-verification cannot be used with --x-enable-event-queue')
+        self._build_with_error(args, '--x-full-verification cannot be used with --enable-event-queue')

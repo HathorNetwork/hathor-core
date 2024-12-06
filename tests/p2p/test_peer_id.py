@@ -72,7 +72,7 @@ class PeerIdTest(unittest.TestCase):
 
     def test_merge_peer(self) -> None:
         # Testing peer storage with merge of peers
-        peer_storage = VerifiedPeerStorage()
+        peer_storage = VerifiedPeerStorage(rng=self.rng, max_size=100)
 
         p1 = PrivatePeer.auto_generated()
         p2 = PrivatePeer.auto_generated()
@@ -86,19 +86,19 @@ class PeerIdTest(unittest.TestCase):
         peer = peer_storage[p1.id]
         self.assertEqual(peer.id, p1.id)
         self.assertEqual(peer.public_key, p1.public_key)
-        self.assertEqual(peer.info.entrypoints, [])
+        self.assertEqual(peer.info.entrypoints, set())
 
         ep1 = PeerAddress.parse('tcp://127.0.0.1:1001')
         ep2 = PeerAddress.parse('tcp://127.0.0.1:1002')
         ep3 = PeerAddress.parse('tcp://127.0.0.1:1003')
 
         p3 = PrivatePeer.auto_generated().to_public_peer()
-        p3.info.entrypoints.append(ep1)
-        p3.info.entrypoints.append(ep2)
+        p3.info.entrypoints.add(ep1)
+        p3.info.entrypoints.add(ep2)
 
         p4 = PublicPeer(UnverifiedPeer(id=p3.id), public_key=p3.public_key)
-        p4.info.entrypoints.append(ep2)
-        p4.info.entrypoints.append(ep3)
+        p4.info.entrypoints.add(ep2)
+        p4.info.entrypoints.add(ep3)
         peer_storage.add_or_merge(p4)
 
         self.assertEqual(len(peer_storage), 2)
@@ -213,16 +213,16 @@ class PeerIdTest(unittest.TestCase):
 
         peer_json_simple = dict(
             id=str(peer_id),
-            entrypoints=[addr1, addr2, addr3]
+            entrypoints=sorted({addr1, addr2, addr3})
         )
         result = UnverifiedPeer.create_from_json(peer_json_simple)
 
         assert result.id == peer_id
-        assert result.info.entrypoints == [
+        assert result.info.entrypoints == {
             PeerAddress.parse(addr1),
             PeerAddress.parse(addr2),
             PeerAddress.parse(addr3),
-        ]
+        }
         assert result.to_json() == peer_json_simple
 
         # We support this for compatibility with old peers that may send ids in the URLs
@@ -237,11 +237,11 @@ class PeerIdTest(unittest.TestCase):
         result = UnverifiedPeer.create_from_json(peer_json_with_ids)
 
         assert result.id == peer_id
-        assert result.info.entrypoints == [
+        assert result.info.entrypoints == {
             PeerAddress.parse(addr1),
             PeerAddress.parse(addr2),
             PeerAddress.parse(addr3),
-        ]
+        }
         assert result.to_json() == peer_json_simple  # the roundtrip erases the ids from the URLs
 
         other_peer_id = PrivatePeer.auto_generated().id
@@ -276,6 +276,10 @@ class BasePeerIdTest(unittest.TestCase):
         peer.info.entrypoints = [PeerAddress.parse('tcp://uri_name:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
+        # if entrypoint is an IPv6
+        peer.entrypoints = [PeerEndpoint.parse('tcp://[::1]:40403')]
+        result = await peer.info.validate_entrypoint(protocol)
+        self.assertTrue(result)
         # test invalid. DNS in test mode will resolve to '127.0.0.1:40403'
         protocol.entrypoint = PeerEndpoint.parse('tcp://45.45.45.45:40403')
         result = await peer.info.validate_entrypoint(protocol)
@@ -296,6 +300,10 @@ class BasePeerIdTest(unittest.TestCase):
         self.assertTrue(result)
         # if entrypoint is an URI
         peer.info.entrypoints = [PeerAddress.parse('tcp://uri_name:40403')]
+        result = await peer.info.validate_entrypoint(protocol)
+        self.assertTrue(result)
+        # if entrypoint is an IPv6
+        peer.entrypoints = [PeerEndpoint.parse('tcp://[2001:db8::ff00:42:8329]:40403')]
         result = await peer.info.validate_entrypoint(protocol)
         self.assertTrue(result)
 

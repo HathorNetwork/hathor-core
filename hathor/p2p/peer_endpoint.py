@@ -14,13 +14,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from twisted.internet.address import IPv4Address, IPv6Address
-from twisted.internet.endpoints import TCP4ClientEndpoint
+from twisted.internet.endpoints import TCP4ClientEndpoint, TCP6ClientEndpoint
 from twisted.internet.interfaces import IAddress, IStreamClientEndpoint
 from typing_extensions import Self
 
@@ -31,6 +32,40 @@ COMPARISON_ERROR_MESSAGE = (
     'never compare PeerAddress with PeerEndpoint or two PeerEndpoint instances directly! '
     'instead, compare the addr attribute explicitly, and if relevant, the peer_id too.'
 )
+
+"""
+This Regex will match any valid IPv6 address.
+
+Some examples that will match:
+    '::'
+    '::1'
+    '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+    '2001:db8:85a3:0:0:8a2e:370:7334'
+    '2001:db8::8a2e:370:7334'
+    '2001:db8:0:0:0:0:2:1'
+    '1234::5678'
+    'fe80::'
+    '::abcd:abcd:abcd:abcd:abcd:abcd'
+    '0:0:0:0:0:0:0:1'
+    '0:0:0:0:0:0:0:0'
+
+Some examples that won't match:
+    '127.0.0.1' -->  # IPv4
+    '1200::AB00:1234::2552:7777:1313' -->  # double '::'
+    '2001:db8::g123' -->  # invalid character
+    '2001:db8::85a3::7334' -->  # double '::'
+    '2001:db8:85a3:0000:0000:8a2e:0370:7334:1234' -->  # too many groups
+    '12345::abcd' -->  # too many characters in a group
+    '2001:db8:85a3:8a2e:0370' -->  # too few groups
+    '2001:db8:85a3::8a2e:3707334' -->  # too many characters in a group
+    '1234:56789::abcd' -->  # too many characters in a group
+    ':2001:db8::1' -->  # invalid start
+    '2001:db8::1:' -->  # invalid end
+"""
+IPV6_REGEX = re.compile(r'''^(([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$''')  # noqa: E501
+
+# A host with length 64 and over would be rejected later by twisted
+MAX_HOST_LEN = 63
 
 
 class Protocol(Enum):
@@ -46,7 +81,11 @@ class PeerAddress:
     port: int
 
     def __str__(self) -> str:
-        return f'{self.protocol.value}://{self.host}:{self.port}'
+        host = self.host
+        if self.is_ipv6():
+            host = f'[{self.host}]'
+
+        return f'{self.protocol.value}://{host}:{self.port}'
 
     def __eq__(self, other: Any) -> bool:
         """
@@ -138,9 +177,11 @@ instead, compare the addr attribute explicitly, and if relevant, the peer_id too
 
     def to_client_endpoint(self, reactor: Reactor) -> IStreamClientEndpoint:
         """This method generates a twisted client endpoint that has a .connect() method."""
-        # XXX: currently we don't support IPv6, but when we do we have to decide between TCP4ClientEndpoint and
-        # TCP6ClientEndpoint, when the host is an IP address that is easy, but when it is a DNS hostname, we will not
-        # know which to use until we know which resource records it holds (A or AAAA)
+        # XXX: currently we only support IPv6 IPs, not hosts resolving to AAAA records.
+        # To support them we would have to perform DNS queries to resolve
+        # the host and check which record it holds (A or AAAA).
+        if self.is_ipv6():
+            return TCP6ClientEndpoint(reactor, self.host, self.port)
         return TCP4ClientEndpoint(reactor, self.host, self.port)
 
     def is_localhost(self) -> bool:
@@ -157,7 +198,18 @@ instead, compare the addr attribute explicitly, and if relevant, the peer_id too
         >>> PeerAddress.parse('tcp://foo.bar:444').is_localhost()
         False
         """
-        return self.host in ('127.0.0.1', 'localhost')
+        return self.host in ('127.0.0.1', 'localhost', '::1')
+
+    def is_ipv6(self) -> bool:
+        """Used to determine if the entrypoint host is an IPv6 address.
+        """
+        # XXX: This means we don't currently consider DNS names that resolve to IPv6 addresses as IPv6.
+        return IPV6_REGEX.fullmatch(self.host) is not None
+
+    def is_ipv4(self) -> bool:
+        """Used to determine if the entrypoint host is an IPv4 address.
+        """
+        return not self.is_ipv6()
 
     def with_id(self, peer_id: PeerId | None = None) -> PeerEndpoint:
         """Create a PeerEndpoint instance with self as the address and with the provided peer_id, or None."""
@@ -211,6 +263,14 @@ peer_id=None)
 
         >>> str(PeerEndpoint.parse('tcp://foo.bar.baz:40403/'))
         'tcp://foo.bar.baz:40403'
+
+        >>> str(PeerEndpoint.parse('tcp://foooooooooooooooooooo.baaaaaaaaaaaaaaaaaar.baaaaaaaaaaaaaaaaaaz:40403/'))
+        'tcp://foooooooooooooooooooo.baaaaaaaaaaaaaaaaaar.baaaaaaaaaaaaaaaaaaz:40403'
+
+        >>> PeerEndpoint.parse('tcp://foooooooooooooooooooo.baaaaaaaaaaaaaaaaaar.baaaaaaaaaaaaaaaaaazz:40403/')
+        Traceback (most recent call last):
+        ...
+        ValueError: hostname too long
 
         >>> PeerEndpoint.parse('tcp://127.0.0.1:40403/?id=123')
         Traceback (most recent call last):
@@ -268,6 +328,8 @@ def _parse_address_parts(description: str) -> tuple[Protocol, str, int, str]:
     host = url.hostname
     if host is None:
         raise ValueError(f'expected a host: "{description}"')
+    if len(host) > MAX_HOST_LEN:
+        raise ValueError('hostname too long')
     port = url.port
     if port is None:
         raise ValueError(f'expected a port: "{description}"')

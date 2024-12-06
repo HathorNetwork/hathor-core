@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Literal, Optional
 
 from OpenSSL.crypto import X509
 from structlog import get_logger
-from twisted.internet.address import IPv4Address
+from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.testing import StringTransport
 
 from hathor.p2p.peer import PrivatePeer
@@ -34,7 +34,7 @@ logger = get_logger()
 
 
 class HathorStringTransport(StringTransport):
-    def __init__(self, peer: PrivatePeer, *, peer_address: IPv4Address):
+    def __init__(self, peer: PrivatePeer, *, peer_address: IPv4Address | IPv6Address):
         super().__init__(peerAddress=peer_address)
         self._peer = peer
 
@@ -58,8 +58,8 @@ class FakeConnection:
         *,
         latency: float = 0,
         autoreconnect: bool = False,
-        addr1: IPv4Address | None = None,
-        addr2: IPv4Address | None = None,
+        addr1: IPv4Address | IPv6Address | None = None,
+        addr2: IPv4Address | IPv6Address | None = None,
         fake_bootstrap_id: PeerId | None | Literal[False] = False,
     ):
         """
@@ -275,9 +275,10 @@ class FakeConnection:
         self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
         self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
 
-        # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls connect_to()
+        # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls
+        # connect_to_endpoint()
         peer = self._proto1.my_peer.to_unverified_peer() if self._fake_bootstrap_id is False else None
-        self.manager2.connections.connect_to(self.entrypoint, peer)
+        self.manager2.connections.connect_to_endpoint(self.entrypoint, peer)
 
         connecting_peers = list(self.manager2.connections.connecting_peers.values())
         for connecting_peer in connecting_peers:
