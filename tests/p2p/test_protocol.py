@@ -78,8 +78,8 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
     def test_peer_with_entrypoint(self) -> None:
         entrypoint_str = 'tcp://192.168.1.1:54321'
         entrypoint = PeerAddress.parse(entrypoint_str)
-        self.peer1.info.entrypoints.append(entrypoint)
-        self.peer2.info.entrypoints.append(entrypoint)
+        self.peer1.info.entrypoints.add(entrypoint)
+        self.peer2.info.entrypoints.add(entrypoint)
         self.conn.run_one_step()  # HELLO
 
         msg1 = self.conn.peek_tr1_value()
@@ -228,9 +228,9 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         entrypoint_1_ipv4 = PeerEndpoint.parse(f'tcp://192.168.1.1:{port1}')
         entrypoint_2_ipv4 = PeerEndpoint.parse(f'tcp://192.168.1.1:{port2}')
 
-        self.peer1.info.entrypoints.append(entrypoint_1_ipv6.addr)
-        self.peer1.info.entrypoints.append(entrypoint_1_ipv4.addr)
-        self.peer2.info.entrypoints.append(entrypoint_2_ipv4.addr)
+        self.peer1.info.entrypoints.add(entrypoint_1_ipv6.addr)
+        self.peer1.info.entrypoints.add(entrypoint_1_ipv4.addr)
+        self.peer2.info.entrypoints.add(entrypoint_2_ipv4.addr)
 
         conn = FakeConnection(manager1, manager2, addr1=addr1, addr2=addr2)
 
@@ -239,8 +239,8 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
 
         self.assertEqual(len(conn.proto1.peer.info.entrypoints), 1)
         self.assertEqual(len(conn.proto2.peer.info.entrypoints), 1)
-        self.assertEqual(conn.proto1.peer.info.entrypoints[0].host, '192.168.1.1')
-        self.assertEqual(conn.proto2.peer.info.entrypoints[0].host, '192.168.1.1')
+        self.assertEqual(next(iter(conn.proto1.peer.info.entrypoints)).host, '192.168.1.1')
+        self.assertEqual(next(iter(conn.proto2.peer.info.entrypoints)).host, '192.168.1.1')
 
     def test_hello_with_ipv6_capability(self) -> None:
         """Tests the connection between peers with the IPV6 capability.
@@ -268,9 +268,9 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         entrypoint_1_ipv4 = PeerEndpoint.parse(f'tcp://192.168.1.1:{port1}')
         entrypoint_2_ipv4 = PeerEndpoint.parse(f'tcp://192.168.1.1:{port2}')
 
-        self.peer1.info.entrypoints.append(entrypoint_1_ipv6.addr)
-        self.peer1.info.entrypoints.append(entrypoint_1_ipv4.addr)
-        self.peer2.info.entrypoints.append(entrypoint_2_ipv4.addr)
+        self.peer1.info.entrypoints.add(entrypoint_1_ipv6.addr)
+        self.peer1.info.entrypoints.add(entrypoint_1_ipv4.addr)
+        self.peer2.info.entrypoints.add(entrypoint_2_ipv4.addr)
 
         conn = FakeConnection(manager1, manager2, addr1=addr1, addr2=addr2)
 
@@ -281,7 +281,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.assertEqual(len(conn.proto2.peer.info.entrypoints), 2)
         self.assertTrue('::1' in map(lambda x: x.host, conn.proto2.peer.info.entrypoints))
         self.assertTrue('192.168.1.1' in map(lambda x: x.host, conn.proto2.peer.info.entrypoints))
-        self.assertEqual(conn.proto1.peer.info.entrypoints[0].host, '192.168.1.1')
+        self.assertEqual(next(iter(conn.proto1.peer.info.entrypoints)).host, '192.168.1.1')
 
     def test_invalid_same_peer_id(self) -> None:
         manager3 = self.create_peer(self.network, peer=self.peer1)

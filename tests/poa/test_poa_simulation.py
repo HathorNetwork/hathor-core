@@ -30,6 +30,7 @@ from hathor.consensus.poa.poa_signer import PoaSignerId
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_bytes_compressed
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
+from hathor.simulator.trigger import StopWhenTrue
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput
 from hathor.transaction.genesis import generate_new_genesis
 from hathor.transaction.poa import PoaBlock
@@ -156,8 +157,8 @@ class BasePoaSimulationTest(SimulatorTestCase):
         connection = FakeConnection(manager1, manager2)
         self.simulator.add_connection(connection)
 
-        # both managers are producing blocks
-        self.simulator.run(100)
+        trigger = StopWhenTrue(lambda: manager2.tx_storage.get_block_count() == 12)
+        assert self.simulator.run(200, trigger=trigger)
         assert manager1.tx_storage.get_block_count() == 12
         assert manager2.tx_storage.get_block_count() == 12
         assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()

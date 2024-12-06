@@ -18,13 +18,13 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(StatusResource(self.manager))
         address1 = IPv4Address('TCP', '192.168.1.1', 54321)
-        self.manager.connections.my_peer.info.entrypoints.append(PeerAddress.from_address(address1))
+        self.manager.connections.my_peer.info.entrypoints.add(PeerAddress.from_address(address1))
         self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
         self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
 
         self.manager2 = self.create_peer('testnet')
         address2 = IPv4Address('TCP', '192.168.1.1', 54322)
-        self.manager2.connections.my_peer.info.entrypoints.append(PeerAddress.from_address(address2))
+        self.manager2.connections.my_peer.info.entrypoints.add(PeerAddress.from_address(address2))
         self.conn1 = FakeConnection(self.manager, self.manager2, addr1=address1, addr2=address2)
 
     @inlineCallbacks

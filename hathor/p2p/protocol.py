@@ -29,6 +29,7 @@ from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer_storage import UnverifiedPeerStorage
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
@@ -163,6 +164,13 @@ class HathorProtocol:
         self.aborting = False
 
         self.use_ssl: bool = use_ssl
+
+        # List of peers received from the network.
+        # We cannot trust their identity before we connect to them.
+        self.unverified_peer_storage = UnverifiedPeerStorage(
+            rng=self.connections.rng,
+            max_size=self._settings.MAX_UNVERIFIED_PEERS_PER_CONN,
+        )
 
         # Protocol version is initially unset
         self.sync_version = None
@@ -367,6 +375,20 @@ class HathorProtocol:
             self.aborting = True
         else:
             transport.abortConnection()
+
+    def on_receive_peer(self, peer: UnverifiedPeer) -> None:
+        """ Update a peer information in our storage, the manager's connection loop will pick it later.
+        """
+        # ignore when the remote echo backs our own peer
+        if peer.id == self.my_peer.id:
+            return
+        # ignore peers we've already connected to
+        if peer.id in self.connections.verified_peer_storage:
+            return
+        # merge with known previous information received from this peer since we don't know what's right (a peer can
+        # change their entrypoints, but the old could still echo, since we haven't connected yet don't assume anything
+        # and just merge them)
+        self.unverified_peer_storage.add_or_merge(peer)
 
     def handle_error(self, payload: str) -> None:
         """ Executed when an ERROR command is received.
