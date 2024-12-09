@@ -86,6 +86,10 @@ class TooManySighashSubsets(TxValidationError):
     """More sighash subsets than the configured maximum."""
 
 
+class MissingSighashAll(TxValidationError):
+    """At least one input is required to be signed using SighashAll."""
+
+
 class InvalidOutputValue(TxValidationError):
     """Value of output is invalid"""
 
