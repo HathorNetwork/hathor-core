@@ -14,9 +14,9 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
-from pydantic import Field
+from pydantic import Field, validator
 from typing_extensions import override
 
 from hathor.utils.pydantic import BaseModel
@@ -60,7 +60,37 @@ class SighashBitmask(CustomSighash):
         return [index for index in range(8) if (bitmask >> index) & 1]
 
 
-SighashType: TypeAlias = SighashAll | SighashBitmask
+class SighashRange(CustomSighash):
+    """A model representing the sighash range type config. Range ends are not inclusive."""
+    input_start: int = Field(ge=0, le=255)
+    input_end: int = Field(ge=0, le=255)
+    output_start: int = Field(ge=0, le=255)
+    output_end: int = Field(ge=0, le=255)
+
+    @validator('input_end')
+    def _validate_input_end(cls, input_end: int, values: dict[str, Any]) -> int:
+        if input_end < values['input_start']:
+            raise ValueError('input_end must be greater than or equal to input_start.')
+
+        return input_end
+
+    @validator('output_end')
+    def _validate_output_end(cls, output_end: int, values: dict[str, Any]) -> int:
+        if output_end < values['output_start']:
+            raise ValueError('output_end must be greater than or equal to output_start.')
+
+        return output_end
+
+    @override
+    def get_input_indexes(self) -> list[int]:
+        return list(range(self.input_start, self.input_end))
+
+    @override
+    def get_output_indexes(self) -> list[int]:
+        return list(range(self.output_start, self.output_end))
+
+
+SighashType: TypeAlias = SighashAll | SighashBitmask | SighashRange
 
 
 class InputsOutputsLimit(BaseModel):
