@@ -367,7 +367,11 @@ class ConnectionsManager:
             conn.disconnect(force=force)
 
     def on_connection_failure(self, failure: Failure, endpoint: PeerEndpoint) -> None:
-        self.log.warn('connection failure', endpoint=str(endpoint), failure=failure.getErrorMessage())
+        self.log.warn(
+            f'connection failure:\n{failure.getTraceback()}',
+            endpoint=str(endpoint),
+            reason=failure.getErrorMessage(),
+        )
         self._connections.on_failed_to_connect(addr=endpoint.addr)
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTION_FAILED,
@@ -584,13 +588,10 @@ class ConnectionsManager:
             addr = self.rng.choice(peer.info.entrypoints)
             self.connect_to(addr.with_id(peer.id), peer)
 
-    def _connect_to_callback(self, protocol: IProtocol, addr: PeerAddress, peer_id: PeerId | None) -> None:
+    async def _connect_to_callback(self, addr: PeerAddress, peer_id: PeerId | None) -> None:
         """Called when we successfully connect to an outbound peer."""
-        if isinstance(protocol, TLSMemoryBIOProtocol):
-            protocol = protocol.wrappedProtocol
-        assert isinstance(protocol, HathorProtocol)
-        assert protocol.addr == addr
-        protocol.on_outbound_connect(peer_id)
+        conn = self._connections.get_peer_by_address(addr)
+        await conn.on_outbound_connect(peer_id)
 
     def connect_to(
         self,
@@ -611,8 +612,20 @@ class ConnectionsManager:
             return None
 
         factory: IProtocolFactory = self.client_factory
-        if self.use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
+
+        if self._multiprocess_args:
+            custom_args, logging_args = self._multiprocess_args
+            from hathor.multiprocess.connect_on_subprocess import ConnectOnSubprocessFactory
+            factory = ConnectOnSubprocessFactory(
+                reactor=self.reactor,
+                main_file=P2P_SUBPROCESS_CONNECTION_MAIN_FILE,
+                logging_args=logging_args,
+                custom_args=custom_args,
+                built_protocol_callback=self._on_built_subprocess_protocol,
+            )
+        else:
+            if self.use_ssl:
+                factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
 
         if peer is not None:
             now = int(self.reactor.seconds())
@@ -621,7 +634,7 @@ class ConnectionsManager:
         peer_id = peer.id if peer else endpoint.peer_id
         deferred = endpoint.addr.to_client_endpoint(self.reactor).connect(factory)
         deferred \
-            .addCallback(self._connect_to_callback, endpoint.addr, peer_id) \
+            .addCallback(lambda _: Deferred.fromCoroutine(self._connect_to_callback(endpoint.addr, peer_id))) \
             .addErrback(self.on_connection_failure, endpoint)
 
         self.log.info('connecting to', addr=str(endpoint.addr), peer_id=str(peer_id))

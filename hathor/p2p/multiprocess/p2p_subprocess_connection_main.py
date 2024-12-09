@@ -91,8 +91,8 @@ def build(args: SubprocessBuildArgs[P2PSubprocessConnectionArgs]) -> SubprocessB
     )
 
     if args.custom_args.use_ssl:
-        # TODO: When implementing the client (connect_to), I'll have to review this
-        factory = TLSMemoryBIOFactory(my_peer.certificate_options, False, factory)
+        # TODO: When implementing the client (connect_to), I'll have to review this isClient: False
+        factory = TLSMemoryBIOFactory(my_peer.certificate_options, True, factory)
 
     return SubprocessBuildArtifacts(factory=factory, exit_callback=exit_callback)
 

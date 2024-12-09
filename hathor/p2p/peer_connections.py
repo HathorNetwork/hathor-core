@@ -161,6 +161,8 @@ class PeerConnections:
         assert addr not in self.connected_peers()
 
         if inbound:
+            # TODO: Fix this. We first connect outbound and then the other peers tries to connect to us inbound,
+            #  so this fails
             assert addr not in self._connecting_outbound
         else:
             assert addr in self._connecting_outbound

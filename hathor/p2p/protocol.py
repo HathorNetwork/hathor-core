@@ -228,7 +228,7 @@ class HathorProtocol:
 
         self.p2p_manager.on_peer_connect(addr=self.addr, inbound=self.inbound)
 
-    def on_outbound_connect(self, peer_id: PeerId | None) -> None:
+    async def on_outbound_connect(self, peer_id: PeerId | None) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
         # Save the peer_id so we can validate that it matches the one we'll receive in the PEER-ID state
         assert not self.inbound

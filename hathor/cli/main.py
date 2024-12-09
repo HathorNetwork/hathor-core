@@ -175,6 +175,8 @@ class CliManager:
 
 
 def main():
+    import pydevd_pycharm
+    pydevd_pycharm.settrace('localhost', port=8090, stdoutToServer=True, stderrToServer=True)
     try:
         sys.exit(CliManager().execute_from_command_line())
     except KeyboardInterrupt:
