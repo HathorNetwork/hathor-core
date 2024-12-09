@@ -17,7 +17,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
 from hathor.reward_lock.reward_lock import get_minimum_best_height
-from hathor.transaction import BaseTransaction, Transaction, TxInput
+from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     DuplicatedParents,
@@ -28,6 +28,7 @@ from hathor.transaction.exceptions import (
     InvalidInputDataSize,
     InvalidToken,
     NoInputError,
+    OutputNotSelected,
     RewardLocked,
     ScriptError,
     TimestampError,
@@ -35,6 +36,7 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
+from hathor.transaction.scripts.script_context import ScriptContext
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -98,7 +100,9 @@ class TransactionVerifier:
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
         spent_outputs: set[tuple[VertexId, int]] = set()
-        for input_tx in tx.inputs:
+        all_selected_outputs: set[int] = set()
+
+        for input_index, input_tx in enumerate(tx.inputs):
             if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
                 raise InvalidInputDataSize('size: {} and max-size: {}'.format(
                     len(input_tx.data), self._settings.MAX_INPUT_DATA_SIZE
@@ -121,7 +125,9 @@ class TransactionVerifier:
                 ))
 
             if not skip_script:
-                self.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx)
+                script_context = self.verify_script(tx=tx, spent_tx=spent_tx, input_index=input_index)
+                selected_outputs = script_context.get_selected_outputs()
+                all_selected_outputs = all_selected_outputs.union(selected_outputs)
 
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
@@ -130,7 +136,18 @@ class TransactionVerifier:
                     tx.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
 
-    def verify_script(self, *, tx: Transaction, input_tx: TxInput, spent_tx: BaseTransaction) -> None:
+        if not skip_script:
+            for index, _ in enumerate(tx.outputs):
+                if index not in all_selected_outputs:
+                    raise OutputNotSelected(f'Output at index {index} is not signed by any input.')
+
+    def verify_script(
+        self,
+        *,
+        tx: Transaction,
+        spent_tx: BaseTransaction,
+        input_index: int
+    ) -> ScriptContext:
         """
         :type tx: Transaction
         :type input_tx: TxInput
@@ -138,7 +155,7 @@ class TransactionVerifier:
         """
         from hathor.transaction.scripts import script_eval
         try:
-            script_eval(tx, input_tx, spent_tx)
+            return script_eval(tx, spent_tx, input_index=input_index)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
