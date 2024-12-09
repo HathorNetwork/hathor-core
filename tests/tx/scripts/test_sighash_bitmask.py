@@ -21,7 +21,7 @@ from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.exceptions import InputOutputMismatch, InvalidInputData, InvalidScriptError
+from hathor.transaction.exceptions import InputOutputMismatch, InvalidInputData, InvalidScriptError, MissingSighashAll
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
 from hathor.util import not_none
@@ -93,9 +93,14 @@ class BaseSighashBitmaskTest(unittest.TestCase):
             sighash=sighash_bitmask,
         )
 
-        # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs
-        self.manager1.verification_service.verifiers.tx.verify_inputs(atomic_swap_tx)
+        # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs, and they're
+        # missing a SighashAll
+        self.manager1.verification_service.verifiers.tx.verify_inputs(atomic_swap_tx, skip_script=True)
+
         with pytest.raises(InputOutputMismatch):
+            self.manager1.verification_service.verifiers.tx.verify_sum(atomic_swap_tx)
+
+        with pytest.raises(MissingSighashAll):
             self.manager1.verification_service.verify(atomic_swap_tx)
 
         # Alice sends the tx bytes to Bob, represented here by cloning the tx
@@ -166,9 +171,14 @@ class BaseSighashBitmaskTest(unittest.TestCase):
             inputs_outputs_limit=InputsOutputsLimit(max_inputs=2, max_outputs=3)
         )
 
-        # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs
-        self.manager1.verification_service.verifiers.tx.verify_inputs(atomic_swap_tx)
+        # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs, and they're
+        # missing a SighashAll
+        self.manager1.verification_service.verifiers.tx.verify_inputs(atomic_swap_tx, skip_script=True)
+
         with pytest.raises(InputOutputMismatch):
+            self.manager1.verification_service.verifiers.tx.verify_sum(atomic_swap_tx)
+
+        with pytest.raises(MissingSighashAll):
             self.manager1.verification_service.verify(atomic_swap_tx)
 
         # Alice sends the tx bytes to Bob, represented here by cloning the tx
