@@ -42,9 +42,10 @@ def test_defaults(max_num_outputs: int) -> None:
         ]
     )
 
-    assert context._sighash == SighashAll()
+    assert context.get_sighash() == SighashAll()
     assert context.get_tx_sighash_data(tx) == tx.get_sighash_all_data()
     assert context.get_selected_outputs() == set(range(max_num_outputs))
+    assert context.get_max_sighash_subsets() is None
 
 
 def test_set_sighash() -> None:
@@ -52,10 +53,24 @@ def test_set_sighash() -> None:
 
     sighash = SighashBitmask(inputs=0b111, outputs=0b101)
     context.set_sighash(sighash)
-    assert context._sighash == sighash
+    assert context.get_sighash() == sighash
 
     with pytest.raises(ScriptError):
         context.set_sighash(sighash)
+
+
+def test_set_max_sighash_subsets() -> None:
+    context = ScriptContext(settings=Mock(), stack=Mock(), logs=[], extras=Mock())
+    assert context.get_max_sighash_subsets() is None
+
+    context.set_max_sighash_subsets(10)
+    assert context.get_max_sighash_subsets() == 10
+
+    context.set_max_sighash_subsets(20)
+    assert context.get_max_sighash_subsets() == 10
+
+    context.set_max_sighash_subsets(3)
+    assert context.get_max_sighash_subsets() == 3
 
 
 @pytest.mark.parametrize(
