@@ -116,6 +116,23 @@ def test_create_input_data_with_inputs_outputs_limit() -> None:
     ])
 
 
+def test_create_input_data_with_max_sighash_subsets() -> None:
+    pub_key = b'my_pub_key'
+    signature = b'my_signature'
+    max_subsets = 7
+    data = P2PKH.create_input_data(public_key_bytes=pub_key, signature=signature, max_sighash_subsets=max_subsets)
+
+    assert data == bytes([
+        1,
+        max_subsets,
+        Opcode.OP_MAX_SIGHASH_SUBSETS,
+        len(signature),
+        *signature,
+        len(pub_key),
+        *pub_key
+    ])
+
+
 def test_create_input_data_with_sighash_bitmask_and_inputs_outputs_limit() -> None:
     pub_key = b'my_pub_key'
     signature = b'my_signature'
