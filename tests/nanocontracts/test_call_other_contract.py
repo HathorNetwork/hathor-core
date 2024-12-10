@@ -87,6 +87,13 @@ class MyBlueprint(Blueprint):
             other = ctx.call_view_method(self.contract, 'get_counter')
         return mine + other
 
+    @public
+    def dec_and_get_counter(self, ctx: Context) -> int:
+        assert self.contract is not None
+        self.dec(ctx)
+        other = ctx.call_view_method(self.contract, 'get_counter')
+        return self.counter + other
+
     @view
     def get_counter(self) -> int:
         return self.counter
@@ -344,3 +351,23 @@ class NCBlueprintTestCase(unittest.TestCase):
         # For debugging:
         # trace = self.runner.get_last_call_trace()
         # trace.print_dump()
+
+    def test_call_view_after_public(self):
+        ctx = Context([], self.tx, b'', timestamp=0)
+        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 8)
+        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 3)
+
+        self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
+
+        storage1 = self.runner.get_storage(self.nc1_id)
+        self.assertEqual(storage1.get('counter'), 8)
+        self.assertEqual(storage1.get('contract'), self.nc2_id)
+
+        storage2 = self.runner.get_storage(self.nc2_id)
+        self.assertEqual(storage2.get('counter'), 3)
+        self.assertEqual(storage2.get('contract'), None)
+
+        result = self.runner.call_public_method(self.nc1_id, 'dec_and_get_counter', ctx)
+        self.assertEqual(storage1.get('counter'), 7)
+        self.assertEqual(storage2.get('counter'), 2)
+        self.assertEqual(result, 9)

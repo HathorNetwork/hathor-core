@@ -32,6 +32,7 @@ class NCChangesTracker(NCStorage):
         self.balance_diff: dict[BalanceKey, int] = {}
 
         self.has_been_commited = False
+        self.has_been_blocked = False
 
     def _to_key(self, key: str) -> AttrKey:
         """Return the actual key used in the storage."""
@@ -42,6 +43,13 @@ class NCChangesTracker(NCStorage):
         """Check if this instance has been locked. A lock occurs after a commit is executed."""
         if self.has_been_commited:
             raise RuntimeError('you cannot change any value after the commit has been executed')
+        elif self.has_been_blocked:
+            raise RuntimeError('you cannot change any value after the changes have been blocked')
+
+    def block(self) -> None:
+        """Block the changes and prevent them from being committed."""
+        self.check_if_locked()
+        self.has_been_blocked = True
 
     def get(self, key: str, *, default: Any = _NOT_PROVIDED) -> Any:
         internal_key = self._to_key(key)
