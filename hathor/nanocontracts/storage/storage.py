@@ -56,6 +56,22 @@ class NCStorage:
         # Nano contract id
         self.nc_id = nc_id
 
+        # Flag to check whether any change or commit can be executed.
+        self.is_locked = False
+
+    def lock(self) -> None:
+        """Lock the storage for changes or commits."""
+        self.is_locked = True
+
+    def unlock(self) -> None:
+        """Unlock the storage."""
+        self.is_locked = False
+
+    def check_if_locked(self) -> None:
+        """Raise a runtime error if the wallet is locked."""
+        if self.is_locked:
+            raise RuntimeError('you cannot modify or commit if the storage is locked')
+
     def _serialize(self, value: Any) -> bytes:
         """Serialize a value to be stored on the trie."""
         return pickle.dumps(value)
@@ -105,12 +121,14 @@ class NCStorage:
     def put(self, key: str, value: Any) -> None:
         """Store the `value` for the provided `key`.
         """
+        self.check_if_locked()
         internal_key = self._to_attr_key(key)
         self._trie_update(bytes(internal_key), value)
 
     def delete(self, key: str) -> None:
         """Delete `key` from storage.
         """
+        self.check_if_locked()
         internal_key = self._to_attr_key(key)
         self._trie_update(bytes(internal_key), DeletedKey)
 
@@ -153,6 +171,7 @@ class NCStorage:
         """Change the contract balance for a token. The amount will be added to the previous balance.
 
         Note that the amount might be negative."""
+        self.check_if_locked()
         key = BalanceKey(self.nc_id, token_uid)
         key_bytes = bytes(key)
         old = self._trie_get(key_bytes, default=0)
@@ -162,6 +181,7 @@ class NCStorage:
 
     def commit(self) -> None:
         """Flush all local changes to the storage."""
+        self.check_if_locked()
         self._trie.commit()
 
     def get_root_id(self) -> bytes:

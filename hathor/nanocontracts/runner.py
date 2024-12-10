@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Type
@@ -45,7 +46,7 @@ from hathor.types import Amount, TokenUid
 
 class CallType(Enum):
     PUBLIC = 'public'
-    PRIVATE = 'private'
+    VIEW = 'view'
 
 
 @dataclass
@@ -71,6 +72,9 @@ class CallRecord:
     args: tuple[Any]
     kwargs: dict[str, Any]
 
+    # Keep track of all changes made by this call.
+    changes_tracker: NCChangesTracker
+
     def print_dump(self):
         prefix = '    ' * self.depth
         print(prefix, self.nanocontract_id.hex(), self.method_name, self.args, self.kwargs)
@@ -84,6 +88,11 @@ class CallInfo:
 
     # The execution stack. This stack is dynamic and changes as the execution progresses.
     stack: list[CallRecord] = field(default_factory=list)
+
+    # Change trackers are grouped by contract. Because multiple calls can occur between contracts, leading to more than
+    # one NCChangesTracker per contract, a stack is used. This design makes it fast to retrieve the most recent tracker
+    # for a given contract whenever a new call is made.
+    change_trackers: defaultdict[ContractId, list[NCChangesTracker]] = field(default_factory=lambda: defaultdict(list))
 
     # Flag to enable/disable keeping record of all calls.
     enable_call_trace: bool
@@ -114,6 +123,8 @@ class CallInfo:
         if self.enable_call_trace:
             self.calls.append(call_record)
 
+        self.change_trackers[call_record.nanocontract_id].append(call_record.changes_tracker)
+
         assert self.depth == len(self.stack)
         self.call_counter += 1
         self.depth += 1
@@ -122,7 +133,16 @@ class CallInfo:
     def post_call(self, call_record: CallRecord) -> None:
         """Called after a call is finished."""
         assert call_record == self.stack.pop()
+        assert call_record.changes_tracker == self.change_trackers[call_record.nanocontract_id][-1]
+        assert call_record.changes_tracker.nc_id == call_record.changes_tracker.storage.nc_id
         self.depth -= 1
+
+        change_trackers = self.change_trackers[call_record.nanocontract_id]
+        if len(change_trackers) > 1:
+            assert call_record.changes_tracker.storage == change_trackers[-2]
+            assert call_record.changes_tracker == change_trackers.pop()
+        else:
+            assert not isinstance(call_record.changes_tracker.storage, NCChangesTracker)
 
 
 class _SingleCallRunner:
@@ -242,7 +262,6 @@ class Runner:
         self.storage_factory = storage_factory
         self.block_trie = block_trie
         self._storages: dict[ContractId, NCStorage] = {}
-        self._change_trackers: dict[ContractId, NCChangesTracker] = {}
         self._settings = get_global_settings()
 
         # For tracking fuel and memory usage
@@ -292,18 +311,20 @@ class Runner:
             except KeyError:
                 nc_root_id = None
             storage = self.storage_factory(nanocontract_id, nc_root_id)
+            storage.lock()
             self._storages[nanocontract_id] = storage
         return storage
 
-    def _get_changes_tracker(self, nanocontract_id: ContractId) -> NCChangesTracker:
-        """Return the change tracker for a contract.
-
-        If no change tracker has been created for the contract, then one will be created."""
-        change_tracker = self._change_trackers.get(nanocontract_id)
-        if change_tracker is None:
+    def _create_changes_tracker(self, nanocontract_id: ContractId) -> NCChangesTracker:
+        """Return the latest change tracker for a contract."""
+        assert self._call_info is not None
+        change_trackers = self._call_info.change_trackers[nanocontract_id]
+        storage: NCStorage
+        if len(change_trackers) > 0:
+            storage = change_trackers[-1]
+        else:
             storage = self.get_storage(nanocontract_id)
-            change_tracker = NCChangesTracker(nanocontract_id, storage)
-            self._change_trackers[nanocontract_id] = change_tracker
+        change_tracker = NCChangesTracker(nanocontract_id, storage)
         return change_tracker
 
     def get_blueprint_class(self, nanocontract_id: ContractId) -> Type[Blueprint]:
@@ -312,11 +333,14 @@ class Runner:
         nc = get_nano_contract_creation(self.tx_storage, nanocontract_id, allow_mempool=True)
         return nc.get_blueprint_class()
 
-    def _get_single_runner(self, nanocontract_id: ContractId) -> _SingleCallRunner:
+    def _create_single_runner(
+        self,
+        nanocontract_id: ContractId,
+        change_tracker: NCChangesTracker
+    ) -> _SingleCallRunner:
         """Return a single runner for a contract."""
         assert self._metered_executor is not None
         blueprint_class = self.get_blueprint_class(nanocontract_id)
-        change_tracker = self._get_changes_tracker(nanocontract_id)
         metered_executor = self._metered_executor
         return _SingleCallRunner(blueprint_class, nanocontract_id, change_tracker, metered_executor)
 
@@ -367,10 +391,9 @@ class Runner:
 
         # The caller is always the last element in the stack. So we need to use it as the `address` in the subsequent
         # call.
-        last_nanocontract_id = self._call_info.stack[-1].nanocontract_id
-        changes_tracker = self._get_changes_tracker(last_nanocontract_id)
+        last_call_record = self._call_info.stack[-1]
 
-        if last_nanocontract_id == nanocontract_id:
+        if last_call_record.nanocontract_id == nanocontract_id:
             raise NCInvalidContractId('a contract cannot call itself')
 
         from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD
@@ -389,19 +412,20 @@ class Runner:
         ctx = Context(
             actions=actions,
             vertex=first_ctx.vertex,
-            address=last_nanocontract_id,
+            address=last_call_record.nanocontract_id,
             timestamp=first_ctx.timestamp,
         )
         ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
 
         # Execute the transfer on the caller side. The callee side is executed by the `_internal_call_public_method()`
         # if it succeeds.
+        previous_changes_tracker = last_call_record.changes_tracker
         for action in actions:
             match action.type:
                 case NCActionType.DEPOSIT:
-                    changes_tracker.add_balance(action.token_uid, -action.amount)
+                    previous_changes_tracker.add_balance(action.token_uid, -action.amount)
                 case NCActionType.WITHDRAWAL:
-                    changes_tracker.add_balance(action.token_uid, action.amount)
+                    previous_changes_tracker.add_balance(action.token_uid, action.amount)
                 case _:
                     assert_never(action.type)
 
@@ -409,29 +433,42 @@ class Runner:
 
     def _reset_all_change_trackers(self) -> None:
         """Reset all changes and prepare for next call."""
-        for change_tracker in self._change_trackers.values():
-            change_tracker.reset()
-        self._change_trackers = {}
+        assert self._call_info is not None
+        for change_trackers in self._call_info.change_trackers.values():
+            for change_tracker in change_trackers:
+                if not change_tracker.has_been_commited:
+                    change_tracker.block()
         self._last_call_info = self._call_info
         self._call_info = None
 
     def _validate_balances(self) -> None:
         """Validate that all balances are non-negative."""
-        for change_tracker in self._change_trackers.values():
-            change_tracker.validate_balances()
+        assert self._call_info is not None
+        for change_trackers in self._call_info.change_trackers.values():
+            assert len(change_trackers) == 1
+            change_trackers[0].validate_balances()
 
     def _commit_all_changes_to_storage(self) -> None:
         """Commit all change trackers."""
-        for change_tracker in self._change_trackers.values():
+        assert self._call_info is not None
+        for nc_id, change_trackers in self._call_info.change_trackers.items():
+            assert len(change_trackers) == 1
+            change_tracker = change_trackers[0]
+
+            nc_storage = self._storages[nc_id]
+            assert change_tracker.storage == nc_storage
+            nc_storage.unlock()
             change_tracker.commit()
-        for nc_id, nc_storage in self._storages.items():
+            nc_storage.lock()
             self.block_trie.update(nc_id, nc_storage.get_root_id())
         self._reset_all_change_trackers()
 
     def commit(self) -> None:
         """Commit all storages and update block trie."""
         for nc_id, nc_storage in self._storages.items():
+            nc_storage.unlock()
             nc_storage.commit()
+            nc_storage.lock()
 
     def _internal_call_public_method(self,
                                      nanocontract_id: ContractId,
@@ -445,6 +482,8 @@ class Runner:
         assert self._call_info is not None
         assert ctx._runner is None
 
+        changes_tracker = self._create_changes_tracker(nanocontract_id)
+
         call_record = CallRecord(
             type=CallType.PUBLIC,
             depth=self._call_info.depth,
@@ -453,14 +492,18 @@ class Runner:
             ctx=ctx,
             args=args,
             kwargs=kwargs,
+            changes_tracker=changes_tracker,
         )
 
         ctx._runner = self
         self._call_info.pre_call(call_record)
-        single_runner = self._get_single_runner(nanocontract_id)
+        single_runner = self._create_single_runner(nanocontract_id, changes_tracker)
         ret = single_runner.call_public_method(method_name, ctx, *args, **kwargs)
+        if len(self._call_info.change_trackers[nanocontract_id]) > 1:
+            call_record.changes_tracker.commit()
         self._call_info.post_call(call_record)
         ctx._runner = None
+
         return ret
 
     def call_view_method(self, nanocontract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
@@ -473,20 +516,25 @@ class Runner:
         assert self._call_info is not None
         assert self._metered_executor is not None
 
+        changes_tracker = self._create_changes_tracker(nanocontract_id)
+
         call_record = CallRecord(
-            type=CallType.PRIVATE,
+            type=CallType.VIEW,
             depth=self._call_info.depth,
             nanocontract_id=nanocontract_id,
             method_name=method_name,
             ctx=None,
             args=args,
             kwargs=kwargs,
+            changes_tracker=changes_tracker,
         )
 
         self._call_info.pre_call(call_record)
-        single_runner = self._get_single_runner(nanocontract_id)
+        single_runner = self._create_single_runner(nanocontract_id, changes_tracker)
         ret = single_runner.call_view_method(method_name, *args, **kwargs)
         self._call_info.post_call(call_record)
+
+        assert changes_tracker.is_empty()
 
         if not self._call_info.stack:
             self._call_info = None
@@ -500,8 +548,16 @@ class Runner:
             nanocontract_id = self.get_current_nanocontract_id()
         if token_uid is None:
             token_uid = self._settings.HATHOR_TOKEN_UID
-        change_tracker = self._get_changes_tracker(nanocontract_id)
-        return change_tracker.get_balance(token_uid)
+
+        storage: NCStorage
+        if self._call_info is None:
+            storage = self.get_storage(nanocontract_id)
+        else:
+            change_trackers = self._call_info.change_trackers[nanocontract_id]
+            assert len(change_trackers) > 0
+            storage = change_trackers[-1]
+
+        return storage.get_balance(token_uid)
 
     def get_current_nanocontract_id(self) -> ContractId:
         """Return the contract id for the current method being executed."""
