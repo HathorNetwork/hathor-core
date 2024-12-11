@@ -12,12 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from math import log
+from math import log2
 from typing import Any
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
+from hathor.manager import HathorManager
 from hathor.util import json_dumpb
+from hathor.utils.weight import work_to_weight
+
+N_CONFIRMATION_BLOCKS: int = 6
 
 
 @register_resource
@@ -28,7 +32,7 @@ class TransactionAccWeightResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager) -> None:
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
@@ -48,15 +52,21 @@ class TransactionAccWeightResource(Resource):
 
         if meta.first_block:
             block = self.manager.tx_storage.get_transaction(meta.first_block)
-            stop_value = block.weight + log(6, 2)
+            stop_value = block.weight + log2(N_CONFIRMATION_BLOCKS)
             meta = tx.update_accumulated_weight(stop_value=stop_value)
-            data['accumulated_weight'] = meta.accumulated_weight
-            data['accumulated_bigger'] = meta.accumulated_weight > stop_value
+            acc_weight = work_to_weight(meta.accumulated_weight)
+            acc_weight_raw = str(meta.accumulated_weight)
+            data['accumulated_weight'] = acc_weight
+            data['accumulated_weight_raw'] = acc_weight_raw
+            data['accumulated_bigger'] = acc_weight > stop_value
             data['stop_value'] = stop_value
-            data['confirmation_level'] = min(meta.accumulated_weight / stop_value, 1)
+            data['confirmation_level'] = min(acc_weight / stop_value, 1)
         else:
             meta = tx.update_accumulated_weight()
-            data['accumulated_weight'] = meta.accumulated_weight
+            acc_weight = work_to_weight(meta.accumulated_weight)
+            acc_weight_raw = str(meta.accumulated_weight)
+            data['accumulated_weight'] = acc_weight
+            data['accumulated_weight_raw'] = acc_weight_raw
             data['accumulated_bigger'] = False
             data['confirmation_level'] = 0
         return data
@@ -125,7 +135,8 @@ TransactionAccWeightResource.openapi = {
                                 'success': {
                                     'summary': 'Success',
                                     'value': {
-                                        'accumulated_weight': 43237,
+                                        'accumulated_weight': 15.4,
+                                        'accumulated_weight_raw': '43238',
                                         'confirmation_level': 0.88,
                                         'stop_value': 14.5,
                                         'accumulated_bigger': True,
