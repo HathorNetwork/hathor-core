@@ -641,7 +641,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def update_accumulated_weight(
         self,
         *,
-        stop_value: float | None = None,
+        stop_value: int | None = None,
         save_file: bool = True,
     ) -> TransactionMetadata:
         """Calculates the tx's accumulated weight and update its metadata.
@@ -660,9 +660,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """
         assert self.storage is not None
 
-        stop_work_value = weight_to_work(stop_value) if stop_value is not None else None
         metadata = self.get_metadata()
-        if stop_work_value is not None and metadata.accumulated_weight > stop_work_value:
+        if stop_value is not None and metadata.accumulated_weight > stop_value:
             return metadata
 
         work = weight_to_work(self.weight)
@@ -670,7 +669,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         # TODO Another optimization is that, when we calculate the acc weight of a transaction, we
         # also partially calculate the acc weight of its descendants. If it were a DFS, when returning
         # to a vertex, the acc weight calculated would be <= the real acc weight. So, we might store it
-        # as a pre-calculated value. Then, during the next DFS, if `cur + tx.acc_weight > stop_work_value`,
+        # as a pre-calculated value. Then, during the next DFS, if `cur + tx.acc_weight > stop_value`,
         # we might stop and avoid some visits. Question: how would we do it in the BFS?
 
         # TODO We can walk by the blocks first, because they have higher weight and this may
@@ -681,7 +680,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         bfs_walk = BFSTimestampWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         for tx in bfs_walk.run(self, skip_root=True):
             work += weight_to_work(tx.weight)
-            if stop_work_value is not None and work > stop_work_value:
+            if stop_value is not None and work > stop_value:
                 break
 
         metadata.accumulated_weight = work

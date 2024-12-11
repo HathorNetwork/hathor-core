@@ -19,7 +19,7 @@ from structlog import get_logger
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput
 from hathor.util import classproperty
-from hathor.utils.weight import weight_to_work, work_to_weight
+from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
     from hathor.consensus.context import ConsensusAlgorithmContext
@@ -296,7 +296,7 @@ class TransactionConsensusAlgorithm:
         for candidate in candidates:
             tx_meta = candidate.get_metadata()
             if not tx_meta.voided_by:
-                candidate.update_accumulated_weight(stop_value=work_to_weight(meta.accumulated_weight))
+                candidate.update_accumulated_weight(stop_value=meta.accumulated_weight)
                 tx_meta = candidate.get_metadata()
                 d = tx_meta.accumulated_weight - meta.accumulated_weight
                 if d == 0:

@@ -19,7 +19,7 @@ from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
 from hathor.util import json_dumpb
-from hathor.utils.weight import work_to_weight
+from hathor.utils.weight import weight_to_work, work_to_weight
 
 N_CONFIRMATION_BLOCKS: int = 6
 
@@ -53,7 +53,7 @@ class TransactionAccWeightResource(Resource):
         if meta.first_block:
             block = self.manager.tx_storage.get_transaction(meta.first_block)
             stop_value = block.weight + log2(N_CONFIRMATION_BLOCKS)
-            meta = tx.update_accumulated_weight(stop_value=stop_value)
+            meta = tx.update_accumulated_weight(stop_value=weight_to_work(stop_value))
             acc_weight = work_to_weight(meta.accumulated_weight)
             acc_weight_raw = str(meta.accumulated_weight)
             data['accumulated_weight'] = acc_weight
