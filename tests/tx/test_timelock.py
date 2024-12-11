@@ -1,6 +1,7 @@
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.transaction.weight import Weight
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
@@ -36,7 +37,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
-        tx1.weight = 10
+        tx1.weight = Weight(10.0)
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
@@ -55,7 +56,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
 
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs1,
                                                                         outputs1, self.manager.tx_storage)
-        tx2.weight = 10
+        tx2.weight = Weight(10.0)
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
@@ -75,7 +76,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
 
         tx3 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs2,
                                                                         outputs2, self.manager.tx_storage)
-        tx3.weight = 10
+        tx3.weight = Weight(10.0)
         tx3.parents = self.manager.get_new_tx_parents()
         tx3.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx3)
@@ -95,7 +96,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
 
         tx4 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs3,
                                                                         outputs3, self.manager.tx_storage)
-        tx4.weight = 10
+        tx4.weight = Weight(10.0)
         tx4.parents = self.manager.get_new_tx_parents()
         tx4.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx4)
@@ -126,7 +127,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
-        tx1.weight = 10
+        tx1.weight = Weight(10.0)
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
@@ -144,7 +145,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         self.clock.advance(10)
 
         tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
-        tx2.weight = 10
+        tx2.weight = Weight(10.0)
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)

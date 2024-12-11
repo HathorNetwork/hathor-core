@@ -47,6 +47,7 @@ from hathor.transaction.storage.migrations import (
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.transaction.weight import Weight, Work
 from hathor.types import VertexId
 from hathor.verification.transaction_verifier import TransactionVerifier
 
@@ -604,7 +605,7 @@ class TransactionStorage(ABC):
         if timestamp is None and not skip_cache and self._best_block_tips_cache is not None:
             return self._best_block_tips_cache[:]
 
-        best_score: int = 0
+        best_score: Work = Work(0)
         best_tip_blocks: list[bytes] = []
 
         for block_hash in (x.data for x in self.get_block_tips(timestamp)):
@@ -627,9 +628,9 @@ class TransactionStorage(ABC):
         assert self.indexes is not None
         return self.indexes.height.get_n_height_tips(n_blocks)
 
-    def get_weight_best_block(self) -> float:
+    def get_weight_best_block(self) -> Weight:
         heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
-        highest_weight = 0.0
+        highest_weight = Weight(0.0)
         for head in heads:
             if head.weight > highest_weight:
                 highest_weight = head.weight
@@ -1070,7 +1071,7 @@ class TransactionStorage(ABC):
             storage=self,
             nonce=self._settings.GENESIS_BLOCK_NONCE,
             timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
-            weight=self._settings.MIN_BLOCK_WEIGHT,
+            weight=Weight(self._settings.MIN_BLOCK_WEIGHT),
             outputs=[
                 TxOutput(self._settings.GENESIS_TOKENS, self._settings.GENESIS_OUTPUT_SCRIPT),
             ],
@@ -1088,7 +1089,7 @@ class TransactionStorage(ABC):
             storage=self,
             nonce=self._settings.GENESIS_TX1_NONCE,
             timestamp=self._settings.GENESIS_TX1_TIMESTAMP,
-            weight=self._settings.MIN_TX_WEIGHT,
+            weight=Weight(self._settings.MIN_TX_WEIGHT),
         )
         tx1.update_hash()
 
@@ -1102,7 +1103,7 @@ class TransactionStorage(ABC):
             storage=self,
             nonce=self._settings.GENESIS_TX2_NONCE,
             timestamp=self._settings.GENESIS_TX2_TIMESTAMP,
-            weight=self._settings.MIN_TX_WEIGHT,
+            weight=Weight(self._settings.MIN_TX_WEIGHT),
         )
         tx2.update_hash()
 
@@ -1208,7 +1209,7 @@ class BaseTransactionStorage(TransactionStorage):
         self._latest_n_height_tips = super().get_n_height_tips(n_blocks)
         return self._latest_n_height_tips[:n_blocks]
 
-    def get_weight_best_block(self) -> float:
+    def get_weight_best_block(self) -> Weight:
         return super().get_weight_best_block()
 
     def get_block_tips(self, timestamp: Optional[float] = None) -> set[Interval]:

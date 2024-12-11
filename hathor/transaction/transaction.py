@@ -27,6 +27,7 @@ from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
+from hathor.transaction.weight import Weight
 from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
@@ -61,7 +62,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         timestamp: Optional[int] = None,
         signal_bits: int = 0,
         version: TxVersion = TxVersion.REGULAR_TRANSACTION,
-        weight: float = 0,
+        weight: Weight = Weight(0.0),
         inputs: Optional[list[TxInput]] = None,
         outputs: Optional[list[TxOutput]] = None,
         parents: Optional[list[VertexId]] = None,

@@ -28,6 +28,7 @@ from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.simulator import FakeConnection
 from hathor.simulator.utils import add_new_blocks, gen_new_tx
 from hathor.transaction.exceptions import BlockMustSignalError
+from hathor.transaction.weight import Weight
 from hathor.util import not_none
 from tests import unittest
 from tests.resources.base_resource import StubSite
@@ -106,7 +107,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, 10)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*10)
-            tx.weight = 25
+            tx.weight = Weight(25.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
@@ -144,7 +145,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, 9)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*19)
-            tx.weight = 25
+            tx.weight = Weight(25.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
@@ -181,7 +182,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*20)
-            tx.weight = 25
+            tx.weight = Weight(25.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
@@ -220,7 +221,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, 34)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*55)
-            tx.weight = 30
+            tx.weight = Weight(30.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
@@ -256,7 +257,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*56)
-            tx.weight = 30
+            tx.weight = Weight(30.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
@@ -306,7 +307,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*59)
-            tx.weight = 30
+            tx.weight = Weight(30.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
@@ -343,7 +344,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*60)
-            tx.weight = 30
+            tx.weight = Weight(30.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
@@ -382,7 +383,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, 10)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*71)
-            tx.weight = 30
+            tx.weight = Weight(30.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)
@@ -418,7 +419,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
             tx = gen_new_tx(manager, address, 6400*72)
-            tx.weight = 30
+            tx.weight = Weight(30.0)
             tx.update_hash()
             assert manager.propagate_tx(tx, fails_silently=False)
             result = self._get_result(web_client)

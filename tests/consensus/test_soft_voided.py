@@ -5,6 +5,7 @@ from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulat
 from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import Block
+from hathor.transaction.weight import Weight
 from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -88,7 +89,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         txC = gen_new_tx(manager2, address, value)
         txC.parents[0] = txA.hash
         txC.timestamp = max(txC.timestamp, txA.timestamp + 1)
-        txC.weight = 25
+        txC.weight = Weight(25.0)
         txC.update_hash()
         self.assertTrue(manager2.propagate_tx(txC, fails_silently=False))
         metaC = txC.get_metadata()

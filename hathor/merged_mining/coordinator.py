@@ -668,7 +668,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         block.aux_pow = aux_pow
         block.update_hash()
         block_hash = Hash(block.hash)
-        if block_hash.to_weight() < block.weight:
+        if block_hash.to_weight() < block.weight.get():
             self.log.debug('high hash for Hathor, keep mining')
             return
         if job.hathor_height is not None:

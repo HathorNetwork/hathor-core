@@ -27,6 +27,7 @@ from hathor.transaction import Block, TxOutput
 from hathor.transaction.exceptions import PoaValidationError
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.static_metadata import BlockStaticMetadata
+from hathor.transaction.weight import Weight
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
 
 
@@ -34,7 +35,7 @@ def test_get_hashed_poa_data() -> None:
     block = PoaBlock(
         timestamp=123,
         signal_bits=0b1010,
-        weight=2,
+        weight=Weight(2.0),
         parents=[b'\xFF' * 32, b'\xFF' * 32],
         data=b'some data',
         signer_id=b'\xAB\xCD',
@@ -58,7 +59,7 @@ def test_get_hashed_poa_data() -> None:
     assert poa.get_hashed_poa_data(test_block) != poa.get_hashed_poa_data(block)
 
     test_block = clone_block()
-    test_block.weight += 1
+    test_block.weight = test_block.weight.add(1.0)
     assert poa.get_hashed_poa_data(test_block) != poa.get_hashed_poa_data(block)
 
     test_block = clone_block()
@@ -105,7 +106,7 @@ def test_verify_poa() -> None:
         storage=storage,
         timestamp=153,
         signal_bits=0b1010,
-        weight=poa.BLOCK_WEIGHT_IN_TURN,
+        weight=Weight(poa.BLOCK_WEIGHT_IN_TURN),
         parents=[b'parent1', b'parent2'],
     )
     block.set_static_metadata(
@@ -161,7 +162,7 @@ def test_verify_poa() -> None:
     block_verifier.verify_poa(block)
 
     # Test some random weight fails
-    block.weight = 123
+    block.weight = Weight(123.0)
     poa_signer.sign_block(block)
     with pytest.raises(PoaValidationError) as e:
         block_verifier.verify_poa(block)
@@ -175,7 +176,7 @@ def test_verify_poa() -> None:
     first_poa_signer, second_poa_signer = [key_pair[0] for key_pair in signer_and_keys]
 
     # Test valid signature with two signers, in turn
-    block.weight = poa.BLOCK_WEIGHT_IN_TURN
+    block.weight = Weight(poa.BLOCK_WEIGHT_IN_TURN)
     first_poa_signer.sign_block(block)
     block_verifier.verify_poa(block)
 
@@ -186,7 +187,7 @@ def test_verify_poa() -> None:
     assert str(e.value) == 'block weight is 2.0, expected 1.0'
 
     # Test valid signature with two signers, out of turn
-    block.weight = poa.BLOCK_WEIGHT_OUT_OF_TURN
+    block.weight = Weight(poa.BLOCK_WEIGHT_OUT_OF_TURN)
     second_poa_signer.sign_block(block)
     block_verifier.verify_poa(block)
 
@@ -201,7 +202,7 @@ def test_verify_poa() -> None:
         storage=storage,
         timestamp=153,
         signal_bits=0b1010,
-        weight=poa.BLOCK_WEIGHT_IN_TURN,
+        weight=Weight(poa.BLOCK_WEIGHT_IN_TURN),
         parents=[b'parent1', b'parent2'],
     )
     block.set_static_metadata(
@@ -214,7 +215,7 @@ def test_verify_poa() -> None:
     )
 
     # Test valid signature with two signers, in turn
-    block.weight = poa.BLOCK_WEIGHT_IN_TURN
+    block.weight = Weight(poa.BLOCK_WEIGHT_IN_TURN)
     second_poa_signer.sign_block(block)
     block_verifier.verify_poa(block)
 
@@ -225,7 +226,7 @@ def test_verify_poa() -> None:
     assert str(e.value) == 'block weight is 2.0, expected 1.0'
 
     # Test valid signature with two signers, out of turn
-    block.weight = poa.BLOCK_WEIGHT_OUT_OF_TURN
+    block.weight = Weight(poa.BLOCK_WEIGHT_OUT_OF_TURN)
     first_poa_signer.sign_block(block)
     block_verifier.verify_poa(block)
 

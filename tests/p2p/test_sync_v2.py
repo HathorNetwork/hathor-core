@@ -21,6 +21,7 @@ from hathor.simulator.trigger import (
 from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.traversal import DFSWalk
+from hathor.transaction.weight import Weight
 from hathor.types import VertexId
 from hathor.util import not_none
 from tests.simulation.base import SimulatorTestCase
@@ -290,7 +291,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
             tx.timestamp = max(max_ts_spent_tx + 1, int(manager.reactor.seconds()))
 
-            tx.weight = 1
+            tx.weight = Weight(1.0)
             # XXX: fixed parents is the final requirement to make all the generated new tips
             tx.parents = parents
             manager.cpu_mining_service.resolve(tx)

@@ -22,6 +22,7 @@ from hathor.consensus.consensus_settings import PoaSettings
 from hathor.transaction import Block, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.weight import Weight
 
 # Size limit in bytes for signature field
 _MAX_POA_SIGNATURE_LEN: int = 100
@@ -34,7 +35,7 @@ class PoaBlock(Block):
         self,
         timestamp: int | None = None,
         signal_bits: int = 0,
-        weight: float = 0,
+        weight: Weight = Weight(0.0),
         outputs: list[TxOutput] | None = None,
         parents: list[bytes] | None = None,
         hash: bytes | None = None,

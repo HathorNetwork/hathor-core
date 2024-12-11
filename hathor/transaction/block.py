@@ -28,6 +28,7 @@ from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.weight import Weight
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
         timestamp: Optional[int] = None,
         signal_bits: int = 0,
         version: TxVersion = TxVersion.REGULAR_BLOCK,
-        weight: float = 0,
+        weight: Weight = Weight(0.0),
         outputs: Optional[list[TxOutput]] = None,
         parents: Optional[list[bytes]] = None,
         hash: Optional[bytes] = None,

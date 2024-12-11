@@ -2,6 +2,7 @@ from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
+from hathor.transaction.weight import Weight
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import PrivateKeyNotFound
 from tests import unittest
@@ -33,7 +34,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs,
                                                                           self.manager.tx_storage)
-        self.tx1.weight = 10
+        self.tx1.weight = Weight(10.0)
         self.tx1.parents = self.manager.get_new_tx_parents()
         self.tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(self.tx1)
@@ -51,7 +52,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # With less weight, so the balance will continue because tx1 will be the winner
         tx2 = Transaction.create_from_struct(self.tx1.get_struct())
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
-        tx2.weight = 9
+        tx2.weight = Weight(9.0)
         self.manager.cpu_mining_service.resolve(tx2)
 
         # Propagate a conflicting twin transaction
@@ -126,7 +127,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # With higher weight, so the balance will continue because tx2 will be the winner
         tx2 = Transaction.create_from_struct(self.tx1.get_struct())
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
-        tx2.weight = 13
+        tx2.weight = Weight(13.0)
         self.manager.cpu_mining_service.resolve(tx2)
 
         # Propagate a conflicting twin transaction
@@ -160,7 +161,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
-        tx2.weight = 10
+        tx2.weight = Weight(10.0)
         tx2.parents = [self.tx1.hash, self.tx1.parents[0]]
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
@@ -216,7 +217,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
-        tx2.weight = 10
+        tx2.weight = Weight(10.0)
         tx2.parents = [self.tx1.hash, self.tx1.parents[0]]
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
@@ -266,7 +267,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         ]
 
         tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
-        tx3.weight = 10
+        tx3.weight = Weight(10.0)
         tx3.parents = [self.tx1.hash, self.tx1.parents[0]]
         tx3.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx3)
@@ -296,7 +297,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
-        tx2.weight = 10
+        tx2.weight = Weight(10.0)
         tx2.parents = [self.tx1.hash, self.tx1.parents[0]]
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
@@ -304,7 +305,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # Change of parents only, so it's a twin.
         tx3 = Transaction.create_from_struct(self.tx1.get_struct())
         tx3.parents = [self.tx1.parents[1], self.tx1.parents[0]]
-        tx3.weight = 14
+        tx3.weight = Weight(14.0)
         self.manager.cpu_mining_service.resolve(tx3)
 
         # Propagate a conflicting twin transaction
@@ -336,7 +337,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         ]
 
         tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs2, self.manager.tx_storage)
-        tx2.weight = 10
+        tx2.weight = Weight(10.0)
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
@@ -347,7 +348,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(wallet_address), value=self.blocks_tokens[0], timelock=None)
         ]
         tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs3, self.manager.tx_storage)
-        tx3.weight = 10
+        tx3.weight = Weight(10.0)
         tx3.parents = self.manager.get_new_tx_parents()
         tx3.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx3)
@@ -360,7 +361,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [WalletOutputInfo(address=new_address, value=self.blocks_tokens[0], timelock=None)]
         tx4 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
-        tx4.weight = 10
+        tx4.weight = Weight(10.0)
         tx4.parents = [tx3.hash, tx3.parents[0]]
         tx4.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx4)
@@ -370,7 +371,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # Change of parents only, so it's a twin.
         tx5 = Transaction.create_from_struct(tx4.get_struct())
         tx5.parents = [tx4.parents[1], tx4.parents[0]]
-        tx5.weight = 10
+        tx5.weight = Weight(10.0)
         self.manager.cpu_mining_service.resolve(tx5)
 
         # Propagate a conflicting twin transaction

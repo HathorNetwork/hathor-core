@@ -26,6 +26,7 @@ from hathor.consensus.consensus_settings import PoaSettings
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.reactor import ReactorProtocol
+from hathor.transaction.weight import Weight
 from hathor.util import not_none
 
 if TYPE_CHECKING:
@@ -129,7 +130,7 @@ class PoaBlockProducer:
             return
 
         from hathor.transaction.poa import PoaBlock
-        if isinstance(block, PoaBlock) and not block.weight == poa.BLOCK_WEIGHT_IN_TURN:
+        if isinstance(block, PoaBlock) and not block.weight == Weight(poa.BLOCK_WEIGHT_IN_TURN):
             self._log.info('received out of turn block', block=block.hash_hex, signer_id=block.signer_id)
 
         self._schedule_block()

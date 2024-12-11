@@ -22,7 +22,7 @@ import weakref
 from abc import ABC, abstractmethod
 from enum import IntEnum
 from itertools import chain
-from math import isfinite, log
+from math import log2
 from struct import error as StructError, pack
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
@@ -35,9 +35,9 @@ from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.weight import Weight, Work
 from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
-from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
     from _hashlib import HASH
@@ -66,23 +66,13 @@ _ONE_BYTE = 0xFF
 
 
 def sum_weights(w1: float, w2: float) -> float:
-    return aux_calc_weight(w1, w2, 1)
-
-
-def sub_weights(w1: float, w2: float) -> float:
-    if w1 == w2:
-        return 0
-    return aux_calc_weight(w1, w2, -1)
-
-
-def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
     a = max(w1, w2)
     b = min(w1, w2)
     if b == 0.0:
         # Zero is a special acc_weight.
         # We could use float('-inf'), but it is not serializable.
         return a
-    return a + log(1 + 2**(b - a) * multiplier, 2)
+    return a + log2(1 + 2**(b - a))
 
 
 # Versions are sequential for blocks and transactions
@@ -152,7 +142,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         timestamp: Optional[int] = None,
         signal_bits: int = 0,
         version: TxVersion = TxVersion.REGULAR_BLOCK,
-        weight: float = 0,
+        weight: Weight = Weight(0.0),
         inputs: Optional[list['TxInput']] = None,
         outputs: Optional[list['TxOutput']] = None,
         parents: Optional[list[VertexId]] = None,
@@ -201,7 +191,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             nonce='%d' % (self.nonce or 0),
             timestamp='%s' % self.timestamp,
             version='%s' % int(self.version),
-            weight='%f' % self.weight,
+            weight='%f' % self.weight.get(),
             hash=self.hash_hex,
         )
         if not short:
@@ -304,11 +294,12 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Sum of the value of the outputs"""
         return sum(output.value for output in self.outputs if not output.is_token_authority())
 
-    def get_target(self, override_weight: Optional[float] = None) -> int:
+    def get_target(self, override_weight: Weight | None = None) -> int:
         """Target to be achieved in the mining process"""
-        if not isfinite(self.weight):
+        if not self.weight.is_finite():
             raise WeightError
-        return int(2**(256 - (override_weight or self.weight)) - 1)
+        weight = override_weight.get() if override_weight is not None else 0
+        return int(2**(256 - (weight or self.weight.get())) - 1)
 
     def get_time_from_now(self, now: Optional[Any] = None) -> str:
         """ Return a the time difference between now and the tx's timestamp
@@ -367,9 +358,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
+        (raw_weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
+        self.weight = Weight(raw_weight)
         if verbose:
-            verbose('weigth', self.weight)
+            verbose('weight', self.weight)
             verbose('timestamp', self.timestamp)
             verbose('parents_len', parents_len)
 
@@ -391,7 +383,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :return: graph data serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = pack(_GRAPH_FORMAT_STRING, self.weight, self.timestamp, len(self.parents))
+        struct_bytes = pack(_GRAPH_FORMAT_STRING, self.weight.get(), self.timestamp, len(self.parents))
         for parent in self.parents:
             struct_bytes += parent
         return struct_bytes
@@ -603,8 +595,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
-            score = weight_to_work(self.weight) if self.is_genesis else 0
-            accumulated_weight = weight_to_work(self.weight)
+            score = self.weight.to_work() if self.is_genesis else Work(0)
+            accumulated_weight = self.weight.to_work()
             metadata = TransactionMetadata(
                 settings=self._settings,
                 hash=self._hash,
@@ -623,8 +615,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """
         from hathor.transaction.transaction_metadata import ValidationState
         assert self.storage is not None
-        score = weight_to_work(self.weight) if self.is_genesis else 0
-        accumulated_weight = weight_to_work(self.weight)
+        score = self.weight.to_work() if self.is_genesis else Work(0)
+        accumulated_weight = self.weight.to_work()
         self._metadata = TransactionMetadata(hash=self._hash,
                                              score=score,
                                              accumulated_weight=accumulated_weight)
@@ -641,7 +633,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def update_accumulated_weight(
         self,
         *,
-        stop_value: int | None = None,
+        stop_value: Work | None = None,
         save_file: bool = True,
     ) -> TransactionMetadata:
         """Calculates the tx's accumulated weight and update its metadata.
@@ -664,7 +656,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         if stop_value is not None and metadata.accumulated_weight > stop_value:
             return metadata
 
-        work = weight_to_work(self.weight)
+        work = self.weight.to_work()
 
         # TODO Another optimization is that, when we calculate the acc weight of a transaction, we
         # also partially calculate the acc weight of its descendants. If it were a DFS, when returning
@@ -679,7 +671,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         from hathor.transaction.storage.traversal import BFSTimestampWalk
         bfs_walk = BFSTimestampWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         for tx in bfs_walk.run(self, skip_root=True):
-            work += weight_to_work(tx.weight)
+            work = work.add(tx.weight)
             if stop_value is not None and work > stop_value:
                 break
 
@@ -714,7 +706,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def _update_initial_accumulated_weight(self) -> None:
         """Update the vertex initial accumulated_weight."""
         metadata = self.get_metadata()
-        metadata.accumulated_weight = weight_to_work(self.weight)
+        metadata.accumulated_weight = self.weight.to_work()
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
@@ -741,7 +733,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         data['nonce'] = self.nonce
         data['timestamp'] = self.timestamp
         data['version'] = int(self.version)
-        data['weight'] = self.weight
+        data['weight'] = self.weight.get()
         data['signal_bits'] = self.signal_bits
 
         data['parents'] = []

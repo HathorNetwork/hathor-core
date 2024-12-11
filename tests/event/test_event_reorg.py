@@ -1,6 +1,7 @@
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from hathor.simulator.utils import add_new_blocks
+from hathor.transaction.weight import Weight
 from tests import unittest
 from tests.utils import BURN_ADDRESS, get_genesis_key
 
@@ -34,7 +35,7 @@ class BaseEventReorgTest(unittest.TestCase):
         block_to_replace = blocks[8]
         tb0 = self.manager.make_custom_block_template(block_to_replace.parents[0], block_to_replace.parents[1:])
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage, address=BURN_ADDRESS)
-        b0.weight = 10
+        b0.weight = Weight(10.0)
         self.manager.cpu_mining_service.resolve(b0)
         self.manager.propagate_tx(b0, fails_silently=False)
         self.log.debug('reorg block propagated')

@@ -23,6 +23,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.weight import Weight
 from hathor.wallet import BaseWallet
 
 
@@ -66,7 +67,7 @@ class VertexExporter:
         if block.parents[0] == self._settings.GENESIS_BLOCK_HASH:
             genesis_block = Block(
                 timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
-                weight=self._settings.MIN_BLOCK_WEIGHT,
+                weight=Weight(self._settings.MIN_BLOCK_WEIGHT),
             )
             genesis_block.get_height = lambda: 0  # type: ignore[method-assign]
             return genesis_block
@@ -177,7 +178,7 @@ class VertexExporter:
         vertex.timestamp = self.get_min_timestamp(node)
         self.sign_all_inputs(node, vertex)
         if 'weight' in node.attrs:
-            vertex.weight = float(node.attrs['weight'])
+            vertex.weight = Weight(float(node.attrs['weight']))
         else:
             vertex.weight = self._daa.minimum_tx_weight(vertex)
         self.update_vertex_hash(vertex)
@@ -202,7 +203,7 @@ class VertexExporter:
         blk.get_height = lambda: height  # type: ignore[method-assign]
         blk.update_hash()  # the next call fails is blk.hash is None
         if 'weight' in node.attrs:
-            blk.weight = float(node.attrs['weight'])
+            blk.weight = Weight(float(node.attrs['weight']))
         else:
             blk.weight = self._daa.calculate_block_difficulty(blk, self.get_parent_block)
         self.update_vertex_hash(blk)
@@ -220,7 +221,7 @@ class VertexExporter:
         tx.timestamp = self.get_min_timestamp(node)
         self.sign_all_inputs(node, tx)
         if 'weight' in node.attrs:
-            tx.weight = float(node.attrs['weight'])
+            tx.weight = Weight(float(node.attrs['weight']))
         else:
             tx.weight = self._daa.minimum_tx_weight(tx)
         self.update_vertex_hash(tx)

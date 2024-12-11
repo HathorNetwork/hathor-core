@@ -20,6 +20,7 @@ from hathor.transaction import BitcoinAuxPow, Block, MergeMinedBlock, Transactio
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.weight import Weight
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
@@ -46,7 +47,7 @@ class BaseVerificationTest(unittest.TestCase):
         block = Block(
             hash=b'some_hash',
             storage=self.manager.tx_storage,
-            weight=1,
+            weight=Weight(1.0),
             outputs=[TxOutput(value=6400, script=b'')],
             parents=[
                 self._settings.GENESIS_BLOCK_HASH,
@@ -61,7 +62,7 @@ class BaseVerificationTest(unittest.TestCase):
         block = MergeMinedBlock(
             hash=b'some_hash',
             storage=self.manager.tx_storage,
-            weight=1,
+            weight=Weight(1.0),
             outputs=[TxOutput(value=6400, script=b'')],
             aux_pow=BitcoinAuxPow.dummy(),
             parents=[
@@ -87,7 +88,7 @@ class BaseVerificationTest(unittest.TestCase):
         tx = Transaction(
             hash=b'some_hash',
             storage=self.manager.tx_storage,
-            weight=1,
+            weight=Weight(1.0),
             inputs=[_input],
             outputs=[output],
             parents=[

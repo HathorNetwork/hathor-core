@@ -8,6 +8,7 @@ from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
+from hathor.transaction.weight import Weight
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
@@ -72,7 +73,7 @@ class BaseMultiSigSpendTest(unittest.TestCase):
         outputs = [WalletOutputInfo(address=self.multisig_address, value=block_reward, timelock=None)]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
-        tx1.weight = 10
+        tx1.weight = Weight(10.0)
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
@@ -84,7 +85,7 @@ class BaseMultiSigSpendTest(unittest.TestCase):
 
         # Then we create a new tx that spends this tokens from multisig wallet
         tx = Transaction.create_from_struct(tx1.get_struct())
-        tx.weight = 10
+        tx.weight = Weight(10.0)
         tx.parents = self.manager.get_new_tx_parents()
         tx.timestamp = int(self.clock.seconds())
 

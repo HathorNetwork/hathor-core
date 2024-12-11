@@ -6,6 +6,7 @@ from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
 from hathor.transaction.vertex_parser import VertexParser
+from hathor.transaction.weight import Weight
 from hathor.util import iwindows
 from hathor.wallet import Wallet
 from tests import unittest
@@ -264,7 +265,7 @@ class BaseIndexesTest(unittest.TestCase):
                                                     address=decode_address(address))
         block2.parents[1:] = [txA2.hash, txB2.hash]
         block2.timestamp = block1.timestamp
-        block2.weight = 4
+        block2.weight = Weight(4.0)
         self.manager.cpu_mining_service.resolve(block2)
         self.manager.propagate_tx(block2, fails_silently=False)
         self.graphviz.labels[block2.hash] = 'block2'

@@ -37,6 +37,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
+from hathor.transaction.weight import Weight
 from hathor.types import TokenUid, VertexId
 
 cpu = get_cpu_profiler()
@@ -65,11 +66,11 @@ class TransactionVerifier:
         """Validate minimum tx difficulty."""
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         min_tx_weight = self._daa.minimum_tx_weight(tx)
-        max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
-        if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:
+        max_tx_weight = min_tx_weight.add(self._settings.MAX_TX_WEIGHT_DIFF)
+        if tx.weight < min_tx_weight.sub(self._settings.WEIGHT_TOL):
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'smaller than the minimum weight ({min_tx_weight})')
-        elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
+        elif min_tx_weight > Weight(self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION) and tx.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
 

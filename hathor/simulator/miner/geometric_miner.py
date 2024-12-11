@@ -102,7 +102,7 @@ class GeometricMiner(AbstractMiner):
             except BlockTemplateTimestampError:
                 dt = 5  # Try again in 5 seconds.
             else:
-                geometric_p = 2**(-block.weight)
+                geometric_p = 2**(-block.weight.get())
                 trials = self._rng.geometric(geometric_p)
                 dt = 1.0 * trials / self._hashpower
                 self._block = block

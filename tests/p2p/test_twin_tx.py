@@ -1,6 +1,7 @@
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.transaction.weight import Weight
 from hathor.util import not_none
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
@@ -35,7 +36,7 @@ class BaseTwinTransactionTestCase(unittest.TestCase):
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
-        tx1.weight = 10
+        tx1.weight = Weight(10.0)
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)

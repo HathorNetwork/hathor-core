@@ -6,6 +6,7 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
 from hathor.simulator.utils import add_new_block
+from hathor.transaction.weight import Weight
 from hathor.util import not_none
 from hathor.wallet import HDWallet
 from tests import unittest
@@ -295,7 +296,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # Propagates a block with bigger weight, so the score of the manager2 chain
         # will be bigger than the other one
         b = add_new_block(manager2, advance_clock=1, propagate=False)
-        b.weight = 5
+        b.weight = Weight(5.0)
         manager2.cpu_mining_service.resolve(b)
         manager2.propagate_tx(b)
         manager2_blocks += 1

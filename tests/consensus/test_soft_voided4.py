@@ -5,6 +5,7 @@ from hathor.simulator import FakeConnection, RandomTransactionGenerator, Simulat
 from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_double_spending
 from hathor.transaction import Transaction
+from hathor.transaction.weight import Weight
 from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -76,7 +77,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         assert isinstance(tx_base, Transaction)
         txC = gen_new_double_spending(manager2, use_same_parents=False, tx=tx_base)
         self.graphviz.labels[tx_base.hash] = 'tx_base'
-        txC.weight = 30
+        txC.weight = Weight(30.0)
         txC.parents = tx_base.parents
         txC.update_hash()
         self.graphviz.labels[txC.hash] = 'txC'

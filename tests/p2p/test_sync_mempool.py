@@ -5,6 +5,7 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.simulator import FakeConnection
 from hathor.transaction import Block, Transaction
+from hathor.transaction.weight import Weight
 from hathor.util import json_loadb, not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
@@ -36,7 +37,7 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         )
         tx.timestamp = int(self.clock.seconds())
         tx.storage = self.manager1.tx_storage
-        tx.weight = 10
+        tx.weight = Weight(10.0)
         tx.parents = self.manager1.get_new_tx_parents()
         self.manager1.cpu_mining_service.resolve(tx)
         self.manager1.propagate_tx(tx)

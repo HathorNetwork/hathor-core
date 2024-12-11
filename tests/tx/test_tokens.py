@@ -10,6 +10,7 @@ from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMisma
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, int_to_bytes
+from hathor.transaction.weight import Weight
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
 
@@ -417,7 +418,7 @@ class BaseTokenTest(unittest.TestCase):
         # create conflicting tx by changing parents
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.parents = [tx.parents[1], tx.parents[0]]
-        tx3.weight = 3
+        tx3.weight = Weight(3.0)
         self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx3.hash, tx2.hash)
         self.assertTrue(tx3.weight > tx2.weight)

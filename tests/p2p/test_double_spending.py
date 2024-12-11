@@ -4,6 +4,7 @@ from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.transaction.weight import Weight
 from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_tx
@@ -46,20 +47,20 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(address), value=value, timelock=None))
 
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
-        tx1.weight = 10
+        tx1.weight = Weight(10.0)
         tx1.parents = self.manager1.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx1)
 
         tx2 = Transaction.create_from_struct(tx1.get_struct())
-        tx2.weight = 10
+        tx2.weight = Weight(10.0)
         tx2.parents = tx2.parents[::-1]
         tx2.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx2)
         self.assertNotEqual(tx1.hash, tx2.hash)
 
         tx3 = Transaction.create_from_struct(tx1.get_struct())
-        tx3.weight = 11
+        tx3.weight = Weight(11.0)
         tx3.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx1.hash, tx3.hash)
@@ -146,13 +147,13 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # tx6 is a twin of tx3, but verifying tx4 and tx5
         # tx7 verifies tx4, but does not spend any of tx4's inputs
         # ---
-        # tx1.weight = 5
-        # tx2.weight = 5
-        # tx3.weight = 5
-        # tx4.weight = 5
-        # tx5.weight = 5
-        # tx6.weight = 1
-        # tx7.weight = 10
+        # tx1.weight = Weight(5.0)
+        # tx2.weight = Weight(5.0)
+        # tx3.weight = Weight(5.0)
+        # tx4.weight = Weight(5.0)
+        # tx5.weight = Weight(5.0)
+        # tx6.weight = Weight(1.0)
+        # tx7.weight = Weight(10.0)
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
@@ -160,7 +161,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
-        tx1.weight = 5
+        tx1.weight = Weight(5.0)
         tx1.parents = self.manager1.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx1)
@@ -174,7 +175,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         inputs = [WalletInputInfo(i.tx_id, i.index, Mock()) for i in tx1.inputs]
         tx4 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs,
                                                                          outputs, self.manager1.tx_storage)
-        tx4.weight = 5
+        tx4.weight = Weight(5.0)
         tx4.parents = self.manager1.get_new_tx_parents()
         tx4.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx4)
@@ -197,7 +198,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(1)
         tx2 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                          self.manager1.tx_storage)
-        tx2.weight = 5
+        tx2.weight = Weight(5.0)
         tx2.parents = tx1.parents
         tx2.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx2)
@@ -216,7 +217,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx3 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
         self.assertNotEqual(tx3.inputs[0].tx_id, tx1.hash)
         self.assertNotEqual(tx3.inputs[0].tx_id, tx2.hash)
-        tx3.weight = 5
+        tx3.weight = Weight(5.0)
         tx3.parents = [tx1.hash, tx1.parents[0]]
         tx3.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx3)
@@ -247,7 +248,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(1)
         tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs, force=True,
                                                                          tx_storage=self.manager1.tx_storage)
-        tx5.weight = 5
+        tx5.weight = Weight(5.0)
         tx5.parents = tx1.parents
         tx5.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx5)
@@ -263,7 +264,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.clock.advance(1)
         tx6 = Transaction.create_from_struct(tx3.get_struct())
-        tx6.weight = 1
+        tx6.weight = Weight(1.0)
         tx6.parents = [tx4.hash, tx5.hash]
         tx6.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx6)
@@ -284,7 +285,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(1)
         tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                          self.manager1.tx_storage)
-        tx7.weight = 10
+        tx7.weight = Weight(10.0)
         tx7.parents = [tx4.hash, tx5.hash]
         tx7.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx7)

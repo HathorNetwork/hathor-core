@@ -21,8 +21,8 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.weight import Work
 from hathor.util import json_dumpb, json_loadb, practically_equal
-from hathor.utils.weight import work_to_weight
 
 if TYPE_CHECKING:
     from weakref import ReferenceType  # noqa: F401
@@ -41,8 +41,8 @@ class TransactionMetadata:
     received_by: list[int]
     children: list[bytes]
     twins: list[bytes]
-    accumulated_weight: int
-    score: int
+    accumulated_weight: Work
+    score: Work
     first_block: Optional[bytes]
     validation: ValidationState
 
@@ -61,8 +61,8 @@ class TransactionMetadata:
         self,
         spent_outputs: Optional[dict[int, list[bytes]]] = None,
         hash: Optional[bytes] = None,
-        accumulated_weight: int = 0,
-        score: int = 0,
+        accumulated_weight: Work = Work(0),
+        score: Work = Work(0),
         settings: HathorSettings | None = None,
     ) -> None:
         from hathor.transaction.genesis import is_genesis
@@ -235,8 +235,8 @@ class TransactionMetadata:
 
     def to_json(self) -> dict[str, Any]:
         data = self.to_storage_json()
-        data['accumulated_weight'] = work_to_weight(self.accumulated_weight)
-        data['score'] = work_to_weight(self.score)
+        data['accumulated_weight'] = self.accumulated_weight.to_weight().get()
+        data['score'] = self.score.to_weight().get()
         return data
 
     def to_json_extended(self, tx_storage: 'TransactionStorage') -> dict[str, Any]:
@@ -275,8 +275,8 @@ class TransactionMetadata:
         else:
             meta.twins = []
 
-        meta.accumulated_weight = int(data['accumulated_weight_raw'])
-        meta.score = int(data.get('score_raw', 0))
+        meta.accumulated_weight = Work(int(data['accumulated_weight_raw']))
+        meta.score = Work(int(data.get('score_raw', 0)))
 
         feature_states_raw = data.get('feature_states')
         if feature_states_raw:

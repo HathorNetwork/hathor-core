@@ -1,6 +1,6 @@
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.utils.weight import weight_to_work
+from hathor.transaction.weight import Work
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
@@ -37,11 +37,11 @@ class BaseAccumulatedWeightTestCase(unittest.TestCase):
 
         # All transactions and blocks should be verifying tx_list[0] directly or
         # indirectly.
-        expected = 0
+        expected = Work(0)
         for tx in tx_list:
-            expected += weight_to_work(tx.weight)
+            expected = expected.add(tx.weight)
         for block in blocks:
-            expected += weight_to_work(block.weight)
+            expected = expected.add(block.weight)
 
         meta = tx0.update_accumulated_weight()
         self.assertAlmostEqual(meta.accumulated_weight, expected)

@@ -7,6 +7,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
+from hathor.transaction.weight import Weight
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from tests import unittest
@@ -42,7 +43,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
             tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
 
         tx.storage = self.manager.tx_storage
-        tx.weight = 1
+        tx.weight = Weight(1.0)
         max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
         tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
@@ -90,7 +91,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         yield self.web_tokens.post('wallet/send_tokens', {'data': data_json})
 
         # modify tx so it will be a double spending, then rejected
-        tx.weight += 0.1
+        tx.weight = tx.weight.add(0.1)
         self.manager.cpu_mining_service.resolve(tx)
 
         tx_hex = tx.get_struct().hex()

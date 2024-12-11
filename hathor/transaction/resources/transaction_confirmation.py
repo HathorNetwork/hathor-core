@@ -19,7 +19,6 @@ from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
 from hathor.util import json_dumpb
-from hathor.utils.weight import weight_to_work, work_to_weight
 
 N_CONFIRMATION_BLOCKS: int = 6
 
@@ -52,20 +51,20 @@ class TransactionAccWeightResource(Resource):
 
         if meta.first_block:
             block = self.manager.tx_storage.get_transaction(meta.first_block)
-            stop_value = block.weight + log2(N_CONFIRMATION_BLOCKS)
-            meta = tx.update_accumulated_weight(stop_value=weight_to_work(stop_value))
-            acc_weight = work_to_weight(meta.accumulated_weight)
+            stop_value = block.weight.add(log2(N_CONFIRMATION_BLOCKS))
+            meta = tx.update_accumulated_weight(stop_value=stop_value.to_work())
+            acc_weight = meta.accumulated_weight.to_weight()
             acc_weight_raw = str(meta.accumulated_weight)
-            data['accumulated_weight'] = acc_weight
+            data['accumulated_weight'] = acc_weight.get()
             data['accumulated_weight_raw'] = acc_weight_raw
             data['accumulated_bigger'] = acc_weight > stop_value
-            data['stop_value'] = stop_value
-            data['confirmation_level'] = min(acc_weight / stop_value, 1)
+            data['stop_value'] = stop_value.get()
+            data['confirmation_level'] = min(acc_weight.get() / stop_value.get(), 1)
         else:
             meta = tx.update_accumulated_weight()
-            acc_weight = work_to_weight(meta.accumulated_weight)
+            acc_weight = meta.accumulated_weight.to_weight()
             acc_weight_raw = str(meta.accumulated_weight)
-            data['accumulated_weight'] = acc_weight
+            data['accumulated_weight'] = acc_weight.get()
             data['accumulated_weight_raw'] = acc_weight_raw
             data['accumulated_bigger'] = False
             data['confirmation_level'] = 0

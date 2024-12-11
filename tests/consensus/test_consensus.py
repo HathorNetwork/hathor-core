@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, Mock
 from hathor.execution_manager import ExecutionManager
 from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.transaction.weight import Weight
 from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
@@ -79,7 +80,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         # So, it will be executed and previous blocks and transactions will be voided.
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
-        b0.weight = 10
+        b0.weight = Weight(10.0)
         manager.cpu_mining_service.resolve(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
@@ -195,7 +196,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         # This block verifies the conflicting transaction and has a high weight.
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
-        b0.weight = 10
+        b0.weight = Weight(10.0)
         manager.cpu_mining_service.resolve(b0)
         manager.propagate_tx(b0, fails_silently=False)
 
@@ -248,7 +249,7 @@ class BaseConsensusTestCase(unittest.TestCase):
         # This block verifies the conflicting transaction and has a high weight.
         b0 = manager.generate_mining_block()
         b0.parents = [b0.parents[0], conflicting_tx.hash, conflicting_tx.parents[0]]
-        b0.weight = 10
+        b0.weight = Weight(10.0)
         manager.cpu_mining_service.resolve(b0)
         manager.propagate_tx(b0, fails_silently=False)
 

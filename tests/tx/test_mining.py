@@ -4,7 +4,7 @@ from hathor.mining import BlockTemplate
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.utils.weight import weight_to_work
+from hathor.transaction.weight import Weight, Work
 from tests import unittest
 
 
@@ -44,7 +44,7 @@ class BaseMiningTest(unittest.TestCase):
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
             reward=self._settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
-            weight=1.0,
+            weight=Weight(1.0),
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=self._settings.GENESIS_BLOCK_TIMESTAMP + 3,
             timestamp_max=timestamp_max,  # no limit for next block after genesis
@@ -52,7 +52,7 @@ class BaseMiningTest(unittest.TestCase):
             parents=block_templates[0].parents,
             parents_any=[],
             height=1,  # genesis is 0
-            score=weight_to_work(self.genesis_blocks[0].weight) + weight_to_work(1),
+            score=self.genesis_blocks[0].weight.to_work().add(Weight(1.0)),
             signal_bits=0
         ))
 
@@ -73,7 +73,7 @@ class BaseMiningTest(unittest.TestCase):
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
             reward=self._settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
-            weight=1.0,
+            weight=Weight(1.0),
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=blocks[-1].timestamp + 1,
             timestamp_max=timestamp_max,
@@ -81,7 +81,7 @@ class BaseMiningTest(unittest.TestCase):
             parents=block_templates[0].parents,
             parents_any=[],
             height=101,  # genesis is 0
-            score=blocks[-1].get_metadata().score + weight_to_work(1),
+            score=blocks[-1].get_metadata().score.add(Weight(1.0)),
             signal_bits=0
         ))
 
@@ -91,14 +91,14 @@ class BaseMiningTest(unittest.TestCase):
         template = BlockTemplate(
             versions={0},
             reward=6400,
-            weight=60,
+            weight=Weight(60.0),
             timestamp_now=12345,
             timestamp_min=12344,
             timestamp_max=12346,
             parents=[b'\x01', b'\x02', b'\x03'],
             parents_any=[],
             height=999,
-            score=100,
+            score=Work(100),
             signal_bits=0b0101,
         )
         block = template.generate_minimally_valid_block()

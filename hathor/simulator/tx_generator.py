@@ -139,7 +139,7 @@ class RandomTransactionGenerator:
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
         tx.update_hash()
 
-        geometric_p = 2**(-tx.weight)
+        geometric_p = 2**(-tx.weight.get())
         trials = self.rng.geometric(geometric_p)
         dt = 1.0 * trials / self.hashpower
 

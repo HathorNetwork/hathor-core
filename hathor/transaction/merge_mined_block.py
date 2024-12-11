@@ -20,6 +20,7 @@ from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
 from hathor.transaction.block import Block
 from hathor.transaction.util import VerboseCallback
+from hathor.transaction.weight import Weight
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -33,7 +34,7 @@ class MergeMinedBlock(Block):
         timestamp: Optional[int] = None,
         signal_bits: int = 0,
         version: TxVersion = TxVersion.MERGE_MINED_BLOCK,
-        weight: float = 0,
+        weight: Weight = Weight(0.0),
         outputs: Optional[list[TxOutput]] = None,
         parents: Optional[list[bytes]] = None,
         hash: Optional[bytes] = None,

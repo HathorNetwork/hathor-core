@@ -123,9 +123,9 @@ class HathorSettings(NamedTuple):
     GENESIS_TX2_HASH: bytes = bytes.fromhex('0002c187ab30d4f61c11a5dc43240bdf92dba4d19f40f1e883b0a5fdac54ef53')
 
     # Weight of genesis and minimum weight of a tx/block
-    MIN_BLOCK_WEIGHT: int = 21
-    MIN_TX_WEIGHT: int = 14
-    MIN_SHARE_WEIGHT: int = 21
+    MIN_BLOCK_WEIGHT: float = 21.0
+    MIN_TX_WEIGHT: float = 14.0
+    MIN_SHARE_WEIGHT: float = 21.0
 
     HATHOR_TOKEN_UID: bytes = HATHOR_TOKEN_UID
 

@@ -41,6 +41,7 @@ from hathor.pubsub import EventArguments, HathorEvents
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction, BitcoinAuxPow, Block, MergeMinedBlock, Transaction, sum_weights
 from hathor.transaction.exceptions import PowError, ScriptError, TxValidationError
+from hathor.transaction.weight import Weight
 from hathor.util import json_dumpb, json_loadb
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor.wallet.exceptions import InvalidAddress
@@ -531,7 +532,7 @@ class StratumProtocol(JSONRPC):
         verifier = VertexVerifier(settings=self._settings)
 
         try:
-            verifier.verify_pow(tx, override_weight=job.weight)
+            verifier.verify_pow(tx, override_weight=Weight(job.weight))
         except PowError:
             self.log.error('bad share, discard', job_weight=job.weight, tx=tx)
             return self.send_error(INVALID_SOLUTION, msgid, {
@@ -631,7 +632,7 @@ class StratumProtocol(JSONRPC):
         self.job_ids.append(job.id)
 
         share_weight = self.calculate_share_weight()
-        job.weight = min(share_weight, tx.weight)
+        job.weight = min(share_weight, tx.weight.get())
 
         def jobTimeout(job: ServerJob, protocol: StratumProtocol) -> None:
             if job is protocol.current_job and job.submitted is None:
