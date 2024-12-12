@@ -2,6 +2,7 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.manager import HathorManager
 from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import Transaction
+from hathor.transaction.weight import Weight
 from hathor.util import not_none
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -79,7 +80,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         address = manager1.wallet.get_unused_address(mark_as_used=False)
         value = 10
         initial = gen_new_tx(manager1, address, value)
-        initial.weight = 25
+        initial.weight = Weight(25.0)
         initial.update_hash()
         manager1.propagate_tx(initial, fails_silently=False)
         self.graphviz.labels[initial.hash] = 'initial'
@@ -115,7 +116,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         address = manager1.wallet.get_unused_address(mark_as_used=False)
         value = 10
         initial = gen_new_tx(manager1, address, value)
-        initial.weight = 25
+        initial.weight = Weight(25.0)
         initial.update_hash()
         manager1.propagate_tx(initial, fails_silently=False)
         self.graphviz.labels[not_none(initial.hash)] = 'initial'

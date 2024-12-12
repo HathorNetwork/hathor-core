@@ -29,6 +29,7 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
+from hathor.transaction.weight import Weight
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -127,7 +128,7 @@ class VertexVerifier:
             raise IncorrectParents('wrong number of parents (tx type): {}, expecting {}'.format(
                 my_parents_txs, parents_txs))
 
-    def verify_pow(self, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
+    def verify_pow(self, vertex: BaseTransaction, *, override_weight: Weight | None = None) -> None:
         """Verify proof-of-work
 
         :raises PowError: when the hash is equal or greater than the target

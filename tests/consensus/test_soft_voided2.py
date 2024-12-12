@@ -5,6 +5,7 @@ from hathor.manager import HathorManager
 from hathor.simulator import Simulator
 from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import Block, Transaction
+from hathor.transaction.weight import Weight
 from hathor.types import VertexId
 from hathor.wallet import HDWallet
 from tests import unittest
@@ -123,7 +124,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         address = manager1.wallet.get_unused_address(mark_as_used=False)
         value = 10
         initial = gen_new_tx(manager1, address, value)
-        initial.weight = 25
+        initial.weight = Weight(25.0)
         initial.update_hash()
         manager1.propagate_tx(initial, fails_silently=False)
         self.graphviz.labels[initial.hash] = 'initial'

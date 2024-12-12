@@ -3,7 +3,7 @@ from itertools import chain
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.utils.weight import weight_to_work
+from hathor.transaction.weight import Weight
 from tests import unittest
 from tests.utils import add_new_transactions
 
@@ -37,27 +37,27 @@ class BaseBlockchainTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # The initial score is the sum of the genesis
-        score = weight_to_work(self.genesis_blocks[0].weight)
+        score = self.genesis_blocks[0].weight.to_work()
         for tx in self.genesis_txs:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Mine 100 blocks in a row with no transaction but the genesis
         blocks = add_new_blocks(manager, 100, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata(force_reload=True)
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
         txs = add_new_transactions(manager, 30, advance_clock=15)
         for tx in txs:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Mine 50 more blocks in a row with no transactions between them
         blocks = add_new_blocks(manager, 50)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
             consensus_context = manager.consensus_algorithm.create_context()
             self.assertAlmostEqual(consensus_context.block_algorithm.calculate_score(block), meta.score)
@@ -66,12 +66,12 @@ class BaseBlockchainTestCase(unittest.TestCase):
         for _ in range(15):
             txs = add_new_transactions(manager, 10, advance_clock=15)
             for tx in txs:
-                score += weight_to_work(tx.weight)
+                score = score.add(tx.weight)
 
             blocks = add_new_blocks(manager, 1)
             for i, block in enumerate(blocks):
                 meta = block.get_metadata()
-                score += weight_to_work(block.weight)
+                score = score.add(block.weight)
                 self.assertAlmostEqual(score, meta.score)
                 consensus_context = manager.consensus_algorithm.create_context()
                 self.assertAlmostEqual(consensus_context.block_algorithm.calculate_score(block), meta.score)
@@ -86,27 +86,27 @@ class BaseBlockchainTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # The initial score is the sum of the genesis
-        score = weight_to_work(self.genesis_blocks[0].weight)
+        score = self.genesis_blocks[0].weight.to_work()
         for tx in self.genesis_txs:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Mine 30 blocks in a row with no transactions
         blocks = add_new_blocks(manager, 30, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
         txs = add_new_transactions(manager, 5, advance_clock=15)
         for tx in txs:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Mine 1 blocks
         blocks = add_new_blocks(manager, 1, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
         # Generate a block which will be a fork in the middle of the chain
@@ -119,7 +119,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         blocks = add_new_blocks(manager, 8, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
         # Fork block must have the same parents as blocks[0] as well as the same score
@@ -134,20 +134,20 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # Add some transactions between blocks
         txs = add_new_transactions(manager, 5, advance_clock=15)
         for tx in txs:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Mine 5 blocks in a row
         # These blocks belong to case (i).
         blocks = add_new_blocks(manager, 5, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
         txs = add_new_transactions(manager, 2, advance_clock=15)
         for tx in txs:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Propagate a block connected to the voided chain
         # These blocks belongs to case (iii).
@@ -159,7 +159,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # Add some transactions between blocks
         txs = add_new_transactions(manager, 2, advance_clock=15)
         for tx in txs:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Propagate a block connected to the voided chain
         # This block belongs to case (iv).
@@ -176,28 +176,28 @@ class BaseBlockchainTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # The initial score is the sum of the genesis
-        score = weight_to_work(self.genesis_blocks[0].weight)
+        score = self.genesis_blocks[0].weight.to_work()
         for tx in self.genesis_txs:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Mine 30 blocks in a row with no transactions, case (i).
         blocks = add_new_blocks(manager, 30, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
         txs1 = add_new_transactions(manager, 5, advance_clock=15)
         for tx in txs1:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Mine 1 blocks, case (i).
         blocks = add_new_blocks(manager, 1, advance_clock=15)
         block_before_fork = blocks[0]
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
         for tx in txs1:
@@ -207,13 +207,13 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # Add some transactions between blocks
         txs2 = add_new_transactions(manager, 3, advance_clock=15)
         for tx in txs2:
-            score += weight_to_work(tx.weight)
+            score = score.add(tx.weight)
 
         # Mine 5 blocks in a row, case (i).
         blocks = add_new_blocks(manager, 5, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
-            score += weight_to_work(block.weight)
+            score = score.add(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
         # Mine 4 blocks, starting a fork.
@@ -304,7 +304,7 @@ class BaseBlockchainTestCase(unittest.TestCase):
         # Propagate a block connected to the side chain, case (v).
         # Another side chain has direcly exceeded the best score.
         fork_block4 = manager.generate_mining_block(parent_block_hash=sidechain3[-1].hash)
-        fork_block4.weight = 10
+        fork_block4.weight = Weight(10.0)
         manager.cpu_mining_service.resolve(fork_block4)
         self.assertTrue(manager.propagate_tx(fork_block4))
         sidechain3.append(fork_block4)
@@ -389,9 +389,9 @@ class BaseBlockchainTestCase(unittest.TestCase):
         T = self._settings.AVG_TIME_BETWEEN_BLOCKS
         manager.avg_time_between_blocks = T
         # stabilize weight on 2 and lower the minimum to 1, so it can vary around 2
-        manager.min_block_weight = 2
+        manager.min_block.weight = Weight(2.0)
         add_new_blocks(manager, N * 2, advance_clock=T)
-        manager.min_block_weight = 1
+        manager.min_block.weight = Weight(1.0)
         for i in range(N):
             # decreasing solvetime should increase weight
             base_weight = manager.generate_mining_block().weight

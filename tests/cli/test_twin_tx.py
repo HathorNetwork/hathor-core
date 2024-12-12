@@ -136,7 +136,7 @@ class BaseTwinTxTest(unittest.TestCase):
 
         self.assertEqual(tx_data['parents'][0], self.tx.parents[1].hex())
         self.assertEqual(tx_data['parents'][1], self.tx.parents[0].hex())
-        self.assertEqual(tx_data['weight'], self.tx.weight)
+        self.assertEqual(tx_data['weight'], self.tx.weight.get())
 
     def test_struct_error(self):
         # Struct error

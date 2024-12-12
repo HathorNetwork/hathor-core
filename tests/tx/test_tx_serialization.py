@@ -1,6 +1,7 @@
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.transaction.weight import Weight
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
@@ -28,7 +29,7 @@ class _SerializationTest(unittest.TestCase):
         ]
 
         self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.tx_storage)
-        self.tx1.weight = 10
+        self.tx1.weight = Weight(10.0)
         self.tx1.parents = self.manager.get_new_tx_parents()
         self.tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(self.tx1)
@@ -38,7 +39,7 @@ class _SerializationTest(unittest.TestCase):
         # With less weight, so the balance will continue because tx1 will be the winner
         self.tx2 = Transaction.create_from_struct(self.tx1.get_struct())
         self.tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
-        self.tx2.weight = 9
+        self.tx2.weight = Weight(9.0)
         self.manager.cpu_mining_service.resolve(self.tx2)
 
         # Propagate a conflicting twin transaction

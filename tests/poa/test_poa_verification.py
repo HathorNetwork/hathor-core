@@ -21,6 +21,7 @@ from hathor.consensus.poa import PoaSigner
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.weight import Weight
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
@@ -55,7 +56,7 @@ class BasePoaVerificationTest(unittest.TestCase):
         block = PoaBlock(
             hash=b'some_hash',
             storage=self.manager.tx_storage,
-            weight=2,
+            weight=Weight(2.0),
             outputs=[],
             parents=[
                 self._settings.GENESIS_BLOCK_HASH,

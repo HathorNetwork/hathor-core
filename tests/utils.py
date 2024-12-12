@@ -25,6 +25,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxO
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
+from hathor.transaction.weight import Weight
 from hathor.util import Random
 
 try:
@@ -117,7 +118,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
             tx2.parents = tx2.parents[:2]
     assert len(tx2.parents) == 2
 
-    tx2.weight = weight or 25
+    tx2.weight = Weight(weight or 25.0)
     tx2.timestamp += inc_timestamp
     if resolve:
         manager.cpu_mining_service.resolve(tx2)
@@ -127,7 +128,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
 
 
 def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
-                            tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
+                            tx: Optional[Transaction] = None, weight: float = 1.0) -> Transaction:
     tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
     manager.propagate_tx(tx, fails_silently=False)
     return tx
@@ -458,7 +459,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         outputs.append(change_output)
 
     tx = TokenCreationTransaction(
-        weight=1,
+        weight=Weight(1.0),
         parents=parents,
         storage=manager.tx_storage,
         inputs=deposit_input,
@@ -548,7 +549,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
         outputs.append(change_output)
 
     tx = Transaction(
-        weight=1,
+        weight=Weight(1.0),
         parents=parents,
         storage=manager.tx_storage,
         inputs=burn_input,

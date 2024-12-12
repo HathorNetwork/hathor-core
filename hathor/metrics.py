@@ -187,7 +187,7 @@ class Metrics:
             if data['tx'].is_block:
                 self.blocks = self.tx_storage.get_block_count()
                 self.hash_rate = self.calculate_new_hashrate(data['tx'])
-                self.best_block_weight = self.tx_storage.get_weight_best_block()
+                self.best_block_weight = self.tx_storage.get_weight_best_block().get()
                 self.best_block_height = self.tx_storage.get_height_best_block()
             else:
                 self.transactions = self.tx_storage.get_tx_count()
@@ -211,7 +211,7 @@ class Metrics:
         """ Weight formula: w = log2(avg_time_between_blocks) + log2(hash_rate)
         """
         from math import log
-        return 2**(block.weight - log(self.avg_time_between_blocks, 2))
+        return 2**(block.weight.get() - log(self.avg_time_between_blocks, 2))
 
     def set_websocket_data(self) -> None:
         """ Set websocket metrics data. Connections and addresses subscribed.

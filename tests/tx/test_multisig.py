@@ -5,6 +5,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
 from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, parse_address_script, script_eval
+from hathor.transaction.weight import Weight
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
@@ -67,7 +68,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
-        tx1.weight = 10
+        tx1.weight = Weight(10.0)
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
@@ -79,7 +80,7 @@ class BaseMultisigTestCase(unittest.TestCase):
 
         # Then we create a new tx that spends this tokens from multisig wallet
         tx = Transaction.create_from_struct(tx1.get_struct())
-        tx.weight = 10
+        tx.weight = Weight(10.0)
         tx.parents = self.manager.get_new_tx_parents()
         tx.timestamp = int(self.clock.seconds())
 

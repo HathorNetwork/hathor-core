@@ -22,6 +22,7 @@ from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.weight import Weight
 from hathor.types import TokenUid
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
@@ -42,7 +43,7 @@ class TokenCreationTransaction(Transaction):
         timestamp: Optional[int] = None,
         signal_bits: int = 0,
         version: TxVersion = TxVersion.TOKEN_CREATION_TRANSACTION,
-        weight: float = 0,
+        weight: Weight = Weight(0.0),
         inputs: Optional[list[TxInput]] = None,
         outputs: Optional[list[TxOutput]] = None,
         parents: Optional[list[bytes]] = None,
@@ -74,7 +75,8 @@ class TokenCreationTransaction(Transaction):
     def __str__(self) -> str:
         return ('TokenCreationTransaction(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s,'
                 'token_name=%s, token_symbol=%s)' % (self.nonce, self.timestamp, int(self.version),
-                                                     self.weight, self.hash_hex, self.token_name, self.token_symbol))
+                                                     self.weight.get(), self.hash_hex, self.token_name,
+                                                     self.token_symbol))
 
     def update_hash(self) -> None:
         """ When we update the hash, we also have to update the tokens uid list

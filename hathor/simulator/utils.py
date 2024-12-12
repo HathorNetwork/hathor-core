@@ -17,6 +17,7 @@ from typing import Optional, cast
 from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
 from hathor.transaction import Block, Transaction
+from hathor.transaction.weight import Weight
 from hathor.types import Address, VertexId
 
 
@@ -44,7 +45,7 @@ def gen_new_tx(manager: HathorManager, address: str, value: int) -> Transaction:
     max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
     tx.timestamp = max(max_ts_spent_tx + 1, int(manager.reactor.seconds()))
 
-    tx.weight = 1
+    tx.weight = Weight(1.0)
     tx.parents = manager.get_new_tx_parents(tx.timestamp)
     manager.cpu_mining_service.resolve(tx)
     return tx
@@ -104,7 +105,7 @@ def add_new_block(
     """
     block = manager.generate_mining_block(parent_block_hash=parent_block_hash, data=data, address=address)
     if weight is not None:
-        block.weight = weight
+        block.weight = Weight(weight)
     if signal_bits is not None:
         block.signal_bits = signal_bits
     manager.cpu_mining_service.resolve(block)
@@ -121,7 +122,7 @@ class NoCandidatesError(Exception):
 
 
 def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
-                            tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
+                            tx: Optional[Transaction] = None, weight: float = 1.0) -> Transaction:
     """
     Generate and return a double spending transaction.
 
@@ -167,7 +168,7 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
 
     tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
     tx2.storage = manager.tx_storage
-    tx2.weight = weight
+    tx2.weight = Weight(weight)
     tx2.timestamp = max(tx.timestamp + 1, int(manager.reactor.seconds()))
 
     if use_same_parents:

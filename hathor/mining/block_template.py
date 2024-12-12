@@ -21,6 +21,7 @@ from typing import Iterable, NamedTuple, Optional, TypeVar, cast
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.weight import Weight, Work
 from hathor.util import Random
 
 T = TypeVar('T', bound=Block)
@@ -29,14 +30,14 @@ T = TypeVar('T', bound=Block)
 class BlockTemplate(NamedTuple):
     versions: set[int]
     reward: int  # reward unit value, 64.00 HTR is 6400
-    weight: float  # calculated from the DAA
+    weight: Weight  # calculated from the DAA
     timestamp_now: int  # the reference timestamp the template was generated for
     timestamp_min: int  # min valid timestamp
     timestamp_max: int  # max valid timestamp
     parents: list[bytes]  # required parents, will always have a block and at most 2 txs
     parents_any: list[bytes]  # list of extra parents to choose from when there are more options
     height: int  # metadata
-    score: int  # metadata
+    score: Work  # metadata
     signal_bits: int  # signal bits for blocks generated from this template
 
     def generate_minimally_valid_block(self) -> BaseTransaction:
@@ -99,14 +100,14 @@ class BlockTemplate(NamedTuple):
             'data': self.generate_minimally_valid_block().get_struct_without_nonce().hex(),
             'versions': sorted(self.versions),
             'reward': self.reward,
-            'weight': self.weight,
+            'weight': self.weight.get(),
             'timestamp_now': self.timestamp_now,
             'timestamp_min': self.timestamp_min,
             'timestamp_max': self.timestamp_max,
             'parents': [p.hex() for p in self.parents],
             'parents_any': [p.hex() for p in self.parents_any],
             'height': self.height,
-            'score': self.score,
+            'score': self.score.get(),
             'signal_bits': self.signal_bits,
         }
 
@@ -115,14 +116,14 @@ class BlockTemplate(NamedTuple):
         return cls(
             versions=set(data['versions']),
             reward=int(data['reward']),
-            weight=float(data['weight']),
+            weight=Weight(float(data['weight'])),
             timestamp_now=int(data['timestamp_now']),
             timestamp_min=int(data['timestamp_min']),
             timestamp_max=int(data['timestamp_max']),
             parents=[bytes.fromhex(p) for p in data['parents']],
             parents_any=[bytes.fromhex(p) for p in data['parents_any']],
             height=int(data['height']),
-            score=int(data['score']),
+            score=Work(int(data['score'])),
             signal_bits=int(data.get('signal_bits', 0)),
         )
 

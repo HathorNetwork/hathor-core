@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives import serialization
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction, TxInput
+from hathor.transaction.weight import Weight
 from hathor.wallet import Wallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
@@ -264,7 +265,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx2.storage = self.manager.tx_storage
         tx2.timestamp = max(tx2.get_spent_tx(txin).timestamp for txin in tx2.inputs) + 1
         tx2.parents = self.manager.get_new_tx_parents(tx2.timestamp)
-        tx2.weight = 1
+        tx2.weight = Weight(1.0)
         tx2.timestamp = blocks[-1].timestamp + 1
         self.manager.cpu_mining_service.resolve(tx2)
         self.assertTrue(self.manager.on_new_tx(tx2, fails_silently=False))

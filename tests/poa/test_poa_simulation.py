@@ -36,6 +36,7 @@ from hathor.transaction.genesis import generate_new_genesis
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.weight import Weight
 from hathor.util import not_none
 from tests import unittest
 from tests.poa.utils import get_settings, get_signer
@@ -65,7 +66,7 @@ def _assert_height_weight_signer_id(
     vertices: Iterator[BaseTransaction],
     expected: list[tuple[int, float, PoaSignerId]]
 ) -> None:
-    non_voided_blocks: list[tuple[int, float, bytes]] = []
+    non_voided_blocks: list[tuple[int, Weight, bytes]] = []
 
     for vertex in vertices:
         meta = vertex.get_metadata()
@@ -491,8 +492,8 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
         tokens = 100_000
         block_timestamp = 1718894758
-        min_block_weight = 0
-        min_tx_weight = 0
+        min_block_weight = Weight(0.0)
+        min_tx_weight = Weight(0.0)
         genesis_block, genesis_tx1, genesis_tx2 = generate_new_genesis(
             tokens=tokens,
             address=address,
@@ -520,10 +521,10 @@ class BasePoaSimulationTest(SimulatorTestCase):
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_UNITS_PER_BLOCK=0,
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-            MIN_BLOCK_WEIGHT=min_block_weight,
+            MIN_BLOCK_WEIGHT=min_block_weight.get(),
             MIN_TX_WEIGHT_K=0,
             MIN_TX_WEIGHT_COEFFICIENT=0,
-            MIN_TX_WEIGHT=min_tx_weight,
+            MIN_TX_WEIGHT=min_tx_weight.get(),
             REWARD_SPEND_MIN_BLOCKS=1,
             AVG_TIME_BETWEEN_BLOCKS=10,
             CONSENSUS_ALGORITHM=PoaSettings(
@@ -555,7 +556,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
         token_tx = TokenCreationTransaction(
             timestamp=self.simulator.settings.GENESIS_BLOCK_TIMESTAMP + 3,
-            weight=0,
+            weight=Weight(0.0),
             parents=[self.simulator.settings.GENESIS_TX1_HASH, self.simulator.settings.GENESIS_TX2_HASH],
             inputs=[TxInput(self.simulator.settings.GENESIS_BLOCK_HASH, 0, b'')],
             outputs=[

@@ -20,6 +20,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction import Block, Transaction, TxOutput
 from hathor.transaction.scripts import P2PKH
+from hathor.transaction.weight import Weight
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -53,8 +54,8 @@ def generate_new_genesis(
     tokens: int,
     address: str,
     block_timestamp: int,
-    min_block_weight: float,
-    min_tx_weight: float,
+    min_block_weight: Weight,
+    min_tx_weight: Weight,
 ) -> tuple[Block, Transaction, Transaction]:
     """
     Create new genesis block and transactions. This is a convenience method to be used when creating side-dags,

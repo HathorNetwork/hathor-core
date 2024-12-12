@@ -6,6 +6,7 @@ from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
+from hathor.transaction.weight import Weight
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -67,7 +68,7 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx.inputs = [i]
         tx.timestamp = int(self.clock.seconds())
-        tx.weight = 0
+        tx.weight = Weight(0.0)
 
         response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx.get_struct().hex()})
         data = response.json_value()

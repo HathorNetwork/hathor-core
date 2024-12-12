@@ -69,10 +69,10 @@ class GraphvizVisualizer:
             parts = [tx.hash.hex()[-4:]]
 
         if self.show_weight:
-            parts.append('w: {:.2f}'.format(tx.weight))
+            parts.append('w: {:.2f}'.format(tx.weight.get()))
         if self.show_acc_weight:
             meta = tx.get_metadata()
-            parts.append('a: {:.2f}'.format(meta.accumulated_weight))
+            parts.append('a: {:.2f}'.format(meta.accumulated_weight.get()))
         return '\n'.join(parts)
 
     def get_node_attrs(self, tx: BaseTransaction) -> dict[str, str]:

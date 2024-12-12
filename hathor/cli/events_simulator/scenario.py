@@ -105,6 +105,7 @@ def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
 def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
+    from hathor.transaction.weight import Weight
 
     settings = get_global_settings()
     assert manager.wallet is not None
@@ -115,7 +116,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
 
     # A tx is created with weight 19.0005
     tx = gen_new_tx(manager, address, 1000)
-    tx.weight = 19.0005
+    tx.weight = Weight(19.0005)
     tx.update_hash()
     assert manager.propagate_tx(tx, fails_silently=False)
     simulator.run(60)
@@ -123,7 +124,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     # A clone is created with a greater timestamp and a lower weight. It's a voided twin tx.
     tx2 = tx.clone(include_metadata=False)
     tx2.timestamp += 60
-    tx2.weight = 19
+    tx2.weight = Weight(19)
     tx2.update_hash()
     assert manager.propagate_tx(tx2, fails_silently=False)
     simulator.run(60)
@@ -152,6 +153,7 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
     from hathor.transaction import Block
+    from hathor.transaction.weight import Weight
 
     settings = get_global_settings()
     assert manager.wallet is not None
@@ -174,7 +176,7 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     block_to_replace = blocks[-2]
     tb0 = manager.make_custom_block_template(block_to_replace.parents[0], block_to_replace.parents[1:])
     b0: Block = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
-    b0.weight = 10
+    b0.weight = Weight(10)
     manager.cpu_mining_service.resolve(b0)
     assert manager.propagate_tx(b0, fails_silently=False)
     simulator.run(60)

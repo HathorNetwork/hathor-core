@@ -14,6 +14,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.weight import Weight
 from tests.unittest import TestBuilder
 from tests.utils import (
     BURN_ADDRESS,
@@ -519,7 +520,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         block.data = b'Testing, testing, 1, 2, 3... testing, testing...'
         if parents is not None:
             block.parents = parents
-        block.weight = 10
+        block.weight = Weight(10.0)
         self.assertTrue(self.manager.cpu_mining_service.resolve(block))
         self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)

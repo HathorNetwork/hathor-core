@@ -8,6 +8,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.transaction.weight import Weight
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
@@ -51,7 +52,7 @@ class BaseTransactionTest(unittest.TestCase):
         input_ = TxInput(reward_block.hash, 0, b'')
         output = TxOutput(value, script)
         tx = Transaction(
-            weight=1,
+            weight=Weight(1.0),
             timestamp=int(manager.reactor.seconds()) + 1,
             inputs=[input_],
             outputs=[output],
@@ -171,7 +172,7 @@ class BaseTransactionTest(unittest.TestCase):
         block_to_replace = blocks[-2]
         tb0 = self.manager.make_custom_block_template(block_to_replace.parents[0], block_to_replace.parents[1:])
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage)
-        b0.weight = 10
+        b0.weight = Weight(10.0)
         self.manager.cpu_mining_service.resolve(b0)
         self.manager.propagate_tx(b0, fails_silently=False)
         self.clock.advance(1)

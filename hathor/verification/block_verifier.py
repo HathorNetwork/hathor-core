@@ -55,7 +55,7 @@ class BlockVerifier:
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         assert block.storage is not None
         min_block_weight = self._daa.calculate_block_difficulty(block, block.storage.get_parent_block)
-        if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
+        if block.weight < min_block_weight.sub(self._settings.WEIGHT_TOL):
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
 

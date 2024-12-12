@@ -28,6 +28,7 @@ class GenerateGenesisArgs(BaseModel):
 def main() -> None:
     from hathor.cli.util import create_parser
     from hathor.transaction.genesis import generate_new_genesis
+    from hathor.transaction.weight import Weight
 
     parser = create_parser()
     parser.add_argument('--tokens', type=int, help='Amount of genesis tokens, including decimals', required=True)
@@ -43,8 +44,8 @@ def main() -> None:
         tokens=args.tokens,
         address=args.address,
         block_timestamp=args.block_timestamp,
-        min_block_weight=args.min_block_weight,
-        min_tx_weight=args.min_tx_weight,
+        min_block_weight=Weight(args.min_block_weight),
+        min_tx_weight=Weight(args.min_tx_weight),
     )
 
     print('# Paste this output into your network\'s yaml configuration file')

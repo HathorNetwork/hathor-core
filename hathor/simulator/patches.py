@@ -12,12 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Optional
-
 from structlog import get_logger
 
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction import BaseTransaction
+from hathor.transaction.weight import Weight
 from hathor.verification.vertex_verifier import VertexVerifier
 
 logger = get_logger()
@@ -25,7 +24,7 @@ logger = get_logger()
 
 class SimulatorVertexVerifier(VertexVerifier):
     @classmethod
-    def verify_pow(cls, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
+    def verify_pow(cls, vertex: BaseTransaction, *, override_weight: Weight | None = None) -> None:
         logger.new().debug('Skipping VertexVerifier.verify_pow() for simulator')
 
 

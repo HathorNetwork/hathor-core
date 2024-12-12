@@ -27,6 +27,7 @@ from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
+from hathor.transaction.weight import Weight
 from hathor.types import VertexId
 from hathor.util import iwindows
 
@@ -58,13 +59,13 @@ class DifficultyAdjustmentAlgorithm:
         DifficultyAdjustmentAlgorithm.singleton = self
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
-    def calculate_block_difficulty(self, block: 'Block', parent_block_getter: Callable[['Block'], 'Block']) -> float:
+    def calculate_block_difficulty(self, block: 'Block', parent_block_getter: Callable[['Block'], 'Block']) -> Weight:
         """ Calculate block weight according to the ascendants of `block`, using calculate_next_weight."""
         if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
-            return 1.0
+            return Weight(1.0)
 
         if block.is_genesis:
-            return self.MIN_BLOCK_WEIGHT
+            return Weight(self.MIN_BLOCK_WEIGHT)
 
         parent_block = parent_block_getter(block)
         return self.calculate_next_weight(parent_block, block.timestamp, parent_block_getter)
@@ -94,7 +95,7 @@ class DifficultyAdjustmentAlgorithm:
         parent_block: 'Block',
         timestamp: int,
         parent_block_getter: Callable[['Block'], 'Block'],
-    ) -> float:
+    ) -> Weight:
         """ Calculate the next block weight, aka DAA/difficulty adjustment algorithm.
 
         The algorithm used is described in [RFC 22](https://gitlab.com/HathorNetwork/rfcs/merge_requests/22).
@@ -102,7 +103,7 @@ class DifficultyAdjustmentAlgorithm:
         The weight must not be less than `MIN_BLOCK_WEIGHT`.
         """
         if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
-            return 1.0
+            return Weight(1.0)
 
         from hathor.transaction import sum_weights
 
@@ -112,7 +113,7 @@ class DifficultyAdjustmentAlgorithm:
         T = self.AVG_TIME_BETWEEN_BLOCKS
         S = 5
         if N < 10:
-            return self.MIN_BLOCK_WEIGHT
+            return Weight(self.MIN_BLOCK_WEIGHT)
 
         blocks: list['Block'] = []
         while len(blocks) < N + 1:
@@ -125,7 +126,7 @@ class DifficultyAdjustmentAlgorithm:
 
         assert len(blocks) == N + 1
         solvetimes, weights = zip(*(
-            (block.timestamp - prev_block.timestamp, block.weight)
+            (block.timestamp - prev_block.timestamp, block.weight.get())
             for prev_block, block in iwindows(blocks, 2)
         ))
         assert len(solvetimes) == len(weights) == N, f'got {len(solvetimes)}, {len(weights)} expected {N}'
@@ -156,7 +157,7 @@ class DifficultyAdjustmentAlgorithm:
         if weight < self.MIN_BLOCK_WEIGHT:
             weight = self.MIN_BLOCK_WEIGHT
 
-        return weight
+        return Weight(weight)
 
     def get_weight_decay_amount(self, distance: int) -> float:
         """Return the amount to be reduced in the weight of the block."""
@@ -171,7 +172,7 @@ class DifficultyAdjustmentAlgorithm:
         n_windows = 1 + (dt // self._settings.WEIGHT_DECAY_WINDOW_SIZE)
         return n_windows * self._settings.WEIGHT_DECAY_AMOUNT
 
-    def minimum_tx_weight(self, tx: 'Transaction') -> float:
+    def minimum_tx_weight(self, tx: 'Transaction') -> Weight:
         """ Returns the minimum weight for the param tx
             The minimum is calculated by the following function:
 
@@ -188,10 +189,10 @@ class DifficultyAdjustmentAlgorithm:
         # In test mode we don't validate the minimum weight for tx
         # We do this to allow generating many txs for testing
         if self.TEST_MODE & TestMode.TEST_TX_WEIGHT:
-            return 1.0
+            return Weight(1.0)
 
         if tx.is_genesis:
-            return self._settings.MIN_TX_WEIGHT
+            return Weight(self._settings.MIN_TX_WEIGHT)
 
         tx_size = len(tx.get_struct())
 
@@ -207,7 +208,7 @@ class DifficultyAdjustmentAlgorithm:
         # Make sure the calculated weight is at least the minimum
         weight = max(weight, self._settings.MIN_TX_WEIGHT)
 
-        return weight
+        return Weight(weight)
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""

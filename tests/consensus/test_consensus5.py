@@ -1,6 +1,7 @@
 from hathor.graphviz import GraphvizVisualizer
 from hathor.manager import HathorManager
 from hathor.transaction import Block
+from hathor.transaction.weight import Weight
 from hathor.types import VertexId
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -21,7 +22,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         v = []
         for i in range(length):
             blk = manager.generate_mining_block(parent_block_hash=current)
-            blk.weight = min(50.0, blk.weight)
+            blk.weight = Weight(min(50.0, blk.weight.get()))
             blk.nonce = self.rng.getrandbits(32)
             if tx_parents:
                 blk.parents[1:] = tx_parents
@@ -59,7 +60,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(10)
 
         b2 = manager1.generate_mining_block()
-        b2.weight = max(b2.weight, 40)
+        b2.weight = Weight(max(b2.weight.get(), 40.0))
         b2.parents[1:] = [txA1.parents[0], txA1.hash]
         b2.nonce = self.rng.getrandbits(32)
         b2.update_hash()

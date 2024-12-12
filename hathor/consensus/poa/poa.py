@@ -25,6 +25,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from hathor.consensus.consensus_settings import PoaSettings
 from hathor.crypto.util import get_public_key_from_bytes_compressed
 from hathor.transaction import Block
+from hathor.transaction.weight import Weight
 
 if TYPE_CHECKING:
     from hathor.transaction.poa import PoaBlock
@@ -66,10 +67,10 @@ def get_signer_index_distance(*, settings: PoaSettings, signer_index: int, heigh
     return index_distance
 
 
-def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) -> float:
+def calculate_weight(settings: PoaSettings, block: PoaBlock, signer_index: int) -> Weight:
     """Return the weight for the given block and signer."""
     index_distance = get_signer_index_distance(settings=settings, signer_index=signer_index, height=block.get_height())
-    return BLOCK_WEIGHT_IN_TURN if index_distance == 0 else BLOCK_WEIGHT_OUT_OF_TURN / index_distance
+    return Weight(BLOCK_WEIGHT_IN_TURN) if index_distance == 0 else Weight(BLOCK_WEIGHT_OUT_OF_TURN / index_distance)
 
 
 @dataclass(frozen=True, slots=True)

@@ -36,6 +36,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.weight import Weight
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions, create_script_with_sigops, get_genesis_key
@@ -690,7 +691,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # 2. propagate block with weight 1
         block = manager.generate_mining_block()
-        block.weight = 1
+        block.weight = Weight(1.0)
         self.manager.cpu_mining_service.resolve(block)
         self.assertFalse(manager.propagate_tx(block))
 
@@ -734,7 +735,7 @@ class BaseTransactionTest(unittest.TestCase):
 
         # Pow error
         self._verifiers.vertex.verify_pow(tx2)
-        tx2.weight = 100
+        tx2.weight = Weight(100.0)
         with self.assertRaises(PowError):
             self._verifiers.vertex.verify_pow(tx2)
 
@@ -1208,7 +1209,7 @@ class BaseTransactionTest(unittest.TestCase):
         # clone it and change something, doesn't matter what it is
         # XXX: note the hash is not being update on purpose, we expect a failure even if the hash hasn't changed
         block2 = block1.clone()
-        block2.weight += 1
+        block2.weight = block2.weight.add(1.0)
 
         # the storage already has block1 and should correctly return False
         self.assertFalse(self.tx_storage.compare_bytes_with_local_tx(block2))
@@ -1240,7 +1241,7 @@ class BaseTransactionTest(unittest.TestCase):
         # clone it and change something, doesn't matter what it is
         # XXX: note the hash is not being update on purpose, we expect a failure even if the hash hasn't changed
         block2 = block1.clone()
-        block2.weight += 1
+        block2.weight = block2.weight.add(1.0)
 
         # the storage already has block1 and should correctly return False
         self.assertFalse(self.tx_storage.compare_bytes_with_local_tx(block2))

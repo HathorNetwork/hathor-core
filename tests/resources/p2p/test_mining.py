@@ -4,6 +4,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningResource
 from hathor.transaction import Block
+from hathor.transaction.weight import Weight
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
@@ -30,7 +31,7 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
 
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes)
-        block.weight = 4
+        block.weight = Weight(4.0)
         self.manager.cpu_mining_service.resolve(block)
 
         block_bytes = bytes(block)
@@ -39,7 +40,7 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
         response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
         self.assertEqual(response_post.written[0], b'1')
 
-        block.weight = 100
+        block.weight = Weight(100.0)
         block_bytes = bytes(block)
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
 
@@ -55,7 +56,7 @@ class BaseMiningTest(_BaseResourceTest._ResourceTest):
 
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes)
-        block.weight = 4
+        block.weight = Weight(4.0)
         self.manager.cpu_mining_service.resolve(block)
 
         block_bytes = bytes(block)
