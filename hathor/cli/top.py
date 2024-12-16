@@ -660,7 +660,7 @@ if True:
         def __init__(self, loop: AbstractEventLoop, base_url: str, *, update_interval: int = 2) -> None:
             self.loop = loop
             self.url = urllib.parse.urljoin(base_url, '/v1a/top/')
-            self.session = ClientSession()
+            self.session = ClientSession(loop=self.loop)
 
             self.on_fetch_success: Optional[Callable[[ProfileData], None]] = None
             self.on_fetch_error: Optional[Callable[[], None]] = None

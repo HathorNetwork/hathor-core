@@ -55,7 +55,7 @@ logger = get_logger()
 MAX_GET_TRANSACTIONS_BFS_LEN: int = 8
 MAX_MEMPOOL_STATUS_TIPS: int = 20
 
-RUN_SYNC_MAIN_LOOP_INTERVAL = 1  # second(s)
+RUN_SYNC_MAIN_LOOP_INTERVAL = 5  # second(s)
 
 
 class _HeightInfo(NamedTuple):
@@ -435,7 +435,25 @@ class NodeBlockSync(SyncAgent):
 
             self.log.info('tx streaming finished', reason=reason)
             while reason == StreamEnd.LIMIT_EXCEEDED:
-                reason = yield self.resume_transactions_streaming()
+                # can't simply resume if there are too many starting tips, so instead we start again from the partial
+                # blocks that are still needed
+                assert self._tx_streaming_client is not None
+                if len(self._tx_streaming_client._waiting_for) > MAX_GET_TRANSACTIONS_BFS_LEN:
+                    next_partial_blocks = self._tx_streaming_client.partial_blocks
+                    if next_partial_blocks == partial_blocks:
+                        # XXX: if this is the case it means there was no progress since the last transaction streaming,
+                        # in this case a new streaming with the same starting conditions will have the same outcome, so
+                        # it means this sync has stalled, we don't really have any other options but start the block
+                        # sync again
+                        self.log.error('sync stalled', partial_blocks=[b.hash_hex for b in partial_blocks])
+                        self._blk_streaming_client = None
+                        self._tx_streaming_client = None
+                        return False
+                    else:
+                        partial_blocks = next_partial_blocks
+                        reason = yield self.start_transactions_streaming(partial_blocks)
+                else:
+                    reason = yield self.resume_transactions_streaming()
 
         self._blk_streaming_client = None
         self._tx_streaming_client = None
@@ -874,7 +892,7 @@ class NodeBlockSync(SyncAgent):
         start_from: list[bytes] = []
         first_block_hash = partial_blocks[0].hash
         last_block_hash = partial_blocks[-1].hash
-        self.log.info('requesting transactions streaming',
+        self.log.info('requesting transactions streaming start',
                       start_from=[x.hex() for x in start_from],
                       first_block=first_block_hash.hex(),
                       last_block=last_block_hash.hex())
@@ -890,7 +908,7 @@ class NodeBlockSync(SyncAgent):
         start_from = list(self._tx_streaming_client._waiting_for)
         first_block_hash = partial_blocks[0].hash
         last_block_hash = partial_blocks[-1].hash
-        self.log.info('requesting transactions streaming',
+        self.log.info('requesting transactions streaming resume',
                       start_from=[x.hex() for x in start_from],
                       first_block=first_block_hash.hex(),
                       last_block=last_block_hash.hex())

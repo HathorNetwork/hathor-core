@@ -166,17 +166,22 @@ class TransactionStreamingClient:
                 self.log.debug('duplicated vertex received', tx_id=tx.hash.hex())
                 self._update_dependencies(tx)
             elif tx.hash in self._existing_deps:
-                # This case might happen if we already have the transaction from another sync.
-                self.log.debug('existing vertex received', tx_id=tx.hash.hex())
+                # This case might happen if we already have the transaction from another sync, but it's quicker to
+                # check this cache than checking it in the storage
+                self.log.debug('existing vertex received (1)', tx_id=tx.hash.hex())
+                self._update_dependencies(tx)
+            elif self.tx_storage.transaction_exists(tx.hash):
+                # This case might happen if we already have the transaction from another sync, but it's slower to
+                # check, so we do it last.
+                self.log.debug('existing vertex received (2)', tx_id=tx.hash.hex())
                 self._update_dependencies(tx)
             else:
                 self.log.info('unexpected vertex received', tx_id=tx.hash.hex())
                 self.fails(UnexpectedVertex(tx.hash.hex()))
             return
+
         self._waiting_for.remove(tx.hash)
-
         self._update_dependencies(tx)
-
         self._db[tx.hash] = tx
 
         if not self._waiting_for:
