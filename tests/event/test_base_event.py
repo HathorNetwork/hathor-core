@@ -61,8 +61,6 @@ def test_create_base_event(event_id: int, group_id: int | None) -> None:
                 twins=[],
                 accumulated_weight=10.0,
                 score=20.0,
-                accumulated_weight_raw="1024",
-                score_raw="1048576",
                 height=100,
                 validation='validation'
             )

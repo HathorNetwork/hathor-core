@@ -41,7 +41,6 @@ from hathor.transaction.storage.migrations import (
     BaseMigration,
     MigrationState,
     add_closest_ancestor_block,
-    change_score_acc_weight_metadata,
     include_funds_for_first_block,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
@@ -93,7 +92,6 @@ class TransactionStorage(ABC):
 
     # history of migrations that have to be applied in the order defined here
     _migration_factories: list[type[BaseMigration]] = [
-        change_score_acc_weight_metadata.Migration,
         add_closest_ancestor_block.Migration,
         include_funds_for_first_block.Migration,
     ]
@@ -604,7 +602,7 @@ class TransactionStorage(ABC):
         if timestamp is None and not skip_cache and self._best_block_tips_cache is not None:
             return self._best_block_tips_cache[:]
 
-        best_score: int = 0
+        best_score = 0.0
         best_tip_blocks: list[bytes] = []
 
         for block_hash in (x.data for x in self.get_block_tips(timestamp)):
@@ -613,7 +611,7 @@ class TransactionStorage(ABC):
             if meta.voided_by and meta.voided_by != set([block_hash]):
                 # If anyone but the block itself is voiding this block, then it must be skipped.
                 continue
-            if meta.score == best_score:
+            if abs(meta.score - best_score) < 1e-10:
                 best_tip_blocks.append(block_hash)
             elif meta.score > best_score:
                 best_score = meta.score
