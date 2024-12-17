@@ -22,7 +22,7 @@ import weakref
 from abc import ABC, abstractmethod
 from enum import IntEnum
 from itertools import chain
-from math import isfinite, log
+from math import inf, isfinite, log
 from struct import error as StructError, pack
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
@@ -638,12 +638,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         self.storage.save_transaction(self, only_metadata=True)
 
-    def update_accumulated_weight(
-        self,
-        *,
-        stop_value: int | None = None,
-        save_file: bool = True,
-    ) -> TransactionMetadata:
+    def update_accumulated_weight(self, *, stop_value: float = inf, save_file: bool = True) -> TransactionMetadata:
         """Calculates the tx's accumulated weight and update its metadata.
 
         It starts at the current transaction and does a BFS to the tips. In the
@@ -661,10 +656,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert self.storage is not None
 
         metadata = self.get_metadata()
-        if stop_value is not None and metadata.accumulated_weight > stop_value:
+        if metadata.accumulated_weight > stop_value:
             return metadata
 
-        work = weight_to_work(self.weight)
+        accumulated_weight = weight_to_work(self.weight)
 
         # TODO Another optimization is that, when we calculate the acc weight of a transaction, we
         # also partially calculate the acc weight of its descendants. If it were a DFS, when returning
@@ -679,11 +674,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         from hathor.transaction.storage.traversal import BFSTimestampWalk
         bfs_walk = BFSTimestampWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         for tx in bfs_walk.run(self, skip_root=True):
-            work += weight_to_work(tx.weight)
-            if stop_value is not None and work > stop_value:
+            accumulated_weight += weight_to_work(tx.weight)
+            if accumulated_weight > stop_value:
                 break
 
-        metadata.accumulated_weight = work
+        metadata.accumulated_weight = accumulated_weight
         if save_file:
             self.storage.save_transaction(self, only_metadata=True)
 
