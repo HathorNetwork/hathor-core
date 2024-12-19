@@ -107,7 +107,7 @@ class BaseTimelockTransactionTestCase(unittest.TestCase):
         self.clock.advance(8)
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
-        propagated = self.manager.propagate_tx(tx2, False)
+        propagated = self.manager.propagate_tx(tx2, fails_silently=False, init_static_metadata=False)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(blocks_tokens[:3])))
         self.assertTrue(propagated)

@@ -193,7 +193,12 @@ class PoaBlockProducer:
             parent=block.get_block_parent_hash().hex(),
             voided=bool(block.get_metadata().voided_by),
         )
-        self.manager.on_new_tx(block, propagate_to_peers=True, fails_silently=False)
+        self.manager.vertex_handler.on_new_vertex(
+            block,
+            propagate_to_peers=True,
+            fails_silently=False,
+            init_static_metadata=False,
+        )
 
     def _expected_block_timestamp(self, previous_block: Block, signer_index: int) -> int:
         """Calculate the expected timestamp for a new block."""

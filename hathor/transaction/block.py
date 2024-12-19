@@ -18,7 +18,7 @@ import base64
 from struct import pack
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
-from typing_extensions import Self, override
+from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
@@ -367,8 +367,3 @@ class Block(GenericVertex[BlockStaticMetadata]):
                 bfs.skip_neighbors(tx)
                 continue
             yield tx
-
-    @override
-    def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
-        static_metadata = BlockStaticMetadata.create_from_storage(self, settings, storage)
-        self.set_static_metadata(static_metadata)
