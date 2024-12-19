@@ -97,13 +97,14 @@ class DockerWorkflowTest(unittest.TestCase):
         self.assertEqual(base_version, 'v0.53.0-rc.1')
 
         output = prep_tags(os.environ, base_version, is_release_candidate)
+        version_with_python = f'{base_version}-python{NON_DEFAULT_PYTHON_VERSION}'
 
         self.assertNotIn('slack-notification-version', output)
-        self.assertEqual(output['version'], base_version)
+        self.assertEqual(output['version'], version_with_python)
         self.assertEqual(output['login-dockerhub'], 'true')
         self.assertEqual(output['login-ghcr'], 'false')
-        self.assertEqual(output['tags'], 'dont-push--local-only')
-        self.assertEqual(output['push'], 'false')
+        self.assertEqual(output['tags'], f'mock_image:{version_with_python}')
+        self.assertEqual(output['push'], 'true')
         self.assertEqual(output['dockerfile'], 'Dockerfile')
 
     def test_release_candidate_default_python(self):
@@ -127,12 +128,16 @@ class DockerWorkflowTest(unittest.TestCase):
         self.assertEqual(base_version, 'v0.53.0-rc.1')
 
         output = prep_tags(os.environ, base_version, is_release_candidate)
+        version_with_python = f'{base_version}-python{DEFAULT_PYTHON_VERSION}'
 
         self.assertEqual(output['slack-notification-version'], base_version)
-        self.assertEqual(output['version'], base_version)
+        self.assertEqual(output['version'], version_with_python)
         self.assertEqual(output['login-dockerhub'], 'true')
         self.assertEqual(output['login-ghcr'], 'false')
-        self.assertEqual(output['tags'], 'mock_image:v0.53.0-rc.1')
+        self.assertEqual(
+            set(output['tags'].split(',')),
+            {f'mock_image:{version_with_python}', 'mock_image:v0.53.0-rc.1'},
+        )
         self.assertEqual(output['push'], 'true')
         self.assertEqual(output['dockerfile'], 'Dockerfile')
 
