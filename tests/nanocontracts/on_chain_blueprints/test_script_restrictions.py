@@ -1,6 +1,8 @@
 import os
 from textwrap import dedent
 
+import pytest
+
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.exception import OCBInvalidScript
@@ -450,3 +452,72 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         cause = cm.exception.__cause__
         self.assertIsInstance(cause, ValueError)
         self.assertEqual(cause.args, ('Decompressed code is too long.',))
+
+    def test_large_list_with_range(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
+        blueprint = self._create_on_chain_blueprint('''__blueprint__ = list(range(2**30))''')
+        # this should run out of memory before it runs out of fuel
+        with self.assertRaises(OCBOutOfMemoryDuringLoading):
+            blueprint.get_blueprint_class()
+
+    def test_large_list_with_mul(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
+        blueprint = self._create_on_chain_blueprint('''__blueprint__ = [1] * 2**30''')
+        # this should run out of memory before it runs out of fuel
+        with self.assertRaises(OCBOutOfMemoryDuringLoading):
+            blueprint.get_blueprint_class()
+
+    @pytest.mark.skip(reason='hangs')
+    def test_large_list_with_mul2(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
+        blueprint = self._create_on_chain_blueprint('''x = ['a']\nwhile True:\n    x = x * 2\n__blueprint__ = x''')
+        # this should run out of memory before it runs out of fuel
+        with self.assertRaises(OCBOutOfMemoryDuringLoading):
+            blueprint.get_blueprint_class()
+
+    @pytest.mark.skip(reason='hangs')
+    def test_large_list_with_sum(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
+        blueprint = self._create_on_chain_blueprint('''x = ['a']\nwhile True:\n    x = x + x\n__blueprint__ = x''')
+        # this should run out of memory before it runs out of fuel
+        with self.assertRaises(OCBOutOfMemoryDuringLoading):
+            blueprint.get_blueprint_class()
+
+    @pytest.mark.skip(reason='hangs')
+    def test_large_int_with_mul(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
+        blueprint = self._create_on_chain_blueprint('''__blueprint__ = 1**(2**30**30)''')
+        # this should run out of memory before it runs out of fuel
+        with self.assertRaises(OCBOutOfMemoryDuringLoading):
+            blueprint.get_blueprint_class()
+
+    def test_large_string_with_range(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
+        blueprint = self._create_on_chain_blueprint(
+            '''x = 'a'\nfor _ in range(100):\n    x = x * 5\n__blueprint__ = x'''
+        )
+        # this should run out of fuel first, since it shouldn't take too much memory
+        with self.assertRaises(OCBOutOfMemoryDuringLoading):
+            blueprint.get_blueprint_class()
+
+    @pytest.mark.skip(reason='hangs')
+    def test_large_string_with_mul(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
+        blueprint = self._create_on_chain_blueprint('''x = 'a'\nwhile True:\n    x = x * 2\n__blueprint__ = x''')
+        # this should run out of fuel first, since it shouldn't take too much memory
+        with self.assertRaises(OCBOutOfMemoryDuringLoading):
+            blueprint.get_blueprint_class()
+
+    def test_large_sum(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading
+        blueprint = self._create_on_chain_blueprint('''__blueprint__ = sum(range(2**30))''')
+        # this should run out of fuel first, since it shouldn't take too much memory
+        with self.assertRaises(OCBOutOfFuelDuringLoading):
+            blueprint.get_blueprint_class()
+
+    def test_inf_loop(self) -> None:
+        from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading
+        blueprint = self._create_on_chain_blueprint('''a = 0\nwhile True:\n    a += 1\n__blueprint__ = a''')
+        # this should run out of fuel first, since it shouldn't take too much memory
+        with self.assertRaises(OCBOutOfFuelDuringLoading):
+            blueprint.get_blueprint_class()
