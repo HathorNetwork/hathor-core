@@ -45,11 +45,11 @@ class _RestrictionsVisitor(ast.NodeVisitor):
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.module not in ALLOWED_IMPORTS:
-            raise SyntaxError(f'Import from "{node.module}" is not allowed.')
+            raise SyntaxError(f'Importing from "{node.module}" is not allowed.')
         allowed_fromlist = ALLOWED_IMPORTS[node.module]
         for import_what in node.names:
             if import_what.name not in allowed_fromlist:
-                raise SyntaxError(f'Import from "{node.module}.{import_what.name}" is not allowed.')
+                raise SyntaxError(f'Importing "{import_what.name}" from "{node.module}" is not allowed.')
 
     def visit_Try(self, node: ast.Try) -> None:
         raise SyntaxError('Try/Except blocks are not allowed.')
@@ -183,7 +183,7 @@ class OnChainBlueprintVerifier:
         try:
             _RestrictionsVisitor().visit(self._get_python_code_ast(tx))
         except SyntaxError as e:
-            raise OCBInvalidScript from e
+            raise OCBInvalidScript('forbidden syntax') from e
 
     def verify_has_blueprint_attr(self, tx: OnChainBlueprint) -> None:
         """Verify that the script defines a __blueprint__ attribute."""
