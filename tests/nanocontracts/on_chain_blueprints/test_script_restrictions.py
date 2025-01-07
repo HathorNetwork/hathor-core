@@ -52,27 +52,135 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         self._ocb_mine(blueprint)
         return blueprint
 
-    def test_forbid_eval(self) -> None:
-        blueprint = self._create_on_chain_blueprint('''eval("print('foo')")''')
-        # generically an InvalidNewTransaction should happen:
-        with self.assertRaises(InvalidNewTransaction):
+    def _test_forbid_syntax(self, code: str, err_msg: str) -> None:
+        blueprint = self._create_on_chain_blueprint(code)
+        with self.assertRaises(InvalidNewTransaction) as cm:
             self.manager.vertex_handler.on_new_vertex(blueprint, fails_silently=False)
-        # but more specifically, it should be because of a OCBInvalidScript (I'm not sure if we can check the "from" of
-        # the InvalidNewTransaction that we check for previously), also it should happen during the
-        # verify_without_storage, we don't need it to be late like in verify_basic or verify
-        with self.assertRaises(OCBInvalidScript):
-            self.verification_service.verify_without_storage(blueprint)
+        assert isinstance(cm.exception.__cause__, OCBInvalidScript)
+        assert isinstance(cm.exception.__cause__.__cause__, SyntaxError)
+        assert cm.exception.args[0] == 'full validation failed: forbidden syntax'
+        assert cm.exception.__cause__.__cause__.args[0] == err_msg
+
+    def test_forbid_import(self) -> None:
+        self._test_forbid_syntax(
+            'import os',
+            'Import statements are not allowed.',
+        )
+
+    def test_forbid_import_from(self) -> None:
+        self._test_forbid_syntax(
+            'from os import path',
+            'Importing from "os" is not allowed.',
+        )
+        # XXX: only math.ceil and math.floor are currently allowed, log should error
+        self._test_forbid_syntax(
+            'from math import log',
+            'Importing "log" from "math" is not allowed.',
+        )
+
+    def test_forbid_try_except(self) -> None:
+        self._test_forbid_syntax(
+            'try:\n    ...\nexcept:\n    ...',
+            'Try/Except blocks are not allowed.',
+        )
+
+    def test_forbid_names_blacklist(self) -> None:
+        forbidden_cases = {
+            '__builtins__': [
+                r'''x = __builtins__('dir')''',
+                r'''y = __builtins__.dir''',
+            ],
+            '__import__': [
+                r'''sys = __import__('sys')''',
+                r'''os = __import__('os.path')''',
+                r'''path = __import__('os.path', fromlist=[None])''',
+            ],
+            'compile': [
+                r'''code = compile('print("foo")')''',
+            ],
+            'delattr': [
+                '''x = dict()\nx.foo = 1\ndelattr(x, 'foo')''',
+            ],
+            'dir': [
+                '''x = dir()''',
+            ],
+            'eval': [
+                '''x = eval('1+1')''',
+            ],
+            'exec': [
+                '''exec('x=1+1')''',
+            ],
+            'getattr': [
+                '''x = dict()\nx.foo = 1\ny = getattr(x, 'foo')''',
+            ],
+            'globals': [
+                '''x = 1\ny = globals()['x']''',
+            ],
+            'hasattr': [
+                '''x = dict()\ny = hasattr(x, 'foo')''',
+            ],
+            'input': [
+                '''x = input()''',
+            ],
+            'locals': [
+                '''x = 1\ny = locals()['x']''',
+            ],
+            'open': [
+                '''x = open('foo.txt')''',
+            ],
+            'setattr': [
+                '''x = dict()\nsetattr(x, 'foo', 1)''',
+            ],
+            'vars': [
+                '''x = vars()''',
+            ],
+        }
+        for attr, codes in forbidden_cases.items():
+            for code in codes:
+                self._test_forbid_syntax(code, f'Usage or reference to {attr} is not allowed.')
+
+    def test_forbid_internal_attr(self) -> None:
+        self._test_forbid_syntax(
+            'x = 1\nx.__class__',
+            'Access to internal attributes and methods is not allowed.',
+        )
+
+    def test_forbid_async_fn(self) -> None:
+        self._test_forbid_syntax(
+            'async def foo():\n    ...',
+            'Async functions are not allowed.',
+        )
+
+    def test_forbid_await_syntax(self) -> None:
+        # XXX: it is normally forbidden to use await outside an async context, and since async functions cannot be
+        #      defined, it isn't possible to make a realistic code that will fail with await (also applies to other
+        #      syntax nodes as'async for' and 'async with'), however the parser will normally accept this because it
+        #      forms a valid syntax tree
+        self._test_forbid_syntax(
+            'x = await foo()',
+            'Await is not allowed.',
+        )
+        self._test_forbid_syntax(
+            'async for i in range(10):\n    ...',
+            'Async loops are not allowed.',
+        )
+        self._test_forbid_syntax(
+            'async with foo():\n    ...',
+            'Async contexts are not allowed.',
+        )
 
     def test_blueprint_type_not_a_class(self) -> None:
         blueprint = self._create_on_chain_blueprint('''__blueprint__ = "Bet"''')
         with self.assertRaises(InvalidNewTransaction) as cm:
             self.manager.vertex_handler.on_new_vertex(blueprint, fails_silently=False)
+        assert isinstance(cm.exception.__cause__, OCBInvalidScript)
         assert cm.exception.args[0] == 'full validation failed: __blueprint__ is not a class'
 
     def test_blueprint_type_not_blueprint_subclass(self) -> None:
         blueprint = self._create_on_chain_blueprint('''class Foo:\n    ...\n__blueprint__ = Foo''')
         with self.assertRaises(InvalidNewTransaction) as cm:
             self.manager.vertex_handler.on_new_vertex(blueprint, fails_silently=False)
+        assert isinstance(cm.exception.__cause__, OCBInvalidScript)
         assert cm.exception.args[0] == 'full validation failed: __blueprint__ is not a Blueprint subclass'
 
     def test_zlib_bomb(self) -> None:
