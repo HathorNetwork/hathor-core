@@ -64,8 +64,7 @@ class GeometricMiner(AbstractMiner):
             return
 
         assert tx.storage is not None
-        tips = tx.storage.get_best_block_tips()
-        if self._block.parents[0] not in tips:
+        if self._block.parents[0] != tx.storage.get_best_block_hash():
             # Head changed
             self._block = None
             self._schedule_next_block()
