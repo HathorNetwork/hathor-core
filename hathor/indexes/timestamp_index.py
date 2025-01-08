@@ -119,3 +119,9 @@ class TimestampIndex(BaseIndex):
         """ Iterate over the transactions in the index order, that is, sorted by timestamp.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def __contains__(self, elem: tuple[int, bytes]) -> bool:
+        """ Returns whether the pair (timestamp, hash) is present in the index.
+        """
+        raise NotImplementedError

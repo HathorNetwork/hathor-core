@@ -142,3 +142,7 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
         for _, key in it:
             __, tx_hash = self._from_key(key)
             yield tx_hash
+
+    def __contains__(self, elem: tuple[int, bytes]) -> bool:
+        key = self._to_key(*elem)
+        return self._db.get((self._cf, key)) is not None
