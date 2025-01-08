@@ -189,8 +189,8 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert not self.manager.tx_storage.transaction_exists(b13.hash)
         assert not self.manager.tx_storage.transaction_exists(nc1.hash)
         assert not self.manager.tx_storage.transaction_exists(ocb1.hash)
-        assert nc1 not in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
-        assert ocb1 not in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
+        assert nc1 not in list(self.manager.tx_storage.iter_mempool_tips())
+        assert ocb1 not in list(self.manager.tx_storage.iter_mempool_tips())
 
         # The nc txs are re-accepted on the mempool.
         artifacts.propagate_with(self.manager, up_to='a12')
@@ -207,14 +207,14 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert nc1.get_metadata().validation.is_valid()
         assert nc1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(nc1.hash)
-        assert nc1 in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
+        assert nc1 in list(self.manager.tx_storage.iter_mempool_tips())
 
         ocb1._metadata = None
         self.vertex_handler.on_new_relayed_vertex(ocb1)
         assert ocb1.get_metadata().validation.is_valid()
         assert ocb1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(ocb1.hash)
-        assert ocb1 in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
+        assert ocb1 in list(self.manager.tx_storage.iter_mempool_tips())
 
         artifacts.propagate_with(self.manager, up_to='a13')
 
