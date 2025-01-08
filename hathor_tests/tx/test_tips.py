@@ -1,3 +1,5 @@
+from itertools import chain
+
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.transaction import Transaction
 from hathor_tests import unittest
@@ -85,23 +87,23 @@ class TipsTestCase(unittest.TestCase):
         # No tips
         self.assertEqual(len(self.get_tips()), 0)
 
-        tx1 = add_new_transactions(self.manager, 1, advance_clock=1)[0]
+        tx1, = add_new_transactions(self.manager, 1, advance_clock=1, name='tx1')
         # The tx parents will be the genesis txs still
         self.assertCountEqual(set(tx1.parents), set(genesis_txs_hashes))
         # The new tx will be a tip
         self.assertCountEqual(self.get_tips(), set([tx1.hash]))
 
-        tx2 = add_new_transactions(self.manager, 1, advance_clock=1)[0]
+        tx2, = add_new_transactions(self.manager, 1, advance_clock=1, name='tx2')
         # The tx2 parents will be the tx1 and one of the genesis
         self.assertTrue(tx1.hash in tx2.parents)
         # The other parent will be one of tx1 parents
         self.assertTrue(set(tx2.parents).issubset(set([tx1.hash] + tx1.parents)))
         self.assertCountEqual(self.get_tips(), set([tx2.hash]))
 
-        tx3 = add_new_transactions(self.manager, 1, advance_clock=1)[0]
-        # tx3 parents will be tx2 and one of tx2 parents
-        self.assertTrue(tx2.hash in tx3.parents)
-        self.assertTrue(set(tx3.parents).issubset(set([tx2.hash] + tx2.parents)))
+        tx3, = add_new_transactions(self.manager, 1, advance_clock=1, name='tx3')
+        self.manager.tx_storage.get_best_block()
+        # tx3 parents will be tx2 and tx1
+        self.assertEqual(tx3.parents, [tx2.hash, tx1.hash])
         self.assertCountEqual(self.get_tips(), set([tx3.hash]))
 
         b2 = add_new_block(self.manager, advance_clock=1)
@@ -110,7 +112,10 @@ class TipsTestCase(unittest.TestCase):
         self.assertEqual(len(self.get_tips()), 0)
         self.assertTrue(tx3.hash in b2.parents)
         self.assertTrue(reward_blocks[-1].hash in b2.parents)
-        self.assertTrue(set(b2.parents).issubset(set([tx3.hash] + [reward_blocks[-1].hash] + tx3.parents)))
+        self.log.debug('b2 parents', p1=b2.parents[0].hex(), p2=b2.parents[1].hex())
+        possible_parents = set(chain([tx3.hash], tx3.parents, b2.parents))
+        self.log.debug('possible parents', p=[i.hex() for i in possible_parents])
+        self.assertTrue(set(b2.parents).issubset(possible_parents))
 
         tx4 = add_new_transactions(self.manager, 1, advance_clock=1)[0]
         # tx4 had no tip, so the parents will be tx3 and one of tx3 parents

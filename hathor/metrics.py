@@ -182,6 +182,10 @@ class Metrics:
     def handle_publish(self, key: HathorEvents, args: EventArguments) -> None:
         """ This method is called when pubsub publishes an event that we subscribed
         """
+        # Ignore events that arrive after metrics was stopped (this could happen in some tests and lead to segfaults)
+        if not self.is_running:
+            return
+
         data = args.__dict__
         if key == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             if data['tx'].is_block:

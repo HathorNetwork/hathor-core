@@ -182,7 +182,8 @@ def add_new_tx(
     address: str,
     value: int,
     advance_clock: int | None = None,
-    propagate: bool = True
+    propagate: bool = True,
+    name: str | None = None,
 ) -> Transaction:
     """ Create, resolve and propagate a new tx
 
@@ -199,6 +200,7 @@ def add_new_tx(
         :rtype: :py:class:`hathor.transaction.transaction.Transaction`
     """
     tx = gen_new_tx(manager, address, value)
+    tx.name = name
     if propagate:
         manager.propagate_tx(tx)
     if advance_clock:
@@ -210,7 +212,8 @@ def add_new_transactions(
     manager: HathorManager,
     num_txs: int,
     advance_clock: int | None = None,
-    propagate: bool = True
+    propagate: bool = True,
+    name: str | None = None,
 ) -> list[Transaction]:
     """ Create, resolve and propagate some transactions
 
@@ -224,10 +227,11 @@ def add_new_transactions(
         :rtype: list[Transaction]
     """
     txs = []
-    for _ in range(num_txs):
+    for i in range(num_txs):
         address = 'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro'
         value = manager.rng.choice([5, 10, 15, 20])
-        tx = add_new_tx(manager, address, value, advance_clock, propagate)
+        tx_name = f'{name}-{i}' if num_txs > 1 else name
+        tx = add_new_tx(manager, address, value, advance_clock, propagate, name=tx_name)
         txs.append(tx)
     return txs
 
@@ -477,14 +481,14 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
             block = add_new_block(manager, advance_clock=1, address=address)
             deposit_input.append(TxInput(block.hash, 0, b''))
             total_reward += block.outputs[0].value
-            timestamp = block.timestamp + 1
 
         if total_reward > deposit_amount:
             change_output = TxOutput(total_reward - deposit_amount, script, 0)
         else:
             change_output = None
 
-        add_blocks_unlock_reward(manager)
+        unlock_blocks = add_blocks_unlock_reward(manager)
+        timestamp = unlock_blocks[-1].timestamp + 1
         assert timestamp is not None
         parents = manager.get_new_tx_parents(timestamp)
 

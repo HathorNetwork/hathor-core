@@ -550,58 +550,76 @@ class HathorManager:
                     f'hash {block_hash.hex()} was found'
                 )
 
+    def get_timestamp_for_new_vertex(self) -> int:
+        """Generate a timestamp appropriate for a new transaction."""
+        timestamp_now = int(self.reactor.seconds())
+        best_block = self.tx_storage.get_best_block()
+        return max(timestamp_now, best_block.timestamp)
+
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
         """Select which transactions will be confirmed by a new transaction.
 
         :return: The hashes of the parents for a new transaction.
         """
-        timestamp = timestamp or self.reactor.seconds()
+        timestamp = timestamp or self.get_timestamp_for_new_vertex()
         parent_txs = self.generate_parent_txs(timestamp)
         return list(parent_txs.get_random_parents(self.rng))
 
     def generate_parent_txs(self, timestamp: Optional[float]) -> 'ParentTxs':
         """Select which transactions will be confirmed by a new block or transaction.
 
-        This method tries to return a stable result, such that for a given timestamp and storage state it will always
-        return the same.
+        The result of this method depends on the current state of the blockchain and is intended to generate tx-parents
+        for a new block in the current blockchain, as such if a timestamp is present it must be at least greater than
+        the current best block's.
         """
+
         if timestamp is None:
             timestamp = self.reactor.seconds()
 
-        can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
-        assert can_include_intervals, 'tips cannot be empty'
+        best_block = self.tx_storage.get_best_block()
+        assert timestamp >= best_block.timestamp
 
-        confirmed_tips: list[Transaction] = []
-        unconfirmed_tips: list[Transaction] = []
-        for interval in can_include_intervals:
-            tx = self.tx_storage.get_tx(interval.data)
-            tips = unconfirmed_tips if tx.get_metadata().first_block is None else confirmed_tips
-            tips.append(tx)
-
-        def get_tx_parents(tx: Transaction) -> list[Transaction]:
+        def get_tx_parents(tx: BaseTransaction) -> list[Transaction]:
             if tx.is_genesis:
-                other_genesis = {self._settings.GENESIS_TX1_HASH, self._settings.GENESIS_TX2_HASH} - {tx.hash}
-                assert len(other_genesis) == 1
-                return [self.tx_storage.get_tx(vertex_id) for vertex_id in other_genesis]
+                genesis_txs = [self._settings.GENESIS_TX1_HASH, self._settings.GENESIS_TX2_HASH]
+                if tx.is_transaction:
+                    other_genesis_tx, = set(genesis_txs) - {tx.hash}
+                    return [self.tx_storage.get_tx(other_genesis_tx)]
+                else:
+                    return [self.tx_storage.get_tx(t) for t in genesis_txs]
 
             parents = tx.get_tx_parents()
             assert len(parents) == 2
             return list(parents)
 
+        unconfirmed_tips = [tx for tx in self.tx_storage.iter_mempool_tips() if tx.timestamp < timestamp]
+        unconfirmed_extras = sorted(
+            (tx for tx in self.tx_storage.iter_mempool() if tx.timestamp < timestamp and tx not in unconfirmed_tips),
+            key=lambda tx: tx.timestamp,
+        )
+
+        # mix the blocks tx-parents, with their own tx-parents to avoid carrying one of the genesis tx over
+        best_block_tx_parents = get_tx_parents(best_block)
+        tx1_tx_grandparents = get_tx_parents(best_block_tx_parents[0])
+        tx2_tx_grandparents = get_tx_parents(best_block_tx_parents[1])
+        confirmed_tips = sorted(
+            set(best_block_tx_parents) | set(tx1_tx_grandparents) | set(tx2_tx_grandparents),
+            key=lambda tx: tx.timestamp,
+        )
+
         match unconfirmed_tips:
             case []:
-                if len(confirmed_tips) >= 2:
-                    return ParentTxs.from_txs(can_include=confirmed_tips, must_include=())
-                assert len(confirmed_tips) == 1
-                tx = confirmed_tips[0]
-                return ParentTxs.from_txs(can_include=get_tx_parents(tx), must_include=(tx,))
-
+                self.log.debug('generate_parent_txs: empty mempool, repeat parents')
+                return ParentTxs.from_txs(can_include=confirmed_tips[-2:], must_include=())
             case [tip_tx]:
-                if len(confirmed_tips) >= 1:
-                    return ParentTxs.from_txs(can_include=confirmed_tips, must_include=(tip_tx,))
-                return ParentTxs.from_txs(can_include=get_tx_parents(tip_tx), must_include=(tip_tx,))
-
+                if unconfirmed_extras:
+                    self.log.debug('generate_parent_txs: one tx tip and at least one other mempool tx')
+                    return ParentTxs.from_txs(can_include=unconfirmed_extras[-1:], must_include=(tip_tx,))
+                else:
+                    self.log.debug('generate_parent_txs: one tx in mempool, fill with one repeated parent')
+                    return ParentTxs.from_txs(can_include=confirmed_tips[-1:], must_include=(tip_tx,))
             case _:
+                self.log.debug('generate_parent_txs: multiple unconfirmed mempool tips')
                 return ParentTxs.from_txs(can_include=unconfirmed_tips, must_include=())
 
     def allow_mining_without_peers(self) -> None:
@@ -623,15 +641,6 @@ class HathorManager:
         if parent_block_hash is not None:
             return BlockTemplates([self.make_block_template(parent_block_hash, timestamp)], storage=self.tx_storage)
         return BlockTemplates(self.make_block_templates(timestamp), storage=self.tx_storage)
-        # FIXME: the following caching scheme breaks tests:
-        # cached_timestamp: Optional[int]
-        # cached_block_template: BlockTemplates
-        # cached_timestamp, cached_block_template = getattr(self, '_block_templates_cache', (None, None))
-        # if cached_timestamp == self.tx_storage.latest_timestamp:
-        #     return cached_block_template
-        # block_templates = BlockTemplates(self.make_block_templates(), storage=self.tx_storage)
-        # setattr(self, '_block_templates_cache', (self.tx_storage.latest_timestamp, block_templates))
-        # return block_templates
 
     def make_block_templates(self, timestamp: Optional[int] = None) -> Iterator[BlockTemplate]:
         """ Makes block templates for all possible best tips as of the latest timestamp.
@@ -639,8 +648,8 @@ class HathorManager:
         Each block template has all the necessary info to build a block to be mined without requiring further
         information from the blockchain state. Which is ideal for use by external mining servers.
         """
-        for parent_block_hash in self.tx_storage.get_best_block_tips():
-            yield self.make_block_template(parent_block_hash, timestamp)
+        parent_block_hash = self.tx_storage.get_best_block_hash()
+        yield self.make_block_template(parent_block_hash, timestamp)
 
     def make_block_template(self, parent_block_hash: VertexId, timestamp: Optional[int] = None) -> BlockTemplate:
         """ Makes a block template using the given parent block.
@@ -775,10 +784,15 @@ class HathorManager:
     def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.
         """
-        tips = self.tx_storage.get_best_block_tips()
         parent_hash = blk.get_block_parent_hash()
-        if parent_hash not in tips:
-            self.log.warn('submit_block(): Ignoring block: parent not a tip', blk=blk.hash_hex)
+        best_block_hash = self.tx_storage.get_best_block_hash()
+        if parent_hash != best_block_hash:
+            self.log.warn(
+                'submit_block(): Ignoring block: parent not a tip',
+                submitted_block_hash=blk.hash_hex,
+                submitted_parent_hash=parent_hash.hex(),
+                tip_block_hash=best_block_hash.hex(),
+            )
             return False
         parent_block = self.tx_storage.get_transaction(parent_hash)
         parent_block_metadata = parent_block.get_metadata()

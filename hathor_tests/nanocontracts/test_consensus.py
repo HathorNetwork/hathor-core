@@ -152,8 +152,8 @@ class NCConsensusTestCase(SimulatorTestCase):
 
     def _finish_preparing_tx(self, tx: Transaction, *, set_timestamp: bool = True) -> Transaction:
         if set_timestamp:
-            tx.timestamp = int(self.manager.reactor.seconds())
-        tx.parents = self.manager.get_new_tx_parents()
+            tx.timestamp = int(self.manager.get_timestamp_for_new_vertex())
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
         return tx
 

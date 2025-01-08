@@ -87,25 +87,15 @@ class MempoolResource(Resource):
     def _get_from_index(self, index_source: IndexSource) -> Iterator[Transaction]:
         tx_storage = self.manager.tx_storage
         assert tx_storage.indexes is not None
-        if index_source == IndexSource.ANY:
+        if index_source == IndexSource.ANY or index_source == IndexSource.MEMPOOL:
             # XXX: if source is ANY we try to use the mempool when possible
-            if tx_storage.indexes.mempool_tips is not None:
-                yield from self._get_from_mempool_tips_index()
-            else:
-                yield from self._get_from_tx_tips_index()
-        elif index_source == IndexSource.MEMPOOL:
             if tx_storage.indexes.mempool_tips is None:
                 raise ValueError('mempool index is not enabled')
             yield from self._get_from_mempool_tips_index()
         elif index_source == IndexSource.TX_TIPS:
-            if tx_storage.indexes.tx_tips is None:
-                raise ValueError('tx-tips index is not enabled')
-            yield from self._get_from_tx_tips_index()
+            raise ValueError('tx-tips index has been removed')
         else:
             raise NotImplementedError  # XXX: this cannot happen
-
-    def _get_from_tx_tips_index(self) -> Iterator[Transaction]:
-        yield from self.manager.tx_storage.iter_mempool_from_tx_tips()
 
     def _get_from_mempool_tips_index(self) -> Iterator[Transaction]:
         tx_storage = self.manager.tx_storage
