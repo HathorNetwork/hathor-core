@@ -219,3 +219,6 @@ class ManagerInitializationTestCase(unittest.TestCase):
         all_tips = parent_txs.can_include + list(parent_txs.must_include)
         iter_tips_meta = map(manager.tx_storage.get_metadata, all_tips)
         self.assertFalse(any(tx_meta.voided_by for tx_meta in iter_tips_meta))
+
+        for tx in manager.tx_storage.iter_mempool_tips():
+            self.assertFalse(tx.get_metadata().voided_by, tx.hash_hex)

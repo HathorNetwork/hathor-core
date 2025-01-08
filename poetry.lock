@@ -803,20 +803,6 @@ files = [
 ]
 
 [[package]]
-name = "intervaltree"
-version = "3.1.0"
-description = "Editable interval tree data structure for Python 2 and 3"
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "intervaltree-3.1.0.tar.gz", hash = "sha256:902b1b88936918f9b2a19e0e5eb7ccb430ae45cde4f39ea4b36932920d33952d"},
-]
-
-[package.dependencies]
-sortedcontainers = ">=2.0,<3.0"
-
-[[package]]
 name = "ipykernel"
 version = "6.28.0"
 description = "IPython Kernel for Jupyter"
@@ -2556,4 +2542,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "50458e313bb3781eff00d88daaa4020c69a25737ef836785fde5a8087ef2fc85"
+content-hash = "94cb3f852de11baa61d5004dd424135b1f85d70410ac170ef5362085c2b6b983"
