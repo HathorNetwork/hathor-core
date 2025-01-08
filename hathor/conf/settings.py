@@ -403,7 +403,7 @@ class HathorSettings(NamedTuple):
     PARTIALLY_VALIDATED_ID: bytes = b'pending-validation'
 
     # Maximum number of sync running simultaneously.
-    MAX_ENABLED_SYNC: int = 16
+    MAX_ENABLED_SYNC: int = 8
 
     # Time to update the peers that are running sync.
     SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds
