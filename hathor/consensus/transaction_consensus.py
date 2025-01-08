@@ -488,7 +488,6 @@ class TransactionConsensusAlgorithm:
             if tx2.is_block:
                 assert isinstance(tx2, Block)
                 self.context.block_algorithm.mark_as_voided(tx2)
-                tx2.storage.update_best_block_tips_cache(None)
 
             assert not meta2.voided_by or voided_hash not in meta2.voided_by
             if tx2.hash != tx.hash and meta2.conflict_with and not meta2.voided_by:
