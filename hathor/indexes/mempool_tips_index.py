@@ -82,8 +82,6 @@ class MempoolTipsIndex(BaseIndex):
     def get(self) -> set[bytes]:
         """
         Get the set of mempool tips indexed.
-
-        What to do with `get_tx_tips()`? They kind of do the same thing and it might be really confusing in the future.
         """
         raise NotImplementedError
 
