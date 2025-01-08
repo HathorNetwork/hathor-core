@@ -179,7 +179,7 @@ class TransactionTest(unittest.TestCase):
             self.manager.verification_service.verify(tx)
 
         # the transaction should have been removed from the mempool
-        self.assertNotIn(tx, self.manager.tx_storage.iter_mempool_from_best_index())
+        self.assertNotIn(tx, self.manager.tx_storage.iter_mempool())
 
         # additionally the transaction should have been marked as invalid and removed from the storage after the re-org
         self.assertTrue(tx.get_metadata().validation.is_invalid())
