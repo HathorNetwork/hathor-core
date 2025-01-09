@@ -18,6 +18,7 @@ from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput
+from hathor.types import VertexId
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 
@@ -419,6 +420,37 @@ class TransactionConsensusAlgorithm:
         self.add_voided_by(tx, tx.hash)
         self.assert_valid_consensus(tx)
 
+    def has_only_nc_execution_fail_id(self, tx: Transaction) -> bool:
+        """Return true if the only reason that tx is voided is because of nano execution failures."""
+        meta = tx.get_metadata()
+
+        if meta.voided_by is None:
+            return False
+        assert meta.voided_by
+
+        if tx.hash in meta.voided_by:
+            if self._settings.NC_EXECUTION_FAIL_ID not in meta.voided_by:
+                # If tx has a conflict, it is voiding itself but did not failed nano execution,
+                # then we can safely return False.
+                return False
+
+        for h in meta.voided_by:
+            if h == tx.hash:
+                continue
+            if h == self._settings.NC_EXECUTION_FAIL_ID:
+                continue
+            if h == self._settings.SOFT_VOIDED_ID:
+                return False
+            assert tx.storage is not None
+            tx2 = tx.storage.get_transaction(h)
+            tx2_meta = tx2.get_metadata()
+            tx2_voided_by: set[VertexId] = tx2_meta.voided_by or set()
+            if self._settings.NC_EXECUTION_FAIL_ID not in tx2_voided_by:
+                return False
+            assert tx2_voided_by == {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+
+        return True
+
     def add_voided_by(self, tx: Transaction, voided_hash: bytes, *, is_dag_verifications: bool = True) -> bool:
         """ Add a hash from `meta.voided_by` and its descendants (both from verification DAG
         and funds tree).
@@ -433,6 +465,13 @@ class TransactionConsensusAlgorithm:
 
         if meta.voided_by and bool(self.context.consensus.soft_voided_tx_ids & meta.voided_by):
             # If tx is soft voided, we can only walk through the DAG of funds.
+            is_dag_verifications = False
+
+        if self.has_only_nc_execution_fail_id(tx):
+            # If a transaction is voided solely because other nano transactions have failed execution,
+            # we should restrict our traversal to the DAG of funds only. This is important because if
+            # a transaction has a conflict and loses during conflict resolution, it will add itself
+            # to meta.voided_by.
             is_dag_verifications = False
 
         from hathor.transaction.storage.traversal import BFSTimestampWalk

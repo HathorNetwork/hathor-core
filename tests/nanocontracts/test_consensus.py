@@ -1430,3 +1430,60 @@ class NCConsensusTestCase(SimulatorTestCase):
         assert nc1_meta.voided_by is None
         assert nc1_meta.nc_execution is NCExecutionState.PENDING
         assert nc1_meta.nc_calls is None
+
+    def test_nc_consensus_voided_tx_propagation_to_blocks(self) -> None:
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..50]
+            b30 < dummy
+
+            tx1.nc_id = "{self.myblueprint_id.hex()}"
+            tx1.nc_method = initialize("00")
+
+            tx2.nc_id = tx1
+            tx2.nc_method = nop(1)
+
+            # tx3 will fail because it does not have a deposit
+            tx3.nc_id = tx1
+            tx3.nc_method = deposit()
+
+            # tx4 will be voided because tx3 is voided
+            tx4.nc_id = tx1
+            tx4.nc_method = nop(1)
+            tx2.out[0] <<< tx4
+            tx3.out[0] <<< tx4
+
+            # As tx4 failed, tx5 is trying to spend the unspent output of tx2.
+            tx5.nc_id = tx1
+            tx5.nc_method = nop(1)
+            tx2.out[0] <<< tx5
+
+            b31 --> tx1
+            b32 --> tx2
+            b33 --> tx3
+            b34 --> tx4
+
+            b50 < tx5
+        ''')
+
+        artifacts.propagate_with(self.manager)
+
+        tx1, tx2, tx3, tx4, tx5 = artifacts.get_typed_vertices(['tx1', 'tx2', 'tx3', 'tx4', 'tx5'], Transaction)
+
+        assert tx1.get_metadata().voided_by is None
+        assert tx2.get_metadata().voided_by is None
+        assert tx3.get_metadata().voided_by == {tx3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx4.get_metadata().voided_by == {tx3.hash, tx4.hash}
+        assert tx5.get_metadata().voided_by is None
+
+        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx4.get_metadata().nc_execution is NCExecutionState.SKIPPED
+        assert tx5.get_metadata().nc_execution is None
+
+        b33, b34, b50 = artifacts.get_typed_vertices(['b33', 'b34', 'b50'], Block)
+
+        self.assertIsNone(b33.get_metadata().voided_by)
+        self.assertIsNone(b34.get_metadata().voided_by)
+        self.assertIsNone(b50.get_metadata().voided_by)
