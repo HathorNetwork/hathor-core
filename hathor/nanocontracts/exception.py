@@ -97,6 +97,14 @@ class NCInvalidMethodCall(NCFail):
     """Raised when a contract calls another contract's invalid method."""
 
 
+class NCInvalidInitializeMethodCall(NCFail):
+    """Raised when a contract calls another contract's initialize method."""
+
+
+class NCInvalidPublicMethodCallFromView(NCFail):
+    """Raised when a contract calls another contract's initialize method."""
+
+
 class NCAlreadyInitializedContractError(NCFail):
     """Raised when one tries to initialize a contract that has already been initialized."""
 

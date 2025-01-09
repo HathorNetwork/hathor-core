@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCInvalidContext
@@ -62,9 +62,6 @@ class Context:
         # Timestamp of the first block confirming tx.
         self.timestamp = timestamp
 
-        # Runner can only be set by the runner itself.
-        self._runner = None
-
     def copy(self) -> 'Context':
         """Return a copy of the context."""
         ctx = Context(
@@ -74,7 +71,6 @@ class Context:
             timestamp=self.timestamp,
         )
         ctx.actions = MappingProxyType(self.actions)
-        ctx._runner = self._runner
         return ctx
 
     def to_json(self) -> dict[str, Any]:
@@ -88,34 +84,3 @@ class Context:
             'address': get_address_b58_from_bytes(self.address),
             'timestamp': self.timestamp,
         }
-
-    def get_nanocontract_id(self) -> ContractId:
-        """Return the current contract id."""
-        assert self._runner is not None
-        return self._runner.get_current_nanocontract_id()
-
-    def get_balance(self,
-                    token_uid: Optional[TokenUid] = None,
-                    *,
-                    nanocontract_id: Optional[ContractId] = None) -> int:
-        """Return the balance for a given token without considering the current transaction.
-
-        For instance, if a contract has 50 HTR and a transaction is requesting to withdraw 3 HTR,
-        then this method will return 50 HTR."""
-        assert self._runner is not None
-        return self._runner.get_balance(nanocontract_id, token_uid)
-
-    def call_public_method(self,
-                           nc_id: ContractId,
-                           method_name: str,
-                           actions: list[NCAction],
-                           *args: Any,
-                           **kwargs: Any) -> Any:
-        """Call a public method from another contract."""
-        assert self._runner is not None
-        return self._runner.call_another_contract_public_method(nc_id, method_name, actions, *args, **kwargs)
-
-    def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        """Call a private method from another contract."""
-        assert self._runner is not None
-        return self._runner.call_view_method(nc_id, method_name, *args, **kwargs)

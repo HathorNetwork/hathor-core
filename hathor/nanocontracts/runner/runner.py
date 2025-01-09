@@ -24,7 +24,8 @@ from hathor.nanocontracts.exception import (
     NCFail,
     NCInvalidContext,
     NCInvalidContractId,
-    NCInvalidMethodCall,
+    NCInvalidInitializeMethodCall,
+    NCInvalidPublicMethodCallFromView,
     NCUninitializedContractError,
 )
 from hathor.nanocontracts.metered_exec import MeteredExecutor
@@ -133,7 +134,7 @@ class Runner:
         assert self._metered_executor is not None
         blueprint_class = self.get_blueprint_class(nanocontract_id)
         metered_executor = self._metered_executor
-        return _SingleCallRunner(blueprint_class, nanocontract_id, change_tracker, metered_executor)
+        return _SingleCallRunner(self, blueprint_class, nanocontract_id, change_tracker, metered_executor)
 
     def _build_call_info(self) -> CallInfo:
         return CallInfo(
@@ -177,8 +178,6 @@ class Runner:
                                             *args: Any,
                                             **kwargs: Any) -> Any:
         assert self._call_info is not None
-        first_ctx = self._call_info.stack[0].ctx
-        assert first_ctx is not None
 
         # The caller is always the last element in the stack. So we need to use it as the `address` in the subsequent
         # call.
@@ -189,15 +188,21 @@ class Runner:
 
         from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD
         if method_name == NC_INITIALIZE_METHOD:
-            raise NCInvalidMethodCall('cannot call initialize from another contract')
+            raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
 
         if not self.has_contract_been_initialized(nanocontract_id):
             raise NCUninitializedContractError('cannot call a method from an uninitialized contract')
+
+        if last_call_record.type is CallType.VIEW:
+            raise NCInvalidPublicMethodCallFromView('cannot call a public method from a view method')
 
         # Validate actions.
         for action in actions:
             if action.amount < 0:
                 raise NCInvalidContext('amount must be positive')
+
+        first_ctx = self._call_info.stack[0].ctx
+        assert first_ctx is not None
 
         # Call the other contract method.
         ctx = Context(
@@ -271,7 +276,6 @@ class Runner:
         It is also used when a contract calls another contract.
         """
         assert self._call_info is not None
-        assert ctx._runner is None
 
         changes_tracker = self._create_changes_tracker(nanocontract_id)
 
@@ -286,15 +290,12 @@ class Runner:
             changes_tracker=changes_tracker,
         )
 
-        ctx._runner = self
         self._call_info.pre_call(call_record)
         single_runner = self._create_single_runner(nanocontract_id, changes_tracker)
         ret = single_runner.call_public_method(method_name, ctx, *args, **kwargs)
         if len(self._call_info.change_trackers[nanocontract_id]) > 1:
             call_record.changes_tracker.commit()
         self._call_info.post_call(call_record)
-        ctx._runner = None
-
         return ret
 
     def call_view_method(self, nanocontract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
