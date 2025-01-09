@@ -4,7 +4,8 @@ from hathor.nanocontracts import Blueprint, Context, NCFail, public, view
 from hathor.nanocontracts.exception import (
     NCInsufficientFunds,
     NCInvalidContractId,
-    NCInvalidMethodCall,
+    NCInvalidInitializeMethodCall,
+    NCInvalidPublicMethodCallFromView,
     NCNumberOfCallsExceeded,
     NCRecursionError,
     NCUninitializedContractError,
@@ -43,7 +44,7 @@ class MyBlueprint(Blueprint):
         for action in ctx.actions.values():
             amount = 1 + action.amount // 2
             actions.append(NCAction(NCActionType.DEPOSIT, action.token_uid, amount))
-        ctx.call_public_method(self.contract, 'split_balance', actions)
+        self.call_public_method(self.contract, 'split_balance', actions)
 
     @public
     def get_tokens_from_another_contract(self, ctx: Context) -> None:
@@ -52,13 +53,13 @@ class MyBlueprint(Blueprint):
 
         actions = []
         for action in ctx.actions.values():
-            balance = ctx.get_balance(action.token_uid)
+            balance = self.get_balance(action.token_uid)
             diff = balance - action.amount
             if diff < 0:
                 actions.append(NCAction(NCActionType.WITHDRAWAL, action.token_uid, -diff))
 
         if actions:
-            ctx.call_public_method(self.contract, 'get_tokens_from_another_contract', actions)
+            self.call_public_method(self.contract, 'get_tokens_from_another_contract', actions)
 
     @public
     def dec(self, ctx: Context, fail_on_zero: bool = True) -> None:
@@ -70,28 +71,28 @@ class MyBlueprint(Blueprint):
         self.counter -= 1
         if self.contract:
             actions: list[NCAction] = []
-            ctx.call_public_method(self.contract, 'dec', actions, fail_on_zero=fail_on_zero)
+            self.call_public_method(self.contract, 'dec', actions, fail_on_zero=fail_on_zero)
 
     @public
     def non_stop_call(self, ctx: Context) -> None:
         assert self.contract is not None
         while True:
             actions: list[NCAction] = []
-            ctx.call_public_method(self.contract, 'dec', actions, fail_on_zero=False)
+            self.call_public_method(self.contract, 'dec', actions, fail_on_zero=False)
 
-    @public
-    def get_total_counter(self, ctx: Context) -> int:
+    @view
+    def get_total_counter(self) -> int:
         mine = self.counter
         other = 0
         if self.contract:
-            other = ctx.call_view_method(self.contract, 'get_counter')
+            other = self.call_view_method(self.contract, 'get_counter')
         return mine + other
 
     @public
     def dec_and_get_counter(self, ctx: Context) -> int:
         assert self.contract is not None
         self.dec(ctx)
-        other = ctx.call_view_method(self.contract, 'get_counter')
+        other = self.call_view_method(self.contract, 'get_counter')
         return self.counter + other
 
     @view
@@ -99,9 +100,14 @@ class MyBlueprint(Blueprint):
         return self.counter
 
     @public
-    def invalid_call(self, ctx: Context) -> None:
+    def invalid_call_initialize(self, ctx: Context) -> None:
         assert self.contract is not None
-        ctx.call_public_method(self.contract, 'initialize', [])
+        self.call_public_method(self.contract, 'initialize', [])
+
+    @view
+    def invalid_call_public_from_view(self):
+        assert self.contract is not None
+        self.call_public_method(self.contract, 'dec', [])
 
 
 class NCBlueprintTestCase(unittest.TestCase):
@@ -172,8 +178,17 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
-        with self.assertRaises(NCInvalidMethodCall):
-            self.runner.call_public_method(self.nc1_id, 'invalid_call', ctx)
+        with self.assertRaises(NCInvalidInitializeMethodCall):
+            self.runner.call_public_method(self.nc1_id, 'invalid_call_initialize', ctx)
+
+    def test_call_public_from_view(self):
+        ctx = Context([], self.tx, b'', timestamp=0)
+        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 10)
+        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 10)
+        self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
+
+        with self.assertRaises(NCInvalidPublicMethodCallFromView):
+            self.runner.call_view_method(self.nc1_id, 'invalid_call_public_from_view')
 
     def test_call_uninitialize_contract(self):
         ctx = Context([], self.tx, b'', timestamp=0)
@@ -287,10 +302,10 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc3_id)
 
-        total_counter = self.runner.call_public_method(self.nc1_id, 'get_total_counter', ctx)
+        total_counter = self.runner.call_view_method(self.nc1_id, 'get_total_counter')
         self.assertEqual(total_counter, 21)
 
-        total_counter = self.runner.call_public_method(self.nc2_id, 'get_total_counter', ctx)
+        total_counter = self.runner.call_view_method(self.nc2_id, 'get_total_counter')
         self.assertEqual(total_counter, 320)
 
         token1_uid = self._settings.HATHOR_TOKEN_UID
