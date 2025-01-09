@@ -107,6 +107,9 @@ class BlueprintInfoResource(Resource):
             if name in skip_methods:
                 continue
 
+            if not (is_nc_public_method(method) or is_nc_view_method(method)):
+                continue
+
             method_args = []
             argspec = inspect.getfullargspec(method)
             for arg_name in argspec.args[1:]:

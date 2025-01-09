@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Type
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Type
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts.blueprint import Blueprint
@@ -23,6 +25,9 @@ from hathor.nanocontracts.storage import NCChangesTracker
 from hathor.nanocontracts.types import NCAction, NCActionType
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 
+if TYPE_CHECKING:
+    from hathor.nanocontracts.runner.runner import Runner
+
 
 class _SingleCallRunner:
     """This class is used to run a single method in a blueprint.
@@ -32,11 +37,13 @@ class _SingleCallRunner:
 
     def __init__(
         self,
+        runner: Runner,
         blueprint_class: Type[Blueprint],
         nanocontract_id: bytes,
         changes_tracker: NCChangesTracker,
         metered_executor: MeteredExecutor,
     ) -> None:
+        self.runner = runner
         self.blueprint_class = blueprint_class
         self.nanocontract_id = nanocontract_id
         self.changes_tracker = changes_tracker
@@ -82,7 +89,7 @@ class _SingleCallRunner:
 
         self.validate_context(ctx)
 
-        blueprint = self.blueprint_class(self.changes_tracker)
+        blueprint = self.blueprint_class(self.runner, self.changes_tracker)
         method = getattr(blueprint, method_name)
         if method is None:
             raise NCMethodNotFound(method_name)
@@ -110,7 +117,7 @@ class _SingleCallRunner:
 
     def call_view_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a contract view method. It cannot change the state."""
-        blueprint = self.blueprint_class(self.changes_tracker)
+        blueprint = self.blueprint_class(self.runner, self.changes_tracker)
         method = getattr(blueprint, method_name)
         if method is None:
             raise NCMethodNotFound(method_name)
