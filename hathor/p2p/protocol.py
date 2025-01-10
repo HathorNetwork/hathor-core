@@ -14,9 +14,10 @@
 
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Coroutine, Generator, Optional, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 from structlog import get_logger
+from twisted.internet import defer
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IDelayedCall, ITCPTransport, ITransport
 from twisted.internet.protocol import connectionDone
@@ -24,9 +25,11 @@ from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
+from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer_storage import UnverifiedPeerStorage
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
@@ -69,21 +72,19 @@ class HathorProtocol:
         GLOBAL = 'global'
 
     class WarningFlags(str, Enum):
-        NO_PEER_ID_URL = 'no_peer_id_url'
         NO_ENTRYPOINTS = 'no_entrypoints'
 
-    network: str
-    my_peer: PeerId
+    my_peer: PrivatePeer
     connections: 'ConnectionsManager'
     node: 'HathorManager'
     app_version: str
     last_message: float
-    peer: Optional[PeerId]
+    _peer: Optional[PublicPeer]
     transport: Optional[ITransport]
     state: Optional[BaseState]
     connection_time: float
     _state_instances: dict[PeerState, BaseState]
-    entrypoint: Optional[Entrypoint]
+    entrypoint: Optional[PeerEndpoint]
     warning_flags: set[str]
     aborting: bool
     diff_timestamp: Optional[int]
@@ -91,10 +92,14 @@ class HathorProtocol:
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
     capabilities: set[str]  # capabilities received from the peer in HelloState
 
+    @property
+    def peer(self) -> PublicPeer:
+        assert self._peer is not None, 'self.peer must be initialized'
+        return self._peer
+
     def __init__(
         self,
-        network: str,
-        my_peer: PeerId,
+        my_peer: PrivatePeer,
         p2p_manager: 'ConnectionsManager',
         *,
         settings: HathorSettings,
@@ -102,7 +107,6 @@ class HathorProtocol:
         inbound: bool,
     ) -> None:
         self._settings = settings
-        self.network = network
         self.my_peer = my_peer
         self.connections = p2p_manager
 
@@ -125,7 +129,7 @@ class HathorProtocol:
         self.diff_timestamp = None
 
         # The peer on the other side of the connection.
-        self.peer = None
+        self._peer = None
 
         # The last time a message has been received from this peer.
         self.last_message = 0
@@ -146,10 +150,10 @@ class HathorProtocol:
 
         # Connection string of the peer
         # Used to validate if entrypoints has this string
-        self.entrypoint: Optional[Entrypoint] = None
+        self.entrypoint: Optional[PeerEndpoint] = None
 
         # Peer id sent in the connection url that is expected to connect (optional)
-        self.expected_peer_id: Optional[str] = None
+        self.expected_peer_id: PeerId | None = None
 
         # Set of warning flags that may be added during the connection process
         self.warning_flags: set[str] = set()
@@ -160,6 +164,13 @@ class HathorProtocol:
         self.aborting = False
 
         self.use_ssl: bool = use_ssl
+
+        # List of peers received from the network.
+        # We cannot trust their identity before we connect to them.
+        self.unverified_peer_storage = UnverifiedPeerStorage(
+            rng=self.connections.rng,
+            max_size=self._settings.MAX_UNVERIFIED_PEERS_PER_CONN,
+        )
 
         # Protocol version is initially unset
         self.sync_version = None
@@ -192,16 +203,16 @@ class HathorProtocol:
         assert self.transport is not None
         return format_address(self.transport.getPeer())
 
-    def get_peer_id(self) -> Optional[str]:
+    def get_peer_id(self) -> Optional[PeerId]:
         """Get peer id for logging."""
-        if self.peer and self.peer.id:
+        if self._peer is not None:
             return self.peer.id
         return None
 
     def get_short_peer_id(self) -> Optional[str]:
         """Get short peer id for logging."""
-        if self.peer and self.peer.id:
-            return self.peer.id[:7]
+        if self._peer and self._peer.id:
+            return str(self.peer.id)[:7]
         return None
 
     def get_logger_context(self) -> dict[str, Optional[str]]:
@@ -251,9 +262,13 @@ class HathorProtocol:
         if self.connections:
             self.connections.on_peer_connect(self)
 
-    def on_outbound_connect(self, entrypoint: Entrypoint) -> None:
+    def on_outbound_connect(self, entrypoint: PeerEndpoint, peer: UnverifiedPeer | PublicPeer | None) -> None:
         """Called when we successfully establish an outbound connection to a peer."""
         # Save the used entrypoint in protocol so we can validate that it matches the entrypoints data
+        if entrypoint.peer_id is not None and peer is not None:
+            assert entrypoint.peer_id == peer.id
+
+        self.expected_peer_id = peer.id if peer else entrypoint.peer_id
         self.entrypoint = entrypoint
 
     def on_peer_ready(self) -> None:
@@ -289,16 +304,15 @@ class HathorProtocol:
         raise NotImplementedError
 
     @cpu.profiler(key=lambda self, cmd: 'p2p-cmd!{}'.format(str(cmd)))
-    def recv_message(self, cmd: ProtocolMessages, payload: str) -> Optional[Deferred[None]]:
+    def recv_message(self, cmd: ProtocolMessages, payload: str) -> None:
         """ Executed when a new message arrives.
         """
         assert self.state is not None
 
         now = self.reactor.seconds()
         self.last_message = now
-        if self.peer is not None:
-            self.peer.last_seen = now
-        self.reset_idle_timeout()
+        if self._peer is not None:
+            self.peer.info.last_seen = now
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
             # XXX: on Python 3.11 the result of the following expression:
@@ -307,21 +321,22 @@ class HathorProtocol:
             #      that something like `str(value)` is called which results in a different value (usually not the case
             #      for regular strings, but it is for enum+str), using `enum_variant.value` side-steps this problem
             self.state.send_throttle(self.RateLimitKeys.GLOBAL.value)
-            return None
+            return
 
-        fn = self.state.cmd_map.get(cmd)
-        if fn is not None:
-            try:
-                result = fn(payload)
-                return Deferred.fromCoroutine(result) if isinstance(result, Coroutine) else result
-            except Exception:
-                self.log.warn('recv_message processing error', exc_info=True)
-                raise
-        else:
+        cmd_handler = self.state.cmd_map.get(cmd)
+        if cmd_handler is None:
             self.log.debug('cmd not found', cmd=cmd, payload=payload, available=list(self.state.cmd_map.keys()))
             self.send_error_and_close_connection('Invalid Command: {} {}'.format(cmd, payload))
+            return
 
-        return None
+        deferred_result: Deferred[None] = defer.maybeDeferred(cmd_handler, payload)
+        deferred_result \
+            .addCallback(lambda _: self.reset_idle_timeout()) \
+            .addErrback(self._on_cmd_handler_error, cmd)
+
+    def _on_cmd_handler_error(self, failure: Failure, cmd: ProtocolMessages) -> None:
+        self.log.error(f'recv_message processing error:\n{failure.getTraceback()}', reason=failure.getErrorMessage())
+        self.send_error_and_close_connection(f'Error processing "{cmd.value}" command')
 
     def send_error(self, msg: str) -> None:
         """ Send an error message to the peer.
@@ -360,6 +375,20 @@ class HathorProtocol:
             self.aborting = True
         else:
             transport.abortConnection()
+
+    def on_receive_peer(self, peer: UnverifiedPeer) -> None:
+        """ Update a peer information in our storage, the manager's connection loop will pick it later.
+        """
+        # ignore when the remote echo backs our own peer
+        if peer.id == self.my_peer.id:
+            return
+        # ignore peers we've already connected to
+        if peer.id in self.connections.verified_peer_storage:
+            return
+        # merge with known previous information received from this peer since we don't know what's right (a peer can
+        # change their entrypoints, but the old could still echo, since we haven't connected yet don't assume anything
+        # and just merge them)
+        self.unverified_peer_storage.add_or_merge(peer)
 
     def handle_error(self, payload: str) -> None:
         """ Executed when an ERROR command is received.
@@ -408,7 +437,7 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 
     @cpu.profiler(key=lambda self: 'p2p!{}'.format(self.get_short_remote()))
-    def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:
+    def lineReceived(self, line: bytes) -> None:
         assert self.transport is not None
 
         if self.aborting:
@@ -417,7 +446,7 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
             # abort and close the connection, HathorLineReceive.lineReceived will still be called for the buffered
             # lines. If that happens we just ignore those messages.
             self.log.debug('ignore received messager after abort')
-            return None
+            return
 
         self.metrics.received_messages += 1
         self.metrics.received_bytes += len(line)
@@ -426,17 +455,16 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
             sline = line.decode('utf-8')
         except UnicodeDecodeError:
             self.transport.loseConnection()
-            return None
+            return
 
         msgtype, _, msgdata = sline.partition(' ')
         try:
             cmd = ProtocolMessages(msgtype)
         except ValueError:
             self.transport.loseConnection()
-            return None
-        else:
-            self.recv_message(cmd, msgdata)
-            return None
+            return
+
+        self.recv_message(cmd, msgdata)
 
     def send_message(self, cmd_enum: ProtocolMessages, payload: Optional[str] = None) -> None:
         cmd = cmd_enum.value

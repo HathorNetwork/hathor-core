@@ -14,7 +14,7 @@ class BaseCacheStorageTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        builder = self.get_builder('testnet') \
+        builder = self.get_builder() \
             .use_memory() \
             .use_tx_storage_cache(capacity=5) \
             .set_wallet(self._create_test_wallet(unlocked=True))
@@ -34,8 +34,9 @@ class BaseCacheStorageTest(unittest.TestCase):
 
     def _get_new_tx(self, nonce):
         from hathor.transaction.validation_state import ValidationState
-        tx = Transaction(nonce=nonce, storage=self.cache_storage)
+        tx = Transaction(nonce=nonce, storage=self.cache_storage, parents=[self._settings.GENESIS_TX1_HASH])
         tx.update_hash()
+        tx.init_static_metadata_from_storage(self._settings, self.cache_storage)
         meta = TransactionMetadata(hash=tx.hash)
         meta.validation = ValidationState.FULL
         tx._metadata = meta

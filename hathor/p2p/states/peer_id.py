@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.peer import PublicPeer
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 from hathor.util import json_dumps, json_loads
@@ -41,6 +42,12 @@ class PeerIdState(BaseState):
         self.my_peer_ready = False
         self.other_peer_ready = False
 
+        # Common capabilities between the two peers
+        common_capabilities = protocol.capabilities & set(protocol.node.capabilities)
+
+        # whether to relay IPV6 entrypoints
+        self.should_relay_ipv6_entrypoints: bool = self._settings.CAPABILITY_IPV6 in common_capabilities
+
     def on_enter(self) -> None:
         self.send_peer_id()
 
@@ -62,17 +69,25 @@ class PeerIdState(BaseState):
             # So it was just waiting for the ready message from the other peer to change the state to READY
             self.protocol.change_state(self.protocol.PeerState.READY)
 
+    def _get_peer_id_data(self) -> dict[str, Any]:
+        my_peer = self.protocol.my_peer
+
+        if not self.should_relay_ipv6_entrypoints:
+            entrypoints_as_str = my_peer.info.ipv4_entrypoints_as_str()
+        else:
+            entrypoints_as_str = my_peer.info.entrypoints_as_str()
+
+        return dict(
+            id=str(my_peer.id),
+            pubKey=my_peer.get_public_key(),
+            entrypoints=entrypoints_as_str,
+        )
+
     def send_peer_id(self) -> None:
         """ Send a PEER-ID message, identifying the peer.
         """
-        protocol = self.protocol
-        my_peer = protocol.my_peer
-        hello = {
-            'id': my_peer.id,
-            'pubKey': my_peer.get_public_key(),
-            'entrypoints': my_peer.entrypoints_as_str(),
-        }
-        self.send_message(ProtocolMessages.PEER_ID, json_dumps(hello))
+        data = self._get_peer_id_data()
+        self.send_message(ProtocolMessages.PEER_ID, json_dumps(data))
 
     async def handle_peer_id(self, payload: str) -> None:
         """ Executed when a PEER-ID is received. It basically checks
@@ -87,8 +102,7 @@ class PeerIdState(BaseState):
 
         data = json_loads(payload)
 
-        peer = PeerId.create_from_json(data)
-        peer.validate()
+        peer = PublicPeer.create_from_json(data)
         assert peer.id is not None
 
         # If the connection URL had a peer-id parameter we need to check it's the same
@@ -113,10 +127,13 @@ class PeerIdState(BaseState):
                 protocol.send_error_and_close_connection('We are already connected.')
                 return
 
-        entrypoint_valid = await peer.validate_entrypoint(protocol)
+        entrypoint_valid = await peer.info.validate_entrypoint(protocol)
         if not entrypoint_valid:
             protocol.send_error_and_close_connection('Connection string is not in the entrypoints.')
             return
+
+        if protocol.entrypoint is not None and protocol.entrypoint.peer_id is not None:
+            assert protocol.entrypoint.peer_id == peer.id
 
         if protocol.use_ssl:
             certificate_valid = peer.validate_certificate(protocol)
@@ -125,7 +142,7 @@ class PeerIdState(BaseState):
                 return
 
         # If it gets here, the peer is validated, and we are ready to start communicating.
-        protocol.peer = peer
+        protocol._peer = peer
 
         context = NetfilterContext(
             protocol=protocol,
@@ -139,7 +156,7 @@ class PeerIdState(BaseState):
 
         self.send_ready()
 
-    def _should_block_peer(self, peer_id: str) -> bool:
+    def _should_block_peer(self, peer_id: PeerId) -> bool:
         """ Determine if peer should not be allowed to connect.
 
         Currently this is only because the peer is not in a whitelist and whitelist blocking is active.

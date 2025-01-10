@@ -6,7 +6,7 @@ from twisted.internet.testing import StringTransport
 from hathor.wallet import HDWallet
 from hathor.websocket.factory import HathorAdminWebsocketFactory
 from hathor.websocket.iterators import AddressItem, ManualAddressSequencer, gap_limit_search
-from hathor.websocket.streamer import HistoryStreamer
+from hathor.websocket.streamer import HistoryStreamer, StreamerState
 from tests.unittest import TestCase
 from tests.utils import GENESIS_ADDRESS_B58
 
@@ -39,7 +39,11 @@ class AsyncIteratorsTestCase(TestCase):
             addresses.append(AddressItem(idx, wallet.get_address(wallet.get_key_at_index(idx))))
 
         # Create the expected result.
-        expected_result: list[dict[str, Any]] = [{'type': 'stream:history:begin', 'id': stream_id}]
+        expected_result: list[dict[str, Any]] = [{
+            'type': 'stream:history:begin',
+            'id': stream_id,
+            'window_size': None,
+        }]
         expected_result += [
             {
                 'type': 'stream:history:address',
@@ -56,6 +60,8 @@ class AsyncIteratorsTestCase(TestCase):
             'data': genesis.to_json_extended(),
         })
         expected_result.append({'type': 'stream:history:end', 'id': stream_id})
+        for index, item in enumerate(expected_result):
+            item['seq'] = index
 
         # Create both the address iterator and the GAP limit searcher.
         address_iter = ManualAddressSequencer()
@@ -79,6 +85,13 @@ class AsyncIteratorsTestCase(TestCase):
 
         # Run the streamer.
         manager.reactor.advance(10)
+
+        # Check the streamer is waiting for the last ACK.
+        self.assertTrue(streamer._state, StreamerState.CLOSING)
+        streamer.set_ack(1)
+        self.assertTrue(streamer._state, StreamerState.CLOSING)
+        streamer.set_ack(len(expected_result) - 1)
+        self.assertTrue(streamer._state, StreamerState.CLOSED)
 
         # Check the results.
         items_iter = self._parse_ws_raw(transport.value())

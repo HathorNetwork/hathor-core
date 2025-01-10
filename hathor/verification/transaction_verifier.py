@@ -147,10 +147,11 @@ class TransactionVerifier:
         the block rewards spent by this tx itself, and the inherited `min_height`."""
         assert tx.storage is not None
         best_height = get_minimum_best_height(tx.storage)
-        self.verify_reward_locked_for_height(tx, best_height)
+        self.verify_reward_locked_for_height(self._settings, tx, best_height)
 
     @staticmethod
     def verify_reward_locked_for_height(
+        settings: HathorSettings,
         tx: Transaction,
         best_height: int,
         *,
@@ -174,18 +175,17 @@ class TransactionVerifier:
         and a normal `RewardLocked` exception is raised instead.
         """
         assert tx.storage is not None
-        info = get_spent_reward_locked_info(tx, tx.storage)
+        info = get_spent_reward_locked_info(settings, tx, tx.storage)
         if info is not None:
             raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
 
-        meta = tx.get_metadata()
-        assert meta.min_height is not None
+        min_height = tx.static_metadata.min_height
         # We use +1 here because a tx is valid if it can be confirmed by the next block
-        if best_height + 1 < meta.min_height:
+        if best_height + 1 < min_height:
             if assert_min_height_verification:
                 raise AssertionError('a new tx should never be invalid by its inherited min_height.')
             raise RewardLocked(
-                f'Tx {tx.hash_hex} has min_height={meta.min_height}, but the best_height={best_height}.'
+                f'Tx {tx.hash_hex} has min_height={min_height}, but the best_height={best_height}.'
             )
 
     def verify_number_of_inputs(self, tx: Transaction) -> None:

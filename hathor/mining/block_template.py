@@ -36,7 +36,7 @@ class BlockTemplate(NamedTuple):
     parents: list[bytes]  # required parents, will always have a block and at most 2 txs
     parents_any: list[bytes]  # list of extra parents to choose from when there are more options
     height: int  # metadata
-    score: float  # metadata
+    score: int  # metadata
     signal_bits: int  # signal bits for blocks generated from this template
 
     def generate_minimally_valid_block(self) -> BaseTransaction:
@@ -80,7 +80,7 @@ class BlockTemplate(NamedTuple):
         block = cls(outputs=tx_outputs, parents=parents, timestamp=block_timestamp,
                     data=data or b'', storage=storage, weight=self.weight, signal_bits=self.signal_bits)
         if include_metadata:
-            block._metadata = TransactionMetadata(height=self.height, score=self.score)
+            block._metadata = TransactionMetadata(score=self.score)
         block.get_metadata(use_storage=False)
         return block
 

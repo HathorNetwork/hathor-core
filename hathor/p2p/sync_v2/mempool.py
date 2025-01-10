@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Generator, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
+from hathor.exception import InvalidNewTransaction
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
@@ -35,8 +36,8 @@ class SyncMempoolManager:
 
         # Shortcuts.
         self.sync_agent = sync_agent
-        self.manager = self.sync_agent.manager
-        self.tx_storage = self.manager.tx_storage
+        self.vertex_handler = self.sync_agent.vertex_handler
+        self.tx_storage = self.sync_agent.tx_storage
         self.reactor = self.sync_agent.reactor
 
         self._deferred: Optional[Deferred[bool]] = None
@@ -74,6 +75,8 @@ class SyncMempoolManager:
         is_synced = False
         try:
             is_synced = yield self._unsafe_run()
+        except InvalidNewTransaction:
+            return
         finally:
             # sync_agent.run_sync will start it again when needed
             self._is_running = False
@@ -134,4 +137,12 @@ class SyncMempoolManager:
     def _add_tx(self, tx: BaseTransaction) -> None:
         """Add tx to the DAG."""
         self.missing_tips.discard(tx.hash)
-        self.manager.on_new_tx(tx)
+        if self.tx_storage.transaction_exists(tx.hash):
+            return
+        try:
+            success = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+            if success:
+                self.sync_agent.protocol.connections.send_tx_to_peers(tx)
+        except InvalidNewTransaction:
+            self.sync_agent.protocol.send_error_and_close_connection('invalid vertex received')
+            raise

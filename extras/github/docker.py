@@ -97,12 +97,9 @@ def prep_tags(environ: Dict, base_version: str, is_release_candidate: bool):
 
     tags = set()
 
-    # We don't want a tag with a python suffix for release-candidates
-    if is_release_candidate:
-        version = base_version
-    else:
-        version = base_version + '-' + suffix
-        tags.add(version)
+    # Always include -python{Version} suffix variant
+    version = base_version + '-' + suffix
+    tags.add(version)
 
     if suffix == default_python:
         tags.add(base_version)

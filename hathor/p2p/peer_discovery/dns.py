@@ -15,7 +15,7 @@
 import socket
 from collections.abc import Iterator
 from itertools import chain
-from typing import Callable, TypeAlias, cast
+from typing import Callable, TypeAlias
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, gatherResults
@@ -23,7 +23,7 @@ from twisted.names.client import lookupAddress, lookupText
 from twisted.names.dns import Record_A, Record_TXT, RRHeader
 from typing_extensions import override
 
-from hathor.p2p.entrypoint import Entrypoint, Protocol
+from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint, Protocol
 
 from .peer_discovery import PeerDiscovery
 
@@ -53,34 +53,34 @@ class DNSPeerDiscovery(PeerDiscovery):
         return lookupText(host)
 
     @override
-    async def discover_and_connect(self, connect_to: Callable[[Entrypoint], None]) -> None:
+    async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
         """ Run DNS lookup for host and connect to it
             This is executed when starting the DNS Peer Discovery and first connecting to the network
         """
         for host in self.hosts:
             for entrypoint in (await self.dns_seed_lookup(host)):
-                connect_to(entrypoint)
+                connect_to_endpoint(entrypoint)
 
-    async def dns_seed_lookup(self, host: str) -> set[Entrypoint]:
+    async def dns_seed_lookup(self, host: str) -> set[PeerEndpoint]:
         """ Run a DNS lookup for TXT, A, and AAAA records and return a list of connection strings.
         """
         if self.test_mode:
             # Useful for testing purposes, so we don't need to execute a DNS query
-            return {Entrypoint.parse('tcp://127.0.0.1:40403')}
+            return {PeerEndpoint.parse('tcp://127.0.0.1:40403')}
 
-        deferreds = []
+        deferreds: list[Deferred[Iterator[PeerEndpoint]]] = []
 
-        d1 = self.do_lookup_text(host)
-        d1.addCallback(self.dns_seed_lookup_text)
-        d1.addErrback(self.errback)
-        deferreds.append(cast(Deferred[Iterator[Entrypoint]], d1))  # mypy doesn't know how addCallback affects d1
+        d1 = self.do_lookup_text(host) \
+            .addCallback(self.dns_seed_lookup_text) \
+            .addErrback(self.errback)
+        deferreds.append(d1)
 
-        d2 = self.do_lookup_address(host)
-        d2.addCallback(self.dns_seed_lookup_address)
-        d2.addErrback(self.errback)
-        deferreds.append(cast(Deferred[Iterator[Entrypoint]], d2))  # mypy doesn't know how addCallback affects d2
+        d2 = self.do_lookup_address(host) \
+            .addCallback(self.dns_seed_lookup_address) \
+            .addErrback(self.errback)
+        deferreds.append(d2)
 
-        results: list[Iterator[Entrypoint]] = await gatherResults(deferreds)
+        results: list[Iterator[PeerEndpoint]] = await gatherResults(deferreds)
         return set(chain(*results))
 
     def errback(self, result):
@@ -89,7 +89,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         self.log.error('errback', result=result)
         return []
 
-    def dns_seed_lookup_text(self, results: LookupResult) -> Iterator[Entrypoint]:
+    def dns_seed_lookup_text(self, results: LookupResult) -> Iterator[PeerEndpoint]:
         """ Run a DNS lookup for TXT records to discover new peers.
 
         The `results` has three lists that contain answer records, authority records, and additional records.
@@ -100,14 +100,14 @@ class DNSPeerDiscovery(PeerDiscovery):
             for txt in record.payload.data:
                 raw_entrypoint = txt.decode('utf-8')
                 try:
-                    entrypoint = Entrypoint.parse(raw_entrypoint)
+                    entrypoint = PeerEndpoint.parse(raw_entrypoint)
                 except ValueError:
                     self.log.warning('could not parse entrypoint, skipping it', raw_entrypoint=raw_entrypoint)
                     continue
                 self.log.info('seed DNS TXT found', entrypoint=str(entrypoint))
                 yield entrypoint
 
-    def dns_seed_lookup_address(self, results: LookupResult) -> Iterator[Entrypoint]:
+    def dns_seed_lookup_address(self, results: LookupResult) -> Iterator[PeerEndpoint]:
         """ Run a DNS lookup for A records to discover new peers.
 
         The `results` has three lists that contain answer records, authority records, and additional records.
@@ -118,6 +118,6 @@ class DNSPeerDiscovery(PeerDiscovery):
             address = record.payload.address
             assert address is not None
             host = socket.inet_ntoa(address)
-            entrypoint = Entrypoint(Protocol.TCP, host, self.default_port)
+            entrypoint = PeerAddress(Protocol.TCP, host, self.default_port).with_id()
             self.log.info('seed DNS A found', entrypoint=str(entrypoint))
             yield entrypoint

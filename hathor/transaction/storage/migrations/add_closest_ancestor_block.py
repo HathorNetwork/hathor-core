@@ -16,9 +16,7 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.storage.migrations import BaseMigration
-from hathor.util import progress
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage
@@ -31,24 +29,9 @@ class Migration(BaseMigration):
         return True
 
     def get_db_name(self) -> str:
-        return 'remove_second_nop_features'
+        return 'add_closest_ancestor_block'
 
     def run(self, storage: 'TransactionStorage') -> None:
-        """
-        This migration clears the Feature Activation metadata related to the second Phased Testing on testnet.
-        """
-        settings = get_global_settings()
-        log = logger.new()
-
-        if settings.NETWORK_NAME != 'testnet-golf':
-            # If it's not testnet, we don't have to clear anything.
-            log.info('Skipping testnet-only migration.')
-            return
-
-        topological_iterator = storage.topological_iterator()
-
-        for vertex in progress(topological_iterator, log=log, total=None):
-            if vertex.is_block:
-                meta = vertex.get_metadata()
-                meta.feature_states = None
-                storage.save_transaction(vertex, only_metadata=True)
+        raise Exception('Cannot migrate your database due to an incompatible change in the metadata. '
+                        'Please, delete your data folder and use the latest available snapshot or sync '
+                        'from beginning.')

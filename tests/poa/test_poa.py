@@ -26,6 +26,7 @@ from hathor.crypto.util import get_address_b58_from_public_key, get_private_key_
 from hathor.transaction import Block, TxOutput
 from hathor.transaction.exceptions import PoaValidationError
 from hathor.transaction.poa import PoaBlock
+from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
 
 
@@ -107,8 +108,14 @@ def test_verify_poa() -> None:
         weight=poa.BLOCK_WEIGHT_IN_TURN,
         parents=[b'parent1', b'parent2'],
     )
-    block._metadata = Mock()
-    block._metadata.height = 2
+    block.set_static_metadata(
+        BlockStaticMetadata(
+            min_height=0,
+            height=2,
+            feature_activation_bit_counts=[],
+            feature_states={},
+        )
+    )
 
     # Test no rewards
     block.outputs = [TxOutput(123, b'')]
@@ -190,7 +197,21 @@ def test_verify_poa() -> None:
     assert str(e.value) == 'block weight is 1.0, expected 2.0'
 
     # When we increment the height, the turn inverts
-    block._metadata.height += 1
+    block = PoaBlock(
+        storage=storage,
+        timestamp=153,
+        signal_bits=0b1010,
+        weight=poa.BLOCK_WEIGHT_IN_TURN,
+        parents=[b'parent1', b'parent2'],
+    )
+    block.set_static_metadata(
+        BlockStaticMetadata(
+            min_height=0,
+            height=3,
+            feature_activation_bit_counts=[],
+            feature_states={},
+        )
+    )
 
     # Test valid signature with two signers, in turn
     block.weight = poa.BLOCK_WEIGHT_IN_TURN

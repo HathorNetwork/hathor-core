@@ -1,8 +1,11 @@
+import base64
+
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
+from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.simulator import FakeConnection
 from hathor.transaction import Block, Transaction
-from hathor.util import not_none
+from hathor.util import json_loadb, not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
@@ -111,6 +114,74 @@ class SyncV2HathorSyncMempoolTestCase(unittest.SyncV2Params, BaseHathorSyncMempo
         # 8 txs
         self.assertEqual(len(self.manager2.tx_storage.indexes.mempool_tips.get()), 1)
         self.assertEqual(len(self.manager1.tx_storage.indexes.mempool_tips.get()), 1)
+
+    def test_mempool_invalid_new_tx(self) -> None:
+        # 10 blocks
+        self._add_new_blocks(2)
+        # N blocks to unlock the reward
+        add_blocks_unlock_reward(self.manager1)
+
+        # 5 transactions to be confirmed by the next blocks
+        self._add_new_transactions(5)
+        # 2 more blocks
+        self._add_new_blocks(2)
+        # 30 transactions in the mempool
+        txs = self._add_new_transactions(30)
+
+        self.manager2 = self.create_peer(self.network, enable_sync_v1=True)
+        self.assertEqual(self.manager2.state, self.manager2.NodeState.READY)
+
+        conn = FakeConnection(self.manager1, self.manager2)
+
+        # inject invalid tx in manager1 to be sent to manager2 through mempool-sync
+        invalid_tx = txs[0].clone()
+        invalid_tx.parents[1] = invalid_tx.parents[0]  # duplicate parents
+        cpu_mining = CpuMiningService()
+        cpu_mining.resolve(invalid_tx)
+        self.manager1.tx_storage.save_transaction(invalid_tx)
+        self.manager1.tx_storage.indexes.mempool_tips.update(invalid_tx)
+        self.log.debug('YYY invalid tx injected', tx=invalid_tx.hash_hex)
+
+        # advance until the invalid transaction is requested
+        for _ in range(1000):
+            if conn.is_empty():
+                break
+            conn.run_one_step(debug=True)
+            self.clock.advance(1)
+            msg = conn.peek_tr2_value()
+            if not msg.startswith(b'GET-DATA'):
+                continue
+            request = json_loadb(msg.partition(b' ')[2])
+            if request.get('origin') == 'mempool' and request['txid'] == invalid_tx.hash_hex:
+                break
+        else:
+            self.fail('took too many iterations')
+
+        request_txid = request['txid']
+
+        # keep going until the response is sent
+        for _ in range(10):
+            if conn.is_empty():
+                break
+            conn.run_one_step(debug=True)
+            self.clock.advance(1)
+            msg = conn.peek_tr1_value()
+            if not msg.startswith(b'DATA'):
+                continue
+            _, _, payload = msg.partition(b' ')
+            origin, _, tx_encoded = payload.partition(b' ')
+            self.assertEqual(origin, b'mempool')
+            tx_data = base64.b64decode(tx_encoded)
+            tx = self.manager2.vertex_parser.deserialize(tx_data)
+            self.assertEqual(tx.hash_hex, request_txid)
+            break
+        else:
+            self.fail('took too many iterations')
+
+        # manager2 will fail to add the transaction and will start to disconnect
+        self.assertFalse(conn.tr2.disconnecting)
+        conn.run_one_step(debug=True)
+        self.assertTrue(conn.tr2.disconnecting)
 
 
 # sync-bridge should behave like sync-v2

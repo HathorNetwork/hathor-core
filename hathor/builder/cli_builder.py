@@ -34,21 +34,23 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import Random, not_none
+from hathor.util import Random
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
+
+DEFAULT_CACHE_SIZE: int = 100000
 
 
 class SyncChoice(Enum):
@@ -98,7 +100,11 @@ class CliBuilder:
         self.log = logger.new()
         self.reactor = reactor
 
-        peer_id = PeerId.create_from_json_path(self._args.peer) if self._args.peer else PeerId()
+        peer: PrivatePeer
+        if self._args.peer:
+            peer = PrivatePeer.create_from_json_path(self._args.peer)
+        else:
+            peer = PrivatePeer.auto_generated()
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
         self.log.info(
@@ -106,7 +112,7 @@ class CliBuilder:
             hathor=hathor.__version__,
             pid=os.getpid(),
             genesis=get_genesis_short_hash(),
-            my_peer_id=str(peer_id.id),
+            my_peer_id=str(peer.id),
             python=python,
             platform=platform.platform(),
             settings=settings_source,
@@ -149,8 +155,8 @@ class CliBuilder:
             else:
                 indexes = RocksDBIndexesManager(self.rocksdb_storage)
 
-            kwargs = {}
-            if not self._args.cache:
+            kwargs: dict[str, Any] = {}
+            if self._args.disable_cache:
                 # We should only pass indexes if cache is disabled. Otherwise,
                 # only TransactionCacheStorage should have indexes.
                 kwargs['indexes'] = indexes
@@ -161,14 +167,27 @@ class CliBuilder:
             feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
+
         if self._args.cache:
-            self.check_or_raise(not self._args.memory_storage, '--cache should not be used with --memory-storage')
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
+            self.log.warn('--cache is now the default and will be removed')
+
+        if self._args.disable_cache:
+            self.check_or_raise(self._args.cache_size is None, 'cannot use --disable-cache with --cache-size')
+            self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
+
+        if self._args.memory_storage:
             if self._args.cache_size:
-                tx_storage.capacity = self._args.cache_size
+                self.log.warn('using --cache-size with --memory-storage has no effect')
+            if self._args.cache_interval:
+                self.log.warn('using --cache-interval with --memory-storage has no effect')
+
+        if not self._args.disable_cache and not self._args.memory_storage:
+            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
+            tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
             if self._args.cache_interval:
                 tx_storage.interval = self._args.cache_interval
             self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
+
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
 
@@ -178,7 +197,6 @@ class CliBuilder:
             self.log.info('with wallet', wallet=self.wallet, path=self._args.data)
 
         hostname = self.get_hostname()
-        network = settings.NETWORK_NAME
 
         sync_choice: SyncChoice
         if self._args.sync_bridge:
@@ -224,9 +242,12 @@ class CliBuilder:
         pubsub = PubSubManager(reactor)
 
         if self._args.x_enable_event_queue:
+            self.log.warn('--x-enable-event-queue is deprecated and will be removed, use --enable-event-queue instead')
+
+        if self._args.x_enable_event_queue or self._args.enable_event_queue:
             self.event_ws_factory = EventWebsocketFactory(
-                peer_id=not_none(peer_id.id),
-                network=network,
+                peer_id=str(peer.id),
+                settings=settings,
                 reactor=reactor,
                 event_storage=event_storage
             )
@@ -252,8 +273,8 @@ class CliBuilder:
         full_verification = False
         if self._args.x_full_verification:
             self.check_or_raise(
-                not self._args.x_enable_event_queue,
-                '--x-full-verification cannot be used with --x-enable-event-queue'
+                not self._args.x_enable_event_queue and not self._args.enable_event_queue,
+                '--x-full-verification cannot be used with --enable-event-queue'
             )
             full_verification = True
 
@@ -264,17 +285,14 @@ class CliBuilder:
             execution_manager=execution_manager
         )
 
-        if self._args.x_enable_event_queue:
-            self.log.info('--x-enable-event-queue flag provided. '
+        if self._args.x_enable_event_queue or self._args.enable_event_queue:
+            self.log.info('--enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
-        self.feature_service = FeatureService(
-            feature_settings=settings.FEATURE_ACTIVATION,
-            tx_storage=tx_storage
-        )
+        self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
         bit_signaling_service = BitSignalingService(
-            feature_settings=settings.FEATURE_ACTIVATION,
+            settings=settings,
             feature_service=self.feature_service,
             tx_storage=tx_storage,
             support_features=self._args.signal_support,
@@ -295,21 +313,25 @@ class CliBuilder:
             daa=daa,
             feature_service=self.feature_service
         )
-        verification_service = VerificationService(settings=settings, verifiers=vertex_verifiers)
+        verification_service = VerificationService(
+            settings=settings,
+            verifiers=vertex_verifiers,
+            tx_storage=tx_storage,
+        )
 
         cpu_mining_service = CpuMiningService()
 
         p2p_manager = ConnectionsManager(
             settings=settings,
             reactor=reactor,
-            network=network,
-            my_peer=peer_id,
+            my_peer=peer,
             pubsub=pubsub,
             ssl=True,
             whitelist_only=False,
             rng=Random(),
+            enable_ipv6=self._args.x_enable_ipv6,
+            disable_ipv4=self._args.x_disable_ipv4,
         )
-        SyncSupportLevel.add_factories(settings, p2p_manager, sync_v1_support, sync_v2_support, vertex_parser)
 
         vertex_handler = VertexHandler(
             reactor=reactor,
@@ -317,11 +339,19 @@ class CliBuilder:
             tx_storage=tx_storage,
             verification_service=verification_service,
             consensus=consensus_algorithm,
-            p2p_manager=p2p_manager,
             feature_service=self.feature_service,
             pubsub=pubsub,
             wallet=self.wallet,
             log_vertex_bytes=self._args.log_vertex_bytes,
+        )
+
+        SyncSupportLevel.add_factories(
+            settings,
+            p2p_manager,
+            sync_v1_support,
+            sync_v2_support,
+            vertex_parser,
+            vertex_handler,
         )
 
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
@@ -339,20 +369,19 @@ class CliBuilder:
         self.manager = HathorManager(
             reactor,
             settings=settings,
-            network=network,
             hostname=hostname,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
             daa=daa,
-            peer_id=peer_id,
+            peer=peer,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
             event_manager=event_manager,
             wallet=self.wallet,
             checkpoints=settings.CHECKPOINTS,
-            environment_info=get_environment_info(args=str(self._args), peer_id=peer_id.id),
+            environment_info=get_environment_info(args=str(self._args), peer_id=str(peer.id)),
             full_verification=full_verification,
-            enable_event_queue=self._args.x_enable_event_queue,
+            enable_event_queue=self._args.x_enable_event_queue or self._args.enable_event_queue,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
@@ -396,7 +425,7 @@ class CliBuilder:
             p2p_manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
 
         if self._args.bootstrap:
-            entrypoints = [Entrypoint.parse(desc) for desc in self._args.bootstrap]
+            entrypoints = [PeerEndpoint.parse(desc) for desc in self._args.bootstrap]
             p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(entrypoints))
 
         if self._args.x_rocksdb_indexes:

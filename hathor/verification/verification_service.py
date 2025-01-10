@@ -18,6 +18,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.poa import PoaBlock
+from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.validation_state import ValidationState
@@ -28,11 +29,18 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('_settings', 'verifiers')
+    __slots__ = ('_settings', 'verifiers', '_tx_storage')
 
-    def __init__(self, *, settings: HathorSettings, verifiers: VertexVerifiers) -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        verifiers: VertexVerifiers,
+        tx_storage: TransactionStorage | None = None,
+    ) -> None:
         self._settings = settings
         self.verifiers = verifiers
+        self._tx_storage = tx_storage
 
     def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -54,15 +62,19 @@ class VerificationService:
         *,
         skip_block_weight_verification: bool = False,
         sync_checkpoints: bool = False,
-        reject_locked_reward: bool = True
+        reject_locked_reward: bool = True,
+        init_static_metadata: bool = True,
     ) -> bool:
         """ Run full validations (these need access to all dependencies) and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
+        assert self._tx_storage is not None
         from hathor.transaction.transaction_metadata import ValidationState
 
         meta = vertex.get_metadata()
+        if init_static_metadata:
+            vertex.init_static_metadata_from_storage(self._settings, self._tx_storage)
 
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
@@ -182,6 +194,7 @@ class VerificationService:
         self.verifiers.block.verify_mandatory_signaling(block)
 
     def _verify_merge_mined_block(self, block: MergeMinedBlock) -> None:
+        self.verifiers.merge_mined_block.verify_aux_pow(block)
         self._verify_block(block)
 
     def _verify_poa_block(self, block: PoaBlock) -> None:
@@ -262,7 +275,6 @@ class VerificationService:
         self._verify_without_storage_base_block(block)
 
     def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
-        self.verifiers.merge_mined_block.verify_aux_pow(block)
         self._verify_without_storage_block(block)
 
     def _verify_without_storage_poa_block(self, block: PoaBlock) -> None:

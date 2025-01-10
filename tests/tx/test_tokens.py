@@ -112,7 +112,7 @@ class BaseTokenTest(unittest.TestCase):
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx2)
-        tx2.update_reward_lock_metadata()
+        tx2.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.manager.verification_service.verify(tx2)
 
         # missing tokens

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" Generates a random PeerId and print it to stdout.
+""" Generates a random Peer and print it to stdout.
 It may be used to testing purposes.
 """
 
@@ -20,9 +20,9 @@ import json
 
 
 def main() -> None:
-    from hathor.p2p.peer_id import PeerId
+    from hathor.p2p.peer import PrivatePeer
 
-    peer_id = PeerId()
-    data = peer_id.to_json(include_private_key=True)
+    peer = PrivatePeer.auto_generated()
+    data = peer.to_json_private()
     txt = json.dumps(data, indent=4)
     print(txt)

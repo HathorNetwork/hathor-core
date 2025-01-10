@@ -48,6 +48,7 @@ class CliManager:
             oracle_create_key,
             oracle_encode_data,
             oracle_get_pubkey,
+            parse_logs,
             peer_id,
             quick_test,
             replay_logs,
@@ -57,6 +58,7 @@ class CliManager:
             shell,
             side_dag,
             stratum_mining,
+            top,
             twin_tx,
             tx_generator,
             wallet,
@@ -69,9 +71,7 @@ class CliManager:
         self.add_cmd('mining', 'run_stratum_miner', stratum_mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
-        if sys.platform != 'win32':
-            from . import top
-            self.add_cmd('hathor', 'top', top, 'CPU profiler viewer')
+        self.add_cmd('hathor', 'top', top, 'CPU profiler viewer')
         self.add_cmd('side-dag', 'run_node_with_side_dag', side_dag, 'Run a side-dag')
         self.add_cmd('side-dag', 'gen_poa_keys', generate_poa_keys, 'Generate a private/public key pair and its '
                                                                     'address to be used in Proof-of-Authority')
@@ -98,8 +98,10 @@ class CliManager:
         self.add_cmd('dev', 'events_simulator', events_simulator, 'Simulate integration events via websocket')
         self.add_cmd('dev', 'x-export', db_export, 'EXPERIMENTAL: Export database to a simple format.')
         self.add_cmd('dev', 'x-import', db_import, 'EXPERIMENTAL: Import database from exported format.')
-        self.add_cmd('dev', 'replay-logs', replay_logs, 'EXPERIMENTAL: re-play json logs as console printted')
-        self.add_cmd('dev', 'load-from-logs', load_from_logs, 'Load vertices as they are found in a log dump')
+        self.add_cmd('dev', 'replay-logs', replay_logs, 'EXPERIMENTAL: re-play json logs as console printed')
+        self.add_cmd('dev', 'load-from-logs', load_from_logs,
+                     'Load vertices as they are found in a log dump that was parsed with parse-logs')
+        self.add_cmd('dev', 'parse-logs', parse_logs, 'Parse a log dump to use it with load-from-logs')
 
     def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: Optional[str] = None) -> None:
         self.command_list[cmd] = module

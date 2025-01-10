@@ -3,6 +3,10 @@ import unittest
 
 from extras.github.docker import prep_base_version, prep_tags
 
+DEFAULT_PYTHON_VERSION = '3.11'
+NON_DEFAULT_PYTHON_VERSION = '3.10'
+
+
 class DockerWorkflowTest(unittest.TestCase):
     def setUp(self):
         os.environ.update({
@@ -17,7 +21,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.10',
+            'MATRIX_PYTHON_VERSION': DEFAULT_PYTHON_VERSION,
             'SECRETS_DOCKERHUB_IMAGE': '',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -32,7 +36,7 @@ class DockerWorkflowTest(unittest.TestCase):
         output = prep_tags(os.environ, base_version, is_release_candidate)
 
         self.assertEqual(output['slack-notification-version'], base_version)
-        self.assertEqual(output['version'], base_version + '-python3.10')
+        self.assertEqual(output['version'], base_version + f'-python{DEFAULT_PYTHON_VERSION}')
         self.assertEqual(output['login-dockerhub'], 'false')
         self.assertEqual(output['login-ghcr'], 'false')
         self.assertEqual(output['tags'], 'dont-push--local-only')
@@ -47,7 +51,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.10',
+            'MATRIX_PYTHON_VERSION': DEFAULT_PYTHON_VERSION,
             'SECRETS_DOCKERHUB_IMAGE': 'mock_image',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -62,12 +66,12 @@ class DockerWorkflowTest(unittest.TestCase):
         output = prep_tags(os.environ, base_version, is_release_candidate)
 
         self.assertEqual(output['slack-notification-version'], base_version)
-        self.assertEqual(output['version'], base_version + '-python3.10')
+        self.assertEqual(output['version'], base_version + f'-python{DEFAULT_PYTHON_VERSION}')
         self.assertEqual(output['login-dockerhub'], 'true')
         self.assertEqual(output['login-ghcr'], 'false')
         self.assertEqual(len(output['tags'].split(',')), 2)
         self.assertIn('mock_image:nightly-55629a7d', output['tags'].split(','))
-        self.assertIn('mock_image:nightly-55629a7d-python3.10', output['tags'].split(','))
+        self.assertIn(f'mock_image:nightly-55629a7d-python{DEFAULT_PYTHON_VERSION}', output['tags'].split(','))
         self.assertEqual(output['push'], 'true')
         self.assertEqual(output['dockerfile'], 'Dockerfile')
 
@@ -80,7 +84,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.11',
+            'MATRIX_PYTHON_VERSION': NON_DEFAULT_PYTHON_VERSION,
             'SECRETS_DOCKERHUB_IMAGE': 'mock_image',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -93,13 +97,14 @@ class DockerWorkflowTest(unittest.TestCase):
         self.assertEqual(base_version, 'v0.53.0-rc.1')
 
         output = prep_tags(os.environ, base_version, is_release_candidate)
+        version_with_python = f'{base_version}-python{NON_DEFAULT_PYTHON_VERSION}'
 
         self.assertNotIn('slack-notification-version', output)
-        self.assertEqual(output['version'], base_version)
+        self.assertEqual(output['version'], version_with_python)
         self.assertEqual(output['login-dockerhub'], 'true')
         self.assertEqual(output['login-ghcr'], 'false')
-        self.assertEqual(output['tags'], 'dont-push--local-only')
-        self.assertEqual(output['push'], 'false')
+        self.assertEqual(output['tags'], f'mock_image:{version_with_python}')
+        self.assertEqual(output['push'], 'true')
         self.assertEqual(output['dockerfile'], 'Dockerfile')
 
     def test_release_candidate_default_python(self):
@@ -110,7 +115,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.10',
+            'MATRIX_PYTHON_VERSION': DEFAULT_PYTHON_VERSION,
             'SECRETS_DOCKERHUB_IMAGE': 'mock_image',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -123,12 +128,16 @@ class DockerWorkflowTest(unittest.TestCase):
         self.assertEqual(base_version, 'v0.53.0-rc.1')
 
         output = prep_tags(os.environ, base_version, is_release_candidate)
+        version_with_python = f'{base_version}-python{DEFAULT_PYTHON_VERSION}'
 
         self.assertEqual(output['slack-notification-version'], base_version)
-        self.assertEqual(output['version'], base_version)
+        self.assertEqual(output['version'], version_with_python)
         self.assertEqual(output['login-dockerhub'], 'true')
         self.assertEqual(output['login-ghcr'], 'false')
-        self.assertEqual(output['tags'], 'mock_image:v0.53.0-rc.1')
+        self.assertEqual(
+            set(output['tags'].split(',')),
+            {f'mock_image:{version_with_python}', 'mock_image:v0.53.0-rc.1'},
+        )
         self.assertEqual(output['push'], 'true')
         self.assertEqual(output['dockerfile'], 'Dockerfile')
 
@@ -140,7 +149,7 @@ class DockerWorkflowTest(unittest.TestCase):
             'GITHUB_EVENT_DEFAULT_BRANCH': 'master',
             'GITHUB_EVENT_NUMBER': '',
             'MATRIX_PYTHON_IMPL': 'python',
-            'MATRIX_PYTHON_VERSION': '3.10',
+            'MATRIX_PYTHON_VERSION': DEFAULT_PYTHON_VERSION,
             'SECRETS_DOCKERHUB_IMAGE': 'mock_image',
             'SECRETS_GHCR_IMAGE': '',
         })
@@ -155,12 +164,12 @@ class DockerWorkflowTest(unittest.TestCase):
         output = prep_tags(os.environ, base_version, is_release_candidate)
 
         self.assertEqual(output['slack-notification-version'], base_version)
-        self.assertEqual(output['version'], base_version + '-python3.10')
+        self.assertEqual(output['version'], base_version + f'-python{DEFAULT_PYTHON_VERSION}')
         self.assertEqual(output['login-dockerhub'], 'true')
         self.assertEqual(output['login-ghcr'], 'false')
         self.assertEqual(len(output['tags'].split(',')), 4)
-        self.assertIn('mock_image:v0.53-python3.10', output['tags'].split(','))
-        self.assertIn('mock_image:v0.53.0-python3.10', output['tags'].split(','))
+        self.assertIn(f'mock_image:v0.53-python{DEFAULT_PYTHON_VERSION}', output['tags'].split(','))
+        self.assertIn(f'mock_image:v0.53.0-python{DEFAULT_PYTHON_VERSION}', output['tags'].split(','))
         self.assertIn('mock_image:v0.53.0', output['tags'].split(','))
         self.assertIn('mock_image:latest', output['tags'].split(','))
         self.assertEqual(output['push'], 'true')

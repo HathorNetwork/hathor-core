@@ -19,8 +19,8 @@ from typing import Any, Optional
 import requests
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.backends.openssl.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509 import Certificate
 from cryptography.x509.oid import NameOID
@@ -29,8 +29,9 @@ from twisted.internet.interfaces import IAddress
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
-from hathor.p2p.entrypoint import Entrypoint
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
+from hathor.p2p.peer_endpoint import PeerEndpoint
+from hathor.p2p.peer_id import PeerId
 from hathor.transaction.genesis import get_representation_for_all_genesis
 
 
@@ -77,7 +78,7 @@ def get_settings_hello_dict(settings: HathorSettings) -> dict[str, Any]:
     return settings_dict
 
 
-async def discover_dns(host: str, test_mode: int = 0) -> list[Entrypoint]:
+async def discover_dns(host: str, test_mode: int = 0) -> list[PeerEndpoint]:
     """ Start a DNS peer discovery object and execute a search for the host
 
         Returns the DNS string from the requested host
@@ -142,7 +143,7 @@ def parse_file(text: str, *, header: Optional[str] = None) -> list[str]:
     return list(nonblank_lines)
 
 
-def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[str]:
+def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[PeerId]:
     """ Parses the list of whitelist peer ids
 
     Example:
@@ -161,12 +162,7 @@ G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 
     """
     lines = parse_file(text, header=header)
-    peerids = {line.split()[0] for line in lines}
-    for peerid in peerids:
-        bpeerid = bytes.fromhex(peerid)
-        if len(bpeerid) != 32:
-            raise ValueError('invalid peerid size')
-    return peerids
+    return {PeerId(line.split()[0]) for line in lines}
 
 
 def format_address(addr: IAddress) -> str:

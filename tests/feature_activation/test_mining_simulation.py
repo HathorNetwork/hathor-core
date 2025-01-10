@@ -70,7 +70,7 @@ class BaseMiningSimulationTest(SimulatorTestCase):
         miner.start()
 
         # There are 3 resources available for miners, and all of them should contain the correct signal_bits
-        get_block_template_resource = GetBlockTemplateResource(manager)
+        get_block_template_resource = GetBlockTemplateResource(manager, settings)
         get_block_template_client = StubSite(get_block_template_resource)
 
         mining_resource = MiningResource(manager)

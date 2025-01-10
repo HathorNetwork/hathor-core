@@ -30,6 +30,8 @@ DECIMAL_PLACES = 2
 GENESIS_TOKEN_UNITS = 1 * (10**9)  # 1B
 GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10**DECIMAL_PLACES)  # 100B
 
+HATHOR_TOKEN_UID = b'\x00'
+
 
 class HathorSettings(NamedTuple):
     # Version byte of the address in P2PKH
@@ -125,7 +127,7 @@ class HathorSettings(NamedTuple):
     MIN_TX_WEIGHT: int = 14
     MIN_SHARE_WEIGHT: int = 21
 
-    HATHOR_TOKEN_UID: bytes = b'\x00'
+    HATHOR_TOKEN_UID: bytes = HATHOR_TOKEN_UID
 
     # Maximum distance between two consecutive blocks (in seconds), except for genesis.
     # This prevent some DoS attacks exploiting the calculation of the score of a side chain.
@@ -286,6 +288,9 @@ class HathorSettings(NamedTuple):
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
 
+    # Maximum number of entrypoints that we accept that a peer broadcasts
+    PEER_MAX_ENTRYPOINTS: int = 30
+
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
 
@@ -362,6 +367,7 @@ class HathorSettings(NamedTuple):
     CAPABILITY_WHITELIST: str = 'whitelist'
     CAPABILITY_SYNC_VERSION: str = 'sync-version'
     CAPABILITY_GET_BEST_BLOCKCHAIN: str = 'get-best-blockchain'
+    CAPABILITY_IPV6: str = 'ipv6'  # peers announcing this capability will be relayed ipv6 entrypoints from other peers
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None
@@ -397,7 +403,7 @@ class HathorSettings(NamedTuple):
     PARTIALLY_VALIDATED_ID: bytes = b'pending-validation'
 
     # Maximum number of sync running simultaneously.
-    MAX_ENABLED_SYNC: int = 16
+    MAX_ENABLED_SYNC: int = 8
 
     # Time to update the peers that are running sync.
     SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds
@@ -427,6 +433,12 @@ class HathorSettings(NamedTuple):
     # Maximum number of tx tips to accept in the initial phase of the mempool sync 1000 is arbitrary, but it should be
     # more than enough for the forseeable future
     MAX_MEMPOOL_RECEIVING_TIPS: int = 1000
+
+    # Max number of peers simultanously stored in the node
+    MAX_VERIFIED_PEERS: int = 10_000
+
+    # Max number of peers simultanously stored per-connection
+    MAX_UNVERIFIED_PEERS_PER_CONN: int = 100
 
     # Used to enable nano contracts.
     #

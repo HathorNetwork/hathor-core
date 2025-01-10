@@ -15,26 +15,28 @@
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
+from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
+from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
     import rocksdb
 
-    from hathor.transaction import BaseTransaction, TransactionMetadata
+    from hathor.transaction import BaseTransaction
 
 logger = get_logger()
 
 _DB_NAME = 'data_v2.db'
 _CF_NAME_TX = b'tx'
 _CF_NAME_META = b'meta'
+_CF_NAME_STATIC_META = b'static-meta'
 _CF_NAME_ATTR = b'attr'
 _CF_NAME_MIGRATIONS = b'migrations'
 
@@ -55,6 +57,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
+        self._cf_static_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_STATIC_META)
         self._cf_attr = rocksdb_storage.get_or_create_column_family(_CF_NAME_ATTR)
         self._cf_migrations = rocksdb_storage.get_or_create_column_family(_CF_NAME_MIGRATIONS)
 
@@ -67,15 +70,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         from hathor.transaction.transaction_metadata import TransactionMetadata
 
         tx = self.vertex_parser.deserialize(tx_data)
-        tx._metadata = TransactionMetadata.create_from_json(json_loadb(meta_data))
+        tx._metadata = TransactionMetadata.from_bytes(meta_data)
         tx.storage = self
         return tx
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)
-
-    def _meta_to_bytes(self, meta: 'TransactionMetadata') -> bytes:
-        return json_dumpb(meta.to_json())
 
     def get_migration_state(self, migration_name: str) -> MigrationState:
         key = migration_name.encode('ascii')
@@ -93,6 +93,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         super().remove_transaction(tx)
         self._db.delete((self._cf_tx, tx.hash))
         self._db.delete((self._cf_meta, tx.hash))
+        self._db.delete((self._cf_static_meta, tx.hash))
         self._remove_from_weakref(tx)
 
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
@@ -105,8 +106,22 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if not only_metadata:
             tx_data = self._tx_to_bytes(tx)
             self._db.put((self._cf_tx, key), tx_data)
-        meta_data = self._meta_to_bytes(tx.get_metadata(use_storage=False))
+        meta_data = tx.get_metadata(use_storage=False).to_bytes()
         self._db.put((self._cf_meta, key), meta_data)
+
+    @override
+    def _save_static_metadata(self, tx: 'BaseTransaction') -> None:
+        self._db.put((self._cf_static_meta, tx.hash), tx.static_metadata.json_dumpb())
+
+    def _load_static_metadata(self, vertex: 'BaseTransaction') -> None:
+        """Set vertex static metadata loaded from what's saved in this storage."""
+        if vertex.is_genesis:
+            vertex.init_static_metadata_from_storage(self._settings, self)
+            return
+        data = self._db.get((self._cf_static_meta, vertex.hash))
+        assert data is not None, f'static metadata not found for vertex {vertex.hash_hex}'
+        static_metadata = VertexStaticMetadata.from_bytes(data, target=vertex)
+        vertex.set_static_metadata(static_metadata)
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         may_exist, _ = self._db.key_may_exist((self._cf_tx, hash_bytes))
@@ -125,6 +140,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             raise TransactionDoesNotExist(hash_bytes.hex())
 
         assert tx._metadata is not None
+        assert tx._static_metadata is not None
         assert tx.hash == hash_bytes
 
         self._save_to_weakref(tx)
@@ -138,6 +154,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         assert meta_data is not None, 'expected metadata to exist when tx exists'
         tx = self._load_from_bytes(tx_data, meta_data)
+        self._load_static_metadata(tx)
         return tx
 
     def _get_tx(self, hash_bytes: bytes, tx_data: bytes) -> 'BaseTransaction':
@@ -145,6 +162,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if tx is None:
             meta_data = self._db.get((self._cf_meta, hash_bytes))
             tx = self._load_from_bytes(tx_data, meta_data)
+            self._load_static_metadata(tx)
             assert tx.hash == hash_bytes
             self._save_to_weakref(tx)
         return tx
