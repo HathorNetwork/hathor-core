@@ -6,9 +6,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseWalletIndexTest(unittest.TestCase):
-    __test__ = False
-
+class WalletIndexTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -54,16 +52,3 @@ class BaseWalletIndexTest(unittest.TestCase):
         wallet_data = self.manager.tx_storage.indexes.addresses.get_from_address(address)
         self.assertEqual(len(wallet_data), 2)
         self.assertEqual(set(wallet_data), set([tx1.hash, tx2.hash]))
-
-
-class SyncV1WalletIndexTest(unittest.SyncV1Params, BaseWalletIndexTest):
-    __test__ = True
-
-
-class SyncV2WalletIndexTest(unittest.SyncV2Params, BaseWalletIndexTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeWalletIndexTest(unittest.SyncBridgeParams, SyncV2WalletIndexTest):
-    pass

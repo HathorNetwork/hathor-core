@@ -9,9 +9,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
-class BaseHathorSyncMethodsTestCase(unittest.TestCase):
-    __test__ = False
-
+class SyncMethodsTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
@@ -88,14 +86,9 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
             self.assertEqual([tx1.hash, tx2.hash], spent_meta.spent_outputs[txin.index])
 
-        # old indexes
-        self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
-        self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
-
-        # new indexes
-        if self.manager1.tx_storage.indexes.mempool_tips is not None:
-            self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
-            self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+        assert self.manager1.tx_storage.indexes.mempool_tips is not None
+        self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+        self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
 
         # Propagate another conflicting transaction, but with higher weight.
         self.manager1.propagate_tx(tx3)
@@ -118,16 +111,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
             self.assertEqual([tx1.hash, tx2.hash, tx3.hash], spent_meta.spent_outputs[txin.index])
 
-        # old indexes
-        self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
-        self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
-        self.assertIn(tx3.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
-
-        # new indexes
-        if self.manager1.tx_storage.indexes.mempool_tips is not None:
-            self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
-            self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
-            self.assertIn(tx3.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+        assert self.manager1.tx_storage.indexes.mempool_tips is not None
+        self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+        self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+        self.assertIn(tx3.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
 
         self.assertConsensusValid(self.manager1)
 
@@ -324,16 +311,3 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         # dot2 = self.manager1.tx_storage.graphviz_funds(format='pdf', acc_weight=True)
         # dot2.render('dot2')
-
-
-class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
-class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
-    pass

@@ -7,9 +7,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseSimulatorIndexesTestCase(unittest.TestCase):
-    __test__ = False
-
+class SimulatorIndexesTestCase(unittest.TestCase):
     def _build_randomized_blockchain(self, *, utxo_index=False):
         tx_storage = TransactionMemoryStorage(settings=self._settings)
         manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True,
@@ -72,10 +70,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         else:
             raise AssertionError('no voided tx found')
 
-        # base tips indexes
-        base_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        base_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        base_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
+        # base indexes
         base_address_index = deepcopy(tx_storage.indexes.addresses.index)
         base_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
@@ -84,15 +79,9 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         tx_storage.indexes.enable_address_index(self.manager.pubsub)
         tx_storage._manually_initialize_indexes()
 
-        reinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        reinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        reinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
         reinit_address_index = deepcopy(tx_storage.indexes.addresses.index)
         reinit_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
-        self.assertEqual(reinit_all_tips_tree, base_all_tips_tree)
-        self.assertEqual(reinit_block_tips_tree, base_block_tips_tree)
-        self.assertEqual(reinit_tx_tips_tree, base_tx_tips_tree)
         self.assertEqual(reinit_address_index, base_address_index)
         self.assertEqual(reinit_utxo_index, base_utxo_index)
 
@@ -101,15 +90,9 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         tx_storage.indexes.enable_address_index(self.manager.pubsub)
         tx_storage._manually_initialize_indexes()
 
-        newinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        newinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        newinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
         newinit_address_index = deepcopy(tx_storage.indexes.addresses.index)
         newinit_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
-        self.assertEqual(newinit_all_tips_tree, base_all_tips_tree)
-        self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
-        self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
         self.assertEqual(newinit_address_index, base_address_index)
         self.assertEqual(newinit_utxo_index, base_utxo_index)
 
@@ -139,16 +122,3 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
             self.assertEqual(len(txs), total_count, f'iterator "{name}" does not cover all txs')
             # must be topological
             self.assertIsTopological(iter(txs), f'iterator "{name}" is not topological')
-
-
-class SyncV1SimulatorIndexesTestCase(unittest.SyncV1Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
-
-
-class SyncV2SimulatorIndexesTestCase(unittest.SyncV2Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeSimulatorIndexesTestCase(unittest.SyncBridgeParams, SyncV2SimulatorIndexesTestCase):
-    __test__ = True

@@ -11,9 +11,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseMultisigTestCase(unittest.TestCase):
-    __test__ = False
-
+class MultisigTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -139,16 +137,3 @@ class BaseMultisigTestCase(unittest.TestCase):
         # Script error
         with self.assertRaises(ScriptError):
             create_output_script(base58.b58decode('55d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'))
-
-
-class SyncV1MultisigTestCase(unittest.SyncV1Params, BaseMultisigTestCase):
-    __test__ = True
-
-
-class SyncV2MultisigTestCase(unittest.SyncV2Params, BaseMultisigTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMultisigTestCase(unittest.SyncBridgeParams, SyncV2MultisigTestCase):
-    pass

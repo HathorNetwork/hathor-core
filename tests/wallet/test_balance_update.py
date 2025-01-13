@@ -8,9 +8,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, create_tokens
 
 
-class BaseHathorSyncMethodsTestCase(unittest.TestCase):
-    __test__ = False
-
+class HathorSyncMethodsTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -435,16 +433,3 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         balances_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
         self.assertEqual(hathor_balance.available, sum(x for x in balances_per_address.values()))
-
-
-class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
-class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
-    pass

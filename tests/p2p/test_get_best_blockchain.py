@@ -8,13 +8,21 @@ from hathor.p2p.utils import to_height_info
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
 from hathor.util import json_dumps
-from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
 
 
-class BaseGetBestBlockchainTestCase(SimulatorTestCase):
+def check_decreasing_monotonicity(sequence: list[int]) -> bool:
+    """Check if a sequence is monotonic and is decreasing. Raise an exception otherwise.
+    """
+    n = len(sequence)
+    for i in range(1, n):
+        if sequence[i] >= sequence[i-1]:
+            raise ValueError(f'Sequence not monotonic. Value {sequence[i]} >= {sequence[i-1]}. Index: {i}.')
+    return True
 
+
+class GetBestBlockchainTestCase(SimulatorTestCase):
     seed_config = 6
 
     def _send_cmd(self, proto: Protocol, cmd: str, payload: str | None = None) -> None:
@@ -428,26 +436,3 @@ class BaseGetBestBlockchainTestCase(SimulatorTestCase):
             self.assertTrue(check_decreasing_monotonicity(height_sequence))
         except ValueError as e:
             self.fail(str(e))
-
-
-def check_decreasing_monotonicity(sequence: list[int]) -> bool:
-    """Check if a sequence is monotonic and is decreasing. Raise an exception otherwise.
-    """
-    n = len(sequence)
-    for i in range(1, n):
-        if sequence[i] >= sequence[i-1]:
-            raise ValueError(f'Sequence not monotonic. Value {sequence[i]} >= {sequence[i-1]}. Index: {i}.')
-    return True
-
-
-class SyncV1GetBestBlockchainTestCase(unittest.SyncV1Params, BaseGetBestBlockchainTestCase):
-    __test__ = True
-
-
-class SyncV2GetBestBlockchainTestCase(unittest.SyncV2Params, BaseGetBestBlockchainTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeGetBestBlockchainTestCase(unittest.SyncBridgeParams, BaseGetBestBlockchainTestCase):
-    __test__ = True

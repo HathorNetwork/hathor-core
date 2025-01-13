@@ -7,12 +7,11 @@ from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import Block, Transaction
 from hathor.types import VertexId
 from hathor.wallet import HDWallet
-from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import BURN_ADDRESS, add_custom_tx
 
 
-class BaseConsensusSimulatorTestCase(SimulatorTestCase):
+class ConsensusSimulatorTestCase(SimulatorTestCase):
     seed_config = 5988775361793628169
 
     def assertValidConflictResolution(self, tx1: Transaction, tx2: Transaction) -> None:
@@ -209,16 +208,3 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(10, len(soft_voided_tx_ids))
         for _ in self._run_test(self.simulator, soft_voided_tx_ids):
             pass
-
-
-class SyncV1ConsensusSimulatorTestCase(unittest.SyncV1Params, BaseConsensusSimulatorTestCase):
-    __test__ = True
-
-
-class SyncV2ConsensusSimulatorTestCase(unittest.SyncV2Params, BaseConsensusSimulatorTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeConsensusSimulatorTestCase(unittest.SyncBridgeParams, SyncV2ConsensusSimulatorTestCase):
-    __test__ = True

@@ -37,7 +37,6 @@ from hathor.transaction.poa import PoaBlock
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import not_none
-from tests import unittest
 from tests.poa.utils import get_settings, get_signer
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
@@ -76,7 +75,7 @@ def _assert_height_weight_signer_id(
     assert sorted(non_voided_blocks) == expected
 
 
-class BasePoaSimulationTest(SimulatorTestCase):
+class PoaSimulationTest(SimulatorTestCase):
     def _get_manager(self, signer: PoaSigner | None = None) -> HathorManager:
         builder = self.simulator.get_default_builder().disable_full_verification()
         if signer:
@@ -161,7 +160,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
         assert self.simulator.run(200, trigger=trigger)
         assert manager1.tx_storage.get_block_count() == 12
         assert manager2.tx_storage.get_block_count() == 12
-        assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()
+        assert manager1.tx_storage.get_best_block_hash() == manager2.tx_storage.get_best_block_hash()
 
         _assert_height_weight_signer_id(
             manager1.tx_storage.get_all_transactions(),
@@ -319,7 +318,7 @@ class BasePoaSimulationTest(SimulatorTestCase):
 
         assert manager1.tx_storage.get_block_count() == 20
         assert manager2.tx_storage.get_block_count() == 20
-        assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()
+        assert manager1.tx_storage.get_best_block_hash() == manager2.tx_storage.get_best_block_hash()
 
         _assert_height_weight_signer_id(
             manager1.tx_storage.get_all_transactions(),
@@ -574,16 +573,3 @@ class BasePoaSimulationTest(SimulatorTestCase):
         token_tx.update_hash()
 
         assert manager.on_new_tx(token_tx, fails_silently=False)
-
-
-class SyncV1PoaSimulationTest(unittest.SyncV1Params, BasePoaSimulationTest):
-    __test__ = True
-
-
-class SyncV2PoaSimulationTest(unittest.SyncV2Params, BasePoaSimulationTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgePoaSimulationTest(unittest.SyncBridgeParams, SyncV2PoaSimulationTest):
-    pass

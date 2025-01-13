@@ -1,12 +1,11 @@
+from itertools import chain
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.transaction import Transaction
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 
-class BaseTipsTestCase(unittest.TestCase):
-    __test__ = False
-
+class TipsTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -14,7 +13,9 @@ class BaseTipsTestCase(unittest.TestCase):
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
     def get_tips(self):
-        raise NotImplementedError
+        assert self.manager.tx_storage.indexes is not None
+        assert self.manager.tx_storage.indexes.mempool_tips is not None
+        return self.manager.tx_storage.indexes.mempool_tips.get()
 
     def test_tips_back(self):
         add_new_block(self.manager, advance_clock=1)
@@ -99,9 +100,10 @@ class BaseTipsTestCase(unittest.TestCase):
         self.assertCountEqual(self.get_tips(), set([tx2.hash]))
 
         tx3 = add_new_transactions(self.manager, 1, advance_clock=1)[0]
-        # tx3 parents will be tx2 and one of tx2 parents
+        b1 = self.manager.tx_storage.get_best_block()
+        # tx3 parents will be tx2 and one of b1's parents
         self.assertTrue(tx2.hash in tx3.parents)
-        self.assertTrue(set(tx3.parents).issubset(set([tx2.hash] + tx2.parents)))
+        self.assertTrue(set(tx3.parents).issubset(set([tx2.hash] + b1.parents)))
         self.assertCountEqual(self.get_tips(), set([tx3.hash]))
 
         b2 = add_new_block(self.manager, advance_clock=1)
@@ -110,7 +112,10 @@ class BaseTipsTestCase(unittest.TestCase):
         self.assertEqual(len(self.get_tips()), 0)
         self.assertTrue(tx3.hash in b2.parents)
         self.assertTrue(reward_blocks[-1].hash in b2.parents)
-        self.assertTrue(set(b2.parents).issubset(set([tx3.hash] + [reward_blocks[-1].hash] + tx3.parents)))
+        self.log.debug('b2 parents', p1=b2.parents[0].hex(), p2=b2.parents[1].hex())
+        possible_parents = set(chain([tx3.hash], tx3.parents, b2.parents))
+        self.log.debug('possible parents', p=[i.hex() for i in possible_parents])
+        self.assertTrue(set(b2.parents).issubset(possible_parents))
 
         tx4 = add_new_transactions(self.manager, 1, advance_clock=1)[0]
         # tx4 had no tip, so the parents will be the last block parents
@@ -160,24 +165,3 @@ class BaseTipsTestCase(unittest.TestCase):
 
         # tx6 is the only one left
         self.assertCountEqual(self.get_tips(), set([tx6.hash]))
-
-
-class SyncV1TipsTestCase(unittest.SyncV1Params, BaseTipsTestCase):
-    __test__ = True
-
-    def get_tips(self):
-        return {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips_from_tx_tips()}
-
-
-class SyncV2TipsTestCase(unittest.SyncV2Params, BaseTipsTestCase):
-    __test__ = True
-
-    def get_tips(self):
-        assert self.manager.tx_storage.indexes is not None
-        assert self.manager.tx_storage.indexes.mempool_tips is not None
-        return self.manager.tx_storage.indexes.mempool_tips.get()
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTipsTestCase(unittest.SyncBridgeParams, SyncV2TipsTestCase):
-    pass

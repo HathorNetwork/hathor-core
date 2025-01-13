@@ -127,10 +127,7 @@ class BaseIndexesTest(unittest.TestCase):
             )
 
     def test_genesis_not_in_mempool(self):
-        if self.tx_storage.indexes.mempool_tips is not None:
-            mempool_txs = list(self.tx_storage.indexes.mempool_tips.iter_all(self.tx_storage))
-        else:
-            mempool_txs = list(self.tx_storage.iter_mempool_from_tx_tips())
+        mempool_txs = list(self.tx_storage.indexes.mempool_tips.iter_all(self.tx_storage))
         for tx in self.genesis_txs:
             self.assertNotIn(tx, mempool_txs)
 
@@ -689,7 +686,9 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertEqual(height_index.get_n_height_tips(103), height_index.get_n_height_tips(104))
 
 
-class BaseMemoryIndexesTest(BaseIndexesTest):
+class MemoryIndexesTest(BaseIndexesTest):
+    __test__ = True
+
     def setUp(self):
         from hathor.transaction.storage import TransactionMemoryStorage
 
@@ -714,7 +713,9 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
 
 
 @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-class BaseRocksDBIndexesTest(BaseIndexesTest):
+class RocksDBIndexesTest(BaseIndexesTest):
+    __test__ = True
+
     def setUp(self):
         import tempfile
 
@@ -742,29 +743,3 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         self.last_block = self.blocks[-1]
 
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
-
-
-class SyncV1MemoryIndexesTest(unittest.SyncV1Params, BaseMemoryIndexesTest):
-    __test__ = True
-
-
-class SyncV2MemoryIndexesTest(unittest.SyncV2Params, BaseMemoryIndexesTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMemoryIndexesTest(unittest.SyncBridgeParams, SyncV2MemoryIndexesTest):
-    pass
-
-
-class SyncV1RocksDBIndexesTest(unittest.SyncV1Params, BaseRocksDBIndexesTest):
-    __test__ = True
-
-
-class SyncV2RocksDBIndexesTest(unittest.SyncV2Params, BaseRocksDBIndexesTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeRocksDBIndexesTest(unittest.SyncBridgeParams, SyncV2RocksDBIndexesTest):
-    pass

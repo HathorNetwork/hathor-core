@@ -69,8 +69,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
             .set_peer(peer) \
-            .disable_sync_v1() \
-            .enable_sync_v2() \
             .use_rocksdb(path)
 
         manager2 = self.simulator.create_peer(builder2)
@@ -108,8 +106,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Restart full node using the same db.
         builder3 = self.simulator.get_default_builder() \
             .set_peer(peer) \
-            .disable_sync_v1() \
-            .enable_sync_v2() \
             .use_rocksdb(path)
 
         if full_verification:
@@ -223,8 +219,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
             .set_peer(peer) \
-            .disable_sync_v1() \
-            .enable_sync_v2() \
 
         manager2 = self.simulator.create_peer(builder2)
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -313,9 +307,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Create a new peer and run sync for a while (but stop before getting synced).
         peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
-            .set_peer(peer) \
-            .disable_sync_v1() \
-            .enable_sync_v2() \
+            .set_peer(peer)
 
         manager2 = self.simulator.create_peer(builder2)
         conn12 = FakeConnection(manager1, manager2, latency=0.05)

@@ -2,13 +2,10 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.netfilter import get_table
 from hathor.p2p.resources import NetfilterRuleResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseNetfilterTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class NetfilterTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(NetfilterRuleResource(self.manager))
@@ -185,16 +182,3 @@ class BaseNetfilterTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get('netfilter', {b'chain': bytes('post_peerid', 'utf-8')})
         data_get = response.json_value()
         self.assertEqual(len(data_get['rules']), 2)
-
-
-class SyncV1NetfilterTest(unittest.SyncV1Params, BaseNetfilterTest):
-    __test__ = True
-
-
-class SyncV2NetfilterTest(unittest.SyncV2Params, BaseNetfilterTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeNetfilterTest(unittest.SyncBridgeParams, SyncV2NetfilterTest):
-    pass

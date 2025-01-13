@@ -2,13 +2,10 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.wallet import HDWallet
 from hathor.wallet.resources import LockWalletResource, StateWalletResource, UnlockWalletResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseUnlockTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class UnlockTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp(unlock_wallet=False)
         self.web = StubSite(UnlockWalletResource(self.manager))
@@ -82,16 +79,3 @@ class BaseUnlockTest(_BaseResourceTest._ResourceTest):
         response_words = yield self.web.post("wallet/unlock", {'words': data_success['words'], 'passphrase': ''})
         data_words = response_words.json_value()
         self.assertTrue(data_words['success'])
-
-
-class SyncV1UnlockTest(unittest.SyncV1Params, BaseUnlockTest):
-    __test__ = True
-
-
-class SyncV2UnlockTest(unittest.SyncV2Params, BaseUnlockTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeUnlockTest(unittest.SyncBridgeParams, SyncV2UnlockTest):
-    pass

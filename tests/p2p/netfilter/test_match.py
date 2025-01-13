@@ -196,10 +196,6 @@ class NetfilterMatchTest(unittest.TestCase):
         context = NetfilterContext()
         self.assertFalse(matcher.match(context))
 
-
-class BaseNetfilterMatchTest(unittest.TestCase):
-    __test__ = False
-
     def test_match_peer_id(self) -> None:
         network = 'testnet'
         peer1 = PrivatePeer.auto_generated()
@@ -232,16 +228,3 @@ class BaseNetfilterMatchTest(unittest.TestCase):
         json = matcher.to_json()
         self.assertEqual(json['type'], 'NetfilterMatchPeerId')
         self.assertEqual(json['match_params']['peer_id'], str(peer1.id))
-
-
-class SyncV1NetfilterMatchTest(unittest.SyncV1Params, BaseNetfilterMatchTest):
-    __test__ = True
-
-
-class SyncV2NetfilterMatchTest(unittest.SyncV2Params, BaseNetfilterMatchTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeNetfilterMatchTest(unittest.SyncBridgeParams, SyncV2NetfilterMatchTest):
-    pass

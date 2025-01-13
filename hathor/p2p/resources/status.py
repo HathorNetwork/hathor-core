@@ -90,14 +90,10 @@ class StatusResource(Resource):
 
         app = 'Hathor v{}'.format(hathor.__version__)
 
-        best_block_tips = []
-        for tip in self.manager.tx_storage.get_best_block_tips():
-            block = self.manager.tx_storage.get_block(tip)
-            best_block_tips.append({'hash': block.hash_hex, 'height': block.static_metadata.height})
-
         best_block = self.manager.tx_storage.get_best_block()
         raw_best_blockchain = self.manager.tx_storage.get_n_height_tips(self._settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS)
         best_blockchain = to_serializable_best_blockchain(raw_best_blockchain)
+        best_block_tips = [{'hash': best_block.hash_hex, 'height': best_block.static_metadata.height}]
 
         data = {
             'server': {

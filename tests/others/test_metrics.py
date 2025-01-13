@@ -15,9 +15,7 @@ from tests import unittest
 from tests.utils import HAS_ROCKSDB
 
 
-class BaseMetricsTest(unittest.TestCase):
-    __test__ = False
-
+class MetricsTest(unittest.TestCase):
     def test_p2p_network_events(self):
         """Simulates publishing an event to pubsub the same way as done
            by the ConnectionsManager class.
@@ -120,7 +118,6 @@ class BaseMetricsTest(unittest.TestCase):
 
         manager.tx_storage.pre_init()
         manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
-        manager.tx_storage.update_best_block_tips_cache(None)
 
         add_new_blocks(manager, 10)
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
@@ -174,7 +171,6 @@ class BaseMetricsTest(unittest.TestCase):
 
         manager.tx_storage.pre_init()
         manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
-        manager.tx_storage.update_best_block_tips_cache(None)
 
         add_new_blocks(manager, 10)
 
@@ -281,16 +277,3 @@ class BaseMetricsTest(unittest.TestCase):
         # Assertion
         self.assertEquals(manager.metrics.transaction_cache_hits, 10)
         self.assertEquals(manager.metrics.transaction_cache_misses, 20)
-
-
-class SyncV1MetricsTest(unittest.SyncV1Params, BaseMetricsTest):
-    __test__ = True
-
-
-class SyncV2MetricsTest(unittest.SyncV2Params, BaseMetricsTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMetricsTest(unittest.SyncBridgeParams, SyncV2MetricsTest):
-    pass

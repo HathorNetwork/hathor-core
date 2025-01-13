@@ -29,13 +29,14 @@ from hathor.simulator import FakeConnection
 from hathor.simulator.utils import add_new_blocks, gen_new_tx
 from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.util import not_none
-from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
 
 
 class BaseFeatureSimulationTest(SimulatorTestCase):
+    __test__ = False
+
     def get_simulator_builder(self) -> Builder:
         """Return a pre-configured builder to be used in tests."""
         raise NotImplementedError
@@ -663,13 +664,17 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
 
 
-class BaseMemoryStorageFeatureSimulationTest(BaseFeatureSimulationTest):
+class MemoryStorageFeatureSimulationTest(BaseFeatureSimulationTest):
+    __test__ = True
+
     def get_simulator_builder(self) -> Builder:
         return self.simulator.get_default_builder()
 
 
 @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
+class RocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
+    __test__ = True
+
     def get_rocksdb_directory(self) -> str:
         import tempfile
         tmp_dir = tempfile.mkdtemp()
@@ -806,32 +811,3 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             assert get_ancestor_iteratively_mock.call_count == 0
             assert artifacts2.tx_storage.get_vertices_count() == 67
             calculate_new_state_mock.reset_mock()
-
-
-class SyncV1MemoryStorageFeatureSimulationTest(unittest.SyncV1Params, BaseMemoryStorageFeatureSimulationTest):
-    __test__ = True
-
-
-class SyncV2MemoryStorageFeatureSimulationTest(unittest.SyncV2Params, BaseMemoryStorageFeatureSimulationTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMemoryStorageFeatureSimulationTest(unittest.SyncBridgeParams, BaseMemoryStorageFeatureSimulationTest):
-    __test__ = True
-
-
-class SyncV1RocksDBStorageFeatureSimulationTest(unittest.SyncV1Params, BaseRocksDBStorageFeatureSimulationTest):
-    __test__ = True
-
-
-class SyncV2RocksDBStorageFeatureSimulationTest(unittest.SyncV2Params, BaseRocksDBStorageFeatureSimulationTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeRocksDBStorageFeatureSimulationTest(
-    unittest.SyncBridgeParams,
-    BaseRocksDBStorageFeatureSimulationTest
-):
-    __test__ = True
