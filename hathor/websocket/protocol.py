@@ -56,6 +56,7 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
         super().__init__()
 
         self.subscribed_to: set[str] = set()
+        self.empty_addresses: set[str] = set()
 
         # Enable/disable history streaming for this connection.
         self.is_history_streaming_enabled = is_history_streaming_enabled
