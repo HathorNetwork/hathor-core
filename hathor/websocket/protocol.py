@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Union
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
@@ -28,7 +29,7 @@ from hathor.websocket.iterators import (
     aiter_xpub_addresses,
     gap_limit_search,
 )
-from hathor.websocket.messages import CapabilitiesMessage, StreamErrorMessage, WebSocketMessage
+from hathor.websocket.messages import CapabilitiesMessage, StreamErrorMessage, WebSocketErrorMessage, WebSocketMessage
 from hathor.websocket.streamer import HistoryStreamer
 
 if TYPE_CHECKING:
@@ -103,10 +104,17 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
     def onMessage(self, payload: Union[bytes, str], isBinary: bool) -> None:
         """Called by the websocket protocol when a new message is received."""
         self.log.debug('new message', payload=payload.hex() if isinstance(payload, bytes) else payload)
-        if isinstance(payload, bytes):
-            message = json_loadb(payload)
-        else:
-            message = json_loads(payload)
+
+        try:
+            if isinstance(payload, bytes):
+                message = json_loadb(payload)
+            else:
+                message = json_loads(payload)
+        except JSONDecodeError:
+            self.send_message(WebSocketErrorMessage(
+                errmsg='Malformed command'
+            ))
+            return
 
         _type = message.get('type')
 
