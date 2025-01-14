@@ -23,6 +23,12 @@ class WebSocketMessage(BaseModel):
     pass
 
 
+class WebSocketErrorMessage(WebSocketMessage):
+    type: str = Field('error', const=True)
+    success: bool = Field(False, const=True)
+    errmsg: str
+
+
 class CapabilitiesMessage(WebSocketMessage):
     type: str = Field('capabilities', const=True)
     capabilities: list[str]
