@@ -329,17 +329,22 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
     def subscribe_address(self, connection: HathorAdminWebsocketProtocol, address: str) -> tuple[bool, str]:
         """Subscribe an address to send real time updates to a websocket connection."""
-        subs: set[str] = connection.subscribed_to
-        if self.max_subs_addrs_conn is not None and len(subs) >= self.max_subs_addrs_conn:
+        empty_addresses: set[str] = connection.empty_addresses
+        if self.max_subs_addrs_conn is not None and len(empty_addresses) >= self.max_subs_addrs_conn:
             return False, f'Reached maximum number of subscribed addresses ({self.max_subs_addrs_conn}).'
 
-        elif self.max_subs_addrs_empty is not None and (
-                 self.address_index and _count_empty(subs, self.address_index) >= self.max_subs_addrs_empty
-             ):
+        elif (
+            self.max_subs_addrs_empty is not None
+            and self.address_index
+            and len(empty_addresses) >= self.max_subs_addrs_empty
+            and _count_empty(empty_addresses, self.address_index) >= self.max_subs_addrs_empty
+        ):
             return False, f'Reached maximum number of subscribed empty addresses ({self.max_subs_addrs_empty}).'
 
         self.address_connections[address].add(connection)
         connection.subscribed_to.add(address)
+        if self.address_index and self.address_index.is_address_empty(address):
+            connection.empty_addresses.add(address)
         return True, ''
 
     def _handle_unsubscribe_address(self, connection: HathorAdminWebsocketProtocol, message: dict[Any, Any]) -> None:
@@ -347,6 +352,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         addr = message['address']
         if addr in self.address_connections and connection in self.address_connections[addr]:
             connection.subscribed_to.remove(addr)
+            connection.empty_addresses.discard(addr)
             self._remove_connection_from_address_dict(connection, addr)
             # Reply back to the client
             payload = json_dumpb({'type': 'unsubscribe_address', 'success': True})
@@ -375,4 +381,15 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
 def _count_empty(addresses: set[str], address_index: AddressIndex) -> int:
     """ Count how many of the addresses given are empty (have no outputs)."""
-    return sum(1 for addr in addresses if address_index.is_address_empty(addr))
+    counter = 0
+    to_remove = set()
+    for addr in addresses:
+        if address_index.is_address_empty(addr):
+            counter += 1
+        else:
+            to_remove.add(addr)
+
+    for addr in to_remove:
+        addresses.discard(addr)
+
+    return counter
