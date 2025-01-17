@@ -6,12 +6,11 @@ from hathor.simulator.trigger import StopAfterNTransactions
 from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import BaseTransaction
 from hathor.types import VertexId
-from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx, gen_custom_tx
 
 
-class BaseSoftVoidedTestCase(SimulatorTestCase):
+class SoftVoidedTestCase(SimulatorTestCase):
     seed_config = 5988775361793628169
 
     def assertNoParentsAreSoftVoided(self, tx: BaseTransaction) -> None:
@@ -138,16 +137,3 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         ])
         for _ in self._run_test(self.simulator, soft_voided_tx_ids):
             pass
-
-
-class SyncV1SoftVoidedTestCase(unittest.SyncV1Params, BaseSoftVoidedTestCase):
-    __test__ = True
-
-
-class SyncV2SoftVoidedTestCase(unittest.SyncV2Params, BaseSoftVoidedTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeSoftVoidedTestCase(unittest.SyncBridgeParams, SyncV2SoftVoidedTestCase):
-    __test__ = True

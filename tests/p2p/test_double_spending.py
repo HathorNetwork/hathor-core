@@ -9,9 +9,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
-class BaseHathorSyncMethodsTestCase(unittest.TestCase):
-    __test__ = False
-
+class SyncMethodsTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
@@ -324,16 +322,3 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         # dot2 = self.manager1.tx_storage.graphviz_funds(format='pdf', acc_weight=True)
         # dot2.render('dot2')
-
-
-class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
-class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
-    pass

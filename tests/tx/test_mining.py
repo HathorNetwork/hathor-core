@@ -8,7 +8,7 @@ from hathor.utils.weight import weight_to_work
 from tests import unittest
 
 
-class BaseMiningTest(unittest.TestCase):
+class MiningTest(unittest.TestCase):
     """
     Thus, there are eight cases to be handled when a new block arrives, which are:
     (i)    Single best chain, connected to the head of the best chain
@@ -20,8 +20,6 @@ class BaseMiningTest(unittest.TestCase):
     (vii)  Multiple best chains, connected to the head of a side chain
     (viii) Multiple best chains, connected to the tail of a side chain
     """
-
-    __test__ = False
 
     def setUp(self):
         super().setUp()
@@ -119,16 +117,3 @@ class BaseMiningTest(unittest.TestCase):
 
         self.assertTrue(isinstance(block, Block))
         self.assertEqual(json, expected)
-
-
-class SyncV1MiningTest(unittest.SyncV1Params, BaseMiningTest):
-    __test__ = True
-
-
-class SyncV2MiningTest(unittest.SyncV2Params, BaseMiningTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMiningTest(unittest.SyncBridgeParams, SyncV2MiningTest):
-    pass

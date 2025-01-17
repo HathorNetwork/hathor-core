@@ -2,13 +2,10 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningInfoResource
 from hathor.simulator.utils import add_new_blocks
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class GetMiningInfoTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(MiningInfoResource(self.manager))
@@ -61,16 +58,3 @@ class BaseGetMiningInfoTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertEqual(data['blocks'], self._settings.BLOCKS_PER_HALVING + 20)
         self.assertEqual(data['mined_tokens'], mined_tokens)
-
-
-class SyncV1GetMiningInfoTest(unittest.SyncV1Params, BaseGetMiningInfoTest):
-    __test__ = True
-
-
-class SyncV2GetMiningInfoTest(unittest.SyncV2Params, BaseGetMiningInfoTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeGetMiningInfoTest(unittest.SyncBridgeParams, SyncV2GetMiningInfoTest):
-    pass

@@ -19,9 +19,7 @@ from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.manager import HathorManager
 from hathor.p2p.peer import PrivatePeer
-from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 from hathor.p2p.sync_v2.agent import NodeBlockSync
-from hathor.p2p.sync_version import SyncVersion
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.simulator.clock import MemoryReactorHeapClock
@@ -64,23 +62,6 @@ def _get_default_peer_id_pool_filepath() -> str:
 
 PEER_ID_POOL = list(_load_peer_pool())
 
-# XXX: Sync*Params classes should be inherited before the TestCase class when a sync version is needed
-
-
-class SyncV1Params:
-    _enable_sync_v1 = True
-    _enable_sync_v2 = False
-
-
-class SyncV2Params:
-    _enable_sync_v1 = False
-    _enable_sync_v2 = True
-
-
-class SyncBridgeParams:
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
-
 
 class TestBuilder(Builder):
     __test__ = False
@@ -110,8 +91,6 @@ class TestBuilder(Builder):
 
 
 class TestCase(unittest.TestCase):
-    _enable_sync_v1: bool
-    _enable_sync_v2: bool
     use_memory_storage: bool = USE_MEMORY_STORAGE
     seed_config: Optional[int] = None
 
@@ -216,8 +195,6 @@ class TestCase(unittest.TestCase):
         wallet_index: bool = False,
         capabilities: list[str] | None = None,
         full_verification: bool = True,
-        enable_sync_v1: bool | None = None,
-        enable_sync_v2: bool | None = None,
         checkpoints: list[Checkpoint] | None = None,
         utxo_index: bool = False,
         event_manager: EventManager | None = None,
@@ -230,7 +207,6 @@ class TestCase(unittest.TestCase):
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
-        enable_sync_v1, enable_sync_v2 = self._syncVersionFlags(enable_sync_v1, enable_sync_v2)
 
         settings = self._settings._replace(NETWORK_NAME=network)
         builder = self.get_builder() \
@@ -276,16 +252,6 @@ class TestCase(unittest.TestCase):
         if use_memory_index is True:
             builder.force_memory_index()
 
-        if enable_sync_v1 is True:
-            builder.enable_sync_v1()
-        elif enable_sync_v1 is False:
-            builder.disable_sync_v1()
-
-        if enable_sync_v2 is True:
-            builder.enable_sync_v2()
-        elif enable_sync_v2 is False:
-            builder.disable_sync_v2()
-
         if wallet_index:
             builder.enable_wallet_index()
 
@@ -304,10 +270,6 @@ class TestCase(unittest.TestCase):
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
-
-        # XXX: just making sure that tests set this up correctly
-        assert manager.connections.is_sync_version_enabled(SyncVersion.V2) == enable_sync_v2
-        assert manager.connections.is_sync_version_enabled(SyncVersion.V1_1) == enable_sync_v1
 
         return manager
 
@@ -333,44 +295,13 @@ class TestCase(unittest.TestCase):
                 self.assertIn(dep, valid_deps, message)
             valid_deps.add(tx.hash)
 
-    def _syncVersionFlags(
-        self,
-        enable_sync_v1: bool | None = None,
-        enable_sync_v2: bool | None = None
-    ) -> tuple[bool, bool]:
-        """Internal: use this to check and get the flags and optionally provide override values."""
-        if enable_sync_v1 is None:
-            assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
-                                                      'the test class or pass `enable_sync_v1` by argument')
-            enable_sync_v1 = self._enable_sync_v1
-        if enable_sync_v2 is None:
-            assert hasattr(self, '_enable_sync_v2'), ('`_enable_sync_v2` has no default by design, either set one on '
-                                                      'the test class or pass `enable_sync_v2` by argument')
-            enable_sync_v2 = self._enable_sync_v2
-        assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
-        return enable_sync_v1, enable_sync_v2
-
     def assertTipsEqual(self, manager1: HathorManager, manager2: HathorManager) -> None:
-        _, enable_sync_v2 = self._syncVersionFlags()
-        if enable_sync_v2:
-            self.assertTipsEqualSyncV2(manager1, manager2)
-        else:
-            self.assertTipsEqualSyncV1(manager1, manager2)
+        self.assertTipsEqualSyncV2(manager1, manager2)
 
     def assertTipsNotEqual(self, manager1: HathorManager, manager2: HathorManager) -> None:
         s1 = set(manager1.tx_storage.get_all_tips())
         s2 = set(manager2.tx_storage.get_all_tips())
         self.assertNotEqual(s1, s2)
-
-    def assertTipsEqualSyncV1(self, manager1: HathorManager, manager2: HathorManager) -> None:
-        # XXX: this is the original implementation of assertTipsEqual
-        s1 = set(manager1.tx_storage.get_all_tips())
-        s2 = set(manager2.tx_storage.get_all_tips())
-        self.assertEqual(s1, s2)
-
-        s1 = set(manager1.tx_storage.get_tx_tips())
-        s2 = set(manager2.tx_storage.get_tx_tips())
-        self.assertEqual(s1, s2)
 
     def assertTipsEqualSyncV2(
         self,
@@ -404,32 +335,7 @@ class TestCase(unittest.TestCase):
         self.assertIn(b2, s1)
 
     def assertConsensusEqual(self, manager1: HathorManager, manager2: HathorManager) -> None:
-        _, enable_sync_v2 = self._syncVersionFlags()
-        if enable_sync_v2:
-            self.assertConsensusEqualSyncV2(manager1, manager2)
-        else:
-            self.assertConsensusEqualSyncV1(manager1, manager2)
-
-    def assertConsensusEqualSyncV1(self, manager1: HathorManager, manager2: HathorManager) -> None:
-        self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
-        for tx1 in manager1.tx_storage.get_all_transactions():
-            tx2 = manager2.tx_storage.get_transaction(tx1.hash)
-            tx1_meta = tx1.get_metadata()
-            tx2_meta = tx2.get_metadata()
-            # conflict_with's type is Optional[list[bytes]], so we convert to a set because order does not matter.
-            self.assertEqual(set(tx1_meta.conflict_with or []), set(tx2_meta.conflict_with or []))
-            # Soft verification
-            if tx1_meta.voided_by is None:
-                # If tx1 is not voided, then tx2 must be not voided.
-                self.assertIsNone(tx2_meta.voided_by)
-            else:
-                # If tx1 is voided, then tx2 must be voided.
-                assert tx1_meta.voided_by is not None
-                assert tx2_meta.voided_by is not None
-                self.assertGreaterEqual(len(tx1_meta.voided_by), 1)
-                self.assertGreaterEqual(len(tx2_meta.voided_by), 1)
-            # Hard verification
-            # self.assertEqual(tx1_meta.voided_by, tx2_meta.voided_by)
+        self.assertConsensusEqualSyncV2(manager1, manager2)
 
     def assertConsensusEqualSyncV2(
         self,
@@ -530,18 +436,9 @@ class TestCase(unittest.TestCase):
                 self.assertTrue(meta.voided_by)
                 self.assertTrue(parent_meta.voided_by.issubset(meta.voided_by))
 
-    def assertSyncedProgress(self, node_sync: NodeSyncTimestamp | NodeBlockSync) -> None:
+    def assertSyncedProgress(self, node_sync: NodeBlockSync) -> None:
         """Check "synced" status of p2p-manager, uses self._enable_sync_vX to choose which check to run."""
-        enable_sync_v1, enable_sync_v2 = self._syncVersionFlags()
-        if enable_sync_v2:
-            assert isinstance(node_sync, NodeBlockSync)
-            self.assertV2SyncedProgress(node_sync)
-        elif enable_sync_v1:
-            assert isinstance(node_sync, NodeSyncTimestamp)
-            self.assertV1SyncedProgress(node_sync)
-
-    def assertV1SyncedProgress(self, node_sync: NodeSyncTimestamp) -> None:
-        self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
+        self.assertV2SyncedProgress(node_sync)
 
     def assertV2SyncedProgress(self, node_sync: NodeBlockSync) -> None:
         self.assertEqual(node_sync.synced_block, node_sync.peer_best_block)

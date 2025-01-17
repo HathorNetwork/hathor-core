@@ -6,8 +6,6 @@ from tests.simulation.base import SimulatorTestCase
 
 class HathorManagerSysctlTestCase(SimulatorTestCase):
     __test__ = True
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
 
     def test_profiler(self):
         manager = self.create_peer()

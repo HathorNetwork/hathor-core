@@ -3,12 +3,11 @@ from hathor.manager import HathorManager
 from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import Transaction
 from hathor.util import not_none
-from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx
 
 
-class BaseConsensusSimulatorTestCase(SimulatorTestCase):
+class ConsensusSimulatorTestCase(SimulatorTestCase):
     def checkConflict(self, tx1: Transaction, tx2: Transaction) -> None:
         meta1 = tx1.get_metadata()
         meta2 = tx2.get_metadata()
@@ -130,16 +129,3 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         # Uncomment lines below to visualize the DAG and the blockchain.
         # dot = self.graphviz.dot()
         # dot.render('dot0')
-
-
-class SyncV1ConsensusSimulatorTestCase(unittest.SyncV1Params, BaseConsensusSimulatorTestCase):
-    __test__ = True
-
-
-class SyncV2ConsensusSimulatorTestCase(unittest.SyncV2Params, BaseConsensusSimulatorTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeConsensusSimulatorTestCase(unittest.SyncBridgeParams, SyncV2ConsensusSimulatorTestCase):
-    __test__ = True

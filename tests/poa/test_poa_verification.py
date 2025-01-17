@@ -27,9 +27,7 @@ from hathor.verification.vertex_verifier import VertexVerifier
 from tests import unittest
 
 
-class BasePoaVerificationTest(unittest.TestCase):
-    __test__ = False
-
+class PoaVerificationTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
@@ -272,16 +270,3 @@ class BasePoaVerificationTest(unittest.TestCase):
         verify_reward_wrapped.assert_called_once()
         verify_mandatory_signaling_wrapped.assert_called_once()
         verify_poa_wrapped.assert_called_once()
-
-
-class SyncV1PoaVerificationTest(unittest.SyncV1Params, BasePoaVerificationTest):
-    __test__ = True
-
-
-class SyncV2PoaVerificationTest(unittest.SyncV2Params, BasePoaVerificationTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgePoaVerificationTest(unittest.SyncBridgeParams, SyncV2PoaVerificationTest):
-    pass

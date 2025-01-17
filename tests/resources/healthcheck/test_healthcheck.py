@@ -7,13 +7,10 @@ from hathor.healthcheck.resources.healthcheck import HealthcheckResource
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
 from hathor.simulator.utils import add_new_blocks
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class HealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(HealthcheckResource(self.manager))
@@ -206,16 +203,3 @@ class BaseHealthcheckReadinessTest(_BaseResourceTest._ResourceTest):
                 }]
             }
         })
-
-
-class SyncV1StatusTest(unittest.SyncV1Params, BaseHealthcheckReadinessTest):
-    __test__ = True
-
-
-class SyncV2StatusTest(unittest.SyncV2Params, BaseHealthcheckReadinessTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeStatusTest(unittest.SyncBridgeParams, SyncV2StatusTest):
-    pass
