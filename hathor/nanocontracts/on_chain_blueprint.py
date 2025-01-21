@@ -14,13 +14,15 @@
 
 import ast
 import zlib
+from dataclasses import InitVar, dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from structlog import get_logger
 from typing_extensions import Self, override
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
 from hathor.nanocontracts.method_parser import NCMethodParser
@@ -42,6 +44,9 @@ BLUEPRINT_CLASS_NAME: str = '__blueprint__'
 
 # source compatibility with Python 3.10
 PYTHON_CODE_COMPAT_VERSION = (3, 10)
+
+# max compression level, used as default
+MAX_COMPRESSION_LEVEL = 9
 
 # this is what's allowed to be imported, to be checked in the AST and in runtime
 ALLOWED_IMPORTS = {
@@ -87,62 +92,95 @@ class CodeKind(Enum):
         return self.value.encode()
 
 
-class Code(NamedTuple):
+def _compress_code(content: str, compress_level: int) -> bytes:
+    # XXX: zlib is gzip compatible and compresses slightly better
+    return zlib.compress(content.encode('utf-8'), level=compress_level)
+
+
+def _decompress_code(data: bytes, max_length: int) -> str:
+    dcobj = zlib.decompressobj()
+    content = dcobj.decompress(data, max_length=max_length)
+    if dcobj.unconsumed_tail:
+        raise ValueError('Decompressed code is too long.')
+    return content.decode('utf-8')
+
+
+@dataclass(frozen=True)
+class Code:
     """ Store the code object in memory, along with helper methods.
     """
 
     # determines how the content will be interpreted
     kind: CodeKind
 
-    # the actual content, usually the uncompressed code in utf-8 bytes
-    content: bytes
+    # the encoded content, usually encoded implies compressed
+    data: bytes
 
-    def text(self) -> str:
-        """ Returns the content in text form (str).
-        """
+    # pre-decompressed content, for faster access
+    text: str = field(init=False)
+
+    # only needed for initialization, to decompress the original data
+    settings: InitVar[HathorSettings]
+
+    def __post_init__(self, settings: HathorSettings) -> None:
+        # used to initialize self.text with
         match self.kind:
             case CodeKind.PYTHON_GZIP:
-                return self.content.decode()
+                text = _decompress_code(self.data, settings.NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_UNCOMPRESSED)
+                # set self.text using object.__setattr__ to bypass frozen protection
+                object.__setattr__(self, 'text', text)
             case _:
                 raise ValueError('Invalid code kind value')
 
     def __bytes__(self) -> bytes:
-        # Code serialization format: [kind:variable bytes][null byte][content:variable bytes]
+        # Code serialization format: [kind:variable bytes][null byte][data:variable bytes]
         if self.kind is not CodeKind.PYTHON_GZIP:
             raise ValueError('Invalid code kind value')
-        # XXX: zlib is gzip compatible and compresses slightly better
-        zcode = zlib.compress(self.content)
         buf = bytearray()
         buf.extend(bytes(self.kind))
         buf.append(0)
-        buf.extend(zcode)
+        buf.extend(self.data)
         return bytes(buf)
 
     @classmethod
-    def from_bytes(cls, data: bytes, max_length: int) -> Self:
-        """ Parses a Code instance from a byte sequence, the length of the data is encoded outside of this class."""
+    def from_bytes(cls, data: bytes, settings: HathorSettings) -> Self:
+        """ Parses a Code instance from a byte sequence, the length of the data is encoded outside of this class.
+
+        NOTE: This will not validate whether the encoded has a valid compression format. A Validator must be used to
+        check that.
+        """
         data = bytearray(data)
         cut_at = data.index(0)
         kind = CodeKind(data[0:cut_at].decode())
-        dcobj = zlib.decompressobj()
-        content = dcobj.decompress(data[cut_at + 1:], max_length=max_length)
-        if not dcobj.eof:
-            raise ValueError('Decompressed code is too long.')
-        return cls(kind, content)
+        if kind is not CodeKind.PYTHON_GZIP:
+            raise ValueError('Code kind not supported')
+        compressed_code = data[cut_at + 1:]
+        return cls(kind, compressed_code, settings)
+
+    @classmethod
+    def from_python_code(
+        cls,
+        text_code: str,
+        settings: HathorSettings,
+        *,
+        compress_level: int = MAX_COMPRESSION_LEVEL,
+    ) -> Self:
+        data = _compress_code(text_code, compress_level)
+        return cls(CodeKind.PYTHON_GZIP, data, settings)
 
     def to_json(self) -> dict[str, Any]:
         """ Simple json view."""
         import base64
         return {
             'kind': self.kind.value,
-            'content': base64.b64encode(self.content).decode('ascii'),
+            'content': base64.b64encode(self.data).decode('ascii'),
         }
 
     def to_json_extended(self) -> dict[str, Any]:
         """ Extended json view, includes content in text form."""
         return {
             **self.to_json(),
-            'content_text': self.text(),
+            'content_text': self.text,
         }
 
 
@@ -151,18 +189,20 @@ class OnChainBlueprint(Transaction):
 
     MIN_NUM_INPUTS = 0
 
-    def __init__(self,
-                 nonce: int = 0,
-                 timestamp: Optional[int] = None,
-                 version: TxVersion = TxVersion.ON_CHAIN_BLUEPRINT,
-                 weight: float = 0,
-                 inputs: Optional[list[TxInput]] = None,
-                 outputs: Optional[list[TxOutput]] = None,
-                 parents: Optional[list[bytes]] = None,
-                 tokens: Optional[list[bytes]] = None,
-                 code: Optional[Code] = None,
-                 hash: Optional[bytes] = None,
-                 storage: Optional['TransactionStorage'] = None) -> None:
+    def __init__(
+        self,
+        nonce: int = 0,
+        timestamp: Optional[int] = None,
+        version: TxVersion = TxVersion.ON_CHAIN_BLUEPRINT,
+        weight: float = 0,
+        inputs: Optional[list[TxInput]] = None,
+        outputs: Optional[list[TxOutput]] = None,
+        parents: Optional[list[bytes]] = None,
+        tokens: Optional[list[bytes]] = None,
+        code: Optional[Code] = None,
+        hash: Optional[bytes] = None,
+        storage: Optional['TransactionStorage'] = None,
+    ) -> None:
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs,
                          outputs=outputs or [], tokens=tokens, parents=parents or [], hash=hash, storage=storage)
 
@@ -175,7 +215,7 @@ class OnChainBlueprint(Transaction):
         self.nc_pubkey: bytes = b''
         self.nc_signature: bytes = b''
 
-        self.code: Code = code if code is not None else Code(CodeKind.PYTHON_GZIP, b'')
+        self.code: Code = code if code is not None else Code(CodeKind.PYTHON_GZIP, b'', self._settings)
         self._ast_cache: Optional[ast.Module] = None
         self._blueprint_loaded_env: Optional[tuple[type[Blueprint], dict[str, object]]] = None
 
@@ -190,7 +230,7 @@ class OnChainBlueprint(Transaction):
         memory_limit = self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE
         metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
         try:
-            env = metered_executor.exec(self.code.text())
+            env = metered_executor.exec(self.code.text)
         except OutOfFuelError as e:
             self.log.error('loading blueprint module failed, fuel limit exceeded')
             raise OCBOutOfFuelDuringLoading from e
@@ -242,13 +282,10 @@ class OnChainBlueprint(Transaction):
         serialized_code, buf = unpack_len(serialized_code_len, buf)
         if verbose:
             verbose('serialized_code', serialized_code)
-        code = Code.from_bytes(
-            serialized_code,
-            max_length=settings.NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_UNCOMPRESSED,
-        )
+        code = Code.from_bytes(serialized_code, settings)
         return code, buf
 
-    def _serialize_ocb(self, *, skip_signature: bool = True) -> bytes:
+    def _serialize_ocb(self, *, skip_signature: bool = False) -> bytes:
         buf = bytearray()
         buf += self.serialize_code()
         buf += int_to_bytes(len(self.nc_pubkey), 1)

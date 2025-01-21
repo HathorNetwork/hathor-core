@@ -2,11 +2,8 @@ import hashlib
 import os
 from typing import NamedTuple, Optional
 
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-
 from hathor.conf import HathorSettings
-from hathor.crypto.util import decode_address, get_public_key_bytes_compressed
+from hathor.crypto.util import decode_address
 from hathor.nanocontracts import NanoContract, OnChainBlueprint
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
@@ -18,22 +15,12 @@ from hathor.util import not_none
 from hathor.wallet import KeyPair
 from tests import unittest
 
+from .utils import load_bultin_nc_code, ocb_sign
+
 settings = HathorSettings()
 
 
-def _load_bultin_nc_code(filename: str, blueprint_name: str) -> bytes:
-    from hathor.nanocontracts import blueprints
-    cur_dir = os.path.dirname(blueprints.__file__)
-    filepath = os.path.join(cur_dir, filename)
-    code_bytes = bytearray()
-    with open(filepath, 'rb') as nc_file:
-        for line in nc_file.readlines():
-            code_bytes.extend(line)
-    code_bytes.extend(b'__blueprint__ = ' + blueprint_name.encode())
-    return bytes(code_bytes)
-
-
-ON_CHAIN_BET_NC_CODE: bytes = _load_bultin_nc_code('bet.py', 'Bet')
+ON_CHAIN_BET_NC_CODE: str = load_bultin_nc_code('bet.py', 'Bet')
 
 
 class OnChainBet(NamedTuple):
@@ -113,21 +100,9 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         context = Context([action], tx, address, timestamp=self.get_current_timestamp())
         self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
-    def _ocb_sign(self, blueprint: OnChainBlueprint) -> None:
-        key = KeyPair(unittest.OCB_TEST_PRIVKEY)
-        privkey = key.get_private_key(unittest.OCB_TEST_PASSWORD)
-        pubkey = privkey.public_key()
-        blueprint.nc_pubkey = get_public_key_bytes_compressed(pubkey)
-        data = blueprint.get_sighash_all_data()
-        blueprint.nc_signature = privkey.sign(data, ec.ECDSA(hashes.SHA256()))
-
-    def _ocb_mine(self, blueprint: OnChainBlueprint) -> None:
-        self.manager.cpu_mining_service.resolve(blueprint)
-        self.manager.reactor.advance(2)
-
-    def _create_on_chain_blueprint(self, nc_code: bytes) -> OnChainBlueprint:
-        from hathor.nanocontracts.on_chain_blueprint import Code, CodeKind
-        code = Code(CodeKind.PYTHON_GZIP, nc_code)
+    def _create_on_chain_blueprint(self, nc_code: str) -> OnChainBlueprint:
+        from hathor.nanocontracts.on_chain_blueprint import Code
+        code = Code.from_python_code(nc_code, self._settings)
         timestamp = self.manager.tx_storage.latest_timestamp + 1
         parents = self.manager.get_new_tx_parents(timestamp)
         blueprint = OnChainBlueprint(
@@ -140,8 +115,9 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
             code=code,
         )
         blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
-        self._ocb_sign(blueprint)
-        self._ocb_mine(blueprint)
+        ocb_sign(blueprint)
+        self.manager.cpu_mining_service.resolve(blueprint)
+        self.manager.reactor.advance(2)
         return blueprint
 
     def _gen_nc_initialize_tx(self, blueprint, nc_args):
@@ -165,7 +141,6 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         nc.nc_pubkey = private_key.sec()
         data = nc.get_sighash_all()
         data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        # nc.nc_signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
         nc.nc_signature = private_key.sign(data_hash)
 
         # mine
