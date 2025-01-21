@@ -46,10 +46,10 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(blueprint)
         self.manager.reactor.advance(2)
 
-    def _create_on_chain_blueprint(self, nc_code: bytes) -> OnChainBlueprint:
-        from hathor.nanocontracts.on_chain_blueprint import Code, CodeKind
+    def _create_on_chain_blueprint(self, nc_code: str) -> OnChainBlueprint:
+        from hathor.nanocontracts.on_chain_blueprint import Code
 
-        code = Code(CodeKind.PYTHON_GZIP, nc_code)
+        code = Code.from_python_code(nc_code, self._settings)
         timestamp = self.manager.tx_storage.latest_timestamp + 1
         parents = self.manager.get_new_tx_parents(timestamp)
         blueprint = OnChainBlueprint(
@@ -67,7 +67,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         return blueprint
 
     def test_forbid_eval(self) -> None:
-        blueprint = self._create_on_chain_blueprint(b'''eval("print('foo')")''')
+        blueprint = self._create_on_chain_blueprint('''eval("print('foo')")''')
         # generically an InvalidNewTransaction should happen:
         with self.assertRaises(InvalidNewTransaction):
             self.manager.vertex_handler.on_new_vertex(blueprint, fails_silently=False)
@@ -84,7 +84,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         from hathor.transaction.util import int_to_bytes
         from hathor.transaction.vertex_parser import VertexParser
 
-        blueprint = self._create_on_chain_blueprint(b'')
+        blueprint = self._create_on_chain_blueprint('')
         code = bytearray()
         code.extend(int_to_bytes(ON_CHAIN_BLUEPRINT_VERSION, 1))
         code_type = bytes(CodeKind.PYTHON_GZIP)

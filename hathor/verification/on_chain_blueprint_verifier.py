@@ -159,7 +159,7 @@ class OnChainBlueprintVerifier:
         #      module's `from __future__ ...` imports from affecting the compilation, `_feature_version` is a private
         #      argument, so we have to be mindful of this whenever there's an update to Python's version
         parsed_tree = compile(
-            source=tx.code.text(),
+            source=tx.code.text,
             filename=f'<{tx.hash.hex()}.code>',
             mode='exec',
             flags=ast.PyCF_ONLY_AST,
