@@ -226,7 +226,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         calls1 = data1['calls']
         self.assertEqual(calls1, {
             'has_result()': {'value': False},
-            'unknown_method()': {'errmsg': 'NCMethodNotFound()'},
+            'unknown_method()': {'errmsg': "NCMethodNotFound('MyBlueprint.unknown_method')"},
             'add(5, 12)': {'value': 17},
             'conditional_add([2, 4, null])': {'value': None},
             'conditional_add([2, 4, "a\'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN\'"])': {'value': 6},
