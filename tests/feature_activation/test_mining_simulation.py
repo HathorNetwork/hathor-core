@@ -29,12 +29,11 @@ from hathor.p2p.resources import MiningResource
 from hathor.transaction.resources import GetBlockTemplateResource
 from hathor.transaction.util import unpack, unpack_len
 from hathor.util import json_loadb
-from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
 
 
-class BaseMiningSimulationTest(SimulatorTestCase):
+class MiningSimulationTest(SimulatorTestCase):
     def test_signal_bits_in_mining(self) -> None:
         settings_dict = get_settings()._asdict()
         settings_dict.update(
@@ -188,15 +187,3 @@ class BaseMiningSimulationTest(SimulatorTestCase):
                 yield json_loadb(value)
 
             buf = new_buf
-
-
-class SyncV1MiningSimulationTest(unittest.SyncV1Params, BaseMiningSimulationTest):
-    __test__ = True
-
-
-class SyncV2MiningSimulationTest(unittest.SyncV2Params, BaseMiningSimulationTest):
-    __test__ = True
-
-
-class SyncBridgeMiningSimulationTest(unittest.SyncBridgeParams, BaseMiningSimulationTest):
-    __test__ = True

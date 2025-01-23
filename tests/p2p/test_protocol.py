@@ -18,9 +18,7 @@ from hathor.util import json_dumps, json_loadb
 from tests import unittest
 
 
-class BaseHathorProtocolTestCase(unittest.TestCase):
-    __test__ = False
-
+class HathorProtocolTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
@@ -587,104 +585,6 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         assert self.conn.peek_tr1_value() == b'ERROR Error processing "READY" command\r\n'
         self.assertTrue(self.conn.tr1.disconnecting)
 
-
-class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTestCase):
-    __test__ = True
-
-    def test_two_connections(self) -> None:
-        self.conn.run_one_step()  # HELLO
-        self.conn.run_one_step()  # PEER-ID
-        self.conn.run_one_step()  # READY
-        self.conn.run_one_step()  # GET-PEERS
-        self.conn.run_one_step()  # GET-TIPS
-
-        manager3 = self.create_peer(self.network)
-        conn = FakeConnection(self.manager1, manager3)
-        conn.run_one_step()  # HELLO
-        conn.run_one_step()  # PEER-ID
-        conn.run_one_step()  # READY
-        conn.run_one_step()  # GET-PEERS
-
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEERS')
-        self.conn.run_one_step()
-
-    def test_get_data(self) -> None:
-        self.conn.run_one_step()  # HELLO
-        self.conn.run_one_step()  # PEER-ID
-        self.conn.run_one_step()  # READY
-        self.conn.run_one_step()  # GET-PEERS
-        self.conn.run_one_step()  # GET-TIPS
-        self.conn.run_one_step()  # PEERS
-        self.conn.run_one_step()  # TIPS
-        self.assertIsConnected()
-        missing_tx = '00000000228dfcd5dec1c9c6263f6430a5b4316bb9e3decb9441a6414bfd8697'
-        self._send_cmd(self.conn.proto1, 'GET-DATA', missing_tx)
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
-        self.conn.run_one_step()
-
-    def test_valid_hello_and_peer_id(self) -> None:
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
-        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'HELLO')
-        self.conn.run_one_step()  # HELLO
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEER-ID')
-        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEER-ID')
-        self.conn.run_one_step()  # PEER-ID
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'READY')
-        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'READY')
-        self.conn.run_one_step()  # READY
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'GET-PEERS')
-        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'GET-PEERS')
-        self.conn.run_one_step()  # GET-PEERS
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'GET-TIPS')
-        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'GET-TIPS')
-        self.conn.run_one_step()  # GET-TIPS
-        self.assertIsConnected()
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEERS')
-        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEERS')
-        self.conn.run_one_step()  # PEERS
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'TIPS')
-        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'TIPS')
-        self.conn.run_one_step()  # TIPS
-        self.assertIsConnected()
-
-    def test_send_ping(self) -> None:
-        self.conn.run_one_step()  # HELLO
-        self.conn.run_one_step()  # PEER-ID
-        self.conn.run_one_step()  # READY
-        self.conn.run_one_step()  # GET-PEERS
-        self.conn.run_one_step()  # GET-TIPS
-        self.conn.run_one_step()  # PEERS
-        self.conn.run_one_step()  # TIPS
-        self.assertIsConnected()
-        self.clock.advance(5)
-        self.assertRegex(self.conn.peek_tr1_value(), b'^PING .*\r\n')
-        self.assertRegex(self.conn.peek_tr2_value(), b'^PING .*\r\n')
-        self.conn.run_one_step()  # PING
-        self.conn.run_one_step()  # GET-TIPS
-        self.conn.run_one_step()  # GET-BEST-BLOCKCHAIN
-        self.assertRegex(self.conn.peek_tr1_value(), b'PONG .*\r\n')
-        self.assertRegex(self.conn.peek_tr2_value(), b'PONG .*\r\n')
-        while b'PONG ' in self.conn.peek_tr1_value():
-            self.conn.run_one_step()
-        self.assertEqual(self.clock.seconds(), self.conn.proto1.last_message)
-
-    def test_invalid_peer_id(self) -> None:
-        self.conn.run_one_step()  # HELLO
-        self.conn.run_one_step()  # PEER-ID
-        self.conn.run_one_step()  # READY
-        self.conn.run_one_step()  # GET-PEERS
-        self.conn.run_one_step()  # GET-TIPS
-        self.conn.run_one_step()  # PEERS
-        self.conn.run_one_step()  # TIPS
-        invalid_payload = {'id': '123', 'entrypoints': ['tcp://localhost:1234']}
-        self._send_cmd(self.conn.proto1, 'PEER-ID', json_dumps(invalid_payload))
-        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
-        self.assertTrue(self.conn.tr1.disconnecting)
-
-
-class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTestCase):
-    __test__ = True
-
     def test_two_connections(self) -> None:
         self.assertAndStepConn(self.conn, b'^HELLO')
         self.assertAndStepConn(self.conn, b'^PEER-ID')
@@ -699,7 +599,7 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         # disable timeout because we will make several steps on a new conn and this might get left behind
         self.conn.disable_idle_timeout()
 
-        manager3 = self.create_peer(self.network, enable_sync_v2=True)
+        manager3 = self.create_peer(self.network)
         conn = FakeConnection(self.manager1, manager3)
         self.assertAndStepConn(conn, b'^HELLO')
         self.assertAndStepConn(conn, b'^PEER-ID')
@@ -787,8 +687,3 @@ class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTest
         while b'PONG\r\n' in self.conn.peek_tr1_value():
             self.conn.run_one_step()
         self.assertEqual(self.clock.seconds(), self.conn.proto1.last_message)
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeHathorProtocolTestCase(unittest.SyncBridgeParams, SyncV2HathorProtocolTestCase):
-    pass

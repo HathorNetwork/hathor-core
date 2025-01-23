@@ -66,21 +66,14 @@ class SyncSupportLevel(IntEnum):
         cls,
         settings: HathorSettingsType,
         p2p_manager: ConnectionsManager,
-        sync_v1_support: 'SyncSupportLevel',
         sync_v2_support: 'SyncSupportLevel',
         vertex_parser: VertexParser,
         vertex_handler: VertexHandler,
     ) -> None:
         """Adds the sync factory to the manager according to the support level."""
-        from hathor.p2p.sync_v1.factory import SyncV11Factory
         from hathor.p2p.sync_v2.factory import SyncV2Factory
         from hathor.p2p.sync_version import SyncVersion
 
-        # sync-v1 support:
-        if sync_v1_support > cls.UNAVAILABLE:
-            p2p_manager.add_sync_factory(SyncVersion.V1_1, SyncV11Factory(p2p_manager, vertex_parser=vertex_parser))
-        if sync_v1_support is cls.ENABLED:
-            p2p_manager.enable_sync_version(SyncVersion.V1_1)
         # sync-v2 support:
         if sync_v2_support > cls.UNAVAILABLE:
             sync_v2_factory = SyncV2Factory(
@@ -185,8 +178,7 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._sync_v1_support: SyncSupportLevel = SyncSupportLevel.UNAVAILABLE
-        self._sync_v2_support: SyncSupportLevel = SyncSupportLevel.UNAVAILABLE
+        self._sync_v2_support: SyncSupportLevel = SyncSupportLevel.ENABLED
 
         self._enable_stratum_server: Optional[bool] = None
 
@@ -209,7 +201,7 @@ class Builder:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
 
-        if SyncSupportLevel.ENABLED not in {self._sync_v1_support, self._sync_v2_support}:
+        if SyncSupportLevel.ENABLED not in {self._sync_v2_support}:
             raise TypeError('you must enable at least one sync version')
 
         settings = self._get_or_create_settings()
@@ -435,7 +427,6 @@ class Builder:
         SyncSupportLevel.add_factories(
             self._get_or_create_settings(),
             self._p2p_manager,
-            self._sync_v1_support,
             self._sync_v2_support,
             self._get_or_create_vertex_parser(),
             self._get_or_create_vertex_handler(),
@@ -772,24 +763,9 @@ class Builder:
         self._pubsub = pubsub
         return self
 
-    def set_sync_v1_support(self, support_level: SyncSupportLevel) -> 'Builder':
-        self.check_if_can_modify()
-        self._sync_v1_support = support_level
-        return self
-
     def set_sync_v2_support(self, support_level: SyncSupportLevel) -> 'Builder':
         self.check_if_can_modify()
         self._sync_v2_support = support_level
-        return self
-
-    def enable_sync_v1(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._sync_v1_support = SyncSupportLevel.ENABLED
-        return self
-
-    def disable_sync_v1(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._sync_v1_support = SyncSupportLevel.DISABLED
         return self
 
     def enable_sync_v2(self) -> 'Builder':

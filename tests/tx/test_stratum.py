@@ -61,8 +61,8 @@ class _BaseStratumTest(unittest.TestCase):
         return json_loads(data)
 
 
-class BaseStratumServerTest(_BaseStratumTest):
-    __test__ = False
+class StratumServerTest(_BaseStratumTest):
+    __test__ = True
 
     def test_parse_error(self):
         self.protocol.lineReceived(b'{]')
@@ -144,20 +144,9 @@ class BaseStratumServerTest(_BaseStratumTest):
         self.assertEqual(job['method'], 'job')
 
 
-class SyncV1StratumServerTest(unittest.SyncV1Params, BaseStratumServerTest):
+class StratumJobTest(_BaseStratumTest):
     __test__ = True
 
-
-class SyncV2StratumServerTest(unittest.SyncV2Params, BaseStratumServerTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeStratumServerTest(unittest.SyncBridgeParams, SyncV2StratumServerTest):
-    pass
-
-
-class BaseStratumJobTest(_BaseStratumTest):
     def _get_nonce(self, valid=True):
         target = 2**(256 - self.job['weight']) - 1
         base = sha256(bytes.fromhex(self.job['data']))
@@ -235,22 +224,7 @@ class BaseStratumJobTest(_BaseStratumTest):
         self.assertTrue(job.weight >= 1, f'job weight of {job.weight} is too small')
 
 
-class SyncV1StratumJobTest(unittest.SyncV1Params, BaseStratumJobTest):
-    __test__ = True
-
-
-class SyncV2StratumJobTest(unittest.SyncV2Params, BaseStratumJobTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeStratumJobTest(unittest.SyncBridgeParams, SyncV2StratumJobTest):
-    pass
-
-
-class BaseStratumClientTest(unittest.TestCase):
-    __test__ = False
-
+class StratumClientTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         storage = TransactionMemoryStorage(settings=self._settings)
@@ -294,16 +268,3 @@ class BaseStratumClientTest(unittest.TestCase):
             self.block.nonce = int(nonce, 16)
             self.block.update_hash()
             self.block.verify_pow()
-
-
-class SyncV1StratumClientTest(unittest.SyncV1Params, BaseStratumClientTest):
-    __test__ = True
-
-
-class SyncV2StratumClientTest(unittest.SyncV2Params, BaseStratumClientTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeStratumClientTest(unittest.SyncBridgeParams, SyncV2StratumClientTest):
-    pass

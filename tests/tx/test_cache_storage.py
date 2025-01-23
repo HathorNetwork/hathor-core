@@ -8,9 +8,7 @@ from tests.utils import add_new_transactions
 CACHE_SIZE = 5
 
 
-class BaseCacheStorageTest(unittest.TestCase):
-    __test__ = False
-
+class CacheStorageTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -154,16 +152,3 @@ class BaseCacheStorageTest(unittest.TestCase):
         for tx in self.cache_storage._run_topological_sort_dfs(root=tx, visited=dict()):
             total += 1
         self.assertEqual(total, 5)
-
-
-class SyncV1CacheStorageTest(unittest.SyncV1Params, BaseCacheStorageTest):
-    __test__ = True
-
-
-class SyncV2CacheStorageTest(unittest.SyncV2Params, BaseCacheStorageTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeCacheStorageTest(unittest.SyncBridgeParams, SyncV2CacheStorageTest):
-    pass

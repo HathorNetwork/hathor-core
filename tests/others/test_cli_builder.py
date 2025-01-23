@@ -109,14 +109,10 @@ class BuilderTestCase(unittest.TestCase):
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_bridge(self):
-        manager = self._build(['--memory-storage', '--x-sync-bridge'])
-        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
-        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+        self._build_with_error(['--memory-storage', '--x-sync-bridge'], '--x-sync-bridge was removed')
 
     def test_sync_bridge2(self):
-        manager = self._build(['--memory-storage', '--sync-bridge'])
-        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
-        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+        self._build_with_error(['--memory-storage', '--sync-bridge'], '--sync-bridge was removed')
 
     def test_sync_v2_only(self):
         manager = self._build(['--memory-storage', '--x-sync-v2-only'])
@@ -129,9 +125,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_v1_only(self):
-        manager = self._build(['--memory-storage', '--sync-v1-only'])
-        self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V2))
+        self._build_with_error(['--memory-storage', '--sync-v1-only'], '--sync-v1-only was removed')
 
     def test_keypair_wallet(self):
         manager = self._build(['--memory-storage', '--wallet', 'keypair'])

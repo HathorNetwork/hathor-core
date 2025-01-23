@@ -13,16 +13,16 @@ from hathor.simulator import FakeConnection
 from tests import unittest
 
 
-class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
-    def test_sync_v11_whitelist_no_no(self) -> None:
+class WhitelistTestCase(unittest.TestCase):
+    def test_whitelist_no_no(self) -> None:
         network = 'testnet'
         self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
 
         manager1 = self.create_peer(network)
-        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
+        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
+        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
@@ -36,15 +36,15 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         self.assertTrue(conn.tr1.disconnecting)
         self.assertTrue(conn.tr2.disconnecting)
 
-    def test_sync_v11_whitelist_yes_no(self) -> None:
+    def test_whitelist_yes_no(self) -> None:
         network = 'testnet'
         self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
 
         manager1 = self.create_peer(network)
-        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
+        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
+        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager1.peers_whitelist.append(manager2.my_peer.id)
 
@@ -60,15 +60,15 @@ class WhitelistTestCase(unittest.SyncV1Params, unittest.TestCase):
         self.assertFalse(conn.tr1.disconnecting)
         self.assertTrue(conn.tr2.disconnecting)
 
-    def test_sync_v11_whitelist_yes_yes(self) -> None:
+    def test_whitelist_yes_yes(self) -> None:
         network = 'testnet'
         self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
 
         manager1 = self.create_peer(network)
-        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
+        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V1_1})
+        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager1.peers_whitelist.append(manager2.my_peer.id)
         manager2.peers_whitelist.append(manager1.my_peer.id)
