@@ -55,7 +55,7 @@ def parse_nc_method_call(blueprint_class: Type[Blueprint], call_info: str) -> tu
     method_name, _, arguments = call_info[:-1].partition('(')
     method = getattr(blueprint_class, method_name, None)
     if method is None:
-        raise NCMethodNotFound(f'{blueprint_class} {method_name}')
+        raise NCMethodNotFound(f'{blueprint_class.__name__}.{method_name}')
 
     parser = NCMethodParser(method)
     method_args = parser.get_method_args()
