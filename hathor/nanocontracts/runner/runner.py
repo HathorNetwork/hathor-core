@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import defaultdict
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Type
 
 from typing_extensions import assert_never
@@ -24,226 +21,20 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import (
     NCAlreadyInitializedContractError,
-    NCError,
     NCFail,
     NCInvalidContext,
     NCInvalidContractId,
     NCInvalidMethodCall,
-    NCMethodNotFound,
-    NCNumberOfCallsExceeded,
-    NCPrivateMethodError,
-    NCRecursionError,
     NCUninitializedContractError,
 )
-from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
+from hathor.nanocontracts.metered_exec import MeteredExecutor
+from hathor.nanocontracts.runner.single import _SingleCallRunner
+from hathor.nanocontracts.runner.types import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.storage import NCChangesTracker, NCStorage, NCStorageFactory
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import ContractId, NCAction, NCActionType
-from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.transaction.storage import TransactionStorage
 from hathor.types import Amount, TokenUid
-
-
-class CallType(Enum):
-    PUBLIC = 'public'
-    VIEW = 'view'
-
-
-@dataclass
-class CallRecord:
-    """This object keeps information about a single call between contracts."""
-
-    # The type of the method being called (public or private).
-    type: CallType
-
-    # The depth in the call stack.
-    depth: int
-
-    # The contract being invoked.
-    nanocontract_id: ContractId
-
-    # The method being invoked.
-    method_name: str
-
-    # The context passed in this call.
-    ctx: Context | None
-
-    # The args and kwargs provided to the method.
-    args: tuple[Any]
-    kwargs: dict[str, Any]
-
-    # Keep track of all changes made by this call.
-    changes_tracker: NCChangesTracker
-
-    def print_dump(self):
-        prefix = '    ' * self.depth
-        print(prefix, self.nanocontract_id.hex(), self.method_name, self.args, self.kwargs)
-
-
-@dataclass(kw_only=True)
-class CallInfo:
-    """This object keeps information about a method call and its subsequence calls."""
-    MAX_RECURSION_DEPTH: int
-    MAX_CALL_COUNTER: int
-
-    # The execution stack. This stack is dynamic and changes as the execution progresses.
-    stack: list[CallRecord] = field(default_factory=list)
-
-    # Change trackers are grouped by contract. Because multiple calls can occur between contracts, leading to more than
-    # one NCChangesTracker per contract, a stack is used. This design makes it fast to retrieve the most recent tracker
-    # for a given contract whenever a new call is made.
-    change_trackers: defaultdict[ContractId, list[NCChangesTracker]] = field(default_factory=lambda: defaultdict(list))
-
-    # Flag to enable/disable keeping record of all calls.
-    enable_call_trace: bool
-
-    # A trace of the calls that happened. This will only be filled if `enable_call_trace` is true.
-    calls: list[CallRecord] = field(default_factory=list)
-
-    # Current depth of execution. This is a dynamic value that changes as the execution progresses.
-    depth: int = 0
-
-    # Counter of the number of calls performed so far. This is a dynamic value that changes as the
-    # execution progresses.
-    call_counter: int = 0
-
-    def print_dump(self):
-        """Print the call trace in stdout."""
-        for item in self.calls:
-            item.print_dump()
-
-    def pre_call(self, call_record: CallRecord) -> None:
-        """Called before a new call is executed."""
-        if self.depth >= self.MAX_RECURSION_DEPTH:
-            raise NCRecursionError
-
-        if self.call_counter >= self.MAX_CALL_COUNTER:
-            raise NCNumberOfCallsExceeded
-
-        if self.enable_call_trace:
-            self.calls.append(call_record)
-
-        self.change_trackers[call_record.nanocontract_id].append(call_record.changes_tracker)
-
-        assert self.depth == len(self.stack)
-        self.call_counter += 1
-        self.depth += 1
-        self.stack.append(call_record)
-
-    def post_call(self, call_record: CallRecord) -> None:
-        """Called after a call is finished."""
-        assert call_record == self.stack.pop()
-        assert call_record.changes_tracker == self.change_trackers[call_record.nanocontract_id][-1]
-        assert call_record.changes_tracker.nc_id == call_record.changes_tracker.storage.nc_id
-        self.depth -= 1
-
-        change_trackers = self.change_trackers[call_record.nanocontract_id]
-        if len(change_trackers) > 1:
-            assert call_record.changes_tracker.storage == change_trackers[-2]
-            assert call_record.changes_tracker == change_trackers.pop()
-        else:
-            assert not isinstance(call_record.changes_tracker.storage, NCChangesTracker)
-
-
-class _SingleCallRunner:
-    """This class is used to run a single method in a blueprint.
-
-    You should not use this class unless you know what you are doing.
-    """
-
-    def __init__(
-        self,
-        blueprint_class: Type[Blueprint],
-        nanocontract_id: bytes,
-        changes_tracker: NCChangesTracker,
-        metered_executor: MeteredExecutor,
-    ) -> None:
-        self.blueprint_class = blueprint_class
-        self.nanocontract_id = nanocontract_id
-        self.changes_tracker = changes_tracker
-        self.metered_executor = metered_executor
-        self._has_been_called = False
-        self._settings = get_global_settings()
-
-    def get_nc_balance(self, token_id: bytes) -> int:
-        """Return a Nano Contract balance for a given token."""
-        return self.changes_tracker.get_balance(token_id)
-
-    def add_nc_balance(self, token_uid: bytes, amount: int) -> None:
-        """Add balance to a token. Notice that the amount might be negative."""
-        self.changes_tracker.add_balance(token_uid, amount)
-
-    def validate_context(self, ctx: Context) -> None:
-        """Validate if the context is valid."""
-        for token_uid, action in ctx.actions.items():
-            if token_uid != action.token_uid:
-                raise NCInvalidContext('token_uid mismatch')
-            if action.amount < 0:
-                raise NCInvalidContext('amount must be positive')
-
-    def update_deposits_and_withdrawals(self, ctx: Context) -> None:
-        """Update the contract balance according to deposits and withdrawals."""
-        for action in ctx.actions.values():
-            self.update_balance(action)
-
-    def update_balance(self, action: NCAction) -> None:
-        """Update the contract balance according to the given action."""
-        if action.type == NCActionType.WITHDRAWAL:
-            self.add_nc_balance(action.token_uid, -action.amount)
-        else:
-            assert action.type == NCActionType.DEPOSIT
-            self.add_nc_balance(action.token_uid, action.amount)
-
-    def call_public_method(self, method_name: str, ctx: Context, *args: Any, **kwargs: Any) -> Any:
-        """Call a contract public method. If it fails, no change is saved."""
-
-        if self._has_been_called:
-            raise RuntimeError('only one call to a public method per instance')
-        self._has_been_called = True
-
-        self.validate_context(ctx)
-
-        blueprint = self.blueprint_class(self.changes_tracker)
-        method = getattr(blueprint, method_name)
-        if method is None:
-            raise NCMethodNotFound(method_name)
-        if not is_nc_public_method(method):
-            raise NCError('not a public method')
-
-        try:
-            # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
-            # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
-            # impact the original context. Since the runner relies on the context for other critical checks, any
-            # unauthorized modification would pose a serious security risk.
-            ret = self.metered_executor.call(method, ctx.copy(), *args, **kwargs)
-        except NCFail:
-            raise
-        except OutOfFuelError as e:
-            raise NCFail from e
-        except OutOfMemoryError as e:
-            raise NCFail from e
-        except Exception as e:
-            # Convert any other exception to NCFail.
-            raise NCFail from e
-
-        self.update_deposits_and_withdrawals(ctx)
-        return ret
-
-    def call_view_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        """Call a contract view method. It cannot change the state."""
-        blueprint = self.blueprint_class(self.changes_tracker)
-        method = getattr(blueprint, method_name)
-        if method is None:
-            raise NCMethodNotFound(method_name)
-        if not is_nc_view_method(method):
-            raise NCError('not a view method')
-
-        ret = self.metered_executor.call(method, *args, **kwargs)
-
-        if not self.changes_tracker.is_empty():
-            raise NCPrivateMethodError('private methods cannot change the state')
-
-        return ret
 
 
 class Runner:
