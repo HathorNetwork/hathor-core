@@ -17,7 +17,8 @@ import sys
 import time
 from cProfile import Profile
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, Union
+from itertools import chain
+from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, Union, cast
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -59,7 +60,7 @@ from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import Address, VertexId
-from hathor.util import EnvironmentInfo, LogDuration, Random
+from hathor.util import EnvironmentInfo, LogDuration, Random, small_tuple2
 from hathor.utils.weight import calculate_min_significant_weight, weight_to_work
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
@@ -709,23 +710,43 @@ class HathorManager:
     def generate_parent_txs(self, timestamp: Optional[float]) -> 'ParentTxs':
         """Select which transactions will be confirmed by a new block.
 
-        This method tries to return a stable result, such that for a given timestamp and storage state it will always
-        return the same.
+        The result of this method depends on the current state of the blockchain and is intended to generate tx-parents
+        for a new block in the current blockchain, as such if a timestamp is present it must be at least greater than
+        the current best block's.
         """
         if timestamp is None:
             timestamp = self.reactor.seconds()
-        can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
-        assert can_include_intervals, 'tips cannot be empty'
-        max_timestamp = max(int(i.begin) for i in can_include_intervals)
-        must_include: list[VertexId] = []
-        assert len(can_include_intervals) > 0, f'invalid timestamp "{timestamp}", no tips found"'
-        if len(can_include_intervals) < 2:
-            # If there is only one tip, let's randomly choose one of its parents.
-            must_include_interval = can_include_intervals[0]
-            must_include = [must_include_interval.data]
-            can_include_intervals = sorted(self.tx_storage.get_tx_tips(must_include_interval.begin - 1))
-        can_include = [i.data for i in can_include_intervals]
-        return ParentTxs(max_timestamp, can_include, must_include)
+        mempool_tips = [tx for tx in self.tx_storage.iter_mempool_tips() if tx.timestamp < timestamp]
+        if len(mempool_tips) >= 2:
+            can_include_txs = mempool_tips
+            max_timestamp = max(tx.timestamp for tx in can_include_txs)
+            can_include = tuple(tx.hash for tx in can_include_txs)
+            return ParentTxs(max_timestamp, can_include, ())
+        else:
+            must_include_txs = mempool_tips
+            can_include_txs = []
+            block = self.tx_storage.get_best_block()
+            visited_parents = set(tx.hash for tx in must_include_txs)
+            while len(must_include_txs) + len(can_include_txs) < 2:
+                parents = block.get_tx_parents()
+                can_include_txs.extend(filter(
+                    (lambda tx: tx.timestamp < timestamp),
+                    (
+                        cast(Transaction, self.tx_storage.get_transaction(parent_hash))
+                        for parent_hash in parents
+                        if parent_hash not in visited_parents
+                    )
+                ))
+                visited_parents.update(parents)
+                if not block.parents:
+                    assert block.is_genesis
+                    break
+                block = block.get_block_parent()
+            max_timestamp = max(tx.timestamp for tx in chain(must_include_txs, can_include_txs))
+            must_include_all = [VertexId(tx.hash) for tx in must_include_txs]
+            must_include = small_tuple2(must_include_all)
+            can_include = tuple(tx.hash for tx in can_include_txs)
+            return ParentTxs(max_timestamp, can_include, must_include)
 
     def allow_mining_without_peers(self) -> None:
         """Allow mining without being synced to at least one peer.
@@ -746,15 +767,6 @@ class HathorManager:
         if parent_block_hash is not None:
             return BlockTemplates([self.make_block_template(parent_block_hash, timestamp)], storage=self.tx_storage)
         return BlockTemplates(self.make_block_templates(timestamp), storage=self.tx_storage)
-        # FIXME: the following caching scheme breaks tests:
-        # cached_timestamp: Optional[int]
-        # cached_block_template: BlockTemplates
-        # cached_timestamp, cached_block_template = getattr(self, '_block_templates_cache', (None, None))
-        # if cached_timestamp == self.tx_storage.latest_timestamp:
-        #     return cached_block_template
-        # block_templates = BlockTemplates(self.make_block_templates(), storage=self.tx_storage)
-        # setattr(self, '_block_templates_cache', (self.tx_storage.latest_timestamp, block_templates))
-        # return block_templates
 
     def make_block_templates(self, timestamp: Optional[int] = None) -> Iterator[BlockTemplate]:
         """ Makes block templates for all possible best tips as of the latest timestamp.
@@ -762,8 +774,8 @@ class HathorManager:
         Each block template has all the necessary info to build a block to be mined without requiring further
         information from the blockchain state. Which is ideal for use by external mining servers.
         """
-        for parent_block_hash in self.tx_storage.get_best_block_tips():
-            yield self.make_block_template(parent_block_hash, timestamp)
+        parent_block_hash = self.tx_storage.get_best_block_hash()
+        yield self.make_block_template(parent_block_hash, timestamp)
 
     def make_block_template(self, parent_block_hash: VertexId, timestamp: Optional[int] = None) -> BlockTemplate:
         """ Makes a block template using the given parent block.
@@ -790,7 +802,7 @@ class HathorManager:
             assert isinstance(tx, Transaction)
             parent_tx_list.append(tx)
         max_timestamp = max(tx.timestamp for tx in parent_tx_list)
-        parent_txs = ParentTxs(max_timestamp, parent_tx_hashes, [])
+        parent_txs = ParentTxs(max_timestamp, small_tuple2(parent_tx_hashes), ())
         if timestamp is None:
             current_timestamp = int(max(self.tx_storage.latest_timestamp, self.reactor.seconds()))
         else:
@@ -844,8 +856,8 @@ class HathorManager:
             min_significant_weight
         )
         height = parent_block.get_height() + 1
-        parents = [parent_block.hash] + parent_txs.must_include
-        parents_any = parent_txs.can_include
+        parents = [parent_block.hash] + list(parent_txs.must_include)
+        parents_any = list(parent_txs.can_include)
         # simplify representation when you only have one to choose from
         if len(parents) + len(parents_any) == 3:
             parents.extend(sorted(parents_any))
@@ -899,10 +911,15 @@ class HathorManager:
     def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
         """Used by submit block from all mining APIs.
         """
-        tips = self.tx_storage.get_best_block_tips()
         parent_hash = blk.get_block_parent_hash()
-        if parent_hash not in tips:
-            self.log.warn('submit_block(): Ignoring block: parent not a tip', blk=blk.hash_hex)
+        best_block_hash = self.tx_storage.get_best_block_hash()
+        if parent_hash != best_block_hash:
+            self.log.warn(
+                'submit_block(): Ignoring block: parent not a tip',
+                submitted_block_hash=blk.hash_hex,
+                submitted_parent_hash=parent_hash.hex(),
+                tip_block_hash=best_block_hash.hex(),
+            )
             return False
         parent_block = self.tx_storage.get_transaction(parent_hash)
         parent_block_metadata = parent_block.get_metadata()
@@ -1070,8 +1087,8 @@ class ParentTxs(NamedTuple):
     included.
     """
     max_timestamp: int
-    can_include: list[VertexId]
-    must_include: list[VertexId]
+    can_include: tuple[VertexId, ...]
+    must_include: tuple[()] | tuple[VertexId] | tuple[VertexId, VertexId]
 
     def get_random_parents(self, rng: Random) -> tuple[VertexId, VertexId]:
         """ Get parents from self.parents plus a random choice from self.parents_any to make it 3 in total.
@@ -1080,9 +1097,9 @@ class ParentTxs(NamedTuple):
         """
         assert len(self.must_include) <= 1
         fill = rng.ordered_sample(self.can_include, 2 - len(self.must_include))
-        p1, p2 = self.must_include[:] + fill
+        p1, p2 = self.must_include + tuple(fill)
         return p1, p2
 
-    def get_all_tips(self) -> list[VertexId]:
+    def get_all_tips(self) -> tuple[VertexId, ...]:
         """All generated "tips", can_include + must_include."""
         return self.must_include + self.can_include

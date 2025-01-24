@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from typing import Iterator, Optional
 
 from sortedcontainers import SortedKeyList
@@ -33,7 +35,7 @@ class MemoryTimestampIndex(TimestampIndex):
     """ Index of transactions sorted by their timestamps.
     """
 
-    _index: 'SortedKeyList[TransactionIndexElement]'
+    _index: SortedKeyList[TransactionIndexElement]
 
     def __init__(self, *, scope_type: ScopeType):
         super().__init__(scope_type=scope_type)
@@ -89,3 +91,6 @@ class MemoryTimestampIndex(TimestampIndex):
     def iter(self) -> Iterator[bytes]:
         for element in self._index:
             yield element.hash
+
+    def __contains__(self, elem: tuple[int, bytes]) -> bool:
+        return TransactionIndexElement(*elem) in self._index

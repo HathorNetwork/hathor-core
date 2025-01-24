@@ -145,10 +145,6 @@ class BlockConsensusAlgorithm:
             meta = block.get_metadata()
             if not meta.voided_by:
                 storage.indexes.height.add_new(block.get_height(), block.hash, block.timestamp)
-                storage.update_best_block_tips_cache([block.hash])
-            # The following assert must be true, but it is commented out for performance reasons.
-            if self._settings.SLOW_ASSERTS:
-                assert len(storage.get_best_block_tips(skip_cache=True)) == 1
         else:
             # Resolve all other cases, but (i).
             log = self.log.new(block=block.hash_hex)
@@ -209,7 +205,6 @@ class BlockConsensusAlgorithm:
                         self.log.debug('index new winner block', height=height, block=block.hash_hex)
                         # We update the height cache index with the new winner chain
                         storage.indexes.height.update_new_chain(height, block)
-                        storage.update_best_block_tips_cache([block.hash])
                         # It is only a re-org if common_block not in heads
                         if common_block != head:
                             self.context.mark_as_reorg(common_block)
