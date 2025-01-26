@@ -203,3 +203,13 @@ class DAGCreatorTestCase(unittest.TestCase):
 
         for node, vertex in artifacts.list:
             self.manager.on_new_tx(vertex, fails_silently=False)
+
+    def test_all_topological_sorts(self) -> None:
+        it = self.dag_builder.build_all_from_str("""
+            blockchain genesis b[1..5]
+            b1.out[0] <<< tx1
+        """)
+
+        for i, x in enumerate(it):
+            print(i, x)
+        assert False
