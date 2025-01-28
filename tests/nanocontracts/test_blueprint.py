@@ -82,9 +82,6 @@ class MyBlueprint(Blueprint):
 
 
 class NCBlueprintTestCase(unittest.TestCase):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
-
     def setUp(self) -> None:
         super().setUp()
         self.simple_fields_id = ContractId(VertexId(b'1' * 32))

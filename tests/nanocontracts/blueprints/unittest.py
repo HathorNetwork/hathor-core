@@ -16,8 +16,6 @@ settings = HathorSettings()
 
 
 class BlueprintTestCase(unittest.TestCase):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
     use_memory_storage = True
 
     def setUp(self):
