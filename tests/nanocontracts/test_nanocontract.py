@@ -44,9 +44,6 @@ class MyBlueprint(Blueprint):
 
 
 class NCNanoContractTestCase(unittest.TestCase):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = False
-
     def setUp(self):
         super().setUp()
 

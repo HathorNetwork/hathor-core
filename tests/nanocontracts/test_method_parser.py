@@ -56,9 +56,6 @@ class MyBlueprint:
 
 
 class NCBlueprintTestCase(unittest.TestCase):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = True
-
     def _run_test(self, method, _type, data):
         parser = NCMethodParser(method)
 

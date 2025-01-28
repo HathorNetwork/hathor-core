@@ -88,9 +88,6 @@ class MyBlueprint(Blueprint):
 
 
 class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = False
-
     def setUp(self):
         super().setUp()
         self.tx_storage = TransactionMemoryStorage(settings=self._settings)
