@@ -12,17 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from hathor.dag_builder.tokenizer import MULTILINE_DELIMITER
+
+TEXT_DELIMITER = '"'
+LITERAL_DELIMITERS = [TEXT_DELIMITER, MULTILINE_DELIMITER]
+
+
 def is_literal(value: str) -> bool:
     """Return true if the value is a literal."""
-    if value[0] == '"' and value[-1] == '"':
-        return True
-    return False
+    return _get_literal_delimiter(value) is not None
 
 
 def get_literal(value: str) -> str:
     """Return the content of the literal."""
-    assert value[0] == value[-1] and value[0] == '"'
-    return value[1:-1]
+    delimiter = _get_literal_delimiter(value)
+    assert delimiter is not None
+    n = len(delimiter)
+    return value[n:-n]
+
+
+def _get_literal_delimiter(value: str) -> str | None:
+    """Return the delimiter if value is a literal, None otherwise."""
+    for delimiter in LITERAL_DELIMITERS:
+        if value.startswith(delimiter) and value.endswith(delimiter):
+            return delimiter
+    return None
 
 
 def parse_amount_token(value: str) -> tuple[str, int, list[str]]:

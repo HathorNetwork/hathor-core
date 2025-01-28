@@ -14,11 +14,13 @@
 
 from __future__ import annotations
 
+from types import ModuleType
 from typing import TYPE_CHECKING, Callable
 
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nanocontract import NanoContract
@@ -69,3 +71,23 @@ def get_nano_contract_creation(tx_storage: TransactionStorage,
             raise NCContractCreationVoided('nano contract creation is voided: {tx_id.hex()}')
 
     return nc
+
+
+def load_builtin_blueprint_for_ocb(filename: str, blueprint_name: str, module: ModuleType | None = None) -> str:
+    """Get blueprint code from a file."""
+    import io
+    import os
+
+    from hathor.nanocontracts import blueprints
+
+    module = module or blueprints
+    cur_dir = os.path.dirname(not_none(module.__file__))
+    filepath = os.path.join(not_none(cur_dir), filename)
+    code_text = io.StringIO()
+    with open(filepath, 'r') as nc_file:
+        for line in nc_file.readlines():
+            code_text.write(line)
+    code_text.write(f'__blueprint__ = {blueprint_name}\n')
+    res = code_text.getvalue()
+    code_text.close()
+    return res

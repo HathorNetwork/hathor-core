@@ -1159,7 +1159,7 @@ class TransactionStorage(ABC):
                     blueprint_tx = self.get_transaction(blueprint_id)
                 except TransactionDoesNotExist:
                     self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
-                    # XXX: should be the same exception because we don't know why the id is wrong, and it the exception
+                    # XXX: should be the same exception because we don't know why the id is wrong, and the exception
                     #      shouldn't depend on the order that we look for them in the storage or catalog
                     raise e
                 if not isinstance(blueprint_tx, OnChainBlueprint):
