@@ -64,9 +64,6 @@ class MyBlueprint(Blueprint):
 
 
 class BlueprintInfoTest(_BaseResourceTest._ResourceTest):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = False
-
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')

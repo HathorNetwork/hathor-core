@@ -7,9 +7,6 @@ from tests.resources.nanocontracts.dummy_blueprint import TestBlueprint
 
 
 class BlueprintSourceCodeTest(_BaseResourceTest._ResourceTest):
-    _enable_sync_v1 = True
-    _enable_sync_v2 = False
-
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')
