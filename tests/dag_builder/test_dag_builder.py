@@ -1,6 +1,9 @@
+import pytest
+
 from hathor.transaction import Block, Transaction
-from hathor.nanocontracts import Blueprint, Context, NanoContract, public
+from hathor.nanocontracts import Blueprint, Context, NanoContract, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
+from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
 
@@ -286,3 +289,125 @@ class DAGBuilderTestCase(unittest.TestCase):
             htr_id: NCAction(NCActionType.DEPOSIT, htr_id, 3),
             tka_id: NCAction(NCActionType.WITHDRAWAL, tka_id, 2),
         })
+
+    def test_multiline_literals(self) -> None:
+        artifacts = self.dag_builder.build_from_str("""
+            tx.attr1 = ```
+                test
+            ```
+            tx.attr2 = ```
+                if foo:
+                    bar
+            ```
+        """)
+        node = artifacts.by_name['tx'].node
+
+        # asserting with raw shifted strings to make sure we get the expected output.
+        assert node.get_required_literal('attr1') == """\
+test"""
+        assert node.get_required_literal('attr2') == """\
+if foo:
+    bar"""
+
+        invalid_start_texts = [
+            """
+                tx.attr1 = a```
+                ```
+            """,
+            """
+                tx.attr1 = ```a
+                ```
+            """,
+            """
+                tx.attr1 = ```a```
+            """,
+        ]
+
+        for text in invalid_start_texts:
+            with pytest.raises(SyntaxError) as e:
+                self.dag_builder.build_from_str(text)
+            assert str(e.value) == 'invalid multiline string start'
+
+        invalid_end_texts = [
+            """
+                tx.attr1 = ```
+                a```
+            """,
+            """
+                tx.attr1 = ```
+                ```a
+            """,
+        ]
+
+        for text in invalid_end_texts:
+            with pytest.raises(SyntaxError) as e:
+                self.dag_builder.build_from_str(text)
+            assert str(e.value) == 'invalid multiline string end'
+
+        with pytest.raises(SyntaxError) as e:
+            self.dag_builder.build_from_str("""
+                tx.attr1 = ```
+                    test
+            """)
+        assert str(e.value) == 'unclosed multiline string'
+
+    def test_on_chain_blueprints(self) -> None:
+        bet_code = load_builtin_blueprint_for_ocb('bet.py', 'Bet')
+        private_key = unittest.OCB_TEST_PRIVKEY.hex()
+        password = unittest.OCB_TEST_PASSWORD.hex()
+        artifacts = self.dag_builder.build_from_str(f"""
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            ocb1.ocb_private_key = "{private_key}"
+            ocb1.ocb_password = "{password}"
+
+            ocb2.ocb_private_key = "{private_key}"
+            ocb2.ocb_password = "{password}"
+
+            ocb3.ocb_private_key = "{private_key}"
+            ocb3.ocb_password = "{password}"
+
+            nc1.nc_id = ocb1
+            nc1.nc_method = initialize("00", "00", 0)
+
+            nc2.nc_id = ocb2
+            nc2.nc_method = initialize(0)
+
+            nc3.nc_id = ocb3
+            nc3.nc_method = initialize()
+
+            ocb1 <-- ocb2 <-- ocb3 <-- b11
+            b11 < nc1 < nc2 < nc3
+
+            ocb1.ocb_code = "{bet_code.encode().hex()}"
+            ocb2.ocb_code = test_blueprint1.py, TestBlueprint1
+            ocb3.ocb_code = ```
+                from hathor.nanocontracts import Blueprint
+                from hathor.nanocontracts.context import Context
+                from hathor.nanocontracts.types import public
+                class MyBlueprint(Blueprint):
+                    @public
+                    def initialize(self, ctx: Context) -> None:
+                        pass
+                __blueprint__ = MyBlueprint
+            ```
+        """)
+
+        for node, vertex in artifacts.list:
+            assert self.manager.on_new_tx(vertex, fails_silently=False)
+
+        ocb1, ocb2, ocb3 = artifacts.get_typed_vertices(['ocb1', 'ocb2', 'ocb3'], OnChainBlueprint)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
+
+        assert ocb1.get_blueprint_class().__name__ == 'Bet'
+        assert nc1.get_blueprint_class().__name__ == 'Bet'
+        assert nc1.get_blueprint_id() == ocb1.hash
+
+        assert ocb2.get_blueprint_class().__name__ == 'TestBlueprint1'
+        assert nc2.get_blueprint_class().__name__ == 'TestBlueprint1'
+        assert nc2.get_blueprint_id() == ocb2.hash
+
+        assert ocb3.get_blueprint_class().__name__ == 'MyBlueprint'
+        assert nc3.get_blueprint_class().__name__ == 'MyBlueprint'
+        assert nc3.get_blueprint_id() == ocb3.hash

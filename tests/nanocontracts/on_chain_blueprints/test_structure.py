@@ -1,10 +1,11 @@
 from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts import OnChainBlueprint
+from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 
-from .utils import load_bultin_nc_code, ocb_sign
+from .utils import get_ocb_private_key
 
 # XXX: ON_CHAIN_BET_NC_CODE is not imported from test_bet because test_bet will be refactored out
-ON_CHAIN_BET_NC_CODE: str = load_bultin_nc_code('bet.py', 'Bet')
+ON_CHAIN_BET_NC_CODE: str = load_builtin_blueprint_for_ocb('bet.py', 'Bet')
 
 
 def test_ocb_recompress():
@@ -33,7 +34,7 @@ def test_ocb_recompress():
         code=code,
     )
     ocb.weight = 1.234
-    ocb_sign(ocb)
+    ocb.sign(get_ocb_private_key())
     ocb.update_hash()
     ocb_bytes = bytes(ocb)
     parser = VertexParser(settings=settings)

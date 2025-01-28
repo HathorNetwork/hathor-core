@@ -18,11 +18,14 @@ from dataclasses import InitVar, dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 from structlog import get_logger
 from typing_extensions import Self, override
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
+from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
 from hathor.nanocontracts.method_parser import NCMethodParser
@@ -359,3 +362,10 @@ class OnChainBlueprint(Transaction):
         # XXX: possibly do this by analyzing the source AST instead of using the loaded code
         blueprint_class = self.get_blueprint_class()
         return NCMethodParser(getattr(blueprint_class, method_name))
+
+    def sign(self, private_key: ec.EllipticCurvePrivateKey) -> None:
+        """Sign this blueprint with the provided private key."""
+        pubkey = private_key.public_key()
+        self.nc_pubkey = get_public_key_bytes_compressed(pubkey)
+        data = self.get_sighash_all_data()
+        self.nc_signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
