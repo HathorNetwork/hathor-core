@@ -167,6 +167,7 @@ class TestCase(unittest.TestCase):
         genesis_wallet._manually_initialize()
 
         assert manager.tx_storage.nc_catalog
+        from tests.nanocontracts import test_blueprints
 
         return DAGBuilder(
             settings=manager._settings,
@@ -175,6 +176,7 @@ class TestCase(unittest.TestCase):
             wallet_factory=self.get_wallet,
             vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
             nc_catalog=manager.tx_storage.nc_catalog,
+            blueprints_module=test_blueprints,
         )
 
     def get_builder(self) -> TestBuilder:

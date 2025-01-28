@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from types import ModuleType
 from typing import Iterator
 
 from structlog import get_logger
@@ -49,6 +50,7 @@ class DAGBuilder:
         wallet_factory: WalletFactoryType,
         vertex_resolver: VertexResolverType,
         nc_catalog: NCBlueprintCatalog,
+        blueprints_module: ModuleType | None = None,
     ) -> None:
         from hathor.dag_builder.default_filler import DefaultFiller
         from hathor.dag_builder.tokenizer import tokenize
@@ -67,6 +69,7 @@ class DAGBuilder:
             wallet_factory=wallet_factory,
             vertex_resolver=vertex_resolver,
             nc_catalog=nc_catalog,
+            blueprints_module=blueprints_module,
         )
 
     def parse_tokens(self, tokens: Iterator[Token]) -> None:
@@ -147,7 +150,7 @@ class DAGBuilder:
         return self
 
     def add_parent_edge(self, _from: str, _to: str) -> Self:
-        """Add a parent edge between two nodes. For clarity, `_to` has to be created befre `_from`."""
+        """Add a parent edge between two nodes. For clarity, `_to` has to be created before `_from`."""
         self._get_or_create_node(_to)
         from_node = self._get_or_create_node(_from)
         from_node.parents.add(_to)
@@ -177,8 +180,8 @@ class DAGBuilder:
     def _add_nc_attribute(self, name: str, key: str, value: str) -> None:
         """Handle attributes related to nanocontract transactions."""
         node = self._get_or_create_node(name)
+        node.type = DAGNodeType.NanoContract
         if key == 'nc_id':
-            node.type = DAGNodeType.NanoContract
             if not is_literal(value):
                 node.deps.add(value)
             node.attrs[key] = value
@@ -196,10 +199,34 @@ class DAGBuilder:
         else:
             node.attrs[key] = value
 
+    def _add_ocb_attribute(self, name: str, key: str, value: str) -> None:
+        """Handle attributes related to on-chain blueprint transactions."""
+        node = self._get_or_create_node(name)
+        node.type = DAGNodeType.OnChainBlueprint
+        if key == 'ocb_code':
+            node.attrs[key] = value
+
+        elif key == 'ocb_private_key':
+            if not is_literal(value):
+                raise SyntaxError(f'ocb_private_key must be a bytes literal: {value}')
+            node.attrs[key] = value
+
+        elif key == 'ocb_password':
+            if not is_literal(value):
+                raise SyntaxError(f'ocb_password must be a bytes literal: {value}')
+            node.attrs[key] = value
+
+        else:
+            node.attrs[key] = value
+
     def add_attribute(self, name: str, key: str, value: str) -> Self:
         """Add an attribute to a node."""
         if key.startswith('nc_'):
             self._add_nc_attribute(name, key, value)
+            return self
+
+        if key.startswith('ocb_'):
+            self._add_ocb_attribute(name, key, value)
             return self
 
         if key.startswith('balance_'):

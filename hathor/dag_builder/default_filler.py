@@ -64,7 +64,7 @@ class DefaultFiller:
         outputs.append(None)
         return len(outputs) - 1
 
-    def fill_parents(self, node: DAGNode, *, target: int = 2, candidates: list[str] | None = []) -> None:
+    def fill_parents(self, node: DAGNode, *, target: int = 2, candidates: list[str] | None = None) -> None:
         """Fill parents of a vertex.
 
         Note: We shouldn't use the DAG transactions because it would confirm them, violating the DAG description."""
@@ -220,7 +220,7 @@ class DefaultFiller:
                     self.fill_parents(node)
                     self.balance_node_inputs_and_outputs(node)
 
-                case DAGNodeType.NanoContract:
+                case DAGNodeType.NanoContract | DAGNodeType.OnChainBlueprint:
                     self.fill_parents(node)
                     self.balance_node_inputs_and_outputs(node)
 

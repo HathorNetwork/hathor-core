@@ -1,14 +1,10 @@
 import os
 
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-
-from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.exception import OCBInvalidScript
-from hathor.wallet import KeyPair
 from tests import unittest
+from tests.nanocontracts.on_chain_blueprints.utils import get_ocb_private_key
 
 
 def _load_file(filename: str) -> bytes:
@@ -32,14 +28,6 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         self.manager = self.create_peer('testnet')
         self.verification_service = self.manager.verification_service
 
-    def _ocb_sign(self, blueprint: OnChainBlueprint) -> None:
-        key = KeyPair(unittest.OCB_TEST_PRIVKEY)
-        privkey = key.get_private_key(unittest.OCB_TEST_PASSWORD)
-        pubkey = privkey.public_key()
-        blueprint.nc_pubkey = get_public_key_bytes_compressed(pubkey)
-        data = blueprint.get_sighash_all_data()
-        blueprint.nc_signature = privkey.sign(data, ec.ECDSA(hashes.SHA256()))
-
     def _ocb_mine(self, blueprint: OnChainBlueprint) -> None:
         self.manager.cpu_mining_service.resolve(blueprint)
         self.manager.reactor.advance(2)
@@ -60,7 +48,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             code=code,
         )
         blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
-        self._ocb_sign(blueprint)
+        blueprint.sign(get_ocb_private_key())
         self._ocb_mine(blueprint)
         return blueprint
 

@@ -9,18 +9,19 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.types import Address, ContractId, NCAction, NCActionType, SignedData
+from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
 from tests import unittest
 
-from .utils import load_bultin_nc_code, ocb_sign
+from .utils import get_ocb_private_key
 
 settings = HathorSettings()
 
 
-ON_CHAIN_BET_NC_CODE: str = load_bultin_nc_code('bet.py', 'Bet')
+ON_CHAIN_BET_NC_CODE: str = load_builtin_blueprint_for_ocb('bet.py', 'Bet')
 
 
 class OnChainBet(NamedTuple):
@@ -113,7 +114,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
             code=code,
         )
         blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
-        ocb_sign(blueprint)
+        blueprint.sign(get_ocb_private_key())
         self.manager.cpu_mining_service.resolve(blueprint)
         self.manager.reactor.advance(2)
         return blueprint

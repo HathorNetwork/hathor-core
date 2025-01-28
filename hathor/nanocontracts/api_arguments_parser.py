@@ -39,7 +39,7 @@ def get_supertype(_type: Type) -> Type:
 
 
 def parse_nc_method_call(blueprint_class: Type[Blueprint], call_info: str) -> tuple[str, Any]:
-    """Parse a string that represents an invokation to a Nano Contract method.
+    """Parse a string that represents an invocation to a Nano Contract method.
 
     The string must be in the following format: `method(arg1, arg2, arg3)`.
 

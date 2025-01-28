@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterator, NamedTuple, TypeAlias
 
+from hathor.dag_builder.utils import get_literal
 from hathor.transaction import BaseTransaction
 from hathor.wallet import BaseWallet
 
@@ -34,6 +35,7 @@ class DAGNodeType(Enum):
     Transaction = 'transaction'
     Token = 'token'
     Genesis = 'genesis'
+    OnChainBlueprint = 'on_chain_blueprint'
 
 
 @dataclass
@@ -57,6 +59,17 @@ class DAGNode:
         yield from self.parents
         yield from (name for name, _ in self.inputs)
         yield from self.deps
+
+    def get_required_attr(self, attr: str) -> str:
+        """Return the value of a required attribute or raise a SyntaxError if it doesn't exist."""
+        if value := self.attrs.get(attr):
+            return value
+        raise SyntaxError(f'missing required attribute: {self.name}.{attr}')
+
+    def get_required_literal(self, attr: str) -> str:
+        """Return the value of a required attribute as a literal or raise a SyntaxError if it doesn't exist."""
+        value = self.get_required_attr(attr)
+        return get_literal(value)
 
 
 class DAGInput(NamedTuple):
