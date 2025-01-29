@@ -31,13 +31,13 @@ class ConsensusTestCase(unittest.TestCase):
             pass
 
         execution_manager_mock = Mock(spec_set=ExecutionManager)
-        manager.consensus_algorithm._execution_manager = execution_manager_mock
-        manager.consensus_algorithm._unsafe_update = MagicMock(side_effect=MyError)
+        manager.vertex_handler._execution_manager = execution_manager_mock
+        manager.consensus_algorithm.unsafe_update = MagicMock(side_effect=MyError)
 
         manager.propagate_tx(tx, fails_silently=False)
 
         execution_manager_mock.crash_and_exit.assert_called_once_with(
-            reason=f"Consensus update failed for tx {tx.hash_hex}"
+            reason=f"on_new_vertex() failed for tx {tx.hash_hex}"
         )
 
         tx2 = manager.tx_storage.get_transaction(tx.hash)

@@ -1,7 +1,5 @@
 from unittest.mock import Mock
 
-import pytest
-
 from hathor.builder import CliBuilder, ResourcesBuilder
 from hathor.cli.run_node_args import RunNodeArgs
 from hathor.event import EventManager
@@ -14,7 +12,6 @@ from hathor.p2p.sync_version import SyncVersion
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
 from hathor.wallet import HDWallet, Wallet
 from tests import unittest
-from tests.utils import HAS_ROCKSDB
 
 
 class BuilderTestCase(unittest.TestCase):
@@ -49,7 +46,6 @@ class BuilderTestCase(unittest.TestCase):
     def test_empty(self):
         self._build_with_error([], '--data is expected')
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_all_default(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--data', data_dir])
@@ -64,14 +60,12 @@ class BuilderTestCase(unittest.TestCase):
         self.assertFalse(self.resources_builder._built_status)
         self.assertFalse(manager._enable_event_queue)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_disable_cache_storage(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--disable-cache', '--data', data_dir])
         self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_default_storage_memory_indexes(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--memory-indexes', '--data', data_dir])
@@ -79,7 +73,6 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
         self.assertIsInstance(manager.tx_storage.indexes, MemoryIndexesManager)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_default_storage_with_rocksdb_indexes(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--x-rocksdb-indexes', '--data', data_dir])
@@ -87,7 +80,6 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_rocksdb_storage(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--rocksdb-storage', '--data', data_dir])
@@ -153,20 +145,17 @@ class BuilderTestCase(unittest.TestCase):
         args = ['--memory-storage', '--prometheus']
         self._build_with_error(args, 'To run prometheus exporter you must have a data path')
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_prometheus(self):
         data_dir = self.mkdtemp()
         self._build(['--prometheus', '--data', data_dir])
         self.assertTrue(self.resources_builder._built_prometheus)
         self.clean_pending(required_to_quiesce=False)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_memory_and_rocksdb_indexes(self):
         data_dir = self.mkdtemp()
         args = ['--memory-indexes', '--x-rocksdb-indexes', '--data', data_dir]
         self._build_with_error(args, 'You cannot use --memory-indexes and --x-rocksdb-indexes.')
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_event_queue_with_rocksdb_storage(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--x-enable-event-queue', '--rocksdb-storage', '--data', data_dir])
@@ -183,7 +172,3 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager._event_manager._event_storage, EventMemoryStorage)
         self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
         self.assertTrue(manager._enable_event_queue)
-
-    def test_event_queue_with_full_verification(self):
-        args = ['--x-enable-event-queue', '--memory-storage', '--x-full-verification']
-        self._build_with_error(args, '--x-full-verification cannot be used with --enable-event-queue')

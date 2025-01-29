@@ -31,7 +31,6 @@ from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.util import not_none
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
 
 
 class BaseFeatureSimulationTest(SimulatorTestCase):
@@ -671,7 +670,6 @@ class MemoryStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         return self.simulator.get_default_builder()
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class RocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
     __test__ = True
 

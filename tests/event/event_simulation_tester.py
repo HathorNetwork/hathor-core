@@ -16,7 +16,6 @@ from json import JSONDecodeError
 from typing import Any, Iterable
 from unittest.mock import Mock
 
-import pytest
 from twisted.internet.testing import StringTransport
 
 from hathor.builder import Builder
@@ -27,7 +26,6 @@ from hathor.p2p.peer import PrivatePeer
 from hathor.transaction.util import unpack, unpack_len
 from hathor.util import json_loadb
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
 
 
 class BaseEventSimulationTester(SimulatorTestCase):
@@ -101,7 +99,6 @@ class MemoryEventSimulationTester(BaseEventSimulationTester):
         self._create_artifacts()
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class RocksDBEventSimulationTester(BaseEventSimulationTester):
     def setUp(self) -> None:
         super().setUp()

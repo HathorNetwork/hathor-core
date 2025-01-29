@@ -2,7 +2,6 @@ import base64
 import re
 from unittest.mock import patch
 
-import pytest
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
@@ -24,7 +23,6 @@ from hathor.transaction.storage.traversal import DFSWalk
 from hathor.types import VertexId
 from hathor.util import not_none
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
 
 
 class RandomSimulatorTestCase(SimulatorTestCase):
@@ -148,19 +146,15 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager3.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_restart_fullnode_full_verification(self) -> None:
         self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_restart_fullnode_quick(self) -> None:
         self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_restart_fullnode_quick_with_cache(self) -> None:
         self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_restart_fullnode_full_verification_with_cache(self) -> None:
         self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
 

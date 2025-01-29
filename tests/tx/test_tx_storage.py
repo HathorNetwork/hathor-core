@@ -3,7 +3,6 @@ import tempfile
 import time
 from itertools import chain
 
-import pytest
 from twisted.internet.defer import gatherResults, inlineCallbacks
 from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
@@ -15,14 +14,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
 from tests.unittest import TestBuilder
-from tests.utils import (
-    BURN_ADDRESS,
-    HAS_ROCKSDB,
-    add_blocks_unlock_reward,
-    add_new_transactions,
-    add_new_tx,
-    create_tokens,
-)
+from tests.utils import BURN_ADDRESS, add_blocks_unlock_reward, add_new_transactions, add_new_tx, create_tokens
 
 
 class BaseTransactionStorageTest(unittest.TestCase):
@@ -629,7 +621,6 @@ class CacheMemoryStorageTest(BaseCacheStorageTest):
         builder.use_tx_storage_cache(capacity=5)
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
     __test__ = True
 
@@ -646,7 +637,6 @@ class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
         super().test_storage_new_blocks()
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class CacheRocksDBStorageTest(BaseCacheStorageTest):
     __test__ = True
 

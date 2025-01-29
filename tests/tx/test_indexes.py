@@ -1,5 +1,3 @@
-import pytest
-
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator.utils import add_new_block, add_new_blocks
@@ -9,7 +7,7 @@ from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import iwindows
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
+from tests.utils import add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
 
 
 class BaseIndexesTest(unittest.TestCase):
@@ -715,7 +713,6 @@ class MemoryIndexesTest(BaseIndexesTest):
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class RocksDBIndexesTest(BaseIndexesTest):
     __test__ = True
 

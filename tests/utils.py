@@ -27,13 +27,6 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
 from hathor.util import Random
 
-try:
-    import rocksdb  # noqa: F401
-except ImportError:
-    HAS_ROCKSDB = False
-else:
-    HAS_ROCKSDB = True
-
 settings = HathorSettings()
 
 # useful for adding blocks to a different wallet

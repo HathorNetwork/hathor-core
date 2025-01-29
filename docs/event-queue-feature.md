@@ -15,18 +15,13 @@ When the Event Queue feature is enabled, the full node will generate specific ev
 
 ## Enabling the Event Queue
 
-To enable the Event Queue feature, you must add two CLI options when running the full node:
-
-1. Add `--unsafe-mode [network_name]`
-2. Add `--x-enable-event-queue`
+To enable the Event Queue feature, you must add this CLI option when running the full node: `--enable-event-queue`.
 
 For example:
 
 ```bash
-poetry run hathor-cli run_node --memory-storage --status 8080 --testnet --unsafe-mode testnet-golf --x-enable-event-queue
+poetry run hathor-cli run_node --memory-storage --status 8080 --testnet --enable-event-queue
 ```
-
-**ATTENTION**: While the Event Queue is in beta, it's considered unsafe. You must not use it in production environments.
 
 ### First run
 
@@ -45,7 +40,7 @@ For case 2.2, an extra loading step will be performed during full node initializ
 
 After running the full node with the Event Queue enabled, if you restart your full node (that is, stop it and then run it again), there are 2 possibilities:
 
-1. You run the full node with the `--x-enable-event-queue` CLI option, that is, you keep the Event Queue enabled, or
+1. You run the full node with the `--enable-event-queue` CLI option, that is, you keep the Event Queue enabled, or
 2. You run the full node without the CLI option, that is, you don't enable it, but you **have to clear the event data in the database**.
 
 For case 1, the full node will start normally, and continue to generate new events for synced vertices from where it stopped in the previous run.

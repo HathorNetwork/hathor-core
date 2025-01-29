@@ -1,8 +1,6 @@
 import tempfile
 from unittest.mock import Mock
 
-import pytest
-
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -12,7 +10,6 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import HAS_ROCKSDB
 
 
 class MetricsTest(unittest.TestCase):
@@ -82,7 +79,6 @@ class MetricsTest(unittest.TestCase):
 
         manager.metrics.stop()
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_tx_storage_data_collection_with_rocksdb_storage_and_no_cache(self):
         """Tests storage data collection when using RocksDB Storage
            with cache disabled.
@@ -134,7 +130,6 @@ class MetricsTest(unittest.TestCase):
         self.assertGreater(manager.metrics.rocksdb_cfs_sizes[b'tx'], 500)
         self.assertGreater(manager.metrics.rocksdb_cfs_sizes[b'meta'], 1000)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_tx_storage_data_collection_with_rocksdb_storage_and_cache(self):
         """Tests storage data collection when using RocksDB Storage
            with cache enabled.

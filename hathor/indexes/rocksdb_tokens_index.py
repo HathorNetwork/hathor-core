@@ -289,7 +289,10 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             from hathor.transaction.token_creation_tx import TokenCreationTransaction
             tx = cast(TokenCreationTransaction, tx)
             self.log.debug('create_token_info', tx=tx.hash_hex, name=tx.token_name, symb=tx.token_symbol)
-            self._create_token_info(tx.hash, tx.token_name, tx.token_symbol)
+            key_info = self._to_key_info(tx.hash)
+            token_info = self._db.get((self._cf, key_info))
+            if token_info is None:
+                self._create_token_info(tx.hash, tx.token_name, tx.token_symbol)
 
         if tx.is_transaction:
             # Adding this tx to the transactions key list
@@ -305,7 +308,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self.log.debug('add utxo', tx=tx.hash_hex, index=index)
             self._add_utxo(tx, index)
 
-    def del_tx(self, tx: BaseTransaction) -> None:
+    def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
             self._add_utxo(spent_tx, tx_input.index)

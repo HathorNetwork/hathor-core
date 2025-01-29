@@ -491,7 +491,7 @@ class HathorManager:
                     )
                     self.tx_storage.add_to_indexes(tx)
                     with self.tx_storage.allow_only_valid_context():
-                        self.consensus_algorithm.update(tx)
+                        self.consensus_algorithm.unsafe_update(tx)
                     self.tx_storage.indexes.update(tx)
                     if self.tx_storage.indexes.mempool_tips is not None:
                         self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update

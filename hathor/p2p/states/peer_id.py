@@ -102,7 +102,12 @@ class PeerIdState(BaseState):
 
         data = json_loads(payload)
 
-        peer = PublicPeer.create_from_json(data)
+        try:
+            peer = PublicPeer.create_from_json(data)
+        except ValueError as e:
+            protocol.send_error_and_close_connection(f'Unable to parse peer id. Reason: {str(e)}')
+            return
+
         assert peer.id is not None
 
         # If the connection URL had a peer-id parameter we need to check it's the same

@@ -372,8 +372,7 @@ class Builder:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             pubsub = self._get_or_create_pubsub()
-            execution_manager = self._get_or_create_execution_manager()
-            self._consensus = ConsensusAlgorithm(soft_voided_tx_ids, pubsub, execution_manager=execution_manager)
+            self._consensus = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
 
         return self._consensus
 
@@ -611,6 +610,7 @@ class Builder:
                 verification_service=self._get_or_create_verification_service(),
                 consensus=self._get_or_create_consensus(),
                 feature_service=self._get_or_create_feature_service(),
+                execution_manager=self._get_or_create_execution_manager(),
                 pubsub=self._get_or_create_pubsub(),
                 wallet=self._get_or_create_wallet(),
             )

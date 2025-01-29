@@ -17,7 +17,6 @@ from collections import defaultdict
 from typing import Iterator
 
 import base58
-import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.python.failure import Failure
@@ -39,7 +38,6 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import not_none
 from tests.poa.utils import get_settings, get_signer
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
 
 
 def _get_blocks_by_height(manager: HathorManager) -> defaultdict[int, list[PoaBlock]]:
@@ -325,7 +323,6 @@ class PoaSimulationTest(SimulatorTestCase):
             expected,
         )
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_existing_storage(self) -> None:
         import tempfile
         rocksdb_directory = tempfile.mkdtemp()

@@ -610,11 +610,10 @@ class TokenTest(unittest.TestCase):
         self.assertTrue(bool(tx1.get_metadata().voided_by))
         mint = list(tokens_index.iter_mint_utxos())
         melt = list(tokens_index.iter_melt_utxos())
-        self.assertEqual(0, len(mint))
-        self.assertEqual(0, len(melt))
-        with self.assertRaises(KeyError):
-            tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
-            print(tokens_index)
+        self.assertEqual(1, len(mint))
+        self.assertEqual(1, len(melt))
+        tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
+        print(tokens_index)
 
 
 @pytest.mark.skipif(unittest.USE_MEMORY_STORAGE, reason='previous tests already use memory, avoid duplication')
