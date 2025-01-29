@@ -86,8 +86,6 @@ class BlueprintInfoResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.blueprint_id}')
             return error_response.json_dumpb()
 
-        assert self.manager.tx_storage.nc_catalog is not None
-
         try:
             blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
         except BlueprintDoesNotExist:
