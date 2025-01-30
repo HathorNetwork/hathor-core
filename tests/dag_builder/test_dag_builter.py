@@ -203,3 +203,18 @@ class DAGCreatorTestCase(unittest.TestCase):
 
         for node, vertex in artifacts.list:
             self.manager.on_new_tx(vertex, fails_silently=False)
+
+    def test_no_hash_conflict(self) -> None:
+        artifacts = self.dag_builder.build_from_str("""
+            blockchain genesis b[1..33]
+
+            b30 < dummy
+
+            tx10.out[0] <<< tx20 tx30 tx40
+        """)
+
+        for node, vertex in artifacts.list:
+            print()
+            print(node.name)
+            print()
+            self.manager.on_new_tx(vertex, fails_silently=False)
