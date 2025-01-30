@@ -186,7 +186,7 @@ class DebugMessAroundResource(Resource):
 
     def remove_storage(self) -> None:
         # XXX: this is just used to cause a problem on another part of the fullnode
-        self.manager.tx_storage = None  # type: ignore
+        self.manager.tx_storage = None  # type: ignore[assignment]
 
     def render_GET(self, request: Request) -> bytes:
         mess = get_arg_default(get_args(request), 'with', self.default_mess)
