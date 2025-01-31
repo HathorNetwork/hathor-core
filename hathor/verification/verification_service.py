@@ -346,4 +346,5 @@ class VerificationService:
         self.verifiers.on_chain_blueprint.verify_nc_signature(tx)
         self.verifiers.on_chain_blueprint.verify_python_script(tx)
         self.verifiers.on_chain_blueprint.verify_script_restrictions(tx)
-        self.verifiers.on_chain_blueprint.verify_has_blueprint_object(tx)
+        self.verifiers.on_chain_blueprint.verify_has_blueprint_attr(tx)
+        self.verifiers.on_chain_blueprint.verify_blueprint_type(tx)
