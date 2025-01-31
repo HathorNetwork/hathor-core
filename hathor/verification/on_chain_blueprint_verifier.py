@@ -185,9 +185,18 @@ class OnChainBlueprintVerifier:
         except SyntaxError as e:
             raise OCBInvalidScript from e
 
-    def verify_has_blueprint_object(self, tx: OnChainBlueprint) -> None:
-        """Verify that the script defines a __blueprint__ class object."""
+    def verify_has_blueprint_attr(self, tx: OnChainBlueprint) -> None:
+        """Verify that the script defines a __blueprint__ attribute."""
         search_name = _SearchName(BLUEPRINT_CLASS_NAME)
         search_name.visit(self._get_python_code_ast(tx))
         if not search_name.found:
             raise OCBInvalidScript(f'Could not find {BLUEPRINT_CLASS_NAME} object')
+
+    def verify_blueprint_type(self, tx: OnChainBlueprint) -> None:
+        """Verify that the __blueprint__ is a Blueprint, this will load and execute the blueprint code."""
+        from hathor.nanocontracts.blueprint import Blueprint
+        blueprint_class = tx.get_blueprint_object_bypass()
+        if not isinstance(blueprint_class, type):
+            raise OCBInvalidScript(f'{BLUEPRINT_CLASS_NAME} is not a class')
+        if not issubclass(blueprint_class, Blueprint):
+            raise OCBInvalidScript(f'{BLUEPRINT_CLASS_NAME} is not a Blueprint subclass')
