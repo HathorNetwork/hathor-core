@@ -226,7 +226,7 @@ class OnChainBlueprint(Transaction):
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
         return BlueprintId(VertexId(self.hash))
 
-    def _load_blueprint_code_exec(self) -> tuple[type[Blueprint], dict[str, object]]:
+    def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""
         from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
         fuel = self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE
@@ -241,15 +241,21 @@ class OnChainBlueprint(Transaction):
             self.log.error('loading blueprint module failed, memory limit exceeded')
             raise OCBOutOfMemoryDuringLoading from e
         blueprint_class = env[BLUEPRINT_CLASS_NAME]
-        assert isinstance(blueprint_class, type)
-        assert issubclass(blueprint_class, Blueprint)
         return blueprint_class, env
 
     def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:
         """This method loads the on-chain code (if not loaded) and returns the blueprint class and env."""
         if self._blueprint_loaded_env is None:
-            self._blueprint_loaded_env = self._load_blueprint_code_exec()
+            blueprint_class, env = self._load_blueprint_code_exec()
+            assert isinstance(blueprint_class, type)
+            assert issubclass(blueprint_class, Blueprint)
+            self._blueprint_loaded_env = blueprint_class, env
         return self._blueprint_loaded_env
+
+    def get_blueprint_object_bypass(self) -> object:
+        """Loads the code and returns the object defined in __blueprint__"""
+        blueprint_class, _ = self._load_blueprint_code_exec()
+        return blueprint_class
 
     def get_blueprint_class(self) -> type[Blueprint]:
         """Returns the blueprint class, loads and executes the code as needed."""
