@@ -27,7 +27,7 @@ from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
 
 
-class BaseRandomSimulatorTestCase(SimulatorTestCase):
+class RandomSimulatorTestCase(SimulatorTestCase):
     __test__ = True
 
     seed_config = 2
