@@ -7,8 +7,6 @@ from tests import unittest
 
 
 class SimulatorTestCase(unittest.TestCase):
-    __test__ = False
-
     seed_config: Optional[int] = None
 
     def setUp(self) -> None:

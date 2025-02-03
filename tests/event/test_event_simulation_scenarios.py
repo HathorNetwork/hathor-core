@@ -41,6 +41,8 @@ class BaseEventSimulationScenariosTest(BaseEventSimulationTester):
     console and then copying the output and manipulating it to create instances.
     """
 
+    __test__ = False
+
     seed_config = 6946502462188444706
 
     def assert_response_equal(self, responses: list[EventResponse], expected: list[EventResponse]) -> None:
