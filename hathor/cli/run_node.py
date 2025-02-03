@@ -125,7 +125,7 @@ class RunNode:
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
         fvargs = parser.add_mutually_exclusive_group()
-        fvargs.add_argument('--x-full-verification', action='store_true', help='Fully validate the local database')
+        fvargs.add_argument('--x-full-verification', action='store_true', help=SUPPRESS)  # deprecated
         parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
         parser.add_argument('--allow-non-standard-script', action='store_true', help='Accept non-standard scripts on '
                             '/push-tx API')
@@ -135,14 +135,13 @@ class RunNode:
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
         sync_args = parser.add_mutually_exclusive_group()
-        sync_args.add_argument('--sync-bridge', action='store_true', help=SUPPRESS)  # moved to --x-sync-bridge
-        sync_args.add_argument('--sync-v1-only', action='store_true', help=SUPPRESS)  # moved to --x-sync-v1-only
-        sync_args.add_argument('--sync-v2-only', action='store_true', help=SUPPRESS)  # already default
-        sync_args.add_argument('--x-remove-sync-v1', action='store_true', help='Make sync-v1 unavailable, thus '
-                               'impossible to be enabled in runtime.')
-        sync_args.add_argument('--x-sync-v1-only', action='store_true', help='Disable support for running sync-v2.')
-        sync_args.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # old argument
-        sync_args.add_argument('--x-sync-bridge', action='store_true', help='Enable running both sync protocols.')
+        sync_args.add_argument('--sync-bridge', action='store_true', help=SUPPRESS)  # deprecated
+        sync_args.add_argument('--sync-v1-only', action='store_true', help=SUPPRESS)  # deprecated
+        sync_args.add_argument('--sync-v2-only', action='store_true', help=SUPPRESS)  # deprecated
+        sync_args.add_argument('--x-remove-sync-v1', action='store_true', help=SUPPRESS)  # deprecated
+        sync_args.add_argument('--x-sync-v1-only', action='store_true', help=SUPPRESS)  # deprecated
+        sync_args.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # deprecated
+        sync_args.add_argument('--x-sync-bridge', action='store_true', help=SUPPRESS)  # deprecated
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true',

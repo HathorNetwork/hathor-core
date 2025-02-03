@@ -1,8 +1,6 @@
 import tempfile
 from unittest.mock import Mock
 
-import pytest
-
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -12,12 +10,9 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import HAS_ROCKSDB
 
 
-class BaseMetricsTest(unittest.TestCase):
-    __test__ = False
-
+class MetricsTest(unittest.TestCase):
     def test_p2p_network_events(self):
         """Simulates publishing an event to pubsub the same way as done
            by the ConnectionsManager class.
@@ -84,7 +79,6 @@ class BaseMetricsTest(unittest.TestCase):
 
         manager.metrics.stop()
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_tx_storage_data_collection_with_rocksdb_storage_and_no_cache(self):
         """Tests storage data collection when using RocksDB Storage
            with cache disabled.
@@ -136,7 +130,6 @@ class BaseMetricsTest(unittest.TestCase):
         self.assertGreater(manager.metrics.rocksdb_cfs_sizes[b'tx'], 500)
         self.assertGreater(manager.metrics.rocksdb_cfs_sizes[b'meta'], 1000)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_tx_storage_data_collection_with_rocksdb_storage_and_cache(self):
         """Tests storage data collection when using RocksDB Storage
            with cache enabled.
@@ -281,16 +274,3 @@ class BaseMetricsTest(unittest.TestCase):
         # Assertion
         self.assertEquals(manager.metrics.transaction_cache_hits, 10)
         self.assertEquals(manager.metrics.transaction_cache_misses, 20)
-
-
-class SyncV1MetricsTest(unittest.SyncV1Params, BaseMetricsTest):
-    __test__ = True
-
-
-class SyncV2MetricsTest(unittest.SyncV2Params, BaseMetricsTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMetricsTest(unittest.SyncBridgeParams, SyncV2MetricsTest):
-    pass

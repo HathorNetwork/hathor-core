@@ -1,7 +1,5 @@
 import tempfile
 
-import pytest
-
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.node_state import NodeState
 from hathor.event.storage import EventStorage
@@ -9,7 +7,7 @@ from hathor.event.storage.memory_storage import EventMemoryStorage
 from hathor.event.storage.rocksdb_storage import EventRocksDBStorage
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from tests import unittest
-from tests.utils import HAS_ROCKSDB, EventMocker
+from tests.utils import EventMocker
 
 
 class EventStorageBaseTest(unittest.TestCase):
@@ -237,7 +235,6 @@ class EventStorageBaseTest(unittest.TestCase):
         assert event_queue_state is False
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class EventStorageRocksDBTest(EventStorageBaseTest):
     __test__ = True
 

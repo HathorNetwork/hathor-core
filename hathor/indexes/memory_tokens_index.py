@@ -139,7 +139,7 @@ class MemoryTokensIndex(TokensIndex):
                     return
                 transactions.add(element)
 
-    def del_tx(self, tx: BaseTransaction) -> None:
+    def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
             self._add_to_index(spent_tx, tx_input.index)

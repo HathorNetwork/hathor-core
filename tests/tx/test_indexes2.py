@@ -1,10 +1,7 @@
 import tempfile
 from typing import TYPE_CHECKING, NamedTuple
 
-import pytest
-
 from tests import unittest
-from tests.utils import HAS_ROCKSDB
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -36,7 +33,6 @@ class SimpleIndexesTestCase(unittest.TestCase):
         options = rocksdb.Options(create_if_missing=True, error_if_exists=True)
         return rocksdb.DB(directory, options)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_timestamp_index(self):
         # setup two indexes with different backends
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex

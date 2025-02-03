@@ -7,13 +7,10 @@ from hathor.conf.unittests import SETTINGS
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.resources import StatusResource
 from hathor.simulator import FakeConnection
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class BaseStatusTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class StatusTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(StatusResource(self.manager))
@@ -111,16 +108,3 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(connecting), 1)
         self.assertEqual(connecting[0]['address'], address)
         self.assertIsNotNone(connecting[0]['deferred'])
-
-
-class SyncV1StatusTest(unittest.SyncV1Params, BaseStatusTest):
-    __test__ = True
-
-
-class SyncV2StatusTest(unittest.SyncV2Params, BaseStatusTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeStatusTest(unittest.SyncBridgeParams, SyncV2StatusTest):
-    pass

@@ -256,7 +256,7 @@ class IndexesManager(ABC):
             self.sorted_txs.del_tx(tx)
 
         if self.tokens:
-            self.tokens.del_tx(tx)
+            self.tokens.del_tx(tx, remove_all=remove_all)
 
 
 class MemoryIndexesManager(IndexesManager):

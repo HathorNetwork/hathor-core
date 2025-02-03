@@ -16,7 +16,6 @@ import getpass
 import os
 import platform
 import sys
-from enum import Enum, auto
 from typing import Any, Optional
 
 from structlog import get_logger
@@ -51,13 +50,6 @@ from hathor.wallet import BaseWallet, HDWallet, Wallet
 logger = get_logger()
 
 DEFAULT_CACHE_SIZE: int = 100000
-
-
-class SyncChoice(Enum):
-    V1_DEFAULT = auto()  # v1 enabled, v2 disabled but can be enabled in runtime
-    V2_DEFAULT = auto()  # v2 enabled, v1 disabled but can be enabled in runtime
-    BRIDGE_DEFAULT = auto()  # both enabled, either can be disabled in runtime
-    V2_ONLY = auto()  # v1 is unavailable, it cannot be enabled in runtime
 
 
 class CliBuilder:
@@ -198,46 +190,20 @@ class CliBuilder:
 
         hostname = self.get_hostname()
 
-        sync_choice: SyncChoice
         if self._args.sync_bridge:
-            self.log.warn('--sync-bridge is deprecated and will be removed')
-            sync_choice = SyncChoice.BRIDGE_DEFAULT
+            raise BuilderError('--sync-bridge was removed')
         elif self._args.sync_v1_only:
-            self.log.warn('--sync-v1-only is deprecated and will be removed')
-            sync_choice = SyncChoice.V1_DEFAULT
+            raise BuilderError('--sync-v1-only was removed')
         elif self._args.sync_v2_only:
             self.log.warn('--sync-v2-only is the default, this parameter has no effect')
-            sync_choice = SyncChoice.V2_DEFAULT
         elif self._args.x_remove_sync_v1:
-            sync_choice = SyncChoice.V2_ONLY
+            self.log.warn('--x-remove-sync-v1 is deprecated and has no effect')
         elif self._args.x_sync_bridge:
-            self.log.warn('--x-sync-bridge is deprecated and will be removed')
-            sync_choice = SyncChoice.BRIDGE_DEFAULT
+            raise BuilderError('--x-sync-bridge was removed')
         elif self._args.x_sync_v1_only:
-            self.log.warn('--x-sync-v1-only is deprecated and will be removed')
-            sync_choice = SyncChoice.V1_DEFAULT
+            raise BuilderError('--x-sync-v1-only was removed')
         elif self._args.x_sync_v2_only:
             self.log.warn('--x-sync-v2-only is deprecated and will be removed')
-            sync_choice = SyncChoice.V2_DEFAULT
-        else:
-            # XXX: this is the default behavior when no parameter is given
-            sync_choice = SyncChoice.V2_DEFAULT
-
-        sync_v1_support: SyncSupportLevel
-        sync_v2_support: SyncSupportLevel
-        match sync_choice:
-            case SyncChoice.V1_DEFAULT:
-                sync_v1_support = SyncSupportLevel.ENABLED
-                sync_v2_support = SyncSupportLevel.DISABLED
-            case SyncChoice.V2_DEFAULT:
-                sync_v1_support = SyncSupportLevel.DISABLED
-                sync_v2_support = SyncSupportLevel.ENABLED
-            case SyncChoice.BRIDGE_DEFAULT:
-                sync_v1_support = SyncSupportLevel.ENABLED
-                sync_v2_support = SyncSupportLevel.ENABLED
-            case SyncChoice.V2_ONLY:
-                sync_v1_support = SyncSupportLevel.UNAVAILABLE
-                sync_v2_support = SyncSupportLevel.ENABLED
 
         pubsub = PubSubManager(reactor)
 
@@ -270,19 +236,12 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
-        full_verification = False
-        if self._args.x_full_verification:
-            self.check_or_raise(
-                not self._args.x_enable_event_queue and not self._args.enable_event_queue,
-                '--x-full-verification cannot be used with --enable-event-queue'
-            )
-            full_verification = True
+        self.check_or_raise(not self._args.x_full_verification, '--x-full-verification is deprecated')
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
             soft_voided_tx_ids,
             pubsub=pubsub,
-            execution_manager=execution_manager
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
@@ -341,18 +300,12 @@ class CliBuilder:
             consensus=consensus_algorithm,
             feature_service=self.feature_service,
             pubsub=pubsub,
+            execution_manager=execution_manager,
             wallet=self.wallet,
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
-        SyncSupportLevel.add_factories(
-            settings,
-            p2p_manager,
-            sync_v1_support,
-            sync_v2_support,
-            vertex_parser,
-            vertex_handler,
-        )
+        SyncSupportLevel.add_factories(settings, p2p_manager, SyncSupportLevel.ENABLED, vertex_parser, vertex_handler)
 
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
         poa_block_producer: PoaBlockProducer | None = None
@@ -380,7 +333,7 @@ class CliBuilder:
             wallet=self.wallet,
             checkpoints=settings.CHECKPOINTS,
             environment_info=get_environment_info(args=str(self._args), peer_id=str(peer.id)),
-            full_verification=full_verification,
+            full_verification=False,
             enable_event_queue=self._args.x_enable_event_queue or self._args.enable_event_queue,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,

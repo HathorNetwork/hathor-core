@@ -2,14 +2,11 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.transaction.resources import BlockAtHeightResource
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
-class BaseBlockAtHeightTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class BlockAtHeightTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(BlockAtHeightResource(self.manager))
@@ -108,16 +105,3 @@ class BaseBlockAtHeightTest(_BaseResourceTest._ResourceTest):
         response6 = yield self.web.get("block_at_height", {b'height': b'5'})
         data6 = response6.json_value()
         self.assertFalse(data6['success'])
-
-
-class SyncV1BlockAtHeightTest(unittest.SyncV1Params, BaseBlockAtHeightTest):
-    __test__ = True
-
-
-class SyncV2BlockAtHeightTest(unittest.SyncV2Params, BaseBlockAtHeightTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeBlockAtHeightTest(unittest.SyncBridgeParams, SyncV2BlockAtHeightTest):
-    pass

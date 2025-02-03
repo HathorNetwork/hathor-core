@@ -23,7 +23,6 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
-from hathor.execution_manager import ExecutionManager
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
@@ -68,8 +67,6 @@ class ConsensusAlgorithm:
         self,
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
-        *,
-        execution_manager: ExecutionManager
     ) -> None:
         self._settings = get_global_settings()
         self.log = logger.new()
@@ -77,29 +74,24 @@ class ConsensusAlgorithm:
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
-        self._execution_manager = execution_manager
 
     def create_context(self) -> ConsensusAlgorithmContext:
         """Handy method to create a context that can be used to access block and transaction algorithms."""
         return ConsensusAlgorithmContext(self, self._pubsub)
 
     @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
-    def update(self, base: BaseTransaction) -> None:
+    def unsafe_update(self, base: BaseTransaction) -> None:
+        """
+        Run a consensus update with its own context, indexes will be updated accordingly.
+
+        It is considered unsafe because the caller is responsible for crashing the full node
+        if this method throws any exception.
+        """
+        from hathor.transaction import Block, Transaction
         assert base.storage is not None
         assert base.storage.is_only_valid_allowed()
         meta = base.get_metadata()
         assert meta.validation.is_valid()
-        try:
-            self._unsafe_update(base)
-        except BaseException:
-            meta.add_voided_by(self._settings.CONSENSUS_FAIL_ID)
-            assert base.storage is not None
-            base.storage.save_transaction(base, only_metadata=True)
-            self._execution_manager.crash_and_exit(reason=f'Consensus update failed for tx {base.hash_hex}')
-
-    def _unsafe_update(self, base: BaseTransaction) -> None:
-        """Run a consensus update with its own context, indexes will be updated accordingly."""
-        from hathor.transaction import Block, Transaction
 
         # XXX: first make sure we can run the consensus update on this tx:
         meta = base.get_metadata()

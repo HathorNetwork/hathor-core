@@ -6,7 +6,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward
 
 
-class _SerializationTest(unittest.TestCase):
+class BaseSerializationTest(unittest.TestCase):
     __test__ = False
 
     def setUp(self):
@@ -63,8 +63,19 @@ class _SerializationTest(unittest.TestCase):
             self._assertTxEq(tx, tx_re)
 
 
-class _SerializationV2OnlyTest(unittest.TestCase):
-    __test__ = False
+class NoSerializationTest(BaseSerializationTest):
+    """This should absolutely not fail, or the tests are wrong."""
+
+    __test__ = True
+
+    def _reserialize(self, tx):
+        return tx
+
+    def _assertTxEq(self, tx1, tx2):
+        self.log.info('assertEqual tx with metadata', a=tx1.to_json(), b=tx2.to_json())
+        self.assertEqual(tx1, tx2)
+        self.log.info('assertEqual tx metadata', a=tx1.get_metadata().to_json(), b=tx2.get_metadata().to_json())
+        self.assertEqual(tx1.get_metadata(), tx2.get_metadata())
 
     def test_serialization_tips(self):
         from itertools import chain
@@ -76,55 +87,14 @@ class _SerializationV2OnlyTest(unittest.TestCase):
             self._assertTxEq(tx, tx_re)
 
 
-class _SerializationWithoutMetadataTest(_SerializationTest):
-    def _assertTxEq(self, tx1, tx2):
-        self.log.info('assertEqual tx without metadata', a=tx1.to_json(), b=tx2.to_json())
-        self.assertEqual(tx1, tx2)
-
-
-class _SerializationWithMetadataTest(_SerializationTest):
-    def _assertTxEq(self, tx1, tx2):
-        self.log.info('assertEqual tx with metadata', a=tx1.to_json(), b=tx2.to_json())
-        self.assertEqual(tx1, tx2)
-        self.log.info('assertEqual tx metadata', a=tx1.get_metadata().to_json(), b=tx2.get_metadata().to_json())
-        self.assertEqual(tx1.get_metadata(), tx2.get_metadata())
-
-
-class BaseNoSerializationTest(_SerializationWithMetadataTest):
-    """This should absolutely not fail, or the tests are wrong."""
-
-    def _reserialize(self, tx):
-        return tx
-
-
-class SyncV1NoSerializationTest(unittest.SyncV1Params, BaseNoSerializationTest):
+class StructSerializationTest(BaseSerializationTest):
     __test__ = True
 
-
-class SyncV2NoSerializationTest(unittest.SyncV2Params, BaseNoSerializationTest, _SerializationV2OnlyTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeNoSerializationTest(unittest.SyncBridgeParams, SyncV2NoSerializationTest):
-    pass
-
-
-class BaseStructSerializationTest(_SerializationWithoutMetadataTest):
     def _reserialize(self, tx):
         cls = tx.__class__
         tx_struct = tx.get_struct()
         return cls.create_from_struct(tx_struct)
 
-
-class SyncV1StructSerializationTest(unittest.SyncV1Params, BaseStructSerializationTest):
-    __test__ = True
-
-
-class SyncV2StructSerializationTest(unittest.SyncV2Params, BaseStructSerializationTest, _SerializationV2OnlyTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeStructSerializationTest(unittest.SyncBridgeParams, SyncV2StructSerializationTest):
-    pass
+    def _assertTxEq(self, tx1, tx2):
+        self.log.info('assertEqual tx without metadata', a=tx1.to_json(), b=tx2.to_json())
+        self.assertEqual(tx1, tx2)

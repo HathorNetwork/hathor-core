@@ -19,6 +19,7 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
+from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -43,6 +44,7 @@ class VertexHandler:
         '_consensus',
         '_feature_service',
         '_pubsub',
+        '_execution_manager',
         '_wallet',
         '_log_vertex_bytes',
     )
@@ -57,6 +59,7 @@ class VertexHandler:
         consensus: ConsensusAlgorithm,
         feature_service: FeatureService,
         pubsub: PubSubManager,
+        execution_manager: ExecutionManager,
         wallet: BaseWallet | None,
         log_vertex_bytes: bool = False,
     ) -> None:
@@ -68,6 +71,7 @@ class VertexHandler:
         self._consensus = consensus
         self._feature_service = feature_service
         self._pubsub = pubsub
+        self._execution_manager = execution_manager
         self._wallet = wallet
         self._log_vertex_bytes = log_vertex_bytes
 
@@ -95,12 +99,19 @@ class VertexHandler:
         if not is_valid:
             return False
 
-        self._save_and_run_consensus(vertex)
-        self._post_consensus(
-            vertex,
-            quiet=quiet,
-            reject_locked_reward=reject_locked_reward
-        )
+        try:
+            self._unsafe_save_and_run_consensus(vertex)
+            self._post_consensus(
+                vertex,
+                quiet=quiet,
+                reject_locked_reward=reject_locked_reward
+            )
+        except BaseException:
+            self._log.error('unexpected exception in on_new_vertex()', vertex=vertex)
+            meta = vertex.get_metadata()
+            meta.add_voided_by(self._settings.CONSENSUS_FAIL_ID)
+            self._tx_storage.save_transaction(vertex, only_metadata=True)
+            self._execution_manager.crash_and_exit(reason=f'on_new_vertex() failed for tx {vertex.hash_hex}')
 
         return True
 
@@ -158,7 +169,11 @@ class VertexHandler:
 
         return True
 
-    def _save_and_run_consensus(self, vertex: BaseTransaction) -> None:
+    def _unsafe_save_and_run_consensus(self, vertex: BaseTransaction) -> None:
+        """
+        This method is considered unsafe because the caller is responsible for crashing the full node
+        if this method throws any exception.
+        """
         # The method below adds the tx as a child of the parents
         # This needs to be called right before the save because we were adding the children
         # in the tx parents even if the tx was invalid (failing the verifications above)
@@ -166,7 +181,7 @@ class VertexHandler:
         vertex.update_initial_metadata(save=False)
         self._tx_storage.save_transaction(vertex)
         self._tx_storage.add_to_indexes(vertex)
-        self._consensus.update(vertex)
+        self._consensus.unsafe_update(vertex)
 
     def _post_consensus(
         self,

@@ -17,7 +17,6 @@ from collections import defaultdict
 from typing import Iterator
 
 import base58
-import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.python.failure import Failure
@@ -37,10 +36,8 @@ from hathor.transaction.poa import PoaBlock
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import not_none
-from tests import unittest
 from tests.poa.utils import get_settings, get_signer
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
 
 
 def _get_blocks_by_height(manager: HathorManager) -> defaultdict[int, list[PoaBlock]]:
@@ -76,7 +73,7 @@ def _assert_height_weight_signer_id(
     assert sorted(non_voided_blocks) == expected
 
 
-class BasePoaSimulationTest(SimulatorTestCase):
+class PoaSimulationTest(SimulatorTestCase):
     def _get_manager(self, signer: PoaSigner | None = None) -> HathorManager:
         builder = self.simulator.get_default_builder().disable_full_verification()
         if signer:
@@ -326,7 +323,6 @@ class BasePoaSimulationTest(SimulatorTestCase):
             expected,
         )
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_existing_storage(self) -> None:
         import tempfile
         rocksdb_directory = tempfile.mkdtemp()
@@ -574,16 +570,3 @@ class BasePoaSimulationTest(SimulatorTestCase):
         token_tx.update_hash()
 
         assert manager.on_new_tx(token_tx, fails_silently=False)
-
-
-class SyncV1PoaSimulationTest(unittest.SyncV1Params, BasePoaSimulationTest):
-    __test__ = True
-
-
-class SyncV2PoaSimulationTest(unittest.SyncV2Params, BasePoaSimulationTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgePoaSimulationTest(unittest.SyncBridgeParams, SyncV2PoaSimulationTest):
-    pass

@@ -8,9 +8,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 
-class BaseConsensusTestCase(unittest.TestCase):
-    __test__ = False
-
+class ConsensusTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.tx_storage = TransactionMemoryStorage(settings=self._settings)
@@ -33,13 +31,13 @@ class BaseConsensusTestCase(unittest.TestCase):
             pass
 
         execution_manager_mock = Mock(spec_set=ExecutionManager)
-        manager.consensus_algorithm._execution_manager = execution_manager_mock
-        manager.consensus_algorithm._unsafe_update = MagicMock(side_effect=MyError)
+        manager.vertex_handler._execution_manager = execution_manager_mock
+        manager.consensus_algorithm.unsafe_update = MagicMock(side_effect=MyError)
 
         manager.propagate_tx(tx, fails_silently=False)
 
         execution_manager_mock.crash_and_exit.assert_called_once_with(
-            reason=f"Consensus update failed for tx {tx.hash_hex}"
+            reason=f"on_new_vertex() failed for tx {tx.hash_hex}"
         )
 
         tx2 = manager.tx_storage.get_transaction(tx.hash)
@@ -269,16 +267,3 @@ class BaseConsensusTestCase(unittest.TestCase):
             self.assertIsNone(meta.voided_by)
 
         self.assertConsensusValid(manager)
-
-
-class SyncV1ConsensusTestCase(unittest.SyncV1Params, BaseConsensusTestCase):
-    __test__ = True
-
-
-class SyncV2ConsensusTestCase(unittest.SyncV2Params, BaseConsensusTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeConsensusTestCase(unittest.SyncBridgeParams, SyncV2ConsensusTestCase):
-    pass

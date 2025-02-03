@@ -2,7 +2,6 @@ import base64
 import re
 from unittest.mock import patch
 
-import pytest
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
@@ -24,10 +23,9 @@ from hathor.transaction.storage.traversal import DFSWalk
 from hathor.types import VertexId
 from hathor.util import not_none
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
 
 
-class BaseRandomSimulatorTestCase(SimulatorTestCase):
+class RandomSimulatorTestCase(SimulatorTestCase):
     __test__ = True
 
     seed_config = 2
@@ -44,7 +42,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         return partial_blocks
 
     def _run_restart_test(self, *, full_verification: bool, use_tx_storage_cache: bool) -> None:
-        manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
@@ -69,8 +67,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
             .set_peer(peer) \
-            .disable_sync_v1() \
-            .enable_sync_v2() \
             .use_rocksdb(path)
 
         manager2 = self.simulator.create_peer(builder2)
@@ -108,8 +104,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Restart full node using the same db.
         builder3 = self.simulator.get_default_builder() \
             .set_peer(peer) \
-            .disable_sync_v1() \
-            .enable_sync_v2() \
             .use_rocksdb(path)
 
         if full_verification:
@@ -152,24 +146,20 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager3.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_restart_fullnode_full_verification(self) -> None:
         self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_restart_fullnode_quick(self) -> None:
         self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_restart_fullnode_quick_with_cache(self) -> None:
         self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_restart_fullnode_full_verification_with_cache(self) -> None:
         self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
 
     def test_exceeds_streaming_and_mempool_limits(self) -> None:
-        manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
         # Find 50 blocks.
@@ -223,8 +213,6 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
             .set_peer(peer) \
-            .disable_sync_v1() \
-            .enable_sync_v2() \
 
         manager2 = self.simulator.create_peer(builder2)
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -263,7 +251,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         from hathor.wallet.base_wallet import WalletOutputInfo
         from tests.utils import BURN_ADDRESS
 
-        manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
         # Find 100 blocks.
@@ -313,9 +301,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Create a new peer and run sync for a while (but stop before getting synced).
         peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
-            .set_peer(peer) \
-            .disable_sync_v1() \
-            .enable_sync_v2() \
+            .set_peer(peer)
 
         manager2 = self.simulator.create_peer(builder2)
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -344,14 +330,14 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(conn12.proto2.aborting)
 
     def _prepare_sync_v2_find_best_common_block_reorg(self) -> FakeConnection:
-        manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
         miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
         miner1.start()
         self.assertTrue(self.simulator.run(24 * 3600))
         miner1.stop()
 
-        manager2 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
         self.simulator.add_connection(conn12)
 
@@ -427,7 +413,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
             self.assertIsNone(common_block_info)
 
     def test_multiple_unexpected_txs(self) -> None:
-        manager1 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
         # mine some blocks (10, could be any amount)
@@ -448,7 +434,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         miner1.stop()
 
         # create a new peer and run sync and stop when it requests transactions, so we can inject it with invalid ones
-        manager2 = self.create_peer(enable_sync_v1=False, enable_sync_v2=True)
+        manager2 = self.create_peer()
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
         self.simulator.add_connection(conn12)
         regex = re.compile(rf'{ProtocolMessages.GET_TRANSACTIONS_BFS.value} '.encode('ascii'))

@@ -10,14 +10,11 @@ from hathor.wallet.resources.nano_contracts import (
     NanoContractExecuteResource,
     NanoContractMatchValueResource,
 )
-from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward
 
 
-class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class NanoContractsTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.manager.wallet.unlock(b"MYPASS")
@@ -218,16 +215,3 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         response_match_put = match_resource.render_PUT(request_match_put)
         data_response_match_put = json_loadb(response_match_put)
         self.assertFalse(data_response_match_put['success'])
-
-
-class SyncV1NanoContractsTest(unittest.SyncV1Params, BaseNanoContractsTest):
-    __test__ = True
-
-
-class SyncV2NanoContractsTest(unittest.SyncV2Params, BaseNanoContractsTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeNanoContractsTest(unittest.SyncBridgeParams, SyncV2NanoContractsTest):
-    pass

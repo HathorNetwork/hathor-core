@@ -85,10 +85,17 @@ class TokensIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def del_tx(self, tx: BaseTransaction) -> None:
-        """ Tx has been voided, so remove from tokens index (if applicable)
+    def remove_tx(self, tx: BaseTransaction) -> None:
+        """ Implementation of removal from index called by del_tx.
         """
         raise NotImplementedError
+
+    def del_tx(self, tx: BaseTransaction, *, remove_all: bool = False) -> None:
+        """ Tx has been voided, so remove from tokens index (if applicable)
+        """
+        from hathor.transaction.base_transaction import TxVersion
+        if remove_all or tx.version != TxVersion.TOKEN_CREATION_TRANSACTION:
+            self.remove_tx(tx)
 
     @abstractmethod
     def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:

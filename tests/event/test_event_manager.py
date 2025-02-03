@@ -5,9 +5,7 @@ from hathor.util import not_none
 from tests import unittest
 
 
-class BaseEventManagerTest(unittest.TestCase):
-    __test__ = False
-
+class EventManagerTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
@@ -86,16 +84,3 @@ class BaseEventManagerTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self._fake_reorg_finished()
             self.run_to_completion()
-
-
-class SyncV1EventManager(unittest.SyncV1Params, BaseEventManagerTest):
-    __test__ = True
-
-
-class SyncV2EventManager(unittest.SyncV1Params, BaseEventManagerTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeEventManagerTest(unittest.SyncBridgeParams, SyncV2EventManager):
-    pass

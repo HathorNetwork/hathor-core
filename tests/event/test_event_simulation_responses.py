@@ -23,6 +23,8 @@ from tests.event.event_simulation_tester import (
 
 
 class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
+    __test__ = False
+
     def test_no_start_no_blocks(self) -> None:
         self.simulator.run(36000)
 
