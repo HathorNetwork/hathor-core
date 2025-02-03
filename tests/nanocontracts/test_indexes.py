@@ -3,8 +3,6 @@ import shutil
 import tempfile
 from typing import Any, Optional
 
-import pytest
-
 from hathor.conf import HathorSettings
 from hathor.dag_builder.artifacts import DAGArtifacts
 from hathor.manager import HathorManager
@@ -16,7 +14,6 @@ from hathor.transaction import BaseTransaction, TxOutput
 from hathor.types import AddressB58
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import HAS_ROCKSDB
 
 settings = HathorSettings()
 
@@ -211,7 +208,6 @@ class MemoryIndexesTestCase(BaseIndexesTestCase):
         return self.simulator.create_peer(builder)
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class RocksDBIndexesTestCase(BaseIndexesTestCase):
     __test__ = True
 

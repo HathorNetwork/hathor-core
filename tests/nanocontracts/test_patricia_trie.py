@@ -3,13 +3,10 @@ import tempfile
 from math import log
 from typing import Optional
 
-import pytest
-
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore, RocksDBNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import Node, PatriciaTrie
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from tests import unittest
-from tests.utils import HAS_ROCKSDB
 
 
 def export_trie_outline(trie: PatriciaTrie, *, node: Optional[Node] = None) -> tuple[bytes, Optional[bytes], dict]:
@@ -221,7 +218,6 @@ class MemoryPatriciaTrieTest(PatriciaTrieTestCase):
         return PatriciaTrie(store)
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class RocksDBPatriciaTrieTest(PatriciaTrieTestCase):
     __test__ = True
 
