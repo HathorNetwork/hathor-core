@@ -41,4 +41,7 @@ SETTINGS = HathorSettings(
     BLUEPRINTS={
         bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'): 'Bet',
     },
+    SOFT_VOIDED_TX_IDS=list(map(bytes.fromhex, [
+        '0000003dd5802b05f430a1f54304879173550c0944b49d74321bb9125ee727cb',
+    ])),
 )
