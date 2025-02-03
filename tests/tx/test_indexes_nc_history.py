@@ -1,4 +1,3 @@
-import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -10,7 +9,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.wallet import KeyPair, Wallet
 from tests import unittest
-from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, get_genesis_key
+from tests.utils import add_blocks_unlock_reward, get_genesis_key
 
 settings = HathorSettings()
 
@@ -90,7 +89,6 @@ class MemoryNCHistoryIndexesTest(NCHistoryIndexesTest):
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class RocksDBNCHistoryIndexesTest(NCHistoryIndexesTest):
     __test__ = True
 
