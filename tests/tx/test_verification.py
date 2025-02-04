@@ -29,13 +29,12 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
 
 
-class BaseVerificationTest(unittest.TestCase):
+class VerificationTest(unittest.TestCase):
     """
     This module implements simple tests related to vertex verification. It does not test the implementation of
     verification methods, but rather simply asserts that each verification method is called when it is supposed to be
     called. This guarantee is mostly useful during the verification refactors.
     """
-    __test__ = False
 
     def setUp(self) -> None:
         super().setUp()
@@ -1089,16 +1088,3 @@ class BaseVerificationTest(unittest.TestCase):
         # TokenCreationTransaction methods
         verify_token_info_wrapped.assert_called_once()
         verify_minted_tokens_wrapped.assert_called_once()
-
-
-class SyncV1VerificationTest(unittest.SyncV1Params, BaseVerificationTest):
-    __test__ = True
-
-
-class SyncV2VerificationTest(unittest.SyncV2Params, BaseVerificationTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeVerificationTest(unittest.SyncBridgeParams, SyncV2VerificationTest):
-    pass

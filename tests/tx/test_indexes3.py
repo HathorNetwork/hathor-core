@@ -1,11 +1,10 @@
 import pytest
 
 from hathor.simulator import FakeConnection
-from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
 
-class BaseSimulatorIndexesTestCase(SimulatorTestCase):
+class SimulatorIndexesTestCase(SimulatorTestCase):
     def _build_randomized_blockchain(self):
         manager = self.create_peer()
 
@@ -108,16 +107,3 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
             self.assertEqual(len(txs), total_count, f'iterator "{name}" does not cover all txs')
             # must be topological
             self.assertIsTopological(iter(txs), f'iterator "{name}" is not topological')
-
-
-class SyncV1SimulatorIndexesTestCase(unittest.SyncV1Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
-
-
-class SyncV2SimulatorIndexesTestCase(unittest.SyncV2Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeSimulatorIndexesTestCase(unittest.SyncBridgeParams, SyncV2SimulatorIndexesTestCase):
-    __test__ = True

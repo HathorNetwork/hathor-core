@@ -2,13 +2,11 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.manager import HathorManager
 from hathor.transaction import Block
 from hathor.types import VertexId
-from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import gen_custom_tx
 
 
-class BaseConsensusSimulatorTestCase(SimulatorTestCase):
-
+class ConsensusSimulatorTestCase(SimulatorTestCase):
     def create_chain(
         self,
         manager: HathorManager,
@@ -82,16 +80,3 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         # Uncomment lines below to visualize the DAG and the blockchain.
         # dot = self.graphviz.dot()
         # dot.render('dot0')
-
-
-class SyncV1ConsensusSimulatorTestCase(unittest.SyncV1Params, BaseConsensusSimulatorTestCase):
-    __test__ = True
-
-
-class SyncV2ConsensusSimulatorTestCase(unittest.SyncV2Params, BaseConsensusSimulatorTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeConsensusSimulatorTestCase(unittest.SyncBridgeParams, SyncV2ConsensusSimulatorTestCase):
-    __test__ = True

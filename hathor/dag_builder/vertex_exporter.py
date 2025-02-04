@@ -137,10 +137,20 @@ class VertexExporter:
         timestamp = 1 + max(self._vertices[name].timestamp for name in deps)
         return timestamp
 
-    def update_vertex_hash(self, vertex: BaseTransaction) -> None:
+    def update_vertex_hash(self, vertex: BaseTransaction, *, fix_conflict: bool = True) -> None:
         """Resolve vertex and update its hash."""
         self._vertex_resolver(vertex)
         vertex.update_hash()
+
+        if fix_conflict:
+            max_attempts = 100
+            while vertex.hash in self._vertice_per_id:
+                max_attempts -= 1
+                if max_attempts <= 0:
+                    raise ValueError('could not resolve a conflict')
+                vertex.nonce += 1
+                self._vertex_resolver(vertex)
+                vertex.update_hash()
 
     def sign_all_inputs(self, node: DAGNode, vertex: Transaction) -> None:
         """Sign all inputs of a vertex."""
@@ -277,6 +287,8 @@ class VertexExporter:
                 raise NotImplementedError(node.type)
 
         assert vertex is not None
+        assert vertex.hash not in self._vertice_per_id
+        assert node.name not in self._vertices
         self._vertice_per_id[vertex.hash] = vertex
         self._vertices[node.name] = vertex
         return vertex

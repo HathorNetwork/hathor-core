@@ -12,14 +12,11 @@ from hathor.wallet.resources.thin_wallet import (
     TokenHistoryResource,
     TokenResource,
 )
-from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_tx, create_tokens
 
 
-class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class SendTokensTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
 
@@ -682,16 +679,3 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         })
         data = response.json_value()
         self.assertFalse(data['success'])
-
-
-class SyncV1SendTokensTest(unittest.SyncV1Params, BaseSendTokensTest):
-    __test__ = True
-
-
-class SyncV2SendTokensTest(unittest.SyncV2Params, BaseSendTokensTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeSendTokensTest(unittest.SyncBridgeParams, SyncV2SendTokensTest):
-    pass

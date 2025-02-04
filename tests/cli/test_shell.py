@@ -1,10 +1,7 @@
 import tempfile
 
-import pytest
-
 from hathor.cli.shell import Shell
 from tests import unittest
-from tests.utils import HAS_ROCKSDB
 
 
 class ShellTest(unittest.TestCase):
@@ -14,7 +11,6 @@ class ShellTest(unittest.TestCase):
         shell = Shell(argv=['--memory-storage', '--', '--extra-arg'])
         self.assertTrue(shell is not None)
 
-    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_shell_execution_default_storage(self):
         temp_data = tempfile.TemporaryDirectory()
         shell = Shell(argv=['--data', temp_data.name])

@@ -1,5 +1,3 @@
-import pytest
-
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator.utils import add_new_block, add_new_blocks
@@ -9,7 +7,7 @@ from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import iwindows
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
+from tests.utils import add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
 
 
 class BaseIndexesTest(unittest.TestCase):
@@ -689,7 +687,9 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertEqual(height_index.get_n_height_tips(103), height_index.get_n_height_tips(104))
 
 
-class BaseMemoryIndexesTest(BaseIndexesTest):
+class MemoryIndexesTest(BaseIndexesTest):
+    __test__ = True
+
     def setUp(self):
         from hathor.transaction.storage import TransactionMemoryStorage
 
@@ -713,8 +713,9 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-class BaseRocksDBIndexesTest(BaseIndexesTest):
+class RocksDBIndexesTest(BaseIndexesTest):
+    __test__ = True
+
     def setUp(self):
         import tempfile
 
@@ -742,29 +743,3 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         self.last_block = self.blocks[-1]
 
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
-
-
-class SyncV1MemoryIndexesTest(unittest.SyncV1Params, BaseMemoryIndexesTest):
-    __test__ = True
-
-
-class SyncV2MemoryIndexesTest(unittest.SyncV2Params, BaseMemoryIndexesTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMemoryIndexesTest(unittest.SyncBridgeParams, SyncV2MemoryIndexesTest):
-    pass
-
-
-class SyncV1RocksDBIndexesTest(unittest.SyncV1Params, BaseRocksDBIndexesTest):
-    __test__ = True
-
-
-class SyncV2RocksDBIndexesTest(unittest.SyncV2Params, BaseRocksDBIndexesTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeRocksDBIndexesTest(unittest.SyncBridgeParams, SyncV2RocksDBIndexesTest):
-    pass

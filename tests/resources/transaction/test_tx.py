@@ -6,14 +6,11 @@ from hathor.transaction.resources import TransactionResource
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
-from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
 
-class BaseTransactionTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class TransactionTest(_BaseResourceTest._ResourceTest):
     # XXX: using memory storage so that we can more easily manipulate the tokens-index for a test
     use_memory_storage = True
 
@@ -529,16 +526,3 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("transaction", {b'id': bytes(tx.hash_hex, 'utf-8')})
         data = response.json_value()
         self.assertFalse(data['success'])
-
-
-class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
-    __test__ = True
-
-
-class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
-    pass

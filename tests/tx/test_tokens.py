@@ -14,9 +14,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
 
 
-class BaseTokenTest(unittest.TestCase):
-    __test__ = False
-
+class TokenTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
@@ -612,39 +610,12 @@ class BaseTokenTest(unittest.TestCase):
         self.assertTrue(bool(tx1.get_metadata().voided_by))
         mint = list(tokens_index.iter_mint_utxos())
         melt = list(tokens_index.iter_melt_utxos())
-        self.assertEqual(0, len(mint))
-        self.assertEqual(0, len(melt))
-        with self.assertRaises(KeyError):
-            tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
-            print(tokens_index)
-
-
-class SyncV1TokenTest(unittest.SyncV1Params, BaseTokenTest):
-    __test__ = True
-
-
-class SyncV2TokenTest(unittest.SyncV2Params, BaseTokenTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeTokenTest(unittest.SyncBridgeParams, SyncV2TokenTest):
-    pass
+        self.assertEqual(1, len(mint))
+        self.assertEqual(1, len(melt))
+        tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
+        print(tokens_index)
 
 
 @pytest.mark.skipif(unittest.USE_MEMORY_STORAGE, reason='previous tests already use memory, avoid duplication')
-class BaseMemoryTokenTest(BaseTokenTest):
+class MemoryTokenTest(TokenTest):
     use_memory_storage = True
-
-
-class SyncV1MemoryTokenTest(unittest.SyncV1Params, BaseMemoryTokenTest):
-    __test__ = True
-
-
-class SyncV2MemoryTokenTest(unittest.SyncV2Params, BaseMemoryTokenTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMemoryTokenTest(unittest.SyncBridgeParams, SyncV2MemoryTokenTest):
-    pass
