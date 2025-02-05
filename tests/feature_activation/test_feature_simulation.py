@@ -300,7 +300,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             with pytest.raises(BlockMustSignalError):
                 manager.verification_service.verify(non_signaling_block)
 
-            assert not manager.propagate_tx(non_signaling_block)
+            assert not manager.vertex_handler.on_new_vertex(non_signaling_block, init_static_metadata=False)
 
             # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
             [*_, last_block] = add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
