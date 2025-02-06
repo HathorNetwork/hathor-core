@@ -323,6 +323,7 @@ class ResourcesBuilder:
 
         # Set websocket factory in metrics. It'll be started when the manager is started.
         self.manager.websocket_factory = ws_factory
+        self.manager.metrics.websocket_factory = ws_factory
 
         self._built_status = True
         return status_server
