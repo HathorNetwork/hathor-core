@@ -66,6 +66,11 @@ class CliBuilder:
         if not condition:
             raise BuilderError(message)
 
+    def check_or_warn(self, condition: bool, message: str) -> None:
+        """Will log a warning `message` if `condition` is False."""
+        if not condition:
+            self.log.warn(message)
+
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
         from hathor.builder import SyncSupportLevel
@@ -190,20 +195,13 @@ class CliBuilder:
 
         hostname = self.get_hostname()
 
-        if self._args.sync_bridge:
-            raise BuilderError('--sync-bridge was removed')
-        elif self._args.sync_v1_only:
-            raise BuilderError('--sync-v1-only was removed')
-        elif self._args.sync_v2_only:
-            self.log.warn('--sync-v2-only is the default, this parameter has no effect')
-        elif self._args.x_remove_sync_v1:
-            self.log.warn('--x-remove-sync-v1 is deprecated and has no effect')
-        elif self._args.x_sync_bridge:
-            raise BuilderError('--x-sync-bridge was removed')
-        elif self._args.x_sync_v1_only:
-            raise BuilderError('--x-sync-v1-only was removed')
-        elif self._args.x_sync_v2_only:
-            self.log.warn('--x-sync-v2-only is deprecated and will be removed')
+        self.check_or_raise(not self._args.sync_bridge, '--sync-bridge was removed')
+        self.check_or_raise(not self._args.sync_v1_only, '--sync-v1-only was removed')
+        self.check_or_raise(not self._args.x_sync_bridge, '--x-sync-bridge was removed')
+        self.check_or_raise(not self._args.x_sync_v1_only, '--x-sync-v1-only was removed')
+        self.check_or_warn(not self._args.sync_v2_only, '--sync-v2-only is the default, this parameter has no effect')
+        self.check_or_warn(not self._args.x_remove_sync_v1, '--x-remove-sync-v1 is deprecated and has no effect')
+        self.check_or_warn(not self._args.x_sync_v2_only, '--x-sync-v2-only is deprecated and will be removed')
 
         pubsub = PubSubManager(reactor)
 
