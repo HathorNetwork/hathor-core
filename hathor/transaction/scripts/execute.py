@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import struct
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import NamedTuple, Optional, Union
 
 from hathor.transaction import BaseTransaction, Transaction, TxInput
@@ -88,44 +89,59 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
         raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> None:
+def evaluate_scripts(tx: Transaction) -> None:
     """Evaluates the output script and input data according to
-    a very limited subset of Bitcoin's scripting language.
+    a very limited subset of Bitcoin's scripting language, for all inputs in the tx.
 
     :param tx: the transaction being validated, the 'owner' of the input data
     :type tx: :py:class:`hathor.transaction.Transaction`
 
-    :param txin: transaction input being evaluated
-    :type txin: :py:class:`hathor.transaction.TxInput`
-
-    :param spent_tx: the transaction referenced by the input
-    :type spent_tx: :py:class:`hathor.transaction.BaseTransaction`
-
     :raises ScriptError: if script verification fails
     """
-    input_data = txin.data
-    output_script = spent_tx.outputs[txin.index].script
-    log: list[str] = []
-    extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
-
     from hathor.transaction.scripts import MultiSig
-    if MultiSig.re_match.search(output_script):
-        # For MultiSig there are 2 executions:
-        # First we need to evaluate that redeem_script matches redeem_script_hash
-        # we can't use input_data + output_script because it will end with an invalid stack
-        # i.e. the signatures will still be on the stack after ouput_script is executed
-        redeem_script_pos = MultiSig.get_multisig_redeem_script_pos(input_data)
-        full_data = txin.data[redeem_script_pos:] + output_script
-        execute_eval(full_data, log, extras)
+    with ThreadPoolExecutor() as executor:
+        futures: list[Future[None]] = []
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            output_script = spent_tx.outputs[tx_input.index].script
+            extras = ScriptExtras(tx=tx, txin=tx_input, spent_tx=spent_tx)
 
-        # Second, we need to validate that the signatures on the input_data solves the redeem_script
-        # we pop and append the redeem_script to the input_data and execute it
-        multisig_data = MultiSig.get_multisig_data(extras.txin.data)
-        execute_eval(multisig_data, log, extras)
-    else:
-        # merge input_data and output_script
-        full_data = input_data + output_script
-        execute_eval(full_data, log, extras)
+            if MultiSig.re_match.search(output_script):
+                future = executor.submit(
+                    _evaluate_multisig,
+                    input_data=tx_input.data,
+                    output_script=output_script,
+                    extras=extras,
+                )
+            else:
+                future = executor.submit(
+                    execute_eval,
+                    data=tx_input.data + output_script,
+                    log=[],
+                    extras=extras,
+                )
+
+            futures.append(future)
+
+        for future in as_completed(futures):
+            future.result()
+
+
+def _evaluate_multisig(*, input_data: bytes, output_script: bytes, extras: ScriptExtras) -> None:
+    from hathor.transaction.scripts import MultiSig
+    log: list[str] = []
+    # For MultiSig there are 2 executions:
+    # First we need to evaluate that redeem_script matches redeem_script_hash
+    # we can't use input_data + output_script because it will end with an invalid stack
+    # i.e. the signatures will still be on the stack after output_script is executed
+    redeem_script_pos = MultiSig.get_multisig_redeem_script_pos(input_data)
+    full_data = input_data[redeem_script_pos:] + output_script
+    execute_eval(full_data, log, extras)
+
+    # Second, we need to validate that the signatures on the input_data solves the redeem_script
+    # we pop and append the redeem_script to the input_data and execute it
+    multisig_data = MultiSig.get_multisig_data(input_data)
+    execute_eval(multisig_data, log, extras)
 
 
 def decode_opn(opcode: int) -> int:

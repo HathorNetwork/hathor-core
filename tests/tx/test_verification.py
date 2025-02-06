@@ -600,7 +600,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
         verify_sigops_input_wrapped = Mock(wraps=self.verifiers.tx.verify_sigops_input)
         verify_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_inputs)
-        verify_script_wrapped = Mock(wraps=self.verifiers.tx.verify_script)
+        verify_scripts_wrapped = Mock(wraps=self.verifiers.tx.verify_scripts)
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
         verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
@@ -614,7 +614,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(TransactionVerifier, 'verify_sigops_input', verify_sigops_input_wrapped),
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
-            patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
+            patch.object(TransactionVerifier, 'verify_scripts', verify_scripts_wrapped),
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
@@ -632,7 +632,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped.assert_called_once()
         verify_sigops_input_wrapped.assert_called_once()
         verify_inputs_wrapped.assert_called_once()
-        verify_script_wrapped.assert_called_once()
+        verify_scripts_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
@@ -734,7 +734,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
         verify_sigops_input_wrapped = Mock(wraps=self.verifiers.tx.verify_sigops_input)
         verify_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_inputs)
-        verify_script_wrapped = Mock(wraps=self.verifiers.tx.verify_script)
+        verify_scripts_wrapped = Mock(wraps=self.verifiers.tx.verify_scripts)
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
         verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
@@ -751,7 +751,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(TransactionVerifier, 'verify_sigops_input', verify_sigops_input_wrapped),
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
-            patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
+            patch.object(TransactionVerifier, 'verify_scripts', verify_scripts_wrapped),
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
@@ -772,7 +772,7 @@ class VerificationTest(unittest.TestCase):
         assert verify_sigops_output_wrapped.call_count == 2
         verify_sigops_input_wrapped.assert_called_once()
         verify_inputs_wrapped.assert_called_once()
-        verify_script_wrapped.assert_called_once()
+        verify_scripts_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
@@ -895,7 +895,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
         verify_sigops_input_wrapped = Mock(wraps=self.verifiers.tx.verify_sigops_input)
         verify_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_inputs)
-        verify_script_wrapped = Mock(wraps=self.verifiers.tx.verify_script)
+        verify_scripts_wrapped = Mock(wraps=self.verifiers.tx.verify_scripts)
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
         verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
@@ -912,7 +912,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(TransactionVerifier, 'verify_sigops_input', verify_sigops_input_wrapped),
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
-            patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
+            patch.object(TransactionVerifier, 'verify_scripts', verify_scripts_wrapped),
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
@@ -932,7 +932,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped.assert_called_once()
         verify_sigops_input_wrapped.assert_called_once()
         verify_inputs_wrapped.assert_called_once()
-        verify_script_wrapped.assert_called_once()
+        verify_scripts_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
@@ -1037,7 +1037,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
         verify_sigops_input_wrapped = Mock(wraps=self.verifiers.tx.verify_sigops_input)
         verify_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_inputs)
-        verify_script_wrapped = Mock(wraps=self.verifiers.tx.verify_script)
+        verify_scripts_wrapped = Mock(wraps=self.verifiers.tx.verify_scripts)
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
         verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
@@ -1057,7 +1057,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
             patch.object(TransactionVerifier, 'verify_sigops_input', verify_sigops_input_wrapped),
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
-            patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
+            patch.object(TransactionVerifier, 'verify_scripts', verify_scripts_wrapped),
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
@@ -1080,7 +1080,7 @@ class VerificationTest(unittest.TestCase):
         assert verify_sigops_output_wrapped.call_count == 2
         verify_sigops_input_wrapped.assert_called_once()
         verify_inputs_wrapped.assert_called_once()
-        verify_script_wrapped.assert_called_once()
+        verify_scripts_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
