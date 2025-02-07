@@ -18,20 +18,20 @@ from typing import Any, Callable, Type
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCSerializationArgTooLong, NCSerializationError
 from hathor.nanocontracts.serializers import Deserializer, Serializer
 from hathor.transaction.util import unpack
 
 logger = get_logger()
-settings = HathorSettings()
 
 
 class NCMethodParser:
     """Utility class to serialize and deserialize method arguments."""
     def __init__(self, method: Callable) -> None:
         self.method = method
+        self._settings = get_global_settings()
 
     def get_method_args(self) -> list[tuple[str, Type[Any]]]:
         """Return the list of arguments for the method, including the types."""
@@ -59,7 +59,7 @@ class NCMethodParser:
         assert len(args) == len(method_args), f'{len(args)} != {len(method_args)} ({method_args})'
         for (arg_name, arg_type), arg_value in zip(method_args, args):
             arg_bytes = serializer.from_type(arg_type, arg_value)
-            if len(arg_bytes) > settings.NC_MAX_LENGTH_SERIALIZED_ARG:
+            if len(arg_bytes) > self._settings.NC_MAX_LENGTH_SERIALIZED_ARG:
                 raise NCSerializationArgTooLong
             ret.append(struct.pack('!H', len(arg_bytes)))
             ret.append(arg_bytes)
