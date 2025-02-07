@@ -13,12 +13,13 @@
 # limitations under the License.
 
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterable, Optional, assert_never, cast
 
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction, Block, Transaction
+from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 
@@ -140,10 +141,10 @@ class BlockConsensusAlgorithm:
                             tx_conflict_meta = tx_conflict.get_metadata()
                             assert tx_conflict_meta.first_block is None
                             assert tx_conflict_meta.voided_by
+                    self.context.transaction_algorithm.remove_voided_by(tx, tx.hash)
                     tx_meta.voided_by = None
                     self.context.save(tx)
-            if tx_meta.voided_by:
-                continue
+            tx_meta.nc_execution = NCExecutionState.PENDING
             nc_calls.append(tx)
 
         if not nc_calls:
@@ -160,6 +161,8 @@ class BlockConsensusAlgorithm:
             if tx_meta.voided_by:
                 # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
                 # mark this tx as voided.
+                tx_meta.nc_execution = NCExecutionState.SKIPPED
+                self.context.save(tx)
                 continue
 
             from hathor.nanocontracts.runner import Runner
@@ -169,6 +172,8 @@ class BlockConsensusAlgorithm:
             runner = Runner(tx.storage, storage_factory, block_trie)
             try:
                 tx.execute(runner)
+                tx_meta.nc_execution = NCExecutionState.SUCCESS
+                self.context.save(tx)
                 # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
                 #      method once per contract per block, just like we do for the block_trie. This ensures we will
                 #      have a clean database with no orphan nodes.
@@ -183,11 +188,28 @@ class BlockConsensusAlgorithm:
         meta.nc_block_root_id = block_trie.root.id
         self.context.save(block)
 
+        for tx in nc_calls:
+            tx_meta = tx.get_metadata()
+            assert tx_meta.nc_execution is not None
+            match tx_meta.nc_execution:
+                case NCExecutionState.PENDING:
+                    assert False  # should never happen
+                case NCExecutionState.SUCCESS:
+                    assert tx_meta.voided_by is None
+                case NCExecutionState.FAILURE:
+                    assert tx_meta.voided_by == {tx.hash, self._settings.NC_EXECUTION_FAIL_ID}
+                case NCExecutionState.SKIPPED:
+                    assert tx_meta.voided_by
+                    assert self._settings.NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
+                case _:
+                    assert_never(tx_meta.nc_execution)
+
     def mark_as_nc_fail_execution(self, tx: Transaction) -> None:
         """Mark that a transaction failed execution. It also propagates its voidedness through the DAG of funds."""
         assert tx.storage is not None
         tx_meta = tx.get_metadata()
         tx_meta.add_voided_by(self._settings.NC_EXECUTION_FAIL_ID)
+        tx_meta.nc_execution = NCExecutionState.FAILURE
         self.context.save(tx)
         self.context.transaction_algorithm.add_voided_by(tx,
                                                          tx.hash,

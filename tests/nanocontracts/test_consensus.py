@@ -67,8 +67,13 @@ class MyBlueprint(Blueprint):
             raise NCFail('withdrawal only')
         self.total -= action.amount
 
+    @public
+    def fail_on_zero(self, ctx: Context) -> None:
+        if self.counter == 0:
+            raise NCFail('counter is zero')
 
-class BaseSimulatorIndexesTestCase(SimulatorTestCase):
+
+class NCConsensusTestCase(SimulatorTestCase):
     __test__ = True
 
     def setUp(self):
@@ -951,3 +956,279 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertIsNone(meta1.voided_by)
         self.assertEqual(meta2.voided_by, {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID})
         self.assertEqual(meta3.voided_by, {tx2.hash})
+
+    def test_reexecute_fail_on_reorg_different_blocks(self) -> None:
+        dag_builder = self.get_dag_builder(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            blockchain b31 a[32..34]
+            b30 < dummy
+
+            nc1.nc_id = "{self.myblueprint_id.hex()}"
+            nc1.nc_method = initialize("00")
+
+            # nc2 will fail because it does not have a deposit
+            nc2.nc_id = nc1
+            nc2.nc_method = deposit()
+
+            # nc3 will be voided because nc2 failed execution
+            nc3.nc_id = nc1
+            nc3.nc_method = nop(1)
+            nc2.out[0] <<< nc3
+
+            nc1 <-- b31
+            nc2 <-- b32
+            nc3 <-- b33
+
+            # a34 will generate a reorg, reexecuting nc2 (which fails again).
+            # nc2 and nc3 are in different blocks.
+            b33 < a32
+            nc2 <-- a32
+            nc3 <-- a33
+        ''')
+
+        b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
+        a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
+
+        found_b33 = False
+        for node, vertex in artifacts.list:
+            assert self.manager.on_new_tx(vertex, fails_silently=False)
+
+            if node.name == 'b33':
+                found_b33 = True
+                assert b33.get_metadata().voided_by is None
+                assert nc1.get_metadata().voided_by is None
+                assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+                assert nc3.get_metadata().voided_by == {nc2.hash}
+
+                assert nc1.get_metadata().first_block == b31.hash
+                assert nc2.get_metadata().first_block == b32.hash
+                assert nc3.get_metadata().first_block == b33.hash
+
+                assert self.manager.get_nc_storage(b33, nc1.hash).get('counter') == 0
+
+        assert found_b33
+        assert b33.get_metadata().voided_by == {b33.hash}
+        assert a34.get_metadata().voided_by is None
+        assert nc1.get_metadata().voided_by is None
+        assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert nc3.get_metadata().voided_by == {nc2.hash}
+
+        assert nc1.get_metadata().first_block == b31.hash
+        assert nc2.get_metadata().first_block == a32.hash
+        assert nc3.get_metadata().first_block == a33.hash
+
+        assert self.manager.get_nc_storage(a33, nc1.hash).get('counter') == 0
+
+    def test_reexecute_fail_on_reorg_same_block(self) -> None:
+        dag_builder = self.get_dag_builder(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            blockchain b31 a[32..34]
+            b30 < dummy
+
+            nc1.nc_id = "{self.myblueprint_id.hex()}"
+            nc1.nc_method = initialize("00")
+
+            # nc2 will fail because it does not have a deposit
+            nc2.nc_id = nc1
+            nc2.nc_method = deposit()
+
+            # nc3 will be voided because nc2 failed execution
+            nc3.nc_id = nc1
+            nc3.nc_method = nop(1)
+            nc2.out[0] <<< nc3
+
+            nc1 <-- b31
+            nc2 <-- b32
+            nc3 <-- b33
+
+            # a34 will generate a reorg, reexecuting nc2 (which fails again).
+            # nc2 and nc3 are in the same block.
+            b33 < a32
+            nc2 <-- nc3 <-- a33
+        ''')
+
+        b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
+        a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
+
+        found_b33 = False
+        for node, vertex in artifacts.list:
+            assert self.manager.on_new_tx(vertex, fails_silently=False)
+
+            if node.name == 'b33':
+                found_b33 = True
+                assert b33.get_metadata().voided_by is None
+                assert nc1.get_metadata().voided_by is None
+                assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+                assert nc3.get_metadata().voided_by == {nc2.hash}
+
+                assert nc1.get_metadata().first_block == b31.hash
+                assert nc2.get_metadata().first_block == b32.hash
+                assert nc3.get_metadata().first_block == b33.hash
+
+                assert self.manager.get_nc_storage(b33, nc1.hash).get('counter') == 0
+
+        assert found_b33
+        assert b33.get_metadata().voided_by == {b33.hash}
+        assert a34.get_metadata().voided_by is None
+        assert nc1.get_metadata().voided_by is None
+        assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert nc3.get_metadata().voided_by == {nc2.hash}
+
+        assert nc1.get_metadata().first_block == b31.hash
+        assert nc2.get_metadata().first_block == a33.hash
+        assert nc3.get_metadata().first_block == a33.hash
+
+        assert self.manager.get_nc_storage(a33, nc1.hash).get('counter') == 0
+
+    def test_reexecute_success_on_reorg_different_blocks(self) -> None:
+        dag_builder = self.get_dag_builder(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            blockchain b31 a[32..34]
+            b30 < dummy
+
+            nc1.nc_id = "{self.myblueprint_id.hex()}"
+            nc1.nc_method = initialize("00")
+
+            # nc2 will fail because nc1.counter is 0
+            nc2.nc_id = nc1
+            nc2.nc_method = fail_on_zero()
+
+            # nc3 will be voided because nc2 failed execution
+            nc3.nc_id = nc1
+            nc3.nc_method = nop(1)
+            nc2.out[0] <<< nc3
+
+            nc1 <-- b31
+            nc2 <-- b32
+            nc3 <-- b33
+
+            # a34 will generate a reorg, reexecuting nc2.
+            # this time it succeeds because nc4 in the new chain increments nc1.counter to 1, before nc2.
+            # nc2 and nc3 are in different blocks.
+
+            nc4.nc_id = nc1
+            nc4.nc_method = nop(1)
+            nc4 < nc2
+            nc4 <-- a32
+
+            b33 < a32
+            nc2 <-- a32
+            nc3 <-- a33
+        ''')
+
+        b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
+        a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
+        nc1, nc2, nc3, nc4 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3', 'nc4'], NanoContract)
+
+        found_b33 = False
+        for node, vertex in artifacts.list:
+            assert self.manager.on_new_tx(vertex, fails_silently=False)
+
+            if node.name == 'b33':
+                found_b33 = True
+                assert b33.get_metadata().voided_by is None
+                assert nc1.get_metadata().voided_by is None
+                assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+                assert nc3.get_metadata().voided_by == {nc2.hash}
+                assert nc4.get_metadata().voided_by is None
+
+                assert nc1.get_metadata().first_block == b31.hash
+                assert nc2.get_metadata().first_block == b32.hash
+                assert nc3.get_metadata().first_block == b33.hash
+                assert nc4.get_metadata().first_block is None
+
+                assert self.manager.get_nc_storage(b33, nc1.hash).get('counter') == 0
+
+        assert found_b33
+        assert b33.get_metadata().voided_by == {b33.hash}
+        assert a34.get_metadata().voided_by is None
+        assert nc1.get_metadata().voided_by is None
+        assert nc2.get_metadata().voided_by is None
+        assert nc3.get_metadata().voided_by is None
+        assert nc4.get_metadata().voided_by is None
+
+        assert nc1.get_metadata().first_block == b31.hash
+        assert nc2.get_metadata().first_block == a32.hash
+        assert nc3.get_metadata().first_block == a33.hash
+        assert nc4.get_metadata().first_block == a32.hash
+
+        assert self.manager.get_nc_storage(a33, nc1.hash).get('counter') == 2  # increments by nc4 and nc3
+
+    def test_reexecute_success_on_reorg_same_block(self) -> None:
+        dag_builder = self.get_dag_builder(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            blockchain b31 a[32..34]
+            b30 < dummy
+
+            nc1.nc_id = "{self.myblueprint_id.hex()}"
+            nc1.nc_method = initialize("00")
+
+            # nc2 will fail because nc1.counter is 0
+            nc2.nc_id = nc1
+            nc2.nc_method = fail_on_zero()
+
+            # nc3 will be voided because nc2 failed execution
+            nc3.nc_id = nc1
+            nc3.nc_method = nop(1)
+            nc2.out[0] <<< nc3
+
+            nc1 <-- b31
+            nc2 <-- b32
+            nc3 <-- b33
+
+            # a34 will generate a reorg, reexecuting nc2.
+            # this time it succeeds because nc4 in the new chain increments nc1.counter to 1, before nc2.
+            # nc2 and nc3 are in different blocks.
+
+            nc4.nc_id = nc1
+            nc4.nc_method = nop(1)
+            nc4 < nc2
+            nc4 <-- a32
+
+            b33 < a32
+            nc2 <-- nc3 <-- a33
+        ''')
+
+        b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
+        a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
+        nc1, nc2, nc3, nc4 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3', 'nc4'], NanoContract)
+
+        found_b33 = False
+        for node, vertex in artifacts.list:
+            assert self.manager.on_new_tx(vertex, fails_silently=False)
+
+            if node.name == 'b33':
+                found_b33 = True
+                assert b33.get_metadata().voided_by is None
+                assert nc1.get_metadata().voided_by is None
+                assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+                assert nc3.get_metadata().voided_by == {nc2.hash}
+                assert nc4.get_metadata().voided_by is None
+
+                assert nc1.get_metadata().first_block == b31.hash
+                assert nc2.get_metadata().first_block == b32.hash
+                assert nc3.get_metadata().first_block == b33.hash
+                assert nc4.get_metadata().first_block is None
+
+                assert self.manager.get_nc_storage(b33, nc1.hash).get('counter') == 0
+
+        assert found_b33
+        assert b33.get_metadata().voided_by == {b33.hash}
+        assert a34.get_metadata().voided_by is None
+        assert nc1.get_metadata().voided_by is None
+        assert nc2.get_metadata().voided_by is None
+        assert nc3.get_metadata().voided_by is None
+        assert nc4.get_metadata().voided_by is None
+
+        assert nc1.get_metadata().first_block == b31.hash
+        assert nc2.get_metadata().first_block == a33.hash
+        assert nc3.get_metadata().first_block == a33.hash
+        assert nc4.get_metadata().first_block == a32.hash
+
+        assert self.manager.get_nc_storage(a33, nc1.hash).get('counter') == 2  # increments by nc4 and nc3
