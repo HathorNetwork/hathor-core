@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Optional, final
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
 from hathor.nanocontracts.fields import get_field_for_attr
 from hathor.nanocontracts.storage import NCStorage
 from hathor.nanocontracts.types import ContractId, NCAction, TokenUid
@@ -27,7 +26,6 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.runner import Runner
 
 logger = get_logger()
-settings = HathorSettings()
 
 
 class _BlueprintBase(type):

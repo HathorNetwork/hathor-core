@@ -198,6 +198,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
 
+        # A name solely for debugging purposes.
+        self.name: str | None = None
+
         self.MAX_NUM_INPUTS = self._settings.MAX_NUM_INPUTS
         self.MAX_NUM_OUTPUTS = self._settings.MAX_NUM_OUTPUTS
 

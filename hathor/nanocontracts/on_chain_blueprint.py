@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import ast
 import zlib
 from dataclasses import InitVar, dataclass, field
@@ -24,7 +26,6 @@ from structlog import get_logger
 from typing_extensions import Self, override
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
@@ -34,6 +35,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.nanocontracts.storage import NCStorage  # noqa: F401
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
