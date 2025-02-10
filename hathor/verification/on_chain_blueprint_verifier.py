@@ -61,7 +61,7 @@ class _RestrictionsVisitor(ast.NodeVisitor):
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         if isinstance(node.value, ast.Name):
-            if node.attr.startswith('__'):
+            if '__' in node.attr:
                 raise SyntaxError('Access to internal attributes and methods is not allowed.')
         self.generic_visit(node)
 
