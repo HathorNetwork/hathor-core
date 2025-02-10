@@ -27,19 +27,19 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
+FORBIDDEN_NAMES = {
+    'get_nanocontract_id',
+    'get_balance',
+    'call_public_method',
+    'call_view_method',
+}
+
 
 class _BlueprintBase(type):
     """Metaclass for blueprints.
 
     This metaclass will modify the attributes and set Fields to them according to their types.
     """
-
-    FORBIDDEN_NAMES = {
-        'get_nanocontract_id',
-        'get_balance',
-        'call_public_method',
-        'call_view_method',
-    }
 
     def __new__(cls, name, bases, attrs, **kwargs):
         # Initialize only subclasses of Blueprint.
@@ -54,7 +54,7 @@ class _BlueprintBase(type):
         # Check for forbidden names.
         # Note: This verification must be done AFTER calling super().__new__().
         for name in attrs.keys():
-            if name in cls.FORBIDDEN_NAMES:
+            if name in FORBIDDEN_NAMES:
                 raise SyntaxError(f'Attempt to have a forbidden name: {name}')
 
         # Create the Field instance according to each type.
@@ -92,15 +92,14 @@ class Blueprint(metaclass=_BlueprintBase):
 
     def __init__(self, runner: Runner, storage: NCStorage):
         self.log = logger.new()
-        self._runner = runner
+        self.__runner = runner
         self._storage = storage
         self._cache: dict[str, Any] = {}
 
     @final
     def get_nanocontract_id(self) -> ContractId:
         """Return the current contract id."""
-        assert self._runner is not None
-        return self._runner.get_current_nanocontract_id()
+        return self.__runner.get_current_nanocontract_id()
 
     @final
     def get_balance(self,
@@ -111,8 +110,7 @@ class Blueprint(metaclass=_BlueprintBase):
 
         For instance, if a contract has 50 HTR and a transaction is requesting to withdraw 3 HTR,
         then this method will return 50 HTR."""
-        assert self._runner is not None
-        return self._runner.get_balance(nanocontract_id, token_uid)
+        return self.__runner.get_balance(nanocontract_id, token_uid)
 
     @final
     def call_public_method(self,
@@ -122,11 +120,9 @@ class Blueprint(metaclass=_BlueprintBase):
                            *args: Any,
                            **kwargs: Any) -> Any:
         """Call a public method of another contract."""
-        assert self._runner is not None
-        return self._runner.call_another_contract_public_method(nc_id, method_name, actions, *args, **kwargs)
+        return self.__runner.call_another_contract_public_method(nc_id, method_name, actions, *args, **kwargs)
 
     @final
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a view method of another contract."""
-        assert self._runner is not None
-        return self._runner.call_view_method(nc_id, method_name, *args, **kwargs)
+        return self.__runner.call_view_method(nc_id, method_name, *args, **kwargs)
