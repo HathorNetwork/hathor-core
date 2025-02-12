@@ -24,6 +24,8 @@ from twisted.web.resource import Resource
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.nanocontracts.resources.builtin import BlueprintBuiltinResource
+from hathor.nanocontracts.resources.on_chain import BlueprintOnChainResource
 from hathor.prometheus import PrometheusMetricsExporter
 
 if TYPE_CHECKING:
@@ -262,6 +264,8 @@ class ResourcesBuilder:
             blueprint_resource = Resource()
             nc_resource.putChild(b'blueprint', blueprint_resource)
             blueprint_resource.putChild(b'info', BlueprintInfoResource(self.manager))
+            blueprint_resource.putChild(b'builtin', BlueprintBuiltinResource(self.manager))
+            blueprint_resource.putChild(b'on_chain', BlueprintOnChainResource(self.manager))
             blueprint_resource.putChild(b'source', BlueprintSourceCodeResource(self.manager))
             nc_resource.putChild(b'history', NanoContractHistoryResource(self.manager))
             nc_resource.putChild(b'state', NanoContractStateResource(self.manager))

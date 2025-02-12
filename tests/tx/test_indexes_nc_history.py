@@ -82,7 +82,7 @@ class MemoryNCHistoryIndexesTest(NCHistoryIndexesTest):
 
         # this makes sure we can spend the genesis outputs
         self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
-                                        utxo_index=True, nc_history_index=True)
+                                        utxo_index=True, nc_indices=True)
         self.blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = self.blocks[-1]
 
@@ -117,7 +117,7 @@ class RocksDBNCHistoryIndexesTest(NCHistoryIndexesTest):
 
         # this makes sure we can spend the genesis outputs
         self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
-                                        utxo_index=True, nc_history_index=True)
+                                        utxo_index=True, nc_indices=True)
         self.blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = self.blocks[-1]
 

@@ -26,7 +26,7 @@ from hathor.nanocontracts import Blueprint, NanoContract, OnChainBlueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.on_chain_blueprint import Code
-from hathor.nanocontracts.types import BlueprintId, VertexId
+from hathor.nanocontracts.types import BlueprintId, blueprint_id_from_bytes
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
@@ -256,11 +256,11 @@ class VertexExporter:
         nc_method_raw = node.get_required_attr('nc_method')
 
         if nc_method_raw.startswith('initialize('):
-            blueprint_id = BlueprintId(VertexId(nc.nc_id))
+            blueprint_id = blueprint_id_from_bytes(nc.nc_id)
         else:
             contract_creation_vertex = self._vertices[nc_id_raw]
             assert isinstance(contract_creation_vertex, NanoContract)
-            blueprint_id = BlueprintId(VertexId(contract_creation_vertex.nc_id))
+            blueprint_id = blueprint_id_from_bytes(contract_creation_vertex.nc_id)
 
         blueprint_class = self._get_blueprint_class(blueprint_id)
 

@@ -179,7 +179,7 @@ class Builder:
         self._enable_address_index: bool = False
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
-        self._enable_nc_history_index: bool = False
+        self._enable_nc_indices: bool = False
 
         self._sync_v2_support: SyncSupportLevel = SyncSupportLevel.ENABLED
 
@@ -243,8 +243,8 @@ class Builder:
         if self._enable_utxo_index:
             indexes.enable_utxo_index()
 
-        if self._enable_nc_history_index:
-            indexes.enable_nc_history_index()
+        if self._enable_nc_indices:
+            indexes.enable_nc_indices()
 
         kwargs: dict[str, Any] = {}
 
@@ -737,9 +737,9 @@ class Builder:
         self._enable_utxo_index = True
         return self
 
-    def enable_nc_history_index(self) -> 'Builder':
+    def enable_nc_indices(self) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_nc_history_index = True
+        self._enable_nc_indices = True
         return self
 
     def enable_wallet_index(self) -> 'Builder':

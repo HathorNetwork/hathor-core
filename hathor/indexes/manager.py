@@ -23,6 +23,7 @@ from structlog import get_logger
 
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.blueprint_timestamp_index import BlueprintTimestampIndex
 from hathor.indexes.height_index import HeightIndex
 from hathor.indexes.info_index import InfoIndex
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
@@ -69,6 +70,7 @@ class IndexesManager(ABC):
     tokens: Optional[TokensIndex]
     utxo: Optional[UtxoIndex]
     nc_history: Optional[NCHistoryIndex]
+    blueprints: Optional[BlueprintTimestampIndex]
 
     def __init_checks__(self):
         """ Implementations must call this at the **end** of their __init__ for running ValueError checks."""
@@ -98,6 +100,7 @@ class IndexesManager(ABC):
             self.tokens,
             self.utxo,
             self.nc_history,
+            self.blueprints
         ])
 
     @abstractmethod
@@ -121,8 +124,8 @@ class IndexesManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def enable_nc_history_index(self) -> None:
-        """Enable Nano Contract's history index."""
+    def enable_nc_indices(self) -> None:
+        """Enable Nano Contract related indices."""
         raise NotImplementedError
 
     def force_clear_all(self) -> None:
@@ -230,6 +233,9 @@ class IndexesManager(ABC):
         if self.nc_history:
             self.nc_history.add_tx(tx)
 
+        if self.blueprints:
+            self.blueprints.add_tx(tx)
+
         # We need to check r1 as well to make sure we don't count twice the transactions/blocks that are
         # just changing from voided to executed or vice-versa
         if r1 and r3:
@@ -256,6 +262,8 @@ class IndexesManager(ABC):
                 self.utxo.del_tx(tx)
             if self.nc_history:
                 self.nc_history.remove_tx(tx)
+            if self.blueprints:
+                self.blueprints.del_tx(tx)
             self.info.update_counts(tx, remove=True)
 
         # mempool will pick-up if the transaction is voided/invalid and remove it
@@ -296,6 +304,7 @@ class MemoryIndexesManager(IndexesManager):
         self.height = MemoryHeightIndex(settings=settings)
         self.mempool_tips = None
         self.nc_history = None
+        self.blueprints = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -320,10 +329,12 @@ class MemoryIndexesManager(IndexesManager):
         if self.mempool_tips is None:
             self.mempool_tips = MemoryMempoolTipsIndex()
 
-    def enable_nc_history_index(self) -> None:
+    def enable_nc_indices(self) -> None:
         from hathor.indexes.memory_nc_history_index import MemoryNCHistoryIndex
         if self.nc_history is None:
             self.nc_history = MemoryNCHistoryIndex()
+        if self.blueprints is None:
+            raise NotImplementedError('memory indexes will be removed')
 
 
 class RocksDBIndexesManager(IndexesManager):
@@ -350,6 +361,7 @@ class RocksDBIndexesManager(IndexesManager):
         self.utxo = None
         self.mempool_tips = None
         self.nc_history = None
+        self.blueprints = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -375,7 +387,10 @@ class RocksDBIndexesManager(IndexesManager):
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
             self.mempool_tips = MemoryMempoolTipsIndex()
 
-    def enable_nc_history_index(self) -> None:
+    def enable_nc_indices(self) -> None:
+        from hathor.indexes.blueprint_timestamp_index import BlueprintTimestampIndex
         from hathor.indexes.rocksdb_nc_history_index import RocksDBNCHistoryIndex
         if self.nc_history is None:
             self.nc_history = RocksDBNCHistoryIndex(self._db)
+        if self.blueprints is None:
+            self.blueprints = BlueprintTimestampIndex(self._db)

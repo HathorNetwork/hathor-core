@@ -24,7 +24,15 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid, VertexId
+from hathor.nanocontracts.types import (
+    BlueprintId,
+    ContractId,
+    NCAction,
+    NCActionType,
+    TokenUid,
+    VertexId,
+    blueprint_id_from_bytes,
+)
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -114,13 +122,13 @@ class NanoContract(Transaction):
         assert self.storage is not None
         assert self.storage.nc_catalog is not None
         if self.nc_method == NC_INITIALIZE_METHOD:
-            return BlueprintId(VertexId(self.nc_id))
+            return blueprint_id_from_bytes(self.nc_id)
         else:
             nanocontract_id = self.nc_id
             nanocontract = self.storage.get_transaction(nanocontract_id)
             assert isinstance(nanocontract, NanoContract)
             assert nanocontract.nc_method == NC_INITIALIZE_METHOD
-            return BlueprintId(VertexId(nanocontract.nc_id))
+            return blueprint_id_from_bytes(nanocontract.nc_id)
 
     def execute(self, runner: 'Runner') -> None:
         """Execute the contract's method call."""

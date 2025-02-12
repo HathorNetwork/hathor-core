@@ -47,7 +47,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
             tx_storage=self.tx_storage,
             unlock_wallet=True,
             wallet_index=True,
-            nc_history_index=True
+            nc_indices=True,
         )
         add_blocks_unlock_reward(self.manager)
 
