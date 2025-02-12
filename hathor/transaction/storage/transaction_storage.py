@@ -53,6 +53,7 @@ from hathor.verification.transaction_verifier import TransactionVerifier
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts import OnChainBlueprint
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.types import BlueprintId
@@ -1159,39 +1160,39 @@ class TransactionStorage(ABC):
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
         """
+        from hathor.nanocontracts.exception import BlueprintDoesNotExist
+        assert self.nc_catalog is not None
+
+        try:
+            return self.nc_catalog.get_blueprint_class(blueprint_id)
+        except BlueprintDoesNotExist as e:
+            self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
+            if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
+                raise e
+            self.log.debug('on-chain blueprints enabled, looking for that instead')
+            return self.get_on_chain_blueprint(blueprint_id).get_blueprint_class()
+
+    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
+        """Return an on-chain blueprint transaction."""
+        assert self._settings.ENABLE_ON_CHAIN_BLUEPRINTS
+        from hathor.nanocontracts import OnChainBlueprint
         from hathor.nanocontracts.exception import (
             BlueprintDoesNotExist,
             OCBBlueprintNotConfirmed,
             OCBInvalidBlueprintVertexType,
         )
-        from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
-
-        assert self.nc_catalog is not None
-
         try:
-            blueprint_class = self.nc_catalog.get_blueprint_class(blueprint_id)
-        except BlueprintDoesNotExist as e:
-            self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
-            if self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-                self.log.debug('on-chain blueprints enabled, looking for that instead')
-                try:
-                    blueprint_tx = self.get_transaction(blueprint_id)
-                except TransactionDoesNotExist:
-                    self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
-                    # XXX: should be the same exception because we don't know why the id is wrong, and the exception
-                    #      shouldn't depend on the order that we look for them in the storage or catalog
-                    raise e
-                if not isinstance(blueprint_tx, OnChainBlueprint):
-                    raise OCBInvalidBlueprintVertexType
-                tx_meta = blueprint_tx.get_metadata()
-                if tx_meta.voided_by or not tx_meta.first_block:
-                    raise OCBBlueprintNotConfirmed
-                # XXX: maybe use N blocks confirmation, like reward-locks
-                blueprint_class = blueprint_tx.get_blueprint_class()
-            else:
-                raise e
-
-        return blueprint_class
+            blueprint_tx = self.get_transaction(blueprint_id)
+        except TransactionDoesNotExist:
+            self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
+            raise BlueprintDoesNotExist(blueprint_id.hex())
+        if not isinstance(blueprint_tx, OnChainBlueprint):
+            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())
+        tx_meta = blueprint_tx.get_metadata()
+        if tx_meta.voided_by or not tx_meta.first_block:
+            raise OCBBlueprintNotConfirmed(blueprint_id.hex())
+        # XXX: maybe use N blocks confirmation, like reward-locks
+        return blueprint_tx
 
 
 class BaseTransactionStorage(TransactionStorage):

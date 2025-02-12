@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
-from hathor.nanocontracts.types import BlueprintId, VertexId
+from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ class BlueprintSourceCodeResource(Resource):
             return params.json_dumpb()
 
         try:
-            blueprint_id = BlueprintId(VertexId(bytes.fromhex(params.blueprint_id)))
+            blueprint_id = blueprint_id_from_bytes(bytes.fromhex(params.blueprint_id))
         except ValueError:
             request.setResponseCode(400)
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.blueprint_id}')

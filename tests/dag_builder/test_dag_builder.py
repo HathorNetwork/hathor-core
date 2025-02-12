@@ -50,8 +50,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             b40 --> tx1
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         v_order = [node.name for node, _ in artifacts.list]
 
@@ -89,8 +88,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             c1.weight = 80.6
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         tx1 = artifacts.by_name['tx1'].vertex
         tka = artifacts.by_name['TKA'].vertex
@@ -109,8 +107,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             tx1.out[0] <<< tx2
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         tx1 = artifacts.by_name['tx1'].vertex
         self.assertEqual(len(tx1.outputs), 1)
@@ -131,8 +128,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             b36 --> tx4
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         b0 = artifacts.by_name['b30'].vertex
         b1 = artifacts.by_name['b31'].vertex
@@ -173,8 +169,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             b40 --> tx1
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         tka = artifacts.by_name['TKA'].vertex
         tx1 = artifacts.by_name['tx1'].vertex
@@ -225,8 +220,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             b16 < tx4
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
     def test_no_hash_conflict(self) -> None:
         artifacts = self.dag_builder.build_from_str("""
@@ -269,8 +263,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             a33 --> tx3
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         tx1 = artifacts.by_name['tx1'].vertex
         self.assertIsInstance(tx1, NanoContract)
@@ -397,9 +390,7 @@ if foo:
             ```
         """)
 
-        for node, vertex in artifacts.list:
-            assert self.manager.on_new_tx(vertex, fails_silently=False)
-
+        artifacts.propagate_with(self.manager)
         ocb1, ocb2, ocb3 = artifacts.get_typed_vertices(['ocb1', 'ocb2', 'ocb3'], OnChainBlueprint)
         nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
 

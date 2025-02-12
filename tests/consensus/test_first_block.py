@@ -40,8 +40,7 @@ class FirstBlockTestCase(unittest.TestCase):
             b33 --> tx50
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         b31 = artifacts.by_name['b31'].vertex
         b32 = artifacts.by_name['b32'].vertex

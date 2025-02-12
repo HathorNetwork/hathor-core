@@ -245,9 +245,13 @@ class CliBuilder:
 
         self.check_or_raise(not self._args.x_full_verification, '--x-full-verification is deprecated')
 
-        if self._args.nc_history_index and tx_storage.indexes is not None:
-            self.log.debug('enable nano history index')
-            tx_storage.indexes.enable_nc_history_index()
+        self.check_or_raise(
+            not self._args.nc_history_index,
+            '--nc-history-index has been deprecated, use --nc-indices instead',
+        )
+        if self._args.nc_indices and tx_storage.indexes is not None:
+            self.log.debug('enable nano indices')
+            tx_storage.indexes.enable_nc_indices()
 
         assert self.nc_storage_factory is not None
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)

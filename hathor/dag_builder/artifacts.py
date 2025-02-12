@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterator, NamedTuple, TypeVar
 
 from hathor.dag_builder.types import DAGNode
+from hathor.manager import HathorManager
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -50,3 +51,8 @@ class DAGArtifacts:
     def get_typed_vertices(self, names: list[str], type_: type[T]) -> list[T]:
         """Get a list of vertices by name, asserting they are of the provided type."""
         return [self.get_typed_vertex(name, type_) for name in names]
+
+    def propagate_with(self, manager: HathorManager) -> None:
+        """Propagate vertices using the provided manager."""
+        for _node, vertex in self.list:
+            assert manager.on_new_tx(vertex, fails_silently=False)
