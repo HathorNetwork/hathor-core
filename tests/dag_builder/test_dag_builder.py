@@ -266,8 +266,7 @@ class DAGBuilderTestCase(unittest.TestCase):
             a33 --> tx3
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         tx1 = artifacts.by_name['tx1'].vertex
         self.assertIsInstance(tx1, NanoContract)
@@ -394,9 +393,7 @@ if foo:
             ```
         """)
 
-        for node, vertex in artifacts.list:
-            assert self.manager.on_new_tx(vertex, fails_silently=False)
-
+        artifacts.propagate_with(self.manager)
         ocb1, ocb2, ocb3 = artifacts.get_typed_vertices(['ocb1', 'ocb2', 'ocb3'], OnChainBlueprint)
         nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
 

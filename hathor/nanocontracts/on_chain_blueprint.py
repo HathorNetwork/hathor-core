@@ -29,7 +29,7 @@ from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
 from hathor.nanocontracts.method_parser import NCMethodParser
-from hathor.nanocontracts.types import BlueprintId, VertexId
+from hathor.nanocontracts.types import BlueprintId, blueprint_id_from_bytes
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -224,7 +224,7 @@ class OnChainBlueprint(Transaction):
 
     def blueprint_id(self) -> BlueprintId:
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
-        return BlueprintId(VertexId(self.hash))
+        return blueprint_id_from_bytes(self.hash)
 
     def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""

@@ -30,6 +30,11 @@ BlueprintId = NewType('BlueprintId', VertexId)
 T = TypeVar('T')
 
 
+def blueprint_id_from_bytes(data: bytes) -> BlueprintId:
+    """Create a BlueprintId from a bytes object."""
+    return BlueprintId(VertexId(data))
+
+
 class SignedData(Generic[T]):
     """A wrapper class to sign data.
 
