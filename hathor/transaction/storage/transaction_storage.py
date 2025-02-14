@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from contextlib import AbstractContextManager
 from threading import Lock
-from typing import Any, Iterator, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf.settings import HathorSettings
 from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
@@ -49,6 +50,9 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
 from hathor.verification.transaction_verifier import TransactionVerifier
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
 
 cpu = get_cpu_profiler()
 

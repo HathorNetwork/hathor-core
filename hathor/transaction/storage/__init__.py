@@ -14,13 +14,9 @@
 
 from hathor.transaction.storage.cache_storage import TransactionCacheStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.vertex_storage_protocol import VertexStorageProtocol
-
-try:
-    from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
-except ImportError:
-    pass
 
 __all__ = [
     'TransactionStorage',

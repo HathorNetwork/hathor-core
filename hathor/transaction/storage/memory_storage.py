@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Iterator, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Iterator, Optional, TypeVar
 
 from typing_extensions import override
 
-from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
 
 _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
 
@@ -32,7 +34,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         self,
         indexes: Optional[IndexesManager] = None,
         *,
-        settings: HathorSettings,
+        settings: 'HathorSettings',
         _clone_if_needed: bool = False,
     ) -> None:
         """

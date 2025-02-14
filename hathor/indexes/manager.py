@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import operator
 from abc import ABC, abstractmethod
 from functools import reduce
@@ -19,7 +21,6 @@ from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
-from hathor.conf.settings import HathorSettings
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.height_index import HeightIndex
@@ -33,6 +34,7 @@ from hathor.transaction import BaseTransaction
 from hathor.util import tx_progress
 
 if TYPE_CHECKING:  # pragma: no cover
+    from hathor.conf.settings import HathorSettings
     from hathor.pubsub import PubSubManager
     from hathor.storage import RocksDBStorage
     from hathor.transaction.storage import TransactionStorage

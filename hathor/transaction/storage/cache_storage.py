@@ -13,18 +13,20 @@
 # limitations under the License.
 
 from collections import OrderedDict
-from typing import Any, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from twisted.internet import threads
 from typing_extensions import override
 
-from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
 
 
 class TransactionCacheStorage(BaseTransactionStorage):
@@ -41,7 +43,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         interval: int = 5,
         capacity: int = 10000,
         *,
-        settings: HathorSettings,
+        settings: 'HathorSettings',
         indexes: Optional[IndexesManager],
         _clone_if_needed: bool = False,
     ) -> None:
