@@ -1,4 +1,6 @@
-from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts import Blueprint
+from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.types import public
 
 
 class TestBlueprint(Blueprint):
