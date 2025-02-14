@@ -27,10 +27,18 @@ Syntax:
     a --> b --> c               # c is a parent of b which is a parent of a
     a.out[i] <<< b c d          # b, c, and d spend the i-th output of a
     a < b < c                   # a must be created before b and b must be created before c
-    a > b > c                   # a must be created after b and b must be creater after c
-    a.attr = value              # set value of attribute attr to a
+    a > b > c                   # a must be created after b and b must be created after c
+    a.attr1 = value             # set value of attribute attr to a
+    a.attr2 = "value"           # a string literal
+
+Special keywords:
+
+    b10 < dummy                 # `dummy` is a tx created automatically that spends genesis tokens and provides
+                                # outputs to txs defined by the user. It's usually useful to set it after some
+                                # block to pass the reward lock
 
 Special attributes:
+
     a.out[i] = 100 HTR          # set that the i-th output of a holds 100 HTR
     a.out[i] = 100 TOKEN        # set that the i-th output of a holds 100 TOKEN where TOKEN is a custom token
     a.weight = 50               # set vertex weight

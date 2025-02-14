@@ -185,6 +185,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
 
+        # A name solely for debugging purposes.
+        self.name: str | None = None
+
     @classproperty
     def log(cls):
         """ This is a workaround because of a bug on structlog (or abc).
