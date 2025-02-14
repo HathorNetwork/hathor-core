@@ -1,17 +1,14 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.nanocontracts import Blueprint, OnChainBlueprint
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.resources.blueprint import BlueprintInfoResource
 from hathor.nanocontracts.types import BlueprintId
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.simulator.utils import add_new_blocks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite
+from tests.resources.nanocontracts.base_resource import GenericNanoResourceTest
 
 
-class BaseBlueprintInfoTest(_BaseResourceTest._ResourceTest):
-    __test__ = False
-
+class BaseBlueprintInfoTest(GenericNanoResourceTest):
     # this is what subclasses have to define
     blueprint_id: BlueprintId
 
@@ -141,12 +138,7 @@ class BuiltinBlueprintInfoTest(BaseBlueprintInfoTest):
         super().setUp()
         from tests.resources.nanocontracts import my_blueprint
         self.blueprint_id = BlueprintId(b'3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595')
-        self._create_builtin_blueprint(self.blueprint_id, my_blueprint.MyBlueprint)
-
-    def _create_builtin_blueprint(self, blueprint_id: BlueprintId, blueprint_class: type[Blueprint]) -> None:
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
-            blueprint_id: blueprint_class,
-        })
+        self.create_builtin_blueprint(self.manager, self.blueprint_id, my_blueprint.MyBlueprint)
 
 
 class OCBBlueprintInfoTest(BaseBlueprintInfoTest):
@@ -156,28 +148,7 @@ class OCBBlueprintInfoTest(BaseBlueprintInfoTest):
         super().setUp()
         from tests.resources import nanocontracts
         nc_code = load_builtin_blueprint_for_ocb('my_blueprint.py', 'MyBlueprint', nanocontracts)
-        blueprint = self._create_on_chain_blueprint(nc_code)
+        blueprint = self.create_on_chain_blueprint(self.manager, nc_code)
         self.manager.vertex_handler.on_new_vertex(blueprint, fails_silently=False)
         add_new_blocks(self.manager, 1, advance_clock=30)  # confirm the on-chain blueprint vertex
         self.blueprint_id = BlueprintId(blueprint.hash)
-
-    def _create_on_chain_blueprint(self, nc_code: str) -> OnChainBlueprint:
-        from hathor.nanocontracts.on_chain_blueprint import Code
-        from tests.nanocontracts.on_chain_blueprints.utils import get_ocb_private_key
-        code = Code.from_python_code(nc_code, self._settings)
-        timestamp = self.manager.tx_storage.latest_timestamp + 1
-        parents = self.manager.get_new_tx_parents(timestamp)
-        blueprint = OnChainBlueprint(
-            weight=1,
-            inputs=[],
-            outputs=[],
-            parents=parents,
-            storage=self.manager.tx_storage,
-            timestamp=timestamp,
-            code=code,
-        )
-        blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
-        blueprint.sign(get_ocb_private_key())
-        self.manager.cpu_mining_service.resolve(blueprint)
-        self.manager.reactor.advance(2)
-        return blueprint

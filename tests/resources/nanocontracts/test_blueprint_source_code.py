@@ -1,23 +1,24 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.resources import BlueprintSourceCodeResource
-from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.resources.nanocontracts.dummy_blueprint import TestBlueprint
+from hathor.nanocontracts.types import BlueprintId
+from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
+from hathor.simulator.utils import add_new_blocks
+from tests.resources.base_resource import StubSite
+from tests.resources.nanocontracts.base_resource import GenericNanoResourceTest
 
 
-class BlueprintSourceCodeTest(_BaseResourceTest._ResourceTest):
+class BaseBlueprintSourceCodeTest(GenericNanoResourceTest):
+    __test__ = False
+
+    # this is what subclasses have to define
+    blueprint_id: BlueprintId
+    blueprint_source: str
+
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')
-
         self.web = StubSite(BlueprintSourceCodeResource(self.manager))
-
-        self.blueprint_id = b'3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'
-        self.catalog = NCBlueprintCatalog({
-            self.blueprint_id: TestBlueprint
-        })
-        self.manager.tx_storage.nc_catalog = self.catalog
 
     @inlineCallbacks
     def test_fail_missing_id(self):
@@ -53,11 +54,68 @@ class BlueprintSourceCodeTest(_BaseResourceTest._ResourceTest):
             }
         )
         data = response1.json_value()
-        blueprint_str = ('from hathor.nanocontracts import Blueprint, Context, public\n\n\nclass '
-                         'TestBlueprint(Blueprint):\n    """ This class is used by the test for t'
-                         'he blueprint source code resource\n        It must be in a separate fil'
-                         'e for the assert in the test\n    """\n    int_attribute: int\n\n    @p'
-                         'ublic\n    def initialize(self, ctx: Context) -> None:\n        self.in'
-                         't_attribute = 0\n\n    @public\n    def sum(self, ctx: Context, arg1: i'
-                         'nt) -> None:\n        self.int_attribute += arg1\n')
-        self.assertEqual(blueprint_str, data['source_code'])
+        self.assertEqual(self.blueprint_source, data['source_code'])
+
+
+class BuiltinBlueprintSourceCodeTest(BaseBlueprintSourceCodeTest):
+    __test__ = True
+
+    blueprint_source = r'''from hathor.nanocontracts import Blueprint
+from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.types import public
+
+
+class TestBlueprint(Blueprint):
+    """ This class is used by the test for the blueprint source code resource
+        It must be in a separate file for the assert in the test
+    """
+    int_attribute: int
+
+    @public
+    def initialize(self, ctx: Context) -> None:
+        self.int_attribute = 0
+
+    @public
+    def sum(self, ctx: Context, arg1: int) -> None:
+        self.int_attribute += arg1
+'''
+
+    def setUp(self):
+        super().setUp()
+        from tests.resources.nanocontracts import dummy_blueprint
+        self.blueprint_id = BlueprintId(b'3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595')
+        self.create_builtin_blueprint(self.manager, self.blueprint_id, dummy_blueprint.TestBlueprint)
+
+
+class OCBBlueprintSourceCodeTest(BaseBlueprintSourceCodeTest):
+    __test__ = True
+
+    blueprint_source = r'''from hathor.nanocontracts import Blueprint
+from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.types import public
+
+
+class TestBlueprint(Blueprint):
+    """ This class is used by the test for the blueprint source code resource
+        It must be in a separate file for the assert in the test
+    """
+    int_attribute: int
+
+    @public
+    def initialize(self, ctx: Context) -> None:
+        self.int_attribute = 0
+
+    @public
+    def sum(self, ctx: Context, arg1: int) -> None:
+        self.int_attribute += arg1
+__blueprint__ = TestBlueprint
+'''
+
+    def setUp(self):
+        super().setUp()
+        from tests.resources import nanocontracts
+        nc_code = load_builtin_blueprint_for_ocb('dummy_blueprint.py', 'TestBlueprint', nanocontracts)
+        blueprint = self.create_on_chain_blueprint(self.manager, nc_code)
+        self.manager.vertex_handler.on_new_vertex(blueprint, fails_silently=False)
+        add_new_blocks(self.manager, 1, advance_clock=30)  # confirm the on-chain blueprint vertex
+        self.blueprint_id = BlueprintId(blueprint.hash)

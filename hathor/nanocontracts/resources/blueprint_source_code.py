@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import inspect
 from typing import TYPE_CHECKING
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.nanocontracts.exception import BlueprintDoesNotExist
+from hathor.nanocontracts.exception import BlueprintDoesNotExist, OCBBlueprintNotConfirmed
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
@@ -54,21 +53,19 @@ class BlueprintSourceCodeResource(Resource):
         assert self.manager.tx_storage.nc_catalog is not None
 
         try:
-            blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_source = self.manager.tx_storage.get_blueprint_source(blueprint_id)
+        except OCBBlueprintNotConfirmed:
+            request.setResponseCode(404)
+            error_response = ErrorResponse(success=False, error=f'Blueprint not confirmed: {params.blueprint_id}')
+            return error_response.json_dumpb()
         except BlueprintDoesNotExist:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
             return error_response.json_dumpb()
 
-        module = inspect.getmodule(blueprint_class)
-
-        assert module is not None
-
-        source_code = inspect.getsource(module)
-
         response = BlueprintSourceCodeResponse(
             id=params.blueprint_id,
-            source_code=source_code,
+            source_code=blueprint_source,
         )
         return response.json_dumpb()
 

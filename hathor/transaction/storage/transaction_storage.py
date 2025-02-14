@@ -1136,11 +1136,7 @@ class TransactionStorage(ABC):
         with self.allow_partially_validated_context():
             return self.transaction_exists(vertex_id)
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
-        """Returns the blueprint class associated with the given blueprint_id.
-
-        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
-        """
+    def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
         from hathor.nanocontracts.exception import BlueprintDoesNotExist
         assert self.nc_catalog is not None
 
@@ -1151,7 +1147,39 @@ class TransactionStorage(ABC):
             if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
                 raise e
             self.log.debug('on-chain blueprints enabled, looking for that instead')
-            return self.get_on_chain_blueprint(blueprint_id).get_blueprint_class()
+            return self.get_on_chain_blueprint(blueprint_id)
+
+    def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
+        """Returns the source code associated with the given blueprint_id.
+
+        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+
+        A point of difference is that an OCB will have a `__blueprint__ = BlueprintName` line, where a built-in
+        blueprint will not.
+        """
+        import inspect
+
+        from hathor.nanocontracts import OnChainBlueprint
+
+        blueprint = self._get_blueprint(blueprint_id)
+        if isinstance(blueprint, OnChainBlueprint):
+            return self.get_on_chain_blueprint(blueprint_id).code.text
+        else:
+            module = inspect.getmodule(blueprint)
+            assert module is not None
+            return inspect.getsource(module)
+
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+        """Returns the blueprint class associated with the given blueprint_id.
+
+        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+        """
+        from hathor.nanocontracts import OnChainBlueprint
+        blueprint = self._get_blueprint(blueprint_id)
+        if isinstance(blueprint, OnChainBlueprint):
+            return blueprint.get_blueprint_class()
+        else:
+            return blueprint
 
     def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
         """Return an on-chain blueprint transaction."""
