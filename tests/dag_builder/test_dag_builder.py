@@ -1,8 +1,9 @@
+from hathor.transaction import Block, Transaction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
 
 
-class DAGCreatorTestCase(unittest.TestCase):
+class DAGBuilderTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -26,14 +27,12 @@ class DAGCreatorTestCase(unittest.TestCase):
             b40 --> tx1
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
         v_order = [node.name for node, _ in artifacts.list]
 
-        tx1 = artifacts.by_name['tx1'].vertex
-        b1 = artifacts.by_name['b1'].vertex
-        b40 = artifacts.by_name['b40'].vertex
+        b1, b40 = artifacts.get_typed_vertices(['b1', 'b40'], Block)
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
 
         # blockchain genesis b[1..50]
         self.assertEqual(b1.parents[0], self._settings.GENESIS_BLOCK_HASH)
@@ -65,13 +64,11 @@ class DAGCreatorTestCase(unittest.TestCase):
             c1.weight = 80.6
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
-        tx1 = artifacts.by_name['tx1'].vertex
-        tka = artifacts.by_name['TKA'].vertex
-        c1 = artifacts.by_name['c1'].vertex
-        b38 = artifacts.by_name['b38'].vertex
+        c1, b38 = artifacts.get_typed_vertices(['c1', 'b38'], Block)
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+        tka = artifacts.get_typed_vertex('TKA', TokenCreationTransaction)
 
         self.assertAlmostEqual(tka.weight, 31.8)
         self.assertAlmostEqual(tx1.weight, 25.2)
@@ -85,10 +82,9 @@ class DAGCreatorTestCase(unittest.TestCase):
             tx1.out[0] <<< tx2
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
-        tx1 = artifacts.by_name['tx1'].vertex
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
         self.assertEqual(len(tx1.outputs), 1)
         # the default filler fills unspecified utxos with 1 HTR
         self.assertEqual(tx1.outputs[0].value, 1)
@@ -107,22 +103,11 @@ class DAGCreatorTestCase(unittest.TestCase):
             b36 --> tx4
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
-        b0 = artifacts.by_name['b30'].vertex
-        b1 = artifacts.by_name['b31'].vertex
-        b2 = artifacts.by_name['b32'].vertex
-        b3 = artifacts.by_name['b33'].vertex
-        b4 = artifacts.by_name['b34'].vertex
-        b5 = artifacts.by_name['b35'].vertex
-        b6 = artifacts.by_name['b36'].vertex
-        b7 = artifacts.by_name['b37'].vertex
-
-        tx1 = artifacts.by_name['tx1'].vertex
-        tx2 = artifacts.by_name['tx2'].vertex
-        tx3 = artifacts.by_name['tx3'].vertex
-        tx4 = artifacts.by_name['tx4'].vertex
+        blocks = ['b30', 'b31', 'b32', 'b33', 'b34', 'b35', 'b36', 'b37']
+        b0, b1, b2, b3, b4, b5, b6, b7 = artifacts.get_typed_vertices(blocks, Block)
+        tx1, tx2, tx3, tx4 = artifacts.get_typed_vertices(['tx1', 'tx2', 'tx3', 'tx4'], Transaction)
 
         self.assertEqual(b2.parents[0], b1.hash)
         self.assertEqual(b3.parents[0], b2.hash)
@@ -149,14 +134,12 @@ class DAGCreatorTestCase(unittest.TestCase):
             b40 --> tx1
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
-        tka = artifacts.by_name['TKA'].vertex
-        tx1 = artifacts.by_name['tx1'].vertex
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+        tka = artifacts.get_typed_vertex('TKA', TokenCreationTransaction)
 
         # TKA token creation transaction
-        self.assertIsInstance(tka, TokenCreationTransaction)
         self.assertEqual(tka.token_name, 'TKA')
         self.assertEqual(tka.token_symbol, 'TKA')
 
@@ -201,8 +184,7 @@ class DAGCreatorTestCase(unittest.TestCase):
             b16 < tx4
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
     def test_no_hash_conflict(self) -> None:
         artifacts = self.dag_builder.build_from_str("""
@@ -212,9 +194,24 @@ class DAGCreatorTestCase(unittest.TestCase):
 
             tx10.out[0] <<< tx20 tx30 tx40
         """)
+        artifacts.propagate_with(self.manager)
 
-        for node, vertex in artifacts.list:
-            print()
-            print(node.name)
-            print()
-            self.manager.on_new_tx(vertex, fails_silently=False)
+    def test_propagate_with(self) -> None:
+        tx_storage = self.manager.tx_storage
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..10]
+            b10 < dummy
+            tx1 <-- tx2
+        ''')
+
+        artifacts.propagate_with(self.manager, up_to='b5')
+        assert len(list(tx_storage.get_all_transactions())) == 8  # 3 genesis + 5 blocks
+
+        artifacts.propagate_with(self.manager, up_to='b10')
+        assert len(list(tx_storage.get_all_transactions())) == 13  # 3 genesis + 10 blocks
+
+        artifacts.propagate_with(self.manager, up_to='tx1')
+        assert len(list(tx_storage.get_all_transactions())) == 15  # 3 genesis + 10 blocks + dummy + tx1
+
+        artifacts.propagate_with(self.manager)
+        assert len(list(tx_storage.get_all_transactions())) == 16  # 3 genesis + 10 blocks + dummy + tx1 + tx2
