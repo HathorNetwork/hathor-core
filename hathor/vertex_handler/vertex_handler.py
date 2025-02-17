@@ -237,10 +237,16 @@ class VertexHandler:
         if self._log_vertex_bytes:
             kwargs['bytes'] = bytes(tx).hex()
         if isinstance(tx, Block):
-            message = message_fmt.format('block')
+            if not metadata.voided_by:
+                message = message_fmt.format('block')
+            else:
+                message = message_fmt.format('voided block')
             kwargs['_height'] = tx.get_height()
         else:
-            message = message_fmt.format('tx')
+            if not metadata.voided_by:
+                message = message_fmt.format('tx')
+            else:
+                message = message_fmt.format('voided tx')
         if not quiet:
             log_func = self._log.info
         else:
