@@ -61,7 +61,6 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     simulator = Simulator(args.seed)
     simulator.start()
     builder = simulator.get_default_builder() \
-        .disable_full_verification() \
         .enable_event_queue()
 
     manager = simulator.create_peer(builder)

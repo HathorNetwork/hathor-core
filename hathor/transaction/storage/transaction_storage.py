@@ -83,9 +83,6 @@ class TransactionStorage(ABC):
     # Key storage attribute to save if the network stored is the expected network
     _network_attribute: str = 'network'
 
-    # Key storage attribute to save if the full node is running a full verification
-    _running_full_verification_attribute: str = 'running_full_verification'
-
     # Key storage attribute to save if the manager is running
     _manager_running_attribute: str = 'manager_running'
 
@@ -908,22 +905,6 @@ class TransactionStorage(ABC):
         """ Save the network name
         """
         return self.add_value(self._network_attribute, network)
-
-    def start_full_verification(self) -> None:
-        """ Save full verification on storage
-        """
-        self.add_value(self._running_full_verification_attribute, '1')
-
-    def finish_full_verification(self) -> None:
-        """ Remove from storage that the full node is initializing with a full verification
-        """
-        self.remove_value(self._running_full_verification_attribute)
-
-    def is_running_full_verification(self) -> bool:
-        """ Return if the full node is initializing with a full verification
-            or was running a full verification and was stopped in the middle
-        """
-        return self.get_value(self._running_full_verification_attribute) == '1'
 
     def start_running_manager(self, execution_manager: ExecutionManager) -> None:
         """ Save on storage that manager is running

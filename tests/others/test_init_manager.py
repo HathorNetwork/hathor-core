@@ -1,18 +1,26 @@
+import tempfile
 from typing import Iterator
 
+from hathor.conf.settings import HathorSettings
 from hathor.pubsub import PubSubManager
 from hathor.simulator.utils import add_new_block, add_new_blocks
+from hathor.storage import RocksDBStorage
 from hathor.transaction import BaseTransaction
-from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.transaction.storage import TransactionRocksDBStorage
+from hathor.transaction.vertex_parser import VertexParser
 from tests import unittest
 from tests.unittest import TestBuilder
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 
-class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._first_tx = None
+class ModifiedTransactionRocksDBStorage(TransactionRocksDBStorage):
+    def __init__(self, path: str, settings: HathorSettings):
+        super().__init__(
+            rocksdb_storage=RocksDBStorage(path=path),
+            settings=settings,
+            vertex_parser=VertexParser(settings=settings),
+        )
+        self._first_tx: BaseTransaction | None = None
 
     def set_first_tx(self, tx: BaseTransaction) -> None:
         self._first_tx = tx
@@ -30,7 +38,8 @@ class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):
 class SimpleManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.tx_storage = ModifiedTransactionMemoryStorage(settings=self._settings)
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.tx_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
         self.pubsub = PubSubManager(self.clock)
 
     def test_invalid_arguments(self):
@@ -89,7 +98,8 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
 class ManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.tx_storage = ModifiedTransactionMemoryStorage(settings=self._settings)
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.tx_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, tx_storage=self.tx_storage)
 
@@ -128,8 +138,14 @@ class ManagerInitializationTestCase(unittest.TestCase):
         self.assertEqual(seen, self.all_hashes)
 
         # a new manager must be successfully initialized
-        self.tx_storage.reset_indexes()
-        self.create_peer('testnet', tx_storage=self.tx_storage)
+        self.manager.stop()
+        self.tx_storage._rocksdb_storage.close()
+        new_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
+        artifacts = self.get_builder().set_tx_storage(new_storage).build()
+        artifacts.manager.start()
+        self.clock.run()
+        self.clock.advance(5)
+        assert set(tx.hash for tx in artifacts.manager.tx_storage.get_all_transactions()) == self.all_hashes
 
     def test_init_unfavorable_order(self):
         """We force the first element of `get_all_transactions` to be a transaction
@@ -147,23 +163,34 @@ class ManagerInitializationTestCase(unittest.TestCase):
         self.assertEqual(seen, self.all_hashes)
 
         # a new manager must be successfully initialized
-        self.tx_storage.reset_indexes()
-        self.create_peer('testnet', tx_storage=self.tx_storage)
+        self.manager.stop()
+        self.tx_storage._rocksdb_storage.close()
+        new_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
+        artifacts = self.get_builder().set_tx_storage(new_storage).build()
+        artifacts.manager.start()
+        self.clock.run()
+        self.clock.advance(5)
+        assert set(tx.hash for tx in artifacts.manager.tx_storage.get_all_transactions()) == self.all_hashes
 
     def test_init_not_voided_tips(self):
         # add a bunch of blocks and transactions
         for i in range(30):
-            add_new_block(self.manager, advance_clock=15)
-            add_new_transactions(self.manager, 5, advance_clock=15)
+            blk = add_new_block(self.manager, advance_clock=15)
+            txs = add_new_transactions(self.manager, 5, advance_clock=15)
+            self.all_hashes.add(blk.hash)
+            self.all_hashes.update(x.hash for x in txs)
 
         # add a bunch of conflicting transactions, these will all become voided
         for i in range(50):
-            add_new_double_spending(self.manager)
+            tx = add_new_double_spending(self.manager)
+            self.all_hashes.add(tx.hash)
 
         # finish up with another bunch of blocks and transactions
         for i in range(30):
-            add_new_block(self.manager, advance_clock=15)
-            add_new_transactions(self.manager, 5, advance_clock=15)
+            blk = add_new_block(self.manager, advance_clock=15)
+            txs = add_new_transactions(self.manager, 5, advance_clock=15)
+            self.all_hashes.add(blk.hash)
+            self.all_hashes.update(x.hash for x in txs)
 
         # not the point of this test, but just a sanity check
         self.assertConsensusValid(self.manager)
@@ -172,9 +199,15 @@ class ManagerInitializationTestCase(unittest.TestCase):
         self.assertEqual(50, sum(bool(tx.get_metadata().voided_by) for tx in self.tx_storage.get_all_transactions()))
 
         # create a new manager (which will initialize in the self.create_peer call)
-        self.tx_storage.reset_indexes()
         self.manager.stop()
-        manager = self.create_peer(self.network, tx_storage=self.tx_storage, full_verification=False)
+        self.tx_storage._rocksdb_storage.close()
+        new_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
+        artifacts = self.get_builder().set_tx_storage(new_storage).build()
+        manager = artifacts.manager
+        manager.start()
+        self.clock.run()
+        self.clock.advance(5)
+        assert set(tx.hash for tx in manager.tx_storage.get_all_transactions()) == self.all_hashes
 
         # make sure none of its tx tips are voided
         all_tips = manager.generate_parent_txs(None).get_all_tips()

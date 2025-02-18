@@ -194,7 +194,6 @@ class TestCase(unittest.TestCase):
         unlock_wallet: bool = True,
         wallet_index: bool = False,
         capabilities: list[str] | None = None,
-        full_verification: bool = True,
         checkpoints: list[Checkpoint] | None = None,
         utxo_index: bool = False,
         event_manager: EventManager | None = None,
@@ -210,7 +209,6 @@ class TestCase(unittest.TestCase):
 
         settings = self._settings._replace(NETWORK_NAME=network)
         builder = self.get_builder() \
-            .set_full_verification(full_verification) \
             .set_settings(settings)
 
         if checkpoints is not None:

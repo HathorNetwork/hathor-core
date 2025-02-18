@@ -75,7 +75,7 @@ def _assert_height_weight_signer_id(
 
 class PoaSimulationTest(SimulatorTestCase):
     def _get_manager(self, signer: PoaSigner | None = None) -> HathorManager:
-        builder = self.simulator.get_default_builder().disable_full_verification()
+        builder = self.simulator.get_default_builder()
         if signer:
             builder.set_poa_signer(signer)
         artifacts = self.simulator.create_artifacts(builder)
@@ -419,8 +419,7 @@ class PoaSimulationTest(SimulatorTestCase):
 
         builder_1b = self.simulator.get_default_builder() \
             .set_tx_storage(storage_1a) \
-            .set_poa_signer(signer1) \
-            .disable_full_verification()
+            .set_poa_signer(signer1)
         artifacts_1b = self.simulator.create_artifacts(builder_1b)
         manager_1b = artifacts_1b.manager
         manager_1b.allow_mining_without_peers()

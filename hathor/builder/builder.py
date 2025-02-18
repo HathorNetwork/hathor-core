@@ -182,8 +182,6 @@ class Builder:
 
         self._enable_stratum_server: Optional[bool] = None
 
-        self._full_verification: Optional[bool] = None
-
         self._soft_voided_tx_ids: Optional[set[bytes]] = None
 
         self._execution_manager: ExecutionManager | None = None
@@ -238,9 +236,6 @@ class Builder:
             indexes.enable_utxo_index()
 
         kwargs: dict[str, Any] = {}
-
-        if self._full_verification is not None:
-            kwargs['full_verification'] = self._full_verification
 
         if self._enable_event_queue is not None:
             kwargs['enable_event_queue'] = self._enable_event_queue
@@ -776,21 +771,6 @@ class Builder:
     def disable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
         self._sync_v2_support = SyncSupportLevel.DISABLED
-        return self
-
-    def set_full_verification(self, full_verification: bool) -> 'Builder':
-        self.check_if_can_modify()
-        self._full_verification = full_verification
-        return self
-
-    def enable_full_verification(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._full_verification = True
-        return self
-
-    def disable_full_verification(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._full_verification = False
         return self
 
     def enable_ipv6(self) -> 'Builder':

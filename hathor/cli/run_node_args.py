@@ -59,7 +59,6 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     cache_interval: Optional[int]
     recursion_limit: Optional[int]
     allow_mining_without_peers: bool
-    x_full_verification: bool
     procname_prefix: str
     allow_non_standard_script: bool
     max_output_script_size: Optional[int]
