@@ -21,3 +21,7 @@ class TestBlueprint1(Blueprint):
     @public
     def initialize(self, ctx: Context, a: int) -> None:
         pass
+
+    @public
+    def nop(self, ctx: Context) -> None:
+        pass

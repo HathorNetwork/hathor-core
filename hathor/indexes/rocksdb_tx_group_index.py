@@ -13,9 +13,10 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Iterable, Optional, Sized, TypeVar
+from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Sized, TypeVar
 
 from structlog import get_logger
+from typing_extensions import override
 
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
 from hathor.indexes.tx_group_index import TxGroupIndex
@@ -65,11 +66,6 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         """Deserialize RocksDB's key."""
         raise NotImplementedError
 
-    @abstractmethod
-    def _extract_keys(self, tx: BaseTransaction) -> Iterable[KT]:
-        """Extract the keys related to a given tx. The transaction will be added to all extracted keys."""
-        raise NotImplementedError
-
     def _to_rocksdb_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> bytes:
         import struct
         rocksdb_key = self._serialize_key(key)
@@ -108,13 +104,13 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
     def _get_sorted_from_key(self,
                              key: KT,
                              tx_start: Optional[BaseTransaction] = None,
-                             reverse: bool = False) -> Iterable[bytes]:
+                             reverse: bool = False) -> Iterator[bytes]:
         return self._util_get_from_key(key, tx_start, reverse)
 
     def _util_get_from_key(self,
                            key: KT,
                            tx: Optional[BaseTransaction] = None,
-                           reverse: bool = False) -> Iterable[bytes]:
+                           reverse: bool = False) -> Iterator[bytes]:
         self.log.debug('seek to', key=key)
         it = self._db.iterkeys(self._cf)
         if reverse:
@@ -147,3 +143,16 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         is_empty = key2 != key
         self.log.debug('seek empty', is_empty=is_empty)
         return is_empty
+
+    @override
+    def get_latest_tx_timestamp(self, key: KT) -> int | None:
+        it = self._db.iterkeys(self._cf)
+        it = reversed(it)
+        # when reversed we increment the key by 1, which effectively goes to the end of a prefix
+        it.seek_for_prev(incr_key(self._to_rocksdb_key(key)))
+        _cf, rocksdb_key = next(it)
+        key2, tx_timestamp, _ = self._from_rocksdb_key(rocksdb_key)
+        if key2 != key:
+            return None
+        assert key2 == key
+        return tx_timestamp
