@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import Generic, Iterable, Optional, Sized, TypeVar
+from typing import Generic, Iterable, Iterator, Optional, Sized, TypeVar
 
 from structlog import get_logger
 
@@ -44,6 +44,11 @@ class TxGroupIndex(BaseIndex, Generic[KT]):
         raise NotImplementedError
 
     @abstractmethod
+    def _extract_keys(self, tx: BaseTransaction) -> Iterable[KT]:
+        """Extract the keys related to a given tx. The transaction will be added to all extracted keys."""
+        raise NotImplementedError
+
+    @abstractmethod
     def _get_from_key(self, key: KT) -> Iterable[bytes]:
         """Get all transactions that have a given key."""
         raise NotImplementedError
@@ -52,7 +57,7 @@ class TxGroupIndex(BaseIndex, Generic[KT]):
     def _get_sorted_from_key(self,
                              key: KT,
                              tx_start: Optional[BaseTransaction] = None,
-                             reverse: bool = False) -> Iterable[bytes]:
+                             reverse: bool = False) -> Iterator[bytes]:
         """Get all transactions that have a given key, sorted by timestamp.
 
         `tx_start` serves as a pagination marker, indicating the starting position for the iteration.
@@ -65,4 +70,9 @@ class TxGroupIndex(BaseIndex, Generic[KT]):
     @abstractmethod
     def _is_key_empty(self, key: KT) -> bool:
         """Check whether a key is empty."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_latest_tx_timestamp(self, key: KT) -> int | None:
+        """Get the timestamp of the latest tx in the given key, or None if the key is not found."""
         raise NotImplementedError

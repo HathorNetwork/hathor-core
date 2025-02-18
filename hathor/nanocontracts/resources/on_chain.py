@@ -58,8 +58,7 @@ class BlueprintOnChainResource(Resource):
 
         if params.after and params.before:
             request.setResponseCode(400)
-            error_response = ErrorResponse(
-              success=False, error='Parameters after and before can\'t be used together.')
+            error_response = ErrorResponse(success=False, error='Parameters after and before can\'t be used together.')
             return error_response.json_dumpb()
 
         if params.find_blueprint_name:
