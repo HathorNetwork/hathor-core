@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import os
-from typing import TYPE_CHECKING, Optional
+import tempfile
 
-if TYPE_CHECKING:
-    import rocksdb
-
+import rocksdb
 from structlog import get_logger
+from typing_extensions import assert_never
 
 logger = get_logger()
 _DB_NAME = 'data_v2.db'
@@ -28,12 +29,16 @@ class RocksDBStorage:
     """ Creates a RocksDB database
         Give clients the option to create column families
     """
-    def __init__(self, path: str = './', cache_capacity: Optional[int] = None):
-        import rocksdb
+    def __init__(
+        self,
+        path: str | tempfile.TemporaryDirectory | None = None,
+        cache_capacity: int | None = None,
+    ) -> None:
         self.log = logger.new()
-        self._path = path
+        # We have to keep a reference to the TemporaryDirectory because it is cleaned up when garbage collected.
+        self.path, self.temp_dir = self._get_path_and_temp_dir(path)
 
-        db_path = os.path.join(path, _DB_NAME)
+        db_path = os.path.join(self.path, _DB_NAME)
         lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
         table_factory = rocksdb.BlockBasedTableFactory(block_cache=lru_cache)
         options = rocksdb.Options(
@@ -60,11 +65,25 @@ class RocksDBStorage:
         self._db = rocksdb.DB(db_path, options, column_families=column_families)
         self.log.debug('open db', cf_list=[cf.name.decode('ascii') for cf in self._db.column_families])
 
-    def get_db(self) -> 'rocksdb.DB':
+    @staticmethod
+    def _get_path_and_temp_dir(
+        path: str | tempfile.TemporaryDirectory | None,
+    ) -> tuple[str, tempfile.TemporaryDirectory | None]:
+        match path:
+            case str():
+                return path, None
+            case tempfile.TemporaryDirectory():
+                return path.name, path
+            case None:
+                temp_dir = tempfile.TemporaryDirectory()
+                return temp_dir.name, temp_dir
+            case _:
+                assert_never(path)
+
+    def get_db(self) -> rocksdb.DB:
         return self._db
 
     def get_or_create_column_family(self, cf_name: bytes) -> 'rocksdb.ColumnFamilyHandle':
-        import rocksdb
         cf = self._db.get_column_family(cf_name)
         if cf is None:
             cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())

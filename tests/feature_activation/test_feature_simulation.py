@@ -663,13 +663,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         assert artifacts.bit_signaling_service.get_not_support_features() == [Feature.NOP_FEATURE_1]
 
 
-class MemoryStorageFeatureSimulationTest(BaseFeatureSimulationTest):
-    __test__ = True
-
-    def get_simulator_builder(self) -> Builder:
-        return self.simulator.get_default_builder()
-
-
 class RocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
     __test__ = True
 
@@ -681,7 +674,7 @@ class RocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
 
     def get_simulator_builder_from_dir(self, rocksdb_directory: str) -> Builder:
         return self.simulator.get_default_builder() \
-            .use_rocksdb(path=rocksdb_directory)
+            .set_rocksdb_path(path=rocksdb_directory)
 
     def get_simulator_builder(self) -> Builder:
         rocksdb_directory = self.get_rocksdb_directory()

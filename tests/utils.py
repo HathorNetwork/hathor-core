@@ -219,7 +219,7 @@ def run_server(
     """
     command = ' '.join([
         'python -m hathor run_node',
-        '--memory-storage',
+        '--temp-data',
         '--wallet hd',
         '--wallet-enable-api',
         '--hostname {}'.format(hostname),

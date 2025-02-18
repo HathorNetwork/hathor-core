@@ -18,9 +18,6 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
     is_post: Optional[bool] = None
 
-    # XXX: we will get a "two instances of the same tx in memory" otherwise
-    use_memory_storage = True
-
     def setUp(self):
         super().setUp()
         self.web = StubSite(PushTxResource(self.manager))
@@ -232,6 +229,9 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         response = yield self.push_tx({'hex_tx': tx2_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
+
+        # We have to get tx2 from the storage because the saved instance is different from the one we created here.
+        tx2 = self.manager.tx_storage.get_transaction(tx2.hash)
 
         # Now we set this tx2 as voided and try to push a tx3 that spends tx2
         tx_meta = tx2.get_metadata()

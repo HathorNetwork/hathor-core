@@ -63,11 +63,9 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         gen_tx1.stop()
 
         # Create a new peer and run sync for a while (but stop before getting synced).
-        path = self.mkdtemp()
         peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
-            .set_peer(peer) \
-            .use_rocksdb(path)
+            .set_peer(peer)
 
         manager2 = self.simulator.create_peer(builder2)
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -92,6 +90,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.remove_connection(conn12)
         manager2.stop()
         assert isinstance(manager2.tx_storage, TransactionRocksDBStorage)
+        temp_dir = not_none(manager2.tx_storage._rocksdb_storage.temp_dir)
         manager2.tx_storage._rocksdb_storage.close()
         del manager2
 
@@ -104,7 +103,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # Restart full node using the same db.
         builder3 = self.simulator.get_default_builder() \
             .set_peer(peer) \
-            .use_rocksdb(path)
+            .set_rocksdb_path(temp_dir)
 
         if use_tx_storage_cache:
             builder3.use_tx_storage_cache()

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, TypedDict, cas
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.rocksdb_utils import (
     InternalUid,
     RocksDBIndexUtils,
@@ -84,9 +84,9 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
-        self._settings = get_global_settings()
+    def __init__(self, db: 'rocksdb.DB', *, settings: HathorSettings, cf_name: Optional[bytes] = None) -> None:
         self.log = logger.new()
+        TokensIndex.__init__(self, settings=settings)
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_TOKENS_INDEX)
 
     def get_db_name(self) -> Optional[str]:

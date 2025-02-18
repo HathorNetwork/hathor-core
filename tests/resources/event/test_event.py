@@ -18,14 +18,17 @@ import pytest
 
 from hathor.event import EventManager
 from hathor.event.resources.event import EventResource
-from hathor.event.storage import EventMemoryStorage
+from hathor.event.storage import EventRocksDBStorage
+from hathor.storage import RocksDBStorage
 from tests.resources.base_resource import StubSite
 from tests.utils import EventMocker
 
 
 @pytest.fixture
 def web():
-    event_storage = EventMemoryStorage()
+    event_storage = EventRocksDBStorage(
+        rocksdb_storage=RocksDBStorage(),
+    )
 
     for i in range(3):
         event = EventMocker.create_event(i)

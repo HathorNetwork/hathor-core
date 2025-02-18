@@ -261,70 +261,25 @@ class IndexesManager(ABC):
             self.tokens.del_tx(tx, remove_all=remove_all)
 
 
-class MemoryIndexesManager(IndexesManager):
-    def __init__(self, *, settings: HathorSettings | None = None) -> None:
-        from hathor.indexes.memory_height_index import MemoryHeightIndex
-        from hathor.indexes.memory_info_index import MemoryInfoIndex
-        from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
-        from hathor.indexes.memory_tips_index import MemoryTipsIndex
-
-        self.info = MemoryInfoIndex()
-        self.all_tips = MemoryTipsIndex(scope_type=TipsScopeType.ALL)
-        self.block_tips = MemoryTipsIndex(scope_type=TipsScopeType.BLOCKS)
-        self.tx_tips = MemoryTipsIndex(scope_type=TipsScopeType.TXS)
-
-        self.sorted_all = MemoryTimestampIndex(scope_type=TimestampScopeType.ALL)
-        self.sorted_blocks = MemoryTimestampIndex(scope_type=TimestampScopeType.BLOCKS)
-        self.sorted_txs = MemoryTimestampIndex(scope_type=TimestampScopeType.TXS)
-
-        self.addresses = None
-        self.tokens = None
-        self.utxo = None
-        self.height = MemoryHeightIndex(settings=settings)
-        self.mempool_tips = None
-
-        # XXX: this has to be at the end of __init__, after everything has been initialized
-        self.__init_checks__()
-
-    def enable_address_index(self, pubsub: 'PubSubManager') -> None:
-        from hathor.indexes.memory_address_index import MemoryAddressIndex
-        if self.addresses is None:
-            self.addresses = MemoryAddressIndex(pubsub)
-
-    def enable_tokens_index(self) -> None:
-        from hathor.indexes.memory_tokens_index import MemoryTokensIndex
-        if self.tokens is None:
-            self.tokens = MemoryTokensIndex()
-
-    def enable_utxo_index(self) -> None:
-        from hathor.indexes.memory_utxo_index import MemoryUtxoIndex
-        if self.utxo is None:
-            self.utxo = MemoryUtxoIndex()
-
-    def enable_mempool_index(self) -> None:
-        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
-        if self.mempool_tips is None:
-            self.mempool_tips = MemoryMempoolTipsIndex()
-
-
 class RocksDBIndexesManager(IndexesManager):
-    def __init__(self, rocksdb_storage: 'RocksDBStorage') -> None:
+    def __init__(self, rocksdb_storage: 'RocksDBStorage', *, settings: HathorSettings) -> None:
         from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
 
+        self.settings = settings
         self._db = rocksdb_storage.get_db()
 
-        self.info = RocksDBInfoIndex(self._db)
-        self.height = RocksDBHeightIndex(self._db)
-        self.all_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.ALL)
-        self.block_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.BLOCKS)
-        self.tx_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.TXS)
+        self.info = RocksDBInfoIndex(self._db, settings=settings)
+        self.height = RocksDBHeightIndex(self._db, settings=settings)
+        self.all_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.ALL, settings=settings)
+        self.block_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.BLOCKS, settings=settings)
+        self.tx_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.TXS, settings=settings)
 
-        self.sorted_all = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.ALL)
-        self.sorted_blocks = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.BLOCKS)
-        self.sorted_txs = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.TXS)
+        self.sorted_all = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.ALL, settings=settings)
+        self.sorted_blocks = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.BLOCKS, settings=settings)
+        self.sorted_txs = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.TXS, settings=settings)
 
         self.addresses = None
         self.tokens = None
@@ -337,20 +292,20 @@ class RocksDBIndexesManager(IndexesManager):
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
         if self.addresses is None:
-            self.addresses = RocksDBAddressIndex(self._db, pubsub=pubsub)
+            self.addresses = RocksDBAddressIndex(self._db, pubsub=pubsub, settings=self.settings)
 
     def enable_tokens_index(self) -> None:
         from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
         if self.tokens is None:
-            self.tokens = RocksDBTokensIndex(self._db)
+            self.tokens = RocksDBTokensIndex(self._db, settings=self.settings)
 
     def enable_utxo_index(self) -> None:
         from hathor.indexes.rocksdb_utxo_index import RocksDBUtxoIndex
         if self.utxo is None:
-            self.utxo = RocksDBUtxoIndex(self._db)
+            self.utxo = RocksDBUtxoIndex(self._db, settings=self.settings)
 
     def enable_mempool_index(self) -> None:
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         if self.mempool_tips is None:
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
-            self.mempool_tips = MemoryMempoolTipsIndex()
+            self.mempool_tips = MemoryMempoolTipsIndex(settings=self.settings)

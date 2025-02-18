@@ -16,10 +16,11 @@ from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
-from hathor.indexes.timestamp_index import RangeIdx, ScopeType, TimestampIndex
+from hathor.indexes.timestamp_index import ScopeType, TimestampIndex
 from hathor.transaction import BaseTransaction
-from hathor.util import collect_n, skip_n
+from hathor.util import collect_n
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -38,8 +39,8 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, scope_type: ScopeType):
-        TimestampIndex.__init__(self, scope_type=scope_type)
+    def __init__(self, db: 'rocksdb.DB', *, settings: HathorSettings, scope_type: ScopeType) -> None:
+        TimestampIndex.__init__(self, scope_type=scope_type, settings=settings)
         self._name = scope_type.get_name()
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, f'timestamp-sorted-{self._name}'.encode())
@@ -134,30 +135,6 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
     def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
         it = (x for _, x in self._iter(timestamp, hash_bytes))
         return collect_n(it, count)
-
-    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> tuple[list[bytes], Optional[RangeIdx]]:
-        if count <= 0:
-            raise ValueError(f'count must be positive, got {count}')
-        timestamp, offset = from_idx
-        it = skip_n(self._iter(timestamp), offset)
-        hashes: list[bytes] = []
-        n = count
-        next_timestamp = timestamp
-        next_offset = offset
-        while n > 0:
-            try:
-                timestamp, tx_hash = next(it)
-            except StopIteration:
-                return hashes, None
-            hashes.append(tx_hash)
-            if next_timestamp != timestamp:
-                # XXX: this is to match how the memory index works, it basically resets to 1, not 0
-                next_offset = 1
-                next_timestamp = timestamp
-            else:
-                next_offset += 1
-            n -= 1
-        return hashes, RangeIdx(next_timestamp, next_offset)
 
     def iter(self) -> Iterator[bytes]:
         it = self._db.iterkeys(self._cf)

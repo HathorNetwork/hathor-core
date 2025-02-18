@@ -336,18 +336,16 @@ class Block(GenericVertex[BlockStaticMetadata]):
         """
         previous_state = self.get_feature_state(feature=feature)
 
-        if state == previous_state:
-            return
-
-        assert previous_state is None
-        assert self.storage is not None
-
-        metadata = self.get_metadata()
-        feature_states = metadata.feature_states or {}
-        feature_states[feature] = state
-        metadata.feature_states = feature_states
+        if state != previous_state:
+            # we are settings the state for the first time in this block
+            assert previous_state is None
+            metadata = self.get_metadata()
+            feature_states = metadata.feature_states or {}
+            feature_states[feature] = state
+            metadata.feature_states = feature_states
 
         if save:
+            assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
 
     def get_feature_activation_bit_value(self, bit: int) -> int:
