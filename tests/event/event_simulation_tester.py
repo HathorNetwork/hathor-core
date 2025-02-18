@@ -34,7 +34,6 @@ class BaseEventSimulationTester(SimulatorTestCase):
     def _create_artifacts(self) -> None:
         peer = PrivatePeer.auto_generated()
         builder = self.builder.set_peer(peer) \
-            .disable_full_verification() \
             .enable_event_queue()
         artifacts = self.simulator.create_artifacts(builder)
 

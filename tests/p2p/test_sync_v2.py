@@ -41,7 +41,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
                     partial_blocks.add(tx.hash)
         return partial_blocks
 
-    def _run_restart_test(self, *, full_verification: bool, use_tx_storage_cache: bool) -> None:
+    def _run_restart_test(self, *, use_tx_storage_cache: bool) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -106,11 +106,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             .set_peer(peer) \
             .use_rocksdb(path)
 
-        if full_verification:
-            builder3.enable_full_verification()
-        else:
-            builder3.disable_full_verification()
-
         if use_tx_storage_cache:
             builder3.use_tx_storage_cache()
 
@@ -146,17 +141,11 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager3.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
-    def test_restart_fullnode_full_verification(self) -> None:
-        self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
-
     def test_restart_fullnode_quick(self) -> None:
-        self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
+        self._run_restart_test(use_tx_storage_cache=False)
 
     def test_restart_fullnode_quick_with_cache(self) -> None:
-        self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
-
-    def test_restart_fullnode_full_verification_with_cache(self) -> None:
-        self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
+        self._run_restart_test(use_tx_storage_cache=True)
 
     def test_exceeds_streaming_and_mempool_limits(self) -> None:
         manager1 = self.create_peer()

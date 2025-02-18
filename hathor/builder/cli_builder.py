@@ -234,8 +234,6 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
-        self.check_or_raise(not self._args.x_full_verification, '--x-full-verification is deprecated')
-
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
             soft_voided_tx_ids,
@@ -331,7 +329,6 @@ class CliBuilder:
             wallet=self.wallet,
             checkpoints=settings.CHECKPOINTS,
             environment_info=get_environment_info(args=str(self._args), peer_id=str(peer.id)),
-            full_verification=False,
             enable_event_queue=self._args.x_enable_event_queue or self._args.enable_event_queue,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,

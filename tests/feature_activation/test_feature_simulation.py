@@ -681,8 +681,7 @@ class RocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
 
     def get_simulator_builder_from_dir(self, rocksdb_directory: str) -> Builder:
         return self.simulator.get_default_builder() \
-            .use_rocksdb(path=rocksdb_directory) \
-            .disable_full_verification()
+            .use_rocksdb(path=rocksdb_directory)
 
     def get_simulator_builder(self) -> Builder:
         rocksdb_directory = self.get_rocksdb_directory()

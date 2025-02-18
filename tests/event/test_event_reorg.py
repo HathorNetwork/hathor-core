@@ -13,7 +13,6 @@ class EventReorgTest(unittest.TestCase):
         self.manager = self.create_peer(
             self.network,
             enable_event_queue=True,
-            full_verification=False,
             event_storage=self.event_storage
         )
 

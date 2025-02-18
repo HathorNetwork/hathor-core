@@ -568,13 +568,6 @@ class BaseTransactionStorageTest(unittest.TestCase):
         yield gatherResults(deferreds)
         self.tx_storage._disable_weakref()
 
-    def test_full_verification_attribute(self):
-        self.assertFalse(self.tx_storage.is_running_full_verification())
-        self.tx_storage.start_full_verification()
-        self.assertTrue(self.tx_storage.is_running_full_verification())
-        self.tx_storage.finish_full_verification()
-        self.assertFalse(self.tx_storage.is_running_full_verification())
-
     def test_key_value_attribute(self):
         attr = 'test'
         val = 'a'
