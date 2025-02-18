@@ -1,4 +1,3 @@
-import tempfile
 from typing import Iterator
 
 from hathor.conf.settings import HathorSettings
@@ -38,8 +37,8 @@ class ModifiedTransactionRocksDBStorage(TransactionRocksDBStorage):
 class SimpleManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.tx_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
+        self.path = self.mkdtemp()
+        self.tx_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
         self.pubsub = PubSubManager(self.clock)
 
     def test_invalid_arguments(self):
@@ -98,8 +97,8 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
 class ManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.tx_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
+        self.path = self.mkdtemp()
+        self.tx_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, tx_storage=self.tx_storage)
 
@@ -140,7 +139,7 @@ class ManagerInitializationTestCase(unittest.TestCase):
         # a new manager must be successfully initialized
         self.manager.stop()
         self.tx_storage._rocksdb_storage.close()
-        new_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
+        new_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
         artifacts = self.get_builder().set_tx_storage(new_storage).build()
         artifacts.manager.start()
         self.clock.run()
@@ -165,7 +164,7 @@ class ManagerInitializationTestCase(unittest.TestCase):
         # a new manager must be successfully initialized
         self.manager.stop()
         self.tx_storage._rocksdb_storage.close()
-        new_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
+        new_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
         artifacts = self.get_builder().set_tx_storage(new_storage).build()
         artifacts.manager.start()
         self.clock.run()
@@ -201,7 +200,7 @@ class ManagerInitializationTestCase(unittest.TestCase):
         # create a new manager (which will initialize in the self.create_peer call)
         self.manager.stop()
         self.tx_storage._rocksdb_storage.close()
-        new_storage = ModifiedTransactionRocksDBStorage(path=self.temp_dir.name, settings=self._settings)
+        new_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
         artifacts = self.get_builder().set_tx_storage(new_storage).build()
         manager = artifacts.manager
         manager.start()
