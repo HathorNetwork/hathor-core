@@ -36,9 +36,6 @@ class MemoryAddressIndex(MemoryTxGroupIndex[str], AddressIndex):
         if self.pubsub:
             self._subscribe_pubsub_events()
 
-    def get_db_name(self) -> Optional[str]:
-        return None
-
     def _extract_keys(self, tx: BaseTransaction) -> Iterable[str]:
         return tx.get_related_addresses()
 

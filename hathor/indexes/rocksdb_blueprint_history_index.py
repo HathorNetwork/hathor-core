@@ -1,4 +1,4 @@
-# Copyright 2023 Hathor Labs
+# Copyright 2025 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,37 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional
+import rocksdb
+from typing_extensions import override
 
-from structlog import get_logger
-
-from hathor.indexes.nc_history_index import NCHistoryIndex
+from hathor.indexes.blueprint_history_index import BlueprintHistoryIndex
 from hathor.indexes.rocksdb_tx_group_index import RocksDBTxGroupIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 
-if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
-
-logger = get_logger()
-
-_CF_NAME_NC_HISTORY_INDEX = b'nc-history-index'
-_DB_NAME: str = 'nc-history'
+_CF_NAME_BLUEPRINT_HISTORY_INDEX = b'blueprint-history-index'
+_DB_NAME: str = 'blueprint-history'
 
 
-class RocksDBNCHistoryIndex(RocksDBTxGroupIndex[bytes], NCHistoryIndex, RocksDBIndexUtils):
-    """RocksDB-persistent index of all transactions of a Nano Contract."""
-
+class RocksDBBlueprintHistoryIndex(RocksDBTxGroupIndex[bytes], BlueprintHistoryIndex, RocksDBIndexUtils):
     _KEY_SIZE = 32
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
-        RocksDBTxGroupIndex.__init__(self, db, cf_name or _CF_NAME_NC_HISTORY_INDEX)
+    def __init__(self, db: rocksdb.DB) -> None:
+        RocksDBTxGroupIndex.__init__(self, db, _CF_NAME_BLUEPRINT_HISTORY_INDEX)
 
+    @override
     def _serialize_key(self, key: bytes) -> bytes:
         return key
 
+    @override
     def _deserialize_key(self, key_bytes: bytes) -> bytes:
         return key_bytes
 
-    def get_db_name(self) -> Optional[str]:
-        # XXX: we don't need it to be parametrizable, so this is fine
+    @override
+    def get_db_name(self) -> str | None:
         return _DB_NAME
