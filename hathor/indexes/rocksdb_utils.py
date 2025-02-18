@@ -120,6 +120,16 @@ class RocksDBIndexUtils:
         it.seek_to_first()
         return {k: v for (_, k), v in it}
 
+    def get_all_internal(self) -> Iterable[bytes]:
+        """
+        Return all internal content of this index, sorted — that is, its rocksdb keys.
+        Mostly useful for comparing different index instances in tests.
+        """
+        it = self._db.iterkeys(self._cf)
+        it.seek_to_first()
+        for _cf, rocksdb_key in it:
+            yield rocksdb_key
+
 
 class RocksDBSimpleSet(Collection[bytes], RocksDBIndexUtils):
     def __init__(self, db: 'rocksdb.DB', log: 'structlog.stdlib.BoundLogger', *, cf_name: bytes) -> None:

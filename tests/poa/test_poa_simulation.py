@@ -324,19 +324,16 @@ class PoaSimulationTest(SimulatorTestCase):
         )
 
     def test_existing_storage(self) -> None:
-        import tempfile
-        rocksdb_directory = tempfile.mkdtemp()
-        self.tmpdirs.append(rocksdb_directory)
         signer = get_signer()
         signer_id = signer._signer_id
 
         self.simulator.settings = get_settings(signer, time_between_blocks=10)
         builder = self.simulator.get_default_builder() \
             .set_poa_signer(signer) \
-            .use_rocksdb(path=rocksdb_directory)
 
         artifacts1 = self.simulator.create_artifacts(builder)
         manager1 = artifacts1.manager
+        rocksdb_dir = not_none(artifacts1.rocksdb_storage.temp_dir)
         manager1.allow_mining_without_peers()
 
         self.simulator.run(50)
@@ -357,7 +354,7 @@ class PoaSimulationTest(SimulatorTestCase):
 
         builder = self.simulator.get_default_builder() \
             .set_poa_signer(signer) \
-            .use_rocksdb(path=rocksdb_directory)
+            .set_rocksdb_path(path=rocksdb_dir)
 
         artifacts = self.simulator.create_artifacts(builder)
         manager2 = artifacts.manager

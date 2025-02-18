@@ -17,11 +17,12 @@ from unittest.mock import Mock, call
 import pytest
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.event.storage import EventMemoryStorage
+from hathor.event.storage import EventRocksDBStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
 from hathor.simulator.clock import MemoryReactorHeapClock
+from hathor.storage import RocksDBStorage
 from tests.utils import EventMocker
 
 
@@ -157,7 +158,9 @@ def _get_factory(
     n_starting_events: int = 0,
     clock: MemoryReactorHeapClock = MemoryReactorHeapClock()
 ) -> EventWebsocketFactory:
-    event_storage = EventMemoryStorage()
+    event_storage = EventRocksDBStorage(
+        rocksdb_storage=RocksDBStorage(),
+    )
 
     for event_id in range(n_starting_events):
         event = EventMocker.create_event(event_id)

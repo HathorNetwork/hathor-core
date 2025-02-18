@@ -20,19 +20,19 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
-from hathor.indexes import MemoryIndexesManager
 from hathor.transaction import Block
 from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.transaction.static_metadata import BlockStaticMetadata
-from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
+from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
 from hathor.verification.block_verifier import BlockVerifier
+from tests.unittest import TestBuilder
 
 
 def test_calculate_feature_activation_bit_counts_genesis():
     settings = get_global_settings()
-    storage = TransactionMemoryStorage(settings=settings)
+    storage = TestBuilder().build().tx_storage
     genesis_block = storage.get_block(settings.GENESIS_BLOCK_HASH)
     result = genesis_block.static_metadata.feature_activation_bit_counts
 
@@ -41,9 +41,9 @@ def test_calculate_feature_activation_bit_counts_genesis():
 
 @pytest.fixture
 def tx_storage() -> TransactionStorage:
-    settings = get_global_settings()
-    indexes = MemoryIndexesManager()
-    storage = TransactionMemoryStorage(indexes=indexes, settings=settings)
+    artifacts = TestBuilder().build()
+    storage = artifacts.tx_storage
+    indexes = not_none(artifacts.indexes)
     feature_activation_bits = [
         0b0000,  # 0: boundary block
         0b1010,

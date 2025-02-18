@@ -614,8 +614,3 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(1, len(melt))
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
         print(tokens_index)
-
-
-@pytest.mark.skipif(unittest.USE_MEMORY_STORAGE, reason='previous tests already use memory, avoid duplication')
-class MemoryTokenTest(TokenTest):
-    use_memory_storage = True

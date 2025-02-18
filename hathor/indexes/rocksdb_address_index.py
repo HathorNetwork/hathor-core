@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.rocksdb_tx_group_index import RocksDBTxGroupIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
@@ -38,9 +39,10 @@ class RocksDBAddressIndex(RocksDBTxGroupIndex[str], AddressIndex, RocksDBIndexUt
 
     _KEY_SIZE = 34
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None,
+    def __init__(self, db: 'rocksdb.DB', *, settings: HathorSettings, cf_name: Optional[bytes] = None,
                  pubsub: Optional['PubSubManager'] = None) -> None:
         RocksDBTxGroupIndex.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
+        AddressIndex.__init__(self, settings=settings)
 
         self.pubsub = pubsub
         if self.pubsub:

@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum, IntEnum
+import tempfile
+from enum import IntEnum
 from typing import Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
-from typing_extensions import assert_never
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings as HathorSettingsType
@@ -24,14 +24,14 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.consensus.poa import PoaBlockProducer, PoaSigner
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
-from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
+from hathor.event.storage import EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
-from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
+from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
@@ -40,12 +40,7 @@ from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
 from hathor.stratum import StratumFactory
-from hathor.transaction.storage import (
-    TransactionCacheStorage,
-    TransactionMemoryStorage,
-    TransactionRocksDBStorage,
-    TransactionStorage,
-)
+from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage, TransactionStorage
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, get_environment_info
 from hathor.verification.verification_service import VerificationService
@@ -87,11 +82,6 @@ class SyncSupportLevel(IntEnum):
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
 
-class StorageType(Enum):
-    MEMORY = 'memory'
-    ROCKSDB = 'rocksdb'
-
-
 class BuildArtifacts(NamedTuple):
     """Artifacts created by a builder."""
     peer: PrivatePeer
@@ -107,7 +97,7 @@ class BuildArtifacts(NamedTuple):
     bit_signaling_service: BitSignalingService
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
-    rocksdb_storage: Optional[RocksDBStorage]
+    rocksdb_storage: RocksDBStorage
     stratum_factory: Optional[StratumFactory]
 
 
@@ -123,7 +113,7 @@ class Builder:
     Example:
 
         builder = Builder()
-        builder.use_memory()
+        builder.enable_event_queue()
         artifacts = builder.build()
     """
     def __init__(self) -> None:
@@ -137,9 +127,6 @@ class Builder:
 
         self._peer: Optional[PrivatePeer] = None
         self._cmdline: str = ''
-
-        self._storage_type: StorageType = StorageType.MEMORY
-        self._force_memory_index: bool = False
 
         self._event_manager: Optional[EventManager] = None
         self._enable_event_queue: Optional[bool] = None
@@ -156,7 +143,7 @@ class Builder:
         self._vertex_verifiers_builder: _VertexVerifiersBuilder | None = None
         self._verification_service: Optional[VerificationService] = None
 
-        self._rocksdb_path: Optional[str] = None
+        self._rocksdb_path: str | tempfile.TemporaryDirectory | None = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
         self._rocksdb_cache_capacity: Optional[int] = None
 
@@ -217,6 +204,7 @@ class Builder:
         event_manager = self._get_or_create_event_manager()
         indexes = self._get_or_create_indexes_manager()
         tx_storage = self._get_or_create_tx_storage()
+        rocksdb_storage = self._get_or_create_rocksdb_storage()
         feature_service = self._get_or_create_feature_service()
         bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
@@ -285,7 +273,7 @@ class Builder:
             tx_storage=tx_storage,
             indexes=indexes,
             wallet=wallet,
-            rocksdb_storage=self._rocksdb_storage,
+            rocksdb_storage=rocksdb_storage,
             stratum_factory=stratum_factory,
             feature_service=feature_service,
             bit_signaling_service=bit_signaling_service
@@ -383,20 +371,11 @@ class Builder:
         return stratum_factory
 
     def _get_or_create_rocksdb_storage(self) -> RocksDBStorage:
-        assert self._rocksdb_path is not None
-
-        if self._rocksdb_storage is not None:
-            return self._rocksdb_storage
-
-        kwargs = {}
-        if self._rocksdb_cache_capacity is not None:
-            kwargs = dict(cache_capacity=self._rocksdb_cache_capacity)
-
-        self._rocksdb_storage = RocksDBStorage(
-            path=self._rocksdb_path,
-            **kwargs
-        )
-
+        if self._rocksdb_storage is None:
+            self._rocksdb_storage = RocksDBStorage(
+                path=self._rocksdb_path,
+                cache_capacity=self._rocksdb_cache_capacity,
+            )
         return self._rocksdb_storage
 
     def _get_or_create_p2p_manager(self) -> ConnectionsManager:
@@ -428,19 +407,12 @@ class Builder:
         return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
-        if self._indexes_manager is not None:
-            return self._indexes_manager
-
-        if self._force_memory_index or self._storage_type == StorageType.MEMORY:
-            self._indexes_manager = MemoryIndexesManager(settings=self._get_or_create_settings())
-
-        elif self._storage_type == StorageType.ROCKSDB:
+        if self._indexes_manager is None:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            self._indexes_manager = RocksDBIndexesManager(rocksdb_storage)
-
-        else:
-            raise NotImplementedError
-
+            self._indexes_manager = RocksDBIndexesManager(
+                rocksdb_storage,
+                settings=self._get_or_create_settings(),
+            )
         return self._indexes_manager
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
@@ -456,21 +428,14 @@ class Builder:
         if self._tx_storage_cache:
             store_indexes = None
 
-        if self._storage_type == StorageType.MEMORY:
-            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes, settings=settings)
-
-        elif self._storage_type == StorageType.ROCKSDB:
-            rocksdb_storage = self._get_or_create_rocksdb_storage()
-            vertex_parser = self._get_or_create_vertex_parser()
-            self._tx_storage = TransactionRocksDBStorage(
-                rocksdb_storage,
-                indexes=store_indexes,
-                settings=settings,
-                vertex_parser=vertex_parser,
-            )
-
-        else:
-            raise NotImplementedError
+        rocksdb_storage = self._get_or_create_rocksdb_storage()
+        vertex_parser = self._get_or_create_vertex_parser()
+        self._tx_storage = TransactionRocksDBStorage(
+            rocksdb_storage,
+            indexes=store_indexes,
+            settings=settings,
+            vertex_parser=vertex_parser,
+        )
 
         if self._tx_storage_cache:
             reactor = self._get_reactor()
@@ -484,16 +449,9 @@ class Builder:
         return self._tx_storage
 
     def _get_or_create_event_storage(self) -> EventStorage:
-        if self._event_storage is not None:
-            pass
-        elif self._storage_type == StorageType.MEMORY:
-            self._event_storage = EventMemoryStorage()
-        elif self._storage_type == StorageType.ROCKSDB:
+        if self._event_storage is None:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
             self._event_storage = EventRocksDBStorage(rocksdb_storage)
-        else:
-            raise NotImplementedError
-
         return self._event_storage
 
     def _get_or_create_event_manager(self) -> EventManager:
@@ -557,14 +515,11 @@ class Builder:
 
         return self._verification_service
 
-    def _get_or_create_feature_storage(self) -> FeatureActivationStorage | None:
-        match self._storage_type:
-            case StorageType.MEMORY: return None
-            case StorageType.ROCKSDB: return FeatureActivationStorage(
-                settings=self._get_or_create_settings(),
-                rocksdb_storage=self._get_or_create_rocksdb_storage()
-            )
-            case _: assert_never(self._storage_type)
+    def _get_or_create_feature_storage(self) -> FeatureActivationStorage:
+        return FeatureActivationStorage(
+            settings=self._get_or_create_settings(),
+            rocksdb_storage=self._get_or_create_rocksdb_storage()
+        )
 
     def _get_or_create_vertex_verifiers(self) -> VertexVerifiers:
         if self._vertex_verifiers is None:
@@ -633,31 +588,26 @@ class Builder:
 
         return self._poa_block_producer
 
-    def use_memory(self) -> 'Builder':
+    def set_rocksdb_path(self, path: str | tempfile.TemporaryDirectory) -> 'Builder':
+        if self._tx_storage:
+            raise ValueError('cannot set rocksdb path after tx storage is set')
         self.check_if_can_modify()
-        self._storage_type = StorageType.MEMORY
+        self._rocksdb_path = path
         return self
 
-    def use_rocksdb(
-        self,
-        path: str,
-        cache_capacity: Optional[int] = None
-    ) -> 'Builder':
+    def set_rocksdb_cache_capacity(self, cache_capacity: int) -> 'Builder':
+        if self._tx_storage:
+            raise ValueError('cannot set rocksdb cache capacity after tx storage is set')
         self.check_if_can_modify()
-        self._storage_type = StorageType.ROCKSDB
-        self._rocksdb_path = path
         self._rocksdb_cache_capacity = cache_capacity
         return self
 
     def use_tx_storage_cache(self, capacity: Optional[int] = None) -> 'Builder':
+        if self._tx_storage:
+            raise ValueError('cannot set tx storage cache capacity after tx storage is set')
         self.check_if_can_modify()
         self._tx_storage_cache = True
         self._tx_storage_cache_capacity = capacity
-        return self
-
-    def force_memory_index(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._force_memory_index = True
         return self
 
     def _get_or_create_wallet(self) -> Optional[BaseWallet]:
@@ -688,21 +638,29 @@ class Builder:
         return self
 
     def enable_address_index(self) -> 'Builder':
+        if self._tx_storage or self._indexes_manager:
+            raise ValueError('cannot enable index after tx storage or indexes manager is set')
         self.check_if_can_modify()
         self._enable_address_index = True
         return self
 
     def enable_tokens_index(self) -> 'Builder':
+        if self._tx_storage or self._indexes_manager:
+            raise ValueError('cannot enable index after tx storage or indexes manager is set')
         self.check_if_can_modify()
         self._enable_tokens_index = True
         return self
 
     def enable_utxo_index(self) -> 'Builder':
+        if self._tx_storage or self._indexes_manager:
+            raise ValueError('cannot enable index after tx storage or indexes manager is set')
         self.check_if_can_modify()
         self._enable_utxo_index = True
         return self
 
     def enable_wallet_index(self) -> 'Builder':
+        if self._tx_storage or self._indexes_manager:
+            raise ValueError('cannot enable index after tx storage or indexes manager is set')
         self.check_if_can_modify()
         self.enable_address_index()
         self.enable_tokens_index()
@@ -716,6 +674,9 @@ class Builder:
     def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':
         self.check_if_can_modify()
         self._tx_storage = tx_storage
+        internal = tx_storage.store if isinstance(tx_storage, TransactionCacheStorage) else tx_storage
+        assert isinstance(internal, TransactionRocksDBStorage)
+        self._rocksdb_storage = internal._rocksdb_storage
         return self
 
     def set_event_storage(self, event_storage: EventStorage) -> 'Builder':

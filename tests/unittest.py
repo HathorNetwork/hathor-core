@@ -23,6 +23,7 @@ from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.simulator.clock import MemoryReactorHeapClock
+from hathor.storage import RocksDBStorage
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.types import VertexId
@@ -33,7 +34,6 @@ from tests.utils import GENESIS_SEED
 
 logger = get_logger()
 main = ut_main
-USE_MEMORY_STORAGE = os.environ.get('HATHOR_TEST_MEMORY_STORAGE', 'false').lower() == 'true'
 
 
 def short_hashes(container: Collection[bytes]) -> Iterable[str]:
@@ -91,7 +91,6 @@ class TestBuilder(Builder):
 
 
 class TestCase(unittest.TestCase):
-    use_memory_storage: bool = USE_MEMORY_STORAGE
     seed_config: Optional[int] = None
 
     def setUp(self) -> None:
@@ -163,8 +162,8 @@ class TestCase(unittest.TestCase):
             vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
         )
 
-    def get_builder(self) -> TestBuilder:
-        builder = TestBuilder()
+    def get_builder(self, settings: HathorSettings | None = None) -> TestBuilder:
+        builder = TestBuilder(settings)
         builder.set_rng(self.rng) \
             .set_reactor(self.clock)
         return builder
@@ -197,12 +196,10 @@ class TestCase(unittest.TestCase):
         checkpoints: list[Checkpoint] | None = None,
         utxo_index: bool = False,
         event_manager: EventManager | None = None,
-        use_memory_index: bool | None = None,
         start_manager: bool = True,
         pubsub: PubSubManager | None = None,
         event_storage: EventStorage | None = None,
         enable_event_queue: bool | None = None,
-        use_memory_storage: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
@@ -237,24 +234,14 @@ class TestCase(unittest.TestCase):
         if enable_event_queue:
             builder.enable_event_queue()
 
-        if tx_storage is not None:
-            builder.set_tx_storage(tx_storage)
-
-        if use_memory_storage or self.use_memory_storage:
-            builder.use_memory()
-        else:
-            directory = tempfile.mkdtemp()
-            self.tmpdirs.append(directory)
-            builder.use_rocksdb(directory)
-
-        if use_memory_index is True:
-            builder.force_memory_index()
-
         if wallet_index:
             builder.enable_wallet_index()
 
         if utxo_index:
             builder.enable_utxo_index()
+
+        if tx_storage is not None:
+            builder.set_tx_storage(tx_storage)
 
         if capabilities is not None:
             builder.set_capabilities(capabilities)
@@ -270,6 +257,14 @@ class TestCase(unittest.TestCase):
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
         return manager
+
+    def create_tx_storage(self, settings: HathorSettings | None = None) -> TransactionStorage:
+        artifacts = self.get_builder(settings).build()
+        return artifacts.tx_storage
+
+    def create_rocksdb_storage(self, settings: HathorSettings | None = None) -> RocksDBStorage:
+        artifacts = self.get_builder(settings).build()
+        return not_none(artifacts.rocksdb_storage)
 
     def run_to_completion(self) -> None:
         """ This will advance the test's clock until all calls scheduled are done.
