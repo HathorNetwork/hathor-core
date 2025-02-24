@@ -1,9 +1,9 @@
 import pytest
 
-from hathor.transaction import Block, Transaction
 from hathor.nanocontracts import Blueprint, Context, NanoContract, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
+from hathor.transaction import Block, Transaction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
 
