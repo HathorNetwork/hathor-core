@@ -1,6 +1,7 @@
 import struct
 from unittest.mock import Mock, patch
 
+import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -999,7 +1000,7 @@ class TestScripts(unittest.TestCase):
             op_sighash_bitmask(ScriptContext(stack=[b''], extras=Mock(), logs=[], settings=Mock()))
 
         with self.assertRaises(AssertionError):
-            op_sighash_bitmask(ScriptContext(stack=[0b111, 0b101], extras=Mock(), logs=[], settings=Mock()))
+            op_sighash_bitmask(ScriptContext(stack=[0b110, 0b101], extras=Mock(), logs=[], settings=Mock()))
 
         stack: list[bytes | int | str] = [bytes([0b0]), bytes([0xFF, 0xFF])]
         context = Mock(spec_set=ScriptContext)
@@ -1010,20 +1011,20 @@ class TestScripts(unittest.TestCase):
         with self.assertRaises(CustomSighashModelInvalid):
             op_sighash_bitmask(context)
 
-        context.stack = [bytes([0b111]), bytes([0b101])]
+        context.stack = [bytes([0b110]), bytes([0b101])]
         extras.input_index = 3
 
         with self.assertRaises(InputNotSelectedError):
             op_sighash_bitmask(context)
 
-        context.stack = [bytes([0b111]), bytes([0b101])]
+        context.stack = [bytes([0b110]), bytes([0b101])]
         extras.input_index = 2
         op_sighash_bitmask(context)
 
         self.assertEqual(stack, [])
         context.set_sighash.assert_called_once_with(
             SighashBitmask(
-                inputs=0b111,
+                inputs=0b110,
                 outputs=0b101
             )
         )
@@ -1073,16 +1074,20 @@ class TestScripts(unittest.TestCase):
         # Test that when `is_opcode_valid` returns False, execution must fail, regardless of the opcode.
         with (
             patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: False),
-            self.assertRaises(ScriptError)
+            pytest.raises(ScriptError) as e
         ):
-            execute_op_code(opcode=Mock(), context=Mock())
+            opcode = Mock()
+            opcode.name = 'MyOp'
+            execute_op_code(opcode=opcode, context=Mock())
+        assert str(e.value) == 'Opcode "MyOp" is invalid.'
 
         # Test that when `is_opcode_valid` returns True, execution must fail if it's not a "function opcode".
         with (
             patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True),
-            self.assertRaises(ScriptError)
+            pytest.raises(ScriptError) as e
         ):
             execute_op_code(opcode=Opcode.OP_0, context=Mock())
+        assert str(e.value) == f'unknown opcode: {Opcode.OP_0}'
 
         # Test that a valid opcode is correctly executed.
         with patch('hathor.transaction.scripts.opcode.op_dup') as op_mock:
