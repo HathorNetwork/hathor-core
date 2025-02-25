@@ -13,13 +13,26 @@
 #  limitations under the License.
 
 from hathor.transaction.scripts import P2PKH, Opcode
-from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
+from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashAll, SighashBitmask, SighashRange
 
 
 def test_create_input_data_simple() -> None:
     pub_key = b'my_pub_key'
     signature = b'my_signature'
     data = P2PKH.create_input_data(public_key_bytes=pub_key, signature=signature)
+
+    assert data == bytes([
+        len(signature),
+        *signature,
+        len(pub_key),
+        *pub_key
+    ])
+
+
+def test_create_input_data_with_sighash_all() -> None:
+    pub_key = b'my_pub_key'
+    signature = b'my_signature'
+    data = P2PKH.create_input_data(public_key_bytes=pub_key, signature=signature, sighash=SighashAll())
 
     assert data == bytes([
         len(signature),
@@ -43,6 +56,38 @@ def test_create_input_data_with_sighash_bitmask() -> None:
         1,
         outputs_bitmask,
         Opcode.OP_SIGHASH_BITMASK,
+        len(signature),
+        *signature,
+        len(pub_key),
+        *pub_key
+    ])
+
+
+def test_create_input_data_with_sighash_range() -> None:
+    pub_key = b'my_pub_key'
+    signature = b'my_signature'
+    input_start = 123
+    input_end = 145
+    output_start = 10
+    output_end = 20
+    sighash = SighashRange(
+        input_start=input_start,
+        input_end=input_end,
+        output_start=output_start,
+        output_end=output_end,
+    )
+    data = P2PKH.create_input_data(public_key_bytes=pub_key, signature=signature, sighash=sighash)
+
+    assert data == bytes([
+        1,
+        input_start,
+        1,
+        input_end,
+        1,
+        output_start,
+        1,
+        output_end,
+        Opcode.OP_SIGHASH_RANGE,
         len(signature),
         *signature,
         len(pub_key),
@@ -93,6 +138,51 @@ def test_create_input_data_with_sighash_bitmask_and_inputs_outputs_limit() -> No
         1,
         outputs_bitmask,
         Opcode.OP_SIGHASH_BITMASK,
+        1,
+        max_inputs,
+        1,
+        max_outputs,
+        Opcode.OP_MAX_INPUTS_OUTPUTS,
+        len(signature),
+        *signature,
+        len(pub_key),
+        *pub_key
+    ])
+
+
+def test_create_input_data_with_sighash_range_and_inputs_outputs_limit() -> None:
+    pub_key = b'my_pub_key'
+    signature = b'my_signature'
+    input_start = 123
+    input_end = 145
+    output_start = 10
+    output_end = 20
+    max_inputs = 2
+    max_outputs = 3
+    sighash = SighashRange(
+        input_start=input_start,
+        input_end=input_end,
+        output_start=output_start,
+        output_end=output_end,
+    )
+    limit = InputsOutputsLimit(max_inputs=max_inputs, max_outputs=max_outputs)
+    data = P2PKH.create_input_data(
+        public_key_bytes=pub_key,
+        signature=signature,
+        sighash=sighash,
+        inputs_outputs_limit=limit
+    )
+
+    assert data == bytes([
+        1,
+        input_start,
+        1,
+        input_end,
+        1,
+        output_start,
+        1,
+        output_end,
+        Opcode.OP_SIGHASH_RANGE,
         1,
         max_inputs,
         1,

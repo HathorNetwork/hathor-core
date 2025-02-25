@@ -15,12 +15,20 @@
 import struct
 from typing import Any, Optional
 
+from typing_extensions import assert_never
+
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key_hash
 from hathor.transaction.scripts.base_script import BaseScript
 from hathor.transaction.scripts.construct import get_pushdata, re_compile
 from hathor.transaction.scripts.hathor_script import HathorScript
 from hathor.transaction.scripts.opcode import Opcode
-from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
+from hathor.transaction.scripts.sighash import (
+    InputsOutputsLimit,
+    SighashAll,
+    SighashBitmask,
+    SighashRange,
+    SighashType,
+)
 
 
 class P2PKH(BaseScript):
@@ -97,7 +105,7 @@ class P2PKH(BaseScript):
         public_key_bytes: bytes,
         signature: bytes,
         *,
-        sighash: SighashBitmask | None = None,
+        sighash: SighashType = SighashAll(),
         inputs_outputs_limit: InputsOutputsLimit | None = None
     ) -> bytes:
         """
@@ -108,10 +116,21 @@ class P2PKH(BaseScript):
         """
         s = HathorScript()
 
-        if sighash:
-            s.pushData(sighash.inputs)
-            s.pushData(sighash.outputs)
-            s.addOpcode(Opcode.OP_SIGHASH_BITMASK)
+        match sighash:
+            case SighashAll():
+                pass
+            case SighashBitmask():
+                s.pushData(sighash.inputs)
+                s.pushData(sighash.outputs)
+                s.addOpcode(Opcode.OP_SIGHASH_BITMASK)
+            case SighashRange():
+                s.pushData(sighash.input_start)
+                s.pushData(sighash.input_end)
+                s.pushData(sighash.output_start)
+                s.pushData(sighash.output_end)
+                s.addOpcode(Opcode.OP_SIGHASH_RANGE)
+            case _:
+                assert_never(sighash)
 
         if inputs_outputs_limit:
             s.pushData(inputs_outputs_limit.max_inputs)
