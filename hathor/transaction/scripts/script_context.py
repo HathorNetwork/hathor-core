@@ -20,7 +20,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import ScriptError
 from hathor.transaction.scripts.execute import ScriptExtras, Stack
-from hathor.transaction.scripts.sighash import SighashAll, SighashBitmask, SighashType
+from hathor.transaction.scripts.sighash import SighashAll, SighashBitmask, SighashRange, SighashType
 
 
 class ScriptContext:
@@ -52,7 +52,7 @@ class ScriptContext:
         match self._sighash:
             case SighashAll():
                 return tx.get_sighash_all_data()
-            case SighashBitmask():
+            case SighashBitmask() | SighashRange():
                 data = tx.get_custom_sighash_data(self._sighash)
                 return hashlib.sha256(data).digest()
             case _:
@@ -63,7 +63,7 @@ class ScriptContext:
         match self._sighash:
             case SighashAll():
                 return set(range(self._settings.MAX_NUM_OUTPUTS))
-            case SighashBitmask():
+            case SighashBitmask() | SighashRange():
                 return set(self._sighash.get_output_indexes())
             case _:
                 assert_never(self._sighash)

@@ -30,7 +30,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
 
 
-class SighashTest(unittest.TestCase):
+class SighashBitmaskTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.manager1: HathorManager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
