@@ -24,13 +24,14 @@ from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
-from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.exceptions import InvalidScriptError, InvalidToken
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.transaction.scripts.sighash import CustomSighash
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
@@ -88,7 +89,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             settings=settings
         )
         self.tokens = tokens or []
-        self._sighash_cache: Optional[bytes] = None
+        self._sighash_all_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
 
     @property
@@ -193,32 +194,37 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         # This method does not depend on the input itself, however we call it for each one to sign it.
         # For transactions that have many inputs there is a significant decrease on the verify time
         # when using this cache, so we call this method only once.
-        if self._sighash_cache:
-            return self._sighash_cache
+        if self._sighash_all_cache:
+            return self._sighash_all_cache
 
+        sighash = self._get_sighash(inputs=self.inputs, outputs=self.outputs)
+        self._sighash_all_cache = sighash
+
+        return sighash
+
+    def _get_sighash(self, *, inputs: list[TxInput], outputs: list[TxOutput]) -> bytes:
+        """Return the sighash data for this tx using a custom list of inputs and outputs."""
         struct_bytes = bytearray(
             pack(
                 _SIGHASH_ALL_FORMAT_STRING,
                 self.signal_bits,
                 self.version,
                 len(self.tokens),
-                len(self.inputs),
-                len(self.outputs)
+                len(inputs),
+                len(outputs)
             )
         )
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
 
-        for tx_input in self.inputs:
+        for tx_input in inputs:
             struct_bytes += tx_input.get_sighash_bytes()
 
-        for tx_output in self.outputs:
+        for tx_output in outputs:
             struct_bytes += bytes(tx_output)
 
-        ret = bytes(struct_bytes)
-        self._sighash_cache = ret
-        return ret
+        return bytes(struct_bytes)
 
     def get_sighash_all_data(self) -> bytes:
         """Return the sha256 hash of sighash_all"""
@@ -226,6 +232,19 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             self._sighash_data_cache = hashlib.sha256(self.get_sighash_all()).digest()
 
         return self._sighash_data_cache
+
+    def get_custom_sighash_data(self, sighash: 'CustomSighash') -> bytes:
+        """
+        Return the sighash data for this tx using a custom sighash type.
+        Inputs and outputs are selected according to indexes selected by the sighash.
+        """
+        try:
+            inputs = [self.inputs[index] for index in sighash.get_input_indexes()]
+            outputs = [self.outputs[index] for index in sighash.get_output_indexes()]
+        except IndexError:
+            raise InvalidScriptError('Custom sighash selected nonexistent input/output.')
+
+        return self._get_sighash(inputs=inputs, outputs=outputs)
 
     def get_token_uid(self, index: int) -> TokenUid:
         """Returns the token uid with corresponding index from the tx token uid list.
