@@ -1,16 +1,21 @@
 import struct
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.crypto.util import get_address_from_public_key, get_hash160, get_public_key_bytes_compressed
 from hathor.transaction.exceptions import (
+    CustomSighashModelInvalid,
     DataIndexError,
     EqualVerifyFailed,
     FinalStackInvalid,
+    InputNotSelectedError,
+    InputsOutputsLimitModelInvalid,
     InvalidScriptError,
     InvalidStackData,
+    MaxInputsExceededError,
+    MaxOutputsExceededError,
     MissingStackItems,
     OracleChecksigFailed,
     OutOfData,
@@ -38,6 +43,8 @@ from hathor.transaction.scripts.execute import (
     get_script_op,
 )
 from hathor.transaction.scripts.opcode import (
+    execute_op_code,
+    is_opcode_valid,
     op_checkdatasig,
     op_checkmultisig,
     op_checksig,
@@ -52,10 +59,13 @@ from hathor.transaction.scripts.opcode import (
     op_greaterthan_timestamp,
     op_hash160,
     op_integer,
+    op_max_inputs_outputs,
     op_pushdata,
     op_pushdata1,
+    op_sighash_bitmask,
 )
 from hathor.transaction.scripts.script_context import ScriptContext
+from hathor.transaction.scripts.sighash import SighashBitmask
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import HDWallet
 from tests import unittest
@@ -980,3 +990,108 @@ class TestScripts(unittest.TestCase):
         self.assertEqual(get_sigops_count(input_script.data, p2pkh_script), 1)
         # if no output_script, count only input
         self.assertEqual(get_sigops_count(input_script.data), 1)
+
+    def test_op_sighash_bitmask(self) -> None:
+        with self.assertRaises(MissingStackItems):
+            op_sighash_bitmask(ScriptContext(stack=[], extras=Mock(), logs=[], settings=Mock()))
+
+        with self.assertRaises(MissingStackItems):
+            op_sighash_bitmask(ScriptContext(stack=[b''], extras=Mock(), logs=[], settings=Mock()))
+
+        with self.assertRaises(AssertionError):
+            op_sighash_bitmask(ScriptContext(stack=[0b111, 0b101], extras=Mock(), logs=[], settings=Mock()))
+
+        stack: list[bytes | int | str] = [bytes([0b0]), bytes([0xFF, 0xFF])]
+        context = Mock(spec_set=ScriptContext)
+        extras = Mock(spec_set=ScriptExtras)
+        context.stack = stack
+        context.extras = extras
+
+        with self.assertRaises(CustomSighashModelInvalid):
+            op_sighash_bitmask(context)
+
+        context.stack = [bytes([0b111]), bytes([0b101])]
+        extras.input_index = 3
+
+        with self.assertRaises(InputNotSelectedError):
+            op_sighash_bitmask(context)
+
+        context.stack = [bytes([0b111]), bytes([0b101])]
+        extras.input_index = 2
+        op_sighash_bitmask(context)
+
+        self.assertEqual(stack, [])
+        context.set_sighash.assert_called_once_with(
+            SighashBitmask(
+                inputs=0b111,
+                outputs=0b101
+            )
+        )
+
+    def test_op_max_inputs_outputs(self) -> None:
+        context = Mock(spec_set=ScriptContext)
+        with self.assertRaises(MissingStackItems):
+            context.stack = []
+            op_max_inputs_outputs(context)
+
+        with self.assertRaises(MissingStackItems):
+            context.stack = [b'']
+            op_max_inputs_outputs(context)
+
+        with self.assertRaises(AssertionError):
+            context.stack = [1, 2]
+            op_max_inputs_outputs(context)
+
+        context.stack = [bytes([0]), bytes([0])]
+        context.extras = Mock(spec_set=ScriptExtras)
+
+        with self.assertRaises(InputsOutputsLimitModelInvalid):
+            op_max_inputs_outputs(context)
+
+        context.stack = [bytes([1]), bytes([2])]
+        context.extras.tx.inputs = ['a', 'b']
+
+        with self.assertRaises(MaxInputsExceededError):
+            op_max_inputs_outputs(context)
+
+        context.stack = [bytes([1]), bytes([2])]
+        context.extras.tx.inputs = ['a']
+        context.extras.tx.outputs = ['a', 'b', 'c']
+
+        with self.assertRaises(MaxOutputsExceededError):
+            op_max_inputs_outputs(context)
+
+        context.stack = [bytes([1]), bytes([2])]
+        context.extras.tx.inputs = ['a']
+        context.extras.tx.outputs = ['a', 'b']
+
+        op_max_inputs_outputs(context)
+
+        self.assertEqual(context.stack, [])
+
+    def test_execute_op_code(self) -> None:
+        # Test that when `is_opcode_valid` returns False, execution must fail, regardless of the opcode.
+        with (
+            patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: False),
+            self.assertRaises(ScriptError)
+        ):
+            execute_op_code(opcode=Mock(), context=Mock())
+
+        # Test that when `is_opcode_valid` returns True, execution must fail if it's not a "function opcode".
+        with (
+            patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True),
+            self.assertRaises(ScriptError)
+        ):
+            execute_op_code(opcode=Opcode.OP_0, context=Mock())
+
+        # Test that a valid opcode is correctly executed.
+        with patch('hathor.transaction.scripts.opcode.op_dup') as op_mock:
+            execute_op_code(opcode=Opcode.OP_DUP, context=Mock())
+
+        op_mock.assert_called_once()
+
+    def test_is_opcode_valid(self) -> None:
+        self.assertTrue(is_opcode_valid(Opcode.OP_DUP))
+        self.assertFalse(is_opcode_valid(Opcode.OP_SIGHASH_BITMASK))
+        self.assertFalse(is_opcode_valid(Opcode.OP_SIGHASH_RANGE))
+        self.assertFalse(is_opcode_valid(Opcode.OP_MAX_INPUTS_OUTPUTS))
