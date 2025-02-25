@@ -43,6 +43,7 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     rocksdb_storage: bool
     memory_storage: bool
     memory_indexes: bool
+    temp_data: bool
     rocksdb_cache: Optional[int]
     wallet: Optional[str]
     wallet_enable_api: bool

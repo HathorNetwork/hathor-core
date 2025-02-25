@@ -44,7 +44,7 @@ class BuilderTestCase(unittest.TestCase):
         return manager
 
     def test_empty(self):
-        self._build_with_error([], '--data is expected')
+        self._build_with_error([], 'either --data or --temp-data is expected')
 
     def test_all_default(self):
         data_dir = self.mkdtemp()

@@ -95,12 +95,14 @@ class RunNode:
         parser.add_argument('--x-status-ipv6-interface', help='IPv6 interface to bind the status server')
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
         parser.add_argument('--x-stratum-ipv6-interface', help='IPv6 interface to bind the stratum server')
-        parser.add_argument('--data', help='Data directory')
+        data_group = parser.add_mutually_exclusive_group()
+        data_group.add_argument('--data', help='Data directory')
+        data_group.add_argument('--temp-data', action='store_true',
+                                help='Automatically create storage in a temporary directory')
         storage = parser.add_mutually_exclusive_group()
         storage.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend (default)')
-        storage.add_argument('--memory-storage', action='store_true', help='Do not use a persistent storage')
-        parser.add_argument('--memory-indexes', action='store_true',
-                            help='Use memory indexes when using RocksDB storage (startup is significantly slower)')
+        storage.add_argument('--memory-storage', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--memory-indexes', action='store_true', help=SUPPRESS)  # deprecated
         parser.add_argument('--rocksdb-cache', type=int, help='RocksDB block-table cache size (bytes)', default=None)
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)

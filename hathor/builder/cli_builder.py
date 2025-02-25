@@ -131,7 +131,9 @@ class CliBuilder:
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
         if self._args.memory_storage:
+            self.log.warn('--memory-storage is deprecated, use --temp-data instead')
             self.check_or_raise(not self._args.data, '--data should not be used with --memory-storage')
+            self.check_or_raise(not self._args.temp_data, '--temp-data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             indexes = MemoryIndexesManager()
             tx_storage = TransactionMemoryStorage(indexes, settings=settings)
@@ -139,15 +141,21 @@ class CliBuilder:
             self.check_or_raise(not self._args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         else:
-            self.check_or_raise(bool(self._args.data), '--data is expected')
-            assert self._args.data is not None
+            self.check_or_raise(
+                bool(self._args.data) or self._args.temp_data,
+                'either --data or --temp-data is expected'
+            )
             if self._args.rocksdb_storage:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = self._args.rocksdb_cache
-            self.rocksdb_storage = RocksDBStorage(path=self._args.data, cache_capacity=cache_capacity)
+            self.rocksdb_storage = (
+                RocksDBStorage(path=self._args.data, cache_capacity=cache_capacity)
+                if self._args.data else RocksDBStorage.create_temp(cache_capacity)
+            )
 
             # Initialize indexes manager.
             if self._args.memory_indexes:
+                self.log.warn('--memory-indexes is deprecated')
                 indexes = MemoryIndexesManager()
             else:
                 indexes = RocksDBIndexesManager(self.rocksdb_storage)
