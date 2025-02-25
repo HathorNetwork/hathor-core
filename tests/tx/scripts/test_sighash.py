@@ -24,14 +24,13 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InputOutputMismatch, InvalidInputData, InvalidScriptError
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
+from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
 
 
-class BaseSighashTest(unittest.TestCase):
-    __test__ = False
-
+class SighashTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.manager1: HathorManager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
@@ -80,7 +79,6 @@ class BaseSighashTest(unittest.TestCase):
             storage=self.manager1.tx_storage,
             timestamp=token_creation_tx.timestamp + 1
         )
-        self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
 
         # Alice signs her input using sighash bitmasks, instead of sighash_all.
         sighash_bitmask = SighashBitmask(inputs=0b1, outputs=0b1)
@@ -93,6 +91,12 @@ class BaseSighashTest(unittest.TestCase):
             sighash=sighash_bitmask,
         )
 
+        self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
+        static_metadata = TransactionStaticMetadata.create_from_storage(
+            atomic_swap_tx, self._settings, self.manager1.tx_storage
+        )
+        atomic_swap_tx.set_static_metadata(static_metadata)
+
         # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs
         self.manager1.verification_service.verifiers.tx.verify_inputs(atomic_swap_tx)
         with pytest.raises(InputOutputMismatch):
@@ -100,7 +104,6 @@ class BaseSighashTest(unittest.TestCase):
 
         # Alice sends the tx bytes to Bob, represented here by cloning the tx
         atomic_swap_tx_clone = cast(Transaction, atomic_swap_tx.clone())
-        self.manager1.cpu_mining_service.resolve(atomic_swap_tx_clone)
 
         # Bob creates an input spending all genesis HTR and adds it to the atomic swap tx
         htr_input = TxInput(not_none(self.genesis_block.hash), 0, b'')
@@ -122,6 +125,7 @@ class BaseSighashTest(unittest.TestCase):
         htr_input.data = P2PKH.create_input_data(public_bytes2, signature2)
 
         # The atomic swap tx is now completed and valid, and can be propagated
+        self.manager1.cpu_mining_service.resolve(atomic_swap_tx_clone)
         self.manager1.verification_service.verify(atomic_swap_tx_clone)
         self.manager1.propagate_tx(atomic_swap_tx_clone, fails_silently=False)
 
@@ -151,7 +155,6 @@ class BaseSighashTest(unittest.TestCase):
             storage=self.manager1.tx_storage,
             timestamp=token_creation_tx.timestamp + 1
         )
-        self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
 
         # Alice signs her input using sighash bitmasks, instead of sighash_all.
         # She also sets max inputs and max outputs limits, including one output for change.
@@ -167,13 +170,13 @@ class BaseSighashTest(unittest.TestCase):
         )
 
         # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs
+        self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
         self.manager1.verification_service.verifiers.tx.verify_inputs(atomic_swap_tx)
         with pytest.raises(InputOutputMismatch):
             self.manager1.verification_service.verify(atomic_swap_tx)
 
         # Alice sends the tx bytes to Bob, represented here by cloning the tx
         atomic_swap_tx_clone = cast(Transaction, atomic_swap_tx.clone())
-        self.manager1.cpu_mining_service.resolve(atomic_swap_tx_clone)
 
         # Bob creates an input spending all genesis HTR and adds it to the atomic swap tx
         htr_input = TxInput(not_none(self.genesis_block.hash), 0, b'')
@@ -197,6 +200,7 @@ class BaseSighashTest(unittest.TestCase):
         htr_input.data = P2PKH.create_input_data(public_bytes2, signature2)
 
         # The atomic swap tx is not valid and cannot be propagated
+        self.manager1.cpu_mining_service.resolve(atomic_swap_tx_clone)
         with pytest.raises(InvalidInputData) as e:
             self.manager1.verification_service.verify(atomic_swap_tx_clone)
 
@@ -306,16 +310,3 @@ class BaseSighashTest(unittest.TestCase):
 
         with pytest.raises(InvalidScriptError):
             self.manager1.verification_service.verify(atomic_swap_tx)
-
-
-class SyncV1SighashTest(unittest.SyncV1Params, BaseSighashTest):
-    __test__ = True
-
-
-class SyncV2SighashTest(unittest.SyncV2Params, BaseSighashTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeSighashTest(unittest.SyncBridgeParams, SyncV2SighashTest):
-    pass
