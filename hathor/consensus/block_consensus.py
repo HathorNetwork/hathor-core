@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from structlog import get_logger
 
@@ -161,16 +161,9 @@ class BlockConsensusAlgorithm:
             self.mark_as_voided(block, skip_remove_first_block_markers=True)
 
             # Get the score of the best chains.
-            heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
-            best_score: int | None = None
-            for head in heads:
-                head_meta = head.get_metadata(force_reload=True)
-                if best_score is None:
-                    best_score = head_meta.score
-                else:
-                    # All heads must have the same score.
-                    assert best_score == head_meta.score
-            assert best_score is not None
+            head = storage.get_best_block()
+            head_meta = head.get_metadata(force_reload=True)
+            best_score = head_meta.score
 
             # Calculate the score.
             # We cannot calculate score before getting the heads.
@@ -185,20 +178,27 @@ class BlockConsensusAlgorithm:
                 # Either eveyone has the same score or there is a winner.
 
                 valid_heads = []
-                for head in heads:
-                    meta = head.get_metadata()
-                    if not meta.voided_by:
-                        valid_heads.append(head)
+                if not head_meta.voided_by:
+                    valid_heads.append(head)
 
                 # We must have at most one valid head.
                 # Either we have a single best chain or all chains have already been voided.
                 assert len(valid_heads) <= 1, 'We must never have more than one valid head'
 
-                # Add voided_by to all heads.
                 common_block = self._find_first_parent_in_best_chain(block)
-                self.add_voided_by_to_multiple_chains(block, heads, common_block)
 
+                winner = False
                 if score > best_score:
+                    winner = True
+                else:
+                    min_hash: bytes = head.hash
+                    if block.hash < min_hash:
+                        winner = True
+
+                if winner:
+                    # Add voided_by to all heads.
+                    self.add_voided_by_to_multiple_chains(block, [head], common_block)
+
                     # We have a new winner candidate.
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
                     # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
@@ -211,14 +211,8 @@ class BlockConsensusAlgorithm:
                         storage.indexes.height.update_new_chain(height, block)
                         storage.update_best_block_tips_cache([block.hash])
                         # It is only a re-org if common_block not in heads
-                        if common_block not in heads:
+                        if common_block != head:
                             self.context.mark_as_reorg(common_block)
-                else:
-                    best_block_tips = [blk.hash for blk in heads]
-                    best_block_tips.append(block.hash)
-                    storage.update_best_block_tips_cache(best_block_tips)
-                    if not meta.voided_by:
-                        self.context.mark_as_reorg(common_block)
 
     def union_voided_by_from_parents(self, block: Block) -> set[bytes]:
         """Return the union of the voided_by of block's parents.
@@ -286,31 +280,13 @@ class BlockConsensusAlgorithm:
         self.update_score_and_mark_as_the_best_chain(block)
         self.remove_voided_by_from_chain(block)
 
-        best_score: int
         if self.update_voided_by_from_parents(block):
             storage = block.storage
-            heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
-            best_score = 0
-            best_heads: list[Block]
-            for head in heads:
-                head_meta = head.get_metadata(force_reload=True)
-                if head_meta.score < best_score:
-                    continue
-
-                if head_meta.score > best_score:
-                    best_heads = [head]
-                    best_score = head_meta.score
-                else:
-                    assert best_score == head_meta.score
-                    best_heads.append(head)
-            assert isinstance(best_score, int) and best_score > 0
-
-            assert len(best_heads) > 0
-            first_block = self._find_first_parent_in_best_chain(best_heads[0])
-            self.add_voided_by_to_multiple_chains(best_heads[0], [block], first_block)
-            if len(best_heads) == 1:
-                assert best_heads[0].hash != block.hash
-                self.update_score_and_mark_as_the_best_chain_if_possible(best_heads[0])
+            head = storage.get_best_block()
+            first_block = self._find_first_parent_in_best_chain(head)
+            self.add_voided_by_to_multiple_chains(head, [block], first_block)
+            assert head.hash != block.hash
+            self.update_score_and_mark_as_the_best_chain_if_possible(head)
 
     def update_score_and_mark_as_the_best_chain(self, block: Block) -> None:
         """ Update score and mark the chain as the best chain.
