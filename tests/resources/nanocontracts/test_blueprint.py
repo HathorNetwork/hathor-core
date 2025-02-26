@@ -1,3 +1,4 @@
+import pytest
 from collections.abc import Generator
 from typing import Any
 
@@ -143,6 +144,7 @@ class BuiltinBlueprintInfoTest(BaseBlueprintInfoTest):
         self.create_builtin_blueprint(self.manager, self.blueprint_id, my_blueprint.MyBlueprint)
 
 
+@pytest.mark.no_cover
 class OCBBlueprintInfoTest(BaseBlueprintInfoTest):
     __test__ = True
 
