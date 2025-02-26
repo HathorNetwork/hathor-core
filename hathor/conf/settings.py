@@ -291,6 +291,14 @@ class HathorSettings(NamedTuple):
     # Maximum number of entrypoints that we accept that a peer broadcasts
     PEER_MAX_ENTRYPOINTS: int = 30
 
+    # Maximum number of other peers's entrypoints a given node may connect to.
+    # It does not include the discovered peers connections nor the check trust slots.
+    PEER_MAX_OUTGOING_CONNECTIONS: int = 60
+
+    # Maximum number of other entrypoints a peer may connect to for checking other peers' trustworthiness.
+    # The discovered peers slot is left bound by PEER_MAX_CONNECTIONS.
+    PEER_MAX_CHECK_PEER_CONNECTIONS: int = 10
+
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
 
