@@ -30,7 +30,6 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import MultiSig
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashRange
-from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.util import not_none
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature_for_data
 from tests import unittest
@@ -127,10 +126,7 @@ class SighashRangeTest(unittest.TestCase):
         public_bytes2, signature2 = self.manager2.wallet.get_input_aux_data(data_to_sign2, self.genesis_private_key)
         htr_input.data = P2PKH.create_input_data(public_bytes2, signature2)
 
-        static_metadata = TransactionStaticMetadata.create_from_storage(
-            atomic_swap_tx_clone, self._settings, self.manager1.tx_storage
-        )
-        atomic_swap_tx_clone.set_static_metadata(static_metadata)
+        atomic_swap_tx_clone.init_static_metadata_from_storage(self._settings, self.manager1.tx_storage)
 
         # The atomic swap tx is now completed and valid, and can be propagated
         self.manager1.verification_service.verify(atomic_swap_tx_clone)
@@ -239,10 +235,7 @@ class SighashRangeTest(unittest.TestCase):
         public_bytes2, signature2 = self.manager2.wallet.get_input_aux_data(data_to_sign2, self.genesis_private_key)
         htr_input.data = P2PKH.create_input_data(public_bytes2, signature2)
 
-        static_metadata = TransactionStaticMetadata.create_from_storage(
-            atomic_swap_tx_clone, self._settings, self.manager1.tx_storage
-        )
-        atomic_swap_tx_clone.set_static_metadata(static_metadata)
+        atomic_swap_tx_clone.init_static_metadata_from_storage(self._settings, self.manager1.tx_storage)
 
         # The atomic swap tx is now completed and valid, and can be propagated
         self.manager1.verification_service.verify(atomic_swap_tx_clone)

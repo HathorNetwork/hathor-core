@@ -24,7 +24,6 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InputOutputMismatch, InvalidInputData, InvalidScriptError
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
-from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
@@ -92,10 +91,7 @@ class SighashBitmaskTest(unittest.TestCase):
         )
 
         self.manager1.cpu_mining_service.resolve(atomic_swap_tx)
-        static_metadata = TransactionStaticMetadata.create_from_storage(
-            atomic_swap_tx, self._settings, self.manager1.tx_storage
-        )
-        atomic_swap_tx.set_static_metadata(static_metadata)
+        atomic_swap_tx.init_static_metadata_from_storage(self._settings, self.manager1.tx_storage)
 
         # At this point, the tx is partial. The inputs are valid, but they're mismatched with outputs
         self.manager1.verification_service.verifiers.tx.verify_inputs(atomic_swap_tx)

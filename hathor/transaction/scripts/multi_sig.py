@@ -132,8 +132,9 @@ class MultiSig(BaseScript):
         """
         s = HathorScript()
         s.push_sighash(sighash)
-        s.push_max_sighash_subsets(max_sighash_subsets)
-        if inputs_outputs_limit:
+        if max_sighash_subsets is not None:
+            s.push_max_sighash_subsets(max_sighash_subsets)
+        if inputs_outputs_limit is not None:
             s.push_inputs_outputs_limit(inputs_outputs_limit)
         for signature in signatures:
             s.pushData(signature)

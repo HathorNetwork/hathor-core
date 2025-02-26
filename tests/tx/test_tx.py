@@ -36,7 +36,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.scripts import P2PKH, parse_address_script
-from hathor.transaction.scripts.sighash import SighashBitmask
+from hathor.transaction.scripts.sighash import SighashBitmask, SighashRange, SighashType
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import Wallet
@@ -184,7 +184,7 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(str(e.value), "Output at index 0 is not signed by any input.")
 
     @patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True)
-    def test_too_many_sighash_subsets(self) -> None:
+    def test_too_many_sighash_subsets1(self) -> None:
         parents = [tx.hash for tx in self.genesis_txs]
         genesis_block = self.genesis_blocks[0]
 
@@ -203,6 +203,7 @@ class TransactionTest(unittest.TestCase):
             timestamp=self.last_block.timestamp + 1
         )
 
+        # Test a single subset by bitmask, and 0 allowed
         sighash = SighashBitmask(inputs=0b1, outputs=0b1)
         data_to_sign = tx.get_custom_sighash_data(sighash)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
@@ -213,6 +214,75 @@ class TransactionTest(unittest.TestCase):
             self.manager.verification_service.verify(tx)
 
         self.assertEqual(str(e.value), "There are more custom sighash subsets than the configured maximum (1 > 0).")
+
+    @patch('hathor.transaction.scripts.opcode.is_opcode_valid', lambda _: True)
+    def test_too_many_sighash_subsets2(self) -> None:
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+
+        # Just a dummy tx with 3 outputs
+        dummy = Transaction(
+            weight=1,
+            inputs=[TxInput(genesis_block.hash, 0, b'')],
+            outputs=[
+                TxOutput(1, script),
+                TxOutput(2, script),
+                TxOutput(value - 3, script),
+            ],
+            parents=parents,
+            storage=self.tx_storage,
+            timestamp=self.last_block.timestamp + 1
+        )
+        data_to_sign = dummy.get_sighash_all()
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        dummy.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+        self.manager.cpu_mining_service.resolve(dummy)
+        assert self.manager.on_new_tx(dummy, fails_silently=False)
+
+        tx = Transaction(
+            weight=1,
+            inputs=[
+                TxInput(dummy.hash, 0, b''),
+                TxInput(dummy.hash, 1, b''),
+                TxInput(dummy.hash, 2, b''),
+            ],
+            outputs=[TxOutput(value, script)],
+            parents=parents,
+            storage=self.tx_storage,
+            timestamp=dummy.timestamp + 1
+        )
+
+        # The first input is a sighash bitmask selecting only input 0 and output 0, and allowing 10 subsets
+        sighash: SighashType = SighashBitmask(inputs=0b1, outputs=0b1)
+        data_to_sign = tx.get_custom_sighash_data(sighash)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature, sighash=sighash, max_sighash_subsets=10)
+
+        # The second input is a sighash bitmask selecting input 1 and 2, and output 0, and allowing only 1 subset
+        sighash = SighashBitmask(inputs=0b110, outputs=0b1)
+        data_to_sign = tx.get_custom_sighash_data(sighash)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        tx.inputs[1].data = P2PKH.create_input_data(public_bytes, signature, sighash=sighash, max_sighash_subsets=1)
+
+        # The third input is a sighash range selecting the same subset as the second input, and allowing 5 subsets
+        sighash = SighashRange(input_start=1, input_end=3, output_start=0, output_end=1)
+        data_to_sign = tx.get_custom_sighash_data(sighash)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        tx.inputs[2].data = P2PKH.create_input_data(public_bytes, signature, sighash=sighash, max_sighash_subsets=5)
+
+        self.manager.cpu_mining_service.resolve(tx)
+        with pytest.raises(TooManySighashSubsets) as e:
+            self.manager.verification_service.verify(tx)
+
+        # Since we have 3 inputs, the maximum number of subsets is the lowest configured one, which is 1 from the
+        # second input.
+        # Also, even though we have 3 inputs, only 2 of them are unique subsets (because the second and third are the
+        # same).
+        self.assertEqual(str(e.value), "There are more custom sighash subsets than the configured maximum (2 > 1).")
 
     def _gen_tx_spending_genesis_block(self):
         parents = [tx.hash for tx in self.genesis_txs]
