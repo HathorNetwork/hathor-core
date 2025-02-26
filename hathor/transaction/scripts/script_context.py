@@ -25,7 +25,7 @@ from hathor.transaction.scripts.sighash import SighashAll, SighashBitmask, Sigha
 
 class ScriptContext:
     """A context to be manipulated during script execution. A separate instance must be used for each script."""
-    __slots__ = ('stack', 'logs', 'extras', '_settings', '_sighash')
+    __slots__ = ('stack', 'logs', 'extras', '_settings', '_sighash', '_max_sighash_subsets')
 
     def __init__(self, *, stack: Stack, logs: list[str], extras: ScriptExtras, settings: HathorSettings) -> None:
         self.stack = stack
@@ -33,6 +33,7 @@ class ScriptContext:
         self.extras = extras
         self._settings = settings
         self._sighash: SighashType = SighashAll()
+        self._max_sighash_subsets: int | None = None
 
     def set_sighash(self, sighash: SighashType) -> None:
         """
@@ -43,6 +44,23 @@ class ScriptContext:
             raise ScriptError('Cannot modify sighash after it is already set.')
 
         self._sighash = sighash
+
+    def get_sighash(self) -> SighashType:
+        """Get the configured sighash in this context."""
+        return self._sighash
+
+    def set_max_sighash_subsets(self, max_subsets: int) -> None:
+        """
+        Set the maximum number of sighash subsets in this context.
+        """
+        if self._max_sighash_subsets is None:
+            self._max_sighash_subsets = max_subsets
+        else:
+            self._max_sighash_subsets = min(self._max_sighash_subsets, max_subsets)
+
+    def get_max_sighash_subsets(self) -> int | None:
+        """Get the configured maximum number of sighash subsets."""
+        return self._max_sighash_subsets
 
     def get_tx_sighash_data(self, tx: Transaction) -> bytes:
         """

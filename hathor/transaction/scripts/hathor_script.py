@@ -77,6 +77,11 @@ class HathorScript:
             case _:
                 assert_never(sighash)
 
+    def push_max_sighash_subsets(self, max_subsets: int) -> None:
+        """Push a maximum limit for custom sighash subsets."""
+        self.pushData(max_subsets)
+        self.addOpcode(Opcode.OP_MAX_SIGHASH_SUBSETS)
+
     def push_inputs_outputs_limit(self, limit: InputsOutputsLimit) -> None:
         """Push a custom inputs and outputs limit to the script."""
         self.pushData(limit.max_inputs)

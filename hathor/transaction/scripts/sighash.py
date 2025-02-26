@@ -97,3 +97,15 @@ class InputsOutputsLimit(BaseModel):
     """A model representing inputs and outputs limits config."""
     max_inputs: int = Field(ge=1)
     max_outputs: int = Field(ge=1)
+
+
+def get_unique_sighash_subsets(sighashes: list[SighashType]) -> set[tuple[frozenset[int], frozenset[int]]]:
+    """
+    A sighash subset is equivalent to its select inputs and outputs. That is, two subsets are equal if they select
+    the same inputs and outputs. This function takes a list of sighashes and returns a set of their subsets.
+    SighashAll subsets are excluded.
+    """
+    return set([
+        (frozenset(sighash.get_input_indexes()), frozenset(sighash.get_output_indexes()))
+        for sighash in sighashes if not isinstance(sighash, SighashAll)
+    ])
