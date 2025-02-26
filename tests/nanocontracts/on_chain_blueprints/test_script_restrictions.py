@@ -22,6 +22,7 @@ def _load_file(filename: str) -> bytes:
 ZLIB_BOMB: bytes = _load_file('bomb.zlib')
 
 
+@pytest.mark.no_cover
 class OnChainBlueprintScriptTestCase(unittest.TestCase):
     use_memory_storage = True
 
