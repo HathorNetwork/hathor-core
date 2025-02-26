@@ -10,7 +10,8 @@ tests_nano = tests/nanocontracts/ tests/tx/test_indexes_nc_history.py tests/reso
 tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 tests_ci = extras/github/
 
-pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=xml --cov=hathor
+pytest_flags = -p no:warnings --doctest-modules hathor
+pytest_covflags = --cov-report=term --cov-report=html --cov-report=xml --cov=hathor
 
 #--strict-equality
 #--check-untyped-defs
@@ -33,17 +34,24 @@ tests-nano:
 tests-cli:
 	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=27 -p no:warnings $(tests_cli)
 
-.PHONY: tests-doctests
-tests-doctests:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor
+.PHONY: doctests
+doctests:
+	pytest $(pytest_flags) -n0 hathor
 
 .PHONY: tests-lib
-tests-lib:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib)
+tests-lib: tests-lib-nocov tests-lib-cov
+
+.PHONY: tests-lib-cov
+tests-lib-cov:
+	pytest $(pytest_flags) $(pytest_covflags) $(tests_lib) -m "not no_cover" --durations=10
+
+.PHONY: tests-lib-nocov
+tests-lib-nocov:
+	pytest $(pytest_flags) $(tests_lib) -m no_cover
 
 .PHONY: tests-quick
 tests-quick:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib) --maxfail=1 -m "not slow"
+	pytest $(pytest_flags) $(tests_lib) --maxfail=1 --failed-first -m "not slow"
 
 .PHONY: tests-genesis
 tests-genesis:
