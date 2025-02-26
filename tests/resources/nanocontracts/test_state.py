@@ -2,6 +2,7 @@ import hashlib
 import math
 from typing import Any, NamedTuple, Optional, TypeAlias
 
+import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.defer import inlineCallbacks
@@ -198,6 +199,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         sign_openssl(nano_header, private_key)
         self.manager.cpu_mining_service.resolve(nc)
 
+    @pytest.mark.no_cover
     @inlineCallbacks
     def test_success(self):
         parents = [tx.hash for tx in self.genesis_txs]

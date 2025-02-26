@@ -2,6 +2,8 @@ import os
 import re
 from typing import Any, NamedTuple, Optional
 
+import pytest
+
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key_bytes
 from hathor.nanocontracts import OnChainBlueprint
@@ -47,6 +49,7 @@ class BetInfo(NamedTuple):
     score: str
 
 
+@pytest.mark.no_cover
 class OnChainBetBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -183,6 +186,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         self.assertEqual(self.nc_storage.get_obj(b'token_uid', TOKEN_UID_NC_TYPE), self.token_uid)
         self.assertEqual(self.nc_storage.get_obj(b'date_last_bet', TIMESTAMP_NC_TYPE), self.date_last_bet)
 
+    @pytest.mark.no_cover
     def test_basic_flow(self) -> None:
         runner = self.runner
 

@@ -1,3 +1,5 @@
+import pytest
+
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
@@ -7,6 +9,7 @@ from tests.nanocontracts.test_blueprints.swap_demo import InvalidActions, Invali
 SWAP_NC_TYPE = make_nc_type(int)
 
 
+@pytest.mark.no_cover
 class SwapDemoTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()

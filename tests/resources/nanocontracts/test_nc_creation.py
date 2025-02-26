@@ -14,6 +14,8 @@
 
 from typing import Any
 
+import pytest
+
 from hathor.nanocontracts.resources.nc_creation import NCCreationResource
 from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
@@ -26,6 +28,7 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import get_genesis_key
 
 
+@pytest.mark.no_cover
 class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
 
     def setUp(self):

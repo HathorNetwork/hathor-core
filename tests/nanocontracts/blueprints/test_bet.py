@@ -3,6 +3,8 @@ import os
 import re
 from typing import NamedTuple, Optional
 
+import pytest
+
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
@@ -39,6 +41,7 @@ class BetInfo(NamedTuple):
     score: str
 
 
+@pytest.mark.no_cover
 class NCBetBlueprintTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()

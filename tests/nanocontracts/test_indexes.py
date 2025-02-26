@@ -1,5 +1,7 @@
 from typing import Any, Optional
 
+import pytest
+
 from hathor.conf import HathorSettings
 from hathor.dag_builder.artifacts import DAGArtifacts
 from hathor.manager import HathorManager
@@ -104,6 +106,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         trigger = StopAfterNMinedBlocks(self.miner, quantity=confirmations)
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
 
+    @pytest.mark.no_cover
     def test_tokens_index(self):
         token_info0 = self.manager.tx_storage.indexes.tokens.get_token_info(self.token_uid)
         new_blocks = 0
@@ -143,11 +146,13 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         token_info1 = self.manager.tx_storage.indexes.tokens.get_token_info(self._settings.HATHOR_TOKEN_UID)
         self.assertEqual(token_info0.get_total() + 64_00 * new_blocks, token_info1.get_total())
 
+    @pytest.mark.no_cover
     def test_remove_voided_nano_tx_from_parents_1(self):
         vertices = self._run_test_remove_voided_nano_tx_from_parents('tx3 < b35')
         v = [node.name for node, _ in vertices.list]
         self.assertTrue(v.index('tx3') < v.index('b35'))
 
+    @pytest.mark.no_cover
     def test_remove_voided_nano_tx_from_parents_2(self):
         vertices = self._run_test_remove_voided_nano_tx_from_parents('b35 < tx3')
         v = [node.name for node, _ in vertices.list]

@@ -1,3 +1,5 @@
+import pytest
+
 from hathor.nanocontracts import Blueprint, public
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
@@ -29,6 +31,7 @@ class MyBlueprint(Blueprint):
         self.unknown = 1
 
 
+@pytest.mark.no_cover
 class ViolationsTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()

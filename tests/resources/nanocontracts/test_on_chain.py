@@ -14,6 +14,8 @@
 
 from typing import Any
 
+import pytest
+
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.resources.on_chain import BlueprintOnChainResource
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
@@ -23,6 +25,7 @@ from tests.nanocontracts import test_blueprints
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
+@pytest.mark.no_cover
 class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
 
     def setUp(self):
