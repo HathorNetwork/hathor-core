@@ -21,6 +21,7 @@ from hathor.transaction.scripts.construct import get_pushdata, re_compile
 from hathor.transaction.scripts.execute import Stack, get_script_op
 from hathor.transaction.scripts.hathor_script import HathorScript
 from hathor.transaction.scripts.opcode import Opcode, op_pushdata, op_pushdata1
+from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashAll, SighashType
 
 
 class MultiSig(BaseScript):
@@ -111,7 +112,14 @@ class MultiSig(BaseScript):
         return s.data
 
     @classmethod
-    def create_input_data(cls, redeem_script: bytes, signatures: list[bytes]) -> bytes:
+    def create_input_data(
+        cls,
+        redeem_script: bytes,
+        signatures: list[bytes],
+        *,
+        sighash: SighashType = SighashAll(),
+        inputs_outputs_limit: InputsOutputsLimit | None = None
+    ) -> bytes:
         """
         :param redeem_script: script to redeem the tokens: <M> <pubkey1> ... <pubkeyN> <N> <OP_CHECKMULTISIG>
         :type redeem_script: bytes
@@ -122,6 +130,8 @@ class MultiSig(BaseScript):
         :rtype: bytes
         """
         s = HathorScript()
+        s.push_sighash(sighash)
+        s.push_inputs_outputs_limit(inputs_outputs_limit)
         for signature in signatures:
             s.pushData(signature)
         s.pushData(redeem_script)

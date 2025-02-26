@@ -69,7 +69,7 @@ class SighashBitmaskTest(unittest.TestCase):
         alice_output_script = P2PKH.create_output_script(self.address1)
         htr_output = TxOutput(int(genesis_utxo.value / 2), alice_output_script)
 
-        # Alice creates an atomic swap tx that's missing only Bob's input, with half genesis HTR
+        # Alice creates an atomic swap tx that's missing Bob's input, with half genesis HTR, and his output
         atomic_swap_tx = Transaction(
             weight=1,
             inputs=[tokens_input],
@@ -145,7 +145,7 @@ class SighashBitmaskTest(unittest.TestCase):
         alice_output_script = P2PKH.create_output_script(self.address1)
         htr_output = TxOutput(int(genesis_utxo.value / 2), alice_output_script)
 
-        # Alice creates an atomic swap tx that's missing only Bob's input, with half genesis HTR
+        # Alice creates an atomic swap tx that's missing Bob's input, with half genesis HTR, and his output
         atomic_swap_tx = Transaction(
             weight=1,
             inputs=[tokens_input],
@@ -279,7 +279,7 @@ class SighashBitmaskTest(unittest.TestCase):
         alice_output_script = P2PKH.create_output_script(self.address1)
         htr_output = TxOutput(int(genesis_utxo.value / 2), alice_output_script)
 
-        # Alice creates an atomic swap tx that's missing only Bob's input, with half genesis HTR
+        # Alice creates an atomic swap tx that's missing Bob's input, with half genesis HTR, and his output
         atomic_swap_tx = Transaction(
             weight=1,
             inputs=[tokens_input],
