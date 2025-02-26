@@ -141,6 +141,18 @@ class ConnectionsManager:
         # Global maximum number of connections.
         self.max_connections: int = self._settings.PEER_MAX_CONNECTIONS
 
+        # Maximum number of incoming connections.
+        self.max_incoming_connections: int = self._settings.PEER_MAX_ENTRYPOINTS
+
+        # Maximum number of outgoing connections. 
+        self.max_outgoing_connections: int = self._settings.PEER_MAX_OUTGOING_CONNECTIONS
+
+        # Maximum number of connections for untrustworthy peers checking.
+        self.max_check_peers_connections: int = self._settings.PEER_MAX_CHECK_PEER_CONNECTIONS
+
+        # Maximum connections for discovered peers:
+        self.max_discovered_peers_connections: int = self._settings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
+
         # Global rate limiter for all connections.
         self.rate_limiter = RateLimiter(self.reactor)
         self.enable_rate_limiter()

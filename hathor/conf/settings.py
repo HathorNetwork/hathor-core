@@ -299,6 +299,15 @@ class HathorSettings(NamedTuple):
     # The discovered peers slot is left bound by PEER_MAX_CONNECTIONS.
     PEER_MAX_CHECK_PEER_CONNECTIONS: int = 10
 
+    # Maximum number of connections for discovered peers after bootstrap.
+    PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = PEER_MAX_CONNECTIONS - PEER_MAX_ENTRYPOINTS 
+    - PEER_MAX_OUTGOING_CONNECTIONS - PEER_MAX_OUTGOING_CONNECTIONS 
+    
+    # Safeguard check
+    if PEER_MAX_DISCOVERED_PEERS_CONNECTIONS <= 0:
+        raise Exception("PEER_MAX_DISCOVERED_PEERS_CONNECTIONS must be bigger than zero.")
+
+
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
 
