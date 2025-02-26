@@ -108,7 +108,8 @@ class P2PKH(BaseScript):
         """
         s = HathorScript()
         s.push_sighash(sighash)
-        s.push_inputs_outputs_limit(inputs_outputs_limit)
+        if inputs_outputs_limit:
+            s.push_inputs_outputs_limit(inputs_outputs_limit)
         s.pushData(signature)
         s.pushData(public_key_bytes)
 

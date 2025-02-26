@@ -131,7 +131,8 @@ class MultiSig(BaseScript):
         """
         s = HathorScript()
         s.push_sighash(sighash)
-        s.push_inputs_outputs_limit(inputs_outputs_limit)
+        if inputs_outputs_limit:
+            s.push_inputs_outputs_limit(inputs_outputs_limit)
         for signature in signatures:
             s.pushData(signature)
         s.pushData(redeem_script)

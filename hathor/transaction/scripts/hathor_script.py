@@ -77,11 +77,8 @@ class HathorScript:
             case _:
                 assert_never(sighash)
 
-    def push_inputs_outputs_limit(self, limit: InputsOutputsLimit | None) -> None:
+    def push_inputs_outputs_limit(self, limit: InputsOutputsLimit) -> None:
         """Push a custom inputs and outputs limit to the script."""
-        if not limit:
-            return
-
         self.pushData(limit.max_inputs)
         self.pushData(limit.max_outputs)
         self.addOpcode(Opcode.OP_MAX_INPUTS_OUTPUTS)
