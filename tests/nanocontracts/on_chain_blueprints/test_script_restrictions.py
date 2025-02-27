@@ -22,7 +22,7 @@ def _load_file(filename: str) -> bytes:
 ZLIB_BOMB: bytes = _load_file('bomb.zlib')
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class OnChainBlueprintScriptTestCase(unittest.TestCase):
     use_memory_storage = True
 
@@ -221,6 +221,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         self.assertIsInstance(cause, ValueError)
         self.assertEqual(cause.args, ('Decompressed code is too long.',))
 
+    @pytest.mark.needs_metered_exec
     def test_large_list_with_range(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
         blueprint = self._create_on_chain_blueprint('''__blueprint__ = list(range(2**30))''')
@@ -228,6 +229,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         with self.assertRaises(OCBOutOfMemoryDuringLoading):
             blueprint.get_blueprint_class()
 
+    @pytest.mark.needs_metered_exec
     def test_large_list_with_mul(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
         blueprint = self._create_on_chain_blueprint('''__blueprint__ = [1] * 2**30''')
@@ -236,6 +238,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             blueprint.get_blueprint_class()
 
     @pytest.mark.skip(reason='hangs')
+    @pytest.mark.needs_metered_exec
     def test_large_list_with_mul2(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
         blueprint = self._create_on_chain_blueprint('''x = ['a']\nwhile True:\n    x = x * 2\n__blueprint__ = x''')
@@ -244,6 +247,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             blueprint.get_blueprint_class()
 
     @pytest.mark.skip(reason='hangs')
+    @pytest.mark.needs_metered_exec
     def test_large_list_with_sum(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
         blueprint = self._create_on_chain_blueprint('''x = ['a']\nwhile True:\n    x = x + x\n__blueprint__ = x''')
@@ -252,6 +256,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             blueprint.get_blueprint_class()
 
     @pytest.mark.skip(reason='hangs')
+    @pytest.mark.needs_metered_exec
     def test_large_int_with_mul(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
         blueprint = self._create_on_chain_blueprint('''__blueprint__ = 1**(2**30**30)''')
@@ -259,23 +264,26 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         with self.assertRaises(OCBOutOfMemoryDuringLoading):
             blueprint.get_blueprint_class()
 
+    @pytest.mark.needs_metered_exec
     def test_large_string_with_range(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
         blueprint = self._create_on_chain_blueprint(
             '''x = 'a'\nfor _ in range(100):\n    x = x * 5\n__blueprint__ = x'''
         )
-        # this should run out of fuel first, since it shouldn't take too much memory
+        # this should run out of memory first, before it consumes all the fuel
         with self.assertRaises(OCBOutOfMemoryDuringLoading):
             blueprint.get_blueprint_class()
 
     @pytest.mark.skip(reason='hangs')
+    @pytest.mark.needs_metered_exec
     def test_large_string_with_mul(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfMemoryDuringLoading
         blueprint = self._create_on_chain_blueprint('''x = 'a'\nwhile True:\n    x = x * 2\n__blueprint__ = x''')
-        # this should run out of fuel first, since it shouldn't take too much memory
+        # this should run out of memory first, before it consumes all the fuel
         with self.assertRaises(OCBOutOfMemoryDuringLoading):
             blueprint.get_blueprint_class()
 
+    @pytest.mark.needs_metered_exec
     def test_large_sum(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading
         blueprint = self._create_on_chain_blueprint('''__blueprint__ = sum(range(2**30))''')
@@ -283,6 +291,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         with self.assertRaises(OCBOutOfFuelDuringLoading):
             blueprint.get_blueprint_class()
 
+    @pytest.mark.needs_metered_exec
     def test_inf_loop(self) -> None:
         from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading
         blueprint = self._create_on_chain_blueprint('''a = 0\nwhile True:\n    a += 1\n__blueprint__ = a''')

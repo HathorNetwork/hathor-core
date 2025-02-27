@@ -39,15 +39,15 @@ doctests:
 	pytest $(pytest_flags) -n0 hathor
 
 .PHONY: tests-lib
-tests-lib: tests-lib-nocov tests-lib-cov
+tests-lib: tests-lib-metered tests-lib-cov
 
 .PHONY: tests-lib-cov
 tests-lib-cov:
-	pytest $(pytest_flags) $(pytest_covflags) $(tests_lib) -m "not no_cover" --durations=10
+	HATHOR_TEST_CONFIG_YAML='./hathor/conf/unittests_unmetered.yml' pytest $(pytest_flags) $(pytest_covflags) $(tests_lib) -m "not needs_metered_exec" --durations=10
 
-.PHONY: tests-lib-nocov
-tests-lib-nocov:
-	pytest $(pytest_flags) $(tests_lib) -m no_cover
+.PHONY: tests-lib-metered
+tests-lib-metered:
+	pytest $(pytest_flags) $(tests_lib) -m "does_metered_call or needs_metered_exec"
 
 .PHONY: tests-quick
 tests-quick:
