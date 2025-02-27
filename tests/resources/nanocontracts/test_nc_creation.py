@@ -28,7 +28,7 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import get_genesis_key
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
 
     def setUp(self):

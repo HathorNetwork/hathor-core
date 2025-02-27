@@ -50,7 +50,7 @@ class BetInfo(NamedTuple):
     score: str
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class OnChainBetBlueprintTestCase(unittest.TestCase):
     use_memory_storage = True
 
@@ -199,7 +199,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         self.assertEqual(self.nc_storage.get_obj(b'token_uid', TOKEN_UID_NC_TYPE), self.token_uid)
         self.assertEqual(self.nc_storage.get_obj(b'date_last_bet', TIMESTAMP_NC_TYPE), self.date_last_bet)
 
-    @pytest.mark.no_cover
+    @pytest.mark.does_metered_call
     def test_basic_flow(self) -> None:
         runner = self.runner
 
