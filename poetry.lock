@@ -1795,15 +1795,12 @@ use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
 name = "rocksdb"
-version = "0.9.2"
+version = "0.9.3"
 description = "Python bindings for RocksDB"
 optional = false
-python-versions = "*"
+python-versions = ">=3.10"
 files = []
 develop = false
-
-[package.dependencies]
-setuptools = ">=25"
 
 [package.extras]
 doc = ["sphinx", "sphinx_rtd_theme"]
@@ -1811,9 +1808,9 @@ test = ["pytest"]
 
 [package.source]
 type = "git"
-url = "https://github.com/hathornetwork/python-rocksdb.git"
+url = "https://github.com/jansegre/python-rocksdb.git"
 reference = "HEAD"
-resolved_reference = "72edcfbd22f4a3ca816f94096d3ec181da41031e"
+resolved_reference = "263381514ce13c46c1dfad8353b3f312c74006ff"
 
 [[package]]
 name = "sentry-sdk"
@@ -2486,4 +2483,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4"
-content-hash = "05a728b943ae8b639bbb369f400bb7ed5b6c0c5205abaf355194c7168b4798c7"
+content-hash = "612f1f46e417af1b4c63d64c83baa66ffe0d928d162a19fcbce91c0f3db6e725"
