@@ -76,7 +76,7 @@ class MyBlueprint(Blueprint):
             raise NCFail('counter is zero')
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class NCConsensusTestCase(SimulatorTestCase):
     __test__ = True
 

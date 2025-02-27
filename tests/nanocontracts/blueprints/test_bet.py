@@ -41,7 +41,7 @@ class BetInfo(NamedTuple):
     score: str
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class NCBetBlueprintTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()

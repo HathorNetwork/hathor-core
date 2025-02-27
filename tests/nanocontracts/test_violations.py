@@ -31,7 +31,7 @@ class MyBlueprint(Blueprint):
         self.unknown = 1
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class ViolationsTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()

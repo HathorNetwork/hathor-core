@@ -283,7 +283,11 @@ class Runner:
         if not self.has_contract_been_initialized(contract_id):
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
-        self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+        self._metered_executor = MeteredExecutor(
+            fuel=self._initial_fuel,
+            memory_limit=self._memory_limit,
+            _no_measure=not self._settings.NC_METERED_EXECUTION,
+        )
 
         blueprint_id = self.get_blueprint_id(contract_id)
 
@@ -702,7 +706,11 @@ class Runner:
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
         if self._metered_executor is None:
-            self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+            self._metered_executor = MeteredExecutor(
+                fuel=self._initial_fuel,
+                memory_limit=self._memory_limit,
+                _no_measure=not self._settings.NC_METERED_EXECUTION,
+            )
 
         changes_tracker = self._create_changes_tracker(contract_id)
         blueprint_id = self.get_blueprint_id(contract_id)

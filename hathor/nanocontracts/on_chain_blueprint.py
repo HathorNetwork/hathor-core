@@ -196,9 +196,11 @@ class OnChainBlueprint(Transaction):
     def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""
         from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
-        fuel = self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE
-        memory_limit = self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE
-        metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
+        metered_executor = MeteredExecutor(
+            fuel=self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE,
+            memory_limit=self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE,
+            _no_measure=not self._settings.NC_METERED_EXECUTION,
+        )
         try:
             env = metered_executor.exec(self.code.text)
         except OutOfFuelError as e:

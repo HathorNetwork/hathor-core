@@ -9,7 +9,7 @@ from tests.nanocontracts.test_blueprints.swap_demo import InvalidActions, Invali
 SWAP_NC_TYPE = make_nc_type(int)
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class SwapDemoTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()

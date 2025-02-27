@@ -18,7 +18,7 @@ import dis
 import sys
 import tracemalloc
 from enum import Enum
-from types import FrameType, TracebackType
+from types import CodeType, FrameType, TracebackType
 from typing import Any, Callable, ParamSpec, TypeAlias, TypeVar, cast
 
 from structlog import get_logger
@@ -41,6 +41,18 @@ _TraceFunction: TypeAlias = Callable[[FrameType, _EventName, Any], '_TraceFuncti
 FUEL_COST_MAP = [1] * 256
 
 
+def _compile_compat(source: str) -> CodeType:
+    return compile(
+        source=source,
+        filename='<blueprint>',
+        mode='exec',
+        flags=0,
+        dont_inherit=True,
+        optimize=0,
+        _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
+    )
+
+
 class OutOfFuelError(RuntimeError):
     """Raised when an execution exceeds the CPU-cycle limit"""
 
@@ -52,13 +64,13 @@ class OutOfMemoryError(MemoryError):
 class MeteredExecutor:
     """Used measure and limit the execution of method calls and code exec.
     """
+    __slots__ = ('_fuel', '_memory_limit', '_debug', '_no_measure')
 
-    __slots__ = ('_fuel', '_memory_limit', '_debug')
-
-    def __init__(self, fuel: int, memory_limit: int) -> None:
+    def __init__(self, fuel: int, memory_limit: int, *, _no_measure: bool = False) -> None:
         self._fuel = fuel
         self._memory_limit = memory_limit
         self._debug = False
+        self._no_measure = _no_measure
 
     def get_fuel(self) -> int:
         """Unitless amount of remaining CPU-cycle fuel."""
@@ -69,29 +81,26 @@ class MeteredExecutor:
         return self._memory_limit
 
     def _metered_context(self) -> _MeteredExecutionContext:
-        """Internal method used to start a metered context."""
         return _MeteredExecutionContext(self)
+
+    def __exec(self, code: CodeType, env: dict[str, Any]) -> None:
+        """Do not call this method from outside this calss."""
+        # XXX: SECURITY: `code` and `env` need the proper restrictions by this point
+        if self._no_measure:
+            exec(code, env)
+        else:
+            with self._metered_context():
+                exec(code, env)
 
     def exec(self, source: str, /) -> dict[str, Any]:
         """ This is equivalent to `exec(source)` but with execution metering and memory limiting.
         """
         from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+        code = _compile_compat(source)
         env: dict[str, object] = {
             '__builtins__': EXEC_BUILTINS,
         }
-        # XXX: calling compile now makes the exec step consume less fuel
-        code = compile(
-            source=source,
-            filename='<blueprint>',
-            mode='exec',
-            flags=0,
-            dont_inherit=True,
-            optimize=0,
-            _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
-        )
-        with self._metered_context():
-            # XXX: SECURITY: `code` and `env` need the proper restrictions by this point
-            exec(code, env)
+        self.__exec(code, env)
         del env['__builtins__']
         return env
 
@@ -99,24 +108,14 @@ class MeteredExecutor:
         """ This is equivalent to `func(*args, **kwargs)` but with execution metering and memory limiting.
         """
         from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+        code = _compile_compat('__result__ = __func__(*__args__)')
         env: dict[str, object] = {
             '__builtins__': EXEC_BUILTINS,
             '__func__': func,
             '__args__': args,
             '__result__': None,
         }
-        # XXX: calling compile now makes the exec step consume less fuel
-        code = compile(
-            source='__result__ = __func__(*__args__)',
-            filename='<blueprint>',
-            mode='exec',
-            flags=0,
-            dont_inherit=True,
-            optimize=0,
-            _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
-        )
-        with self._metered_context():
-            exec(code, env)
+        self.__exec(code, env)
         return cast(_T, env['__result__'])
 
 
@@ -202,7 +201,7 @@ class _MeteredExecutionContext:
         self._state = _ContextState.Paused
 
     def resume(self) -> None:
-        """ Resume tracking: once pause is called tracking won't happend until resume is called.
+        """ Resume tracking: once pause is called tracking won't happened until resume is called.
         """
         assert self._state is _ContextState.Paused
         self._register_hooks()
@@ -237,7 +236,7 @@ class _MeteredExecutionContext:
         sys.settrace(None)
         tracemalloc.stop()
 
-    def _trace_calls(self, frame: FrameType, event: str, arg: Any) -> _TraceFunction | None:
+    def _trace_calls(self, frame: FrameType, event: _EventName, arg: Any) -> _TraceFunction | None:
         """This method is passed to sys.settrace to track opcode execution."""
         # trace the opcodes so we can have accurate counting
         frame.f_trace_opcodes = True

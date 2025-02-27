@@ -97,7 +97,7 @@ class MyBlueprint(Blueprint):
         return 1
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()

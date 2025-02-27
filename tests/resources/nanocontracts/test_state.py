@@ -199,7 +199,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         sign_openssl(nano_header, private_key)
         self.manager.cpu_mining_service.resolve(nc)
 
-    @pytest.mark.no_cover
+    @pytest.mark.does_metered_call
     @inlineCallbacks
     def test_success(self):
         parents = [tx.hash for tx in self.genesis_txs]

@@ -133,7 +133,7 @@ class MyBlueprint(Blueprint):
         return self.syscall.call_view_method(self.syscall.get_contract_id(), 'get_counter')
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
