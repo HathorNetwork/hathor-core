@@ -25,7 +25,7 @@ from tests.nanocontracts import test_blueprints
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-@pytest.mark.no_cover
+@pytest.mark.does_metered_call
 class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
 
     def setUp(self):

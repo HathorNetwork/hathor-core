@@ -138,7 +138,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         add_new_block(self.manager)
         return nc
 
-    @pytest.mark.no_cover
+    @pytest.mark.does_metered_call
     @inlineCallbacks
     def test_success(self):
         parents = [tx.hash for tx in self.genesis_txs]
