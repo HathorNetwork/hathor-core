@@ -105,6 +105,8 @@ class HathorProtocol:
         settings: HathorSettings,
         use_ssl: bool,
         inbound: bool,
+        
+        check_entrypoint: bool,
     ) -> None:
         self._settings = settings
         self.my_peer = my_peer
@@ -118,6 +120,9 @@ class HathorProtocol:
 
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
         self.inbound = inbound
+
+        # Connection to check a specific entrypoint to be trustworthy or not.
+        self.check_entrypoint = check_entrypoint
 
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT

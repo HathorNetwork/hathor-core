@@ -169,6 +169,15 @@ class ConnectionsManager:
         # List of peers connected and ready to communicate.
         self.connected_peers = {}
 
+        # List of connected_peers by outgoing connections.
+        self.outgoing_connected_peers = {}
+
+        # List of connected peers by incoming connections.
+        self.incoming_connected_peers = {}
+
+        # List of discovered peers connected in bootstrap phase.
+        self.discover_connected_peers = {}
+
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
         self.new_connection_from_queue = deque()
@@ -429,10 +438,28 @@ class ConnectionsManager:
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
+
+        # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
+            
+        # Checks if new connection is incoming/outgoing. (Note: Disjoint it from discovered and check peers.)
+        if protocol.inbound:
+            if len(self.incoming_connected_peers) >= self.max_incoming_connections:
+                self.log.warn('reached maximum number of INCOMING connections', max_connections=self.max_incoming_connections)
+                protocol.disconnect(force=True)
+                return
+            self.incoming_connected_peers.add(protocol)
+        else:
+            if len(self.outgoing_connected_peers) >= self.max_outgoing_connections:
+                self.log.warn('reached maximum number of OUTGOING connections', max_connections=self.max_outgoing_connections)
+                protocol.disconnect(force=True)
+                return
+            self.outgoing_connected_peers.add(protocol)
+            
+
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
