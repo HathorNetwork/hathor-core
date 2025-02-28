@@ -462,7 +462,7 @@ class ConnectionsManager:
                 self.log.warn('reached maximum number of CHECK_PEERS connections', max_connections=self.max_check_peers_connections )
                 protocol.disconnect(force=True)
                 return 
-            self.check_entrypoint_connectionss.add(protocol)
+            self.check_entrypoint_connections.add(protocol)
         elif protocol.discovered:
             if len(self.discovered_connections) >= self.max_discovered_peers_connections:
                 self.log.warn('reached maximum number of DISCOVERED connections', max_connections=self.max_discovered_peers_connections )
