@@ -125,7 +125,7 @@ class HathorProtocol:
         self.check_entrypoint = check_entrypoint
 
         # Flag of this connection belonging to a discovered peer.
-        self.discovered_connection = discovered
+        self.discovered = discovered
 
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT

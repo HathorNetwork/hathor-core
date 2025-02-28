@@ -170,16 +170,16 @@ class ConnectionsManager:
         self.connected_peers = {}
 
         # List of connected_peers by outgoing connections.
-        self.outgoing_connections = {}
+        self.outgoing_connections = set()
 
         # List of connected peers by incoming connections.
-        self.incoming_connections = {}
+        self.incoming_connections = set()
 
         # List of discovered peers connected in bootstrap phase.
-        self.discovered_connections = {}
+        self.discovered_connections = set()
 
         # List of connections created for checking other peers.
-        self.check_peers_connections = {}
+        self.check_entrypoint_connections = set()
 
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
@@ -452,13 +452,14 @@ class ConnectionsManager:
         # If it is a check connection, go to check_peers_connections slot.
         # If a discovered connection, go to discovered_connections slot.
         # If none of the above, go to either incoming or outgoing connections slot.
+        # Note: Assumes CHECK_ENTRYPOINT and DISCOVERED_CONNECTION cannot be True in Tandem.
         if protocol.check_entrypoint:
-            if len(self.check_peers_connections) >= self.max_check_peers_connections:
+            if len(self.check_entrypoint_connections) >= self.max_check_peers_connections:
                 self.log.warn('reached maximum number of CHECK_PEERS connections', max_connections=self.max_check_peers_connections )
                 protocol.disconnect(force=True)
                 return 
-            self.check_peers_connections.add(protocol)
-        elif protocol.discovered_connection:
+            self.check_entrypoint_connectionss.add(protocol)
+        elif protocol.discovered:
             if len(self.discovered_connections) >= self.max_discovered_peers_connections:
                 self.log.warn('reached maximum number of DISCOVERED connections', max_connections=self.max_discovered_peers_connections )
                 protocol.disconnect(force=True)
@@ -544,6 +545,17 @@ class ConnectionsManager:
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
         self.connections.discard(protocol)
+
+        # Each conn is from a slot - discard from it as well.
+        if protocol.check_entrypoint:
+            self.check_entrypoint_connections.discard(protocol)
+        if protocol.discovered:
+            self.discovered_connections.discard(protocol)
+        if protocol.inbound:
+            self.incoming_connections.discard(protocol)
+        else:
+            self.outgoing_connections.discard(protocol)
+        
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
         if protocol._peer is not None:
@@ -571,6 +583,26 @@ class ConnectionsManager:
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""
         for conn in self.connections:
+            yield conn
+
+    def iter_incoming_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all of the incoming connections."""
+        for conn in self.incoming_connections:
+            yield conn
+
+    def iter_outgoing_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all of the outgoing connections."""
+        for conn in self.outgoing_connections:
+            yield conn
+
+    def iter_check_entrypoint_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all of the connections reserved for entrypoint checking."""
+        for conn in self.check_entrypoint_connections:
+            yield conn
+
+    def iter_discovered_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all of the discovered connections after bootstrapping."""
+        for conn in self.discovered_connections:
             yield conn
 
     def iter_ready_connections(self) -> Iterable[HathorProtocol]:
