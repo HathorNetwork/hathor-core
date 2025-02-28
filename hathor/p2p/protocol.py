@@ -105,7 +105,7 @@ class HathorProtocol:
         settings: HathorSettings,
         use_ssl: bool,
         inbound: bool,
-        
+        discovered: bool,
         check_entrypoint: bool,
     ) -> None:
         self._settings = settings
@@ -123,6 +123,9 @@ class HathorProtocol:
 
         # Connection to check a specific entrypoint to be trustworthy or not.
         self.check_entrypoint = check_entrypoint
+
+        # Flag of this connection belonging to a discovered peer.
+        self.discovered_connection = discovered
 
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT

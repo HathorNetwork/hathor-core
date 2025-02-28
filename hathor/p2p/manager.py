@@ -170,13 +170,16 @@ class ConnectionsManager:
         self.connected_peers = {}
 
         # List of connected_peers by outgoing connections.
-        self.outgoing_connected_peers = {}
+        self.outgoing_connections = {}
 
         # List of connected peers by incoming connections.
-        self.incoming_connected_peers = {}
+        self.incoming_connections = {}
 
         # List of discovered peers connected in bootstrap phase.
-        self.discover_connected_peers = {}
+        self.discovered_connections = {}
+
+        # List of connections created for checking other peers.
+        self.check_peers_connections = {}
 
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
@@ -445,21 +448,37 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
             
-        # Checks if new connection is incoming/outgoing. (Note: Disjoint it from discovered and check peers.)
-        if protocol.inbound:
-            if len(self.incoming_connected_peers) >= self.max_incoming_connections:
-                self.log.warn('reached maximum number of INCOMING connections', max_connections=self.max_incoming_connections)
+        # Next block sends the connection to the appropriate slot.
+        # If it is a check connection, go to check_peers_connections slot.
+        # If a discovered connection, go to discovered_connections slot.
+        # If none of the above, go to either incoming or outgoing connections slot.
+        if protocol.check_entrypoint:
+            if len(self.check_peers_connections) >= self.max_check_peers_connections:
+                self.log.warn('reached maximum number of CHECK_PEERS connections', max_connections=self.max_check_peers_connections )
                 protocol.disconnect(force=True)
-                return
-            self.incoming_connected_peers.add(protocol)
+                return 
+            self.check_peers_connections.add(protocol)
+        elif protocol.discovered_connection:
+            if len(self.discovered_connections) >= self.max_discovered_peers_connections:
+                self.log.warn('reached maximum number of DISCOVERED connections', max_connections=self.max_discovered_peers_connections )
+                protocol.disconnect(force=True)
+                return 
+            self.discovered_connections.add(protocol)
         else:
-            if len(self.outgoing_connected_peers) >= self.max_outgoing_connections:
-                self.log.warn('reached maximum number of OUTGOING connections', max_connections=self.max_outgoing_connections)
-                protocol.disconnect(force=True)
-                return
-            self.outgoing_connected_peers.add(protocol)
+            if protocol.inbound:
+                if len(self.incoming_connections) >= self.max_incoming_connections:
+                    self.log.warn('reached maximum number of INCOMING connections', max_connections=self.max_incoming_connections)
+                    protocol.disconnect(force=True)
+                    return
+                self.incoming_connections.add(protocol)
+            else:
+                if len(self.outgoing_connections) >= self.max_outgoing_connections:
+                    self.log.warn('reached maximum number of OUTGOING connections', max_connections=self.max_outgoing_connections)
+                    protocol.disconnect(force=True)
+                    return
+                self.outgoing_connections.add(protocol)
             
-
+        # Regardless of the slot sent, the total connections increases.
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
