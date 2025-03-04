@@ -20,7 +20,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
 from hathor.reward_lock.reward_lock import get_minimum_best_height
-from hathor.transaction import BaseTransaction, Transaction, TxInput
+from hathor.transaction import Transaction
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     DuplicatedParents,
@@ -126,9 +126,6 @@ class TransactionVerifier:
                     spent_tx.timestamp,
                 ))
 
-            if not skip_script:
-                self.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx)
-
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
             if key in spent_outputs:
@@ -136,15 +133,16 @@ class TransactionVerifier:
                     tx.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
 
-    def verify_script(self, *, tx: Transaction, input_tx: TxInput, spent_tx: BaseTransaction) -> None:
+        if not skip_script:
+            self.verify_scripts(tx)
+
+    def verify_scripts(self, tx: Transaction) -> None:
         """
         :type tx: Transaction
-        :type input_tx: TxInput
-        :type spent_tx: Transaction
         """
-        from hathor.transaction.scripts import script_eval
+        from hathor.transaction.scripts import evaluate_scripts
         try:
-            script_eval(tx, input_tx, spent_tx)
+            evaluate_scripts(tx)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
