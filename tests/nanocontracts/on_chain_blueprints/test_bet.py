@@ -3,7 +3,7 @@ import os
 from typing import NamedTuple, Optional
 
 from hathor.conf import HathorSettings
-from hathor.crypto.util import decode_address
+from hathor.crypto.util import decode_address, get_address_b58_from_public_key_bytes
 from hathor.nanocontracts import NanoContract, OnChainBlueprint
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
@@ -153,6 +153,11 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
     def initialize_contract(self):
         # create on-chain Bet nanocontract
         blueprint = self._create_on_chain_blueprint(ON_CHAIN_BET_NC_CODE)
+
+        related_addresses = set(blueprint.get_related_addresses())
+        address = get_address_b58_from_public_key_bytes(blueprint.nc_pubkey)
+        self.assertIn(address, related_addresses)
+
         assert self.manager.vertex_handler.on_new_vertex(blueprint, fails_silently=False)
         add_new_blocks(self.manager, 1, advance_clock=30)  # confirm the on-chain blueprint vertex
         assert blueprint.get_metadata().first_block is not None

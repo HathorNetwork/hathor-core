@@ -26,7 +26,7 @@ from structlog import get_logger
 from typing_extensions import Self, override
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.crypto.util import get_public_key_bytes_compressed
+from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_bytes_compressed
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
 from hathor.nanocontracts.method_parser import NCMethodParser
@@ -377,3 +377,9 @@ class OnChainBlueprint(Transaction):
         self.nc_pubkey = get_public_key_bytes_compressed(pubkey)
         data = self.get_sighash_all_data()
         self.nc_signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
+
+    def get_related_addresses(self) -> set[str]:
+        """Besides the common tx related addresses, we must also add the nc_pubkey."""
+        ret = super().get_related_addresses()
+        ret.add(get_address_b58_from_public_key_bytes(self.nc_pubkey))
+        return ret
