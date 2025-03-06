@@ -183,10 +183,10 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
             blueprints=[],
         )
 
-    async def test_find_by_id(self) -> None:
+    async def test_search_by_id(self) -> None:
         bp_id = '33' * 32
         response = await self.web.get('builtin', {
-            b'find_blueprint_id': bp_id.encode(),
+            b'search': bp_id.encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -203,7 +203,7 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
         # tx exists but is not a blueprint
         bp_id = self._settings.GENESIS_TX1_HASH.hex()
         response = await self.web.get('builtin', {
-            b'find_blueprint_id': bp_id.encode(),
+            b'search': bp_id.encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -216,7 +216,7 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('builtin', {
-            b'find_blueprint_id': b'ff' * 32,
+            b'search': b'ff' * 32,
         })
         data = response.json_value()
         assert data == dict(
@@ -228,9 +228,9 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
             blueprints=[],
         )
 
-    async def test_find_by_name(self) -> None:
+    async def test_search_by_name(self) -> None:
         response = await self.web.get('builtin', {
-            b'find_blueprint_name': b'myblueprint1',
+            b'search': b'myblueprint1',
         })
         data = response.json_value()
         assert data == dict(
@@ -245,7 +245,7 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('builtin', {
-            b'find_blueprint_name': b'MyBlueprint2',
+            b'search': b'MyBlueprint2',
         })
         data = response.json_value()
         assert data == dict(
@@ -263,7 +263,7 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('builtin', {
-            b'find_blueprint_name': b'Unknown',
+            b'search': b'Unknown',
         })
         data = response.json_value()
         assert data == dict(

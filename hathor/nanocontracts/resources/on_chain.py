@@ -26,6 +26,7 @@ from hathor.nanocontracts.exception import (
     OCBInvalidBlueprintVertexType,
 )
 from hathor.nanocontracts.types import blueprint_id_from_bytes
+from hathor.util import bytes_from_hex
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 
@@ -61,42 +62,22 @@ class BlueprintOnChainResource(Resource):
             error_response = ErrorResponse(success=False, error='Parameters after and before can\'t be used together.')
             return error_response.json_dumpb()
 
-        if params.find_blueprint_name:
-            request.setResponseCode(400)
-            error_response = ErrorResponse(
-              success=False, error='Searching on-chain blueprints by name is currently not supported.')
-            return error_response.json_dumpb()
-
-        if params.find_blueprint_id:
-            if params.after or params.before:
-                request.setResponseCode(400)
-                error_response = ErrorResponse(
-                    success=False,
-                    error='Parameters after and before can\'t be used with find_blueprint_id.'
-                )
-                return error_response.json_dumpb()
-
-            try:
-                bp_id = bytes.fromhex(params.find_blueprint_id)
-            except ValueError:
-                request.setResponseCode(400)
-                error_response = ErrorResponse(
-                    success=False,
-                    error=f'Invalid blueprint_id: {params.find_blueprint_id}'
-                )
-                return error_response.json_dumpb()
-
-            try:
-                bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id))
-                bp_class = bp_tx.get_blueprint_class()
-                bp_item = OnChainBlueprintItem(
-                    id=params.find_blueprint_id,
-                    name=bp_class.__name__,
-                    created_at=bp_tx.timestamp,
-                )
-                blueprint_list = [bp_item]
-            except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed):
-                blueprint_list = []
+        if params.search:
+            search = params.search.strip()
+            blueprint_list = []
+            if bp_id := bytes_from_hex(search):
+                try:
+                    bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id))
+                except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed):
+                    pass
+                else:
+                    bp_class = bp_tx.get_blueprint_class()
+                    bp_item = OnChainBlueprintItem(
+                        id=search,
+                        name=bp_class.__name__,
+                        created_at=bp_tx.timestamp,
+                    )
+                    blueprint_list = [bp_item] if not params.after and not params.before else []
 
             response = OnChainBlueprintsResponse(
                 blueprints=blueprint_list,
@@ -174,8 +155,7 @@ class OnChainBlueprintsParams(QueryParams):
     before: str | None
     after: str | None
     count: int = Field(default=10, le=100)
-    find_blueprint_id: str | None = None
-    find_blueprint_name: str | None = None
+    search: str | None = None
     order: SortOrder = SortOrder.DESC
 
 
@@ -245,18 +225,9 @@ BlueprintOnChainResource.openapi = {
                     }
                 },
                 {
-                    'name': 'find_blueprint_id',
+                    'name': 'search',
                     'in': 'query',
-                    'description': 'Filter the list using the provided Blueprint ID.',
-                    'required': False,
-                    'schema': {
-                        'type': 'string',
-                    }
-                },
-                {
-                    'name': 'find_blueprint_name',
-                    'in': 'query',
-                    'description': 'Filter the list using the provided Blueprint name.',
+                    'description': 'Filter the list using the provided string, that can be a Blueprint ID.',
                     'required': False,
                     'schema': {
                         'type': 'string',

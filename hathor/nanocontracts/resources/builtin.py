@@ -53,27 +53,28 @@ class BlueprintBuiltinResource(Resource):
         assert self.manager.tx_storage.nc_catalog is not None
         builtin_bps = list(self.manager.tx_storage.nc_catalog.blueprints.items())
 
-        if params.find_blueprint_id:
-            if params.after or params.before:
-                request.setResponseCode(400)
-                error_response = ErrorResponse(
-                    success=False,
-                    error='Parameters after and before can\'t be used with find_blueprint_id.'
-                )
-                return error_response.json_dumpb()
-
-            builtin_bps = [
+        filtered_bps = builtin_bps
+        if params.search:
+            search = params.search.strip().lower()
+            # first we try to find by blueprint ID
+            filtered_bps = [
                 (bp_id, bp_class) for bp_id, bp_class in builtin_bps
-                if bp_id.hex() == params.find_blueprint_id
+                if bp_id.hex().lower() == search
             ]
 
-        if params.find_blueprint_name:
-            builtin_bps = [
-                (bp_id, bp_class) for bp_id, bp_class in builtin_bps
-                if params.find_blueprint_name.strip().lower() in bp_class.__name__.lower()
-            ]
+            if filtered_bps:
+                # If we find the Blueprint, it's a single match, and any pagination returns empty.
+                assert len(filtered_bps) == 1
+                if params.after or params.before:
+                    filtered_bps = []
+            else:
+                # If we didn't find it, we'll try by name
+                filtered_bps = [
+                    (bp_id, bp_class) for bp_id, bp_class in builtin_bps
+                    if search in bp_class.__name__.lower()
+                ]
 
-        sorted_bps = SortedKeyList(builtin_bps, key=lambda bp_id_and_class: bp_id_and_class[0])
+        sorted_bps = SortedKeyList(filtered_bps, key=lambda bp_id_and_class: bp_id_and_class[0])
         reverse = bool(params.before)
         start_key = bytes.fromhex(params.before or params.after or '') or None
         bp_iter: Iterator[tuple[bytes, type[Blueprint]]] = sorted_bps.irange_key(
@@ -103,8 +104,7 @@ class BuiltinBlueprintsParams(QueryParams, use_enum_values=True):
     before: str | None
     after: str | None
     count: int = Field(default=10, gt=0, le=100)
-    find_blueprint_id: str | None = None
-    find_blueprint_name: str | None = None
+    search: str | None = None
 
 
 class BuiltinBlueprintItem(Response):
@@ -172,23 +172,14 @@ BlueprintBuiltinResource.openapi = {
                     }
                 },
                 {
-                    'name': 'find_blueprint_id',
+                    'name': 'search',
                     'in': 'query',
-                    'description': 'Filter the list using the provided Blueprint ID.',
+                    'description': 'Filter the list using the provided string, that could be a Blueprint ID or name.',
                     'required': False,
                     'schema': {
                         'type': 'string',
                     }
                 },
-                {
-                    'name': 'find_blueprint_name',
-                    'in': 'query',
-                    'description': 'Filter the list using the provided Blueprint name.',
-                    'required': False,
-                    'schema': {
-                        'type': 'string',
-                    }
-                }
             ],
             'responses': {
                 '200': {

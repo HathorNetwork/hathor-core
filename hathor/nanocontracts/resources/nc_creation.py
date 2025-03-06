@@ -23,7 +23,8 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts import NanoContract
 from hathor.nanocontracts.resources.on_chain import SortOrder
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import collect_n, not_none
+from hathor.types import VertexId
+from hathor.util import bytes_from_hex, collect_n, not_none
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 
@@ -60,78 +61,68 @@ class NCCreationResource(Resource):
             error_response = ErrorResponse(success=False, error='Parameters after and before can\'t be used together.')
             return error_response.json_dumpb()
 
-        if params.find_blueprint_name:
-            request.setResponseCode(400)
-            error_response = ErrorResponse(
-                success=False, error='Searching by blueprint name is currently not supported.'
-            )
-            return error_response.json_dumpb()
-
-        if params.find_nano_contract_id:
-            if params.after or params.before:
-                request.setResponseCode(400)
-                error_response = ErrorResponse(
-                    success=False,
-                    error='Parameters after and before can\'t be used with find_nano_contract_id.'
+        vertex_id: VertexId | None = None
+        if params.search:
+            search = params.search.strip()
+            vertex_id = bytes_from_hex(search)
+            if vertex_id is None:
+                # in this case we do have `search` but it's not a valid hex, so we return empty.
+                response = NCCreationResponse(
+                    nc_creation_txs=[],
+                    before=params.before,
+                    after=params.after,
+                    count=params.count,
+                    has_more=False,
                 )
-                return error_response.json_dumpb()
+                return response.json_dumpb()
 
-            try:
-                nc_id = bytes.fromhex(params.find_nano_contract_id)
-            except ValueError:
-                request.setResponseCode(400)
-                error_response = ErrorResponse(
-                    success=False,
-                    error=f'Invalid nano_contract_id: {params.find_nano_contract_id}'
+            # when using `search`, the value can be either a NC ID or a BP ID.
+            if nc_item := self._get_nc_creation_item(vertex_id):
+                # if we find the respective NC, it's a single match, and therefore any pagination
+                # returns an empty result.
+                nc_list = [nc_item] if not params.after and not params.before else []
+                response = NCCreationResponse(
+                    nc_creation_txs=nc_list,
+                    before=params.before,
+                    after=params.after,
+                    count=params.count,
+                    has_more=False,
                 )
-                return error_response.json_dumpb()
-
-            nc_item = self._get_nc_creation_item(nc_id)
-            nc_list = [nc_item] if nc_item else []
-            response = NCCreationResponse(
-                nc_creation_txs=nc_list,
-                before=params.before,
-                after=params.after,
-                count=params.count,
-                has_more=False,
-            )
-            return response.json_dumpb()
-
-        try:
-            bp_id = bytes.fromhex(params.find_blueprint_id) if params.find_blueprint_id else None
-        except ValueError:
-            request.setResponseCode(400)
-            error_response = ErrorResponse(
-                success=False,
-                error=f'Invalid blueprint_id: {params.find_blueprint_id}'
-            )
-            return error_response.json_dumpb()
+                return response.json_dumpb()
+            # now vertex_id may be a BP, so it will be used below
 
         is_desc = params.order.is_desc()
 
         if not params.before and not params.after:
-            if bp_id:
+            if vertex_id:
                 iter_nc_ids = (
-                    self.bp_history_index.get_newest(bp_id) if is_desc else self.bp_history_index.get_oldest(bp_id)
+                    self.bp_history_index.get_newest(vertex_id)
+                    if is_desc else self.bp_history_index.get_oldest(vertex_id)
                 )
             else:
                 iter_nc_ids = self.nc_creation_index.get_newest() if is_desc else self.nc_creation_index.get_oldest()
         else:
-            ref_tx_id = params.before or params.after
-            assert ref_tx_id is not None
-            try:
-                ref_tx = self.tx_storage.get_transaction(bytes.fromhex(ref_tx_id))
-            except TransactionDoesNotExist:
-                request.setResponseCode(404)
-                error_response = ErrorResponse(success=False, error=f'Transaction {ref_tx_id} not found.')
+            ref_tx_id_hex = params.before or params.after
+            assert ref_tx_id_hex is not None
+            ref_tx_id = bytes_from_hex(ref_tx_id_hex)
+            if ref_tx_id is None:
+                request.setResponseCode(400)
+                error_response = ErrorResponse(success=False, error=f'Invalid "before" or "after": {ref_tx_id_hex}')
                 return error_response.json_dumpb()
 
-            if bp_id:
+            try:
+                ref_tx = self.tx_storage.get_transaction(ref_tx_id)
+            except TransactionDoesNotExist:
+                request.setResponseCode(404)
+                error_response = ErrorResponse(success=False, error=f'Transaction {ref_tx_id_hex} not found.')
+                return error_response.json_dumpb()
+
+            if vertex_id:
                 if is_desc:
                     iter_getter = self.bp_history_index.get_newer if params.before else self.bp_history_index.get_older
                 else:
                     iter_getter = self.bp_history_index.get_older if params.before else self.bp_history_index.get_newer
-                iter_nc_ids = iter_getter(bp_id, ref_tx)
+                iter_nc_ids = iter_getter(vertex_id, ref_tx)
             else:
                 if is_desc:
                     iter_getter2 = (
@@ -183,9 +174,7 @@ class NCCreationParams(QueryParams):
     before: str | None
     after: str | None
     count: int = Field(default=10, le=100)
-    find_nano_contract_id: str | None
-    find_blueprint_id: str | None
-    find_blueprint_name: str | None
+    search: str | None
     order: SortOrder = SortOrder.DESC
 
 
@@ -259,27 +248,10 @@ NCCreationResource.openapi = {
                     }
                 },
                 {
-                    'name': 'find_nano_contract_id',
+                    'name': 'search',
                     'in': 'query',
-                    'description': 'Filter the list using the provided Nano Contract ID.',
-                    'required': False,
-                    'schema': {
-                        'type': 'string',
-                    }
-                },
-                {
-                    'name': 'find_blueprint_id',
-                    'in': 'query',
-                    'description': 'Filter the list using the provided Blueprint ID.',
-                    'required': False,
-                    'schema': {
-                        'type': 'string',
-                    }
-                },
-                {
-                    'name': 'find_blueprint_name',
-                    'in': 'query',
-                    'description': 'Filter the list using the provided Blueprint name.',
+                    'description': 'Filter the list using the provided string,'
+                                   'that could be a Nano Contract ID or a Blueprint ID.',
                     'required': False,
                     'schema': {
                         'type': 'string',

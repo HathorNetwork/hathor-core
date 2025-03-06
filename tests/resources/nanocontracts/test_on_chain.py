@@ -366,11 +366,11 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
             ],
         )
 
-    async def test_find_by_id(self) -> None:
+    async def test_search_by_bp_id(self) -> None:
         ocbs = self.propagate_ocbs()
         some_bp_tx = ocbs[2]
         response = await self.web.get('on_chain', {
-            b'find_blueprint_id': some_bp_tx.hash_hex.encode(),
+            b'search': some_bp_tx.hash_hex.encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -387,7 +387,7 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
         # tx exists but is not a blueprint
         bp_id = self._settings.GENESIS_TX1_HASH.hex()
         response = await self.web.get('builtin', {
-            b'find_blueprint_id': bp_id.encode(),
+            b'search': bp_id.encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -400,7 +400,7 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('on_chain', {
-            b'find_blueprint_id': b'ff' * 32,
+            b'search': b'ff' * 32,
         })
         data = response.json_value()
         assert data == dict(
@@ -412,24 +412,17 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
             blueprints=[],
         )
 
-    async def test_find_by_name(self) -> None:
+    async def test_search_by_name(self) -> None:
         response = await self.web.get('builtin', {
-            b'find_blueprint_name': b'Bet',
+            b'search': b'Bet',
         })
         data = response.json_value()
-        assert response.responseCode == 400
+        # it's not implemented so it returns empty
         assert data == dict(
-            success=False,
-            error='Searching on-chain blueprints by name is currently not supported.',
-        )
-
-    async def test_invalid_blueprint_id(self) -> None:
-        response = await self.web.get('builtin', {
-            b'find_blueprint_id': b'abc',
-        })
-        data = response.json_value()
-        assert response.responseCode == 400
-        assert data == dict(
-            success=False,
-            error='Invalid blueprint_id: abc',
+            success=True,
+            before=None,
+            after=None,
+            count=10,
+            has_more=False,
+            blueprints=[],
         )

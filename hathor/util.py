@@ -854,3 +854,11 @@ def bytes_to_vertexid(data: bytes) -> VertexId:
     if len(data) != 32:
         raise ValueError('length must be exactly 32 bytes')
     return VertexId(data)
+
+
+def bytes_from_hex(hex_str: str) -> bytes | None:
+    """Convert a hex string to bytes or return None if it's invalid."""
+    try:
+        return bytes.fromhex(hex_str)
+    except ValueError:
+        return None

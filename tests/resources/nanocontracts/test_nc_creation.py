@@ -392,10 +392,10 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
             ],
         )
 
-    async def test_find_by_nc_id(self) -> None:
+    async def test_search_by_nc_id(self) -> None:
         nc1, nc2, nc3, nc4, nc5 = self.prepare_ncs()
         response = await self.web.get('on_chain', {
-            b'find_nano_contract_id': nc3.hash_hex.encode(),
+            b'search': nc3.hash_hex.encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -409,23 +409,10 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
             ],
         )
 
-        response = await self.web.get('on_chain', {
-            b'find_nano_contract_id': b'ff' * 32,
-        })
-        data = response.json_value()
-        assert data == dict(
-            success=True,
-            before=None,
-            after=None,
-            count=10,
-            has_more=False,
-            nc_creation_txs=[],
-        )
-
-    async def test_find_by_blueprint_id(self) -> None:
+    async def test_search_by_blueprint_id(self) -> None:
         nc1, nc2, nc3, nc4, nc5 = self.prepare_ncs()
         response = await self.web.get('on_chain', {
-            b'find_blueprint_id': nc1.get_blueprint_id().hex().encode(),
+            b'search': nc1.get_blueprint_id().hex().encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -441,7 +428,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('on_chain', {
-            b'find_blueprint_id': nc2.get_blueprint_id().hex().encode(),
+            b'search': nc2.get_blueprint_id().hex().encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -457,7 +444,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('on_chain', {
-            b'find_blueprint_id': nc4.get_blueprint_id().hex().encode(),
+            b'search': nc4.get_blueprint_id().hex().encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -471,8 +458,10 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
             ],
         )
 
+    async def test_search_non_existent(self) -> None:
+        self.prepare_ncs()
         response = await self.web.get('on_chain', {
-            b'find_blueprint_id': self._settings.GENESIS_BLOCK_HASH.hex().encode(),
+            b'search': self._settings.GENESIS_BLOCK_HASH.hex().encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -485,7 +474,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('on_chain', {
-            b'find_blueprint_id': b'fe' * 32,
+            b'search': b'fe' * 32,
         })
         data = response.json_value()
         assert data == dict(
@@ -497,35 +486,30 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
             nc_creation_txs=[],
         )
 
-    async def test_find_by_blueprint_name(self) -> None:
+    async def test_search_non_hex(self) -> None:
+        self.prepare_ncs()
+        response = await self.web.get('builtin', {
+            b'search': b'abc',
+        })
+        data = response.json_value()
+        assert data == dict(
+            success=True,
+            count=10,
+            before=None,
+            after=None,
+            has_more=False,
+            nc_creation_txs=[],
+        )
+
+    async def test_non_hex_pagination(self) -> None:
+        self.prepare_ncs()
         response = await self.web.get('creation', {
-            b'find_blueprint_name': b'Bet',
+            b'after': b'abc',
+            b'count': b'2',
         })
         data = response.json_value()
         assert response.responseCode == 400
         assert data == dict(
             success=False,
-            error='Searching by blueprint name is currently not supported.',
-        )
-
-    async def test_invalid_blueprint_id(self) -> None:
-        response = await self.web.get('builtin', {
-            b'find_blueprint_id': b'abc',
-        })
-        data = response.json_value()
-        assert response.responseCode == 400
-        assert data == dict(
-            success=False,
-            error='Invalid blueprint_id: abc',
-        )
-
-    async def test_invalid_nc_id(self) -> None:
-        response = await self.web.get('builtin', {
-            b'find_nano_contract_id': b'abc',
-        })
-        data = response.json_value()
-        assert response.responseCode == 400
-        assert data == dict(
-            success=False,
-            error='Invalid nano_contract_id: abc',
+            error='Invalid "before" or "after": abc'
         )
