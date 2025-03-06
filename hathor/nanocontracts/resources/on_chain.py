@@ -76,7 +76,15 @@ class BlueprintOnChainResource(Resource):
                 )
                 return error_response.json_dumpb()
 
-            bp_id = bytes.fromhex(params.find_blueprint_id)
+            try:
+                bp_id = bytes.fromhex(params.find_blueprint_id)
+            except ValueError:
+                request.setResponseCode(400)
+                error_response = ErrorResponse(
+                    success=False,
+                    error=f'Invalid blueprint_id: {params.find_blueprint_id}'
+                )
+                return error_response.json_dumpb()
 
             try:
                 bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id))
@@ -124,12 +132,11 @@ class BlueprintOnChainResource(Resource):
         for idx, bp_id in enumerate(iter_bps):
             try:
                 bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id))
-            except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed) as e:
-                request.setResponseCode(404)
-                error_response = ErrorResponse(
-                    success=False, error=f'Blueprint not found: {repr(e)}'
-                )
-                return error_response.json_dumpb()
+            except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType):
+                raise AssertionError('bps iterator must always yield valid blueprint txs')
+            except OCBBlueprintNotConfirmed:
+                # unconfirmed OCBs are simply not added to the response
+                continue
             bp_class = bp_tx.get_blueprint_class()
             bp_item = OnChainBlueprintItem(
                 id=bp_id.hex(),

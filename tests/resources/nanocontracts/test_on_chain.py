@@ -107,14 +107,18 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()
         artifacts = self.dag_builder.build_from_str(f"""
-            blockchain genesis b[1..10]
+            blockchain genesis b[1..11]
             b10 < dummy
 
             ocb1.ocb_private_key = "{private_key}"
             ocb1.ocb_password = "{password}"
             ocb1.ocb_code = test_blueprint1.py, TestBlueprint1
 
-            dummy <-- ocb1
+            ocb2.ocb_private_key = "{private_key}"
+            ocb2.ocb_password = "{password}"
+            ocb2.ocb_code = test_blueprint1.py, TestBlueprint1
+
+            ocb1 <-- b11
         """)
 
         artifacts.propagate_with(self.manager)
@@ -122,11 +126,15 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
 
         response = await self.web.get('on_chain')
         data = response.json_value()
-
-        assert response.responseCode == 404
         assert data == dict(
-            success=False,
-            error=f"Blueprint not found: OCBBlueprintNotConfirmed('{ocb1.hash_hex}')"
+            success=True,
+            before=None,
+            after=None,
+            count=10,
+            has_more=False,
+            blueprints=[
+                self.blueprint_tx_to_response(ocb1, name='TestBlueprint1')
+            ],
         )
 
     async def test_pagination(self) -> None:
@@ -413,4 +421,15 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
         assert data == dict(
             success=False,
             error='Searching on-chain blueprints by name is currently not supported.',
+        )
+
+    async def test_invalid_blueprint_id(self) -> None:
+        response = await self.web.get('builtin', {
+            b'find_blueprint_id': b'abc',
+        })
+        data = response.json_value()
+        assert response.responseCode == 400
+        assert data == dict(
+            success=False,
+            error='Invalid blueprint_id: abc',
         )

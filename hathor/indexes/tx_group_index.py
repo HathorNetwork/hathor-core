@@ -49,11 +49,6 @@ class TxGroupIndex(BaseIndex, Generic[KT]):
         raise NotImplementedError
 
     @abstractmethod
-    def _get_from_key(self, key: KT) -> Iterable[bytes]:
-        """Get all transactions that have a given key."""
-        raise NotImplementedError
-
-    @abstractmethod
     def _get_sorted_from_key(self,
                              key: KT,
                              tx_start: Optional[BaseTransaction] = None,

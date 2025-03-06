@@ -79,9 +79,10 @@ class NCHistoryIndex(TxGroupIndex[bytes]):
         """
         return self._get_sorted_from_key(contract_id, tx_start=tx_start)
 
+    @abstractmethod
     def get_transaction_count(self, contract_id: bytes) -> int:
-        """Get the count of transactions for the given contract_id. Beware this runs in O(n)."""
-        return sum(1 for _ in self._get_sorted_from_key(contract_id))
+        """Get the count of transactions for the given contract_id."""
+        raise NotImplementedError
 
     def get_last_tx_timestamp(self, contract_id: bytes) -> int | None:
         """Get the timestamp of the last tx in the given contract_id, or None if it doesn't exist."""

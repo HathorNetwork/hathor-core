@@ -76,7 +76,16 @@ class NCCreationResource(Resource):
                 )
                 return error_response.json_dumpb()
 
-            nc_id = bytes.fromhex(params.find_nano_contract_id)
+            try:
+                nc_id = bytes.fromhex(params.find_nano_contract_id)
+            except ValueError:
+                request.setResponseCode(400)
+                error_response = ErrorResponse(
+                    success=False,
+                    error=f'Invalid nano_contract_id: {params.find_nano_contract_id}'
+                )
+                return error_response.json_dumpb()
+
             nc_item = self._get_nc_creation_item(nc_id)
             nc_list = [nc_item] if nc_item else []
             response = NCCreationResponse(
@@ -88,7 +97,16 @@ class NCCreationResource(Resource):
             )
             return response.json_dumpb()
 
-        bp_id = bytes.fromhex(params.find_blueprint_id) if params.find_blueprint_id else None
+        try:
+            bp_id = bytes.fromhex(params.find_blueprint_id) if params.find_blueprint_id else None
+        except ValueError:
+            request.setResponseCode(400)
+            error_response = ErrorResponse(
+                success=False,
+                error=f'Invalid blueprint_id: {params.find_blueprint_id}'
+            )
+            return error_response.json_dumpb()
+
         is_desc = params.order.is_desc()
 
         if not params.before and not params.after:
@@ -190,7 +208,7 @@ class NCCreationResponse(Response):
 
 
 NCCreationResource.openapi = {
-    '/nano_contract/blueprint/history': {
+    '/nano_contract/creation': {
         'x-visibility': 'public',
         'x-rate-limit': {
             'global': [

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import defaultdict
-from typing import Iterable, Iterator, Optional, Sized, TypeVar
+from typing import Iterator, Optional, Sized, TypeVar
 
 from structlog import get_logger
 from typing_extensions import override
@@ -54,10 +54,6 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
 
         for key in self._extract_keys(tx):
             self.index[key].discard((tx.timestamp, tx.hash))
-
-    def _get_from_key(self, key: KT) -> Iterable[bytes]:
-        for _, h in self.index[key]:
-            yield h
 
     def _get_sorted_from_key(self,
                              key: KT,

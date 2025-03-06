@@ -42,6 +42,7 @@ from hathor.transaction.storage.migrations import (
     BaseMigration,
     MigrationState,
     add_closest_ancestor_block,
+    add_nc_history_stats,
     change_score_acc_weight_metadata,
     include_funds_for_first_block,
 )
@@ -102,6 +103,7 @@ class TransactionStorage(ABC):
         change_score_acc_weight_metadata.Migration,
         add_closest_ancestor_block.Migration,
         include_funds_for_first_block.Migration,
+        add_nc_history_stats.Migration,
     ]
 
     _migrations: list[BaseMigration]

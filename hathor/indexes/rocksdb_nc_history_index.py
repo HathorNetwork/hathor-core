@@ -26,6 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover
 logger = get_logger()
 
 _CF_NAME_NC_HISTORY_INDEX = b'nc-history-index'
+_CF_NAME_NC_HISTORY_INDEX_STATS = b'nc-history-index-stats'
 _DB_NAME: str = 'nc-history'
 
 
@@ -35,7 +36,7 @@ class RocksDBNCHistoryIndex(RocksDBTxGroupIndex[bytes], NCHistoryIndex, RocksDBI
     _KEY_SIZE = 32
 
     def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
-        RocksDBTxGroupIndex.__init__(self, db, cf_name or _CF_NAME_NC_HISTORY_INDEX)
+        RocksDBTxGroupIndex.__init__(self, db, cf_name or _CF_NAME_NC_HISTORY_INDEX, _CF_NAME_NC_HISTORY_INDEX_STATS)
 
     def _serialize_key(self, key: bytes) -> bytes:
         return key
@@ -46,3 +47,7 @@ class RocksDBNCHistoryIndex(RocksDBTxGroupIndex[bytes], NCHistoryIndex, RocksDBI
     def get_db_name(self) -> Optional[str]:
         # XXX: we don't need it to be parametrizable, so this is fine
         return _DB_NAME
+
+    def get_transaction_count(self, contract_id: bytes) -> int:
+        assert self._stats is not None
+        return self._stats.get_group_count(contract_id)

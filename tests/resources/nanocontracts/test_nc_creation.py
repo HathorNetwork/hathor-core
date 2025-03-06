@@ -155,7 +155,6 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
 
             ocb1 <-- ocb2 <-- b11
             b11 < nc1 < nc2 < nc3 < nc4 < nc5 < nc6 < nc7
-
         ''')
 
         artifacts.propagate_with(self.manager)
@@ -473,6 +472,19 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('on_chain', {
+            b'find_blueprint_id': self._settings.GENESIS_BLOCK_HASH.hex().encode(),
+        })
+        data = response.json_value()
+        assert data == dict(
+            success=True,
+            before=None,
+            after=None,
+            count=10,
+            has_more=False,
+            nc_creation_txs=[],
+        )
+
+        response = await self.web.get('on_chain', {
             b'find_blueprint_id': b'fe' * 32,
         })
         data = response.json_value()
@@ -494,4 +506,26 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         assert data == dict(
             success=False,
             error='Searching by blueprint name is currently not supported.',
+        )
+
+    async def test_invalid_blueprint_id(self) -> None:
+        response = await self.web.get('builtin', {
+            b'find_blueprint_id': b'abc',
+        })
+        data = response.json_value()
+        assert response.responseCode == 400
+        assert data == dict(
+            success=False,
+            error='Invalid blueprint_id: abc',
+        )
+
+    async def test_invalid_nc_id(self) -> None:
+        response = await self.web.get('builtin', {
+            b'find_nano_contract_id': b'abc',
+        })
+        data = response.json_value()
+        assert response.responseCode == 400
+        assert data == dict(
+            success=False,
+            error='Invalid nano_contract_id: abc',
         )

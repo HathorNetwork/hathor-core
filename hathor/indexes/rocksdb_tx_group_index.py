@@ -13,21 +13,55 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Sized, TypeVar
+from typing import Callable, Iterator, Optional, Sized, TypeVar
 
+import rocksdb
 from structlog import get_logger
 from typing_extensions import override
 
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
 from hathor.indexes.tx_group_index import TxGroupIndex
 from hathor.transaction import BaseTransaction
-
-if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
+from hathor.transaction.util import bytes_to_int, int_to_bytes
 
 logger = get_logger()
 
 KT = TypeVar('KT', bound=Sized)
+
+GROUP_COUNT_VALUE_SIZE = 4  # in bytes
+
+
+class _RocksDBTxGroupStatsIndex(RocksDBIndexUtils):
+    def __init__(
+        self,
+        db: rocksdb.DB,
+        cf_name: bytes,
+        serialize_key: Callable[[KT], bytes],
+    ) -> None:
+        self.log = logger.new()
+        super().__init__(db, cf_name)
+        self._serialize_key = serialize_key
+
+    def increase_group_count(self, key: KT) -> None:
+        """Increase the group count for the provided key."""
+        self._increment_group_count(key, amount=1)
+
+    def decrease_group_count(self, key: KT) -> None:
+        """Decrease the group count for the provided key."""
+        self._increment_group_count(key, amount=-1)
+
+    def _increment_group_count(self, key: KT, *, amount: int) -> None:
+        """Increment the group count for the provided key with the provided amount."""
+        count_key = self._serialize_key(key)
+        count = self.get_group_count(key)
+        new_count_bytes = int_to_bytes(number=count + amount, size=GROUP_COUNT_VALUE_SIZE)
+        self._db.put((self._cf, count_key), new_count_bytes)
+
+    def get_group_count(self, key: KT) -> int:
+        """Return the group count for the provided key."""
+        count_key = self._serialize_key(key)
+        count_bytes = self._db.get((self._cf, count_key)) or b''
+        return bytes_to_int(count_bytes)
 
 
 class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
@@ -47,13 +81,15 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
     """
 
     _KEY_SIZE: int
-    _CF_NAME: bytes
 
-    def __init__(self, db: 'rocksdb.DB', cf_name: bytes) -> None:
+    def __init__(self, db: rocksdb.DB, cf_name: bytes, stats_cf_name: bytes | None = None) -> None:
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, cf_name)
+        self._stats = _RocksDBTxGroupStatsIndex(db, stats_cf_name, self._serialize_key) if stats_cf_name else None
 
     def force_clear(self) -> None:
+        if self._stats:
+            self._stats.clear()
         self.clear()
 
     @abstractmethod
@@ -90,35 +126,32 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
 
     def add_tx(self, tx: BaseTransaction) -> None:
         for key in self._extract_keys(tx):
+            if self._stats:
+                self._stats.increase_group_count(key)
             self.log.debug('put key', key=key)
             self._db.put((self._cf, self._to_rocksdb_key(key, tx)), b'')
 
     def remove_tx(self, tx: BaseTransaction) -> None:
         for key in self._extract_keys(tx):
+            if self._stats:
+                self._stats.decrease_group_count(key)
             self.log.debug('delete key', key=key)
             self._db.delete((self._cf, self._to_rocksdb_key(key, tx)))
 
-    def _get_from_key(self, key: KT) -> Iterable[bytes]:
-        return self._util_get_from_key(key)
-
-    def _get_sorted_from_key(self,
-                             key: KT,
-                             tx_start: Optional[BaseTransaction] = None,
-                             reverse: bool = False) -> Iterator[bytes]:
-        return self._util_get_from_key(key, tx_start, reverse)
-
-    def _util_get_from_key(self,
-                           key: KT,
-                           tx: Optional[BaseTransaction] = None,
-                           reverse: bool = False) -> Iterator[bytes]:
+    def _get_sorted_from_key(
+        self,
+        key: KT,
+        tx_start: Optional[BaseTransaction] = None,
+        reverse: bool = False
+    ) -> Iterator[bytes]:
         self.log.debug('seek to', key=key)
         it = self._db.iterkeys(self._cf)
         if reverse:
             it = reversed(it)
             # when reversed we increment the key by 1, which effectively goes to the end of a prefix
-            it.seek_for_prev(incr_key(self._to_rocksdb_key(key, tx)))
+            it.seek_for_prev(incr_key(self._to_rocksdb_key(key, tx_start)))
         else:
-            it.seek(self._to_rocksdb_key(key, tx))
+            it.seek(self._to_rocksdb_key(key, tx_start))
         for _cf, rocksdb_key in it:
             key2, _, tx_hash = self._from_rocksdb_key(rocksdb_key)
             if key2 != key:
