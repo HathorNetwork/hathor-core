@@ -461,31 +461,34 @@ class ConnectionsManager:
         # If a discovered connection, go to discovered_connections slot.
         # If none of the above, go to either incoming or outgoing connections slot.
         # Note: Assumes CHECK_ENTRYPOINT and DISCOVERED_CONNECTION cannot be True in Tandem.
-        if protocol.check_entrypoint:
-            if len(self.check_entrypoint_connections) >= self.max_check_peers_connections:
-                self.log.warn('reached maximum number of CHECK_PEERS connections', max_connections=self.max_check_peers_connections )
+        if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
+            if len(self.incoming_connections) >= self.max_incoming_connections:
+                self.log.warn('DENIED: Reached maximum number of INCOMING connections', max_connections=self.max_incoming_connections)
                 protocol.disconnect(force=True)
-                return 
-            self.check_entrypoint_connections.add(protocol)
-        elif protocol.discovered:
+                return
+            self.incoming_connections.add(protocol)
+
+        if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
+            if len(self.outgoing_connections) >= self.max_outgoing_connections:
+                self.log.warn("DENIED: Reached maximum number of OUTGOING connections", max_connections=self.max_outgoing_connections)
+                protocol.disconnect(force=True)
+                return
+            self.outgoing_connections.add(protocol)
+            
+        if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
             if len(self.discovered_connections) >= self.max_discovered_peers_connections:
-                self.log.warn('reached maximum number of DISCOVERED connections', max_connections=self.max_discovered_peers_connections )
+                self.log.warn("DENIED: Reached maximum number of DISCOVERED connections from peers.", max_connections=self.max_discovered_peers_connections)
                 protocol.disconnect(force=True)
-                return 
+                return
             self.discovered_connections.add(protocol)
-        else:
-            if protocol.inbound:
-                if len(self.incoming_connections) >= self.max_incoming_connections:
-                    self.log.warn('reached maximum number of INCOMING connections', max_connections=self.max_incoming_connections)
-                    protocol.disconnect(force=True)
-                    return
-                self.incoming_connections.add(protocol)
-            else:
-                if len(self.outgoing_connections) >= self.max_outgoing_connections:
-                    self.log.warn('reached maximum number of OUTGOING connections', max_connections=self.max_outgoing_connections)
-                    protocol.disconnect(force=True)
-                    return
-                self.outgoing_connections.add(protocol)
+        
+        if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
+            if len(self.check_entrypoint_connections) >= self.max_check_peers_connections:
+                self.log.warn("DENIED: Reached maximum number of CONNECTIONS TO CHECK ENTRYPOINTS.", max_connections=self.max_check_peers_connections)
+                protocol.disconnect(force=True)
+                return
+            self.check_entrypoint_connections.add(protocol)
+        
             
         # Regardless of the slot sent, the total connections increases.
         self.connections.add(protocol)
@@ -555,14 +558,16 @@ class ConnectionsManager:
         self.connections.discard(protocol)
 
         # Each conn is from a slot - discard from it as well.
-        if protocol.check_entrypoint:
-            self.check_entrypoint_connections.discard(protocol)
-        if protocol.discovered:
-            self.discovered_connections.discard(protocol)
-        if protocol.inbound:
+        if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
             self.incoming_connections.discard(protocol)
-        else:
+        if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
             self.outgoing_connections.discard(protocol)
+        if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
+            self.discovered_connections.discard(protocol)
+        if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
+            self.check_entrypoint_connections.discard(protocol)
+
+
         
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
