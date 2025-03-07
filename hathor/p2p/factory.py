@@ -55,10 +55,10 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
 class HathorServerFactory(_HathorLineReceiverFactory, protocol.ServerFactory):
     """ HathorServerFactory is used to generate HathorProtocol objects when a new connection arrives.
     """
-    inbound = True
+    inbound = HathorSettings.ConnectionType.INCOMING
 
 
 class HathorClientFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
     """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
     """
-    inbound = False
+    inbound = HathorSettings.ConnectionType.OUTGOING
