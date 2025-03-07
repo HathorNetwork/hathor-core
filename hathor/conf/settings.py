@@ -24,6 +24,7 @@ from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathor.utils import yaml
 from hathor.utils.named_tuple import validated_named_tuple_from_dict
+from enum import Enum
 
 DECIMAL_PLACES = 2
 
@@ -307,6 +308,12 @@ class HathorSettings(NamedTuple):
     if PEER_MAX_DISCOVERED_PEERS_CONNECTIONS <= 0:
         raise Exception("PEER_MAX_DISCOVERED_PEERS_CONNECTIONS must be bigger than zero.")
 
+    class ConnectionType(Enum):
+        # Types of Connection as inputs for an instance of the Hathor Protocol
+        OUTGOING = 0
+        INCOMING = 1
+        DISCOVERED = 2
+        CHECK_ENTRYPOINTS = 3
 
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')

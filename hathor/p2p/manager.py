@@ -388,8 +388,8 @@ class ConnectionsManager:
             len(self.verified_peer_storage),
             len(self.incoming_connections),
             len(self.outgoing_connections),
+            len(self.discovered_connections),
             len(self.check_entrypoint_connections),
-            len(self.discovered_connections)
         )
 
     def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
