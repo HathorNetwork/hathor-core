@@ -9,6 +9,7 @@ from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from hathor.wallet import Wallet
+from hathor.conf.settings import HathorSettings
 from tests import unittest
 
 
@@ -216,7 +217,7 @@ class MetricsTest(unittest.TestCase):
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
-                inbound=False,
+                inbound = HathorSettings.ConnectionType.OUTGOING,
                 settings=self._settings
             )
             protocol._peer = PrivatePeer.auto_generated().to_public_peer()
