@@ -296,19 +296,19 @@ class HathorSettings(NamedTuple):
     PEER_IDLE_TIMEOUT: int = 60
 
     # Maximum number of entrypoints that we accept that a peer broadcasts
-    PEER_MAX_ENTRYPOINTS: int = PERCENTAGE_MAX_INCOMING_CONNECTIONS*PEER_MAX_CONNECTIONS
+    PEER_MAX_ENTRYPOINTS: int = PERCENTAGE_MAX_INCOMING_CONNECTIONS*PEER_MAX_CONNECTIONS/100
 
     # Maximum number of other peers's entrypoints a given node may connect to.
     # It does not include the discovered peers connections nor the check trust slots.
-    PEER_MAX_OUTGOING_CONNECTIONS: int = PERCENTAGE_MAX_OUTGOING_CONNECTIONS*PEER_MAX_CONNECTIONS
+    PEER_MAX_OUTGOING_CONNECTIONS: int = PERCENTAGE_MAX_OUTGOING_CONNECTIONS*PEER_MAX_CONNECTIONS/100
 
     # Maximum number of other entrypoints a peer may connect to for checking other peers' trustworthiness.
     # The discovered peers slot is left bound by PEER_MAX_CONNECTIONS.
-    PEER_MAX_CHECK_PEER_CONNECTIONS: int = PERCENTAGE_MAX_CHECK_ENTRYPOINTS_CONNECTIONS*PEER_MAX_CONNECTIONS
+    PEER_MAX_CHECK_PEER_CONNECTIONS: int = PERCENTAGE_MAX_CHECK_ENTRYPOINTS_CONNECTIONS*PEER_MAX_CONNECTIONS/100
 
     # Maximum number of connections for discovered peers after bootstrap.
     PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = PEER_MAX_CONNECTIONS - PEER_MAX_ENTRYPOINTS 
-    - PEER_MAX_OUTGOING_CONNECTIONS - PEER_MAX_OUTGOING_CONNECTIONS 
+    - PEER_MAX_OUTGOING_CONNECTIONS - PEER_MAX_CHECK_PEER_CONNECTIONS 
     
     # Safeguard check
     if PEER_MAX_DISCOVERED_PEERS_CONNECTIONS <= 0:
