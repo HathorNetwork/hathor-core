@@ -70,7 +70,11 @@ class PeerConnectionsMetrics(NamedTuple):
     handshaking_peers_count: int
     connected_peers_count: int
     known_peers_count: int
-
+    # Counters for the connection pool slots
+    incoming_connections_count: int
+    outgoing_connections_count: int
+    discovered_connections_count: int
+    check_entrypoint_connections_count: int
 
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
