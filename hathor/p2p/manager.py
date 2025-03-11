@@ -608,17 +608,32 @@ class ConnectionsManager:
         self.connections.discard(protocol)
 
         # Each conn is from a slot - discard from it as well.
-        if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
-            self.incoming_connections.discard(protocol)
         if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
             self.outgoing_connections.discard(protocol)
+            # If there are connections in the queue, we pop from it and publish it.
+            if len(self.q_outgoing_connections):
+                dequeued_connection = self.q_outgoing_connections.pop()
+                # If the set just discarded a connection, it is guaranteed not to be at full capacity.
+                self.outgoing_connections.add(dequeued_connection)
+
+                # This dequeued connection has not been published nor added to the total count on peer connect.
+                # Now we add this protocol and publish it.
+                self.connections.add(dequeued_connection)
+                self.handshaking_peers.add(dequeued_connection)
+                self.pubsub.publish(
+                    HathorEvents.NETWORK_PEER_CONNECTED,
+                    protocol=dequeued_connection,
+                    peers_count=self._get_peers_count()
+                )
+
+        if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
+            self.incoming_connections.discard(protocol)
         if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
             self.discovered_connections.discard(protocol)
         if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
             self.check_entrypoint_connections.discard(protocol)
 
 
-        
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
         if protocol._peer is not None:
