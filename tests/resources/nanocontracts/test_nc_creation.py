@@ -458,6 +458,41 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
             ],
         )
 
+    async def test_search_by_blueprint_id_with_pagination(self) -> None:
+        nc1, nc2, nc3, nc4, nc5 = self.prepare_ncs()
+        response = await self.web.get('on_chain', {
+            b'search': nc1.get_blueprint_id().hex().encode(),
+            b'count': b'1',
+        })
+        data = response.json_value()
+        assert data == dict(
+            success=True,
+            before=None,
+            after=None,
+            count=1,
+            has_more=True,
+            nc_creation_txs=[
+                self.nc_to_response_item(nc3),
+            ],
+        )
+
+        response = await self.web.get('on_chain', {
+            b'search': nc1.get_blueprint_id().hex().encode(),
+            b'count': b'1',
+            b'after': nc3.hash_hex.encode()
+        })
+        data = response.json_value()
+        assert data == dict(
+            success=True,
+            before=None,
+            after=nc3.hash_hex,
+            count=1,
+            has_more=False,
+            nc_creation_txs=[
+                self.nc_to_response_item(nc1),
+            ],
+        )
+
     async def test_search_non_existent(self) -> None:
         self.prepare_ncs()
         response = await self.web.get('on_chain', {

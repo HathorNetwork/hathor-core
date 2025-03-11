@@ -123,6 +123,7 @@ class NCCreationResource(Resource):
                 else:
                     iter_getter = self.bp_history_index.get_older if params.before else self.bp_history_index.get_newer
                 iter_nc_ids = iter_getter(vertex_id, ref_tx)
+                next(iter_nc_ids)  # these iterators include the ref_tx, so we skip it.
             else:
                 if is_desc:
                     iter_getter2 = (
