@@ -292,6 +292,9 @@ class HathorSettings(NamedTuple):
     PERCENTAGE_MAX_DISCOVERED_CONNECTIONS: int = 30
     PERCENTAGE_MAX_CHECK_ENTRYPOINTS_CONNECTIONS: int = 10
 
+    # Queue size for each connection slot:
+    QUEUE_SIZE : int = 15
+
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
 
