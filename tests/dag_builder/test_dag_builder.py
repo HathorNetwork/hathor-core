@@ -1,6 +1,6 @@
 import pytest
 
-from hathor.nanocontracts import Blueprint, Context, NanoContract, OnChainBlueprint, public
+from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Block, Transaction
@@ -269,7 +269,8 @@ class DAGBuilderTestCase(unittest.TestCase):
         artifacts.propagate_with(self.manager)
 
         tx1 = artifacts.by_name['tx1'].vertex
-        self.assertIsInstance(tx1, NanoContract)
+        self.assertIsInstance(tx1, Transaction)
+        self.assertTrue(tx1.is_nano_contract())
 
         htr_id = TokenUid(b'\0')
         tka_id = TokenUid(artifacts.by_name['TKA'].vertex.hash)
@@ -277,13 +278,13 @@ class DAGBuilderTestCase(unittest.TestCase):
         tx2 = artifacts.by_name['tx2'].vertex
         tx3 = artifacts.by_name['tx3'].vertex
 
-        ctx2 = tx2.get_context()
+        ctx2 = tx2.get_nano_header().get_context()
         self.assertEqual(ctx2.actions, {
             tka_id: NCAction(NCActionType.DEPOSIT, tka_id, 5),
             htr_id: NCAction(NCActionType.DEPOSIT, htr_id, 10),
         })
 
-        ctx3 = tx3.get_context()
+        ctx3 = tx3.get_nano_header().get_context()
         self.assertEqual(ctx3.actions, {
             htr_id: NCAction(NCActionType.DEPOSIT, htr_id, 3),
             tka_id: NCAction(NCActionType.WITHDRAWAL, tka_id, 2),
@@ -395,16 +396,20 @@ if foo:
 
         artifacts.propagate_with(self.manager)
         ocb1, ocb2, ocb3 = artifacts.get_typed_vertices(['ocb1', 'ocb2', 'ocb3'], OnChainBlueprint)
-        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+        assert nc3.is_nano_contract()
 
         assert ocb1.get_blueprint_class().__name__ == 'Bet'
-        assert nc1.get_blueprint_class().__name__ == 'Bet'
-        assert nc1.get_blueprint_id() == ocb1.hash
+        assert nc1.get_nano_header().get_blueprint_class().__name__ == 'Bet'
+        assert nc1.get_nano_header().get_blueprint_id() == ocb1.hash
 
         assert ocb2.get_blueprint_class().__name__ == 'TestBlueprint1'
-        assert nc2.get_blueprint_class().__name__ == 'TestBlueprint1'
-        assert nc2.get_blueprint_id() == ocb2.hash
+        assert nc2.get_nano_header().get_blueprint_class().__name__ == 'TestBlueprint1'
+        assert nc2.get_nano_header().get_blueprint_id() == ocb2.hash
 
         assert ocb3.get_blueprint_class().__name__ == 'MyBlueprint'
-        assert nc3.get_blueprint_class().__name__ == 'MyBlueprint'
-        assert nc3.get_blueprint_id() == ocb3.hash
+        assert nc3.get_nano_header().get_blueprint_class().__name__ == 'MyBlueprint'
+        assert nc3.get_nano_header().get_blueprint_id() == ocb3.hash

@@ -106,7 +106,7 @@ class BlockConsensusAlgorithm:
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.
         """
-        from hathor.nanocontracts import NanoContract, NCFail
+        from hathor.nanocontracts import NCFail
 
         assert self._settings.ENABLE_NANO_CONTRACTS
 
@@ -123,9 +123,9 @@ class BlockConsensusAlgorithm:
         block_root_id = parent_meta.nc_block_root_id
         assert block_root_id is not None
 
-        nc_calls: list[NanoContract] = []
+        nc_calls: list[Transaction] = []
         for tx in block.iter_transactions_in_this_block():
-            if not isinstance(tx, NanoContract):
+            if not tx.is_nano_contract():
                 # Skip other type of transactions.
                 continue
             tx_meta = tx.get_metadata()
@@ -171,7 +171,8 @@ class BlockConsensusAlgorithm:
             storage_factory = self.context.consensus.nc_storage_factory
             runner = Runner(tx.storage, storage_factory, block_trie)
             try:
-                tx.execute(runner)
+                nc_header = tx.get_nano_header()
+                nc_header.execute(runner)
                 tx_meta.nc_execution = NCExecutionState.SUCCESS
                 self.context.save(tx)
                 # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit

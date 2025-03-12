@@ -20,7 +20,7 @@ from typing_extensions import override
 
 from hathor.indexes.scope import Scope
 from hathor.indexes.tx_group_index import TxGroupIndex
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
 
 logger = get_logger()
 
@@ -54,10 +54,11 @@ class NCHistoryIndex(TxGroupIndex[bytes]):
 
     @override
     def _extract_keys(self, tx: BaseTransaction) -> Iterable[bytes]:
-        from hathor.nanocontracts import NanoContract
-        if not isinstance(tx, NanoContract):
+        if not tx.is_nano_contract():
             return
-        yield tx.get_nanocontract_id()
+        assert isinstance(tx, Transaction)
+        nano_header = tx.get_nano_header()
+        yield nano_header.get_nanocontract_id()
 
     def get_sorted_from_contract_id(self, contract_id: bytes) -> Iterable[bytes]:
         """Get a list of tx_ids sorted by timestamp for a given contract_id.

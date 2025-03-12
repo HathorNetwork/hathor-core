@@ -202,7 +202,7 @@ class TransactionVerifier:
         minimum = tx.get_minimum_number_of_inputs()
         if len(tx.inputs) < minimum:
             if not tx.is_genesis:
-                raise TooFewInputs('Transaction must have at least {minimum} input(s)')
+                raise TooFewInputs(f'Transaction must have at least {minimum} input(s)')
 
     def verify_output_token_indexes(self, tx: Transaction) -> None:
         """Verify outputs reference an existing token uid in the tokens list

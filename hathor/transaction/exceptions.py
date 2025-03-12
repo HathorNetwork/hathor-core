@@ -66,6 +66,14 @@ class TooManyInputs(TxValidationError):
     """More than 256 inputs"""
 
 
+class TooManyHeaders(TxValidationError):
+    """Vertex has more vertex than the maximum allowed."""
+
+
+class HeaderNotSupported(TxValidationError):
+    """Vertex contains a header that is not supported by its type."""
+
+
 class InexistentInput(TxValidationError):
     """Input tx does not exist or index spent does not exist"""
 

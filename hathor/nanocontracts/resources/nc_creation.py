@@ -20,7 +20,6 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
-from hathor.nanocontracts import NanoContract
 from hathor.nanocontracts.resources.on_chain import SortOrder
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
@@ -152,14 +151,22 @@ class NCCreationResource(Resource):
         except TransactionDoesNotExist:
             return None
 
-        if not isinstance(tx, NanoContract) or not tx.is_creating_a_new_contract():
+        if not tx.is_nano_contract():
+            return None
+
+        from hathor.transaction import Transaction
+        if not isinstance(tx, Transaction):
+            return None
+
+        nano_header = tx.get_nano_header()
+        if not nano_header.is_creating_a_new_contract():
             return None
 
         assert self.nc_history_index is not None
         return NCCreationItem(
             nano_contract_id=nc_id.hex(),
-            blueprint_id=tx.get_blueprint_id().hex(),
-            blueprint_name=tx.get_blueprint_class().__name__,
+            blueprint_id=nano_header.get_blueprint_id().hex(),
+            blueprint_name=nano_header.get_blueprint_class().__name__,
             last_tx_timestamp=not_none(self.nc_history_index.get_last_tx_timestamp(nc_id)),
             total_txs=self.nc_history_index.get_transaction_count(nc_id),
             created_at=tx.timestamp,

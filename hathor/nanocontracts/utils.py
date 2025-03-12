@@ -15,15 +15,13 @@
 from __future__ import annotations
 
 from types import ModuleType
-from typing import TYPE_CHECKING, Callable
+from typing import Callable
 
+from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
 from hathor.util import not_none
-
-if TYPE_CHECKING:
-    from hathor.nanocontracts.nanocontract import NanoContract
 
 
 def is_nc_public_method(method: Callable) -> bool:
@@ -40,24 +38,27 @@ def get_nano_contract_creation(tx_storage: TransactionStorage,
                                tx_id: VertexId,
                                *,
                                allow_mempool: bool = False,
-                               allow_voided: bool = False) -> NanoContract:
+                               allow_voided: bool = False) -> Transaction:
     """Return a NanoContract creation vertex. Raise NCContractCreationNotFound otherwise."""
     from hathor.nanocontracts.exception import (
         NCContractCreationAtMempool,
         NCContractCreationNotFound,
         NCContractCreationVoided,
     )
-    from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD, NanoContract
+    from hathor.transaction.headers import NC_INITIALIZE_METHOD
 
     try:
         nc = tx_storage.get_transaction(tx_id)
     except TransactionDoesNotExist as e:
         raise NCContractCreationNotFound from e
 
-    if not isinstance(nc, NanoContract):
+    if not nc.is_nano_contract():
         raise NCContractCreationNotFound(f'not a nano contract tx: {tx_id.hex()}')
 
-    if nc.nc_method != NC_INITIALIZE_METHOD:
+    assert isinstance(nc, Transaction)
+    nano_header = nc.get_nano_header()
+
+    if nano_header.nc_method != NC_INITIALIZE_METHOD:
         raise NCContractCreationNotFound(f'not a contract creation tx: {tx_id.hex()}')
 
     if not allow_mempool:
