@@ -3,7 +3,7 @@ from typing import cast
 
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
-from hathor.nanocontracts import Blueprint, Context, NanoContract, public
+from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import (
     BlueprintDoesNotExist,
@@ -18,6 +18,7 @@ from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from hathor.transaction import Block, Transaction, TxOutput
+from hathor.transaction.headers import NanoHeader
 from hathor.types import VertexId
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests.simulation.base import SimulatorTestCase
@@ -108,20 +109,29 @@ class NCConsensusTestCase(SimulatorTestCase):
         method_parser = NCMethodParser(getattr(MyBlueprint, nc_method))
 
         if nc is None:
-            nc = NanoContract()
-        nc.nc_id = nc_id
-        nc.nc_method = nc_method
-        nc.nc_args_bytes = method_parser.serialize_args(nc_args)
+            nc = Transaction()
+
+        nc_args_bytes = method_parser.serialize_args(nc_args)
 
         if address is None:
             address = self.wallet.get_unused_address()
         privkey = self.wallet.get_private_key(address)
         pubkey_bytes = privkey.sec()
 
-        nc.nc_pubkey = pubkey_bytes
+        nano_header = NanoHeader(
+            tx=nc,
+            nc_version=1,
+            nc_id=nc_id,
+            nc_method=nc_method,
+            nc_args_bytes=nc_args_bytes,
+            nc_pubkey=pubkey_bytes,
+            nc_signature=b'',
+        )
+        nc.headers.append(nano_header)
+
         data = nc.get_sighash_all()
         data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        nc.nc_signature = privkey.sign(data_hash)
+        nano_header.nc_signature = privkey.sign(data_hash)
 
         self._finish_preparing_tx(nc)
         self.manager.reactor.advance(10)
@@ -183,7 +193,8 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(nc.get_metadata().voided_by)
 
         tx = self._gen_nc_tx(nc.hash, 'deposit', [])
-        tx.nc_method = 'unknown'
+        nano_header = tx.get_nano_header()
+        nano_header.nc_method = 'unknown'
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidNewTransaction) as cm:
             self.manager.on_new_tx(tx, fails_silently=False)
@@ -197,7 +208,8 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(nc.get_metadata().voided_by)
 
         tx = self._gen_nc_tx(nc.hash, 'nop', [1])
-        tx.nc_method = 'deposit'
+        nano_header = tx.get_nano_header()
+        nano_header.nc_method = 'deposit'
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidNewTransaction) as cm:
@@ -212,8 +224,9 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(nc.get_metadata().voided_by)
 
         tx = self._gen_nc_tx(nc.hash, 'deposit', [])
-        self.assertNotEqual(getattr(tx, attr), value)
-        setattr(tx, attr, value)
+        nano_header = tx.get_nano_header()
+        self.assertNotEqual(getattr(nano_header, attr), value)
+        setattr(nano_header, attr, value)
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
         self.manager.cpu_mining_service.resolve(tx)
 
@@ -301,7 +314,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         _inputs, deposit_amount = self.wallet.get_inputs_from_amount(
             1, self.manager.tx_storage, token_uid=self.token_uid
         )
-        tx = self.wallet.prepare_transaction(NanoContract, _inputs, [])
+        tx = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx)
         self.manager.cpu_mining_service.resolve(tx)
         self.manager.on_new_tx(tx, fails_silently=False)
@@ -327,7 +340,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             _tokens.append(self.token_uid)
             _output_token_index = 1
 
-        tx2 = NanoContract(outputs=[TxOutput(1, b'', _output_token_index)])
+        tx2 = Transaction(outputs=[TxOutput(1, b'', _output_token_index)])
         tx2.tokens = _tokens
         tx2 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx2)
         self.manager.cpu_mining_service.resolve(tx2)
@@ -346,7 +359,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         # Make a withdrawal of the remainder.
 
-        tx3 = NanoContract(outputs=[TxOutput(deposit_amount - 2, b'', _output_token_index)])
+        tx3 = Transaction(outputs=[TxOutput(deposit_amount - 2, b'', _output_token_index)])
         tx3.tokens = _tokens
         tx3 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx3)
         self.manager.cpu_mining_service.resolve(tx3)
@@ -365,7 +378,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         # Try to withdraw more than available, so it fails.
 
-        tx4 = NanoContract(outputs=[TxOutput(2, b'', 0)])
+        tx4 = Transaction(outputs=[TxOutput(2, b'', 0)])
         tx4 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx4)
         self.manager.cpu_mining_service.resolve(tx4)
         self.manager.on_new_tx(tx4, fails_silently=False)
@@ -406,7 +419,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             WalletOutputInfo(address, 1, None),
             WalletOutputInfo(address, 1, None),
         ]
-        tx1 = self.wallet.prepare_transaction_compute_inputs(NanoContract, _outputs, self.manager.tx_storage)
+        tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, _outputs, self.manager.tx_storage)
         tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1)
         self.manager.cpu_mining_service.resolve(tx1)
         self.manager.on_new_tx(tx1, fails_silently=False)
@@ -487,7 +500,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             WalletOutputInfo(address, 1, None),
             WalletOutputInfo(address, 1, None),
         ]
-        tx1 = self.wallet.prepare_transaction_compute_inputs(NanoContract, _outputs, self.manager.tx_storage)
+        tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, _outputs, self.manager.tx_storage)
         tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1)
         self.manager.cpu_mining_service.resolve(tx1)
 
@@ -508,7 +521,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertTrue(self.manager.on_new_tx(tx3, fails_silently=False))
 
         # tx4 is a NanoContract transaction that spents tx1 output.
-        tx4 = gen_custom_base_tx(self.manager, tx_inputs=[(tx1, 0)], cls=NanoContract)
+        tx4 = gen_custom_base_tx(self.manager, tx_inputs=[(tx1, 0)])
         self._gen_nc_tx(nc.hash, 'nop', [1], nc=tx4)
         tx4.timestamp += 2
         # self.assertNotIn(tx1.hash, tx4.parents)
@@ -516,7 +529,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertTrue(self.manager.on_new_tx(tx4, fails_silently=False))
 
         # tx5 is a NanoContract transaction that spents tx4 output.
-        tx5 = gen_custom_base_tx(self.manager, tx_inputs=[(tx4, 0)], cls=NanoContract)
+        tx5 = gen_custom_base_tx(self.manager, tx_inputs=[(tx4, 0)])
         self._gen_nc_tx(nc.hash, 'nop', [1], nc=tx5)
         tx5.timestamp += 3
         # self.assertNotIn(tx1.hash, tx5.parents)
@@ -575,14 +588,14 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         # Prepare three sibling transactions.
         _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
-        tx1 = self.wallet.prepare_transaction(NanoContract, _inputs, [])
+        tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1)
         self.manager.cpu_mining_service.resolve(tx1)
 
         self.manager.reactor.advance(10)
 
         withdrawal_amount_1 = 123
-        tx11 = NanoContract(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
+        tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
         tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1)
         tx11.weight += 1
         self.manager.cpu_mining_service.resolve(tx11)
@@ -590,7 +603,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.reactor.advance(10)
 
         _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(3, self.manager.tx_storage)
-        tx2 = self.wallet.prepare_transaction(NanoContract, _inputs, [])
+        tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2)
         tx2.weight += 1
         self.manager.cpu_mining_service.resolve(tx2)
@@ -659,14 +672,14 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         # Prepare three sibling transactions.
         _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(3, self.manager.tx_storage)
-        tx2 = self.wallet.prepare_transaction(NanoContract, _inputs, [])
+        tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2)
         self.manager.cpu_mining_service.resolve(tx2)
 
         self.manager.reactor.advance(10)
 
         withdrawal_amount_1 = 123
-        tx11 = NanoContract(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
+        tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
         tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1)
         tx11.weight += 1
         self.manager.cpu_mining_service.resolve(tx11)
@@ -674,7 +687,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.reactor.advance(10)
 
         _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
-        tx1 = self.wallet.prepare_transaction(NanoContract, _inputs, [])
+        tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1)
         tx1.weight += 2
         self.manager.cpu_mining_service.resolve(tx1)
@@ -745,20 +758,20 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.reactor.advance(60)
 
         # tx1 is a NanoContract transaction and will fail execution.
-        tx1 = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)], cls=NanoContract)
+        tx1 = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)])
         self.assertEqual(len(tx1.outputs), 1)
         tx1.outputs[0].value = 3  # sum(inputs) = 10, sum(outputs) = 3, deposit=7
         tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1)
         self.manager.cpu_mining_service.resolve(tx1)
 
         # tx2 is a NanoContract transaction that spends tx1.
-        tx2 = gen_custom_base_tx(self.manager, tx_inputs=[(tx1, 0)], cls=NanoContract)
+        tx2 = gen_custom_base_tx(self.manager, tx_inputs=[(tx1, 0)])
         tx2 = self._gen_nc_tx(nc.hash, 'nop', [1], nc=tx2)
         self.manager.cpu_mining_service.resolve(tx2)
 
         # tx1b is in conflict with tx1
         if conflict_with_nano:
-            tx1b = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)], cls=NanoContract)
+            tx1b = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)])
             self._gen_nc_tx(nc.hash, 'nop', [1], nc=tx1b)
         else:
             tx1b = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)])
@@ -989,7 +1002,11 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
         a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
-        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+        assert nc3.is_nano_contract()
 
         found_b33 = False
         for node, vertex in artifacts.list:
@@ -1052,7 +1069,11 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
         a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
-        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+        assert nc3.is_nano_contract()
 
         found_b33 = False
         for node, vertex in artifacts.list:
@@ -1123,7 +1144,12 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
         a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
-        nc1, nc2, nc3, nc4 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3', 'nc4'], NanoContract)
+        nc1, nc2, nc3, nc4 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3', 'nc4'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+        assert nc3.is_nano_contract()
+        assert nc4.is_nano_contract()
 
         found_b33 = False
         for node, vertex in artifacts.list:
@@ -1197,7 +1223,12 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
         a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
-        nc1, nc2, nc3, nc4 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3', 'nc4'], NanoContract)
+        nc1, nc2, nc3, nc4 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3', 'nc4'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+        assert nc3.is_nano_contract()
+        assert nc4.is_nano_contract()
 
         found_b33 = False
         for node, vertex in artifacts.list:

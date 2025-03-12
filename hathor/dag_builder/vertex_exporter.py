@@ -22,9 +22,10 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import DAGBuilder, DAGNode
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
 from hathor.dag_builder.utils import get_literal, is_literal
-from hathor.nanocontracts import Blueprint, NanoContract, OnChainBlueprint
+from hathor.nanocontracts import Blueprint, OnChainBlueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
+from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
 from hathor.nanocontracts.on_chain_blueprint import Code
 from hathor.nanocontracts.types import BlueprintId, blueprint_id_from_bytes
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
@@ -205,6 +206,7 @@ class VertexExporter:
         vertex.token_name = node.name
         vertex.token_symbol = node.name
         vertex.timestamp = self.get_min_timestamp(node)
+        self.add_nano_header_if_needed(node, vertex)
         self.sign_all_inputs(node, vertex)
         if 'weight' in node.attrs:
             vertex.weight = float(node.attrs['weight'])
@@ -228,6 +230,7 @@ class VertexExporter:
         parents = block_parents + txs_parents
 
         blk = Block(parents=parents, outputs=outputs)
+        self.add_nano_header_if_needed(node, blk)
         blk.timestamp = self.get_min_timestamp(node) + self._settings.AVG_TIME_BETWEEN_BLOCKS
         blk.get_height = lambda: height  # type: ignore[method-assign]
         blk.update_hash()  # the next call fails is blk.hash is None
@@ -239,56 +242,58 @@ class VertexExporter:
         self._block_height[blk.hash] = height
         return blk
 
-    def create_vertex_nanocontract(self, node: DAGNode) -> NanoContract:
-        block_parents, txs_parents = self._create_vertex_parents(node)
-        inputs = self._create_vertex_txin(node)
-        tokens, outputs = self._create_vertex_txout(node)
-
-        assert len(block_parents) == 0
-        nc = NanoContract(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+    def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        if 'nc_id' not in node.attrs:
+            return
 
         nc_id_raw = node.get_required_attr('nc_id')
         if is_literal(nc_id_raw):
-            nc.nc_id = bytes.fromhex(get_literal(nc_id_raw))
+            nc_id = bytes.fromhex(get_literal(nc_id_raw))
         else:
-            nc.nc_id = self.get_vertex_id(nc_id_raw)
+            nc_id = self.get_vertex_id(nc_id_raw)
 
         nc_method_raw = node.get_required_attr('nc_method')
 
         if nc_method_raw.startswith('initialize('):
-            blueprint_id = blueprint_id_from_bytes(nc.nc_id)
+            blueprint_id = blueprint_id_from_bytes(nc_id)
         else:
             contract_creation_vertex = self._vertices[nc_id_raw]
-            assert isinstance(contract_creation_vertex, NanoContract)
-            blueprint_id = blueprint_id_from_bytes(contract_creation_vertex.nc_id)
+            assert contract_creation_vertex.is_nano_contract()
+            assert isinstance(contract_creation_vertex, Transaction)
+            contract_creation_vertex_nano_header = contract_creation_vertex.get_nano_header()
+            blueprint_id = blueprint_id_from_bytes(contract_creation_vertex_nano_header.nc_id)
 
         blueprint_class = self._get_blueprint_class(blueprint_id)
 
         from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
-        nc.nc_method, nc_args = parse_nc_method_call(blueprint_class, nc_method_raw)
+        nc_method, nc_args = parse_nc_method_call(blueprint_class, nc_method_raw)
 
         from hathor.nanocontracts.method_parser import NCMethodParser
-        method_parser = NCMethodParser(getattr(blueprint_class, nc.nc_method))
-        nc.nc_args_bytes = method_parser.serialize_args(nc_args)
-
-        nc.timestamp = self.get_min_timestamp(node)
-        self.sign_all_inputs(node, nc)
+        method_parser = NCMethodParser(getattr(blueprint_class, nc_method))
+        nc_args_bytes = method_parser.serialize_args(nc_args)
 
         wallet_name = node.attrs.get('nc_address', 'main')
         wallet = self.get_wallet(wallet_name)
         assert isinstance(wallet, HDWallet)
         privkey = wallet.get_key_at_index(0)
-        nc.nc_pubkey = privkey.sec()
+        nc_pubkey = privkey.sec()
 
-        data = nc.get_sighash_all()
-        data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        nc.nc_signature = privkey.sign(data_hash)
-        if 'weight' in node.attrs:
-            nc.weight = float(node.attrs['weight'])
-        else:
-            nc.weight = self._daa.minimum_tx_weight(nc)
-        self.update_vertex_hash(nc)
-        return nc
+        from hathor.transaction.headers import NanoHeader
+        nano_header = NanoHeader(
+            tx=vertex,
+            nc_version=1,
+            nc_id=nc_id,
+            nc_method=nc_method,
+            nc_args_bytes=nc_args_bytes,
+            nc_pubkey=nc_pubkey,
+            nc_signature=b'',
+        )
+        vertex.headers.append(nano_header)
+
+        if isinstance(vertex, Transaction):
+            data = vertex.get_sighash_all()
+            data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
+            nano_header.nc_signature = privkey.sign(data_hash)
 
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
         """Create an OnChainBlueprint given a node."""
@@ -298,6 +303,7 @@ class VertexExporter:
 
         assert len(block_parents) == 0
         ocb = OnChainBlueprint(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+        self.add_nano_header_if_needed(node, ocb)
         code_attr = node.get_required_attr('ocb_code')
 
         if is_literal(code_attr):
@@ -336,15 +342,21 @@ class VertexExporter:
         self.update_vertex_hash(ocb)
         return ocb
 
-    def create_vertex_transaction(self, node: DAGNode) -> Transaction:
+    def create_vertex_nanocontract(self, node: DAGNode) -> DeprecatedNanoContract:
+        vertex = self.create_vertex_transaction(node, cls=DeprecatedNanoContract)
+        assert isinstance(vertex, DeprecatedNanoContract)
+        return vertex
+
+    def create_vertex_transaction(self, node: DAGNode, *, cls: type[Transaction] = Transaction) -> Transaction:
         """Create a Transaction given a node."""
         block_parents, txs_parents = self._create_vertex_parents(node)
         inputs = self._create_vertex_txin(node)
         tokens, outputs = self._create_vertex_txout(node)
 
         assert len(block_parents) == 0
-        tx = Transaction(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+        tx = cls(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
         tx.timestamp = self.get_min_timestamp(node)
+        self.add_nano_header_if_needed(node, tx)
         self.sign_all_inputs(node, tx)
         if 'weight' in node.attrs:
             tx.weight = float(node.attrs['weight'])

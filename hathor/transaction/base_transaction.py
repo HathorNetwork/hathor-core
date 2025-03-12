@@ -31,6 +31,7 @@ from structlog import get_logger
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
+from hathor.transaction.headers import VertexBaseHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -120,8 +121,8 @@ class TxVersion(IntEnum):
         settings = get_global_settings()
         if settings.ENABLE_NANO_CONTRACTS:
             # XXX This code should not run on any network except nano-testnet.
-            from hathor.nanocontracts.nanocontract import NanoContract
-            cls_map[TxVersion.NANO_CONTRACT] = NanoContract
+            from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
+            cls_map[TxVersion.NANO_CONTRACT] = DeprecatedNanoContract
 
             if settings.ENABLE_ON_CHAIN_BLUEPRINTS:
                 # XXX This code should not run on any network except nano-testnet.
@@ -143,6 +144,10 @@ StaticMetadataT = TypeVar('StaticMetadataT', bound=VertexStaticMetadata, covaria
 
 class GenericVertex(ABC, Generic[StaticMetadataT]):
     """Hathor generic vertex"""
+
+    __slots__ = ['version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash',
+                 'storage', '_settings', '_metadata', '_static_metadata', 'headers', 'name', 'MAX_NUM_INPUTS',
+                 'MAX_NUM_OUTPUTS', '__weakref__']
 
     # Even though nonce is serialized with different sizes for tx and blocks
     # the same size is used for hashes to enable mining algorithm compatibility
@@ -198,6 +203,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
 
+        self.headers: list[VertexBaseHeader] = []
+
         # A name solely for debugging purposes.
         self.name: str | None = None
 
@@ -250,6 +257,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def is_transaction(self) -> bool:
         raise NotImplementedError
 
+    def is_nano_contract(self) -> bool:
+        """Return True if this transaction is a nano contract or not."""
+        return False
+
     def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
 
@@ -264,6 +275,22 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         buf = self.get_funds_fields_from_struct(struct_bytes, verbose=verbose)
         buf = self.get_graph_fields_from_struct(buf, verbose=verbose)
         return buf
+
+    def get_header_from_bytes(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
+        """Parse bytes and return the next header in buffer."""
+        from hathor.transaction.vertex_parser import VertexParser
+
+        if len(self.headers) >= self.get_maximum_number_of_headers():
+            raise ValueError('too many headers')
+        header_type = buf[:1]
+        header_class = VertexParser.get_header_parser(header_type, self._settings)
+        header, buf = header_class.deserialize(self, buf)
+        self.headers.append(header)
+        return buf
+
+    def get_maximum_number_of_headers(self) -> int:
+        """Return the maximum number of headers for this vertex."""
+        return 1
 
     @classmethod
     @abstractmethod
@@ -415,6 +442,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             struct_bytes += parent
         return struct_bytes
 
+    def get_headers_struct(self) -> bytes:
+        """Return the serialization of the headers only."""
+        return b''.join(h.serialize() for h in self.headers)
+
     def get_struct_without_nonce(self) -> bytes:
         """Return a partial serialization of the transaction, without including the nonce field
 
@@ -442,6 +473,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """
         struct_bytes = self.get_struct_without_nonce()
         struct_bytes += self.get_struct_nonce()
+        struct_bytes += self.get_headers_struct()
         return struct_bytes
 
     def get_all_dependencies(self) -> set[bytes]:
@@ -549,13 +581,22 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         graph_hash.update(self.get_graph_struct())
         return graph_hash.digest()
 
+    def get_headers_hash(self) -> bytes:
+        """Return the sha256 of the headers of the transaction."""
+        if not self.headers:
+            return b''
+
+        h = hashlib.sha256()
+        h.update(self.get_headers_struct())
+        return h.digest()
+
     def get_header_without_nonce(self) -> bytes:
         """Return the transaction header without the nonce
 
         :return: transaction header without the nonce
         :rtype: bytes
         """
-        return self.get_funds_hash() + self.get_graph_hash()
+        return self.get_funds_hash() + self.get_graph_hash() + self.get_headers_hash()
 
     def calculate_hash1(self) -> 'HASH':
         """Return the sha256 of the transaction without including the `nonce`

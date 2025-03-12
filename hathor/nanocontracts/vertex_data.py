@@ -15,10 +15,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import TokenUid, VertexId
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction, TxInput, TxOutput, TxVersion
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -36,6 +38,8 @@ class VertexData:
     @staticmethod
     def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
         """Return the output that txin points to."""
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
         if vertex.storage is None:
             return None
 

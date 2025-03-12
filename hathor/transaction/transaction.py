@@ -21,10 +21,12 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 from typing_extensions import override
 
 from hathor.checkpoint import Checkpoint
+from hathor.crypto.util import get_address_b58_from_public_key_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
@@ -52,6 +54,8 @@ class RewardLockedInfo(NamedTuple):
 
 
 class Transaction(GenericVertex[TransactionStaticMetadata]):
+
+    __slots__ = ['tokens', '_sighash_cache', '_sighash_data_cache']
 
     SERIALIZATION_NONCE_SIZE = 4
 
@@ -106,18 +110,36 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """Returns true if this is a transaction"""
         return True
 
+    def is_nano_contract(self) -> bool:
+        try:
+            self.get_nano_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_nano_header(self) -> NanoHeader:
+        """Return the NanoHeader or raise ValueError."""
+        for header in self.headers:
+            if isinstance(header, NanoHeader):
+                return header
+        raise ValueError('nano header not found')
+
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> 'Transaction':
         tx = cls()
         buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
 
-        if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
+        if len(buf) < cls.SERIALIZATION_NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
 
         [tx.nonce, ], buf = unpack('!I', buf)
         if verbose:
             verbose('nonce', tx.nonce)
+
+        while buf:
+            buf = tx.get_header_from_bytes(buf, verbose=verbose)
 
         tx.update_hash()
         tx.storage = storage
@@ -221,6 +243,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
 
+        for header in self.headers:
+            struct_bytes += header.get_sighash_bytes()
+
         ret = bytes(struct_bytes)
         self._sighash_cache = ret
         return ret
@@ -247,10 +272,34 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             return self._settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
+    def get_related_addresses(self) -> set[str]:
+        ret = super().get_related_addresses()
+        if self.is_nano_contract():
+            nano_header = self.get_nano_header()
+            ret.add(get_address_b58_from_public_key_bytes(nano_header.nc_pubkey))
+        return ret
+
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
+
+        if self.is_nano_contract():
+            nano_header = self.get_nano_header()
+            json['nc_id'] = nano_header.get_nanocontract_id().hex()
+            json['nc_blueprint_id'] = nano_header.get_blueprint_id().hex()
+            json['nc_method'] = nano_header.nc_method
+            json['nc_args'] = nano_header.nc_args_bytes.hex()
+            json['nc_pubkey'] = nano_header.nc_pubkey.hex()
+            json['nc_context'] = nano_header.get_context().to_json()
+
         return json
+
+    def to_json_extended(self) -> dict[str, Any]:
+        json_extended = super().to_json_extended()
+        if self.is_nano_contract():
+            json = self.to_json()
+            return {**json, **json_extended}
+        return json_extended
 
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.storage is not None
@@ -276,6 +325,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def get_minimum_number_of_inputs(self) -> int:
         """Return the minimum number of inputs for this transaction.
         This is used by the verification services."""
+        if self.is_nano_contract():
+            return 0
         return 1
 
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:

@@ -28,7 +28,6 @@ from hathor.indexes.rocksdb_utils import (
     to_internal_token_uid,
 )
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
-from hathor.nanocontracts import NanoContract
 from hathor.nanocontracts.types import NCActionType
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
@@ -312,8 +311,10 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self._add_utxo(tx, index)
 
         # Handle deposits and withdrawals from Nano Contracts.
-        if isinstance(tx, NanoContract):
-            ctx = tx.get_context()
+        if tx.is_nano_contract():
+            assert isinstance(tx, Transaction)
+            nano_header = tx.get_nano_header()
+            ctx = nano_header.get_context()
             for action in ctx.actions.values():
                 match action.type:
                     case NCActionType.DEPOSIT:
@@ -342,8 +343,10 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self._destroy_token(tx.hash)
 
         # Handle deposits and withdrawals from Nano Contracts.
-        if isinstance(tx, NanoContract):
-            ctx = tx.get_context()
+        if tx.is_nano_contract():
+            assert isinstance(tx, Transaction)
+            nano_header = tx.get_nano_header()
+            ctx = nano_header.get_context()
             for action in ctx.actions.values():
                 match action.type:
                     case NCActionType.DEPOSIT:

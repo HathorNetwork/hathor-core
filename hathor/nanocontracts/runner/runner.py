@@ -123,7 +123,8 @@ class Runner:
         """Return the blueprint class of a contract."""
         from hathor.nanocontracts.utils import get_nano_contract_creation
         nc = get_nano_contract_creation(self.tx_storage, nanocontract_id, allow_mempool=True)
-        return nc.get_blueprint_class()
+        nano_header = nc.get_nano_header()
+        return nano_header.get_blueprint_class()
 
     def _create_single_runner(
         self,
@@ -150,7 +151,7 @@ class Runner:
                            *args: Any,
                            **kwargs: Any) -> Any:
         """Call a contract public method."""
-        from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD
+        from hathor.transaction.headers import NC_INITIALIZE_METHOD
         if method_name == NC_INITIALIZE_METHOD:
             if self.has_contract_been_initialized(nanocontract_id):
                 raise NCAlreadyInitializedContractError(nanocontract_id)
@@ -186,7 +187,7 @@ class Runner:
         if last_call_record.nanocontract_id == nanocontract_id:
             raise NCInvalidContractId('a contract cannot call itself')
 
-        from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD
+        from hathor.transaction.headers import NC_INITIALIZE_METHOD
         if method_name == NC_INITIALIZE_METHOD:
             raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
 

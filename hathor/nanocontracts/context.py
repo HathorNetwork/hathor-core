@@ -15,13 +15,15 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, final
+from typing import TYPE_CHECKING, Any, final
 
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCInvalidContext
 from hathor.nanocontracts.types import Address, ContractId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import VertexData
-from hathor.transaction import BaseTransaction
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction
 
 _EMPTY_MAP: MappingProxyType[TokenUid, NCAction] = MappingProxyType({})
 
