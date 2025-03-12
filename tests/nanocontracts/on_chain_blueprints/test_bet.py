@@ -4,13 +4,14 @@ from typing import NamedTuple, Optional
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key_bytes
-from hathor.nanocontracts import NanoContract, OnChainBlueprint
+from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.types import Address, ContractId, NCAction, NCActionType, SignedData
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.simulator.utils import add_new_blocks
+from hathor.transaction import Transaction
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
@@ -120,16 +121,17 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         return blueprint
 
     def _gen_nc_initialize_tx(self, blueprint, nc_args):
-        from hathor.nanocontracts.nanocontract import NC_INITIALIZE_METHOD
+        from hathor.transaction.headers import NC_INITIALIZE_METHOD
 
         method_parser = blueprint.get_method_parser(NC_INITIALIZE_METHOD)
         timestamp = int(self.manager.reactor.seconds())
         parents = self.manager.get_new_tx_parents()
 
-        nc = NanoContract(timestamp=timestamp, parents=parents)
-        nc.nc_id = blueprint.blueprint_id()
-        nc.nc_method = NC_INITIALIZE_METHOD
-        nc.nc_args_bytes = method_parser.serialize_args(nc_args)
+        nc = Transaction(timestamp=timestamp, parents=parents)
+
+        nc_id = blueprint.blueprint_id()
+        nc_method = NC_INITIALIZE_METHOD
+        nc_args_bytes = method_parser.serialize_args(nc_args)
 
         # sign
         # import pudb; pu.db
@@ -137,10 +139,23 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         # private_key = self.wallet.get_private_key(address)
         # nc.nc_pubkey = private_key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
         private_key = self.wallet.get_private_key(address)
-        nc.nc_pubkey = private_key.sec()
+        nc_pubkey = private_key.sec()
+
+        from hathor.transaction.headers import NanoHeader
+        nano_header = NanoHeader(
+            tx=nc,
+            nc_version=1,
+            nc_id=nc_id,
+            nc_method=nc_method,
+            nc_args_bytes=nc_args_bytes,
+            nc_pubkey=nc_pubkey,
+            nc_signature=b'',
+        )
+        nc.headers.append(nano_header)
+
         data = nc.get_sighash_all()
         data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        nc.nc_signature = private_key.sign(data_hash)
+        nano_header.nc_signature = private_key.sign(data_hash)
 
         # mine
         nc.weight = self.manager.daa.minimum_tx_weight(nc)

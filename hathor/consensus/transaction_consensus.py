@@ -261,7 +261,6 @@ class TransactionConsensusAlgorithm:
 
     def assert_voided_with_first_block(self, tx: BaseTransaction) -> None:
         """Assert the voided transaction with first block is valid."""
-        from hathor.nanocontracts import NanoContract
         assert tx.storage is not None
 
         meta = tx.get_metadata()
@@ -271,7 +270,7 @@ class TransactionConsensusAlgorithm:
             return
         if self._settings.NC_EXECUTION_FAIL_ID in meta.voided_by:
             # Nano transactions that failed execution can be confirmed by blocks.
-            assert isinstance(tx, NanoContract)
+            assert tx.is_nano_contract()
             return
         for h in meta.voided_by:
             # Transactions voided by Nano transactions that failed execution can be confirmed by blocks.
@@ -279,7 +278,7 @@ class TransactionConsensusAlgorithm:
             tx2_meta = tx2.get_metadata()
             assert tx2_meta.voided_by
             if self._settings.NC_EXECUTION_FAIL_ID in tx2_meta.voided_by:
-                assert isinstance(tx2, NanoContract)
+                assert tx2.is_nano_contract()
                 return
         raise AssertionError
 

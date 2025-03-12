@@ -3,10 +3,11 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_bytes_compressed
-from hathor.graphviz import GraphvizVisualizer
-from hathor.nanocontracts import Blueprint, Context, NanoContract, public
+from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.storage.rocksdb_storage import RocksDBStorage
+from hathor.transaction import Transaction
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.util import not_none
 from hathor.wallet import KeyPair, Wallet
@@ -37,18 +38,30 @@ class NCHistoryIndexesTest(unittest.TestCase):
         self.manager.tx_storage.nc_catalog = self.catalog
 
         parents = self.manager.get_new_tx_parents()
-        nc = NanoContract(weight=1, inputs=[], outputs=[], parents=parents, storage=self.tx_storage)
+        nc = Transaction(weight=1, inputs=[], outputs=[], parents=parents, storage=self.tx_storage)
 
-        nc.nc_id = blueprint_id
-        nc.nc_method = 'initialize'
-        nc.nc_args_bytes = b''
+        nc_id = blueprint_id
+        nc_method = 'initialize'
+        nc_args_bytes = b''
 
         key = KeyPair.create(b'my-pass')
         privkey = key.get_private_key(b'my-pass')
         pubkey = privkey.public_key()
         data = nc.get_sighash_all_data()
-        nc.nc_pubkey = get_public_key_bytes_compressed(pubkey)
-        nc.nc_signature = privkey.sign(data, ec.ECDSA(hashes.SHA256()))
+        nc_pubkey = get_public_key_bytes_compressed(pubkey)
+
+        nano_header = NanoHeader(
+            tx=nc,
+            nc_version=1,
+            nc_id=nc_id,
+            nc_method=nc_method,
+            nc_args_bytes=nc_args_bytes,
+            nc_pubkey=nc_pubkey,
+            nc_signature=b'',
+        )
+        nc.headers.append(nano_header)
+
+        nano_header.nc_signature = privkey.sign(data, ec.ECDSA(hashes.SHA256()))
 
         self.manager.cpu_mining_service.resolve(nc)
 
@@ -62,7 +75,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
         )
 
         addresses_index = self.manager.tx_storage.indexes.addresses
-        address = get_address_b58_from_public_key_bytes(nc.nc_pubkey)
+        address = get_address_b58_from_public_key_bytes(nano_header.nc_pubkey)
         self.assertEqual(
             [nc.hash],
             list(addresses_index.get_sorted_from_address(address))
@@ -91,7 +104,11 @@ class NCHistoryIndexesTest(unittest.TestCase):
         ''')
         artifacts.propagate_with(manager)
 
-        nc1, nc2 = artifacts.get_typed_vertices(['nc1', 'nc2'], NanoContract)
+        nc1, nc2 = artifacts.get_typed_vertices(['nc1', 'nc2'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+
         assert nc_history_index.get_latest_tx_timestamp(nc1.hash) == nc2.timestamp
         assert nc_history_index.get_latest_tx_timestamp(nc2.hash) is None
 
@@ -142,7 +159,12 @@ class NCHistoryIndexesTest(unittest.TestCase):
         ''')
 
         artifacts.propagate_with(manager)
-        nc1, nc2, nc6, nc7 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc6', 'nc7'], NanoContract)
+        nc1, nc2, nc6, nc7 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc6', 'nc7'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+        assert nc6.is_nano_contract()
+        assert nc7.is_nano_contract()
 
         assert nc_history_index.get_transaction_count(nc1.hash) == 3
         assert nc_history_index.get_transaction_count(nc2.hash) == 4
@@ -193,4 +215,5 @@ class RocksDBNCHistoryIndexesTest(NCHistoryIndexesTest):
         self.blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = self.blocks[-1]
 
+        from hathor.graphviz import GraphvizVisualizer
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)

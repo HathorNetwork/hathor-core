@@ -23,7 +23,7 @@ from typing_extensions import Self, override
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.transaction import BaseTransaction, TxOutput, TxVersion
+from hathor.transaction import TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
@@ -32,6 +32,7 @@ from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 # Signal bits (B), version (B), outputs len (B)
@@ -356,8 +357,9 @@ class Block(GenericVertex[BlockStaticMetadata]):
 
         return bit_list[bit]
 
-    def iter_transactions_in_this_block(self) -> Iterator[BaseTransaction]:
+    def iter_transactions_in_this_block(self) -> Iterator[Transaction]:
         """Return an iterator of the transactions that have this block as meta.first_block."""
+        from hathor.transaction import Transaction
         from hathor.transaction.storage.traversal import BFSOrderWalk
         assert self.storage is not None
         bfs = BFSOrderWalk(self.storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
@@ -366,6 +368,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
             if tx_meta.first_block != self.hash:
                 bfs.skip_neighbors(tx)
                 continue
+            assert isinstance(tx, Transaction)
             yield tx
 
     @override

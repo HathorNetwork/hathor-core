@@ -22,7 +22,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import DAGBuilder, DAGNode
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
 from hathor.dag_builder.utils import get_literal, is_literal
-from hathor.nanocontracts import Blueprint, NanoContract, OnChainBlueprint
+from hathor.nanocontracts import Blueprint, OnChainBlueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.on_chain_blueprint import Code
@@ -239,50 +239,64 @@ class VertexExporter:
         self._block_height[blk.hash] = height
         return blk
 
-    def create_vertex_nanocontract(self, node: DAGNode) -> NanoContract:
+    def create_vertex_nanocontract(self, node: DAGNode) -> Transaction:
         block_parents, txs_parents = self._create_vertex_parents(node)
         inputs = self._create_vertex_txin(node)
         tokens, outputs = self._create_vertex_txout(node)
 
         assert len(block_parents) == 0
-        nc = NanoContract(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+        nc = Transaction(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
 
         nc_id_raw = node.get_required_attr('nc_id')
         if is_literal(nc_id_raw):
-            nc.nc_id = bytes.fromhex(get_literal(nc_id_raw))
+            nc_id = bytes.fromhex(get_literal(nc_id_raw))
         else:
-            nc.nc_id = self.get_vertex_id(nc_id_raw)
+            nc_id = self.get_vertex_id(nc_id_raw)
 
         nc_method_raw = node.get_required_attr('nc_method')
 
         if nc_method_raw.startswith('initialize('):
-            blueprint_id = blueprint_id_from_bytes(nc.nc_id)
+            blueprint_id = blueprint_id_from_bytes(nc_id)
         else:
             contract_creation_vertex = self._vertices[nc_id_raw]
-            assert isinstance(contract_creation_vertex, NanoContract)
-            blueprint_id = blueprint_id_from_bytes(contract_creation_vertex.nc_id)
+            assert contract_creation_vertex.is_nano_contract()
+            assert isinstance(contract_creation_vertex, Transaction)
+            contract_creation_vertex_nano_header = contract_creation_vertex.get_nano_header()
+            blueprint_id = blueprint_id_from_bytes(contract_creation_vertex_nano_header.nc_id)
 
         blueprint_class = self._get_blueprint_class(blueprint_id)
 
         from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
-        nc.nc_method, nc_args = parse_nc_method_call(blueprint_class, nc_method_raw)
+        nc_method, nc_args = parse_nc_method_call(blueprint_class, nc_method_raw)
 
         from hathor.nanocontracts.method_parser import NCMethodParser
-        method_parser = NCMethodParser(getattr(blueprint_class, nc.nc_method))
-        nc.nc_args_bytes = method_parser.serialize_args(nc_args)
-
-        nc.timestamp = self.get_min_timestamp(node)
-        self.sign_all_inputs(node, nc)
+        method_parser = NCMethodParser(getattr(blueprint_class, nc_method))
+        nc_args_bytes = method_parser.serialize_args(nc_args)
 
         wallet_name = node.attrs.get('nc_address', 'main')
         wallet = self.get_wallet(wallet_name)
         assert isinstance(wallet, HDWallet)
         privkey = wallet.get_key_at_index(0)
-        nc.nc_pubkey = privkey.sec()
+        nc_pubkey = privkey.sec()
+
+        from hathor.transaction.headers import NanoHeader
+        nano_header = NanoHeader(
+            tx=nc,
+            nc_version=1,
+            nc_id=nc_id,
+            nc_method=nc_method,
+            nc_args_bytes=nc_args_bytes,
+            nc_pubkey=nc_pubkey,
+            nc_signature=b'',
+        )
+        nc.headers.append(nano_header)
+
+        nc.timestamp = self.get_min_timestamp(node)
+        self.sign_all_inputs(node, nc)
 
         data = nc.get_sighash_all()
         data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        nc.nc_signature = privkey.sign(data_hash)
+        nano_header.nc_signature = privkey.sign(data_hash)
         if 'weight' in node.attrs:
             nc.weight = float(node.attrs['weight'])
         else:

@@ -1,6 +1,6 @@
 import pytest
 
-from hathor.nanocontracts import Blueprint, Context, NanoContract, OnChainBlueprint, public
+from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Block, Transaction
@@ -269,7 +269,8 @@ class DAGBuilderTestCase(unittest.TestCase):
         artifacts.propagate_with(self.manager)
 
         tx1 = artifacts.by_name['tx1'].vertex
-        self.assertIsInstance(tx1, NanoContract)
+        self.assertIsInstance(tx1, Transaction)
+        self.assertTrue(tx1.is_nano_contract())
 
         htr_id = TokenUid(b'\0')
         tka_id = TokenUid(artifacts.by_name['TKA'].vertex.hash)
@@ -395,7 +396,11 @@ if foo:
 
         artifacts.propagate_with(self.manager)
         ocb1, ocb2, ocb3 = artifacts.get_typed_vertices(['ocb1', 'ocb2', 'ocb3'], OnChainBlueprint)
-        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], NanoContract)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], Transaction)
+
+        assert nc1.is_nano_contract()
+        assert nc2.is_nano_contract()
+        assert nc3.is_nano_contract()
 
         assert ocb1.get_blueprint_class().__name__ == 'Bet'
         assert nc1.get_blueprint_class().__name__ == 'Bet'

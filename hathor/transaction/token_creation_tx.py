@@ -36,6 +36,9 @@ TOKEN_INFO_VERSION = 1
 
 
 class TokenCreationTransaction(Transaction):
+
+    SUPPORTED_HEADERS = {}
+
     def __init__(
         self,
         nonce: int = 0,

@@ -6,11 +6,13 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import get_public_key_bytes_compressed
-from hathor.nanocontracts import Blueprint, Context, NanoContract, public
+from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractHistoryResource
 from hathor.simulator.utils import add_new_block
+from hathor.transaction import Transaction
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
@@ -95,29 +97,37 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(404, response1.responseCode)
 
     def _fill_nc(self,
-                 nc: NanoContract,
+                 nc: Transaction,
                  nc_id: bytes,
                  nc_method: str,
                  nc_args: list[Any],
                  private_key: ec.EllipticCurvePrivateKeyWithSerialization) -> None:
 
-        nc.nc_id = nc_id
-        nc.nc_method = nc_method
-
         method = getattr(MyBlueprint, nc_method)
         method_parser = NCMethodParser(method)
-        nc.nc_args_bytes = method_parser.serialize_args(nc_args)
+        nc_args_bytes = method_parser.serialize_args(nc_args)
 
         pubkey = private_key.public_key()
-        nc.nc_pubkey = get_public_key_bytes_compressed(pubkey)
+        nc_pubkey = get_public_key_bytes_compressed(pubkey)
+
+        nano_header = NanoHeader(
+            tx=nc,
+            nc_version=1,
+            nc_id=nc_id,
+            nc_method=nc_method,
+            nc_args_bytes=nc_args_bytes,
+            nc_pubkey=nc_pubkey,
+            nc_signature=b'',
+        )
+        nc.headers.append(nano_header)
 
         data = nc.get_sighash_all_data()
-        nc.nc_signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
+        nano_header.nc_signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
 
         self.manager.cpu_mining_service.resolve(nc)
 
-    def _create_contract(self, parents: list[bytes], timestamp: int) -> NanoContract:
-        nc = NanoContract(
+    def _create_contract(self, parents: list[bytes], timestamp: int) -> Transaction:
+        nc = Transaction(
             weight=1,
             inputs=[],
             outputs=[],
@@ -153,7 +163,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data1['history'][0]['nc_method'], 'initialize')
 
         # Now we create a transaction
-        tx1 = NanoContract(
+        tx1 = Transaction(
             weight=1,
             inputs=[],
             outputs=[],

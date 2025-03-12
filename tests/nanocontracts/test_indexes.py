@@ -1,19 +1,21 @@
 import hashlib
 import shutil
 import tempfile
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.conf import HathorSettings
-from hathor.dag_builder.artifacts import DAGArtifacts
-from hathor.manager import HathorManager
-from hathor.nanocontracts import Blueprint, Context, NanoContract, NCFail, public
+from hathor.nanocontracts import Blueprint, Context, NCFail, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
-from hathor.transaction import BaseTransaction, TxOutput
+from hathor.transaction import BaseTransaction, Transaction, TxOutput
 from hathor.types import AddressB58
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from tests.simulation.base import SimulatorTestCase
+
+if TYPE_CHECKING:
+    from hathor.dag_builder.artifacts import DAGArtifacts
+    from hathor.manager import HathorManager
 
 settings = HathorSettings()
 
@@ -61,27 +63,36 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         self.assertTrue(self.simulator.run(120))
 
     def fill_nc_tx(self,
-                   nc: NanoContract,
+                   nc: Transaction,
                    nc_id: bytes,
                    nc_method: str,
                    nc_args: list[Any],
                    *,
                    address: Optional[AddressB58] = None) -> None:
         method_parser = NCMethodParser(getattr(MyBlueprint, nc_method))
-
-        nc.nc_id = nc_id
-        nc.nc_method = nc_method
-        nc.nc_args_bytes = method_parser.serialize_args(nc_args)
+        nc_args_bytes = method_parser.serialize_args(nc_args)
 
         if address is None:
             address = self.wallet.get_unused_address()
         privkey = self.wallet.get_private_key(address)
         pubkey_bytes = privkey.sec()
-        nc.nc_pubkey = pubkey_bytes
+        nc_pubkey = pubkey_bytes
+
+        from hathor.transaction.headers import NanoHeader
+        nano_header = NanoHeader(
+            tx=nc,
+            nc_version=1,
+            nc_id=nc_id,
+            nc_method=nc_method,
+            nc_args_bytes=nc_args_bytes,
+            nc_pubkey=nc_pubkey,
+            nc_signature=b'',
+        )
+        nc.headers.append(nano_header)
 
         data = nc.get_sighash_all()
         data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        nc.nc_signature = privkey.sign(data_hash)
+        nano_header.nc_signature = privkey.sign(data_hash)
 
     def finish_and_broadcast_tx(self, tx: BaseTransaction, confirmations: int = 1) -> None:
         tx.timestamp = int(self.manager.reactor.seconds())
@@ -100,7 +111,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
 
         # Deposits 1 HTR
         _inputs, deposit_amount = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
-        tx = self.wallet.prepare_transaction(NanoContract, _inputs, [])
+        tx = self.wallet.prepare_transaction(Transaction, _inputs, [])
         self.fill_nc_tx(tx, self.myblueprint_id, 'initialize', [])
         self.finish_and_broadcast_tx(tx, confirmations=2)
         new_blocks += 2
@@ -113,7 +124,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         self.assertEqual(token_info0.get_total() + 64_00 * new_blocks, token_info1.get_total())
 
         # Withdrawals 1 HTR
-        tx2 = NanoContract(outputs=[TxOutput(1, b'', 0)])
+        tx2 = Transaction(outputs=[TxOutput(1, b'', 0)])
         self.fill_nc_tx(tx2, nc_id, 'nop', [])
         self.finish_and_broadcast_tx(tx2, confirmations=2)
         new_blocks += 2
@@ -131,7 +142,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         v = [node.name for node, _ in vertices.list]
         self.assertTrue(v.index('b35') < v.index('tx3'))
 
-    def _run_test_remove_voided_nano_tx_from_parents(self, order: str) -> DAGArtifacts:
+    def _run_test_remove_voided_nano_tx_from_parents(self, order: str) -> 'DAGArtifacts':
         builder = self.get_dag_builder(self.manager)
         vertices = builder.build_from_str(f'''
             blockchain genesis b[0..40]
@@ -201,7 +212,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
 class MemoryIndexesTestCase(BaseIndexesTestCase):
     __test__ = True
 
-    def build_manager(self) -> HathorManager:
+    def build_manager(self) -> 'HathorManager':
         builder = self.simulator.get_default_builder()
         builder.enable_wallet_index()
         builder.use_memory()
@@ -211,7 +222,7 @@ class MemoryIndexesTestCase(BaseIndexesTestCase):
 class RocksDBIndexesTestCase(BaseIndexesTestCase):
     __test__ = True
 
-    def build_manager(self) -> HathorManager:
+    def build_manager(self) -> 'HathorManager':
         self.directory = tempfile.mkdtemp()
 
         builder = self.simulator.get_default_builder()
