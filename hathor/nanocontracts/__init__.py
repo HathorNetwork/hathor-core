@@ -15,7 +15,6 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.nanocontract import NanoContract
 from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.storage import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
@@ -25,7 +24,6 @@ __all__ = [
     'Blueprint',
     'Context',
     'Runner',
-    'NanoContract',
     'OnChainBlueprint',
     'NCFail',
     'NCMemoryStorageFactory',

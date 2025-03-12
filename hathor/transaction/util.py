@@ -43,13 +43,14 @@ def bytes_to_int(data: bytes, *, signed: bool = False) -> int:
     return int.from_bytes(data, byteorder='big', signed=signed)
 
 
-def unpack(fmt: str, buf: bytes) -> Any:
+def unpack(fmt: str, buf: bytes | memoryview) -> tuple[Any, bytes | memoryview]:
     size = struct.calcsize(fmt)
     return struct.unpack(fmt, buf[:size]), buf[size:]
 
 
-def unpack_len(n: int, buf: bytes) -> tuple[bytes, bytes]:
-    return buf[:n], buf[n:]
+def unpack_len(n: int, buf: bytes | memoryview) -> tuple[bytes, bytes | memoryview]:
+    ret = buf[:n] if isinstance(buf, bytes) else bytes(buf[:n])
+    return ret, buf[n:]
 
 
 def get_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:

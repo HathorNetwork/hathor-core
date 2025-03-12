@@ -19,7 +19,7 @@ from typing import Iterator
 
 from hathor.indexes.scope import Scope
 from hathor.indexes.tx_group_index import TxGroupIndex
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
 
 SCOPE = Scope(
     include_blocks=False,
@@ -50,10 +50,13 @@ class BlueprintHistoryIndex(TxGroupIndex[bytes]):
         raise NotImplementedError
 
     def _extract_keys(self, tx: BaseTransaction) -> Iterator[bytes]:
-        from hathor.nanocontracts import NanoContract
-        if not isinstance(tx, NanoContract) or not tx.is_creating_a_new_contract():
+        if not tx.is_nano_contract():
             return
-        yield tx.get_blueprint_id()
+        assert isinstance(tx, Transaction)
+        nano_header = tx.get_nano_header()
+        if not nano_header.is_creating_a_new_contract():
+            return
+        yield nano_header.get_blueprint_id()
 
     def get_newest(self, blueprint_id: bytes) -> Iterator[bytes]:
         """Get a list of nano_contract_ids sorted by timestamp for a given blueprint_id starting from the newest."""

@@ -180,7 +180,6 @@ class DAGBuilder:
     def _add_nc_attribute(self, name: str, key: str, value: str) -> None:
         """Handle attributes related to nanocontract transactions."""
         node = self._get_or_create_node(name)
-        node.type = DAGNodeType.NanoContract
         if key == 'nc_id':
             if not is_literal(value):
                 node.deps.add(value)
@@ -236,7 +235,10 @@ class DAGBuilder:
 
         node = self._get_or_create_node(name)
         if key not in node.attrs:
-            node.attrs[key] = value
+            if key == 'type' and value == 'NanoContract':
+                node.type = DAGNodeType.NanoContract
+            else:
+                node.attrs[key] = value
         else:
             raise SyntaxError('attribute key duplicated')
 

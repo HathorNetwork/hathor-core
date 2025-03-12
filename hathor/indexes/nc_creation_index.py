@@ -14,7 +14,7 @@
 
 from hathor.indexes.rocksdb_vertex_timestamp_index import RocksDBVertexTimestampIndex
 from hathor.indexes.scope import Scope
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
 
 SCOPE = Scope(
     include_blocks=False,
@@ -32,5 +32,8 @@ class NCCreationIndex(RocksDBVertexTimestampIndex):
         return SCOPE
 
     def _should_add(self, tx: BaseTransaction) -> bool:
-        from hathor.nanocontracts import NanoContract
-        return isinstance(tx, NanoContract) and tx.is_creating_a_new_contract()
+        if not tx.is_nano_contract():
+            return False
+        assert isinstance(tx, Transaction)
+        nano_header = tx.get_nano_header()
+        return nano_header.is_creating_a_new_contract()

@@ -219,9 +219,6 @@ class ImportFunction(Protocol):
 
 def _generate_restriced_import_function(allowed_imports: dict[str, set[str]]) -> ImportFunction:
     """Returns a function equivalent to builtins.__import__ but that will only import `allowed_imports`"""
-    from structlog import get_logger
-    logger = get_logger()
-
     @_wraps(builtins.__import__)
     def __import__(
         name: str,
@@ -230,7 +227,6 @@ def _generate_restriced_import_function(allowed_imports: dict[str, set[str]]) ->
         fromlist: Sequence[str] = (),
         level: int = 0,
     ) -> types.ModuleType:
-        logger.debug('__import__', name=name, globals=globals, locals=locals, fromlist=fromlist, level=level)
         if level > 0:
             raise ImportError('Relative imports are not allowed')
         if not fromlist and name != 'typing':
