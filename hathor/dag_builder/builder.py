@@ -33,7 +33,10 @@ from hathor.dag_builder.types import (
     VertexResolverType,
     WalletFactoryType,
 )
+from hathor.manager import HathorManager
+from hathor.util import initialize_hd_wallet
 from hathor.wallet import BaseWallet
+from tests.utils import GENESIS_SEED  # skip-import-tests-custom-check
 
 logger = get_logger()
 
@@ -63,6 +66,20 @@ class DAGBuilder:
             genesis_wallet=genesis_wallet,
             wallet_factory=wallet_factory,
             vertex_resolver=vertex_resolver,
+        )
+
+    @staticmethod
+    def from_manager(
+        manager: HathorManager,
+        genesis_words: str = GENESIS_SEED,
+        wallet_factory: WalletFactoryType | None = None,
+    ) -> DAGBuilder:
+        return DAGBuilder(
+            settings=manager._settings,
+            daa=manager.daa,
+            genesis_wallet=initialize_hd_wallet(genesis_words),
+            wallet_factory=wallet_factory or initialize_hd_wallet,
+            vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
         )
 
     def parse_tokens(self, tokens: Iterator[Token]) -> None:

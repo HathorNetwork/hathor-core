@@ -1,3 +1,4 @@
+from hathor.dag_builder import DAGBuilder
 from hathor.transaction import Block, Transaction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
@@ -17,7 +18,7 @@ class DAGBuilderTestCase(unittest.TestCase):
             .set_cpu_mining_service(cpu_mining_service)
 
         self.manager = self.create_peer_from_builder(builder)
-        self.dag_builder = self.get_dag_builder(self.manager)
+        self.dag_builder = DAGBuilder.from_manager(self.manager)
 
     def test_one_tx(self) -> None:
         artifacts = self.dag_builder.build_from_str("""

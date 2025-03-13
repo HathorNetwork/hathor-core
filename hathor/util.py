@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import datetime
 import gc
 import json
@@ -36,6 +38,7 @@ if TYPE_CHECKING:
     import structlog
 
     from hathor.transaction.base_transaction import BaseTransaction
+    from hathor.wallet import HDWallet
 
 logger = get_logger()
 
@@ -823,3 +826,16 @@ def bytes_to_vertexid(data: bytes) -> VertexId:
     if len(data) != 32:
         raise ValueError('length must be exactly 32 bytes')
     return VertexId(data)
+
+
+def initialize_hd_wallet(words: str | None = None) -> HDWallet:
+    """Get an initialized HDWallet from the provided words, or a default one."""
+    from hathor.wallet import HDWallet
+    words = words or (
+        'bind daring above film health blush during tiny neck slight clown salmon '
+        'wine brown good setup later omit jaguar tourist rescue flip pet salute'
+    )
+
+    hd = HDWallet(words=words)
+    hd._manually_initialize()
+    return hd

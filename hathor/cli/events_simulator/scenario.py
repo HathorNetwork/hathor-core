@@ -12,10 +12,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from hathor.dag_builder.artifacts import DAGArtifacts
     from hathor.manager import HathorManager
     from hathor.simulator import Simulator
 
@@ -30,7 +33,7 @@ class Scenario(Enum):
     EMPTY_SCRIPT = 'EMPTY_SCRIPT'
     CUSTOM_SCRIPT = 'CUSTOM_SCRIPT'
 
-    def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
+    def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> DAGArtifacts | None:
         simulate_fns = {
             Scenario.ONLY_LOAD: simulate_only_load,
             Scenario.SINGLE_CHAIN_ONE_BLOCK: simulate_single_chain_one_block,
@@ -44,20 +47,27 @@ class Scenario(Enum):
 
         simulate_fn = simulate_fns[self]
 
-        simulate_fn(simulator, manager)
+        return simulate_fn(simulator, manager)
 
 
-def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> None:
+def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> DAGArtifacts | None:
+    simulator.run(1)
+    return None
+
+
+def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorManager') -> DAGArtifacts | None:
+    from hathor.dag_builder import DAGBuilder
+    dag_builder = DAGBuilder.from_manager(manager)
+    artifacts = dag_builder.build_from_str('blockchain genesis b[1..1]')
+    artifacts.propagate_with(manager)
     simulator.run(60)
+    return artifacts
 
 
-def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorManager') -> None:
-    from hathor.simulator.utils import add_new_blocks
-    add_new_blocks(manager, 1)
-    simulator.run(60)
-
-
-def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
+def simulate_single_chain_blocks_and_transactions(
+    simulator: 'Simulator',
+    manager: 'HathorManager',
+) -> DAGArtifacts | None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
 
@@ -83,8 +93,10 @@ def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manage
     add_new_blocks(manager, 1)
     simulator.run(60)
 
+    return None
 
-def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> DAGArtifacts | None:
     from hathor.simulator import FakeConnection
     from hathor.simulator.utils import add_new_blocks
 
@@ -101,8 +113,10 @@ def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
     simulator.add_connection(connection)
     simulator.run(60)
 
+    return None
 
-def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> DAGArtifacts | None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 
@@ -147,8 +161,10 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     assert tx.get_metadata().voided_by
     assert not tx2.get_metadata().voided_by
 
+    return None
 
-def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'HathorManager') -> DAGArtifacts | None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
     from hathor.transaction import Block
@@ -186,8 +202,10 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
     assert balance_per_address[address] == 6400
 
+    return None
 
-def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> DAGArtifacts | None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
     from hathor.transaction import TxInput, TxOutput
@@ -218,8 +236,10 @@ def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> N
     add_new_blocks(manager, 1)
     simulator.run(60)
 
+    return None
 
-def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> DAGArtifacts | None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
     from hathor.transaction import TxInput, TxOutput
@@ -255,3 +275,5 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
 
     add_new_blocks(manager, 1)
     simulator.run(60)
+
+    return None
