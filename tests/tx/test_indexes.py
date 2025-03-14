@@ -687,32 +687,6 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertEqual(height_index.get_n_height_tips(103), height_index.get_n_height_tips(104))
 
 
-class MemoryIndexesTest(BaseIndexesTest):
-    __test__ = True
-
-    def setUp(self):
-        from hathor.transaction.storage import TransactionMemoryStorage
-
-        super().setUp()
-        self.wallet = Wallet()
-        self.tx_storage = TransactionMemoryStorage(settings=self._settings)
-        self.genesis = self.tx_storage.get_all_genesis()
-        self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
-        self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
-
-        # read genesis keys
-        self.genesis_private_key = get_genesis_key()
-        self.genesis_public_key = self.genesis_private_key.public_key()
-
-        # this makes sure we can spend the genesis outputs
-        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
-                                        use_memory_index=True, utxo_index=True)
-        self.blocks = add_blocks_unlock_reward(self.manager)
-        self.last_block = self.blocks[-1]
-
-        self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
-
-
 class RocksDBIndexesTest(BaseIndexesTest):
     __test__ = True
 

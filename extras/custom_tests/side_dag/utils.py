@@ -29,11 +29,11 @@ COMMAND = f"""
     python -m hathor run_node_with_side_dag
         --disable-logs
         --testnet
-        --memory-storage
+        --temp-data
         --x-localhost-only
         --procname-prefix {HATHOR_PROCESS_PREFIX}
         --side-dag-testnet
-        --side-dag-memory-storage
+        --side-dag-temp-data
         --side-dag-x-localhost-only
         --side-dag-procname-prefix {SIDE_DAG_PROCESS_PREFIX}
 """

@@ -15,16 +15,10 @@
 from hathor.event.websocket.request import AckRequest, StartStreamRequest, StopStreamRequest
 from hathor.event.websocket.response import InvalidRequestType
 from hathor.simulator.trigger import StopAfterNMinedBlocks
-from tests.event.event_simulation_tester import (
-    BaseEventSimulationTester,
-    MemoryEventSimulationTester,
-    RocksDBEventSimulationTester,
-)
+from tests.event.event_simulation_tester import BaseEventSimulationTester
 
 
-class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
-    __test__ = False
-
+class EventSimulationResponsesTest(BaseEventSimulationTester):
     def test_no_start_no_blocks(self) -> None:
         self.simulator.run(36000)
 
@@ -359,11 +353,3 @@ class BaseEventSimulationResponsesTest(BaseEventSimulationTester):
 
         assert len(responses) == 4  # 4 events because of window size
         assert responses[0].event.id == 8  # ack=7, so we get from event 8
-
-
-class MemoryEventSimulationResponsesTest(BaseEventSimulationResponsesTest, MemoryEventSimulationTester):
-    __test__ = True
-
-
-class RocksDBEventSimulationResponsesTest(BaseEventSimulationResponsesTest, RocksDBEventSimulationTester):
-    __test__ = True

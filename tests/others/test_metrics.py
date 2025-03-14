@@ -1,13 +1,15 @@
 import tempfile
 from unittest.mock import Mock
 
+from hathor.manager import HathorManager
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
+from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
+from hathor.transaction.vertex_parser import VertexParser
 from hathor.wallet import Wallet
 from tests import unittest
 
@@ -21,9 +23,7 @@ class MetricsTest(unittest.TestCase):
            the event to set its own fields related to the network peers
         """
         # Preparation
-        self.use_memory_storage = True
         manager = self.create_peer('testnet')
-        self.assertIsInstance(manager.tx_storage, TransactionMemoryStorage)
         pubsub = manager.pubsub
 
         # Execution
@@ -49,7 +49,7 @@ class MetricsTest(unittest.TestCase):
            to update the Metrics class with info from ConnectionsManager class
         """
         # Preparation
-        tx_storage = TransactionMemoryStorage(settings=self._settings)
+        tx_storage = self.create_tx_storage()
         tmpdir = tempfile.mkdtemp()
         self.tmpdirs.append(tmpdir)
         wallet = Wallet(directory=tmpdir)
@@ -86,14 +86,12 @@ class MetricsTest(unittest.TestCase):
            The expected result is that it will successfully collect
            the RocksDB metrics.
         """
-        path = tempfile.mkdtemp()
-        self.tmpdirs.append(path)
-
-        def _init_manager():
+        def _init_manager(path: tempfile.TemporaryDirectory | None = None) -> HathorManager:
             builder = self.get_builder() \
-                .use_rocksdb(path, cache_capacity=100) \
-                .force_memory_index() \
+                .set_rocksdb_cache_capacity(100) \
                 .set_wallet(self._create_test_wallet(unlocked=True))
+            if path:
+                builder.set_rocksdb_path(path)
             manager = self.create_peer_from_builder(builder, start_manager=False)
             return manager
 
@@ -110,6 +108,14 @@ class MetricsTest(unittest.TestCase):
             b'event': 0.0,
             b'event-metadata': 0.0,
             b'feature-activation-metadata': 0.0,
+            b'info-index': 0.0,
+            b'height-index': 0.0,
+            b'tips-all': 0.0,
+            b'tips-blocks': 0.0,
+            b'tips-txs': 0.0,
+            b'timestamp-sorted-all': 0.0,
+            b'timestamp-sorted-blocks': 0.0,
+            b'timestamp-sorted-txs': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -122,7 +128,7 @@ class MetricsTest(unittest.TestCase):
         # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396
         manager.tx_storage._db.close()
 
-        manager = _init_manager()
+        manager = _init_manager(manager.tx_storage._rocksdb_storage.temp_dir)
         manager.metrics._collect_data()
 
         # We don't know exactly the sizes of each column family,
@@ -137,15 +143,13 @@ class MetricsTest(unittest.TestCase):
            The expected result is that it will successfully collect
            the RocksDB metrics.
         """
-        path = tempfile.mkdtemp()
-        self.tmpdirs.append(path)
-
-        def _init_manager():
+        def _init_manager(path: tempfile.TemporaryDirectory | None = None) -> HathorManager:
             builder = self.get_builder() \
-                .use_rocksdb(path, cache_capacity=100) \
-                .force_memory_index() \
+                .set_rocksdb_cache_capacity(100) \
                 .set_wallet(self._create_test_wallet(unlocked=True)) \
                 .use_tx_storage_cache()
+            if path:
+                builder.set_rocksdb_path(path)
             manager = self.create_peer_from_builder(builder, start_manager=False)
             return manager
 
@@ -163,6 +167,14 @@ class MetricsTest(unittest.TestCase):
             b'event': 0.0,
             b'event-metadata': 0.0,
             b'feature-activation-metadata': 0.0,
+            b'info-index': 0.0,
+            b'height-index': 0.0,
+            b'tips-all': 0.0,
+            b'tips-blocks': 0.0,
+            b'tips-txs': 0.0,
+            b'timestamp-sorted-all': 0.0,
+            b'timestamp-sorted-blocks': 0.0,
+            b'timestamp-sorted-txs': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -176,7 +188,7 @@ class MetricsTest(unittest.TestCase):
         # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396
         manager.tx_storage.store._db.close()
 
-        manager = _init_manager()
+        manager = _init_manager(manager.tx_storage.store._rocksdb_storage.temp_dir)
         manager.metrics._collect_data()
 
         # We don't know exactly the sizes of each column family,
@@ -184,30 +196,12 @@ class MetricsTest(unittest.TestCase):
         self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'tx'] > 500)
         self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'meta'] > 1000)
 
-    def test_tx_storage_data_collection_with_memory_storage(self):
-        """Tests storage data collection when using Memory Storage using no cache
-           We don't allow using it with cache, so this is the only case
-
-           The expected result is that nothing is done, because we currently only collect
-           data for RocksDB storage
-        """
-        tx_storage = TransactionMemoryStorage(settings=self._settings)
-
-        # All
-        manager = self.create_peer('testnet', tx_storage=tx_storage)
-
-        manager.metrics._collect_data()
-
-        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
-
     def test_peer_connections_data_collection(self):
         """Test if peer connections data is correctly being collected from the
             ConnectionsManager
         """
         # Preparation
-        self.use_memory_storage = True
         manager = self.create_peer('testnet')
-        self.assertIsInstance(manager.tx_storage, TransactionMemoryStorage)
 
         my_peer = manager.my_peer
 
@@ -260,7 +254,12 @@ class MetricsTest(unittest.TestCase):
             TransactionCacheStorage
         """
         # Preparation
-        base_storage = TransactionMemoryStorage(settings=self._settings)
+        rocksdb_storage = self.create_rocksdb_storage()
+        base_storage = TransactionRocksDBStorage(
+            rocksdb_storage=rocksdb_storage,
+            settings=self._settings,
+            vertex_parser=VertexParser(settings=self._settings),
+        )
         tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None, settings=self._settings)
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)

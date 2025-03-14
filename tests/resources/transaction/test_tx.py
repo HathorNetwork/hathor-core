@@ -11,9 +11,6 @@ from tests.utils import add_blocks_unlock_reward, add_new_transactions
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
-    # XXX: using memory storage so that we can more easily manipulate the tokens-index for a test
-    use_memory_storage = True
-
     def setUp(self):
         super().setUp()
         self.web = StubSite(TransactionResource(self.manager))
@@ -130,17 +127,11 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         tx_input.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_input)
 
-        # XXX: this is completely dependant on MemoryTokensIndex implementation, hence use_memory_storage=True
         token_bytes1 = bytes.fromhex('001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d')
-        status = self.manager.tx_storage.indexes.tokens._tokens[token_bytes1]
-        status.name = 'Test Coin'
-        status.symbol = 'TSC'
+        self.manager.tx_storage.indexes.tokens._create_token_info(token_bytes1, 'Test Coin', 'TSC')
 
-        # XXX: this is completely dependant on MemoryTokensIndex implementation, hence use_memory_storage=True
         token_bytes2 = bytes.fromhex('007231eee3cb6160d95172a409d634d0866eafc8775f5729fff6a61e7850aba5')
-        status2 = self.manager.tx_storage.indexes.tokens._tokens[token_bytes2]
-        status2.name = 'NewCoin'
-        status2.symbol = 'NCN'
+        self.manager.tx_storage.indexes.tokens._create_token_info(token_bytes2, 'NewCoin', 'NCN')
 
         response = yield self.web.get(
             "transaction", {b'id': b'0033784bc8443ba851fd88d81c6f06774ae529f25c1fa8f026884ad0a0e98011'})
@@ -231,11 +222,8 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         # Both inputs are the same as the last parent, so no need to manually add them
 
-        # XXX: this is completely dependant on MemoryTokensIndex implementation
         token_bytes1 = bytes.fromhex('000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330')
-        status = self.manager.tx_storage.indexes.tokens._tokens[token_bytes1]
-        status.name = 'Wat wat'
-        status.symbol = 'WAT'
+        self.manager.tx_storage.indexes.tokens._create_token_info(token_bytes1, 'Wat wat', 'WAT')
 
         response = yield self.web.get(
             "transaction", {b'id': b'00005f234469407614bf0abedec8f722bb5e534949ad37650f6077c899741ed7'})
@@ -290,12 +278,10 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         # Get last 2 blocks
         expected1 = blocks[-2:]
-        expected1.reverse()
-
         response1 = yield self.web.get("transaction", {b'count': b'2', b'type': b'block'})
         data1 = response1.json_value()
 
-        for expected, result in zip(expected1, data1['transactions']):
+        for expected, result in zip(reversed(expected1), data1['transactions'], strict=True):
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
@@ -303,21 +289,18 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         # Get last 8 txs
         expected2 = txs[-8:]
-        expected2.reverse()
-
         response2 = yield self.web.get("transaction", {b'count': b'8', b'type': b'tx'})
         data2 = response2.json_value()
 
-        for expected, result in zip(expected2, data2['transactions']):
+        for expected, result in zip(reversed(expected2), data2['transactions'], strict=True):
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
         self.assertTrue(data2['has_more'])
 
         # Get older blocks with hash reference
-        expected3 = blocks[:2]
-        expected3.reverse()
-
+        genesis_block = self.manager.tx_storage.get_genesis(self._settings.GENESIS_BLOCK_HASH)
+        expected3 = [genesis_block, *blocks[:2]]
         response3 = yield self.web.get(
             "transaction", {
                 b'count': b'3',
@@ -328,7 +311,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             })
         data3 = response3.json_value()
 
-        for expected, result in zip(expected3, data3['transactions']):
+        for expected, result in zip(reversed(expected3), data3['transactions'], strict=True):
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
@@ -345,7 +328,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             })
         data4 = response4.json_value()
 
-        for expected, result in zip(expected2, data4['transactions']):
+        for expected, result in zip(expected2, data4['transactions'], strict=True):
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
@@ -353,19 +336,17 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         # Get newer blocks with hash reference
         expected5 = blocks[-2:]
-        expected5.reverse()
-
         response5 = yield self.web.get(
             "transaction", {
                 b'count': b'3',
                 b'type': b'block',
-                b'timestamp': bytes(str(expected1[-1].timestamp), 'utf-8'),
-                b'hash': bytes(expected1[-1].hash.hex(), 'utf-8'),
+                b'timestamp': bytes(str(blocks[-3].timestamp), 'utf-8'),
+                b'hash': bytes(blocks[-3].hash.hex(), 'utf-8'),
                 b'page': b'previous'
             })
         data5 = response5.json_value()
 
-        for expected, result in zip(expected5, data5['transactions']):
+        for expected, result in zip(expected5, data5['transactions'], strict=True):
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
@@ -373,8 +354,6 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         # Get txs with hash reference
         expected6 = txs[:8]
-        expected6.reverse()
-
         response6 = yield self.web.get(
             "transaction", {
                 b'count': b'8',
@@ -385,7 +364,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             })
         data6 = response6.json_value()
 
-        for expected, result in zip(expected6, data6['transactions']):
+        for expected, result in zip(reversed(expected6), data6['transactions'], strict=True):
             self.assertEqual(expected.timestamp, result['timestamp'])
             self.assertEqual(expected.hash.hex(), result['tx_id'])
 
@@ -462,12 +441,12 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("transaction", {b'count': b'0', b'type': b'block'})
         data = response.json_value()
         self.assertEqual(0, len(data['transactions']))
-        self.assertFalse(data['has_more'])
+        self.assertTrue(data['has_more'])
 
         response = yield self.web.get("transaction", {b'count': b'0', b'type': b'tx'})
         data = response.json_value()
         self.assertEqual(0, len(data['transactions']))
-        self.assertFalse(data['has_more'])
+        self.assertTrue(data['has_more'])
 
     @inlineCallbacks
     def test_negative_count(self):

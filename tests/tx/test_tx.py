@@ -47,7 +47,7 @@ class TransactionTest(unittest.TestCase):
         self.wallet = Wallet()
 
         # this makes sure we can spend the genesis outputs
-        self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True, use_memory_storage=True)
+        self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
         self._verifiers = self.manager.verification_service.verifiers
         self.tx_storage = self.manager.tx_storage
 

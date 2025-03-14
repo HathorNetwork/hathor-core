@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.mempool_tips_index import ByteCollectionMempoolTipsIndex
 from hathor.indexes.rocksdb_utils import RocksDBSimpleSet
 
@@ -31,7 +32,8 @@ _DB_NAME: str = 'mempool_tips'
 class RocksDBMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
     _index: RocksDBSimpleSet
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
+    def __init__(self, db: 'rocksdb.DB', *, settings: HathorSettings, cf_name: Optional[bytes] = None) -> None:
+        super().__init__(settings=settings)
         self.log = logger.new()
         _cf_name = cf_name or _CF_NAME_MEMPOOL_TIPS_INDEX
         self._index = RocksDBSimpleSet(db, self.log, cf_name=_cf_name)

@@ -1,5 +1,5 @@
 from hathor.event.model.event_type import EventType
-from hathor.event.storage.memory_storage import EventMemoryStorage
+from hathor.event.storage import EventRocksDBStorage
 from hathor.pubsub import HathorEvents
 from hathor.util import not_none
 from tests import unittest
@@ -9,7 +9,9 @@ class EventManagerTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
-        self.event_storage = EventMemoryStorage()
+        self.event_storage = EventRocksDBStorage(
+            rocksdb_storage=self.create_rocksdb_storage(),
+        )
         self.manager = self.create_peer(
             self.network,
             enable_event_queue=True,

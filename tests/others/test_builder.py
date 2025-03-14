@@ -7,7 +7,6 @@ class BuilderTestCase(unittest.TestCase):
         super().setUp()
         self.reactor = self.clock
         self.builder = TestBuilder()
-        self.builder.use_memory()
 
     def test_multiple_calls_to_build(self):
         self.builder.build()
