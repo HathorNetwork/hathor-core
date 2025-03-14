@@ -121,19 +121,19 @@ class NCNanoContractTestCase(unittest.TestCase):
 
     def test_verify_method_and_args(self):
         nc = self._get_nc()
-        self.peer.verification_service.verifiers.nano_contract.verify_nc_method_and_args(nc)
+        self.peer.verification_service.verifiers.nano_header.verify_nc_method_and_args(nc)
 
     def test_verify_method_and_args_fails_nc_args(self):
         nc = self._get_nc()
         nano_header = nc.get_nano_header()
         nano_header.nc_args_bytes = b''
         with self.assertRaises(NCSerializationError):
-            self.peer.verification_service.verifiers.nano_contract.verify_nc_method_and_args(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_method_and_args(nc)
 
     def test_verify_signature_success(self):
         nc = self._get_nc()
         nc.clear_sighash_cache()
-        self.peer.verification_service.verifiers.nano_contract.verify_nc_signature(nc)
+        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
 
     def test_verify_signature_fails_nc_id(self):
         nc = self._get_nc()
@@ -141,7 +141,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_id = b'a' * 32
         nc.clear_sighash_cache()
         with self.assertRaises(NCInvalidSignature):
-            self.peer.verification_service.verifiers.nano_contract.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
 
     def test_verify_signature_fails_nc_method(self):
         nc = self._get_nc()
@@ -149,7 +149,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_method = 'other_nc_method'
         nc.clear_sighash_cache()
         with self.assertRaises(NCInvalidSignature):
-            self.peer.verification_service.verifiers.nano_contract.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
 
     def test_verify_signature_fails_nc_args_bytes(self):
         nc = self._get_nc()
@@ -157,7 +157,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_args_bytes = b'other_nc_args_bytes'
         nc.clear_sighash_cache()
         with self.assertRaises(NCInvalidSignature):
-            self.peer.verification_service.verifiers.nano_contract.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
 
     def test_verify_signature_fails_invalid_nc_pubkey(self):
         nc = self._get_nc()
@@ -165,7 +165,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_pubkey = b'invalid-pubkey'
         nc.clear_sighash_cache()
         with self.assertRaises(NCInvalidPubKey):
-            self.peer.verification_service.verifiers.nano_contract.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
 
     def test_verify_signature_fails_nc_pubkey(self):
         key = KeyPair.create(b'xyz')
@@ -177,7 +177,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_pubkey = get_public_key_bytes_compressed(pubkey)
         nc.clear_sighash_cache()
         with self.assertRaises(NCInvalidSignature):
-            self.peer.verification_service.verifiers.nano_contract.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
 
     def test_get_related_addresses(self):
         nc = self._get_nc()
@@ -248,7 +248,7 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         nc2 = self._create_nc(nc_id=nc.hash, nc_method='not_found', nc_args=[], parents=parents, timestamp=timestamp)
         with self.assertRaises(NCMethodNotFound):
-            self.peer.verification_service.verifiers.nano_contract.verify_nc_method_and_args(nc2)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_method_and_args(nc2)
 
         with self.assertRaises(InvalidNewTransaction):
             self.peer.on_new_tx(nc2, fails_silently=False)
@@ -360,7 +360,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             nc_signature=b'',
         ))
         with self.assertRaises(TokenAuthorityNotAllowed):
-            self.peer.verification_service.verifiers.nano_contract.verify_no_authorities(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_no_authorities(nc)
 
         # Incomplete nanocontract transaction with a token authority on one input.
         inputs = [
@@ -384,4 +384,4 @@ class NCNanoContractTestCase(unittest.TestCase):
             nc_signature=b'',
         ))
         with self.assertRaises(TokenAuthorityNotAllowed):
-            self.peer.verification_service.verifiers.nano_contract.verify_no_authorities(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_no_authorities(nc)

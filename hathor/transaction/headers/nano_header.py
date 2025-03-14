@@ -18,6 +18,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Type
 
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import get_address_from_public_key_bytes
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.context import Context
     from hathor.nanocontracts.runner import Runner
-    from hathor.nanocontracts.types import BlueprintId, ContractId
+    from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction
     from hathor.transaction.base_transaction import BaseTransaction
 
 NC_VERSION = 1
@@ -197,8 +198,8 @@ class NanoHeader(VertexBaseHeader):
         context = self.get_context()
         runner.call_public_method(self.get_nanocontract_id(), self.nc_method, context, *args)
 
-    def get_context(self) -> Context:
-        """Return a context to be used in a method call."""
+    def get_actions(self) -> list[NCAction]:
+        """Calculate the actions based on the differences between inputs and outputs."""
         from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 
         diff_by_token: defaultdict[TokenUid, int] = defaultdict(int)
@@ -216,6 +217,22 @@ class NanoHeader(VertexBaseHeader):
 
         tokens: set[TokenUid] = set(diff_by_token.keys())
 
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        from hathor.transaction.util import get_deposit_amount
+        if isinstance(self.tx, TokenCreationTransaction):
+            # This implementation assumes that all missing deposit for minting tokens will be fulfilled by the contract
+            # through a withdrawal action.
+            settings = get_global_settings()
+            new_token_uid = TokenUid(self.tx.hash)
+            htr_token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
+            mint_amount = diff_by_token[new_token_uid]
+            assert mint_amount < 0
+            required_deposit = get_deposit_amount(settings, -mint_amount)
+            # Set diff_by_token[] of the newly created token to zero, so no action will be generated for it.
+            diff_by_token[new_token_uid] = 0
+            # Subtract the required deposit for minting tokens.
+            diff_by_token[htr_token_uid] -= required_deposit
+
         action_list = []
         for token_uid in tokens:
             diff = diff_by_token[token_uid]
@@ -231,6 +248,12 @@ class NanoHeader(VertexBaseHeader):
                 amount = diff
             assert amount >= 0
             action_list.append(NCAction(action, token_uid, amount))
+
+        return action_list
+
+    def get_context(self) -> Context:
+        """Return a context to be used in a method call."""
+        action_list = self.get_actions()
 
         meta = self.tx.get_metadata()
         timestamp: int

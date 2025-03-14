@@ -28,16 +28,16 @@ from hathor.nanocontracts.exception import (
     NCSerializationError,
 )
 from hathor.nanocontracts.method_parser import NCMethodParser
-from hathor.transaction import Transaction
+from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import TokenAuthorityNotAllowed
 from hathor.transaction.headers import NC_INITIALIZE_METHOD
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 
-class NanoContractVerifier:
+class NanoHeaderVerifier:
     __slots__ = ()
 
-    def verify_no_authorities(self, tx: Transaction) -> None:
+    def verify_no_authorities(self, tx: BaseTransaction) -> None:
         """Verify that it has not token authority."""
         assert tx.is_nano_contract()
 
@@ -51,9 +51,10 @@ class NanoContractVerifier:
             if txout.is_token_authority():
                 raise TokenAuthorityNotAllowed(f'input {i} is a token authority')
 
-    def verify_nc_id(self, tx: Transaction) -> None:
+    def verify_nc_id(self, tx: BaseTransaction) -> None:
         """Verify that nc_id is valid."""
         assert tx.is_nano_contract()
+        assert isinstance(tx, Transaction)
 
         assert tx.storage is not None
         assert tx.storage.nc_catalog is not None
@@ -80,9 +81,10 @@ class NanoContractVerifier:
             if nc_nano_header.nc_method != NC_INITIALIZE_METHOD:
                 raise NanoContractDoesNotExist
 
-    def verify_nc_signature(self, tx: Transaction) -> None:
+    def verify_nc_signature(self, tx: BaseTransaction) -> None:
         """Verify if the caller's signature is valid."""
         assert tx.is_nano_contract()
+        assert isinstance(tx, Transaction)
 
         data = tx.get_sighash_all_data()
 
@@ -98,9 +100,10 @@ class NanoContractVerifier:
         except InvalidSignature as e:
             raise NCInvalidSignature from e
 
-    def verify_nc_method_and_args(self, tx: Transaction) -> None:
+    def verify_nc_method_and_args(self, tx: BaseTransaction) -> None:
         """Verify if the method to be called and its arguments are valid."""
         assert tx.is_nano_contract()
+        assert isinstance(tx, Transaction)
 
         nano_header = tx.get_nano_header()
         blueprint_class = nano_header.get_blueprint_class()
