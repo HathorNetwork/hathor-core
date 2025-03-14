@@ -97,6 +97,7 @@ class HathorProtocol:
     idle_timeout: int
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
     capabilities: set[str]  # capabilities received from the peer in HelloState
+    connection_state: ConnectionState # in slot queue, connecting or ready/in-slot.
 
     @property
     def peer(self) -> PublicPeer:

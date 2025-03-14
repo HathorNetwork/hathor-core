@@ -467,7 +467,10 @@ class ConnectionsManager:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
-            
+                    
+        # Note: ^^^^ This alone may lead to a failure of the system.
+        # If all connections are full, but may still handle queues, it will regardless disconnect it. 
+
         # Next block sends the connection to the appropriate slot.
         # If it is a check connection, go to check_peers_connections slot.
         # If a discovered connection, go to discovered_connections slot.
@@ -489,6 +492,7 @@ class ConnectionsManager:
                 # Note: We return here since the connection is in queue, hence it should not be added
                 # to the connection pool nor broadcasted. It will only be added when other connections are lost.
                 self.q_outgoing_connections.appendleft(protocol)
+                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED
                 return 
             self.outgoing_connections.add(protocol)
         
@@ -505,6 +509,7 @@ class ConnectionsManager:
                 
                 # If not full, add to the queue and return, waiting for another peer to disconnect.
                 self.q_incoming_connections.appendleft(protocol)
+                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED
                 return
             self.incoming_connections.add(protocol)
 
@@ -521,6 +526,7 @@ class ConnectionsManager:
                 
                 # If not full, add to the queue and return, waiting for another peer to disconnect.
                 self.q_discovered_connections.appendleft(protocol)
+                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED
                 return
             self.discovered_connections.add(protocol)
         
@@ -535,6 +541,7 @@ class ConnectionsManager:
                     return
 
                 self.q_check_entrypoint_connections.appendleft(protocol)
+                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED
                 return
             self.check_entrypoint_connections.add(protocol)
         
