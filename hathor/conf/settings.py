@@ -315,7 +315,7 @@ class HathorSettings(NamedTuple):
     if PEER_MAX_DISCOVERED_PEERS_CONNECTIONS <= 0:
         raise Exception("PEER_MAX_DISCOVERED_PEERS_CONNECTIONS must be bigger than zero.")
 
-    class ConnectionType(Enum):
+    class ConnectionType(Enum): 
         # Types of Connection as inputs for an instance of the Hathor Protocol
         OUTGOING = 0
         INCOMING = 1
