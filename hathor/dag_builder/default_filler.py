@@ -15,11 +15,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from math import ceil
 
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeType, DAGOutput
+from hathor.transaction.util import get_deposit_amount
 
 
 class DefaultFiller:
@@ -104,7 +104,10 @@ class DefaultFiller:
             return DAGInput(token, index)
 
     def calculate_balance(self, node: DAGNode) -> dict[str, int]:
-        """Calculate the balance for each token in a node."""
+        """Calculate the balance for each token in a node.
+
+        balance = sum(outputs) - sum(inputs)
+        """
         ins: defaultdict[str, int] = defaultdict(int)
         for tx_name, index in node.inputs:
             node2 = self._get_or_create_node(tx_name)
@@ -237,15 +240,22 @@ class DefaultFiller:
             balance = self.calculate_balance(node)
             assert set(balance.keys()).issubset({'HTR', token})
 
-            htr_minimum = ceil(balance[token] / 100)
-            htr_balance = -balance.get('HTR', 0)
+            htr_deposit = get_deposit_amount(self._settings, balance[token])
+            htr_balance = balance.get('HTR', 0)
 
-            if htr_balance > htr_minimum:
+            # target = sum(outputs) - sum(inputs)
+            # <0 means deposit
+            # >0 means withdrawal
+            htr_target = node.balances.get('HTR', 0) - htr_deposit
+
+            diff = htr_balance - htr_target
+
+            if diff < 0:
                 index = self.get_next_index(node.outputs)
-                node.outputs[index] = DAGOutput(htr_balance - htr_minimum, 'HTR', {'_origin': 'f8'})
+                node.outputs[index] = DAGOutput(-diff, 'HTR', {'_origin': 'f8'})
 
-            elif htr_balance < htr_minimum:
-                txin = self.find_txin(htr_minimum - htr_balance, 'HTR')
+            elif diff > 0:
+                txin = self.find_txin(diff, 'HTR')
                 node.inputs.add(txin)
 
         if 'dummy' in self._builder._nodes:

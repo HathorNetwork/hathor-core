@@ -16,7 +16,7 @@ def test_deprecated_nano_contract():
 
     from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
     from hathor.transaction.vertex_parser import VertexParser
-    from hathor.verification.nano_contract_verifier import NanoContractVerifier
+    from hathor.verification.nano_header_verifier import NanoHeaderVerifier
 
     vertex_parser = VertexParser(settings=settings)
     tx = vertex_parser.deserialize(tx_bytes)
@@ -24,5 +24,5 @@ def test_deprecated_nano_contract():
     assert tx.hash == expected_tx_hash
     assert bytes(tx) == tx_bytes
 
-    nc_verifier = NanoContractVerifier()
+    nc_verifier = NanoHeaderVerifier()
     nc_verifier.verify_nc_signature(tx)

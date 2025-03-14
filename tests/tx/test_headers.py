@@ -5,6 +5,7 @@ from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import HeaderNotSupported
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
 
@@ -20,6 +21,12 @@ class MyTestBlueprint(Blueprint):
 
 
 class VertexHeadersTest(unittest.TestCase):
+    def has_nano_header(self, vertex: BaseTransaction) -> bool:
+        for header in vertex.headers:
+            if isinstance(header, NanoHeader):
+                return True
+        return False
+
     def test_allowed_vertices(self) -> None:
         blueprint_id = b'x' * 32
 
@@ -57,33 +64,27 @@ class VertexHeadersTest(unittest.TestCase):
 
         vertex: BaseTransaction
 
-        expected_to_pass: list[tuple[str, type[BaseTransaction]]] = [
-            ('b11', Block),
-            ('nc1', Transaction),
-            ('nc2', DeprecatedNanoContract),
-            ('TKA', TokenCreationTransaction),
-            ('tx1', Transaction),
+        expected_to_pass: list[tuple[str, type[BaseTransaction], bool]] = [
+            ('b11', Block, False),
+            ('nc1', Transaction, True),
+            ('nc2', DeprecatedNanoContract, True),
+            ('TKA', TokenCreationTransaction, False),
+            ('TKB', TokenCreationTransaction, True),
+            ('tx1', Transaction, False),
         ]
-        for name, _type in expected_to_pass:
-            node = artifacts.by_name[name].node
+        for name, _type, should_have_nano_header in expected_to_pass:
             vertex = artifacts.get_typed_vertex(name, _type)
-            print()
-            print()
-            print(name)
-            print(node)
-            print(repr(vertex))
-            print()
-            print()
+            assert self.has_nano_header(vertex) == should_have_nano_header
             clone = _type.create_from_struct(bytes(vertex))
             assert bytes(clone) == bytes(vertex)
             assert manager.on_new_tx(vertex, fails_silently=False)
 
-        expected_to_fail: list[tuple[str, type[BaseTransaction]]] = [
-            ('b12', Block),
-            ('TKB', TokenCreationTransaction),
+        expected_to_fail: list[tuple[str, type[BaseTransaction], bool]] = [
+            ('b12', Block, True),
         ]
-        for name, _type in expected_to_fail:
+        for name, _type, should_have_nano_header in expected_to_fail:
             vertex = artifacts.get_typed_vertex(name, _type)
+            assert self.has_nano_header(vertex) == should_have_nano_header
             clone = _type.create_from_struct(bytes(vertex))
             assert bytes(clone) == bytes(vertex)
             with pytest.raises(InvalidNewTransaction) as e:

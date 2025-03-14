@@ -18,7 +18,7 @@ import hashlib
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
-from typing_extensions import override
+from typing_extensions import assert_never, override
 
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_public_key_bytes
@@ -318,6 +318,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         Get a complete token info dict, including data from both inputs and outputs.
         """
         token_dict = self._get_token_info_from_inputs()
+        self._update_token_info_from_nano_actions(token_dict=token_dict)
+        # This one must be called last so token_dict already contains all tokens in inputs and nano actions.
         self._update_token_info_from_outputs(token_dict=token_dict)
 
         return token_dict
@@ -328,6 +330,32 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         if self.is_nano_contract():
             return 0
         return 1
+
+    def _update_token_info_from_nano_actions(self, *, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        """Update token_dict with nano actions."""
+        if not self.is_nano_contract():
+            return
+
+        from hathor.nanocontracts.types import NCActionType
+
+        nano_header = self.get_nano_header()
+        context = nano_header.get_context()
+        for action in context.actions.values():
+            token_info = token_dict.get(action.token_uid)
+            if token_info is None:
+                token_info = TokenInfo(0, False, False)
+
+            # amount = sum(outputs) - sum(inputs)
+            new_amount = token_info.amount
+            match action.type:
+                case NCActionType.DEPOSIT:
+                    new_amount += action.amount
+                case NCActionType.WITHDRAWAL:
+                    new_amount -= action.amount
+                case _:
+                    assert_never(action.type)
+
+            token_dict[action.token_uid] = TokenInfo(new_amount, token_info.can_mint, token_info.can_melt)
 
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
@@ -369,23 +397,23 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             token_info = token_dict.get(token_uid)
             if token_info is None:
                 raise InvalidToken('no inputs for token {}'.format(token_uid.hex()))
-            else:
-                # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
-                if tx_output.can_mint_token() and not token_info.can_mint:
-                    raise InvalidToken('output has mint authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
-                if tx_output.can_melt_token() and not token_info.can_melt:
-                    raise InvalidToken('output has melt authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
 
-                if tx_output.is_token_authority():
-                    # make sure we only have authorities that we know of
-                    if tx_output.value > TxOutput.ALL_AUTHORITIES:
-                        raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
-                else:
-                    # for regular outputs, just subtract from the total amount
-                    sum_tokens = token_info.amount + tx_output.value
-                    token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
+            # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
+            if tx_output.can_mint_token() and not token_info.can_mint:
+                raise InvalidToken('output has mint authority, but no input has it: {}'.format(
+                    tx_output.to_human_readable()))
+            if tx_output.can_melt_token() and not token_info.can_melt:
+                raise InvalidToken('output has melt authority, but no input has it: {}'.format(
+                    tx_output.to_human_readable()))
+
+            if tx_output.is_token_authority():
+                # make sure we only have authorities that we know of
+                if tx_output.value > TxOutput.ALL_AUTHORITIES:
+                    raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
+            else:
+                # for regular outputs, just subtract from the total amount
+                sum_tokens = token_info.amount + tx_output.value
+                token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent

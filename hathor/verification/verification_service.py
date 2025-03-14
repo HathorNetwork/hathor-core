@@ -115,21 +115,22 @@ class VerificationService:
                 self._verify_basic_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
-                if vertex.is_nano_contract():
-                    self._verify_basic_nano_contract(vertex)
-                else:
-                    self._verify_basic_tx(vertex)
+                self._verify_basic_tx(vertex)
+            case TxVersion.NANO_CONTRACT:
+                assert type(vertex) is DeprecatedNanoContract
+                self._verify_basic_tx(vertex)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_basic_token_creation_tx(vertex)
-            case TxVersion.NANO_CONTRACT:
-                assert type(vertex) is DeprecatedNanoContract
-                self._verify_basic_nano_contract(vertex)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
                 self._verify_basic_on_chain_blueprint(vertex)
             case _:
                 assert_never(vertex.version)
+
+        if vertex.is_nano_contract():
+            # nothing to do
+            pass
 
     def _verify_basic_block(self, block: Block, *, skip_weight_verification: bool) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
@@ -157,10 +158,6 @@ class VerificationService:
     def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_basic_tx(tx)
 
-    def _verify_basic_nano_contract(self, tx: Transaction) -> None:
-        assert tx.is_nano_contract()
-        self._verify_basic_tx(tx)
-
     def _verify_basic_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
         self._verify_basic_tx(tx)
 
@@ -181,21 +178,22 @@ class VerificationService:
                 self._verify_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
-                if vertex.is_nano_contract():
-                    self._verify_nano_contract(vertex, reject_locked_reward=reject_locked_reward)
-                else:
-                    self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
+                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
+            case TxVersion.NANO_CONTRACT:
+                assert type(vertex) is DeprecatedNanoContract
+                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_token_creation_tx(vertex, reject_locked_reward=reject_locked_reward)
-            case TxVersion.NANO_CONTRACT:
-                assert type(vertex) is DeprecatedNanoContract
-                self._verify_nano_contract(vertex, reject_locked_reward=reject_locked_reward)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
-                self._verify_on_chain_blueprint(vertex)
+                # TODO: on-chain blueprint verifications
+                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
             case _:
                 assert_never(vertex.version)
+
+        if vertex.is_nano_contract():
+            self._verify_nano_header(vertex, reject_locked_reward=reject_locked_reward)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def _verify_block(self, block: Block) -> None:
@@ -228,14 +226,6 @@ class VerificationService:
     def _verify_poa_block(self, block: PoaBlock) -> None:
         self._verify_block(block)
 
-    def _verify_common_tx(self, tx: Transaction) -> None:
-        """Common verifications for `Transaction` class and its subclasses, except the verify_reward_locked().
-        """
-        self.verify_without_storage(tx)
-        self.verifiers.tx.verify_sigops_input(tx)
-        self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
-        self.verifiers.vertex.verify_parents(tx)
-
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
     def _verify_tx(
         self,
@@ -258,8 +248,11 @@ class VerificationService:
         if tx.is_genesis:
             # TODO do genesis validation
             return
-        self._verify_common_tx(tx)
+        self.verify_without_storage(tx)
+        self.verifiers.tx.verify_sigops_input(tx)
+        self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
+        self.verifiers.vertex.verify_parents(tx)
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 
@@ -273,20 +266,13 @@ class VerificationService:
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
         self.verifiers.token_creation_tx.verify_token_info(tx)
 
-    def _verify_nano_contract(self, tx: Transaction, *, reject_locked_reward: bool) -> None:
+    def _verify_nano_header(self, tx: BaseTransaction, *, reject_locked_reward: bool) -> None:
         """Add `verify_no_authorities()` to the transaction verification."""
         assert tx.is_nano_contract()
 
-        self._verify_common_tx(tx)
-        self.verifiers.nano_contract.verify_nc_id(tx)
-        self.verifiers.nano_contract.verify_nc_method_and_args(tx)
-        self.verifiers.nano_contract.verify_no_authorities(tx)
-        if reject_locked_reward:
-            self.verifiers.tx.verify_reward_locked(tx)
-
-    def _verify_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
-        self._verify_common_tx(tx)
-        # TODO: on-chain blueprint verifications
+        self.verifiers.nano_header.verify_nc_id(tx)
+        self.verifiers.nano_header.verify_nc_method_and_args(tx)
+        self.verifiers.nano_header.verify_no_authorities(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
@@ -302,21 +288,21 @@ class VerificationService:
                 self._verify_without_storage_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
-                if vertex.is_nano_contract():
-                    self._verify_without_storage_nano_contract(vertex)
-                else:
-                    self._verify_without_storage_tx(vertex)
+                self._verify_without_storage_tx(vertex)
+            case TxVersion.NANO_CONTRACT:
+                assert type(vertex) is DeprecatedNanoContract
+                self._verify_without_storage_tx(vertex)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_without_storage_token_creation_tx(vertex)
-            case TxVersion.NANO_CONTRACT:
-                assert type(vertex) is DeprecatedNanoContract
-                self._verify_without_storage_nano_contract(vertex)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
                 self._verify_without_storage_on_chain_blueprint(vertex)
             case _:
                 assert_never(vertex.version)
+
+        if vertex.is_nano_contract():
+            self._verify_without_storage_nano_header(vertex)
 
     def _verify_without_storage_base_block(self, block: Block) -> None:
         self.verifiers.block.verify_no_inputs(block)
@@ -350,10 +336,9 @@ class VerificationService:
     def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_without_storage_tx(tx)
 
-    def _verify_without_storage_nano_contract(self, tx: Transaction) -> None:
+    def _verify_without_storage_nano_header(self, tx: BaseTransaction) -> None:
         assert tx.is_nano_contract()
-        self._verify_without_storage_tx(tx)
-        self.verifiers.nano_contract.verify_nc_signature(tx)
+        self.verifiers.nano_header.verify_nc_signature(tx)
 
     def _verify_without_storage_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
         self._verify_without_storage_tx(tx)
