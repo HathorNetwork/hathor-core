@@ -551,6 +551,9 @@ class ConnectionsManager:
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
+        # If not queued, connection state is "CONNECTING", as it is not ready yet, added to handshaking.
+        protocol.connection_state = HathorProtocol.ConnectionState.CONNECTING
+
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
             protocol=protocol,
@@ -565,6 +568,8 @@ class ConnectionsManager:
         self.handshaking_peers.remove(protocol)
         for conn in self.iter_all_connections():
             conn.unverified_peer_storage.remove(protocol.peer)
+        
+        protocol.connection_state = HathorProtocol.ConnectionState.READY
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emitted regardless
@@ -649,28 +654,25 @@ class ConnectionsManager:
                 dequeued_connection = self.q_outgoing_connections.pop()
                 # If the set just discarded a connection, it is guaranteed not to be at full capacity.
                 self.outgoing_connections.add(dequeued_connection)
-                # The max values of each slot are percentages of maximum value. No need to check if max value of connections is
-                # respected.
+                # The max values of each slot are percentages of maximum value. 
+                # No need to check if max value of connections is respected.
 
         if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
             self.incoming_connections.discard(protocol)
             if len(self.q_incoming_connections):
                 dequeued_connection = self.q_incoming_connections.pop()
-                # If the set just discarded a connection, it is guaranteed not to be at full capacity.
                 self.incoming_connections.add(dequeued_connection)
 
         if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
             self.discovered_connections.discard(protocol)
             if len(self.q_discovered_connections):
                 dequeued_connection = self.q_discovered_connections.pop()
-                # If the set just discarded a connection, it is guaranteed not to be at full capacity.
                 self.discovered_connections.add(dequeued_connection)
 
         if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
             self.check_entrypoint_connections.discard(protocol)
             if len(self.q_check_entrypoint_connections):
                 dequeued_connection = self.q_check_entrypoint_connections.pop()
-                # If the set just discarded a connection, it is guaranteed not to be at full capacity.
                 self.check_entrypoint_connections.add(dequeued_connection)
 
         
