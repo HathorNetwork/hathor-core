@@ -19,6 +19,7 @@ from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
+from hathor.transaction.headers import NANO_HEADER_ID, NanoHeader
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo, Transaction
 from hathor.transaction.util import VerboseCallback, decode_string_utf8, int_to_bytes, unpack, unpack_len
@@ -37,7 +38,9 @@ TOKEN_INFO_VERSION = 1
 
 class TokenCreationTransaction(Transaction):
 
-    SUPPORTED_HEADERS = {}
+    SUPPORTED_HEADERS = {
+        NANO_HEADER_ID: NanoHeader,
+    }
 
     def __init__(
         self,
