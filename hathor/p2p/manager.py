@@ -492,7 +492,7 @@ class ConnectionsManager:
                 # Note: We return here since the connection is in queue, hence it should not be added
                 # to the connection pool nor broadcasted. It will only be added when other connections are lost.
                 self.q_outgoing_connections.appendleft(protocol)
-                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED
+                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
                 return 
             self.outgoing_connections.add(protocol)
         
@@ -509,7 +509,7 @@ class ConnectionsManager:
                 
                 # If not full, add to the queue and return, waiting for another peer to disconnect.
                 self.q_incoming_connections.appendleft(protocol)
-                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED
+                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
                 return
             self.incoming_connections.add(protocol)
 
@@ -526,7 +526,7 @@ class ConnectionsManager:
                 
                 # If not full, add to the queue and return, waiting for another peer to disconnect.
                 self.q_discovered_connections.appendleft(protocol)
-                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED
+                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
                 return
             self.discovered_connections.add(protocol)
         
@@ -541,7 +541,7 @@ class ConnectionsManager:
                     return
 
                 self.q_check_entrypoint_connections.appendleft(protocol)
-                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED
+                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
                 return
             self.check_entrypoint_connections.add(protocol)
         
@@ -565,7 +565,12 @@ class ConnectionsManager:
         assert protocol.peer is not None
         self.verified_peer_storage.add_or_replace(protocol.peer)
 
-        self.handshaking_peers.remove(protocol)
+        if protocol in self.handshaking_peers:
+            self.handshaking_peers.remove(protocol)
+        else:
+            # Queued protocols do not handshake before freed slot - if ready without handshaking, return.
+            self.log.warn("Protocol in QUEUE - Waiting for respective slot to unload.")
+            return
         for conn in self.iter_all_connections():
             conn.unverified_peer_storage.remove(protocol.peer)
         
@@ -681,7 +686,22 @@ class ConnectionsManager:
             # This dequeued connection has not been published nor added to the total count on peer connect.
             # Now we add this protocol and publish it.
             self.connections.add(dequeued_connection)
-            self.handshaking_peers.add(dequeued_connection)
+
+            # Update the dequeued connection state:
+            if dequeued_connection.connection_state == HathorProtocol.ConnectionState.QUEUED_CONNECTING:
+                self.handshaking_peers.add(dequeued_connection)
+                protocol.connection_state = HathorProtocol.ConnectionState.CONNECTING
+
+            if dequeued_connection.connection_state == HathorProtocol.ConnectionState.QUEUED_READY:
+                # Add to handshaking to be removed right after on_peer_ready is called.
+                self.handshaking_peers.add(dequeued_connection)
+                # Called again, as it was first ignored by being in queue.
+                self.on_peer_ready(dequeued_connection)
+
+        # SUGGESTION: To make a NETWORK_PEER_DEQUEUED. It would be clearer, since in the case of a dequeue,
+        # the order of events would be "NETWORK_PEER_READY" and then "NETWORK_PEER_CONNECTED", which is 
+        # the opposite.
+        
             self.pubsub.publish(
                 HathorEvents.NETWORK_PEER_CONNECTED,
                 protocol=dequeued_connection,

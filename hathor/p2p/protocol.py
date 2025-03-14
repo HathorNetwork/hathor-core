@@ -72,7 +72,8 @@ class HathorProtocol:
         # State of connection of two peers - either in a slot queue or active.
         CONNECTING = 0
         READY = 1
-        QUEUED = 2    # Later may be changed to a more robust Enum
+        QUEUED_CONNECTING = 2    
+        QUEUED_READY = 3        # Later may be changed to a more robust Enum
 
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'
