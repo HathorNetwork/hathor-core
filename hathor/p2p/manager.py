@@ -71,8 +71,8 @@ class PeerConnectionsMetrics(NamedTuple):
     connected_peers_count: int
     known_peers_count: int
     # Counters for the connection pool slots
-    incoming_connections_count: int
     outgoing_connections_count: int
+    incoming_connections_count: int
     discovered_connections_count: int
     check_entrypoint_connections_count: int
 
