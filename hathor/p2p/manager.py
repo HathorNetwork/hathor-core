@@ -160,9 +160,6 @@ class ConnectionsManager:
         # Maximum connections establishable in a QUEUE of connections:
         self.max_queued_connections: int = self._settings.QUEUE_SIZE
 
-        # Test variable
-        self.testList = set()
-
         # Global rate limiter for all connections.
         self.rate_limiter = RateLimiter(self.reactor)
         self.enable_rate_limiter()
@@ -467,8 +464,6 @@ class ConnectionsManager:
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
-        self.testList.add(protocol)
-        print(self.testList)
         print("=##=###=####=##### NEW CONNECTION COMING #####=####=###=##=")
         print("=##=###=####=##### NEW CONNECTION COMING #####=####=###=##=")
         print("=##=###=####=##### NEW CONNECTION COMING #####=####=###=##=")
@@ -696,36 +691,6 @@ class ConnectionsManager:
         # If the protocol discarded is from a slot with connections in queue:
         dequeued_connection = None
 
-        if protocol in self.handshaking_peers:
-            self.handshaking_peers.remove(protocol)
-            print("aa")
-        if protocol._peer is not None:
-            peer_id = protocol.peer.id
-            print("bb")
-            existing_protocol = self.connected_peers.pop(peer_id, None)
-            print("cc")
-            if existing_protocol is None:
-                # in this case, the connection was closed before it got to READY state
-                return
-            if existing_protocol != protocol:
-                # this is the case we're closing a duplicate connection. We need to set the
-                # existing protocol object back to connected_peers, as that connection is still ongoing.
-                # A check for duplicate connections is done during PEER_ID state, but there's still a
-                # chance it can happen if both connections start at the same time and none of them has
-                # reached READY state while the other is on PEER_ID state
-                print("BBB")
-                self.connected_peers[peer_id] = existing_protocol
-            elif peer_id in self.new_connection_from_queue:
-                # now we're sure it can be removed from new_connection_from_queue
-                self.new_connection_from_queue.remove(peer_id)
-                print("CCC")
-
-        self.pubsub.publish(
-            HathorEvents.NETWORK_PEER_DISCONNECTED,
-            protocol=protocol,
-            peers_count=self._get_peers_count()
-        )
-
         # Each conn is from a slot - discard from it as well.
         if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
             print("=##=###=  OUTGOING DISCONNECTING #####==")
@@ -733,50 +698,50 @@ class ConnectionsManager:
 
             # If there are connections in the queue, we pop from it and publish it.
             if self.q_outgoing_connections:
-                print("Queue is NOT empty.")
-
                 # The protocol to be disconnected may be from the queue.
                 if protocol in self.q_outgoing_connections:
-                    print("     Protocol in question IN QUEUE.")
-                    print("     Removing protocol from queue... ")
                     self.q_outgoing_connections.remove(protocol)
-                    print("     PROTOCOL DISCARDED FROM QUEUE, NOT CONNECTED.")
                     return 
 
                 # If protocol in slot but queue not empty, pop from queue and add to slot.
                 dequeued_connection = self.q_outgoing_connections.pop()
+
                 # If the set just discarded a connection, it is guaranteed not to be at full capacity.
-                # if len(self.outgoing_connections) >= self.max_outgoing_connections:
                 self.outgoing_connections.add(dequeued_connection)
-                # The max values of each slot are percentages of maximum value. 
-                # No need to check if max value of connections is respected.
 
         if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
             self.incoming_connections.discard(protocol)
-            if len(self.q_incoming_connections):
+            if self.q_incoming_connections:
+                if protocol in self.q_incoming_connections:
+                    self.q_incoming_connections.remove(protocol)
+                    return 
                 dequeued_connection = self.q_incoming_connections.pop()
                 self.incoming_connections.add(dequeued_connection)
 
         if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
             self.discovered_connections.discard(protocol)
-            if len(self.q_discovered_connections):
+            if self.q_discovered_connections:
+                if protocol in self.q_discovered_connections:
+                    self.q_discovered_connections.remove(protocol)
+                    return 
                 dequeued_connection = self.q_discovered_connections.pop()
                 self.discovered_connections.add(dequeued_connection)
 
         if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
             self.check_entrypoint_connections.discard(protocol)
-            if len(self.q_check_entrypoint_connections):
+            if self.q_check_entrypoint_connections:
+                if protocol in self.q_check_entrypoint_connections:
+                    self.q_check_entrypoint_connections.remove(protocol)
+                    return 
                 dequeued_connection = self.q_check_entrypoint_connections.pop()
                 self.check_entrypoint_connections.add(dequeued_connection)
 
 
         # After the network peer has been disconnected, if a connection was dequeued, we publish its connection.
         if dequeued_connection:
-            print("There was something in queue, so dequeued.")
             # This dequeued connection has not been published nor added to the total count on peer connect.
             # Now we add this protocol and publish it.
             self.connections.add(dequeued_connection)
-            print("Add dequeued to connections.")
             # Update the dequeued connection state:
             if dequeued_connection.connection_state == HathorProtocol.ConnectionState.QUEUED_CONNECTING:
                 self.handshaking_peers.add(dequeued_connection)
@@ -788,11 +753,39 @@ class ConnectionsManager:
                 # Called again, as it was first ignored by being in queue.
                 self.on_peer_ready(dequeued_connection)
 
+
+        if protocol in self.handshaking_peers:
+            self.handshaking_peers.remove(protocol)
+
+        if protocol._peer is not None:
+            peer_id = protocol.peer.id
+            existing_protocol = self.connected_peers.pop(peer_id, None)
+            if existing_protocol is None:
+                # in this case, the connection was closed before it got to READY state
+                return
+            if existing_protocol != protocol:
+                # this is the case we're closing a duplicate connection. We need to set the
+                # existing protocol object back to connected_peers, as that connection is still ongoing.
+                # A check for duplicate connections is done during PEER_ID state, but there's still a
+                # chance it can happen if both connections start at the same time and none of them has
+                # reached READY state while the other is on PEER_ID state
+                self.connected_peers[peer_id] = existing_protocol
+            elif peer_id in self.new_connection_from_queue:
+                # now we're sure it can be removed from new_connection_from_queue
+                self.new_connection_from_queue.remove(peer_id)
+
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_DISCONNECTED,
+            protocol=protocol,
+            peers_count=self._get_peers_count()
+        )
+
+        
         # SUGGESTION: To make a NETWORK_PEER_DEQUEUED. It would be clearer, since in the case of a dequeue,
         # the order of events would be "NETWORK_PEER_READY" and then "NETWORK_PEER_CONNECTED", which is 
         # the opposite.
         
-            self.pubsub.publish(
+        self.pubsub.publish(
                 HathorEvents.NETWORK_PEER_CONNECTED,
                 protocol=dequeued_connection,
                 peers_count=self._get_peers_count()
