@@ -464,22 +464,9 @@ class ConnectionsManager:
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
-        print("=##=###=####=##### NEW CONNECTION COMING #####=####=###=##=")
-        print("=##=###=####=##### NEW CONNECTION COMING #####=####=###=##=")
-        print("=##=###=####=##### NEW CONNECTION COMING #####=####=###=##=")
-        print(f"CONNECTION TYPE: {protocol.connection_type}")
-        print("=\n=\n=\n")
-        print("########## CONNECTION LOG - BEFORE ###########")
-        print(f"TOTAL CONN: {len(self.connections)}")  
-        print(f"INCOMING: {len(self.incoming_connections)}")  
-        print(f"OUTGOING: {len(self.outgoing_connections)}")  
-        print(f"QUEUE OUTGOING: {len(self.q_outgoing_connections)}")  
-        print(f"DISCOVERED: {len(self.discovered_connections)}")  
-        print(f"CHECK_ENTRYPOINTS: {len(self.check_entrypoint_connections)}")  
 
         # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:
-            print("======= MAX NUMBER OF CONNECTIONS ========")
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
@@ -488,14 +475,8 @@ class ConnectionsManager:
         # If all connections are full, but may still handle queues, it will regardless disconnect it. 
 
         # Next block sends the connection to the appropriate slot.
-        # If it is a check connection, go to check_peers_connections slot.
-        # If a discovered connection, go to discovered_connections slot.
-        # If none of the above, go to either incoming or outgoing connections slot.
-        # Note: Assumes CHECK_ENTRYPOINT and DISCOVERED_CONNECTION cannot be True in Tandem.
-
         if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
             if len(self.outgoing_connections) >= self.max_outgoing_connections:
-                
                 self.log.warn("DENIED: Reached maximum number of OUTGOING connections", max_connections=self.max_outgoing_connections)
                 self.log.warn("|_____  Adding to QUEUE of OUTGOING connections...")
                 # Check if queue is full. If so, disconnect. 
@@ -503,13 +484,6 @@ class ConnectionsManager:
                     self.log.warn("      |_____DENIED: QUEUE of OUTGOING connections is full. Disconnecting... ")
                     protocol.connection_state = HathorProtocol.ConnectionState.OUT_QUEUED
                     protocol.disconnect(force=True)
-                    print("########## CONNECTION LOG - AFTER QUEUE FULL, SLOT FULL ###########")
-                    print(f"TOTAL CONN: {len(self.connections)}")  
-                    print(f"INCOMING: {len(self.incoming_connections)}")  
-                    print(f"OUTGOING: {len(self.outgoing_connections)}") 
-                    print(f"QUEUE OUTGOING: {len(self.q_outgoing_connections)}")   
-                    print(f"DISCOVERED: {len(self.discovered_connections)}")  
-                    print(f"CHECK_ENTRYPOINTS: {len(self.check_entrypoint_connections)}")  
                     return
                 
                 # If not full, add to the queue and return, waiting for another peer to disconnect.
@@ -517,15 +491,8 @@ class ConnectionsManager:
                 # to the connection pool nor broadcasted. It will only be added when other connections are lost.
                 self.q_outgoing_connections.appendleft(protocol)
                 protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
-                print("########## CONNECTION LOG - QUEUE FREE, SLOT FULL ###########")
-                print(f"TOTAL CONN: {len(self.connections)}")  
-                print(f"INCOMING: {len(self.incoming_connections)}")  
-                print(f"OUTGOING: {len(self.outgoing_connections)}")  
-                print(f"QUEUE OUTGOING: {len(self.q_outgoing_connections)}")  
-                print(f"DISCOVERED: {len(self.discovered_connections)}")  
-                print(f"CHECK_ENTRYPOINTS: {len(self.check_entrypoint_connections)}")  
-                print("======------=========")
                 return 
+            # If not full, add to slot
             self.outgoing_connections.add(protocol)
 
         if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
@@ -533,13 +500,12 @@ class ConnectionsManager:
                 self.log.warn('DENIED: Reached maximum number of INCOMING connections', max_connections=self.max_incoming_connections)
                 self.log.warn("|_____  Adding to QUEUE of INCOMING connections")
 
-                # Check if queue is full. If so, disconnect. 
                 if len(self.q_incoming_connections) >= self.max_queued_connections:
                     self.log.warn("      |_____DENIED: QUEUE of INCOMING connections is full. Disconnecting... ")
+                    protocol.connection_state = HathorProtocol.ConnectionState.OUT_QUEUED
                     protocol.disconnect(force=True)
                     return
                 
-                # If not full, add to the queue and return, waiting for another peer to disconnect.
                 self.q_incoming_connections.appendleft(protocol)
                 protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
                 return
@@ -550,13 +516,12 @@ class ConnectionsManager:
                 self.log.warn("DENIED: Reached maximum number of DISCOVERED connections from peers.", max_connections=self.max_discovered_peers_connections)
                 self.log.warn("|_____  Adding to QUEUE of DISCOVERED connections")
 
-                # Check if queue is full. If so, disconnect. 
                 if len(self.q_discovered_connections) >= self.max_queued_connections:
                     self.log.warn("      |_____DENIED: QUEUE of DISCOVERED connections is full. Disconnecting... ")
+                    protocol.connection_state = HathorProtocol.ConnectionState.OUT_QUEUED
                     protocol.disconnect(force=True)
                     return
                 
-                # If not full, add to the queue and return, waiting for another peer to disconnect.
                 self.q_discovered_connections.appendleft(protocol)
                 protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
                 return
@@ -569,9 +534,10 @@ class ConnectionsManager:
 
                 if len(self.q_check_entrypoint_connections) >= self.max_queued_connections:
                     self.log.warn("      |_____DENIED: QUEUE of CHECK_ENTRYPOINTS connections is full. Disconnecting... ")
+                    protocol.connection_state = HathorProtocol.ConnectionState.OUT_QUEUED
                     protocol.disconnect(force=True)
                     return
-
+                
                 self.q_check_entrypoint_connections.appendleft(protocol)
                 protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
                 return
@@ -591,17 +557,6 @@ class ConnectionsManager:
             protocol=protocol,
             peers_count=self._get_peers_count()
         )
-
-        print("########## CONNECTION LOG - SLOT FREE, NO QUEUE ###########")
-        print(f"TOTAL CONN: {len(self.connections)}")  
-        print(f"INCOMING: {len(self.incoming_connections)}")  
-        print(f"OUTGOING: {len(self.outgoing_connections)}")  
-        print(f"QUEUE OUTGOING: {len(self.q_outgoing_connections)}")  
-        print(f"DISCOVERED: {len(self.discovered_connections)}")  
-        print(f"CHECK_ENTRYPOINTS: {len(self.check_entrypoint_connections)}")  
-        print("==------=======--------=========---------==--")
-        print("==------=======--------=========---------==--")
-        print("==------=======--------=========---------==--")
         
 
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
@@ -667,19 +622,6 @@ class ConnectionsManager:
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
 
-
-        print("=##=###=####=#####  CONNECTION LEAVING #####=####=###=##=")
-
-        print("====\n====\n====\n===")
-        print("########## CONNECTION LOG - BEFORE ###########")
-        print(f"TOTAL CONN: {len(self.connections)}")  
-        print(f"INCOMING: {len(self.incoming_connections)}")  
-        print(f"OUTGOING: {len(self.outgoing_connections)}")  
-        print(f"QUEUE OUTGOING: {len(self.q_outgoing_connections)}")  
-        print(f"DISCOVERED: {len(self.discovered_connections)}")  
-        print(f"CHECK_ENTRYPOINTS: {len(self.check_entrypoint_connections)}")
-        print("------")
-
         # If slot and queue full, protocol neved connected - ditched.
         if protocol.connection_state == HathorProtocol.ConnectionState.OUT_QUEUED:
             self.log.warn("DENIED: Connection out of any slot or queue.")
@@ -693,7 +635,6 @@ class ConnectionsManager:
 
         # Each conn is from a slot - discard from it as well.
         if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
-            print("=##=###=  OUTGOING DISCONNECTING #####==")
             self.outgoing_connections.discard(protocol) ## Discard both from conn and slot_conn
 
             # If there are connections in the queue, we pop from it and publish it.
@@ -711,28 +652,34 @@ class ConnectionsManager:
 
         if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
             self.incoming_connections.discard(protocol)
+
             if self.q_incoming_connections:
                 if protocol in self.q_incoming_connections:
                     self.q_incoming_connections.remove(protocol)
                     return 
+                
                 dequeued_connection = self.q_incoming_connections.pop()
                 self.incoming_connections.add(dequeued_connection)
 
         if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
             self.discovered_connections.discard(protocol)
+
             if self.q_discovered_connections:
                 if protocol in self.q_discovered_connections:
                     self.q_discovered_connections.remove(protocol)
                     return 
+                
                 dequeued_connection = self.q_discovered_connections.pop()
                 self.discovered_connections.add(dequeued_connection)
 
         if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
             self.check_entrypoint_connections.discard(protocol)
+
             if self.q_check_entrypoint_connections:
                 if protocol in self.q_check_entrypoint_connections:
                     self.q_check_entrypoint_connections.remove(protocol)
                     return 
+                
                 dequeued_connection = self.q_check_entrypoint_connections.pop()
                 self.check_entrypoint_connections.add(dequeued_connection)
 
@@ -791,15 +738,6 @@ class ConnectionsManager:
                 peers_count=self._get_peers_count()
             )
         
-        print("########## CONNECTION LOG - AFTER DISCONNECT ###########")
-        print(f"TOTAL CONN: {len(self.connections)}")  
-        print(f"INCOMING: {len(self.incoming_connections)}")  
-        print(f"OUTGOING: {len(self.outgoing_connections)}") 
-        print(f"QUEUE OUTGOING: {len(self.q_outgoing_connections)}")   
-        print(f"DISCOVERED: {len(self.discovered_connections)}")  
-        print(f"CHECK_ENTRYPOINTS: {len(self.check_entrypoint_connections)}")  
-        print("_-_-_-------_-_-________---__-_-_-_----______________")
-
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""
         for conn in self.connections:
