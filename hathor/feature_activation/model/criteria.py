@@ -81,7 +81,10 @@ class Criteria(BaseModel, validate_all=True):
     def get_threshold(self, feature_settings: 'FeatureSettings') -> int:
         """Returns the configured threshold, or the default threshold if it is None."""
         return self.threshold if self.threshold is not None else feature_settings.default_threshold
-
+    
+    def is_block_in_activation_range(self, block_height: int) -> bool:
+        return self.start_height <= block_height and block_height < self.timeout_height
+        
 
 class ValidatedCriteria(Criteria):
     """

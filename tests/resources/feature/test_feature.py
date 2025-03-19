@@ -34,7 +34,7 @@ from tests.resources.base_resource import StubSite
 def web() -> StubSite:
     block = Block(hash=b'some_hash')
     static_metadata = BlockStaticMetadata(
-        height=123,
+        height=250,
         min_height=0,
         feature_activation_bit_counts=[0, 1, 0, 0],
         feature_states={},
@@ -94,7 +94,7 @@ def test_get_features(web: StubSite) -> None:
     result = response.result.json_value()
     expected = dict(
         block_hash=b'some_hash'.hex(),
-        block_height=123,
+        block_height=250,
         features=[
             dict(
                 name='NOP_FEATURE_1',
