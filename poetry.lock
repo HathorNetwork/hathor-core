@@ -1813,7 +1813,7 @@ test = ["pytest"]
 type = "git"
 url = "https://github.com/hathornetwork/python-rocksdb.git"
 reference = "HEAD"
-resolved_reference = "72edcfbd22f4a3ca816f94096d3ec181da41031e"
+resolved_reference = "1f0ce6a35472ad2e631335f159db9906ed2ebc86"
 
 [[package]]
 name = "sentry-sdk"
