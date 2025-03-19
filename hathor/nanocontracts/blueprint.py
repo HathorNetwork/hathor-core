@@ -49,6 +49,10 @@ class _BlueprintBase(type):
 
         # Create the `_fields` attribute with the type for each field.
         attrs['_fields'] = attrs.get('__annotations__', {})
+        # Use an empty __slots__ to prevent storing any attributes directly on instances.
+        # The declared attributes are stored as fields on the class, so they still work despite the empty slots.
+        attrs['__slots__'] = tuple()
+        # Finally, create class!
         new_class = super().__new__(cls, name, bases, attrs, **kwargs)
 
         # Check for forbidden names.
@@ -89,6 +93,8 @@ class Blueprint(metaclass=_BlueprintBase):
             name: str
             age: int
     """
+
+    __slots__ = ('log', '__runner', '_storage', '_cache')
 
     def __init__(self, runner: Runner, storage: NCStorage):
         self.log = logger.new()
