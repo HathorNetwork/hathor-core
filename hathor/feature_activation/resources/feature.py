@@ -71,16 +71,17 @@ class FeatureResource(Resource):
         feature_infos = self._feature_service.get_feature_infos(vertex=block)
 
         for feature, feature_info in feature_infos.items():
-            if feature_info.state not in FeatureState.get_signaling_states():
+            
+            if not feature_info.criteria.is_block_in_activation_range(block.static_metadata.height):
                 continue
 
             block_feature = GetBlockFeatureResponse(
                 bit=feature_info.criteria.bit,
                 signal=block.get_feature_activation_bit_value(feature_info.criteria.bit),
                 feature=feature,
-                feature_state=feature_info.state.name
+                feature_state=feature_info.state.name,
             )
-
+            
             signal_bits.append(block_feature)
 
         response = GetBlockFeaturesResponse(signal_bits=signal_bits)
