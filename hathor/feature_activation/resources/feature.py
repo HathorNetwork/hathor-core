@@ -71,7 +71,6 @@ class FeatureResource(Resource):
         feature_infos = self._feature_service.get_feature_infos(vertex=block)
 
         for feature, feature_info in feature_infos.items():
-
             if not feature_info.criteria.is_block_in_activation_range(block.static_metadata.height):
                 continue
 
