@@ -23,11 +23,13 @@ from hathor.nanocontracts.storage import NCStorage
 from hathor.nanocontracts.types import ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
 
 logger = get_logger()
 
 FORBIDDEN_NAMES = {
+    'rng',
     'get_nanocontract_id',
     'get_balance',
     'call_public_method',
@@ -101,6 +103,12 @@ class Blueprint(metaclass=_BlueprintBase):
         self.__runner = runner
         self._storage = storage
         self._cache: dict[str, Any] = {}
+
+    @final
+    @property
+    def rng(self) -> NanoRNG:
+        """Return an RNG for the current contract."""
+        return self.__runner.get_rng()
 
     @final
     def get_nanocontract_id(self) -> ContractId:
