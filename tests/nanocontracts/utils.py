@@ -14,8 +14,12 @@ class TestRunner(Runner):
     def __init__(self,
                  tx_storage: TransactionStorage,
                  storage_factory: NCStorageFactory,
-                 block_trie: PatriciaTrie) -> None:
-        super().__init__(tx_storage, storage_factory, block_trie)
+                 block_trie: PatriciaTrie,
+                 *,
+                 seed: bytes | None = None) -> None:
+        if seed is None:
+            seed = b'x' * 32
+        super().__init__(tx_storage, storage_factory, block_trie, seed=seed)
         self._contracts: dict[ContractId, Type[Blueprint]] = {}
 
     def register_contract(self, blueprint_class: Type[Blueprint], nanocontract_id: ContractId) -> None:
