@@ -1,6 +1,7 @@
 import tempfile
 from unittest.mock import Mock
 
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -9,7 +10,6 @@ from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from hathor.wallet import Wallet
-from hathor.conf.settings import HathorSettings
 from tests import unittest
 
 

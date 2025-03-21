@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+from enum import Enum
 from math import log
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, Union
@@ -24,7 +25,6 @@ from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathor.utils import yaml
 from hathor.utils.named_tuple import validated_named_tuple_from_dict
-from enum import Enum
 
 DECIMAL_PLACES = 2
 
