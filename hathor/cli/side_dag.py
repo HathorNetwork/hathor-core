@@ -82,10 +82,10 @@ def main(capture_stdout: bool) -> None:
     $ python -m hathor run_node_with_side_dag
         --testnet
         --procname-prefix testnet-
-        --memory-storage
+        --temp-data
         --side-dag-config-yaml ./my-side-dag.yml
         --side-dag-procname-prefix my-side-dag-
-        --side-dag-memory-storage
+        --side-dag-temp-data
         --json-logs both
     ```
 

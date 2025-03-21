@@ -12,13 +12,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Iterator, Optional
 
-from hathor.conf.settings import HathorSettings
 from hathor.transaction import Block
 from hathor.util import not_none
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.storage.vertex_storage_protocol import VertexStorageProtocol
     from hathor.transaction.transaction import RewardLockedInfo, Transaction
 

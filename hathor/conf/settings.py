@@ -359,10 +359,6 @@ class HathorSettings(NamedTuple):
     # Amount in which tx min weight reaches the middle point between the minimum and maximum weight
     MIN_TX_WEIGHT_K: int = 100
 
-    # When the node is being initialized (with a full verification) we don't verify
-    # the difficulty of all blocks, we execute the validation every N blocks only
-    VERIFY_WEIGHT_EVERY_N_BLOCKS: int = 1000
-
     # Capabilities
     CAPABILITY_WHITELIST: str = 'whitelist'
     CAPABILITY_SYNC_VERSION: str = 'sync-version'

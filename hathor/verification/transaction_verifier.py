@@ -12,7 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.conf.settings import HathorSettings
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
@@ -38,6 +41,9 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
 
 cpu = get_cpu_profiler()
 

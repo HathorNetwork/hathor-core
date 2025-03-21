@@ -1,3 +1,4 @@
+from hathor.transaction import Block, Transaction
 from tests import unittest
 
 
@@ -40,21 +41,11 @@ class FirstBlockTestCase(unittest.TestCase):
             b33 --> tx50
         """)
 
-        for node, vertex in artifacts.list:
-            self.manager.on_new_tx(vertex, fails_silently=False)
+        artifacts.propagate_with(self.manager)
 
-        b31 = artifacts.by_name['b31'].vertex
-        b32 = artifacts.by_name['b32'].vertex
-        b33 = artifacts.by_name['b33'].vertex
-
-        tx10 = artifacts.by_name['tx10'].vertex
-        tx20 = artifacts.by_name['tx20'].vertex
-        tx30 = artifacts.by_name['tx30'].vertex
-        tx40 = artifacts.by_name['tx40'].vertex
-        tx41 = artifacts.by_name['tx41'].vertex
-        tx42 = artifacts.by_name['tx42'].vertex
-        tx43 = artifacts.by_name['tx43'].vertex
-        tx50 = artifacts.by_name['tx50'].vertex
+        b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
+        txs = ['tx10', 'tx20', 'tx30', 'tx40', 'tx41', 'tx42', 'tx43', 'tx50']
+        tx10, tx20, tx30, tx40, tx41, tx42, tx43, tx50 = artifacts.get_typed_vertices(txs, Transaction)
 
         self.assertEqual(tx10.get_metadata().first_block, b31.hash)
 

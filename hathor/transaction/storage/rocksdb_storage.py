@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Iterator, Optional
 from structlog import get_logger
 from typing_extensions import override
 
-from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
 from hathor.transaction.static_metadata import VertexStaticMetadata
@@ -29,6 +28,7 @@ from hathor.transaction.vertex_parser import VertexParser
 if TYPE_CHECKING:
     import rocksdb
 
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction import BaseTransaction
 
 logger = get_logger()
@@ -52,7 +52,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         rocksdb_storage: RocksDBStorage,
         indexes: Optional[IndexesManager] = None,
         *,
-        settings: HathorSettings,
+        settings: 'HathorSettings',
         vertex_parser: VertexParser,
     ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)

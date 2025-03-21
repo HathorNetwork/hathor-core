@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
 import sys
 import time
 from cProfile import Profile
@@ -53,7 +52,6 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
-from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
@@ -115,7 +113,6 @@ class HathorManager:
         checkpoints: Optional[list[Checkpoint]] = None,
         rng: Optional[Random] = None,
         environment_info: Optional[EnvironmentInfo] = None,
-        full_verification: bool = False,
         enable_event_queue: bool = False,
         poa_block_producer: PoaBlockProducer | None = None,
         # Websocket factory
@@ -223,10 +220,6 @@ class HathorManager:
         # Thread pool used to resolve pow when sending tokens
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
 
-        # Full verification execute all validations for transactions and blocks when initializing the node
-        # Can be activated on the command line with --full-verification
-        self._full_verification = full_verification
-
         # List of whitelisted peers
         self.peers_whitelist: list[PeerId] = []
 
@@ -272,33 +265,16 @@ class HathorManager:
             )
             sys.exit(-1)
 
-        # If it's a full verification, we save on the storage that we are starting it
-        # this is required because if we stop the initilization in the middle, the metadata
-        # saved on the storage is not reliable anymore, only if we finish it
-        if self._full_verification:
-            self.tx_storage.start_full_verification()
-        else:
-            # If it's a fast initialization and the last time a full initialization stopped in the middle
-            # we can't allow the full node to continue, so we need to remove the storage and do a full sync
-            # or execute an initialization with full verification
-            if self.tx_storage.is_running_full_verification():
-                self.log.error(
-                    'Error initializing node. The last time you started your node you did a full verification '
-                    'that was stopped in the middle. The storage is not reliable anymore and, because of that, '
-                    'you must initialize with a full verification again or remove your storage and do a full sync.'
-                )
-                sys.exit(-1)
-
-            # If self.tx_storage.is_running_manager() is True, the last time the node was running it had a sudden crash
-            # because of that, we must run a full verification because some storage data might be wrong.
-            # The metadata is the only piece of the storage that may be wrong, not the blocks and transactions.
-            if self.tx_storage.is_running_manager():
-                self.log.error(
-                    'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
-                    'The storage is not reliable anymore and, because of that, so you must run a full verification '
-                    'or remove your storage and do a full sync.'
-                )
-                sys.exit(-1)
+        # If self.tx_storage.is_running_manager() is True, the last time the node was running it had a sudden crash
+        # because of that, we must run a sync from scratch or from a snapshot.
+        # The metadata is the only piece of the storage that may be wrong, not the blocks and transactions.
+        if self.tx_storage.is_running_manager():
+            self.log.error(
+                'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
+                'The storage is not reliable anymore and, because of that you must remove your storage and do a'
+                'sync from scratch or from a snapshot.'
+            )
+            sys.exit(-1)
 
         if self._enable_event_queue:
             self._event_manager.start(str(self.my_peer.id))
@@ -312,16 +288,7 @@ class HathorManager:
         self.tx_storage.disable_lock()
         # Open scope for initialization.
         self.tx_storage.set_allow_scope(TxAllowScope.VALID | TxAllowScope.PARTIAL | TxAllowScope.INVALID)
-        # Initialize manager's components.
-        if self._full_verification:
-            self.tx_storage.reset_indexes()
-            self._initialize_components_full_verification()
-            # Before calling self._initialize_components_full_verification() I start 'full verification' mode and
-            # after that I need to finish it. It's just to know if the full node has stopped a full initialization
-            # in the middle.
-            self.tx_storage.finish_full_verification()
-        else:
-            self._initialize_components_new()
+        self._initialize_components()
         self.tx_storage.set_allow_scope(TxAllowScope.VALID)
         self.tx_storage.enable_lock()
 
@@ -414,159 +381,7 @@ class HathorManager:
         if save_to:
             self.profiler.dump_stats(save_to)
 
-    def _initialize_components_full_verification(self) -> None:
-        """You are not supposed to run this method manually. You should run `doStart()` to initialize the
-        manager.
-
-        This method runs through all transactions, verifying them and updating our wallet.
-        """
-        assert not self._enable_event_queue, 'this method cannot be used if the events feature is enabled.'
-        assert self._full_verification
-
-        self.log.info('initialize')
-        if self.wallet:
-            self.wallet._manually_initialize()
-        t0 = time.time()
-        t1 = t0
-        cnt = 0
-        cnt2 = 0
-        t2 = t0
-        h = 0
-
-        block_count = 0
-        tx_count = 0
-
-        self.tx_storage.pre_init()
-        assert self.tx_storage.indexes is not None
-
-        self._verify_soft_voided_txs()
-
-        # Checkpoints as {height: hash}
-        checkpoint_heights = {}
-        for cp in self.checkpoints:
-            checkpoint_heights[cp.height] = cp.hash
-
-        # self.start_profiler()
-        self.log.debug('reset all metadata')
-        for tx in self.tx_storage.get_all_transactions():
-            tx.reset_metadata()
-
-        self.log.debug('load blocks and transactions')
-        for tx in self.tx_storage._topological_sort_dfs():
-            tx_meta = tx.get_metadata()
-
-            t2 = time.time()
-            dt = LogDuration(t2 - t1)
-            dcnt = cnt - cnt2
-            tx_rate = '?' if dt == 0 else dcnt / dt
-            h = max(h, (tx.static_metadata.height if isinstance(tx, Block) else 0))
-            if dt > 30:
-                ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
-                if h == 0:
-                    self.log.debug('start loading transactions...')
-                else:
-                    self.log.info('load transactions...', tx_rate=tx_rate, tx_new=dcnt, dt=dt,
-                                  total=cnt, latest_ts=ts_date, height=h)
-                t1 = t2
-                cnt2 = cnt
-            cnt += 1
-
-            # It's safe to skip block weight verification during initialization because
-            # we trust the difficulty stored in metadata
-            skip_block_weight_verification = True
-            if block_count % self._settings.VERIFY_WEIGHT_EVERY_N_BLOCKS == 0:
-                skip_block_weight_verification = False
-
-            try:
-                # TODO: deal with invalid tx
-                tx._update_parents_children_metadata()
-
-                if self.tx_storage.can_validate_full(tx):
-                    tx.update_initial_metadata()
-                    if tx.is_genesis:
-                        assert tx.validate_checkpoint(self.checkpoints)
-                    assert self.verification_service.validate_full(
-                        tx,
-                        skip_block_weight_verification=skip_block_weight_verification
-                    )
-                    self.tx_storage.add_to_indexes(tx)
-                    with self.tx_storage.allow_only_valid_context():
-                        self.consensus_algorithm.unsafe_update(tx)
-                    self.tx_storage.indexes.update(tx)
-                    if self.tx_storage.indexes.mempool_tips is not None:
-                        self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
-                    self.tx_storage.save_transaction(tx, only_metadata=True)
-                else:
-                    assert self.verification_service.validate_basic(
-                        tx,
-                        skip_block_weight_verification=skip_block_weight_verification
-                    )
-                    self.tx_storage.save_transaction(tx, only_metadata=True)
-            except (InvalidNewTransaction, TxValidationError):
-                self.log.error('unexpected error when initializing', tx=tx, exc_info=True)
-                raise
-
-            if tx.is_block:
-                block_count += 1
-
-                # this works because blocks on the best chain are iterated from lower to higher height
-                assert tx_meta.validation.is_at_least_basic()
-                assert isinstance(tx, Block)
-                blk_height = tx.get_height()
-                if not tx_meta.voided_by and tx_meta.validation.is_fully_connected():
-                    # XXX: this might not be needed when making a full init because the consensus should already have
-                    self.tx_storage.indexes.height.add_reorg(blk_height, tx.hash, tx.timestamp)
-
-                # Check if it's a checkpoint block
-                if blk_height in checkpoint_heights:
-                    if tx.hash == checkpoint_heights[blk_height]:
-                        del checkpoint_heights[blk_height]
-                    else:
-                        # If the hash is different from checkpoint hash, we stop the node
-                        self.log.error('Error initializing the node. Checkpoint validation error.')
-                        sys.exit()
-            else:
-                tx_count += 1
-
-            if time.time() - t2 > 1:
-                dt = LogDuration(time.time() - t2)
-                self.log.warn('tx took too long to load', tx=tx.hash_hex, dt=dt)
-
-        # we have to have a best_block by now
-        # assert best_block is not None
-
-        self.tx_storage.indexes._manually_initialize(self.tx_storage)
-
-        self.log.debug('done loading transactions')
-
-        # Check if all checkpoints in database are ok
-        my_best_height = self.tx_storage.get_height_best_block()
-        if checkpoint_heights:
-            # If I have checkpoints that were not validated I must check if they are all in a height I still don't have
-            first = min(list(checkpoint_heights.keys()))
-            if first <= my_best_height:
-                # If the height of the first checkpoint not validated is lower than the height of the best block
-                # Then it's missing this block
-                self.log.error('Error initializing the node. Checkpoint validation error.')
-                sys.exit()
-
-        best_height = self.tx_storage.get_height_best_block()
-        if best_height != h:
-            self.log.warn('best height doesn\'t match', best_height=best_height, max_height=h)
-
-        # self.stop_profiler(save_to='profiles/initializing.prof')
-        self.state = self.NodeState.READY
-
-        total_load_time = LogDuration(t2 - t0)
-        tx_rate = '?' if total_load_time == 0 else cnt / total_load_time
-
-        environment_info = self.environment_info.as_dict() if self.environment_info else {}
-
-        # Changing the field names in this log could impact log collectors that parse them
-        self.log.info('ready', vertex_count=cnt, tx_rate=tx_rate, total_load_time=total_load_time, height=h,
-                      blocks=block_count, txs=tx_count, **environment_info)
-
-    def _initialize_components_new(self) -> None:
+    def _initialize_components(self) -> None:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
         manager.
 
@@ -593,10 +408,6 @@ class HathorManager:
                           started_at=started_at, last_started_at=last_started_at)
 
         self._verify_soft_voided_txs()
-
-        # TODO: move support for full-verification here, currently we rely on the original _initialize_components
-        #       method for full-verification to work, if we implement it here we'll reduce a lot of duplicate and
-        #       complex code
         self.tx_storage.indexes._manually_initialize(self.tx_storage)
 
         # Verify if all checkpoints that exist in the database are correct

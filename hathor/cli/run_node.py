@@ -95,12 +95,12 @@ class RunNode:
         parser.add_argument('--x-status-ipv6-interface', help='IPv6 interface to bind the status server')
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
         parser.add_argument('--x-stratum-ipv6-interface', help='IPv6 interface to bind the stratum server')
-        parser.add_argument('--data', help='Data directory')
-        storage = parser.add_mutually_exclusive_group()
-        storage.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend (default)')
-        storage.add_argument('--memory-storage', action='store_true', help='Do not use a persistent storage')
-        parser.add_argument('--memory-indexes', action='store_true',
-                            help='Use memory indexes when using RocksDB storage (startup is significantly slower)')
+        data_group = parser.add_mutually_exclusive_group()
+        data_group.add_argument('--data', help='Data directory')
+        data_group.add_argument('--temp-data', action='store_true',
+                                help='Automatically create storage in a temporary directory')
+        parser.add_argument('--memory-storage', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--memory-indexes', action='store_true', help=SUPPRESS)  # deprecated
         parser.add_argument('--rocksdb-cache', type=int, help='RocksDB block-table cache size (bytes)', default=None)
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)
@@ -124,8 +124,6 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
-        fvargs = parser.add_mutually_exclusive_group()
-        fvargs.add_argument('--x-full-verification', action='store_true', help=SUPPRESS)  # deprecated
         parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
         parser.add_argument('--allow-non-standard-script', action='store_true', help='Accept non-standard scripts on '
                             '/push-tx API')
@@ -134,16 +132,14 @@ class RunNode:
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
-        sync_args = parser.add_mutually_exclusive_group()
-        sync_args.add_argument('--sync-bridge', action='store_true', help=SUPPRESS)  # deprecated
-        sync_args.add_argument('--sync-v1-only', action='store_true', help=SUPPRESS)  # deprecated
-        sync_args.add_argument('--sync-v2-only', action='store_true', help=SUPPRESS)  # deprecated
-        sync_args.add_argument('--x-remove-sync-v1', action='store_true', help=SUPPRESS)  # deprecated
-        sync_args.add_argument('--x-sync-v1-only', action='store_true', help=SUPPRESS)  # deprecated
-        sync_args.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # deprecated
-        sync_args.add_argument('--x-sync-bridge', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--sync-bridge', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--sync-v1-only', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--sync-v2-only', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--x-remove-sync-v1', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--x-sync-v1-only', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--x-sync-v2-only', action='store_true', help=SUPPRESS)  # deprecated
+        parser.add_argument('--x-sync-bridge', action='store_true', help=SUPPRESS)  # deprecated
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
-        parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true',
                             help='Deprecated: use --enable-event-queue instead.')
         parser.add_argument('--enable-event-queue', action='store_true', help='Enable event queue mechanism')
@@ -254,7 +250,7 @@ class RunNode:
             tx_storage=self.manager.tx_storage,
             indexes=self.manager.tx_storage.indexes,
             wallet=self.manager.wallet,
-            rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
+            rocksdb_storage=builder.rocksdb_storage,
             stratum_factory=self.manager.stratum_factory,
             feature_service=self.manager.vertex_handler._feature_service,
             bit_signaling_service=self.manager._bit_signaling_service,

@@ -291,6 +291,7 @@ class VertexExporter:
         assert node.name not in self._vertices
         self._vertice_per_id[vertex.hash] = vertex
         self._vertices[node.name] = vertex
+        vertex.name = node.name
         return vertex
 
     def export(self) -> Iterator[tuple[DAGNode, BaseTransaction]]:

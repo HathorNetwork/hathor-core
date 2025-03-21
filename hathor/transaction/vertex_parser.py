@@ -17,9 +17,8 @@ from __future__ import annotations
 from struct import error as StructError
 from typing import TYPE_CHECKING
 
-from hathor.conf.settings import HathorSettings
-
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction import BaseTransaction
     from hathor.transaction.storage import TransactionStorage
 

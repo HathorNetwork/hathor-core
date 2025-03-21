@@ -29,16 +29,17 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_info import FeatureInfo
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.indexes import MemoryIndexesManager
 from hathor.transaction import Block
-from hathor.transaction.storage import TransactionMemoryStorage, TransactionStorage
+from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
+from tests.unittest import TestBuilder
 
 
 def get_storage(settings: HathorSettings, *, up_to_height: int) -> TransactionStorage:
-    indexes = MemoryIndexesManager()
-    storage = TransactionMemoryStorage(indexes=indexes, settings=settings)
+    artifacts = TestBuilder(settings).build()
+    storage = artifacts.tx_storage
+    indexes = not_none(artifacts.indexes)
     feature_activation_bits = [
         0b0000,  # 0: boundary block
         0b0010,

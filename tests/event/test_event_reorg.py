@@ -1,5 +1,5 @@
 from hathor.event.model.event_type import EventType
-from hathor.event.storage import EventMemoryStorage
+from hathor.event.storage import EventRocksDBStorage
 from hathor.simulator.utils import add_new_blocks
 from tests import unittest
 from tests.utils import BURN_ADDRESS, get_genesis_key
@@ -9,11 +9,12 @@ class EventReorgTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
-        self.event_storage = EventMemoryStorage()
+        self.event_storage = EventRocksDBStorage(
+            rocksdb_storage=self.create_rocksdb_storage(),
+        )
         self.manager = self.create_peer(
             self.network,
             enable_event_queue=True,
-            full_verification=False,
             event_storage=self.event_storage
         )
 

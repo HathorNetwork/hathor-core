@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from contextlib import AbstractContextManager
 from threading import Lock
-from typing import Any, Iterator, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
 from structlog import get_logger
 
-from hathor.conf.settings import HathorSettings
 from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
@@ -49,6 +50,9 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
 from hathor.verification.transaction_verifier import TransactionVerifier
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
 
 cpu = get_cpu_profiler()
 
@@ -78,9 +82,6 @@ class TransactionStorage(ABC):
 
     # Key storage attribute to save if the network stored is the expected network
     _network_attribute: str = 'network'
-
-    # Key storage attribute to save if the full node is running a full verification
-    _running_full_verification_attribute: str = 'running_full_verification'
 
     # Key storage attribute to save if the manager is running
     _manager_running_attribute: str = 'manager_running'
@@ -904,22 +905,6 @@ class TransactionStorage(ABC):
         """ Save the network name
         """
         return self.add_value(self._network_attribute, network)
-
-    def start_full_verification(self) -> None:
-        """ Save full verification on storage
-        """
-        self.add_value(self._running_full_verification_attribute, '1')
-
-    def finish_full_verification(self) -> None:
-        """ Remove from storage that the full node is initializing with a full verification
-        """
-        self.remove_value(self._running_full_verification_attribute)
-
-    def is_running_full_verification(self) -> bool:
-        """ Return if the full node is initializing with a full verification
-            or was running a full verification and was stopped in the middle
-        """
-        return self.get_value(self._running_full_verification_attribute) == '1'
 
     def start_running_manager(self, execution_manager: ExecutionManager) -> None:
         """ Save on storage that manager is running
