@@ -68,6 +68,14 @@ class HathorProtocol:
         PEER_ID = PeerIdState
         READY = ReadyState
 
+    class ConnectionState(Enum):
+        # State of connection of two peers - either in a slot queue or active.
+        CONNECTING = 0
+        READY = 1
+        QUEUED_CONNECTING = 2
+        QUEUED_READY = 3        # Later may be changed to a more robust Enum
+        OUT_QUEUED = 4          # When the connection gets disconnected due to slot Queue being full.
+
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'
 
@@ -91,6 +99,7 @@ class HathorProtocol:
     idle_timeout: int
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
     capabilities: set[str]  # capabilities received from the peer in HelloState
+    connection_state: ConnectionState  # in slot queue, connecting or ready/in-slot.
 
     @property
     def peer(self) -> PublicPeer:
@@ -104,7 +113,7 @@ class HathorProtocol:
         *,
         settings: HathorSettings,
         use_ssl: bool,
-        inbound: bool,
+        inbound: HathorSettings.ConnectionType,
     ) -> None:
         self._settings = settings
         self.my_peer = my_peer
@@ -117,7 +126,15 @@ class HathorProtocol:
         self.reactor = self.connections.reactor
 
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
-        self.inbound = inbound
+        # Update: Now, inbound is an enum (0, 1, 2, or 3).
+        # 0 == Outgoing Connection, 1 == Incoming, 2 == Discovered, 3 == For Checking Entrypoints.
+        self.connection_type = inbound
+
+        # Connection to check a specific entrypoint to be trustworthy or not.
+        # self.check_entrypoint = check_entrypoint
+
+        # Flag of this connection belonging to a discovered peer.
+        # self.discovered = discovered
 
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT
