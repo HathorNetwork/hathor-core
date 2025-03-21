@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Iterable, Optional, assert_never, cast
 
@@ -153,10 +154,14 @@ class BlockConsensusAlgorithm:
             return
 
         block_trie = self.context.consensus.nc_storage_factory.get_trie(block_root_id)
+        seed_hasher = hashlib.sha256(block.hash)
 
         # TODO Bad ordering because tx.timestamp can be cherry picked. It's here just for testing.
         nc_calls.sort(key=lambda tx: (tx.timestamp, tx.hash))
         for tx in nc_calls:
+            seed_hasher.update(tx.hash)
+            seed_hasher.update(block_trie.root.id)
+
             tx_meta = tx.get_metadata()
             if tx_meta.voided_by:
                 # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
@@ -169,7 +174,7 @@ class BlockConsensusAlgorithm:
 
             assert tx.storage is not None
             storage_factory = self.context.consensus.nc_storage_factory
-            runner = Runner(tx.storage, storage_factory, block_trie)
+            runner = Runner(tx.storage, storage_factory, block_trie, seed=seed_hasher.digest())
             try:
                 nc_header = tx.get_nano_header()
                 nc_header.execute(runner)

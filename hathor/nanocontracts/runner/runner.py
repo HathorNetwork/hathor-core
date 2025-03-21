@@ -29,6 +29,7 @@ from hathor.nanocontracts.exception import (
     NCUninitializedContractError,
 )
 from hathor.nanocontracts.metered_exec import MeteredExecutor
+from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.single import _SingleCallRunner
 from hathor.nanocontracts.runner.types import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.storage import NCChangesTracker, NCStorage, NCStorageFactory
@@ -49,6 +50,8 @@ class Runner:
         tx_storage: TransactionStorage,
         storage_factory: NCStorageFactory,
         block_trie: PatriciaTrie,
+        *,
+        seed: bytes | None = None,
     ) -> None:
         self.tx_storage = tx_storage
         self.storage_factory = storage_factory
@@ -69,6 +72,8 @@ class Runner:
 
         # Information about the current call.
         self._call_info: CallInfo | None = None
+
+        self._rng: NanoRNG | None = NanoRNG(seed) if seed is not None else None
 
     def enable_call_trace(self) -> None:
         """Enable call trace for debugging."""
@@ -356,3 +361,9 @@ class Runner:
         """Return the contract id for the current method being executed."""
         assert self._call_info is not None
         return self._call_info.stack[-1].nanocontract_id
+
+    def get_rng(self) -> NanoRNG:
+        """Return the RNG for the current contract being executed."""
+        if self._rng is None:
+            raise ValueError('no seed was provided')
+        return self._rng
