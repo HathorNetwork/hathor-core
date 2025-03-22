@@ -285,31 +285,17 @@ class HathorSettings(NamedTuple):
     # Number max of connections in the p2p network
     PEER_MAX_CONNECTIONS: int = 125
 
-    # Percentages to each connection slot (int):
-    PERCENTAGE_MAX_INCOMING_CONNECTIONS: int = 30
-    PERCENTAGE_MAX_OUTGOING_CONNECTIONS: int = 30
-    PERCENTAGE_MAX_DISCOVERED_CONNECTIONS: int = 30
-    PERCENTAGE_MAX_CHECK_ENTRYPOINTS_CONNECTIONS: int = 10
+    # Max Number of each connection slot (int):
+    PEER_MAX_ENTRYPOINTS: int = 40
+    PEER_MAX_OUTGOING_CONNECTIONS: int = 40
+    PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 40
+    PEER_MAX_CHECK_PEER_CONNECTIONS: int = 5
 
     # Queue size for each connection slot:
     QUEUE_SIZE: int = 10
 
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
-
-    # Maximum number of entrypoints that we accept that a peer broadcasts
-    PEER_MAX_ENTRYPOINTS: int = int(PERCENTAGE_MAX_INCOMING_CONNECTIONS*PEER_MAX_CONNECTIONS/100)
-
-    # Maximum number of other peers's entrypoints a given node may connect to.
-    # It does not include the discovered peers connections nor the check trust slots.
-    PEER_MAX_OUTGOING_CONNECTIONS: int = int(PERCENTAGE_MAX_OUTGOING_CONNECTIONS*PEER_MAX_CONNECTIONS/100)
-
-    # Maximum number of other entrypoints a peer may connect to for checking other peers' trustworthiness.
-    # The discovered peers slot is left bound by PEER_MAX_CONNECTIONS.
-    PEER_MAX_CHECK_PEER_CONNECTIONS: int = int(PERCENTAGE_MAX_CHECK_ENTRYPOINTS_CONNECTIONS*PEER_MAX_CONNECTIONS/100)
-
-    # Maximum number of connections for discovered peers after bootstrap.
-    PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = int(PERCENTAGE_MAX_DISCOVERED_CONNECTIONS*PEER_MAX_CONNECTIONS/100)
 
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
