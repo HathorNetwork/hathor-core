@@ -135,13 +135,7 @@ class HathorProtocol:
         # Type of Connection 
         # 0 == Outgoing, 1 == Incoming, 2 == Discovered, 3 == For Checking Entrypoints.
         self.connection_type = connection_type
-
-        # Connection to check a specific entrypoint to be trustworthy or not.
-        # self.check_entrypoint = check_entrypoint
-
-        # Flag of this connection belonging to a discovered peer.
-        # self.discovered = discovered
-
+        
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT
         self._idle_timeout_call_later: Optional[IDelayedCall] = None
