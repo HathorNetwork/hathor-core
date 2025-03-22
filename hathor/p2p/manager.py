@@ -743,33 +743,27 @@ class ConnectionsManager:
 
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""
-        for conn in self.connections:
-            yield conn
+        yield from self.connections
 
     def iter_incoming_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all of the incoming connections."""
-        for conn in self.incoming_connections:
-            yield conn
+        yield from self.incoming_connections
 
     def iter_outgoing_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all of the outgoing connections."""
-        for conn in self.outgoing_connections:
-            yield conn
+        yield from self.outgoing_connections
 
     def iter_check_entrypoint_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all of the connections reserved for entrypoint checking."""
-        for conn in self.check_entrypoint_connections:
-            yield conn
+        yield from self.check_entrypoint_connections
 
     def iter_discovered_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all of the discovered connections after bootstrapping."""
-        for conn in self.discovered_connections:
-            yield conn
+        yield from self.discovered_connections
 
     def iter_ready_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over ready connections."""
-        for conn in self.connected_peers.values():
-            yield conn
+        yield from self.connected_peers.values()
 
     def iter_not_ready_endpoints(self) -> Iterable[PeerEndpoint]:
         """Iterate over not-ready connections."""
