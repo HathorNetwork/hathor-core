@@ -70,11 +70,6 @@ class PeerConnectionsMetrics(NamedTuple):
     handshaking_peers_count: int
     connected_peers_count: int
     known_peers_count: int
-    # Counters for the connection pool slots
-    outgoing_connections_count: int
-    incoming_connections_count: int
-    discovered_connections_count: int
-    check_entrypoint_connections_count: int
 
 
 class ConnectionsManager:
@@ -418,10 +413,6 @@ class ConnectionsManager:
             len(self.handshaking_peers),
             len(self.connected_peers),
             len(self.verified_peer_storage),
-            len(self.incoming_connections),
-            len(self.outgoing_connections),
-            len(self.discovered_connections),
-            len(self.check_entrypoint_connections),
         )
 
     def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
