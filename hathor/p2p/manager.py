@@ -97,6 +97,18 @@ class ConnectionsManager:
 
     rate_limiter: RateLimiter
 
+    # Slots:
+    outgoing_connections: set[HathorProtocol]
+    incoming_connections: set[HathorProtocol]
+    discovered_connections: set[HathorProtocol]
+    check_entrypoint_connections: set[HathorProtocol]
+
+    # Queues:
+    q_outgoing_connections: deque[HathorProtocol]
+    q_incoming_connections: deque[HathorProtocol]
+    q_discovered_connections: deque[HathorProtocol]
+    q_check_entrypoint_connections: deque[HathorProtocol]
+
     def __init__(
         self,
         settings: HathorSettings,
@@ -476,7 +488,7 @@ class ConnectionsManager:
         # If all connections are full, but may still handle queues, it will regardless disconnect it.
 
         # Next block sends the connection to the appropriate slot.
-        if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
+        if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
             if len(self.outgoing_connections) >= self.max_outgoing_connections:
                 self.log.warn("DENIED: Reached maximum number of OUTGOING connections",
                               max_connections=self.max_outgoing_connections)
@@ -497,7 +509,7 @@ class ConnectionsManager:
             # If not full, add to slot
             self.outgoing_connections.add(protocol)
 
-        if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
+        if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
             if len(self.incoming_connections) >= self.max_incoming_connections:
                 self.log.warn('DENIED: Reached maximum number of INCOMING connections',
                               max_connections=self.max_incoming_connections)
@@ -514,7 +526,7 @@ class ConnectionsManager:
                 return
             self.incoming_connections.add(protocol)
 
-        if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
+        if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
             if len(self.discovered_connections) >= self.max_discovered_peers_connections:
                 self.log.warn("DENIED: Reached maximum number of DISCOVERED connections from peers.",
                               max_connections=self.max_discovered_peers_connections)
@@ -531,7 +543,7 @@ class ConnectionsManager:
                 return
             self.discovered_connections.add(protocol)
 
-        if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
+        if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             if len(self.check_entrypoint_connections) >= self.max_check_peers_connections:
                 self.log.warn("DENIED: Reached maximum number of CONNECTIONS TO CHECK ENTRYPOINTS.",
                               max_connections=self.max_check_peers_connections)
@@ -637,7 +649,7 @@ class ConnectionsManager:
         dequeued_connection = None
 
         # Each conn is from a slot - discard from it as well.
-        if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
+        if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
             self.outgoing_connections.discard(protocol)  # Discard both from conn and slot_conn
 
             # If there are connections in the queue, we pop from it and publish it.
@@ -653,7 +665,7 @@ class ConnectionsManager:
                 # If the set just discarded a connection, it is guaranteed not to be at full capacity.
                 self.outgoing_connections.add(dequeued_connection)
 
-        if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
+        if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
             self.incoming_connections.discard(protocol)
 
             if self.q_incoming_connections:
@@ -664,7 +676,7 @@ class ConnectionsManager:
                 dequeued_connection = self.q_incoming_connections.pop()
                 self.incoming_connections.add(dequeued_connection)
 
-        if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
+        if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
             self.discovered_connections.discard(protocol)
 
             if self.q_discovered_connections:
@@ -675,7 +687,7 @@ class ConnectionsManager:
                 dequeued_connection = self.q_discovered_connections.pop()
                 self.discovered_connections.add(dequeued_connection)
 
-        if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
+        if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             self.check_entrypoint_connections.discard(protocol)
 
             if self.q_check_entrypoint_connections:
@@ -1075,7 +1087,7 @@ class ConnectionsManager:
         other_connection = self.connected_peers[protocol.peer.id]
         if bytes(protocol.my_peer.id) > bytes(protocol.peer.id):
             # connection started by me is kept
-            if not protocol.inbound:
+            if not protocol.connection_type:
                 # other connection is dropped
                 return other_connection
             else:
@@ -1083,7 +1095,7 @@ class ConnectionsManager:
                 return protocol
         else:
             # connection started by peer is kept
-            if not protocol.inbound:
+            if not protocol.connection_type:
                 return protocol
             else:
                 return other_connection

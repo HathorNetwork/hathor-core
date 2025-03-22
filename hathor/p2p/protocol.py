@@ -68,6 +68,14 @@ class HathorProtocol:
         PEER_ID = PeerIdState
         READY = ReadyState
 
+    # Port this and other classes over to Hathor Protocol or other - HSettings is a Named Tuple
+    class ConnectionType(Enum):
+        # Types of Connection as inputs for an instance of the Hathor Protocol
+        OUTGOING = 0
+        INCOMING = 1
+        DISCOVERED = 2
+        CHECK_ENTRYPOINTS = 3
+
     class ConnectionState(Enum):
         # State of connection of two peers - either in a slot queue or active.
         CONNECTING = 0
@@ -113,7 +121,7 @@ class HathorProtocol:
         *,
         settings: HathorSettings,
         use_ssl: bool,
-        inbound: HathorSettings.ConnectionType,
+        connection_type: ConnectionType,
     ) -> None:
         self._settings = settings
         self.my_peer = my_peer
@@ -128,7 +136,7 @@ class HathorProtocol:
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
         # Update: Now, inbound is an enum (0, 1, 2, or 3).
         # 0 == Outgoing Connection, 1 == Incoming, 2 == Discovered, 3 == For Checking Entrypoints.
-        self.connection_type = inbound
+        self.connection_type = connection_type
 
         # Connection to check a specific entrypoint to be trustworthy or not.
         # self.check_entrypoint = check_entrypoint

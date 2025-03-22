@@ -24,7 +24,7 @@ from hathor.p2p.protocol import HathorLineReceiver
 
 
 class _HathorLineReceiverFactory(ABC, protocol.Factory):
-    inbound: HathorSettings.ConnectionType
+    connection_type: HathorLineReceiver.ConnectionType  # HLR inherits HathorProtocol, which has ConnectionType.
 
     def __init__(
         self,
@@ -45,7 +45,7 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
             my_peer=self.my_peer,
             p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
-            inbound=self.inbound,
+            connection_type=self.connection_type,
             settings=self._settings
         )
         p.factory = self
@@ -55,10 +55,10 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
 class HathorServerFactory(_HathorLineReceiverFactory, protocol.ServerFactory):
     """ HathorServerFactory is used to generate HathorProtocol objects when a new connection arrives.
     """
-    inbound = HathorSettings.ConnectionType.INCOMING
+    connection_type = HathorLineReceiver.ConnectionType.INCOMING
 
 
 class HathorClientFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
     """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
     """
-    inbound = HathorSettings.ConnectionType.OUTGOING
+    connection_type = HathorLineReceiver.ConnectionType.OUTGOING

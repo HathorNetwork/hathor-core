@@ -217,7 +217,7 @@ class MetricsTest(unittest.TestCase):
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
-                inbound=HathorSettings.ConnectionType.OUTGOING,
+                connection_type=HathorSettings.ConnectionType.OUTGOING,
                 settings=self._settings
             )
             protocol._peer = PrivatePeer.auto_generated().to_public_peer()
