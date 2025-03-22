@@ -255,14 +255,24 @@ class MetricsTest(unittest.TestCase):
         """Test if cache-related data is correctly being collected from the
             TransactionCacheStorage
         """
+        from hathor.nanocontracts.storage import NCRocksDBStorageFactory
+
         # Preparation
         rocksdb_storage = self.create_rocksdb_storage()
+        nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         base_storage = TransactionRocksDBStorage(
             rocksdb_storage=rocksdb_storage,
             settings=self._settings,
             vertex_parser=VertexParser(settings=self._settings),
+            nc_storage_factory=nc_storage_factory,
         )
-        tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None, settings=self._settings)
+        tx_storage = TransactionCacheStorage(
+            base_storage,
+            self.clock,
+            indexes=None,
+            settings=self._settings,
+            nc_storage_factory=nc_storage_factory,
+        )
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)
 

@@ -56,7 +56,7 @@ class BlueprintHistoryIndex(TxGroupIndex[bytes]):
         nano_header = tx.get_nano_header()
         if not nano_header.is_creating_a_new_contract():
             return
-        yield nano_header.get_blueprint_id()
+        yield nano_header.nc_id
 
     def get_newest(self, blueprint_id: bytes) -> Iterator[bytes]:
         """Get a list of nano_contract_ids sorted by timestamp for a given blueprint_id starting from the newest."""

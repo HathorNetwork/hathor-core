@@ -503,12 +503,14 @@ class Builder:
             store_indexes = None
 
         rocksdb_storage = self._get_or_create_rocksdb_storage()
+        nc_storage_factory = self._get_or_create_nc_storage_factory()
         vertex_parser = self._get_or_create_vertex_parser()
         self._tx_storage = TransactionRocksDBStorage(
             rocksdb_storage,
             indexes=store_indexes,
             settings=settings,
             vertex_parser=vertex_parser,
+            nc_storage_factory=nc_storage_factory,
         )
 
         if self._tx_storage_cache:
@@ -517,7 +519,12 @@ class Builder:
             if self._tx_storage_cache_capacity is not None:
                 kwargs['capacity'] = self._tx_storage_cache_capacity
             self._tx_storage = TransactionCacheStorage(
-                self._tx_storage, reactor, indexes=indexes, settings=settings, **kwargs
+                self._tx_storage,
+                reactor,
+                indexes=indexes,
+                settings=settings,
+                nc_storage_factory=nc_storage_factory,
+                **kwargs
             )
 
         return self._tx_storage

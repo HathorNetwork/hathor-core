@@ -1,3 +1,4 @@
+import sys
 from typing import Optional
 
 from hathor.nanocontracts import Blueprint, Context, NCFail, public, view
@@ -13,7 +14,7 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.storage import NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import ContractId, NCAction, NCActionType
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
 from tests import unittest
 from tests.nanocontracts.utils import TestRunner
 
@@ -125,19 +126,20 @@ class NCBlueprintTestCase(unittest.TestCase):
             self.manager.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
         )
 
+        self.blueprint_id = BlueprintId(b'a' * 32)
+
+        nc_catalog = self.manager.tx_storage.nc_catalog
+        nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
+
         self.nc1_id = ContractId(b'1' * 32)
         self.nc2_id = ContractId(b'2' * 32)
         self.nc3_id = ContractId(b'3' * 32)
 
-        self.runner.register_contract(MyBlueprint, self.nc1_id)
-        self.runner.register_contract(MyBlueprint, self.nc2_id)
-        self.runner.register_contract(MyBlueprint, self.nc3_id)
-
     def test_failing(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 5)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 1)
-        self.runner.call_public_method(self.nc3_id, 'initialize', ctx, 3)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 5)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 1)
+        self.runner.create_contract(self.nc3_id, self.blueprint_id, ctx, 3)
 
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc1_id)
         self.runner.call_public_method(self.nc3_id, 'set_contract', ctx, self.nc2_id)
@@ -168,7 +170,7 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_call_itself(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 10)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc1_id)
 
         with self.assertRaises(NCInvalidContractId):
@@ -176,8 +178,8 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_call_initialize(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 10)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 10)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 10)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
         with self.assertRaises(NCInvalidInitializeMethodCall):
@@ -185,8 +187,8 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_call_public_from_view(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 10)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 10)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 10)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
         with self.assertRaises(NCInvalidPublicMethodCallFromView):
@@ -194,16 +196,21 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_call_uninitialize_contract(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 10)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
         with self.assertRaises(NCUninitializedContractError):
             self.runner.call_public_method(self.nc1_id, 'dec', ctx)
 
     def test_recursion_error(self):
+        # Each call to `self.call_public_method()` in the blueprint adds 8 frames to the call stack.
+        # To trigger an NCRecursionError (instead of Python's built-in RecursionError),
+        # we need to increase the recursion limit accordingly.
+        sys.setrecursionlimit(5000)
+
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 100_000)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 100_000)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 100_000)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 100_000)
 
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc1_id)
@@ -216,8 +223,8 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_max_calls_exceeded(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 0)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 0)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 0)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 0)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
         self.runner.enable_call_trace()
@@ -237,7 +244,7 @@ class NCBlueprintTestCase(unittest.TestCase):
             NCAction(NCActionType.DEPOSIT, token3_uid, 13),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 0)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 0)
         self.assertEqual(11, self.runner.get_balance(self.nc1_id, token1_uid))
         self.assertEqual(12, self.runner.get_balance(self.nc1_id, token2_uid))
         self.assertEqual(13, self.runner.get_balance(self.nc1_id, token3_uid))
@@ -248,7 +255,7 @@ class NCBlueprintTestCase(unittest.TestCase):
             NCAction(NCActionType.DEPOSIT, token3_uid, 23),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 0)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 0)
         self.assertEqual(21, self.runner.get_balance(self.nc2_id, token1_uid))
         self.assertEqual(22, self.runner.get_balance(self.nc2_id, token2_uid))
         self.assertEqual(23, self.runner.get_balance(self.nc2_id, token3_uid))
@@ -259,7 +266,7 @@ class NCBlueprintTestCase(unittest.TestCase):
             NCAction(NCActionType.DEPOSIT, token3_uid, 33),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc3_id, 'initialize', ctx, 0)
+        self.runner.create_contract(self.nc3_id, self.blueprint_id, ctx, 0)
         self.assertEqual(31, self.runner.get_balance(self.nc3_id, token1_uid))
         self.assertEqual(32, self.runner.get_balance(self.nc3_id, token2_uid))
         self.assertEqual(33, self.runner.get_balance(self.nc3_id, token3_uid))
@@ -297,9 +304,9 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_transfer_between_contracts(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 1)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 20)
-        self.runner.call_public_method(self.nc3_id, 'initialize', ctx, 300)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 1)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 20)
+        self.runner.create_contract(self.nc3_id, self.blueprint_id, ctx, 300)
 
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc3_id)
@@ -336,9 +343,9 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_loop(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 8)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 3)
-        self.runner.call_public_method(self.nc3_id, 'initialize', ctx, 6)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 8)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 3)
+        self.runner.create_contract(self.nc3_id, self.blueprint_id, ctx, 6)
 
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc3_id)
@@ -364,8 +371,8 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_call_view_after_public(self):
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(self.nc1_id, 'initialize', ctx, 8)
-        self.runner.call_public_method(self.nc2_id, 'initialize', ctx, 3)
+        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 8)
+        self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 3)
 
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 

@@ -71,3 +71,13 @@ class TxGroupIndex(BaseIndex, Generic[KT]):
     def get_latest_tx_timestamp(self, key: KT) -> int | None:
         """Get the timestamp of the latest tx in the given key, or None if the key is not found."""
         raise NotImplementedError
+
+    @abstractmethod
+    def add_single_key(self, key: KT, tx: BaseTransaction) -> None:
+        """Add a single key to the index."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def remove_single_key(self, key: KT, tx: BaseTransaction) -> None:
+        """Remove a single key from the index."""
+        raise NotImplementedError

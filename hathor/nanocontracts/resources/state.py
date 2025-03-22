@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
     from hathor.manager import HathorManager
     from hathor.nanocontracts.storage import NCStorage
-    from hathor.transaction import Block, Transaction
+    from hathor.transaction import Block
 
 
 @register_resource
@@ -74,7 +74,7 @@ class NanoContractStateResource(Resource):
 
         # Check if the contract exists.
         try:
-            nanocontract = get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes)
+            get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes)
         except NCContractCreationNotFound:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')
@@ -143,6 +143,9 @@ class NanoContractStateResource(Resource):
                             )
             return error_response.json_dumpb()
 
+        blueprint_id = nc_storage.get_blueprint_id()
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+
         value: Any
         # Get balances.
         balances: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
@@ -186,7 +189,7 @@ class NanoContractStateResource(Resource):
         calls: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
         for call_info in params.calls:
             try:
-                method_name, method_args = self.parse_call_info(nanocontract, call_info)
+                method_name, method_args = parse_nc_method_call(blueprint_class, call_info)
                 value = runner.call_view_method(nc_id_bytes, method_name, *method_args)
                 if type(value) is bytes:
                     value = value.hex()
@@ -195,28 +198,16 @@ class NanoContractStateResource(Resource):
             else:
                 calls[call_info] = NCValueSuccessResponse(value=value)
 
-        nano_header = nanocontract.get_nano_header()
-
         response = NCStateResponse(
             success=True,
             nc_id=params.id,
-            blueprint_id=nano_header.get_blueprint_id().hex(),
-            blueprint_name=nano_header.get_blueprint_class().__name__,
+            blueprint_id=blueprint_id.hex(),
+            blueprint_name=blueprint_class.__name__,
             fields=fields,
             balances=balances,
             calls=calls,
         )
         return response.json_dumpb()
-
-    def parse_call_info(self, nanocontract: Transaction, call_info: str) -> tuple[str, list[Any]]:
-        """Parse call_info string into (method_name, method_args).
-
-        The expected string format is "method_name(arg1, arg2, arg3, ...)".
-        """
-        nano_header = nanocontract.get_nano_header()
-        blueprint_class = nano_header.get_blueprint_class()
-        method_name, parsed_args = parse_nc_method_call(blueprint_class, call_info)
-        return method_name, parsed_args
 
     def get_key_for_field(self, field: str) -> Optional[str]:
         """Return the storage key for a given field."""

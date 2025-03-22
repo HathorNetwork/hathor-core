@@ -102,7 +102,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
             nc2.nc_id = nc1
             nc2.nc_method = nop()
 
-            nc2 <-- b11
+            nc1 <-- nc2 <-- b11
         ''')
         artifacts.propagate_with(manager)
 
@@ -192,6 +192,7 @@ class RocksDBNCHistoryIndexesTest(NCHistoryIndexesTest):
     def setUp(self):
         import tempfile
 
+        from hathor.nanocontracts.storage import NCRocksDBStorageFactory
         from hathor.transaction.storage import TransactionRocksDBStorage
         from hathor.transaction.vertex_parser import VertexParser
 
@@ -201,9 +202,11 @@ class RocksDBNCHistoryIndexesTest(NCHistoryIndexesTest):
         self.tmpdirs.append(directory)
         rocksdb_storage = RocksDBStorage(path=directory)
         vertex_parser = VertexParser(settings=self._settings)
+        nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         self.tx_storage = TransactionRocksDBStorage(rocksdb_storage,
                                                     settings=self._settings,
-                                                    vertex_parser=vertex_parser)
+                                                    vertex_parser=vertex_parser,
+                                                    nc_storage_factory=nc_storage_factory)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

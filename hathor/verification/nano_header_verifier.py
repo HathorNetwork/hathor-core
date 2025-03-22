@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 import struct
 
 from cryptography.exceptions import InvalidSignature
@@ -28,10 +30,9 @@ from hathor.nanocontracts.exception import (
     NCSerializationError,
 )
 from hathor.nanocontracts.method_parser import NCMethodParser
+from hathor.nanocontracts.types import BlueprintId
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import TokenAuthorityNotAllowed
-from hathor.transaction.headers import NC_INITIALIZE_METHOD
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 
 class NanoHeaderVerifier:
@@ -51,42 +52,25 @@ class NanoHeaderVerifier:
             if txout.is_token_authority():
                 raise TokenAuthorityNotAllowed(f'input {i} is a token authority')
 
+    def _get_blueprint_id_and_class(self, tx: Transaction) -> tuple[BlueprintId, type[Blueprint]]:
+        assert tx.storage is not None
+        nano_header = tx.get_nano_header()
+        blueprint_id = nano_header.get_blueprint_id()
+        blueprint_class = tx.storage.get_blueprint_class(blueprint_id)
+        if not issubclass(blueprint_class, Blueprint):
+            raise NanoContractDoesNotExist
+        return blueprint_id, blueprint_class
+
     def verify_nc_id(self, tx: BaseTransaction) -> None:
         """Verify that nc_id is valid."""
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
-
-        assert tx.storage is not None
-        assert tx.storage.nc_catalog is not None
-
-        nano_header = tx.get_nano_header()
-
-        if nano_header.nc_method == NC_INITIALIZE_METHOD:
-            blueprint_class = nano_header.get_blueprint_class()
-            if not issubclass(blueprint_class, Blueprint):
-                raise NanoContractDoesNotExist
-        else:
-            # Load transaction.
-            try:
-                nc = tx.storage.get_transaction(nano_header.nc_id)
-            except TransactionDoesNotExist as e:
-                raise NanoContractDoesNotExist from e
-
-            # Check the transaction is a Nano Contract.
-            if not isinstance(nc, Transaction):
-                raise NanoContractDoesNotExist
-            if not nc.is_nano_contract():
-                raise NanoContractDoesNotExist
-            nc_nano_header = nc.get_nano_header()
-            if nc_nano_header.nc_method != NC_INITIALIZE_METHOD:
-                raise NanoContractDoesNotExist
+        self._get_blueprint_id_and_class(tx)
 
     def verify_nc_signature(self, tx: BaseTransaction) -> None:
         """Verify if the caller's signature is valid."""
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
-
-        data = tx.get_sighash_all_data()
 
         nano_header = tx.get_nano_header()
         try:
@@ -95,6 +79,7 @@ class NanoHeaderVerifier:
             # pubkey is not compressed public key
             raise NCInvalidPubKey('nc_pubkey is not a public key') from e
 
+        data = tx.get_sighash_all_data()
         try:
             pubkey.verify(nano_header.nc_signature, data, ec.ECDSA(hashes.SHA256()))
         except InvalidSignature as e:
@@ -106,7 +91,7 @@ class NanoHeaderVerifier:
         assert isinstance(tx, Transaction)
 
         nano_header = tx.get_nano_header()
-        blueprint_class = nano_header.get_blueprint_class()
+        _, blueprint_class = self._get_blueprint_id_and_class(tx)
 
         # Validate arguments passed to the method.
         method = getattr(blueprint_class, nano_header.nc_method, None)

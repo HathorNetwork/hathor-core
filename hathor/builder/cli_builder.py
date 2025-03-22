@@ -148,7 +148,11 @@ class CliBuilder:
             # only TransactionCacheStorage should have indexes.
             kwargs['indexes'] = indexes
         tx_storage = TransactionRocksDBStorage(
-            self.rocksdb_storage, settings=settings, vertex_parser=vertex_parser, **kwargs
+            self.rocksdb_storage,
+            settings=settings,
+            vertex_parser=vertex_parser,
+            nc_storage_factory=self.nc_storage_factory,
+            **kwargs
         )
         event_storage = EventRocksDBStorage(self.rocksdb_storage)
         feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
@@ -163,7 +167,13 @@ class CliBuilder:
             self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
 
         if not self._args.disable_cache:
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
+            tx_storage = TransactionCacheStorage(
+                tx_storage,
+                reactor,
+                indexes=indexes,
+                settings=settings,
+                nc_storage_factory=self.nc_storage_factory,
+            )
             tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
             if self._args.cache_interval:
                 tx_storage.interval = self._args.cache_interval

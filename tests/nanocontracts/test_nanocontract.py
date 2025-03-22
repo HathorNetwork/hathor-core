@@ -197,14 +197,15 @@ class NCNanoContractTestCase(unittest.TestCase):
         )
 
         nc = self._get_nc()
-        nc_nano_header = nc.get_nano_header()
-        nc_id = nc_nano_header.get_nanocontract_id()
-        runner.register_contract(nc_nano_header.get_blueprint_class(), nc_id)
+        nano_header = nc.get_nano_header()
+        nc_id = nano_header.get_nanocontract_id()
+
         nc_metadata = nc.get_metadata()
         nc_metadata.first_block = self.peer.tx_storage.get_best_block().hash
 
-        nano_header = nc.get_nano_header()
+        # Create contract.
         nano_header.execute(runner)
+
         self.assertEqual('string', runner.call_view_method(nc_id, 'get_a'))
         self.assertEqual(1, runner.call_view_method(nc_id, 'get_b'))
 

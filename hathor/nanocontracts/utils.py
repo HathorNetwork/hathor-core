@@ -14,14 +14,17 @@
 
 from __future__ import annotations
 
+import hashlib
 from types import ModuleType
 from typing import Callable
 
+from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.types import VertexId
 from hathor.util import not_none
+
+CHILD_CONTRACT_ID_PREFIX: bytes = b'child-contract'
 
 
 def is_nc_public_method(method: Callable) -> bool:
@@ -92,3 +95,13 @@ def load_builtin_blueprint_for_ocb(filename: str, blueprint_name: str, module: M
     res = code_text.getvalue()
     code_text.close()
     return res
+
+
+def derive_child_contract_id(parent_id: ContractId, salt: bytes, blueprint_id: BlueprintId) -> ContractId:
+    """Derives the contract id for a nano contract created by another (parent) contract."""
+    h = hashlib.sha256()
+    h.update(CHILD_CONTRACT_ID_PREFIX)
+    h.update(parent_id)
+    h.update(salt)
+    h.update(blueprint_id)
+    return ContractId(VertexId(h.digest()))

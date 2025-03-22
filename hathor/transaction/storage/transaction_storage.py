@@ -57,7 +57,8 @@ if TYPE_CHECKING:
     from hathor.nanocontracts import OnChainBlueprint
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
-    from hathor.nanocontracts.types import BlueprintId
+    from hathor.nanocontracts.storage import NCStorage, NCStorageFactory
+    from hathor.nanocontracts.types import BlueprintId, ContractId
 
 cpu = get_cpu_profiler()
 
@@ -108,8 +109,9 @@ class TransactionStorage(ABC):
 
     _migrations: list[BaseMigration]
 
-    def __init__(self, *, settings: HathorSettings) -> None:
+    def __init__(self, *, settings: HathorSettings, nc_storage_factory: NCStorageFactory) -> None:
         self._settings = settings
+        self._nc_storage_factory = nc_storage_factory
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -1138,6 +1140,20 @@ class TransactionStorage(ABC):
         with self.allow_partially_validated_context():
             return self.transaction_exists(vertex_id)
 
+    def get_nc_storage(self, block: Block, contract_id: ContractId) -> NCStorage:
+        """Return a contract storage with the contract state at a given block."""
+        from hathor.nanocontracts.types import VertexId as NCVertexId
+        meta = block.get_metadata()
+        if not block.is_genesis:
+            assert meta.nc_block_root_id is not None
+        block_trie = self._nc_storage_factory.get_trie(meta.nc_block_root_id)
+        try:
+            nc_root_id = block_trie.get(contract_id)
+        except KeyError:
+            from hathor.nanocontracts.exception import NanoContractDoesNotExist
+            raise NanoContractDoesNotExist(contract_id.hex())
+        return self._nc_storage_factory(NCVertexId(contract_id), nc_root_id)
+
     def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
         from hathor.nanocontracts.exception import BlueprintDoesNotExist
         assert self.nc_catalog is not None
@@ -1215,8 +1231,9 @@ class BaseTransactionStorage(TransactionStorage):
         pubsub: Optional[Any] = None,
         *,
         settings: HathorSettings,
+        nc_storage_factory: NCStorageFactory,
     ) -> None:
-        super().__init__(settings=settings)
+        super().__init__(settings=settings, nc_storage_factory=nc_storage_factory)
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub

@@ -126,17 +126,29 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
 
     def add_tx(self, tx: BaseTransaction) -> None:
         for key in self._extract_keys(tx):
-            if self._stats:
-                self._stats.increase_group_count(key)
-            self.log.debug('put key', key=key)
-            self._db.put((self._cf, self._to_rocksdb_key(key, tx)), b'')
+            self.add_single_key(key, tx)
+
+    def add_single_key(self, key: KT, tx: BaseTransaction) -> None:
+        self.log.debug('put key', key=key)
+        internal_key = self._to_rocksdb_key(key, tx)
+        if self._db.get((self._cf, internal_key)) is not None:
+            return
+        self._db.put((self._cf, internal_key), b'')
+        if self._stats:
+            self._stats.increase_group_count(key)
 
     def remove_tx(self, tx: BaseTransaction) -> None:
         for key in self._extract_keys(tx):
-            if self._stats:
-                self._stats.decrease_group_count(key)
-            self.log.debug('delete key', key=key)
-            self._db.delete((self._cf, self._to_rocksdb_key(key, tx)))
+            self.remove_single_key(key, tx)
+
+    def remove_single_key(self, key: KT, tx: BaseTransaction) -> None:
+        self.log.debug('delete key', key=key)
+        internal_key = self._to_rocksdb_key(key, tx)
+        if self._db.get((self._cf, internal_key)) is None:
+            return
+        self._db.delete((self._cf, internal_key))
+        if self._stats:
+            self._stats.decrease_group_count(key)
 
     def _get_sorted_from_key(
         self,

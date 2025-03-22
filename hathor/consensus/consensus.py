@@ -125,21 +125,39 @@ class ConsensusAlgorithm:
         else:
             raise NotImplementedError
 
-        new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
         txs_to_remove: list[BaseTransaction] = []
+
+        from hathor.nanocontracts.exception import NanoContractDoesNotExist
+        for tx_affected in context.txs_affected:
+            if not tx_affected.is_nano_contract():
+                # Not a nano tx? Skip!
+                continue
+            if tx_affected.get_metadata().first_block:
+                # Not in mempool? Skip!
+                continue
+            assert isinstance(tx_affected, Transaction)
+            nano_header = tx_affected.get_nano_header()
+            try:
+                nano_header.get_blueprint_id()
+            except NanoContractDoesNotExist:
+                from hathor.transaction.validation_state import ValidationState
+                tx_affected.set_validation(ValidationState.INVALID)
+
+        new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
         if new_best_height < best_height:
             self.log.warn('height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
                           prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
             # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
             #      reward lock
-            txs_to_remove = storage.compute_transactions_that_became_invalid(new_best_height)
-            if txs_to_remove:
-                self.log.warn('some transactions on the mempool became invalid and will be removed',
-                              count=len(txs_to_remove))
-                # XXX: because transactions in `txs_to_remove` are marked as invalid, we need this context to be
-                # able to remove them
-                with storage.allow_invalid_context():
-                    self._remove_transactions(txs_to_remove, storage, context)
+            txs_to_remove.extend(storage.compute_transactions_that_became_invalid(new_best_height))
+
+        if txs_to_remove:
+            self.log.warn('some transactions on the mempool became invalid and will be removed',
+                          count=len(txs_to_remove))
+            # XXX: because transactions in `txs_to_remove` are marked as invalid, we need this context to be
+            # able to remove them
+            with storage.allow_invalid_context():
+                self._remove_transactions(txs_to_remove, storage, context)
 
         # emit the reorg started event if needed
         if context.reorg_common_block is not None:

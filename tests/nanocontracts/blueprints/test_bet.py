@@ -4,7 +4,6 @@ from typing import NamedTuple, Optional
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.blueprints.bet import (
-    Bet,
     DepositNotAllowed,
     InsufficientBalance,
     InvalidOracleSignature,
@@ -19,7 +18,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.storage import NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import Address, Amount, ContractId, NCAction, NCActionType, SignedData
+from hathor.nanocontracts.types import Address, Amount, BlueprintId, ContractId, NCAction, NCActionType, SignedData
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
@@ -44,6 +43,9 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         self.manager = self.create_peer('testnet')
         self.token_uid = settings.HATHOR_TOKEN_UID
         self.nc_id = ContractId(b'1' * 32)
+        self.blueprint_id = BlueprintId(
+            bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595')
+        )
 
         nc_storage_factory = NCMemoryStorageFactory()
         store = MemoryNodeTrieStore()
@@ -51,6 +53,7 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         self.runner = TestRunner(
             self.manager.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
         )
+        self.initialize_contract()
         self.nc_storage = self.runner.get_storage(self.nc_id)
 
     def _get_any_tx(self):
@@ -100,7 +103,6 @@ class NCBetBlueprintTestCase(unittest.TestCase):
 
     def initialize_contract(self):
         runner = self.runner
-        storage = self.nc_storage
 
         self.oracle_key = KeyPair.create(b'123')
         assert self.oracle_key.address is not None
@@ -108,18 +110,24 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         oracle_script = p2pkh.get_script()
         self.date_last_bet = self.get_current_timestamp() + 3600 * 24
 
-        runner.register_contract(Bet, self.nc_id)
-
         tx = self._get_any_tx()
         context = Context([], tx, b'', timestamp=self.get_current_timestamp())
-        runner.call_public_method(self.nc_id, 'initialize', context, oracle_script, self.token_uid, self.date_last_bet)
+        runner.create_contract(
+            self.nc_id,
+            self.blueprint_id,
+            context,
+            oracle_script,
+            self.token_uid,
+            self.date_last_bet,
+        )
+
+        storage = runner.get_storage(self.nc_id)
         self.assertEqual(storage.get('oracle_script'), oracle_script)
         self.assertEqual(storage.get('token_uid'), self.token_uid)
         self.assertEqual(storage.get('date_last_bet'), self.date_last_bet)
 
     def test_basic_flow(self) -> None:
         runner = self.runner
-        self.initialize_contract()
 
         tx = self._get_any_tx()
 
@@ -155,7 +163,6 @@ class NCBetBlueprintTestCase(unittest.TestCase):
             runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_with_withdrawal(self):
-        self.initialize_contract()
         self._make_a_bet(100, '1x1')
 
         (address_bytes, _) = self._get_any_address()
@@ -167,37 +174,31 @@ class NCBetBlueprintTestCase(unittest.TestCase):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_make_a_bet_after_result(self):
-        self.initialize_contract()
         self._make_a_bet(100, '1x1')
         self._set_result('2x2')
         with self.assertRaises(ResultAlreadySet):
             self._make_a_bet(100, '1x1')
 
     def test_make_a_bet_after_date_last_bet(self):
-        self.initialize_contract()
         with self.assertRaises(TooLate):
             self._make_a_bet(100, '1x1', timestamp=self.date_last_bet + 1)
 
     def test_set_results_two_times(self):
-        self.initialize_contract()
         self._set_result('2x2')
         with self.assertRaises(ResultAlreadySet):
             self._set_result('5x1')
 
     def test_set_results_wrong_signature(self):
-        self.initialize_contract()
         wrong_oracle_key = KeyPair.create(b'123')
         with self.assertRaises(InvalidOracleSignature):
             self._set_result('3x2', oracle_key=wrong_oracle_key)
 
     def test_withdraw_before_result(self):
-        self.initialize_contract()
         bet1 = self._make_a_bet(100, '1x1')
         with self.assertRaises(ResultNotAvailable):
             self._withdraw(bet1.address, 100)
 
     def test_withdraw_with_deposits(self):
-        self.initialize_contract()
         (address_bytes, _) = self._get_any_address()
         tx = self._get_any_tx()
         action = NCAction(NCActionType.DEPOSIT, self.token_uid, 1)
@@ -206,7 +207,6 @@ class NCBetBlueprintTestCase(unittest.TestCase):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_wrong_token(self):
-        self.initialize_contract()
 
         (address_bytes, _) = self._get_any_address()
         tx = self._get_any_tx()
@@ -219,7 +219,6 @@ class NCBetBlueprintTestCase(unittest.TestCase):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_withdraw_wrong_token(self):
-        self.initialize_contract()
         bet1 = self._make_a_bet(100, '1x1')
 
         tx = self._get_any_tx()

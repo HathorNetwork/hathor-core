@@ -35,7 +35,8 @@ from hathor.nanocontracts.runner.single import _SingleCallRunner
 from hathor.nanocontracts.runner.types import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.storage import NCChangesTracker, NCStorage, NCStorageFactory
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import ContractId, NCAction, NCActionType
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
+from hathor.nanocontracts.utils import derive_child_contract_id
 from hathor.reactor import ReactorProtocol
 from hathor.transaction.storage import TransactionStorage
 from hathor.types import Amount, TokenUid
@@ -100,10 +101,9 @@ class Runner:
         """Check whether a contract has been initialized or not."""
         try:
             self.block_trie.get(nanocontract_id)
-        except KeyError:
-            return False
-        else:
             return True
+        except KeyError:
+            return nanocontract_id in self._storages
 
     def get_storage(self, nanocontract_id: ContractId) -> NCStorage:
         """Return the storage for a contract.
@@ -111,10 +111,7 @@ class Runner:
         If no storage has been created, then one will be created."""
         storage = self._storages.get(nanocontract_id)
         if storage is None:
-            try:
-                nc_root_id = self.block_trie.get(nanocontract_id)
-            except KeyError:
-                nc_root_id = None
+            nc_root_id = self.block_trie.get(nanocontract_id)
             storage = self.storage_factory(nanocontract_id, nc_root_id)
             storage.lock()
             self._storages[nanocontract_id] = storage
@@ -132,12 +129,15 @@ class Runner:
         change_tracker = NCChangesTracker(nanocontract_id, storage)
         return change_tracker
 
+    def get_blueprint_id(self, nanocontract_id: ContractId) -> BlueprintId:
+        """Return the blueprint id of a contract."""
+        storage = self.get_storage(nanocontract_id)
+        return storage.get_blueprint_id()
+
     def get_blueprint_class(self, nanocontract_id: ContractId) -> Type[Blueprint]:
         """Return the blueprint class of a contract."""
-        from hathor.nanocontracts.utils import get_nano_contract_creation
-        nc = get_nano_contract_creation(self.tx_storage, nanocontract_id, allow_mempool=True)
-        nano_header = nc.get_nano_header()
-        return nano_header.get_blueprint_class()
+        blueprint_id = self.get_blueprint_id(nanocontract_id)
+        return self.tx_storage.get_blueprint_class(blueprint_id)
 
     def _create_single_runner(
         self,
@@ -170,6 +170,11 @@ class Runner:
         **kwargs: Any,
     ) -> Any:
         """Call a contract public method."""
+        from hathor.transaction.headers import NC_INITIALIZE_METHOD
+        if method_name == NC_INITIALIZE_METHOD:
+            raise NCInvalidInitializeMethodCall(
+                'Cannot call initialize from call_public_method(); use create_contract() instead.'
+            )
         try:
             ret = self._unsafe_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
         finally:
@@ -182,22 +187,21 @@ class Runner:
         method_name: str,
         ctx: Context,
         *args: Any,
-        **kwargs: Any,
+        **kwargs: Any
     ) -> Any:
-        from hathor.transaction.headers import NC_INITIALIZE_METHOD
+        """Invoke a public method without running the usual guard‑safety checks.
+
+        Used by call_public_method() and create_contract()."""
+
         assert self._call_info is None
         self._call_info = self._build_call_info(nanocontract_id)
 
-        if method_name == NC_INITIALIZE_METHOD:
-            if self.has_contract_been_initialized(nanocontract_id):
-                raise NCAlreadyInitializedContractError(nanocontract_id)
-        else:
-            if not self.has_contract_been_initialized(nanocontract_id):
-                raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
+        if not self.has_contract_been_initialized(nanocontract_id):
+            raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
         self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
 
-        ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
+        ret = self._execute_public_method_call(nanocontract_id, method_name, ctx, *args, **kwargs)
 
         self._validate_balances(ctx)
         self._commit_all_changes_to_storage()
@@ -209,6 +213,23 @@ class Runner:
                                             actions: list[NCAction],
                                             *args: Any,
                                             **kwargs: Any) -> Any:
+        """Call another contract's public method. This method must be called by a blueprint during an execution."""
+        from hathor.transaction.headers import NC_INITIALIZE_METHOD
+        if method_name == NC_INITIALIZE_METHOD:
+            raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
+        return self._unsafe_call_another_contract_public_method(nanocontract_id, method_name, actions, *args, **kwargs)
+
+    def _unsafe_call_another_contract_public_method(
+        self,
+        nanocontract_id: ContractId,
+        method_name: str,
+        actions: list[NCAction],
+        *args: Any,
+        **kwargs: Any
+    ) -> Any:
+        """Invoke another contract's public method without running the usual guard‑safety checks.
+
+        Used by call_another_contract_public_method() and create_another_contract()."""
         assert self._call_info is not None
 
         # The caller is always the last element in the stack. So we need to use it as the `address` in the subsequent
@@ -217,10 +238,6 @@ class Runner:
 
         if last_call_record.nanocontract_id == nanocontract_id:
             raise NCInvalidContractId('a contract cannot call itself')
-
-        from hathor.transaction.headers import NC_INITIALIZE_METHOD
-        if method_name == NC_INITIALIZE_METHOD:
-            raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
 
         if not self.has_contract_been_initialized(nanocontract_id):
             raise NCUninitializedContractError('cannot call a method from an uninitialized contract')
@@ -243,9 +260,9 @@ class Runner:
             address=last_call_record.nanocontract_id,
             timestamp=first_ctx.timestamp,
         )
-        ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
+        ret = self._execute_public_method_call(nanocontract_id, method_name, ctx, *args, **kwargs)
 
-        # Execute the transfer on the caller side. The callee side is executed by the `_internal_call_public_method()`
+        # Execute the transfer on the caller side. The callee side is executed by the `_execute_public_method_call()`
         # call above, if it succeeds.
         previous_changes_tracker = last_call_record.changes_tracker
         for action in actions:
@@ -315,7 +332,7 @@ class Runner:
             nc_storage.commit()
             nc_storage.lock()
 
-    def _internal_call_public_method(
+    def _execute_public_method_call(
         self,
         nanocontract_id: ContractId,
         method_name: str,
@@ -330,10 +347,12 @@ class Runner:
 
         changes_tracker = self._create_changes_tracker(nanocontract_id)
 
+        blueprint_id = self.get_blueprint_id(nanocontract_id)
         call_record = CallRecord(
             type=CallType.PUBLIC,
             depth=self._call_info.depth,
             nanocontract_id=nanocontract_id,
+            blueprint_id=blueprint_id,
             method_name=method_name,
             ctx=ctx,
             args=args,
@@ -351,6 +370,9 @@ class Runner:
 
     def call_view_method(self, nanocontract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a contract view method."""
+        if not self.has_contract_been_initialized(nanocontract_id):
+            raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
+
         if self._call_info is None:
             self._call_info = self._build_call_info(nanocontract_id)
         if self._metered_executor is None:
@@ -361,10 +383,12 @@ class Runner:
 
         changes_tracker = self._create_changes_tracker(nanocontract_id)
 
+        blueprint_id = self.get_blueprint_id(nanocontract_id)
         call_record = CallRecord(
             type=CallType.VIEW,
             depth=self._call_info.depth,
             nanocontract_id=nanocontract_id,
+            blueprint_id=blueprint_id,
             method_name=method_name,
             ctx=None,
             args=args,
@@ -388,7 +412,7 @@ class Runner:
         """Return a contract balance for a given token."""
         if nanocontract_id is None:
             assert self._call_info is not None
-            nanocontract_id = self.get_current_nanocontract_id()
+            nanocontract_id = self.get_current_contract_id()
         if token_uid is None:
             token_uid = self._settings.HATHOR_TOKEN_UID
 
@@ -402,7 +426,7 @@ class Runner:
 
         return storage.get_balance(token_uid)
 
-    def get_current_nanocontract_id(self) -> ContractId:
+    def get_current_contract_id(self) -> ContractId:
         """Return the contract id for the current method being executed."""
         assert self._call_info is not None
         return self._call_info.stack[-1].nanocontract_id
@@ -412,6 +436,63 @@ class Runner:
         if self._rng is None:
             raise ValueError('no seed was provided')
         return self._rng
+
+    def _internal_create_contract(self, nanocontract_id: ContractId, blueprint_id: BlueprintId) -> None:
+        """Create a new contract without calling the initialize() method."""
+        assert not self.has_contract_been_initialized(nanocontract_id)
+        assert nanocontract_id not in self._storages
+        nc_storage = self.storage_factory(nanocontract_id, None)
+        nc_storage.set_blueprint_id(blueprint_id)
+        self._storages[nanocontract_id] = nc_storage
+
+    def create_contract(self,
+                        nanocontract_id: ContractId,
+                        blueprint_id: BlueprintId,
+                        ctx: Context,
+                        *args: Any,
+                        **kwargs: Any) -> Any:
+        """Create contract and call its initialize() method."""
+        from hathor.transaction.headers import NC_INITIALIZE_METHOD
+
+        if self.has_contract_been_initialized(nanocontract_id):
+            raise NCAlreadyInitializedContractError(nanocontract_id)
+
+        self._internal_create_contract(nanocontract_id, blueprint_id)
+        try:
+            ret = self._unsafe_call_public_method(nanocontract_id, NC_INITIALIZE_METHOD, ctx, *args, **kwargs)
+        finally:
+            self._reset_all_change_trackers()
+        return ret
+
+    def create_another_contract(self,
+                                blueprint_id: BlueprintId,
+                                salt: bytes,
+                                actions: list[NCAction],
+                                *args: Any,
+                                **kwargs: Any) -> tuple[ContractId, Any]:
+        """Create a contract from another contract."""
+        from hathor.transaction.headers import NC_INITIALIZE_METHOD
+
+        if not salt:
+            raise Exception('invalid salt')
+
+        assert self._call_info is not None
+        last_call_record = self._call_info.stack[-1]
+        parent_id = last_call_record.nanocontract_id
+        child_id = derive_child_contract_id(parent_id, salt, blueprint_id)
+
+        if self.has_contract_been_initialized(child_id):
+            raise NCAlreadyInitializedContractError(child_id)
+
+        self._internal_create_contract(child_id, blueprint_id)
+        ret = self._unsafe_call_another_contract_public_method(
+            child_id,
+            NC_INITIALIZE_METHOD,
+            actions,
+            *args,
+            **kwargs
+        )
+        return child_id, ret
 
 
 class RunnerFactory:

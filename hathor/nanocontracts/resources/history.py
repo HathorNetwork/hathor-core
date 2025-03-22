@@ -23,6 +23,7 @@ from hathor.nanocontracts.exception import (
     NCContractCreationNotFound,
     NCContractCreationVoided,
 )
+from hathor.nanocontracts.types import VertexId
 from hathor.nanocontracts.utils import get_nano_contract_creation
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -73,7 +74,7 @@ class NanoContractHistoryResource(Resource):
 
         # Check if the contract exists.
         try:
-            get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes)
+            get_nano_contract_creation(self.manager.tx_storage, VertexId(nc_id_bytes))
         except NCContractCreationNotFound:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')

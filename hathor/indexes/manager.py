@@ -17,7 +17,7 @@ from __future__ import annotations
 import operator
 from abc import ABC, abstractmethod
 from functools import reduce
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional, cast
 
 from structlog import get_logger
 
@@ -204,10 +204,80 @@ class IndexesManager(ABC):
     def update(self, tx: BaseTransaction) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx
         """
+        self.nc_update_add(tx)
+
         # XXX: this _should_ be here, but it breaks some tests, for now this is done explicitly in hathor.manager
         # self.mempool_tips.update(tx)
         if self.utxo:
             self.utxo.update(tx)
+
+    def nc_update_add(self, tx: BaseTransaction) -> None:
+        from hathor.transaction.headers import NC_INITIALIZE_METHOD
+        from hathor.transaction.nc_execution_state import NCExecutionState
+
+        if not tx.is_nano_contract():
+            return
+
+        meta = tx.get_metadata()
+        if meta.nc_execution != NCExecutionState.SUCCESS:
+            return
+
+        assert meta.nc_calls
+        nc_calls_set = set(meta.nc_calls)
+
+        # Add to indexes.
+        for blueprint_id, contract_id, method_name in nc_calls_set:
+            from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId
+            contract_id = ContractId(VertexId(contract_id))
+            blueprint_id = BlueprintId(VertexId(blueprint_id))
+
+            if self.nc_history is not None:
+                self.nc_history.add_single_key(contract_id, tx)
+
+            if method_name == NC_INITIALIZE_METHOD:
+                if self.nc_creation is not None:
+                    self.nc_creation.manually_add_tx(tx)
+
+                if self.blueprint_history is not None:
+                    self.blueprint_history.add_single_key(blueprint_id, tx)
+
+    def nc_update_remove(self, tx: BaseTransaction) -> None:
+        if not tx.is_nano_contract():
+            return
+
+        meta = tx.get_metadata()
+        if meta.nc_calls is None:
+            return
+
+        first_call = meta.nc_calls[0]
+        nc_calls_set = set(meta.nc_calls)
+
+        # Remove from indexes but we must keep the first call still in the indexes.
+        for blueprint_id, contract_id, method_name in nc_calls_set:
+            from hathor.nanocontracts.types import BlueprintId, ContractId
+            from hathor.transaction.headers import NC_INITIALIZE_METHOD
+            contract_id = cast(ContractId, contract_id)
+            blueprint_id = cast(BlueprintId, blueprint_id)
+
+            if self.nc_history is not None:
+                # Remove from nc_history except where it's the same contract as the first call.
+                if contract_id != first_call.contract_id:
+                    self.nc_history.remove_single_key(contract_id, tx)
+
+            if method_name == NC_INITIALIZE_METHOD:
+                if self.nc_creation is not None:
+                    # Remove from nc_creation only if the first call is not creating a contract.
+                    if first_call.method_name != NC_INITIALIZE_METHOD:
+                        self.nc_creation.del_tx(tx)
+
+                if self.blueprint_history is not None:
+                    # Remove from blueprint_history except when first_call is initializing the contract
+                    # and the blueprint_id is the same as the first call.
+                    if first_call.method_name != NC_INITIALIZE_METHOD:
+                        self.blueprint_history.remove_single_key(blueprint_id, tx)
+                    else:
+                        if blueprint_id != first_call.blueprint_id:
+                            self.blueprint_history.remove_single_key(blueprint_id, tx)
 
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes

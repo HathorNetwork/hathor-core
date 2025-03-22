@@ -8,9 +8,10 @@ class SwapDemoTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
 
+        self.blueprint_id = self.gen_random_blueprint_id()
         self.contract_id = self.gen_random_nanocontract_id()
-        self.runner.register_contract(SwapDemo, self.contract_id)
-        self.nc_storage = self.runner.get_storage(self.contract_id)
+
+        self.nc_catalog.blueprints[self.blueprint_id] = SwapDemo
 
         # Test doubles:
         self.token_a = self.gen_random_token_uid()
@@ -37,13 +38,16 @@ class SwapDemoTestCase(BlueprintTestCase):
         )
 
         # Act:
-        self.runner.call_public_method(self.contract_id,
-                                       'initialize',
-                                       context,
-                                       token_a,
-                                       token_b,
-                                       multiplier_a,
-                                       multiplier_b)
+        self.runner.create_contract(
+            self.contract_id,
+            self.blueprint_id,
+            context,
+            token_a,
+            token_b,
+            multiplier_a,
+            multiplier_b,
+        )
+        self.nc_storage = self.runner.get_storage(self.contract_id)
 
     def _swap(
         self,

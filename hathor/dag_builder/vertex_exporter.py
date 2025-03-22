@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ast
 import hashlib
 import re
 from types import ModuleType
@@ -30,8 +31,8 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
 from hathor.nanocontracts.on_chain_blueprint import Code
-from hathor.nanocontracts.types import BlueprintId, NCActionType, blueprint_id_from_bytes
-from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCActionType, VertexId, blueprint_id_from_bytes
+from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.scripts.p2pkh import P2PKH
@@ -247,26 +248,54 @@ class VertexExporter:
         self._block_height[blk.hash] = height
         return blk
 
+    def _get_ast_value_bytes(self, ast_node: ast.AST) -> bytes:
+        if isinstance(ast_node, ast.Constant):
+            return bytes.fromhex(ast_node.value)
+        elif isinstance(ast_node, ast.Name):
+            return self.get_vertex_id(ast_node.id)
+        elif isinstance(ast_node, ast.Attribute):
+            assert isinstance(ast_node.value, ast.Name)
+            vertex = self._vertices[ast_node.value.id]
+            assert isinstance(vertex, Transaction)
+            if ast_node.attr == 'nc_id':
+                return vertex.get_nano_header().nc_id
+            else:
+                raise ValueError
+        else:
+            raise ValueError('unsupported ast node')
+
+    def _parse_nc_id(self, ast_node: ast.AST) -> tuple[bytes, BlueprintId | None]:
+        if not isinstance(ast_node, ast.Call):
+            return self._get_ast_value_bytes(ast_node), None
+
+        assert isinstance(ast_node.func, ast.Name)
+        if ast_node.func.id != 'child_contract':
+            raise ValueError(f'unknown function: {ast_node.func.id}')
+        args = [self._get_ast_value_bytes(x) for x in ast_node.args]
+        if len(args) != 3:
+            raise ValueError('wrong number of args')
+        parent_id_bytes, salt, blueprint_id_bytes = args
+        parent_id = ContractId(VertexId(parent_id_bytes))
+        blueprint_id = BlueprintId(VertexId(blueprint_id_bytes))
+        child_contract_id = derive_child_contract_id(parent_id, salt, blueprint_id)
+        return child_contract_id, blueprint_id
+
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
             return
 
-        nc_id_raw = node.get_attr_str('nc_id')
-        if is_literal(nc_id_raw):
-            nc_id = bytes.fromhex(get_literal(nc_id_raw))
-        else:
-            nc_id = self.get_vertex_id(nc_id_raw)
-
+        nc_id, blueprint_id = self._parse_nc_id(node.get_attr_ast('nc_id'))
         nc_method_raw = node.get_attr_str('nc_method')
 
-        if nc_method_raw.startswith('initialize('):
-            blueprint_id = blueprint_id_from_bytes(nc_id)
-        else:
-            contract_creation_vertex = self._vertices[nc_id_raw]
-            assert contract_creation_vertex.is_nano_contract()
-            assert isinstance(contract_creation_vertex, Transaction)
-            contract_creation_vertex_nano_header = contract_creation_vertex.get_nano_header()
-            blueprint_id = blueprint_id_from_bytes(contract_creation_vertex_nano_header.nc_id)
+        if blueprint_id is None:
+            if nc_method_raw.startswith('initialize('):
+                blueprint_id = blueprint_id_from_bytes(nc_id)
+            else:
+                contract_creation_vertex = self._vertice_per_id[nc_id]
+                assert contract_creation_vertex.is_nano_contract()
+                assert isinstance(contract_creation_vertex, Transaction)
+                contract_creation_vertex_nano_header = contract_creation_vertex.get_nano_header()
+                blueprint_id = blueprint_id_from_bytes(contract_creation_vertex_nano_header.nc_id)
 
         blueprint_class = self._get_blueprint_class(blueprint_id)
 

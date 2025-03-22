@@ -84,10 +84,7 @@ class NCBlockSorter:
 
             if tx.is_nano_contract():
                 nano_header = tx.get_nano_header()
-                sorter.add_edge(tx.hash, nano_header.get_blueprint_id())
-                nc_id = nano_header.get_nanocontract_id()
-                if nc_id != tx.hash:
-                    sorter.add_edge(tx.hash, nc_id)
+                sorter.add_edge(tx.hash, nano_header.nc_id)
 
         # Remove all transactions that do not belong to nc_calls.
         allowed_keys = set(tx.hash for tx in nc_calls)

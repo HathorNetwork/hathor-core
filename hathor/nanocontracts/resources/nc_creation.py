@@ -21,8 +21,8 @@ from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
 from hathor.nanocontracts.resources.on_chain import SortOrder
+from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.types import VertexId
 from hathor.util import bytes_from_hex, collect_n, not_none
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
@@ -63,8 +63,8 @@ class NCCreationResource(Resource):
         vertex_id: VertexId | None = None
         if params.search:
             search = params.search.strip()
-            vertex_id = bytes_from_hex(search)
-            if vertex_id is None:
+            maybe_bytes = bytes_from_hex(search)
+            if maybe_bytes is None:
                 # in this case we do have `search` but it's not a valid hex, so we return empty.
                 response = NCCreationResponse(
                     nc_creation_txs=[],
@@ -74,6 +74,8 @@ class NCCreationResource(Resource):
                     has_more=False,
                 )
                 return response.json_dumpb()
+
+            vertex_id = VertexId(maybe_bytes)
 
             # when using `search`, the value can be either a NC ID or a BP ID.
             if nc_item := self._get_nc_creation_item(vertex_id):
@@ -162,11 +164,14 @@ class NCCreationResource(Resource):
         if not nano_header.is_creating_a_new_contract():
             return None
 
+        blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
+        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+
         assert self.nc_history_index is not None
         return NCCreationItem(
             nano_contract_id=nc_id.hex(),
-            blueprint_id=nano_header.get_blueprint_id().hex(),
-            blueprint_name=nano_header.get_blueprint_class().__name__,
+            blueprint_id=blueprint_id.hex(),
+            blueprint_name=blueprint_class.__name__,
             last_tx_timestamp=not_none(self.nc_history_index.get_last_tx_timestamp(nc_id)),
             total_txs=self.nc_history_index.get_transaction_count(nc_id),
             created_at=tx.timestamp,

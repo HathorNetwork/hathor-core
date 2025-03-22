@@ -693,6 +693,7 @@ class RocksDBIndexesTest(BaseIndexesTest):
     def setUp(self):
         import tempfile
 
+        from hathor.nanocontracts.storage import NCRocksDBStorageFactory
         from hathor.transaction.storage import TransactionRocksDBStorage
 
         super().setUp()
@@ -701,7 +702,13 @@ class RocksDBIndexesTest(BaseIndexesTest):
         self.tmpdirs.append(directory)
         rocksdb_storage = RocksDBStorage(path=directory)
         parser = VertexParser(settings=self._settings)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage, settings=self._settings, vertex_parser=parser)
+        nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
+        self.tx_storage = TransactionRocksDBStorage(
+            rocksdb_storage,
+            settings=self._settings,
+            vertex_parser=parser,
+            nc_storage_factory=nc_storage_factory,
+        )
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

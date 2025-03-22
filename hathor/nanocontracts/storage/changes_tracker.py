@@ -17,6 +17,7 @@ from typing import Any
 from hathor.nanocontracts.exception import NCInsufficientFunds
 from hathor.nanocontracts.storage.storage import AttrKey, BalanceKey, NCStorage
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey
+from hathor.nanocontracts.types import ContractId
 
 
 class NCChangesTracker(NCStorage):
@@ -24,7 +25,7 @@ class NCChangesTracker(NCStorage):
 
     These changes are not committed to the storage."""
 
-    def __init__(self, nc_id: bytes, storage: NCStorage):
+    def __init__(self, nc_id: ContractId, storage: NCStorage):
         self.storage = storage
         self.nc_id = nc_id
 

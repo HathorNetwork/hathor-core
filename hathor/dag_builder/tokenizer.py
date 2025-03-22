@@ -58,6 +58,9 @@ Nano Contracts:
     tx1.nc_method = initialize("00")   # call a Nano Contract method
     tx2.nc_method = initialize(`tx1`)  # call a Nano Contract method with another tx's id as an argument
 
+    # Points to a contract created by another contract.
+    tx1.nc_id = child_contract(contract_creator_id, salt.hex(), blueprint_id.hex())
+
 On-chain Blueprints:
 
     ocb1.ocb_private_key = "{private_key}"   # private key bytes in hex to sign the OCB

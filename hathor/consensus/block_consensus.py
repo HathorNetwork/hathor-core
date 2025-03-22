@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.consensus.context import ConsensusAlgorithmContext
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+    from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.runner.runner import RunnerFactory
 
 logger = get_logger()
@@ -186,21 +187,26 @@ class BlockConsensusAlgorithm:
                 continue
 
             runner = self._runner_factory.create(block_trie=block_trie, seed=seed_hasher.digest())
+            runner.enable_call_trace()
             exception_and_tb: tuple[NCFail, str] | None = None
+            nc_header = tx.get_nano_header()
             try:
-                nc_header = tx.get_nano_header()
                 nc_header.execute(runner)
+            except NCFail as e:
+                self.log.info('nc execution failed', tx=tx.hash.hex())
+                exception_and_tb = e, traceback.format_exc()
+                self.mark_as_nc_fail_execution(tx)
+            else:
                 tx_meta.nc_execution = NCExecutionState.SUCCESS
                 self.context.save(tx)
                 # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
                 #      method once per contract per block, just like we do for the block_trie. This ensures we will
                 #      have a clean database with no orphan nodes.
                 runner.commit()
-            except NCFail as e:
-                self.log.info('nc execution failed', tx=tx.hash.hex())
-                exception_and_tb = e, traceback.format_exc()
-                self.mark_as_nc_fail_execution(tx)
-            else:
+
+                # Update metadata.
+                self.nc_update_metadata(tx, runner)
+
                 # We only emit events when the nc is successfully executed.
                 assert self.context.nc_events is not None
                 last_call_info = runner.get_last_call_info()
@@ -234,6 +240,25 @@ class BlockConsensusAlgorithm:
                     assert self._settings.NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
                 case _:
                     assert_never(tx_meta.nc_execution)
+
+    def nc_update_metadata(self, tx: Transaction, runner: 'Runner') -> None:
+        from hathor.nanocontracts.runner.types import CallType
+        from hathor.transaction.types import MetaNCCallRecord
+
+        meta = tx.get_metadata()
+        assert meta.nc_execution is NCExecutionState.SUCCESS
+        call_info = runner.get_last_call_info()
+        assert call_info.calls is not None
+        nc_calls: list[MetaNCCallRecord] = [
+            MetaNCCallRecord(x.blueprint_id, x.nanocontract_id, x.method_name)
+            for x in call_info.calls
+            if x.type == CallType.PUBLIC
+        ]
+
+        # Update metadata.
+        assert meta.nc_calls is None
+        meta.nc_calls = nc_calls
+        self.context.save(tx)
 
     def mark_as_nc_fail_execution(self, tx: Transaction) -> None:
         """Mark that a transaction failed execution. It also propagates its voidedness through the DAG of funds."""
@@ -642,6 +667,13 @@ class BlockConsensusAlgorithm:
                 bfs.skip_neighbors(tx)
                 continue
 
+            if tx.is_nano_contract():
+                if meta.nc_execution is NCExecutionState.SUCCESS:
+                    assert tx.storage is not None
+                    assert tx.storage.indexes is not None
+                    tx.storage.indexes.nc_update_remove(tx)
+                meta.nc_execution = NCExecutionState.PENDING
+                meta.nc_calls = None
             meta.first_block = None
             self.context.save(tx)
 

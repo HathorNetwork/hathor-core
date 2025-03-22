@@ -21,6 +21,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.nc_execution_state import NCExecutionState
+from hathor.transaction.types import MetaNCCallRecord
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import json_dumpb, json_loadb, practically_equal
 from hathor.utils.weight import work_to_weight
@@ -50,6 +51,7 @@ class TransactionMetadata:
     # Used to store the root node id of the contract tree related to this block.
     nc_block_root_id: Optional[bytes]
     nc_execution: Optional[NCExecutionState]
+    nc_calls: Optional[list[MetaNCCallRecord]]
 
     # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
     # is None otherwise. This is only used for caching, so it can be safely cleared up, as it would be recalculated
@@ -77,8 +79,10 @@ class TransactionMetadata:
         self.hash = hash
         self._tx_ref = None
 
+        # Nano contract metadata
         self.nc_block_root_id = nc_block_root_id
         self.nc_execution = None
+        self.nc_calls = None
 
         # Tx outputs that have been spent.
         # The key is the output index, while the value is a set of the transactions which spend the output.
@@ -185,7 +189,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by', 'children',
                       'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
-                      'feature_states', 'nc_block_root_id']:
+                      'feature_states', 'nc_block_root_id', 'nc_calls']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -241,6 +245,10 @@ class TransactionMetadata:
             data['first_block'] = None
         data['validation'] = self.validation.name.lower()
         data['nc_block_root_id'] = self.nc_block_root_id.hex() if self.nc_block_root_id else None
+        data['nc_calls'] = [
+            (x.blueprint_id.hex(), x.contract_id.hex(), x.method_name)
+            for x in self.nc_calls
+        ] if self.nc_calls else None
         data['nc_execution'] = self.nc_execution.value if self.nc_execution else None
         return data
 
@@ -314,6 +322,15 @@ class TransactionMetadata:
             meta.nc_execution = NCExecutionState(nc_execution_raw)
         else:
             meta.nc_execution = None
+
+        nc_calls_raw = data.get('nc_calls')
+        if nc_calls_raw is not None:
+            meta.nc_calls = [
+                MetaNCCallRecord(bytes.fromhex(x[0]), bytes.fromhex(x[1]), x[2])
+                for x in nc_calls_raw
+            ]
+        else:
+            meta.nc_calls = None
 
         return meta
 

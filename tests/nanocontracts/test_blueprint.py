@@ -92,31 +92,40 @@ class NCBlueprintTestCase(unittest.TestCase):
             self.manager.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
         )
 
-        self.runner.register_contract(SimpleFields, self.simple_fields_id)
-        self.runner.register_contract(ContainerFields, self.container_fields_id)
-        self.runner.register_contract(MyBlueprint, self.my_blueprint_id)
+        self.blueprint_ids = {
+            'simple_fields': b'a' * 32,
+            'container_fields': b'b' * 32,
+            'my_blueprint': b'c' * 32,
+        }
+
+        nc_catalog = self.manager.tx_storage.nc_catalog
+        nc_catalog.blueprints[self.blueprint_ids['simple_fields']] = SimpleFields
+        nc_catalog.blueprints[self.blueprint_ids['container_fields']] = ContainerFields
+        nc_catalog.blueprints[self.blueprint_ids['my_blueprint']] = MyBlueprint
 
         genesis = self.manager.tx_storage.get_all_genesis()
         self.tx = list(genesis)[0]
 
     def test_simple_fields(self):
+        blueprint_id = self.blueprint_ids['simple_fields']
         nc_id = self.simple_fields_id
-        storage = self.runner.get_storage(nc_id)
 
         ctx = Context([], self.tx, b'', timestamp=0)
         a = 'str'
         b = b'bytes'
         c = 123
         d = True
-        self.runner.call_public_method(nc_id, 'initialize', ctx, a, b, c, d)
+        self.runner.create_contract(nc_id, blueprint_id, ctx, a, b, c, d)
+
+        storage = self.runner.get_storage(nc_id)
         self.assertEqual(storage.get('a'), a)
         self.assertEqual(storage.get('b'), b)
         self.assertEqual(storage.get('c'), c)
         self.assertEqual(storage.get('d'), d)
 
     def test_container_fields(self):
+        blueprint_id = self.blueprint_ids['container_fields']
         nc_id = self.container_fields_id
-        storage = self.runner.get_storage(nc_id)
 
         ctx = Context([], self.tx, b'', timestamp=0)
         items = [
@@ -124,59 +133,65 @@ class NCBlueprintTestCase(unittest.TestCase):
             ('b', '2', b'2', 2),
             ('c', '3', b'3', 3),
         ]
-        self.runner.call_public_method(nc_id, 'initialize', ctx, items)
+        self.runner.create_contract(nc_id, blueprint_id, ctx, items)
+
+        storage = self.runner.get_storage(nc_id)
         self.assertEqual(storage.get('a:a'), '1')
         self.assertEqual(storage.get('a:b'), '2')
         self.assertEqual(storage.get('a:c'), '3')
 
-    def test_public_method_fails(self):
+    def _create_my_blueprint_contract(self):
+        blueprint_id = self.blueprint_ids['my_blueprint']
         nc_id = self.my_blueprint_id
-        storage = self.runner.get_storage(nc_id)
-
         ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(nc_id, 'initialize', ctx)
+        self.runner.create_contract(nc_id, blueprint_id, ctx)
+
+    def test_public_method_fails(self):
+        self._create_my_blueprint_contract()
+        nc_id = self.my_blueprint_id
+
+        storage = self.runner.get_storage(nc_id)
         self.assertEqual(1, storage.get('a'))
         with self.assertRaises(NCFail):
+            ctx = Context([], self.tx, b'', timestamp=0)
             self.runner.call_public_method(nc_id, 'fail', ctx)
         self.assertEqual(1, storage.get('a'))
 
     def test_private_method_change_state(self):
+        self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
         with self.assertRaises(NCPrivateMethodError):
             self.runner.call_view_method(nc_id, 'my_private_method_fail')
 
     def test_private_method_success(self):
+        self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
         self.assertEqual(1, self.runner.call_view_method(nc_id, 'my_private_method_nop'))
 
     def test_initial_balance(self):
+        self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
         storage = self.runner.get_storage(nc_id)
         self.assertEqual(0, storage.get_balance(b''))
 
     def test_nop(self):
+        self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(nc_id, 'initialize', ctx)
-
         ctx = Context([], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
 
     def test_withdrawal_fail(self):
+        self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(nc_id, 'initialize', ctx)
-
         action = NCAction(NCActionType.WITHDRAWAL, b'\0', 1)
         ctx = Context([action], self.tx, b'', timestamp=0)
         with self.assertRaises(NCInsufficientFunds):
             self.runner.call_public_method(nc_id, 'nop', ctx)
 
     def test_deposits_and_withdrawals(self):
+        self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
         storage = self.runner.get_storage(nc_id)
-        ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(nc_id, 'initialize', ctx)
 
         token_uid = b'\0'
         action = NCAction(NCActionType.DEPOSIT, token_uid, 100)
@@ -200,10 +215,9 @@ class NCBlueprintTestCase(unittest.TestCase):
             self.runner.call_public_method(nc_id, 'nop', ctx)
 
     def test_withdraw_wrong_token(self):
+        self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
         storage = self.runner.get_storage(nc_id)
-        ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(nc_id, 'initialize', ctx)
 
         token_uid = b'\0'
         wrong_token_uid = b'\1'
@@ -229,10 +243,9 @@ class NCBlueprintTestCase(unittest.TestCase):
                     self.a = 1.2
 
     def test_balances(self):
+        self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
         storage = self.runner.get_storage(nc_id)
-        ctx = Context([], self.tx, b'', timestamp=0)
-        self.runner.call_public_method(nc_id, 'initialize', ctx)
 
         token_uid = b'\0'  # HTR
         action = NCAction(NCActionType.DEPOSIT, token_uid, 100)

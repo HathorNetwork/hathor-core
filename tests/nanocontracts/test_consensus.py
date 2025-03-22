@@ -20,6 +20,7 @@ from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlo
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
+from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.types import VertexId
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests.dag_builder.builder import TestDAGBuilder
@@ -1369,3 +1370,37 @@ class NCConsensusTestCase(SimulatorTestCase):
         assert nc4.get_metadata().first_block == a32.hash
 
         assert self.manager.get_nc_storage(a33, nc1.hash).get('counter') == 2  # increments by nc4 and nc3
+
+    def test_back_to_mempool(self) -> None:
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..32]
+            blockchain b31 a[32..34]
+            b30 < dummy
+
+            a34.weight = 40
+
+            nc1.nc_id = "{self.myblueprint_id.hex()}"
+            nc1.nc_method = initialize("00")
+
+            nc1 <-- b32
+
+            # a34 will generate a reorg, moving nc1 back to mempool
+            b32 < a32
+        ''')
+
+        artifacts.propagate_with(self.manager)
+
+        b32, a34 = artifacts.get_typed_vertices(['b32', 'a34'], Block)
+        nc1 = artifacts.get_typed_vertex('nc1', Transaction)
+
+        assert b32.get_metadata().voided_by == {b32.hash}
+        assert a34.get_metadata().voided_by is None
+
+        assert nc1.is_nano_contract()
+        nc1_meta = nc1.get_metadata()
+
+        assert nc1_meta.first_block is None
+        assert nc1_meta.voided_by is None
+        assert nc1_meta.nc_execution is NCExecutionState.PENDING
+        assert nc1_meta.nc_calls is None

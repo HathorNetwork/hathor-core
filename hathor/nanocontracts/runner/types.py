@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError
 from hathor.nanocontracts.storage import NCChangesTracker, NCStorage
-from hathor.nanocontracts.types import ContractId
+from hathor.nanocontracts.types import BlueprintId, ContractId
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -45,6 +45,9 @@ class CallRecord:
 
     # The contract being invoked.
     nanocontract_id: ContractId
+
+    # The blueprint at the time of execution.
+    blueprint_id: BlueprintId
 
     # The method being invoked.
     method_name: str

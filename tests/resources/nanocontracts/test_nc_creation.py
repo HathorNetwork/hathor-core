@@ -15,6 +15,7 @@
 from typing import Any
 
 from hathor.nanocontracts.resources.nc_creation import NCCreationResource
+from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Transaction
 from tests import unittest
@@ -90,12 +91,15 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         return nc1, nc2, nc3, nc4, nc5
 
     def nc_to_response_item(self, nc: Transaction) -> dict[str, Any]:
+        assert nc.storage is not None
         assert nc.is_nano_contract()
         nano_header = nc.get_nano_header()
+        blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
+        blueprint_class = nc.storage.get_blueprint_class(blueprint_id)
         return dict(
             nano_contract_id=nc.hash_hex,
-            blueprint_id=nano_header.get_blueprint_id().hex(),
-            blueprint_name=nano_header.get_blueprint_class().__name__,
+            blueprint_id=blueprint_id.hex(),
+            blueprint_name=blueprint_class.__name__,
             last_tx_timestamp=nc.timestamp,
             total_txs=1,
             created_at=nc.timestamp,
@@ -126,7 +130,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         password = unittest.OCB_TEST_PASSWORD.hex()
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
-            blockchain genesis b[1..11]
+            blockchain genesis b[1..12]
             b10 < dummy
 
             ocb1.ocb_private_key = "{private_key}"
@@ -160,6 +164,8 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
 
             ocb1 <-- ocb2 <-- b11
             b11 < nc1 < nc2 < nc3 < nc4 < nc5 < nc6 < nc7
+
+            nc1 <-- nc2 <-- nc3 <-- b12
         ''')
 
         artifacts.propagate_with(self.manager)
@@ -180,7 +186,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
             nc_creation_txs=[
                 dict(
                     nano_contract_id=nc2.hash_hex,
-                    blueprint_id=nc2.get_nano_header().get_blueprint_id().hex(),
+                    blueprint_id=nc2.get_nano_header().nc_id.hex(),
                     blueprint_name='TestBlueprint1',
                     last_tx_timestamp=nc6.timestamp,
                     total_txs=4,
@@ -188,7 +194,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
                 ),
                 dict(
                     nano_contract_id=nc1.hash_hex,
-                    blueprint_id=nc1.get_nano_header().get_blueprint_id().hex(),
+                    blueprint_id=nc1.get_nano_header().nc_id.hex(),
                     blueprint_name='TestBlueprint1',
                     last_tx_timestamp=nc7.timestamp,
                     total_txs=3,
@@ -421,7 +427,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
     async def test_search_by_blueprint_id(self) -> None:
         nc1, nc2, nc3, nc4, nc5 = self.prepare_ncs()
         response = await self.web.get('on_chain', {
-            b'search': nc1.get_nano_header().get_blueprint_id().hex().encode(),
+            b'search': nc1.get_nano_header().nc_id.hex().encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -437,7 +443,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('on_chain', {
-            b'search': nc2.get_nano_header().get_blueprint_id().hex().encode(),
+            b'search': nc2.get_nano_header().nc_id.hex().encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -453,7 +459,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('on_chain', {
-            b'search': nc4.get_nano_header().get_blueprint_id().hex().encode(),
+            b'search': nc4.get_nano_header().nc_id.hex().encode(),
         })
         data = response.json_value()
         assert data == dict(
@@ -471,7 +477,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         nc1, nc2, nc3, nc4, nc5 = self.prepare_ncs()
         nc1_nano_header = nc1.get_nano_header()
         response = await self.web.get('on_chain', {
-            b'search': nc1_nano_header.get_blueprint_id().hex().encode(),
+            b'search': nc1_nano_header.nc_id.hex().encode(),
             b'count': b'1',
         })
         data = response.json_value()
@@ -487,7 +493,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         )
 
         response = await self.web.get('on_chain', {
-            b'search': nc1_nano_header.get_blueprint_id().hex().encode(),
+            b'search': nc1_nano_header.nc_id.hex().encode(),
             b'count': b'1',
             b'after': nc3.hash_hex.encode()
         })

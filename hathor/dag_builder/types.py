@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import ast
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -59,6 +60,11 @@ class DAGNode:
         yield from self.parents
         yield from (name for name, _ in self.inputs)
         yield from self.deps
+
+    def get_attr_ast(self, attr: str) -> Any:
+        value = self.attrs.get(attr)
+        assert isinstance(value, ast.AST)
+        return value
 
     def get_attr_str(self, attr: str, *, default: str | None = None) -> str:
         """Return the value of an attribute, a default, or raise a SyntaxError if it doesn't exist."""

@@ -33,9 +33,9 @@ class ViolationsTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
 
+        self.blueprint_id = self.gen_random_blueprint_id()
         self.contract_id = self.gen_random_nanocontract_id()
-        self.runner.register_contract(MyBlueprint, self.contract_id)
-        self.nc_storage = self.runner.get_storage(self.contract_id)
+        self.nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
         self.tx = self.get_genesis_tx()
         self.address = self.gen_random_address()
 
@@ -46,7 +46,7 @@ class ViolationsTestCase(BlueprintTestCase):
             address=self.address,
             timestamp=self.now
         )
-        self.runner.call_public_method(self.contract_id, 'initialize', context)
+        self.runner.create_contract(self.contract_id, self.blueprint_id, context)
 
         with self.assertRaises(NCFail) as cm:
             self.runner.call_public_method(self.contract_id, 'modify_actions', context)
@@ -60,7 +60,7 @@ class ViolationsTestCase(BlueprintTestCase):
             address=self.address,
             timestamp=self.now
         )
-        self.runner.call_public_method(self.contract_id, 'initialize', context)
+        self.runner.create_contract(self.contract_id, self.blueprint_id, context)
         with self.assertRaises(NCFail) as cm:
             self.runner.call_public_method(self.contract_id, 'modify_vertex', context)
         exc = cm.exception
@@ -73,7 +73,7 @@ class ViolationsTestCase(BlueprintTestCase):
             address=self.address,
             timestamp=self.now
         )
-        self.runner.call_public_method(self.contract_id, 'initialize', context)
+        self.runner.create_contract(self.contract_id, self.blueprint_id, context)
         self.runner.call_public_method(self.contract_id, 'assign_declared_attribute', context)
         with self.assertRaises(NCFail) as cm:
             self.runner.call_public_method(self.contract_id, 'assign_non_declared_attribute', context)

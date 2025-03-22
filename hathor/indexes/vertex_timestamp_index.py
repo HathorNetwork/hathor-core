@@ -41,6 +41,10 @@ class VertexTimestampIndex(BaseIndex, ABC):
         if self._should_add(tx):
             self._add_tx(tx)
 
+    @final
+    def manually_add_tx(self, tx: BaseTransaction) -> None:
+        self._add_tx(tx)
+
     @abstractmethod
     def _add_tx(self, tx: BaseTransaction) -> None:
         """Internal method to actually add a tx to this index."""

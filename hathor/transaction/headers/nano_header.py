@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
     from hathor.transaction.base_transaction import BaseTransaction
+    from hathor.transaction.block import Block
 
 NC_VERSION = 1
 NC_INITIALIZE_METHOD = 'initialize'
@@ -218,49 +219,81 @@ class NanoHeader(VertexBaseHeader):
             return ContractId(VertexId(self.tx.hash))
         return ContractId(VertexId(self.nc_id))
 
-    def get_blueprint_id(self) -> BlueprintId:
+    def get_blueprint_id(self, block: Block | None = None) -> BlueprintId:
         """Return the blueprint id."""
-        from hathor.nanocontracts.types import blueprint_id_from_bytes
-        from hathor.transaction import Transaction
+        from hathor.nanocontracts.exception import NanoContractDoesNotExist, NCContractCreationNotFound
+        from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId as NCVertexId
+        from hathor.nanocontracts.utils import get_nano_contract_creation
 
         assert self.tx.storage is not None
-        assert self.tx.storage.nc_catalog is not None
-        if self.nc_method == NC_INITIALIZE_METHOD:
-            return blueprint_id_from_bytes(self.nc_id)
-        else:
-            nanocontract_id = self.nc_id
-            nanocontract = self.tx.storage.get_transaction(nanocontract_id)
-            assert isinstance(nanocontract, Transaction)
-            nanocontract_nano_header = nanocontract.get_nano_header()
-            assert nanocontract.is_nano_contract()
-            assert nanocontract_nano_header.nc_method == NC_INITIALIZE_METHOD
-            return blueprint_id_from_bytes(nanocontract_nano_header.nc_id)
 
-    def get_blueprint_class(self) -> Type[Blueprint]:
-        """Return the blueprint class of the contract."""
-        assert self.tx.storage is not None
-        if self._blueprint_class is not None:
-            return self._blueprint_class
-        blueprint_id = self.get_blueprint_id()
-        blueprint_class = self.tx.storage.get_blueprint_class(blueprint_id)
-        self._blueprint_class = blueprint_class
-        return blueprint_class
+        if self.is_creating_a_new_contract():
+            blueprint_id = BlueprintId(NCVertexId(self.nc_id))
+            return blueprint_id
+
+        if block is None:
+            block = self.tx.storage.get_best_block()
+
+        try:
+            nc_storage = self.tx.storage.get_nc_storage(block, ContractId(NCVertexId(self.nc_id)))
+            blueprint_id = nc_storage.get_blueprint_id()
+            return blueprint_id
+        except NanoContractDoesNotExist:
+            pass
+
+        try:
+            nc_creation = get_nano_contract_creation(
+                self.tx.storage,
+                NCVertexId(self.nc_id),
+                allow_mempool=True,
+                allow_voided=True,
+            )
+        except NCContractCreationNotFound as e:
+            raise NanoContractDoesNotExist from e
+
+        # must be in the mempool
+        nc_creation_meta = nc_creation.get_metadata()
+        if nc_creation_meta.first_block is not None:
+            # otherwise, it failed or skipped execution
+            from hathor.transaction.nc_execution_state import NCExecutionState
+            assert nc_creation_meta.nc_execution in (NCExecutionState.FAILURE, NCExecutionState.SKIPPED)
+            raise NanoContractDoesNotExist
+
+        blueprint_id = BlueprintId(NCVertexId(nc_creation.get_nano_header().nc_id))
+        return blueprint_id
 
     def execute(self, runner: Runner) -> None:
         """Execute the contract's method call."""
         from hathor.nanocontracts.method_parser import NCMethodParser
+        from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId
 
         vertex_metadata = self.tx.get_metadata()
         assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
 
-        blueprint_class = self.get_blueprint_class()
+        blueprint_id: BlueprintId
+        nanocontract_id: ContractId
+
+        if self.is_creating_a_new_contract():
+            blueprint_id = BlueprintId(VertexId(self.nc_id))
+            nanocontract_id = ContractId(VertexId(self.tx.hash))
+        else:
+            nanocontract_id = ContractId(VertexId(self.nc_id))
+            nc_storage = runner.get_storage(nanocontract_id)
+            blueprint_id = nc_storage.get_blueprint_id()
+
+        assert self.tx.storage is not None
+        blueprint_class = self.tx.storage.get_blueprint_class(blueprint_id)
         method = getattr(blueprint_class, self.nc_method)
         parser = NCMethodParser(method)
         args = parser.deserialize_args(self.nc_args_bytes)
 
         context = self.get_context()
         assert context.vertex.block.hash == vertex_metadata.first_block
-        runner.call_public_method(self.get_nanocontract_id(), self.nc_method, context, *args)
+
+        if self.is_creating_a_new_contract():
+            runner.create_contract(nanocontract_id, blueprint_id, context, *args)
+        else:
+            runner.call_public_method(nanocontract_id, self.nc_method, context, *args)
 
     def get_actions(self) -> list[NCAction]:
         """Get a list of NCActions from the header actions."""

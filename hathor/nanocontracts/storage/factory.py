@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Optional
 
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore, NodeTrieStore, RocksDBNodeTrieStore
 from hathor.nanocontracts.storage.storage import NCStorage
-from hathor.types import VertexId
+from hathor.nanocontracts.types import VertexId
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie

@@ -19,12 +19,13 @@ from typing import Any, NamedTuple
 
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
-from hathor.types import VertexId
+from hathor.nanocontracts.types import BlueprintId, VertexId
 
 
 class _Tag(Enum):
     ATTR = b'\0'
     BALANCE = b'\1'
+    METADATA = b'\2'
 
 
 class AttrKey(NamedTuple):
@@ -42,6 +43,17 @@ class BalanceKey(NamedTuple):
 
     def __bytes__(self):
         return _Tag.BALANCE.value + self.token_uid
+
+
+class MetadataKey(NamedTuple):
+    nc_id: bytes
+    key: bytes
+
+    def __bytes__(self):
+        return _Tag.METADATA.value + hashlib.sha1(self.key).digest()
+
+
+BLUEPRINT_ID_KEY = b'blueprint_id'
 
 
 class NCStorage:
@@ -139,6 +151,24 @@ class NCStorage:
         except KeyError:
             return False
         return True
+
+    def _get_metadata(self, key: bytes) -> bytes:
+        """Return the value of a metadata key."""
+        internal_key = MetadataKey(self.nc_id, key)
+        return self._trie_get(bytes(internal_key))
+
+    def _put_metadata(self, key: bytes, value: bytes) -> None:
+        """Store a new value for a metadata key."""
+        internal_key = MetadataKey(self.nc_id, key)
+        self._trie_update(bytes(internal_key), value)
+
+    def get_blueprint_id(self) -> BlueprintId:
+        """Return the blueprint id of the contract."""
+        return BlueprintId(VertexId(self._get_metadata(BLUEPRINT_ID_KEY)))
+
+    def set_blueprint_id(self, value: BlueprintId) -> None:
+        """Set a new blueprint id for the contract."""
+        return self._put_metadata(BLUEPRINT_ID_KEY, value)
 
     def get_balance(self, token_uid: bytes) -> int:
         """Return the contract balance for a token."""

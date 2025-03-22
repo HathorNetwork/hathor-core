@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional, final
 
 from hathor.nanocontracts.fields import get_field_for_attr
 from hathor.nanocontracts.storage import NCStorage
-from hathor.nanocontracts.types import ContractId, NCAction, TokenUid
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -28,10 +28,11 @@ if TYPE_CHECKING:
 FORBIDDEN_NAMES = {
     'rng',
     'log',
-    'get_nanocontract_id',
+    'get_contract_id',
     'get_balance',
     'call_public_method',
     'call_view_method',
+    'create_contract',
 }
 
 
@@ -115,9 +116,9 @@ class Blueprint(metaclass=_BlueprintBase):
         return self.__log
 
     @final
-    def get_nanocontract_id(self) -> ContractId:
+    def get_contract_id(self) -> ContractId:
         """Return the current contract id."""
-        return self.__runner.get_current_nanocontract_id()
+        return self.__runner.get_current_contract_id()
 
     @final
     def get_balance(self,
@@ -144,3 +145,13 @@ class Blueprint(metaclass=_BlueprintBase):
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a view method of another contract."""
         return self.__runner.call_view_method(nc_id, method_name, *args, **kwargs)
+
+    @final
+    def create_contract(self,
+                        blueprint_id: BlueprintId,
+                        salt: bytes,
+                        actions: list[NCAction],
+                        *args: Any,
+                        **kwargs: Any) -> tuple[ContractId, Any]:
+        """Create a new contract."""
+        return self.__runner.create_another_contract(blueprint_id, salt, actions, *args, **kwargs)

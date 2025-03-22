@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import ast
 from collections import defaultdict
 from types import ModuleType
 from typing import Iterator
@@ -201,13 +202,28 @@ class DAGBuilder:
             node.deps.add(token)
         return self
 
+    def _parse_expression(self, value: str) -> ast.AST:
+        try:
+            ret = ast.parse(value, mode='eval').body
+        except SyntaxError as e:
+            raise SyntaxError(f'failed parsing "{value}"') from e
+        return ret
+
     def _add_nc_attribute(self, name: str, key: str, value: str) -> None:
         """Handle attributes related to nanocontract transactions."""
         node = self._get_or_create_node(name)
         if key == 'nc_id':
-            if not is_literal(value):
-                node.deps.add(value)
-            node.attrs[key] = value
+            parsed_value = self._parse_expression(value)
+            if isinstance(parsed_value, ast.Name):
+                node.deps.add(parsed_value.id)
+            elif isinstance(parsed_value, ast.Call):
+                for arg in parsed_value.args:
+                    if isinstance(arg, ast.Name):
+                        node.deps.add(arg.id)
+                    elif isinstance(arg, ast.Attribute):
+                        assert isinstance(arg.value, ast.Name)
+                        node.deps.add(arg.value.id)
+            node.attrs[key] = parsed_value
 
         elif key in (NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY):
             token, amount, args = parse_amount_token(value)

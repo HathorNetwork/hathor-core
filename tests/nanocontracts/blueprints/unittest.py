@@ -1,12 +1,12 @@
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
+from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.storage import NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import ContractId
+from hathor.nanocontracts.types import Address, BlueprintId, ContractId, TokenUid
 from hathor.transaction import Transaction
-from hathor.types import Address, TokenUid
 from hathor.util import not_none
 from hathor.wallet import KeyPair
 from tests import unittest
@@ -24,6 +24,7 @@ class BlueprintTestCase(unittest.TestCase):
         self.rng = self.manager.rng
         self.wallet = self.manager.wallet
         self.reactor = self.manager.reactor
+        self.nc_catalog = self.manager.tx_storage.nc_catalog
 
         self.htr_token_uid = settings.HATHOR_TOKEN_UID
 
@@ -39,7 +40,12 @@ class BlueprintTestCase(unittest.TestCase):
         self._token_index = 1
 
     def build_manager(self) -> HathorManager:
-        return self.create_peer('testnet')
+        return self.create_peer('testnet', nc_indices=True)
+
+    def register_blueprint_class(self, blueprint_id: BlueprintId, blueprint_class: type[Blueprint]) -> None:
+        """Register a blueprint class with a given id, allowing contracts to be created from it."""
+        assert blueprint_id not in self.nc_catalog.blueprints
+        self.nc_catalog.blueprints[blueprint_id] = blueprint_class
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""
@@ -58,11 +64,15 @@ class BlueprintTestCase(unittest.TestCase):
         key = KeyPair.create(password)
         address_b58 = key.address
         address_bytes = decode_address(not_none(address_b58))
-        return address_bytes, key
+        return Address(address_bytes), key
 
     def gen_random_nanocontract_id(self) -> ContractId:
         """Generate a random contract id."""
         return ContractId(self.rng.randbytes(32))
+
+    def gen_random_blueprint_id(self) -> BlueprintId:
+        """Generate a random contract id."""
+        return BlueprintId(self.rng.randbytes(32))
 
     def get_genesis_tx(self):
         """Return a genesis transaction."""

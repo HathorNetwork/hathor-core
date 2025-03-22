@@ -83,28 +83,29 @@ class MyBlueprint2(Blueprint):
         return 'hello world'
 
 
-def _get_initialize_entries(tx: Transaction) -> list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry]:
-    assert tx.is_nano_contract()
-    nano_header = tx.get_nano_header()
-    return [
-        NCCallBeginEntry.construct(
-            nc_id=tx.hash,
-            call_type=CallType.PUBLIC,
-            method_name='initialize',
-            timestamp=ANY,
-            actions=[],
-        ),
-        NCLogEntry.construct(
-            level=NCLogLevel.INFO,
-            message=f'initialize() called on {nano_header.get_blueprint_class().__name__}',
-            timestamp=ANY,
-        ),
-        NCCallEndEntry.construct(timestamp=ANY),
-    ]
-
-
 class BaseNCExecLogs(unittest.TestCase):
     __test__ = False
+
+    def _get_initialize_entries(self, tx: Transaction) -> list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry]:
+        assert tx.is_nano_contract()
+        nano_header = tx.get_nano_header()
+        assert self.manager.tx_storage.nc_catalog is not None
+        blueprint_class = self.manager.tx_storage.nc_catalog.blueprints[nano_header.nc_id]
+        return [
+            NCCallBeginEntry.construct(
+                nc_id=tx.hash,
+                call_type=CallType.PUBLIC,
+                method_name='initialize',
+                timestamp=ANY,
+                actions=[],
+            ),
+            NCLogEntry.construct(
+                level=NCLogLevel.INFO,
+                message=f'initialize() called on {blueprint_class.__name__}',
+                timestamp=ANY,
+            ),
+            NCCallEndEntry.construct(timestamp=ANY),
+        ]
 
     def _prepare(self, nc_log_config: NCLogConfig = NCLogConfig.ALL) -> None:
         settings = self._settings._replace(
@@ -155,7 +156,7 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         assert not_none(self.nc_log_storage.get_logs(nc1.hash)).entries == {
             b2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
         }
 
@@ -271,7 +272,7 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         assert not_none(self.nc_log_storage.get_logs(nc1.hash)).entries == {
             b2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
         }
 
@@ -357,7 +358,7 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         assert not_none(self.nc_log_storage.get_logs(nc1.hash)).entries == {
             b2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
         }
 
@@ -406,7 +407,7 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         assert not_none(self.nc_log_storage.get_logs(nc1.hash)).entries == {
             b2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
         }
 
@@ -462,7 +463,7 @@ class TestNCExecLogs(BaseNCExecLogs):
         assert b2.get_metadata().voided_by is None
         assert not_none(self.nc_log_storage.get_logs(nc1.hash)).entries == {
             b2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
         }
 
@@ -472,10 +473,10 @@ class TestNCExecLogs(BaseNCExecLogs):
         assert a2.get_metadata().voided_by is None
         assert not_none(self.nc_log_storage.get_logs(nc1.hash)).entries == {
             b2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
             a2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
         }
 
@@ -486,14 +487,14 @@ class TestNCExecLogs(BaseNCExecLogs):
         assert not_none(self.nc_log_storage.get_logs(nc1.hash)).entries == {
             b2.hash: [
                 NCExecEntry(
-                    logs=_get_initialize_entries(nc1),
+                    logs=self._get_initialize_entries(nc1),
                 ),
                 NCExecEntry(
-                    logs=_get_initialize_entries(nc1),
+                    logs=self._get_initialize_entries(nc1),
                 ),
             ],
             a2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
         }
 
@@ -525,12 +526,12 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         assert not_none(self.nc_log_storage.get_logs(nc1.hash)).entries == {
             b2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc1),
+                logs=self._get_initialize_entries(nc1),
             )],
         }
         assert not_none(self.nc_log_storage.get_logs(nc2.hash)).entries == {
             b2.hash: [NCExecEntry(
-                logs=_get_initialize_entries(nc2),
+                logs=self._get_initialize_entries(nc2),
             )],
         }
 
