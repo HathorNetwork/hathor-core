@@ -77,6 +77,7 @@ class HathorProtocol:
 
     class ConnectionState(Enum):
         # State of connection of two peers - either in a slot queue or active.
+        INIT = -1
         CONNECTING = 0
         READY = 1
         QUEUED_CONNECTING = 2
@@ -135,6 +136,9 @@ class HathorProtocol:
         # Type of Connection
         # 0 == Outgoing, 1 == Incoming, 2 == Discovered, 3 == For Checking Entrypoints.
         self.connection_type = connection_type
+
+        # Connection State
+        self.connection_state = HathorProtocol.ConnectionState.INIT
 
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT
