@@ -132,10 +132,10 @@ class HathorProtocol:
         assert self.connections.reactor is not None
         self.reactor = self.connections.reactor
 
-        # Type of Connection 
+        # Type of Connection
         # 0 == Outgoing, 1 == Incoming, 2 == Discovered, 3 == For Checking Entrypoints.
         self.connection_type = connection_type
-        
+
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT
         self._idle_timeout_call_later: Optional[IDelayedCall] = None
