@@ -90,33 +90,33 @@ class Slot:
             self.max_slot_connections = HathorSettings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
         if self.type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             self.max_slot_connections = HathorSettings.PEER_MAX_CHECK_PEER_CONNECTIONS
-        
+
         # All slots have the same maximum size.
         self.max_queue_connections = HathorSettings.QUEUE_SIZE
-    
+
     def add_connection(self, protocol: HathorProtocol) -> None:
         """
-            Adds connection protocol to the slot. Checks whether the slot is full or not, 
+            Adds connection protocol to the slot. Checks whether the slot is full or not,
             adding to the queue if necessary. If queue also full, disconnects the protocol.
         """
         if len(self.connection_slot) >= self.max_slot_connections:
-                self.log.warn("DENIED: Reached maximum number of connections",
-                              max_connections=self.max_outgoing_connections)
-                self.log.warn("|_____  Adding to QUEUE of connections...")
+            self.log.warn("DENIED: Reached maximum number of connections",
+                          max_connections=self.max_outgoing_connections)
+            self.log.warn("|_____  Adding to QUEUE of connections...")
 
-                # Check if queue is full. If so, disconnect.
-                if len(self.queue_slot) >= self.max_queue_connections:
-                    self.log.warn("      |_____DENIED: QUEUE of connections is full. Disconnecting... ")
-                    protocol.connection_state = HathorProtocol.ConnectionState.OUT_QUEUED
-                    protocol.disconnect(force=True)
-                    return
-
-                # If not full, add to the queue and return, waiting for another peer to disconnect.
-                # Note: We return here since the connection is in queue, hence it should not be added
-                # to the connection pool nor broadcasted. It will only be added when other connections are lost.
-                self.queue_slot.appendleft(protocol)
-                protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
+            # Check if queue is full. If so, disconnect.
+            if len(self.queue_slot) >= self.max_queue_connections:
+                self.log.warn("      |_____DENIED: QUEUE of connections is full. Disconnecting... ")
+                protocol.connection_state = HathorProtocol.ConnectionState.OUT_QUEUED
+                protocol.disconnect(force=True)
                 return
+
+            # If not full, add to the queue and return, waiting for another peer to disconnect.
+            # Note: We return here since the connection is in queue, hence it should not be added
+            # to the connection pool nor broadcasted. It will only be added when other connections are lost.
+            self.queue_slot.appendleft(protocol)
+            protocol.connection_state = HathorProtocol.ConnectionState.QUEUED_CONNECTING
+            return
         # If not full, add to slot
         self.connection_slot.add(protocol)
 
@@ -143,7 +143,7 @@ class Slot:
 
             # If the set just discarded a connection, it is not at full capacity.
             self.connection_slot.add(dequeued_connection)
-        
+
         return dequeued_connection
 
 
@@ -266,7 +266,7 @@ class ConnectionsManager:
         # List of peers connected and ready to communicate.
         self.connected_peers = {}
 
-        # List of connected_peers by each slot 
+        # List of connected_peers by each slot
         outgoing_slot = Slot(HathorProtocol.ConnectionType.OUTGOING)
         incoming_slot = Slot(HathorProtocol.ConnectionType.INCOMING)
         discovered_slot = Slot(HathorProtocol.ConnectionType.DISCOVERED)
