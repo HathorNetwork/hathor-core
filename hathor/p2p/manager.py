@@ -529,13 +529,13 @@ class ConnectionsManager:
             protocol_connected = self.outgoing_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
-            protocol_connected = self.outgoing_slot.add_connection(protocol)
+            protocol_connected = self.incoming_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
-            protocol_connected = self.outgoing_slot.add_connection(protocol)
+            protocol_connected = self.discovered_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-            protocol_connected = self.outgoing_slot.add_connection(protocol)
+            protocol_connected = self.check_entrypoints_slot.add_connection(protocol)
 
         # Regardless of the slot sent, the total connections increases.
         # A connection waiting in queue is not added (yet) to the whole pool, only if another disconnects.

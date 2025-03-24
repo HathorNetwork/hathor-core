@@ -77,7 +77,7 @@ class HathorProtocol:
 
     class ConnectionState(Enum):
         # State of connection of two peers - either in a slot queue or active.
-        INIT = -1
+        INIT = -1               # The INIT state is for when the protocol is first instatiated.
         CONNECTING = 0
         READY = 1
         QUEUED_CONNECTING = 2
