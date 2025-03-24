@@ -1,9 +1,10 @@
 import base64
+from unittest.mock import Mock
 
 import base58
 
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH, NanoContractMatchValues, script_eval
+from hathor.transaction.scripts import P2PKH, NanoContractMatchValues, evaluate_scripts
 from hathor.util import json_dumpb
 from tests import unittest
 
@@ -37,5 +38,8 @@ class NanoContracts(unittest.TestCase):
             base64.b64decode(oracle_data), base64.b64decode(oracle_signature), base64.b64decode(pubkey))
         txin = TxInput(b'aa', 0, input_data)
         spent_tx = Transaction(outputs=[TxOutput(20, script)])
-        tx = Transaction(outputs=[TxOutput(20, P2PKH.create_output_script(address))])
-        script_eval(tx, txin, spent_tx)
+        tx_mock = Mock()
+        tx_mock.outputs = [TxOutput(20, P2PKH.create_output_script(address))]
+        tx_mock.inputs = [txin]
+        tx_mock.get_spent_tx = Mock(return_value=spent_tx)
+        evaluate_scripts(tx_mock)
