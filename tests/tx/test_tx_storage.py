@@ -599,31 +599,11 @@ class BaseCacheStorageTest(BaseTransactionStorageTest):
         self.assertFalse(self.tx_storage.store.transaction_exists(tx_hash))
 
 
-class TransactionMemoryStorageTest(BaseTransactionStorageTest):
-    __test__ = True
-
-    def _config_builder(self, builder: TestBuilder) -> None:
-        builder.use_memory()
-
-
-class CacheMemoryStorageTest(BaseCacheStorageTest):
-    __test__ = True
-
-    def _config_builder(self, builder: TestBuilder) -> None:
-        builder.use_memory()
-        builder.use_tx_storage_cache(capacity=5)
-
-
 class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
     __test__ = True
 
     def _config_builder(self, builder: TestBuilder) -> None:
-        self.directory = tempfile.mkdtemp()
-        builder.use_rocksdb(self.directory)
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
+        pass
 
     def test_storage_new_blocks(self):
         self.tx_storage._always_use_topological_dfs = True
@@ -634,10 +614,4 @@ class CacheRocksDBStorageTest(BaseCacheStorageTest):
     __test__ = True
 
     def _config_builder(self, builder: TestBuilder) -> None:
-        self.directory = tempfile.mkdtemp()
-        builder.use_rocksdb(self.directory)
         builder.use_tx_storage_cache(capacity=5)
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()

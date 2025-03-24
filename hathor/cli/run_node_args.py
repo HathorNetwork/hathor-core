@@ -40,9 +40,9 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     stratum: Optional[int]
     x_stratum_ipv6_interface: Optional[str]
     data: Optional[str]
-    rocksdb_storage: bool
     memory_storage: bool
     memory_indexes: bool
+    temp_data: bool
     rocksdb_cache: Optional[int]
     wallet: Optional[str]
     wallet_enable_api: bool
@@ -73,7 +73,6 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     sync_v1_only: bool
     sync_v2_only: bool
     x_localhost_only: bool
-    x_rocksdb_indexes: bool
     x_enable_event_queue: bool
     enable_event_queue: bool
     peer_id_blacklist: list[str]

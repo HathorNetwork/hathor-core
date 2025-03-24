@@ -14,6 +14,7 @@
 
 from typing import TYPE_CHECKING, Optional
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.info_index import InfoIndex
 from hathor.transaction import BaseTransaction
 
@@ -22,8 +23,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class MemoryInfoIndex(InfoIndex):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *, settings: HathorSettings) -> None:
+        super().__init__(settings=settings)
         self._block_count = 0
         self._tx_count = 0
         self._first_timestamp = 0

@@ -18,7 +18,6 @@ from unittest.mock import Mock
 
 from twisted.internet.testing import StringTransport
 
-from hathor.builder import Builder
 from hathor.event.websocket import EventWebsocketProtocol
 from hathor.event.websocket.request import Request
 from hathor.event.websocket.response import EventResponse, InvalidRequestResponse
@@ -29,11 +28,11 @@ from tests.simulation.base import SimulatorTestCase
 
 
 class BaseEventSimulationTester(SimulatorTestCase):
-    builder: Builder
-
-    def _create_artifacts(self) -> None:
+    def setUp(self) -> None:
+        super().setUp()
         peer = PrivatePeer.auto_generated()
-        builder = self.builder.set_peer(peer) \
+        builder = self.simulator.get_default_builder() \
+            .set_peer(peer) \
             .enable_event_queue()
         artifacts = self.simulator.create_artifacts(builder)
 
@@ -89,22 +88,3 @@ class BaseEventSimulationTester(SimulatorTestCase):
                 yield json_loadb(value)
 
             buf = new_buf
-
-
-class MemoryEventSimulationTester(BaseEventSimulationTester):
-    def setUp(self) -> None:
-        super().setUp()
-        self.builder = self.simulator.get_default_builder()
-        self._create_artifacts()
-
-
-class RocksDBEventSimulationTester(BaseEventSimulationTester):
-    def setUp(self) -> None:
-        super().setUp()
-        import tempfile
-
-        directory = tempfile.mkdtemp()
-        self.tmpdirs.append(directory)
-
-        self.builder = self.simulator.get_default_builder().use_rocksdb(path=directory)
-        self._create_artifacts()

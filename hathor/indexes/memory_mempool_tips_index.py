@@ -16,6 +16,7 @@ from typing import Iterable, Optional
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.mempool_tips_index import ByteCollectionMempoolTipsIndex
 
 logger = get_logger()
@@ -24,7 +25,8 @@ logger = get_logger()
 class MemoryMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
     _index: set[bytes]
 
-    def __init__(self):
+    def __init__(self, *, settings: HathorSettings) -> None:
+        super().__init__(settings=settings)
         self.log = logger.new()
         self.force_clear()
 

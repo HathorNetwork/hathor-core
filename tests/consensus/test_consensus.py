@@ -2,7 +2,6 @@ from unittest.mock import MagicMock, Mock
 
 from hathor.execution_manager import ExecutionManager
 from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
-from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.util import not_none
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
@@ -11,7 +10,7 @@ from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_n
 class ConsensusTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.tx_storage = TransactionMemoryStorage(settings=self._settings)
+        self.tx_storage = self.create_tx_storage()
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
