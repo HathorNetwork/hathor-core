@@ -67,12 +67,13 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         return BetInfo(key=key, address=address_bytes, amount=amount, score=score)
 
     def _set_result(self, result: str, oracle_key: Optional[KeyPair] = None) -> None:
-        signed_result: SignedData[str] = SignedData(result, b'')
+        signed_result = SignedData[str](result, b'')
 
         if oracle_key is None:
             oracle_key = self.oracle_key
 
-        signed_result.script_input = oracle_key.p2pkh_create_input_data(b'123', signed_result.get_data_bytes())
+        result_bytes = signed_result.get_data_bytes(self.nc_id)
+        signed_result.script_input = oracle_key.p2pkh_create_input_data(b'123', result_bytes)
 
         tx = self._get_any_tx()
         context = Context([], tx, Address(b''), timestamp=self.get_current_timestamp())

@@ -79,12 +79,13 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         return BetInfo(key=key, address=Address(address_bytes), amount=Amount(amount), score=score)
 
     def _set_result(self, result: Result, oracle_key: Optional[KeyPair] = None) -> None:
-        signed_result: SignedData[Result] = SignedData(result, b'')
+        signed_result = SignedData[Result](result, b'')
 
         if oracle_key is None:
             oracle_key = self.oracle_key
 
-        signed_result.script_input = oracle_key.p2pkh_create_input_data(b'123', signed_result.get_data_bytes())
+        result_bytes = signed_result.get_data_bytes(self.nc_id)
+        signed_result.script_input = oracle_key.p2pkh_create_input_data(b'123', result_bytes)
 
         tx = self._get_any_tx()
         context = Context([], tx, Address(b''), timestamp=self.get_current_timestamp())

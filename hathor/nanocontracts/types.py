@@ -38,7 +38,7 @@ def blueprint_id_from_bytes(data: bytes) -> BlueprintId:
     return BlueprintId(VertexId(data))
 
 
-class SignedData(Generic[T]):
+class RawSignedData(Generic[T]):
     """A wrapper class to sign data.
 
     T must be serializable.
@@ -48,17 +48,27 @@ class SignedData(Generic[T]):
         self.script_input = script_input
 
     def __eq__(self, other):
+        if not isinstance(other, RawSignedData):
+            return False
         if self.data != other.data:
             return False
         if self.script_input != other.script_input:
             return False
         return True
 
+    def _get_inner_type(self) -> type[T]:
+        if not hasattr(self, '__orig_class__'):
+            raise TypeError('You must use RawSignedData[data_type](...)')
+        if len(self.__orig_class__.__args__) != 1:
+            raise TypeError('You must provide only one type')
+        return self.__orig_class__.__args__[0]
+
     def get_data_bytes(self) -> bytes:
         """Return the serialized data."""
         from hathor.nanocontracts.serializers import Serializer
         serializer = Serializer()
-        return serializer.from_type(type(self.data), self.data)
+        type_ = self._get_inner_type()
+        return serializer.from_type(type_, self.data)
 
     def get_sighash_all_data(self) -> bytes:
         """Workaround to be able to pass `self` for ScriptExtras. See the method `checksig`."""
@@ -78,6 +88,42 @@ class SignedData(Generic[T]):
             return False
         else:
             return True
+
+
+class SignedData(Generic[T]):
+    def __init__(self, data: T, script_input: bytes) -> None:
+        self.data = data
+        self.script_input = script_input
+
+    def __eq__(self, other):
+        if not isinstance(other, SignedData):
+            return False
+        if self.data != other.data:
+            return False
+        if self.script_input != other.script_input:
+            return False
+        return True
+
+    def _get_inner_type(self) -> type[T]:
+        if not hasattr(self, '__orig_class__'):
+            raise TypeError('You must use SignedData[data_type](...)')
+        if len(self.__orig_class__.__args__) != 1:
+            raise TypeError('You must provide only one type')
+        return self.__orig_class__.__args__[0]
+
+    def _get_raw_signed_data(self, contract_id: ContractId) -> RawSignedData:
+        type_ = self._get_inner_type()
+        data = (contract_id, self.data)
+        return RawSignedData[tuple[ContractId, type_]](data, self.script_input)  # type: ignore
+
+    def get_data_bytes(self, contract_id: ContractId) -> bytes:
+        raw_signed_data = self._get_raw_signed_data(contract_id)
+        return raw_signed_data.get_data_bytes()
+
+    def checksig(self, contract_id: ContractId, script: bytes) -> bool:
+        """Check if script_input satisfies the provided script."""
+        raw_signed_data = self._get_raw_signed_data(contract_id)
+        return raw_signed_data.checksig(script)
 
 
 def public(fn: Callable) -> Callable:
