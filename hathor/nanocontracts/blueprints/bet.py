@@ -188,7 +188,7 @@ class Bet(Blueprint):
     def set_result(self, ctx: Context, result: SignedData[Result]) -> None:
         """Set final result. This method is called by the oracle."""
         self.fail_if_result_is_available()
-        if not result.checksig(self.oracle_script):
+        if not result.checksig(self.get_nanocontract_id(), self.oracle_script):
             raise InvalidOracleSignature
         self.final_result = result.data
 
