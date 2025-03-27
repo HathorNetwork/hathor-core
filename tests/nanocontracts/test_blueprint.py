@@ -15,15 +15,13 @@ class SimpleFields(Blueprint):
     b: bytes
     c: int
     d: bool
-    e: float
 
     @public
-    def initialize(self, ctx: Context, a: str, b: bytes, c: int, d: bool, e: float) -> None:
+    def initialize(self, ctx: Context, a: str, b: bytes, c: int, d: bool) -> None:
         self.a = a
         self.b = b
         self.c = c
         self.d = d
-        self.e = e
 
         # Read the content of the variable.
         if self.a:
@@ -34,7 +32,6 @@ class ContainerFields(Blueprint):
     a: dict[str, str]
     b: dict[bytes, bytes]
     c: dict[int, int]
-    d: dict[str, float]
 
     def _set(self, _dict, key, value):
         _dict[key] = value
@@ -45,12 +42,11 @@ class ContainerFields(Blueprint):
         _dict[key] = value
 
     @public
-    def initialize(self, ctx: Context, items: list[tuple[str, str, bytes, int, float]]) -> None:
-        for key, va, vb, vc, vd in items:
+    def initialize(self, ctx: Context, items: list[tuple[str, str, bytes, int]]) -> None:
+        for key, va, vb, vc in items:
             self._set(self.a, key, va)
             self._set(self.b, key, vb)
             self._set(self.c, key, vc)
-            self._set(self.d, key, vd)
 
 
 class MyBlueprint(Blueprint):
@@ -110,13 +106,11 @@ class NCBlueprintTestCase(unittest.TestCase):
         b = b'bytes'
         c = 123
         d = True
-        e = 1.25
-        self.runner.call_public_method(nc_id, 'initialize', ctx, a, b, c, d, e)
+        self.runner.call_public_method(nc_id, 'initialize', ctx, a, b, c, d)
         self.assertEqual(storage.get('a'), a)
         self.assertEqual(storage.get('b'), b)
         self.assertEqual(storage.get('c'), c)
         self.assertEqual(storage.get('d'), d)
-        self.assertEqual(storage.get('e'), e)
 
     def test_container_fields(self):
         nc_id = self.container_fields_id
@@ -124,9 +118,9 @@ class NCBlueprintTestCase(unittest.TestCase):
 
         ctx = Context([], self.tx, b'', timestamp=0)
         items = [
-            ('a', '1', b'1', 1, 1.25),
-            ('b', '2', b'2', 2, 2.25),
-            ('c', '3', b'3', 3, 3.25),
+            ('a', '1', b'1', 1),
+            ('b', '2', b'2', 2),
+            ('c', '3', b'3', 3),
         ]
         self.runner.call_public_method(nc_id, 'initialize', ctx, items)
         self.assertEqual(storage.get('a:a'), '1')

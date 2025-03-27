@@ -18,14 +18,7 @@ from hathor.nanocontracts.exception import UnknownFieldType
 from hathor.nanocontracts.fields.base import Field
 from hathor.nanocontracts.fields.containers import DictField
 from hathor.nanocontracts.fields.others import OptionalField, SignedDataField, TupleField
-from hathor.nanocontracts.fields.singles import (
-    BooleanField,
-    BytesField,
-    FloatField,
-    IntegerField,
-    SingleValueField,
-    StrField,
-)
+from hathor.nanocontracts.fields.singles import BooleanField, BytesField, IntegerField, SingleValueField, StrField
 from hathor.nanocontracts.types import (
     Address,
     Amount,
@@ -44,7 +37,6 @@ _field_mapping: dict[Any, Type[Field]] = {
     bytes: BytesField,
     int: IntegerField,
     bool: BooleanField,
-    float: FloatField,
     dict: DictField,
     BlueprintId: BytesField,
     ContractId: BytesField,

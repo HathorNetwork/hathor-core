@@ -82,12 +82,6 @@ class NCSerializerTestCase(unittest.TestCase):
         with self.assertRaises(struct.error):
             self._run_test(int, 2**31)
 
-    def test_float_valid(self):
-        self._run_test(float, 1.23)
-
-    def test_float_int_valid(self):
-        self._run_test(float, 1)
-
     def test_optional_str_none(self):
         self._run_test(Optional[str], None)
 
@@ -98,7 +92,7 @@ class NCSerializerTestCase(unittest.TestCase):
         self._run_test(Optional[str], 'hathor')
 
     def test_tuple(self):
-        self._run_test(tuple[int, str, float, bytes], (1, 'a', 1.0, b'b'))
+        self._run_test(tuple[int, str, bytes], (1, 'a', b'b'))
 
     def test_tuple_optional_str(self):
         _type = tuple[int, Optional[str]]

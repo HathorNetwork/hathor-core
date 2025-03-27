@@ -90,20 +90,6 @@ class IntegerField(SingleValueField):
         return value
 
 
-class FloatField(SingleValueField):
-    """This is the field for Python's `float` type."""
-    type = (int, float)
-
-    def to_bytes(self, value: Any) -> bytes:
-        assert isinstance(value, (int, float))
-        return struct.pack('>d', value)
-
-    def to_python(self, raw: bytes) -> float:
-        (value,), raw = unpack('>d', raw)
-        assert len(raw) == 0
-        return value
-
-
 class BooleanField(SingleValueField):
     """This is the field for Python's `bool` type."""
     type = bool

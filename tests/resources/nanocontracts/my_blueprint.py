@@ -8,7 +8,6 @@ from hathor.nanocontracts.types import Address, Amount, SignedData, Timestamp, T
 class MyBlueprint(Blueprint):
     a_int: int
     a_str: str
-    a_float: float
     a_bool: bool
     a_address: Address
     a_amount: Amount
@@ -18,7 +17,7 @@ class MyBlueprint(Blueprint):
     a_signed_data: SignedData[str]
     a_dict: dict[str, int]
     a_tuple: tuple[str, int, bool]
-    a_dict_dict_tuple: dict[str, tuple[str, int, float]]
+    a_dict_dict_tuple: dict[str, tuple[str, int]]
     a_optional_int: Optional[int]
 
     @public
