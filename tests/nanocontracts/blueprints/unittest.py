@@ -37,7 +37,7 @@ class BlueprintTestCase(unittest.TestCase):
         self._token_index = 1
 
     def build_manager(self) -> HathorManager:
-        return self.create_peer('testnet', use_memory_storage=True)
+        return self.create_peer('testnet')
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""

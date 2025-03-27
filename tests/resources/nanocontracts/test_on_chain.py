@@ -22,15 +22,12 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
-    use_memory_storage = False
 
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer(
             'testnet',
             nc_indices=True,
-            use_memory_storage=self.use_memory_storage,
-            use_memory_index=self.use_memory_storage,
         )
         self.web = StubSite(BlueprintOnChainResource(self.manager))
         self.dag_builder = self.get_dag_builder(self.manager)

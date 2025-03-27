@@ -96,9 +96,10 @@ class NCHistoryIndexesTest(unittest.TestCase):
         assert nc_history_index.get_latest_tx_timestamp(nc2.hash) is None
 
     def test_transaction_count(self) -> None:
-        path = self.mkdtemp()
-        builder = self.get_builder().use_rocksdb(path).enable_nc_indices()
+        builder = self.get_builder().enable_nc_indices()
         manager = self.create_peer_from_builder(builder)
+        assert isinstance(manager.tx_storage, TransactionRocksDBStorage)
+        path = manager.tx_storage._rocksdb_storage.path
         indexes_manager = not_none(manager.tx_storage.indexes)
         nc_history_index = not_none(indexes_manager.nc_history)
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
@@ -152,7 +153,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
         manager.tx_storage._rocksdb_storage.close()
 
         # Test loading counts from existing db
-        builder2 = self.get_builder().use_rocksdb(path).enable_nc_indices()
+        builder2 = self.get_builder().set_rocksdb_path(path).enable_nc_indices()
         manager2 = self.create_peer_from_builder(builder2)
         indexes_manager2 = not_none(manager2.tx_storage.indexes)
         nc_history_index = not_none(indexes_manager2.nc_history)
