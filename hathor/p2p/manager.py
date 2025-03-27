@@ -134,8 +134,13 @@ class Slot:
 
         # Connections/Protocols may not be in queue, only endpoints/peers.
         if self.endpoint_queue_slot:
-            # -- DO QUEUE ENDPOINT STUFF
+
+            # -- DO QUEUE ENDPOINT STUFF --
+            # -- MAKE DEQUEUED_ENDPOINT INTO CONNECTION -- 
+
             # If the set just discarded a connection, it is not at full capacity.
+
+            # dequeued_connection.connection_type = HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS
             self.connection_slot.add(dequeued_connection)
 
         return dequeued_connection
@@ -633,19 +638,17 @@ class ConnectionsManager:
 
         # If a connection was dequeued, we publish its connection.
         if dequeued_connection:
+            if dequeued_connection.connection_type != HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+                raise Exception("Only CHECK_ENTRYPOINTS connections can be dequeued.")
+
             # This dequeued connection has not been published nor added to the total count on peer connect.
             # Now we add this protocol and publish it.
             self.connections.add(dequeued_connection)
             # Update the dequeued connection state:
-            if dequeued_connection.connection_state == HathorProtocol.ConnectionState.QUEUED_CONNECTING:
-                self.handshaking_peers.add(dequeued_connection)
-                protocol.connection_state = HathorProtocol.ConnectionState.CONNECTING
+            self.handshaking_peers.add(dequeued_connection)
 
-            if dequeued_connection.connection_state == HathorProtocol.ConnectionState.QUEUED_READY:
-                # Add to handshaking to be removed right after on_peer_ready is called.
-                self.handshaking_peers.add(dequeued_connection)
-                # Called again, as it was first ignored by being in queue.
-                self.on_peer_ready(dequeued_connection)
+            # This connection is now connecting. When it becomes ready, it will disconnect.
+            protocol.connection_state = HathorProtocol.ConnectionState.CONNECTING
 
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)

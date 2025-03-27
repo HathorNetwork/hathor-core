@@ -80,9 +80,7 @@ class HathorProtocol:
         INIT = -1               # The INIT state is for when the protocol is first instatiated.
         CONNECTING = 0
         READY = 1
-        QUEUED_CONNECTING = 2
-        QUEUED_READY = 3        # Later may be changed to a more robust Enum
-        OUT_QUEUED = 4          # When the connection gets disconnected due to slot Queue being full.
+
 
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'
