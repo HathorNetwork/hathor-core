@@ -70,7 +70,7 @@ class Slot:
         Class of a connection pool slot - outgoing, incoming, discovered or check_entrypoints connections.
     """
     connection_slot: set[HathorProtocol]
-    queue_slot: deque[HathorProtocol]
+    endpoint_queue: deque[HathorProtocol]
     type: HathorProtocol.ConnectionType
     max_slot_connections: int
     queue_size_endpoints: int
@@ -79,7 +79,7 @@ class Slot:
     def __init__(self, type: HathorProtocol.ConnectionType, _settings: HathorSettings):
         self.type = type
         self.connection_slot = set()
-        self.queue_slot = deque()
+        self.endpoint_queue_slot = deque()
 
         # For each type of slot, there is a maximum of connections allowed.
         if self.type == HathorProtocol.ConnectionType.OUTGOING:
@@ -132,16 +132,9 @@ class Slot:
         # If connection removed from slot while queue not empty, a conn. will be dequeued.
         dequeued_connection = None
 
-        # If there are connections in the queue, we pop from it and publish it.
-        if self.queue_slot:
-            # The protocol to be disconnected may be from the queue.
-            if protocol in self.queue_slot:
-                self.queue_slot.remove(protocol)
-                return None
-
-            # If protocol in slot but queue not empty, pop from queue and add to slot.
-            dequeued_connection = self.queue_slot.pop()
-
+        # Connections/Protocols may not be in queue, only endpoints/peers.
+        if self.endpoint_queue_slot:
+            # -- DO QUEUE ENDPOINT STUFF
             # If the set just discarded a connection, it is not at full capacity.
             self.connection_slot.add(dequeued_connection)
 
@@ -557,12 +550,10 @@ class ConnectionsManager:
         assert protocol.peer is not None
         self.verified_peer_storage.add_or_replace(protocol.peer)
 
-        if protocol in self.handshaking_peers:
-            self.handshaking_peers.remove(protocol)
-        else:
-            # Queued protocols do not handshake before freed slot - if ready without handshaking, return.
-            self.log.warn("Protocol in QUEUE - Waiting for respective slot to unload.")
-            return
+        # Only there is no protocol connecting while in queue, so 
+        # we may just remove from handshaking_peers when a protocol reaches ready.
+        self.handshaking_peers.remove(protocol)
+
         for conn in self.iter_all_connections():
             conn.unverified_peer_storage.remove(protocol.peer)
 
@@ -628,14 +619,15 @@ class ConnectionsManager:
 
         # Each conn is from a slot - discard from it as well.
         if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
-            dequeued_connection = self.outgoing_slot.remove_connection(protocol)
+            self.outgoing_slot.remove_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
-            dequeued_connection = self.incoming_slot.remove_connection(protocol)
+            self.incoming_slot.remove_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
-            dequeued_connection = self.discovered_slot.remove_connection(protocol)
+            self.discovered_slot.remove_connection(protocol)
 
+        # The only connection type that may pop from a queue is CHECK_ENTRYPOINTS
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             dequeued_connection = self.check_entrypoints_slot.remove_connection(protocol)
 
