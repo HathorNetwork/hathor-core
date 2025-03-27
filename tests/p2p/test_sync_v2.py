@@ -447,3 +447,14 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # force the processing of async code, nothing should break
         self.simulator.run(0)
+
+    def test_hello_world(self) -> None:
+        #   Prepare
+        manager1 = self.create_peer()
+        manager2 = self.create_peer()
+        manager3 = self.create_peer()
+        conn12 = FakeConnection(manager1, manager2, latency=0.05)
+        conn13 = FakeConnection(manager1, manager3, latency=0.05)
+        print(f"{conn12}, {conn13}")
+        #   Act
+        #   Assert
