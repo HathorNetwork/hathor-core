@@ -9,8 +9,6 @@ on: # yamllint disable-line rule:truthy
     tags:
       - v*
   pull_request:
-    branches:
-      - nano-master
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
