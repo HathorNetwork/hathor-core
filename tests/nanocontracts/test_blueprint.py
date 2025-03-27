@@ -91,7 +91,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         nc_storage_factory = NCMemoryStorageFactory()
         store = MemoryNodeTrieStore()
         block_trie = PatriciaTrie(store)
-        self.manager = self.create_peer('testnet', use_memory_storage=True)
+        self.manager = self.create_peer('testnet')
         self.runner = TestRunner(self.manager.tx_storage, nc_storage_factory, block_trie)
 
         self.runner.register_contract(SimpleFields, self.simple_fields_id)

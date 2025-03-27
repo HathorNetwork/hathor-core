@@ -27,15 +27,12 @@ class MyBlueprint2(Blueprint):
 
 
 class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
-    use_memory_storage = False
 
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer(
             'testnet',
             nc_indices=True,
-            use_memory_storage=self.use_memory_storage,
-            use_memory_index=self.use_memory_storage,
         )
         self.web = StubSite(BlueprintBuiltinResource(self.manager))
 
