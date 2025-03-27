@@ -15,7 +15,7 @@ settings = HathorSettings()
 
 class MyBlueprint:
     @public
-    def initialize(self, ctx: Context, a: str, b: bytes, c: int, d: float, e: bool) -> None:
+    def initialize(self, ctx: Context, a: str, b: bytes, c: int, d: bool) -> None:
         pass
 
     @public
@@ -28,10 +28,6 @@ class MyBlueprint:
 
     @public
     def method_int(self, ctx: Context, x: int) -> None:
-        pass
-
-    @public
-    def method_float(self, ctx: Context, x: float) -> None:
         pass
 
     @public
@@ -129,18 +125,6 @@ class NCBlueprintTestCase(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self._run_test(MyBlueprint.method_int, int, 1.)
 
-    def test_type_float_zero(self):
-        self._run_test(MyBlueprint.method_float, float, 0.)
-
-    def test_type_float_negative(self):
-        self._run_test(MyBlueprint.method_float, float, -100.)
-
-    def test_type_float_positive(self):
-        self._run_test(MyBlueprint.method_float, float, 100.)
-
-    def test_type_float_big(self):
-        self._run_test(MyBlueprint.method_float, float, 1e100)
-
     def test_type_bool_false(self):
         self._run_test(MyBlueprint.method_bool, bool, False)
 
@@ -172,13 +156,12 @@ class NCBlueprintTestCase(unittest.TestCase):
             ('a', str),
             ('b', bytes),
             ('c', int),
-            ('d', float),
-            ('e', bool),
+            ('d', bool),
         ]
         self.assertEqual(expected_arg_types, arg_types)
 
         # Then, check serialization and deserialization.
-        args_in = ['a', b'b', 1, 2.0, True]
+        args_in = ['a', b'b', 1, True]
         serialized_args_in = parser.serialize_args(args_in)
         args_out = parser.parse_args_bytes(serialized_args_in)
         self.assertEqual(args_in, args_out)
@@ -216,20 +199,6 @@ class NCBlueprintTestCase(unittest.TestCase):
         method_args = parser.get_method_args()
 
         value = 1
-        parsed_args = []
-        args_array = json.loads(f'[{value}]')
-
-        for (_, arg_type), arg_value in zip(method_args, args_array):
-            parsed_args.append(parse_arg(arg_value, arg_type))
-
-        self.assertEqual(len(parsed_args), 1)
-        self.assertEqual(parsed_args[0], value)
-
-    def test_arg_parse_float(self):
-        parser = NCMethodParser(MyBlueprint.method_float)
-        method_args = parser.get_method_args()
-
-        value = 1.23
         parsed_args = []
         args_array = json.loads(f'[{value}]')
 
