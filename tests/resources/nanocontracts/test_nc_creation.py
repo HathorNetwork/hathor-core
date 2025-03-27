@@ -23,15 +23,12 @@ from tests.utils import get_genesis_key
 
 
 class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
-    use_memory_storage = False
 
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer(
             'testnet',
             nc_indices=True,
-            use_memory_storage=self.use_memory_storage,
-            use_memory_index=self.use_memory_storage,
         )
         self.web = StubSite(NCCreationResource(self.manager))
         self.genesis_private_key = get_genesis_key()

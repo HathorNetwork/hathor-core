@@ -1,6 +1,4 @@
 import hashlib
-import shutil
-import tempfile
 from typing import Any, Optional
 
 from hathor.conf import HathorSettings
@@ -198,27 +196,10 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         return vertices
 
 
-class MemoryIndexesTestCase(BaseIndexesTestCase):
-    __test__ = True
-
-    def build_manager(self) -> HathorManager:
-        builder = self.simulator.get_default_builder()
-        builder.enable_wallet_index()
-        builder.use_memory()
-        return self.simulator.create_peer(builder)
-
-
 class RocksDBIndexesTestCase(BaseIndexesTestCase):
     __test__ = True
 
     def build_manager(self) -> HathorManager:
-        self.directory = tempfile.mkdtemp()
-
         builder = self.simulator.get_default_builder()
         builder.enable_wallet_index()
-        builder.use_rocksdb(self.directory)
         return self.simulator.create_peer(builder)
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
