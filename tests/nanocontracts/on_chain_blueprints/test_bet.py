@@ -1,13 +1,12 @@
 import hashlib
 import os
+import re
 from typing import NamedTuple, Optional
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key_bytes
 from hathor.nanocontracts import NanoContract, OnChainBlueprint
-from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.types import Address, ContractId, NCAction, NCActionType, SignedData
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.simulator.utils import add_new_blocks
@@ -24,19 +23,6 @@ settings = HathorSettings()
 ON_CHAIN_BET_NC_CODE: str = load_builtin_blueprint_for_ocb('bet.py', 'Bet')
 
 
-class OnChainBet(NamedTuple):
-    Bet: type[Blueprint]
-    DepositNotAllowed: type[NCFail]
-    InsufficientBalance: type[NCFail]
-    InvalidOracleSignature: type[NCFail]
-    InvalidToken: type[NCFail]
-    # Result: type[str]
-    ResultAlreadySet: type[NCFail]
-    ResultNotAvailable: type[NCFail]
-    TooLate: type[NCFail]
-    WithdrawalNotAllowed: type[NCFail]
-
-
 class BetInfo(NamedTuple):
     key: KeyPair
     address: Address
@@ -46,14 +32,13 @@ class BetInfo(NamedTuple):
 
 class OnChainBetBlueprintTestCase(unittest.TestCase):
     use_memory_storage = True
-    on_chain_bet: OnChainBet
 
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')
         self.wallet = self.get_wallet()
         self.token_uid = settings.HATHOR_TOKEN_UID
-        self.initialize_contract()  # will set self.on_chain_bet, self.nc_id, self.runner, self.nc_storage
+        self.initialize_contract()  # will set self.nc_id, self.runner, self.nc_storage
 
     def _get_any_tx(self):
         genesis = self.manager.tx_storage.get_all_genesis()
@@ -162,10 +147,6 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         add_new_blocks(self.manager, 1, advance_clock=30)  # confirm the on-chain blueprint vertex
         assert blueprint.get_metadata().first_block is not None
 
-        # load our `on_chain_bet` so we can use it for testing
-        blueprint_class, blueprint_env = blueprint._load_blueprint_code()
-        self.on_chain_bet = OnChainBet(**{k: v for k, v in blueprint_env.items() if k in OnChainBet._fields})
-
         self.oracle_key = KeyPair.create(b'123')
         assert self.oracle_key.address is not None
         p2pkh = P2PKH(self.oracle_key.address)
@@ -222,7 +203,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         amount = 1
         action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
         context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
-        with self.assertRaises(self.on_chain_bet.InsufficientBalance):
+        with self.assertNCFail('InsufficientBalance', 'withdrawal amount is greater than available (max: 0)'):
             runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_with_withdrawal(self):
@@ -233,32 +214,32 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, 1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
-        with self.assertRaises(self.on_chain_bet.WithdrawalNotAllowed):
+        with self.assertNCFail('WithdrawalNotAllowed', 'must be deposit'):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_make_a_bet_after_result(self):
         self._make_a_bet(100, '1x1')
         self._set_result('2x2')
-        with self.assertRaises(self.on_chain_bet.ResultAlreadySet):
+        with self.assertNCFail('ResultAlreadySet', ''):
             self._make_a_bet(100, '1x1')
 
     def test_make_a_bet_after_date_last_bet(self):
-        with self.assertRaises(self.on_chain_bet.TooLate):
+        with self.assertNCFail('TooLate', re.compile(r'cannot place bets after \d+')):
             self._make_a_bet(100, '1x1', timestamp=self.date_last_bet + 1)
 
     def test_set_results_two_times(self):
         self._set_result('2x2')
-        with self.assertRaises(self.on_chain_bet.ResultAlreadySet):
+        with self.assertNCFail('ResultAlreadySet', ''):
             self._set_result('5x1')
 
     def test_set_results_wrong_signature(self):
         wrong_oracle_key = KeyPair.create(b'123')
-        with self.assertRaises(self.on_chain_bet.InvalidOracleSignature):
+        with self.assertNCFail('InvalidOracleSignature', ''):
             self._set_result('3x2', oracle_key=wrong_oracle_key)
 
     def test_withdraw_before_result(self):
         bet1 = self._make_a_bet(100, '1x1')
-        with self.assertRaises(self.on_chain_bet.ResultNotAvailable):
+        with self.assertNCFail('ResultNotAvailable', ''):
             self._withdraw(bet1.address, 100)
 
     def test_withdraw_with_deposits(self):
@@ -266,7 +247,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         tx = self._get_any_tx()
         action = NCAction(NCActionType.DEPOSIT, self.token_uid, 1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
-        with self.assertRaises(self.on_chain_bet.DepositNotAllowed):
+        with self.assertNCFail('DepositNotAllowed', 'action must be withdrawal'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_wrong_token(self):
@@ -278,7 +259,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         action = NCAction(NCActionType.DEPOSIT, token_uid, 1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
-        with self.assertRaises(self.on_chain_bet.InvalidToken):
+        with self.assertNCFail('InvalidToken', 'token different from 00'):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_withdraw_wrong_token(self):
@@ -289,5 +270,5 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         self.assertNotEqual(token_uid, self.token_uid)
         action = NCAction(NCActionType.WITHDRAWAL, token_uid, 1)
         context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
-        with self.assertRaises(self.on_chain_bet.InvalidToken):
+        with self.assertNCFail('InvalidToken', 'token different from 00'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)

@@ -1,9 +1,11 @@
 import base64
 import os
+import re
 import secrets
 import shutil
 import tempfile
 import time
+from contextlib import contextmanager
 from typing import Any, Callable, Collection, Iterable, Iterator, Optional
 from unittest import main as ut_main
 
@@ -456,6 +458,24 @@ class TestCase(unittest.TestCase):
 
     def assertV2SyncedProgress(self, node_sync: NodeBlockSync) -> None:
         self.assertEqual(node_sync.synced_block, node_sync.peer_best_block)
+
+    @contextmanager
+    def assertNCFail(self, class_name: str, pattern: str | re.Pattern[str] | None = None) -> Iterator[BaseException]:
+        """Assert that a NCFail is raised and it has the expected class name and str(exc) format.
+        """
+        from hathor.nanocontracts.exception import NCFail
+
+        with self.assertRaises(NCFail) as cm:
+            yield cm
+
+        self.assertEqual(cm.exception.__class__.__name__, class_name)
+
+        if pattern is not None:
+            actual = str(cm.exception)
+            if isinstance(pattern, re.Pattern):
+                assert pattern.match(actual)
+            else:
+                self.assertEqual(pattern, actual)
 
     def clean_tmpdirs(self) -> None:
         for tmpdir in self.tmpdirs:
