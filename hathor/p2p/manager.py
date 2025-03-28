@@ -70,7 +70,7 @@ class Slot:
         Class of a connection pool slot - outgoing, incoming, discovered or check_entrypoints connections.
     """
     connection_slot: set[HathorProtocol]
-    endpoint_queue: deque[HathorProtocol]
+    endpoint_queue_slot: deque[HathorProtocol]
     type: HathorProtocol.ConnectionType
     max_slot_connections: int
     queue_size_endpoints: int
@@ -131,17 +131,18 @@ class Slot:
 
         # If connection removed from slot while queue not empty, a conn. will be dequeued.
         dequeued_connection = None
-
         # Connections/Protocols may not be in queue, only endpoints/peers.
         if self.endpoint_queue_slot:
 
             # -- DO QUEUE ENDPOINT STUFF --
-            # -- MAKE DEQUEUED_ENDPOINT INTO CONNECTION -- 
+            # -- MAKE DEQUEUED_ENDPOINT INTO CONNECTION --
 
             # If the set just discarded a connection, it is not at full capacity.
 
             # dequeued_connection.connection_type = HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS
-            self.connection_slot.add(dequeued_connection)
+            # ---- NEEDS TO WORK ON THIS VVV ----
+            if dequeued_connection:
+                self.connection_slot.add(dequeued_connection)
 
         return dequeued_connection
 
@@ -555,7 +556,7 @@ class ConnectionsManager:
         assert protocol.peer is not None
         self.verified_peer_storage.add_or_replace(protocol.peer)
 
-        # Only there is no protocol connecting while in queue, so 
+        # Only there is no protocol connecting while in queue, so
         # we may just remove from handshaking_peers when a protocol reaches ready.
         self.handshaking_peers.remove(protocol)
 

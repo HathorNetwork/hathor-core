@@ -81,7 +81,6 @@ class HathorProtocol:
         CONNECTING = 0
         READY = 1
 
-
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'
 

@@ -5,6 +5,7 @@ from unittest.mock import patch
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.states import ReadyState
@@ -449,16 +450,16 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(0)
 
     def test_update_of_slots(self) -> None:
-        #   Prepare
+        # Number of peers to connect
         max_total_peers = 5
 
         # Create peer list
-        peerList: list = []
+        peerList = []
         for _ in range(max_total_peers):
             peerList.append(self.create_peer())
 
         # Generate incoming connections - peerList[0] is the target.
-        in_connList: list = []
+        in_connList = []
         for i in range(1, max_total_peers):
             in_connList.append(FakeConnection(peerList[0], peerList[i]))
 
@@ -470,12 +471,12 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # Checks whether it is updating incoming slot
         self.assertTrue(len(peerList[0].connections.incoming_slot.connection_slot) == len(in_connList))
 
-        # Generate outgoing_connections - peerList[1] is the one.
+        # Generate outgoing_connections - we'll make a new peer to be the outgoing reference.
         # Add new peer:
 
         newPeer = self.create_peer()
-        out_connList: list = []
-        for i in range(max_total_peers): # Starts from one not to connect again to peerList[0]
+        out_connList = []
+        for i in range(max_total_peers):
             out_connList.append(FakeConnection(peerList[i], newPeer))
 
         for i in range(len(out_connList)):
@@ -485,3 +486,66 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # Checks whether it is updating outgoing_slot
         self.assertTrue(len(newPeer.connections.outgoing_slot.connection_slot) == len(out_connList))
+
+    def test_slot_limit(self) -> None:
+        """
+            Tests whether the slots and the pool stop increasing connections after cap is reached.
+        """
+
+        # Get the settings of the max_connections allowed. Put dummy values in HathorSettings.
+        _settings = HathorSettings(bytes(1), bytes(1), "testnet")
+
+        # Number of peers and thresholds of connections in slots and pool
+        number_of_peers = 45  # Note: After around 100, no more peer ids in the pool ?
+        max_connections = _settings.PEER_MAX_CONNECTIONS
+        max_incoming_connections = _settings.PEER_MAX_ENTRYPOINTS
+        max_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
+
+        # Full-Node: May receive incoming connections, deliver outgoing connections, etc.
+        full_node = self.create_peer()
+
+        # -- Check incoming connections slot -- #
+
+        # Create peer list for incoming connections
+        in_peerList = []
+        for _ in range(number_of_peers):
+            in_peerList.append(self.create_peer())
+
+        # Generate incoming connections - full_node is the target.
+        in_connList = []
+        for i in range(0, number_of_peers):
+            in_connList.append(FakeConnection(full_node, in_peerList[i]))
+
+        for i in range(len(in_connList)):
+            self.simulator.add_connection(in_connList[i])
+
+        self.simulator.run(10)
+
+        number_incoming_slot = len(full_node.connections.incoming_slot.connection_slot)
+        # Checks whether the connection has capped on its limit size.
+        self.assertTrue(number_incoming_slot == max_incoming_connections)
+
+        # -- Check outgoing connections slot -- #
+
+        # Create peer list for outgoing connections
+        out_peerList = []
+        for _ in range(number_of_peers):
+            out_peerList.append(self.create_peer())
+
+        # Generate outgoing connections - out_peerList[i] is the target.
+        out_connList = []
+        for i in range(0, number_of_peers):
+            out_connList.append(FakeConnection(out_peerList[i], full_node))
+
+        for i in range(len(out_connList)):
+            self.simulator.add_connection(out_connList[i])
+
+        # Assure the outgoing connections cap at the threshold.
+        self.simulator.run(10)
+        number_outgoing_slot = len(full_node.connections.outgoing_slot.connection_slot)
+        self.assertTrue(number_outgoing_slot == max_outgoing_connections)
+
+        # Finally, assure the number of connected peers is the same as the sum of both.
+        connection_pool = full_node.connections.connections
+        self.assertTrue(number_outgoing_slot + number_incoming_slot == len(connection_pool))
+        self.assertTrue(len(connection_pool) <= max_connections)
