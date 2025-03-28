@@ -549,3 +549,43 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         connection_pool = full_node.connections.connections
         self.assertTrue(number_outgoing_slot + number_incoming_slot == len(connection_pool))
         self.assertTrue(len(connection_pool) <= max_connections)
+
+    def test_check_ep_update(self) -> None:
+        """
+            Checks whether the check_entrypoints slot gets updated after outgoing slot full.
+        """
+
+        _settings = HathorSettings(bytes(1), bytes(1), "testnet")
+
+        # Create exactly the amount of peers that the outgoing slot can handle
+        number_of_peers = _settings.PEER_MAX_OUTGOING_CONNECTIONS
+        full_node = self.create_peer()
+
+        out_peerList = []
+        for _ in range(number_of_peers):
+            out_peerList.append(self.create_peer())
+
+        # Generate outgoing connections - out_peerList[i] is the target.
+        out_connList = []
+        for i in range(0, number_of_peers):
+            out_connList.append(FakeConnection(out_peerList[i], full_node))
+
+        for i in range(len(out_connList)):
+            self.simulator.add_connection(out_connList[i])
+
+        # Assure the outgoing connections cap at the threshold.
+        self.simulator.run(10)
+
+        # Now, increase in one more connection, and see if the protocol is check_entrypoints type.
+        new_peer = self.create_peer()
+        out_peerList.append(new_peer)
+        conn = FakeConnection(new_peer, full_node)
+        out_connList.append(conn)
+        self.simulator.add_connection(conn)
+
+        self.simulator.run(2)
+
+        # Check if indeed a connection was updated into check_entrypoints after outgoing full
+        self.assertTrue(len(full_node.connections.check_entrypoints_slot.connection_slot) == 1)
+
+        # Let's keep adding more outgoing connections to the full node until it caps the check_entrypoints.

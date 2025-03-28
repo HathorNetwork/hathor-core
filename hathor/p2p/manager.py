@@ -113,6 +113,13 @@ class Slot:
         if len(self.connection_slot) >= self.max_slot_connections:
             if self.type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
                 # -- DO QUEUE STUFF --
+                # If more than slot, and check_entrypoints, then the queue of endpoints must follow.
+                # Returning false hence means the protocol was disconnected and the queue has its endpoint.
+                return False
+            if self.type == HathorProtocol.ConnectionType.OUTGOING:
+                # The connection must be turned into CHECK_ENTRYPOINTS.
+                protocol.connection_type = HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS
+                # -- DO QUEUE STUFF --
                 return False
             protocol.disconnect(reason="Connect attempt to slot full, no queue.")
             return False
