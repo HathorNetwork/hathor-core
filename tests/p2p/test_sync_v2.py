@@ -450,6 +450,10 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(0)
 
     def test_update_of_slots(self) -> None:
+
+        """
+            Tests whether the slot mechanism is updating with each extra connection.
+        """
         # Number of peers to connect
         max_total_peers = 5
 
@@ -559,6 +563,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # Create exactly the amount of peers that the outgoing slot can handle
         number_of_peers = _settings.PEER_MAX_OUTGOING_CONNECTIONS
+        max_check_ep_connections = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
         full_node = self.create_peer()
 
         out_peerList = []
@@ -589,3 +594,25 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(len(full_node.connections.check_entrypoints_slot.connection_slot) == 1)
 
         # Let's keep adding more outgoing connections to the full node until it caps the check_entrypoints.
+        for _ in range(10):
+            out_peerList.append(self.create_peer())
+
+        # Generate outgoing connections - out_peerList[i] is the target.
+        out_connList = []
+        for i in range(max_check_ep_connections + 5):
+            out_connList.append(FakeConnection(out_peerList[i], full_node))
+
+        for i in range(len(out_connList)):
+            self.simulator.add_connection(out_connList[i])
+
+        self.simulator.run(2)
+
+        # Amount of established connections in check_ep slot.
+        amount_check_ep_conn = len(full_node.connections.check_entrypoints_slot.connection_slot)
+
+        # It passed through the cap of check_entrypoints. It mush be capped.
+        self.assertTrue(amount_check_ep_conn == max_check_ep_connections)
+
+        # Assert the numbers add up to the max of connections.
+        total_conn = len(full_node.connections.connections)
+        self.assertTrue(amount_check_ep_conn + number_of_peers == total_conn)
