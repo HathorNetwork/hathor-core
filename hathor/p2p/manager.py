@@ -611,11 +611,6 @@ class ConnectionsManager:
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
 
-        # If slot and queue full, protocol neved connected - ditched.
-        if protocol.connection_state == HathorProtocol.ConnectionState.OUT_QUEUED:
-            self.log.warn("DENIED: Connection out of any slot or queue.")
-            return
-
         # Discard handles case when not in connections.
         self.connections.discard(protocol)
 

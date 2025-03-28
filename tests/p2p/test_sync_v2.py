@@ -448,13 +448,40 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # force the processing of async code, nothing should break
         self.simulator.run(0)
 
-    def test_hello_world(self) -> None:
+    def test_update_of_slots(self) -> None:
         #   Prepare
-        manager1 = self.create_peer()
-        manager2 = self.create_peer()
-        manager3 = self.create_peer()
-        conn12 = FakeConnection(manager1, manager2, latency=0.05)
-        conn13 = FakeConnection(manager1, manager3, latency=0.05)
-        print(f"{conn12}, {conn13}")
-        #   Act
-        #   Assert
+        max_total_peers = 5
+
+        # Create peer list
+        peerList: list = []
+        for _ in range(max_total_peers):
+            peerList.append(self.create_peer())
+
+        # Generate incoming connections - peerList[0] is the target.
+        in_connList: list = []
+        for i in range(1, max_total_peers):
+            in_connList.append(FakeConnection(peerList[0], peerList[i]))
+
+        for i in range(len(in_connList)):
+            self.simulator.add_connection(in_connList[i])
+
+        self.simulator.run(15)
+
+        # Checks whether it is updating incoming slot
+        self.assertTrue(len(peerList[0].connections.incoming_slot.connection_slot) == len(in_connList))
+
+        # Generate outgoing_connections - peerList[1] is the one.
+        # Add new peer:
+
+        newPeer = self.create_peer()
+        out_connList: list = []
+        for i in range(max_total_peers): # Starts from one not to connect again to peerList[0]
+            out_connList.append(FakeConnection(peerList[i], newPeer))
+
+        for i in range(len(out_connList)):
+            self.simulator.add_connection(out_connList[i])
+
+        self.simulator.run(15)
+
+        # Checks whether it is updating outgoing_slot
+        self.assertTrue(len(newPeer.connections.outgoing_slot.connection_slot) == len(out_connList))
