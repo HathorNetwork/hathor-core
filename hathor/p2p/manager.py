@@ -28,7 +28,7 @@ from twisted.web.client import Agent
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
-from hathor.p2p.peer_discovery import PeerDiscovery
+from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery, PeerDiscovery
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import VerifiedPeerStorage
@@ -207,6 +207,8 @@ class ConnectionsManager:
     discovered_slot: Slot
     check_entrypoints_slot: Slot
 
+    discovered_entrypoints: set[PeerEndpoint]
+
     def __init__(
         self,
         settings: HathorSettings,
@@ -277,6 +279,9 @@ class ConnectionsManager:
         self.incoming_slot = Slot(HathorProtocol.ConnectionType.INCOMING, settings)
         self.discovered_slot = Slot(HathorProtocol.ConnectionType.DISCOVERED, settings)
         self.check_entrypoints_slot = Slot(HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS, settings)
+
+        # Set of discovered entrypoints
+        self.discovered_entrypoints = set()
 
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
@@ -401,6 +406,9 @@ class ConnectionsManager:
         for peer_discovery in self.peer_discoveries:
             coro = peer_discovery.discover_and_connect(self.connect_to_endpoint)
             Deferred.fromCoroutine(coro)
+            if isinstance(peer_discovery, BootstrapPeerDiscovery | DNSPeerDiscovery):
+                for entrypoint in peer_discovery.entrypoints:
+                    self.discovered_entrypoints.add(entrypoint)
 
     def disable_rate_limiter(self) -> None:
         """Disable global rate limiter."""
@@ -550,11 +558,12 @@ class ConnectionsManager:
 
         protocol_connected = False  # If protocol is added to slot, True. If to Queue or disconnected, False.
 
-
-        
         # Next block sends the connection to the appropriate slot.
         if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
-            protocol_connected = self.outgoing_slot.add_connection(protocol)
+            if protocol.entrypoint in self.discovered_entrypoints:
+                protocol.connection_type = HathorProtocol.ConnectionType.DISCOVERED
+            else:
+                protocol_connected = self.outgoing_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
             protocol_connected = self.incoming_slot.add_connection(protocol)
