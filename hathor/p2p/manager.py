@@ -80,6 +80,7 @@ class Slot:
         self.type = type
         self.connection_slot = set()
         self.entrypoint_queue_slot = deque()
+        self.entrypoint_set = set()
 
         # For each type of slot, there is a maximum of connections allowed.
         if self.type == HathorProtocol.ConnectionType.OUTGOING:
@@ -549,6 +550,8 @@ class ConnectionsManager:
 
         protocol_connected = False  # If protocol is added to slot, True. If to Queue or disconnected, False.
 
+
+        
         # Next block sends the connection to the appropriate slot.
         if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
             protocol_connected = self.outgoing_slot.add_connection(protocol)
