@@ -504,6 +504,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         max_connections = _settings.PEER_MAX_CONNECTIONS
         max_incoming_connections = _settings.PEER_MAX_ENTRYPOINTS
         max_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
+        max_check_entrypoints = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
 
         # Full-Node: May receive incoming connections, deliver outgoing connections, etc.
         full_node = self.create_peer()
@@ -550,8 +551,9 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(number_outgoing_slot == max_outgoing_connections)
 
         # Finally, assure the number of connected peers is the same as the sum of both.
+        # We put a "5" in assert due to the check_entrypoints slot.
         connection_pool = full_node.connections.connections
-        self.assertTrue(number_outgoing_slot + number_incoming_slot == len(connection_pool))
+        self.assertTrue(number_outgoing_slot + number_incoming_slot + max_check_entrypoints == len(connection_pool))
         self.assertTrue(len(connection_pool) <= max_connections)
 
     def test_check_ep_update(self) -> None:

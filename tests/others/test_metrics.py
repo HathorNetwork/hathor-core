@@ -1,7 +1,6 @@
 import tempfile
 from unittest.mock import Mock
 
-from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -217,7 +216,7 @@ class MetricsTest(unittest.TestCase):
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
-                connection_type=HathorSettings.ConnectionType.OUTGOING,
+                connection_type=HathorProtocol.ConnectionType.OUTGOING,
                 settings=self._settings
             )
             protocol._peer = PrivatePeer.auto_generated().to_public_peer()
