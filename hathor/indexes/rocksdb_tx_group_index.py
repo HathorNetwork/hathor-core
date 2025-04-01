@@ -183,7 +183,10 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         it = reversed(it)
         # when reversed we increment the key by 1, which effectively goes to the end of a prefix
         it.seek_for_prev(incr_key(self._to_rocksdb_key(key)))
-        _cf, rocksdb_key = next(it)
+        try:
+            _cf, rocksdb_key = next(it)
+        except StopIteration:
+            return None
         key2, tx_timestamp, _ = self._from_rocksdb_key(rocksdb_key)
         if key2 != key:
             return None
