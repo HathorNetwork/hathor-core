@@ -36,7 +36,6 @@ TOKEN_INFO_VERSION = 1
 
 
 class TokenCreationTransaction(Transaction):
-
     def __init__(
         self,
         nonce: int = 0,

@@ -590,7 +590,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         h.update(self.get_headers_struct())
         return h.digest()
 
-    def get_header_without_nonce(self) -> bytes:
+    def get_mining_header_without_nonce(self) -> bytes:
         """Return the transaction header without the nonce
 
         :return: transaction header without the nonce
@@ -605,7 +605,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :rtype: :py:class:`_hashlib.HASH`
         """
         calculate_hash1 = hashlib.sha256()
-        calculate_hash1.update(self.get_header_without_nonce())
+        calculate_hash1.update(self.get_mining_header_without_nonce())
         return calculate_hash1
 
     def calculate_hash2(self, part1: 'HASH') -> bytes:
