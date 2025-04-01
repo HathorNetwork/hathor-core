@@ -296,9 +296,9 @@ class Block(GenericVertex[BlockStaticMetadata]):
             # TODO: check whether self is a parent of any checkpoint-valid block, this is left for a future PR
             pass
 
-    def get_base_hash(self) -> bytes:
+    def get_mining_base_hash(self) -> bytes:
         from hathor.merged_mining.bitcoin import sha256d_hash
-        return sha256d_hash(self.get_header_without_nonce())
+        return sha256d_hash(self.get_mining_header_without_nonce())
 
     def get_height(self) -> int:
         """Return this block's height."""

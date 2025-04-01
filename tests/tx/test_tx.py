@@ -290,7 +290,7 @@ class TransactionTest(unittest.TestCase):
             storage=self.tx_storage,
         )
 
-        assert b1.get_base_hash() != b2.get_base_hash()
+        assert b1.get_mining_base_hash() != b2.get_mining_base_hash()
 
         header_head = b'\x00' * 32
         header_tail = b'\x00' * 12
@@ -298,9 +298,9 @@ class TransactionTest(unittest.TestCase):
         coinbase_parts = [
             b'\x00' * 42,
             MAGIC_NUMBER,
-            b1.get_base_hash(),
+            b1.get_mining_base_hash(),
             MAGIC_NUMBER,
-            b2.get_base_hash(),
+            b2.get_mining_base_hash(),
             b'\x00' * 18,
         ]
 
