@@ -24,6 +24,7 @@ from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_double
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.transaction import TokenInfoVersion
 from hathor.transaction.util import get_deposit_amount
 from hathor.util import Random
 
@@ -364,12 +365,12 @@ GENESIS_ADDRESS_B58 = get_address_b58_from_public_key(GENESIS_PUBLIC_KEY)
 
 def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
                   token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True,
-                  use_genesis: bool = True, nft_data: Optional[str] = None) -> TokenCreationTransaction:
+                  use_genesis: bool = True, nft_data: Optional[str] = None, token_info_version: TokenInfoVersion = TokenInfoVersion.DEPOSIT) -> TokenCreationTransaction:
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
     1. mint authority;
     2. melt authority;
-    3. deposit change;
+    3. deposit/fee change;
 
     :param manager: hathor manager
     :type manager: :class:`hathor.manager.HathorManager`
@@ -389,6 +390,9 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     :param nft_data: If not None we create a first output as the NFT data script
     :type nft_data: str
 
+    :param token_info_version: The version of the token info to be used. Defaults to TokenInfoVersion.DEPOSIT.
+    :type token_info_version: TokenInfoVersion
+
     :return: the propagated transaction so others can spend their outputs
     """
     wallet = manager.wallet
@@ -399,7 +403,9 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     address = decode_address(address_b58)
     script = P2PKH.create_output_script(address)
 
-    deposit_amount = get_deposit_amount(manager._settings, mint_amount)
+    should_charge_fee = token_info_version == TokenInfoVersion.FEE
+
+    deposit_amount = 0 if should_charge_fee else get_deposit_amount(manager._settings, mint_amount)
     if nft_data:
         # NFT creation needs 0.01 HTR of fee
         deposit_amount += 1
@@ -414,16 +420,16 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     if use_genesis:
         genesis_hash = genesis_block.hash
         assert genesis_hash is not None
-        deposit_input = [TxInput(genesis_hash, 0, b'')]
+        _input = [TxInput(genesis_hash, 0, b'')]
         change_output = TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0)
         parents = [tx.hash for tx in genesis_txs]
         timestamp = int(manager.reactor.seconds())
     else:
         total_reward = 0
-        deposit_input = []
+        _input = []
         while total_reward < deposit_amount:
             block = add_new_block(manager, advance_clock=1, address=address)
-            deposit_input.append(TxInput(block.hash, 0, b''))
+            _input.append(TxInput(block.hash, 0, b''))
             total_reward += block.outputs[0].value
 
         if total_reward > deposit_amount:
@@ -446,20 +452,26 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     # authority outputs
     outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
     outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
-    # deposit output
-    if change_output:
-        outputs.append(change_output)
 
     tx = TokenCreationTransaction(
         weight=1,
         parents=parents,
         storage=manager.tx_storage,
-        inputs=deposit_input,
+        inputs=_input,
         outputs=outputs,
         token_name=token_name,
         token_symbol=token_symbol,
-        timestamp=timestamp
+        timestamp=timestamp,
+        token_info_version=token_info_version
     )
+
+    # deposit output
+    if change_output:
+        # adds the deposit amount back and charge the fee
+        if should_charge_fee:
+            change_output.value = change_output.value - tx.calculate_fee()
+        outputs.append(change_output)
+
     data_to_sign = tx.get_sighash_all()
     if use_genesis:
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)

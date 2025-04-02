@@ -79,7 +79,7 @@ class TransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
+            self._verifiers.tx.verify_sum(tx.get_complete_token_info(), tx)
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
