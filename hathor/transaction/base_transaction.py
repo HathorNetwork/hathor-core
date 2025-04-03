@@ -860,6 +860,17 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         self._static_metadata = static_metadata
 
+    def calculate_fee(self) -> int:
+        """Calculate the fee for this transaction.
+        
+        This is a base implementation that returns 0. Subclasses should override this method
+        to implement their specific fee calculation logic.
+        
+        :return: The total fee in HTR
+        :rtype: int
+        """
+        return 0
+
 
 """
 Type aliases for easily working with `GenericVertex`. A `Vertex` is a superclass that includes all specific

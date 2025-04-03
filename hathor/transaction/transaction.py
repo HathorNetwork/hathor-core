@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import hashlib
+from enum import IntEnum
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
@@ -39,12 +40,18 @@ _FUNDS_FORMAT_STRING = '!BBBBB'
 # Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
 _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
+# used when (de)serializing token information
+# TODO: refactor to another file
+class TokenInfoVersion(IntEnum):
+    DEPOSIT = 1
+    FEE = 2
 
+# TODO: refactor to another file
 class TokenInfo(NamedTuple):
     amount: int
     can_mint: bool
     can_melt: bool
-
+    version: TokenInfoVersion | None = TokenInfoVersion.DEPOSIT
 
 class RewardLockedInfo(NamedTuple):
     block_hash: VertexId
@@ -273,25 +280,31 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """
         token_dict: dict[TokenUid, TokenInfo] = {}
 
-        default_info: TokenInfo = TokenInfo(0, False, False)
-
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo(0, False, False)
+        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo(0, False, False, None)
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            (amount, can_mint, can_melt) = token_dict.get(token_uid, default_info)
+            token_info_version: TokenInfoVersion | None = None
+
+            if token_uid != self._settings.HATHOR_TOKEN_UID:
+                from hathor.transaction.token_creation_tx import TokenCreationTransaction
+                token_creation_tx = self.storage.get_transaction(token_uid)
+                assert isinstance(token_creation_tx, TokenCreationTransaction)
+                token_info_version = token_creation_tx.token_info_version
+
+            (amount, can_mint, can_melt, token_info_version) = token_dict.get(token_uid, TokenInfo(0, False, False, token_info_version))
             if spent_output.is_token_authority():
                 can_mint = can_mint or spent_output.can_mint_token()
                 can_melt = can_melt or spent_output.can_melt_token()
             else:
                 amount -= spent_output.value
-            token_dict[token_uid] = TokenInfo(amount, can_mint, can_melt)
+            token_dict[token_uid] = TokenInfo(amount, can_mint, can_melt, token_info_version)
 
         return token_dict
 
@@ -324,7 +337,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 else:
                     # for regular outputs, just subtract from the total amount
                     sum_tokens = token_info.amount + tx_output.value
-                    token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
+                    token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt, token_info.version)
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent
@@ -359,3 +372,46 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
         static_metadata = TransactionStaticMetadata.create_from_storage(self, settings, storage)
         self.set_static_metadata(static_metadata)
+
+    @override
+    def calculate_fee(self) -> int:
+        """Calculate the fee for this transaction.
+
+        The fee is calculated based on the transaction size and any fee-based tokens involved.
+        The fee is always paid in HTR.
+
+        :return: The total fee in HTR
+        :rtype: int
+        """
+        if not self.should_charge_fee():
+            return 0
+
+        return 1
+
+    def should_charge_fee(self) -> bool:
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        """Check if this transaction should charge a fee.
+
+        A transaction should charge a fee if:
+        1. It's not a genesis transaction
+        2. It has at least one token with FEE version
+        """
+        if self._settings.FEE_FEATURE_FLAG is False:
+            return False
+
+        if self.is_genesis:
+            return False
+
+        if isinstance(self, TokenCreationTransaction) and self.token_info_version == TokenInfoVersion.FEE:
+            return True
+
+        # Check if any token in the transaction has FEE version
+        for token_uid in self.tokens:
+            if token_uid == self._settings.HATHOR_TOKEN_UID:
+                continue
+            token_tx = self.storage.get_transaction(token_uid)
+            assert isinstance(token_tx, TokenCreationTransaction)
+            if token_tx.token_info_version == TokenInfoVersion.FEE:
+                return True
+
+        return False
