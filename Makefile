@@ -147,3 +147,16 @@ docker-push: docker
 docker-push-aws: docker
 	docker tag $(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_subtag)
 	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_subtag)
+
+# If you get errors similar to the one below, running `make fix-rocksdb` may fix the problem.
+#
+# Traceback (most recent call last):
+#   File "<string>", line 1, in <module>
+#   File "/<redacted>/pypoetry/virtualenvs/hathor-29FNXj3I-py3.11/lib/python3.11/site-packages/rocksdb/__init__.py", line 1, in <module>
+#     from ._rocksdb import *
+# ImportError: dlopen(/<redacted>/pypoetry/virtualenvs/hathor-29FNXj3I-py3.11/lib/python3.11/site-packages/rocksdb/_rocksdb.cpython-311-darwin.so, 0x0002): Library not loaded: /opt/homebrew/opt/rocksdb/lib/librocksdb.9.dylib
+#   Referenced from: /<redacted>/pypoetry/virtualenvs/hathor-29FNXj3I-py3.11/lib/python3.11/site-packages/rocksdb/_rocksdb.cpython-311-darwin.so
+#   Reason: tried: '/opt/homebrew/opt/rocksdb/lib/librocksdb.9.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/opt/homebrew/opt/rocksdb/lib/librocksdb.9.dylib' (no such file), '/opt/homebrew/opt/rocksdb/lib/librocksdb.9.dylib' (no such file), '/opt/homebrew/Cellar/rocksdb/10.0.1/lib/librocksdb.9.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/opt/homebrew/Cellar/rocksdb/10.0.1/lib/librocksdb.9.dylib' (no such file), '/opt/homebrew/Cellar/rocksdb/10.0.1/lib/librocksdb.9.dylib' (no such file)
+.PHONY: fix-rocksdb
+fix-rocksdb:
+	poetry run pip uninstall -y rocksdb && poetry run pip install --no-binary :all: git+https://github.com/hathornetwork/python-rocksdb.git
