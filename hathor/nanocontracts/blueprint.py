@@ -28,8 +28,9 @@ if TYPE_CHECKING:
 FORBIDDEN_NAMES = {
     'rng',
     'log',
-    'get_contract_id',
     'get_balance',
+    'get_blueprint_id',
+    'get_contract_id',
     'call_public_method',
     'call_view_method',
     'create_contract',
@@ -130,6 +131,13 @@ class Blueprint(metaclass=_BlueprintBase):
         For instance, if a contract has 50 HTR and a transaction is requesting to withdraw 3 HTR,
         then this method will return 50 HTR."""
         return self.__runner.get_balance(nanocontract_id, token_uid)
+
+    @final
+    def get_blueprint_id(self, nanocontract_id: Optional[ContractId] = None) -> BlueprintId:
+        """Return the blueprint id of a nano contract. By default, it returns for the current contract."""
+        if nanocontract_id is None:
+            nanocontract_id = self.get_contract_id()
+        return self.__runner.get_blueprint_id(nanocontract_id)
 
     @final
     def call_public_method(self,
