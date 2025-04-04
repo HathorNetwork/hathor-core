@@ -12,24 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import struct
-from typing import Any, Optional, Type, Union, get_args, get_origin
+from typing import Any, Type, Union, get_args, get_origin
 
 from typing_extensions import Self
 
 from hathor.nanocontracts.fields.base import Field
 from hathor.nanocontracts.fields.singles import SingleValueField
 from hathor.nanocontracts.types import SignedData
-from hathor.transaction.util import unpack
-
-
-def to_n(raw: bytes) -> tuple[int, bytes]:
-    (n,), raw = unpack('!H', raw)
-    return n, raw
-
-
-def from_n(n: int) -> bytes:
-    return struct.pack('!H', n)
+from hathor.serialization import Deserializer, Serializer
 
 
 class OptionalField(SingleValueField):
@@ -38,13 +28,13 @@ class OptionalField(SingleValueField):
         self.field = field
 
     @classmethod
-    def create_from_type(cls, name: str, _type: Type[Any]) -> Self:
+    def create_from_type(cls, name: str, type_: Type[Any]) -> Self:
         from hathor.nanocontracts.fields import get_field_for_attr
 
-        origin = get_origin(_type)
+        origin = get_origin(type_)
         assert origin is Union
 
-        args = get_args(_type)
+        args = get_args(type_)
         assert len(args) == 2
         subtype = args[0]
         if subtype is type(None):
@@ -60,18 +50,20 @@ class OptionalField(SingleValueField):
             return True
         return False
 
-    def to_bytes(self, value: Any) -> bytes:
+    def serialize(self, serializer: Serializer, value: Any) -> None:
         if value is None:
-            return b'\x00'
-        return b'\x01' + self.field.to_bytes(value)
+            serializer.write_byte(0x00)
+        else:
+            serializer.write_byte(0x01)
+            self.field.serialize(serializer, value)
 
-    def to_python(self, raw: bytes) -> Optional[Any]:
-        assert len(raw) > 0
-        if raw.startswith(b'\x00'):
-            assert len(raw) == 1
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        b = deserializer.read_byte()
+        if b == 0:
             return None
-        assert raw.startswith(b'\x01')
-        return self.field.to_python(raw[1:])
+        else:
+            assert b == 1
+        return self.field.deserialize(deserializer)
 
 
 class SignedDataField(SingleValueField):
@@ -80,34 +72,32 @@ class SignedDataField(SingleValueField):
         self.field = field
 
     @classmethod
-    def create_from_type(cls, name: str, _type: Type[Any]) -> Self:
+    def create_from_type(cls, name: str, type_: Type[Any]) -> Self:
         from hathor.nanocontracts.fields import get_field_for_attr
 
-        args = get_args(_type)
+        args = get_args(type_)
         assert len(args) == 1
         subtype = args[0]
         field = get_field_for_attr('', subtype)
         return cls(name, field)
 
-    def isinstance(self, signed_value: Any) -> bool:
-        if not isinstance(signed_value, SignedData):
+    def isinstance(self, value: Any) -> bool:
+        if not isinstance(value, SignedData):
             return False
-        if not self.field.isinstance(signed_value.data):
+        if not self.field.isinstance(value.data):
             return False
         return True
 
-    def to_bytes(self, signed_value: Any) -> bytes:
-        assert self.isinstance(signed_value)
+    def serialize(self, serializer: Serializer, value: Any) -> None:
+        assert self.isinstance(value)
         from hathor.nanocontracts.fields import BytesField
-        data_bytes = self.field.to_bytes(signed_value.data)
-        script_input_bytes = BytesField('').to_bytes(signed_value.script_input)
-        return from_n(len(data_bytes)) + data_bytes + script_input_bytes
+        self.field.serialize(serializer, value.data)
+        BytesField('').serialize(serializer, value.script_input)
 
-    def to_python(self, raw: bytes) -> Optional[Any]:
+    def deserialize(self, deserializer: Deserializer) -> Any:
         from hathor.nanocontracts.fields import BytesField
-        n, raw = to_n(raw)
-        data = self.field.to_python(raw[:n])
-        script_input = BytesField('').to_python(raw[n:])
+        data = self.field.deserialize(deserializer)
+        script_input = BytesField('').deserialize(deserializer)
         return SignedData(data, script_input)
 
 
@@ -117,13 +107,13 @@ class TupleField(SingleValueField):
         self.fields = fields
 
     @classmethod
-    def create_from_type(cls, name: str, _type: Type[Any]) -> Self:
+    def create_from_type(cls, name: str, type_: Type[Any]) -> Self:
         from hathor.nanocontracts.fields import get_field_for_attr
 
-        origin = get_origin(_type)
+        origin = get_origin(type_)
         assert origin is tuple
 
-        args = get_args(_type)
+        args = get_args(type_)
         fields = []
         for subtype in args:
             fields.append(get_field_for_attr('', subtype))
@@ -139,19 +129,10 @@ class TupleField(SingleValueField):
                 return False
         return True
 
-    def to_bytes(self, values: Any) -> bytes:
-        assert self.isinstance(values)
-        ret = []
-        for field, x in zip(self.fields, values):
-            x_bytes = field.to_bytes(x)
-            ret.append(from_n(len(x_bytes)))
-            ret.append(x_bytes)
-        return b''.join(ret)
+    def serialize(self, serializer: Serializer, value: Any) -> None:
+        assert self.isinstance(value)
+        for field, individual_value in zip(self.fields, value):
+            field.serialize(serializer, individual_value)
 
-    def to_python(self, raw: bytes) -> Optional[Any]:
-        ret = []
-        for field in self.fields:
-            x_len, raw = to_n(raw)
-            ret.append(field.to_python(raw[:x_len]))
-            raw = raw[x_len:]
-        return tuple(ret)
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        return tuple(field.deserialize(deserializer) for field in self.fields)

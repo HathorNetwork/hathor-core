@@ -19,9 +19,10 @@ from typing_extensions import Self
 
 from hathor.nanocontracts.exception import NCAttributeError
 from hathor.nanocontracts.fields.base import Field
-from hathor.transaction.base_transaction import bytes_to_output_value, output_value_to_bytes
+from hathor.serialization import Deserializer, Serializer
 from hathor.transaction.util import bytes_to_int, decode_string_utf8, int_to_bytes
-from hathor.utils import leb128
+
+MAX_BYTES_LENGTH = 2**16  # 64 KiB
 
 
 class SingleValueField(Field, ABC):
@@ -60,24 +61,31 @@ class StrField(SingleValueField):
     """This is the field for Python's `str` type."""
     type = str
 
-    def to_bytes(self, value: Any) -> bytes:
+    def serialize(self, serializer: Serializer, value: Any) -> None:
         assert isinstance(value, str)
-        return value.encode('utf-8')
+        data = value.encode('utf-8')
+        serializer.write_leb128_unsigned(len(data))
+        serializer.write_bytes(data, max_bytes=MAX_BYTES_LENGTH)
 
-    def to_python(self, raw: bytes) -> str:
-        return decode_string_utf8(raw, 'str')
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        size = deserializer.read_leb128_unsigned()
+        data = bytes(deserializer.read_bytes(size, max_bytes=MAX_BYTES_LENGTH))
+        return decode_string_utf8(data, 'str')
 
 
 class BytesField(SingleValueField):
     """This is the field for Python's `bytes` type."""
     type = bytes
 
-    def to_bytes(self, value: Any) -> bytes:
+    def serialize(self, serializer: Serializer, value: Any) -> None:
         assert isinstance(value, bytes)
-        return value
+        serializer.write_leb128_unsigned(len(value))
+        serializer.write_bytes(value, max_bytes=MAX_BYTES_LENGTH)
 
-    def to_python(self, raw: bytes) -> bytes:
-        return raw
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        size = deserializer.read_leb128_unsigned()
+        data = bytes(deserializer.read_bytes(size, max_bytes=MAX_BYTES_LENGTH))
+        return bytes(data)
 
 
 class BoundedInt(SingleValueField, ABC):
@@ -85,12 +93,14 @@ class BoundedInt(SingleValueField, ABC):
     type = int
     size: int
 
-    def to_bytes(self, value: Any) -> bytes:
+    def serialize(self, serializer: Serializer, value: Any) -> None:
         assert isinstance(value, int)
-        return int_to_bytes(number=value, size=self.size, signed=True)
+        raw = int_to_bytes(number=value, size=self.size, signed=True)
+        serializer.write_bytes(raw)
 
-    def to_python(self, raw: bytes) -> int:
-        return bytes_to_int(data=raw, signed=True)
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        raw = deserializer.read_bytes(self.size)
+        return bytes_to_int(raw, signed=True)
 
 
 class Int32Field(BoundedInt):
@@ -105,43 +115,40 @@ class VarIntField(SingleValueField):
     """
     type = int
 
-    def to_bytes(self, value: Any) -> bytes:
+    def serialize(self, serializer: Serializer, value: Any) -> None:
         assert isinstance(value, int)
-        return leb128.encode_signed(value, max_bytes=32)
+        serializer.write_leb128_signed(value, max_bytes=32)
 
-    def to_python(self, raw: bytes) -> int:
-        value, buf = leb128.decode_signed(raw, max_bytes=32)
-        assert len(buf) == 0  # TODO: this will be updated before mainnet
-        return value
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        return deserializer.read_leb128_signed(max_bytes=32)
 
 
 class AmountField(SingleValueField):
     """This is the field for Python's `int` type when representing an Amount, that is, an output value."""
     type = int
 
-    def to_bytes(self, value: int) -> bytes:
+    def serialize(self, serializer: Serializer, value: Any) -> None:
         assert isinstance(value, int)
-        return output_value_to_bytes(value)
+        serializer.write_output_value(value)
 
-    def to_python(self, raw: bytes) -> int:
-        value, raw = bytes_to_output_value(raw)
-        assert len(raw) == 0
-        return value
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        return deserializer.read_output_value()
 
 
 class BooleanField(SingleValueField):
     """This is the field for Python's `bool` type."""
     type = bool
 
-    def to_bytes(self, value: Any) -> bytes:
+    def serialize(self, serializer: Serializer, value: Any) -> None:
         assert isinstance(value, bool)
-        return b'\x01' if value else b'\x00'
+        serializer.write_byte(0x01 if value else 0x00)
 
-    def to_python(self, raw: bytes) -> bool:
-        assert len(raw) == 1
-        if raw == b'\x00':
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        i = deserializer.read_byte()
+        if i == 0:
             return False
-        elif raw == b'\x01':
+        elif i == 1:
             return True
         else:
+            raw = bytes([i])
             raise ValueError(f'{raw!r} is not a valid boolean')

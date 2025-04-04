@@ -256,7 +256,7 @@ class NanoHeader(VertexBaseHeader):
         blueprint_class = self.get_blueprint_class()
         method = getattr(blueprint_class, self.nc_method)
         parser = NCMethodParser(method)
-        args = parser.parse_args_bytes(self.nc_args_bytes)
+        args = parser.deserialize_args(self.nc_args_bytes)
 
         context = self.get_context()
         assert context.vertex.block.hash == vertex_metadata.first_block
