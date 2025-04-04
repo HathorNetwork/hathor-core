@@ -19,6 +19,7 @@ from typing_extensions import Self
 
 from hathor.nanocontracts.fields import Field
 from hathor.nanocontracts.storage import NCStorage
+from hathor.serialization import Deserializer, Serializer
 
 T = TypeVar('T', bound='StorageContainer')
 StorageFactoryType: TypeAlias = Callable[[NCStorage, str, Field], T]
@@ -61,10 +62,10 @@ class ContainerField(Field, ABC, Generic[T]):
         blueprint._cache[self.__name] = storage
         return storage
 
-    def to_bytes(self, value: Any) -> bytes:
+    def serialize(self, serializer: Serializer, value: Any) -> None:
         raise AssertionError('container fields cannot be used directly')
 
-    def to_python(self, raw: bytes) -> Any:
+    def deserialize(self, deserializer: Deserializer) -> Any:
         raise AssertionError('container fields cannot be used directly')
 
     def isinstance(self, value: Any) -> bool:

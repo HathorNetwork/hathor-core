@@ -51,18 +51,20 @@ class MyBlueprint:
 
 
 class NCBlueprintTestCase(unittest.TestCase):
-    def _run_test(self, method, _type, data):
+    def _run_test(self, method, type_, data):
         parser = NCMethodParser(method)
+        self._run_test_parser(parser, type_, data)
 
+    def _run_test_parser(self, parser, type_, data):
         # First, check arg types.
-        arg_types = parser.get_method_args()
-        expected_arg_types = [('x', _type)]
-        self.assertEqual(expected_arg_types, arg_types)
+        expected_arg_types = (type_,)
+        actual_arg_types = parser.get_arg_types()
+        self.assertEqual(expected_arg_types, actual_arg_types)
 
         # Then, check serialization and deserialization.
-        args_in = [data]
+        args_in = (data,)
         serialized_args_in = parser.serialize_args(args_in)
-        args_out = parser.parse_args_bytes(serialized_args_in)
+        args_out = parser.deserialize_args(serialized_args_in)
         self.assertEqual(args_in, args_out)
 
     def test_type_str_wrong_type(self):
@@ -103,6 +105,16 @@ class NCBlueprintTestCase(unittest.TestCase):
             length = settings.NC_MAX_LENGTH_SERIALIZED_ARG + 1
             self._run_test(MyBlueprint.method_bytes, bytes, b'a' * length)
 
+    def test_type_bytes_even_longer(self):
+        def foobar(self: object, data: bytes) -> None:
+            pass
+        parser = NCMethodParser(foobar)
+        parser._max_bytes = 2**32  # more than long enough to test a single bytes write
+        max_write_length = 2**16
+        self._run_test_parser(parser, bytes, b'a' * max_write_length)  # largest valid write
+        with self.assertRaises(NCSerializationArgTooLong):
+            self._run_test_parser(parser, bytes, b'a' * (max_write_length + 1))  # smallest invalid write
+
     def test_type_int_negative(self):
         self._run_test(MyBlueprint.method_int, int, -100)
 
@@ -123,6 +135,37 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_type_int_wrong_type(self):
         with self.assertRaises(AssertionError):
             self._run_test(MyBlueprint.method_int, int, 1.)
+
+    def test_type_varint(self):
+        from hathor.nanocontracts.types import VarInt
+
+        def foobar(self: object, i: VarInt) -> None:
+            pass
+
+        valid_values = [
+            0,
+            1,
+            -1,
+            2**31,
+            -2**31,
+            # edge valid values for 32 bytes of signed leb128 with 4 bytes
+            2**223 - 1,
+            -2**223,
+        ]
+        for valid_value in valid_values:
+            self._run_test(foobar, VarInt, valid_value)
+
+        invalid_values = [
+            2**223,
+            -2**223 - 1,
+            2**223 + 1,
+            2**224,
+            -2**223 - 2,
+            -2**224,
+        ]
+        for invalid_value in invalid_values:
+            with self.assertRaises(ValueError):
+                self._run_test(foobar, VarInt, invalid_value)
 
     def test_type_bool_false(self):
         self._run_test(MyBlueprint.method_bool, bool, False)
@@ -150,30 +193,25 @@ class NCBlueprintTestCase(unittest.TestCase):
         parser = NCMethodParser(MyBlueprint.initialize)
 
         # First, check arg types.
-        arg_types = parser.get_method_args()
-        expected_arg_types = [
-            ('a', str),
-            ('b', bytes),
-            ('c', int),
-            ('d', bool),
-        ]
-        self.assertEqual(expected_arg_types, arg_types)
+        expected_arg_types = (str, bytes, int, bool)
+        actual_arg_types = parser.get_arg_types()
+        self.assertEqual(expected_arg_types, actual_arg_types)
 
         # Then, check serialization and deserialization.
-        args_in = ['a', b'b', 1, True]
+        args_in = ('a', b'b', 1, True)
         serialized_args_in = parser.serialize_args(args_in)
-        args_out = parser.parse_args_bytes(serialized_args_in)
+        args_out = parser.deserialize_args(serialized_args_in)
         self.assertEqual(args_in, args_out)
 
     def test_arg_parse_str(self):
         parser = NCMethodParser(MyBlueprint.method_str)
-        method_args = parser.get_method_args()
+        arg_types = parser.get_arg_types()
 
         value = 'test'
         parsed_args = []
         args_array = json.loads(f'["{value}"]')
 
-        for (_, arg_type), arg_value in zip(method_args, args_array):
+        for arg_type, arg_value in zip(arg_types, args_array):
             parsed_args.append(parse_arg(arg_value, arg_type))
 
         self.assertEqual(len(parsed_args), 1)
@@ -181,13 +219,13 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_arg_parse_bytes(self):
         parser = NCMethodParser(MyBlueprint.method_bytes)
-        method_args = parser.get_method_args()
+        arg_types = parser.get_arg_types()
 
         value = '01'
         parsed_args = []
         args_array = json.loads(f'["{value}"]')
 
-        for (_, arg_type), arg_value in zip(method_args, args_array):
+        for arg_type, arg_value in zip(arg_types, args_array):
             parsed_args.append(parse_arg(arg_value, arg_type))
 
         self.assertEqual(len(parsed_args), 1)
@@ -195,13 +233,13 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_arg_parse_int(self):
         parser = NCMethodParser(MyBlueprint.method_int)
-        method_args = parser.get_method_args()
+        arg_types = parser.get_arg_types()
 
         value = 1
         parsed_args = []
         args_array = json.loads(f'[{value}]')
 
-        for (_, arg_type), arg_value in zip(method_args, args_array):
+        for arg_type, arg_value in zip(arg_types, args_array):
             parsed_args.append(parse_arg(arg_value, arg_type))
 
         self.assertEqual(len(parsed_args), 1)
@@ -209,12 +247,12 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_arg_parse_bool(self):
         parser = NCMethodParser(MyBlueprint.method_bool)
-        method_args = parser.get_method_args()
+        arg_types = parser.get_arg_types()
 
         parsed_args = []
         args_array = json.loads('[false]')
 
-        for (_, arg_type), arg_value in zip(method_args, args_array):
+        for arg_type, arg_value in zip(arg_types, args_array):
             parsed_args.append(parse_arg(arg_value, arg_type))
 
         self.assertEqual(len(parsed_args), 1)
@@ -222,13 +260,13 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_arg_parse_optional(self):
         parser = NCMethodParser(MyBlueprint.method_with_optional)
-        method_args = parser.get_method_args()
+        arg_types = parser.get_arg_types()
 
         # If optional is None
         parsed_args = []
         args_array = json.loads('[null]')
 
-        for (_, arg_type), arg_value in zip(method_args, args_array):
+        for arg_type, arg_value in zip(arg_types, args_array):
             parsed_args.append(parse_arg(arg_value, arg_type))
 
         self.assertEqual(len(parsed_args), 1)
@@ -239,7 +277,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         parsed_args = []
         args_array = json.loads(f'["{value}"]')
 
-        for (_, arg_type), arg_value in zip(method_args, args_array):
+        for arg_type, arg_value in zip(arg_types, args_array):
             parsed_args.append(parse_arg(arg_value, arg_type))
 
         self.assertEqual(len(parsed_args), 1)
@@ -247,12 +285,12 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_arg_parse_tuple(self):
         parser = NCMethodParser(MyBlueprint.method_with_tuple)
-        method_args = parser.get_method_args()
+        arg_types = parser.get_arg_types()
 
         parsed_args = []
         args_array = json.loads('[["test", 1, 2]]')
 
-        for (_, arg_type), arg_value in zip(method_args, args_array):
+        for arg_type, arg_value in zip(arg_types, args_array):
             parsed_args.append(parse_arg(arg_value, arg_type))
 
         self.assertEqual(len(parsed_args), 1)
@@ -260,12 +298,12 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_arg_parse_signed_data(self):
         parser = NCMethodParser(MyBlueprint.method_signed_str)
-        method_args = parser.get_method_args()
+        arg_types = parser.get_arg_types()
 
         parsed_args = []
         args_array = json.loads('[["test", "1234"]]')
 
-        for (_, arg_type), arg_value in zip(method_args, args_array):
+        for arg_type, arg_value in zip(arg_types, args_array):
             parsed_args.append(parse_arg(arg_value, arg_type))
 
         self.assertEqual(len(parsed_args), 1)

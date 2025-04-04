@@ -82,30 +82,22 @@ def decode_string_utf8(encoded: bytes, key: str) -> str:
         raise StructError('{} must be a valid utf-8 string.'.format(key))
 
 
-def bytes_to_output_value(buf: bytes) -> tuple[int, bytes]:
-    (value_high_byte,), _ = unpack('!b', buf)
-    if value_high_byte < 0:
-        output_struct = '!q'
-        value_sign = -1
-    else:
-        output_struct = '!i'
-        value_sign = 1
+def bytes_to_output_value(data: bytes) -> tuple[int, bytes]:
+    from hathor.serialization import BadDataError, BytesDeserializer
+    deserializer = BytesDeserializer(data)
     try:
-        (signed_value,), buf = unpack(output_struct, buf)
-    except StructError as e:
-        raise InvalidOutputValue('Invalid byte struct for output') from e
-    value = signed_value * value_sign
-    assert value >= 0
-    if value < MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
-        raise ValueError('Value fits in 4 bytes but is using 8 bytes')
-    return value, buf
+        output_value = deserializer.read_output_value()
+    except BadDataError as e:
+        raise InvalidOutputValue(*e.args)
+    remaining_data = deserializer.read_all()
+    return (output_value, remaining_data)
 
 
 def output_value_to_bytes(number: int) -> bytes:
-    if number <= 0:
-        raise InvalidOutputValue('Invalid value for output')
-
-    if number > MAX_OUTPUT_VALUE_32:
-        return (-number).to_bytes(8, byteorder='big', signed=True)
-    else:
-        return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well
+    from hathor.serialization import BytesSerializer
+    serializer = BytesSerializer()
+    try:
+        serializer.write_output_value(number)
+    except ValueError as e:
+        raise InvalidOutputValue(*e.args)
+    return bytes(serializer.finalize())

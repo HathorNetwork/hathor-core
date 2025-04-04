@@ -13,16 +13,14 @@
 # limitations under the License.
 
 import inspect
-import struct
-from typing import Any, Callable, Type
+from typing import Any, Callable
 
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCSerializationArgTooLong, NCSerializationError
-from hathor.nanocontracts.serializers import Deserializer, Serializer
-from hathor.transaction.util import unpack
+from hathor.nanocontracts.exception import NCSerializationError
+from hathor.serialization import BytesDeserializer, BytesSerializer, SerializationError
 
 logger = get_logger()
 
@@ -32,9 +30,10 @@ class NCMethodParser:
     def __init__(self, method: Callable) -> None:
         self.method = method
         self._settings = get_global_settings()
+        self._max_bytes = self._settings.NC_MAX_LENGTH_SERIALIZED_ARG
 
-    def get_method_args(self) -> list[tuple[str, Type[Any]]]:
-        """Return the list of arguments for the method, including the types."""
+    def get_arg_types(self) -> tuple[type, ...]:
+        """Return the list of the type of each argument for the method."""
         from hathor.nanocontracts.utils import is_nc_public_method
         argspec = inspect.getfullargspec(self.method)
         assert argspec.args[0] == 'self'
@@ -48,36 +47,36 @@ class NCMethodParser:
         args = []
         for arg_name in argspec.args[begin_idx:]:
             arg_type = argspec.annotations[arg_name]
-            args.append((arg_name, arg_type))
-        return args
+            args.append(arg_type)
+        return tuple(args)
 
-    def serialize_args(self, args: list[Any]) -> bytes:
+    def serialize_args(self, args: tuple[Any, ...] | list[Any]) -> bytes:
         """Serialize a list of arguments into bytes according to the types."""
-        method_args = self.get_method_args()
-        serializer = Serializer()
-        ret = []
-        assert len(args) == len(method_args), f'{len(args)} != {len(method_args)} ({method_args})'
-        for (arg_name, arg_type), arg_value in zip(method_args, args):
-            arg_bytes = serializer.from_type(arg_type, arg_value)
-            if len(arg_bytes) > self._settings.NC_MAX_LENGTH_SERIALIZED_ARG:
-                raise NCSerializationArgTooLong
-            ret.append(struct.pack('!H', len(arg_bytes)))
-            ret.append(arg_bytes)
-        return b''.join(ret)
+        from hathor.nanocontracts.exception import NCSerializationArgTooLong
+        from hathor.serialization import TooLongError
 
-    def parse_args_bytes(self, args_bytes: bytes) -> list[Any]:
+        arg_types_tuple = self.get_arg_types()
+        if len(args) != len(arg_types_tuple):
+            # XXX: we don't yet support arguments with default values, when we do it will be enough to check that
+            #      len(args) <= len(arg_types_tuple) in order to proceed
+            raise NCSerializationError('number of args mismatch')
+
+        serializer = BytesSerializer()
+        try:
+            serializer.write_type_tuple(arg_types_tuple, tuple(args), max_bytes=self._max_bytes)
+        except TooLongError as e:
+            raise NCSerializationArgTooLong() from e
+        return bytes(serializer.finalize())
+
+    def deserialize_args(self, args_bytes: bytes) -> tuple[Any, ...]:
         """Parse bytes into a list of arguments according to the types."""
-        method_args = self.get_method_args()
-        deserializer = Deserializer()
-        cur = args_bytes
-        ret = []
-        for arg_name, arg_type in method_args:
-            (n,), cur = unpack('!H', cur)
-            arg_value = deserializer.from_type(arg_type, cur[:n])
-            ret.append(arg_value)
-            cur = cur[n:]
-        if cur:
-            raise NCSerializationError('Unable to parse')
-        if len(ret) != len(method_args):
-            raise NCSerializationError('Unable to parse: different number of arguments')
-        return ret
+        deserializer = BytesDeserializer(args_bytes)
+        arg_types_tuple = self.get_arg_types()
+        try:
+            args = deserializer.read_type_tuple(arg_types_tuple)
+        except SerializationError as e:
+            raise NCSerializationError() from e
+        # XXX: all bytes must be consumed
+        if not deserializer.is_empty():
+            raise NCSerializationError('unexpected extra bytes')
+        return args
