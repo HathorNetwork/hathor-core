@@ -12,10 +12,11 @@ from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractStateResource
-from hathor.nanocontracts.types import Address, Timestamp, TokenUid
+from hathor.nanocontracts.types import Address, NCActionType, Timestamp, TokenUid
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.headers import NanoHeader
+from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.scripts import P2PKH
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
@@ -139,12 +140,16 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         })
         self.assertEqual(404, response1.responseCode)
 
-    def _fill_nc(self,
-                 nc: Transaction,
-                 nc_id: bytes,
-                 nc_method: str,
-                 nc_args: list[Any],
-                 private_key: ec.EllipticCurvePrivateKeyWithSerialization) -> None:
+    def _fill_nc(
+        self,
+        nc: Transaction,
+        nc_id: bytes,
+        nc_method: str,
+        nc_args: list[Any],
+        private_key: ec.EllipticCurvePrivateKeyWithSerialization,
+        *,
+        nc_actions: list[NanoHeaderAction] | None = None
+    ) -> None:
 
         method = getattr(MyBlueprint, nc_method)
         method_parser = NCMethodParser(method)
@@ -161,6 +166,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             nc_args_bytes=nc_args_bytes,
             nc_pubkey=nc_pubkey,
             nc_signature=b'',
+            nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
 
@@ -259,6 +265,13 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             'bet',
             [decode_address(address_b58), '1x0'],
             self.genesis_private_key,
+            nc_actions=[
+                NanoHeaderAction(
+                    type=NCActionType.DEPOSIT,
+                    token_index=0,
+                    amount=self.genesis_blocks[0].outputs[0].value,
+                )
+            ]
         )
 
         data_to_sign = nc_bet.get_sighash_all()

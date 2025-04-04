@@ -212,4 +212,6 @@ class VertexVerifier:
         allowed_headers = self.get_allowed_headers(vertex)
         for header in vertex.headers:
             if type(header) not in allowed_headers:
-                raise HeaderNotSupported('Header not supported for this vertex')
+                raise HeaderNotSupported(
+                    f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
+                )

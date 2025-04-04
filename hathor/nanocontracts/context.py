@@ -104,7 +104,7 @@ class Context:
         """Return a JSON representation of the context."""
         return {
             'actions': [{
-                'type': action.type.value,
+                'type': str(action.type),
                 'token_uid': action.token_uid.hex(),
                 'amount': action.amount,
             } for token_uid, action in self.actions.items()],

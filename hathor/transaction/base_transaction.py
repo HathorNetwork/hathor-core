@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from itertools import chain
 from math import isfinite, log
-from struct import error as StructError, pack
+from struct import pack
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
 from structlog import get_logger
@@ -34,7 +34,14 @@ from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.headers import VertexBaseHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import (
+    VerboseCallback,
+    bytes_to_output_value,
+    int_to_bytes,
+    output_value_to_bytes,
+    unpack,
+    unpack_len,
+)
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
@@ -49,7 +56,6 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 MAX_OUTPUT_VALUE = 2**63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
-_MAX_OUTPUT_VALUE_32 = 2**31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
 
 TX_HASH_SIZE = 32   # 256 bits, 32 bytes
 
@@ -881,14 +887,15 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         :return: Transaction or Block copy
         """
-        new_tx = self.create_from_struct(self.get_struct())
+        new_tx = self.create_from_struct(
+            self.get_struct(),
+            storage=self.storage if include_storage else None,
+        )
         # static_metadata can be safely copied as it is a frozen dataclass
         new_tx.set_static_metadata(self._static_metadata)
         if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
-        if include_storage:
-            new_tx.storage = self.storage
         return new_tx
 
     @abstractmethod
@@ -1140,32 +1147,3 @@ class TxOutput:
         if decode_script:
             data['decoded'] = self.to_human_readable()
         return data
-
-
-def bytes_to_output_value(buf: bytes) -> tuple[int, bytes]:
-    (value_high_byte,), _ = unpack('!b', buf)
-    if value_high_byte < 0:
-        output_struct = '!q'
-        value_sign = -1
-    else:
-        output_struct = '!i'
-        value_sign = 1
-    try:
-        (signed_value,), buf = unpack(output_struct, buf)
-    except StructError as e:
-        raise InvalidOutputValue('Invalid byte struct for output') from e
-    value = signed_value * value_sign
-    assert value >= 0
-    if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
-        raise ValueError('Value fits in 4 bytes but is using 8 bytes')
-    return value, buf
-
-
-def output_value_to_bytes(number: int) -> bytes:
-    if number <= 0:
-        raise InvalidOutputValue('Invalid value for output')
-
-    if number > _MAX_OUTPUT_VALUE_32:
-        return (-number).to_bytes(8, byteorder='big', signed=True)
-    else:
-        return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well

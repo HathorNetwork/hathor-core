@@ -58,6 +58,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
             nc_args_bytes=nc_args_bytes,
             nc_pubkey=nc_pubkey,
             nc_signature=b'',
+            nc_actions=[],
         )
         nc.headers.append(nano_header)
 
