@@ -40,6 +40,9 @@ from hathor.wallet import BaseWallet
 
 logger = get_logger()
 
+NC_DEPOSIT_KEY = 'nc_deposit'
+NC_WITHDRAWAL_KEY = 'nc_withdrawal'
+
 
 class DAGBuilder:
     def __init__(
@@ -185,15 +188,17 @@ class DAGBuilder:
                 node.deps.add(value)
             node.attrs[key] = value
 
-        elif key == 'nc_deposit':
+        elif key in (NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY):
             token, amount, args = parse_amount_token(value)
-            assert args == []
-            self.set_balance(name, token, -amount)
-
-        elif key == 'nc_withdrawal':
-            token, amount, args = parse_amount_token(value)
-            assert args == []
-            self.set_balance(name, token, amount)
+            if args:
+                raise SyntaxError(f'unexpected args in `{value}`')
+            if amount < 0:
+                raise SyntaxError(f'unexpected negative action in `{value}`')
+            multiplier = 1 if key == NC_WITHDRAWAL_KEY else -1
+            self.set_balance(name, token, amount * multiplier)
+            actions = node.get_attr_list(key, default=[])
+            actions.append((token, amount))
+            node.attrs[key] = actions
 
         else:
             node.attrs[key] = value

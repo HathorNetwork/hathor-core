@@ -20,10 +20,14 @@ from math import ceil, floor
 from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+from hathor.transaction.exceptions import InvalidOutputValue
+
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
 
 VerboseCallback = Optional[Callable[[str, Any], None]]
+
+MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
 
 
 def int_to_bytes(number: int, size: int, signed: bool = False) -> bytes:
@@ -76,3 +80,32 @@ def decode_string_utf8(encoded: bytes, key: str) -> str:
         return decoded
     except UnicodeDecodeError:
         raise StructError('{} must be a valid utf-8 string.'.format(key))
+
+
+def bytes_to_output_value(buf: bytes) -> tuple[int, bytes]:
+    (value_high_byte,), _ = unpack('!b', buf)
+    if value_high_byte < 0:
+        output_struct = '!q'
+        value_sign = -1
+    else:
+        output_struct = '!i'
+        value_sign = 1
+    try:
+        (signed_value,), buf = unpack(output_struct, buf)
+    except StructError as e:
+        raise InvalidOutputValue('Invalid byte struct for output') from e
+    value = signed_value * value_sign
+    assert value >= 0
+    if value < MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
+        raise ValueError('Value fits in 4 bytes but is using 8 bytes')
+    return value, buf
+
+
+def output_value_to_bytes(number: int) -> bytes:
+    if number <= 0:
+        raise InvalidOutputValue('Invalid value for output')
+
+    if number > MAX_OUTPUT_VALUE_32:
+        return (-number).to_bytes(8, byteorder='big', signed=True)
+    else:
+        return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well

@@ -43,7 +43,7 @@ class DAGNode:
     name: str
     type: DAGNodeType
 
-    attrs: dict[str, str] = field(default_factory=dict)
+    attrs: dict[str, Any] = field(default_factory=dict)
     inputs: set[DAGInput] = field(default_factory=set)
     outputs: list[DAGOutput | None] = field(default_factory=list)
     parents: set[str] = field(default_factory=set)
@@ -60,15 +60,28 @@ class DAGNode:
         yield from (name for name, _ in self.inputs)
         yield from self.deps
 
-    def get_required_attr(self, attr: str) -> str:
-        """Return the value of a required attribute or raise a SyntaxError if it doesn't exist."""
+    def get_attr_str(self, attr: str, *, default: str | None = None) -> str:
+        """Return the value of an attribute, a default, or raise a SyntaxError if it doesn't exist."""
         if value := self.attrs.get(attr):
+            assert isinstance(value, str)
             return value
+        if default is not None:
+            return default
+        raise SyntaxError(f'missing required attribute: {self.name}.{attr}')
+
+    def get_attr_list(self, attr: str, *, default: list[Any] | None = None) -> list[Any]:
+        """Return the value of an attribute, a default, or raise a SyntaxError if it doesn't exist."""
+        if value := self.attrs.get(attr):
+            assert isinstance(value, list)
+            return value
+        if default is not None:
+            return default
         raise SyntaxError(f'missing required attribute: {self.name}.{attr}')
 
     def get_required_literal(self, attr: str) -> str:
         """Return the value of a required attribute as a literal or raise a SyntaxError if it doesn't exist."""
-        value = self.get_required_attr(attr)
+        value = self.get_attr_str(attr)
+        assert isinstance(value, str)
         return get_literal(value)
 
 
