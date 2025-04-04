@@ -5,8 +5,10 @@ from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, NCFail, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
+from hathor.nanocontracts.types import NCActionType
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from hathor.transaction import BaseTransaction, Transaction, TxOutput
+from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.types import AddressB58
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from tests.simulation.base import SimulatorTestCase
@@ -60,13 +62,16 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
         self.assertTrue(self.simulator.run(120))
 
-    def fill_nc_tx(self,
-                   nc: Transaction,
-                   nc_id: bytes,
-                   nc_method: str,
-                   nc_args: list[Any],
-                   *,
-                   address: Optional[AddressB58] = None) -> None:
+    def fill_nc_tx(
+        self,
+        nc: Transaction,
+        nc_id: bytes,
+        nc_method: str,
+        nc_args: list[Any],
+        *,
+        address: Optional[AddressB58] = None,
+        nc_actions: list[NanoHeaderAction] | None = None,
+    ) -> None:
         method_parser = NCMethodParser(getattr(MyBlueprint, nc_method))
         nc_args_bytes = method_parser.serialize_args(nc_args)
 
@@ -85,6 +90,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
             nc_args_bytes=nc_args_bytes,
             nc_pubkey=nc_pubkey,
             nc_signature=b'',
+            nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
 
@@ -110,7 +116,13 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         # Deposits 1 HTR
         _inputs, deposit_amount = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
         tx = self.wallet.prepare_transaction(Transaction, _inputs, [])
-        self.fill_nc_tx(tx, self.myblueprint_id, 'initialize', [])
+        self.fill_nc_tx(tx, self.myblueprint_id, 'initialize', [], nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.DEPOSIT,
+                token_index=0,
+                amount=deposit_amount,
+            )
+        ])
         self.finish_and_broadcast_tx(tx, confirmations=2)
         new_blocks += 2
 
@@ -123,7 +135,13 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
 
         # Withdrawals 1 HTR
         tx2 = Transaction(outputs=[TxOutput(1, b'', 0)])
-        self.fill_nc_tx(tx2, nc_id, 'nop', [])
+        self.fill_nc_tx(tx2, nc_id, 'nop', [], nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.WITHDRAWAL,
+                token_index=0,
+                amount=1,
+            )
+        ])
         self.finish_and_broadcast_tx(tx2, confirmations=2)
         new_blocks += 2
 

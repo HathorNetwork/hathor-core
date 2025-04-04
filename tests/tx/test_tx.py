@@ -34,7 +34,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.scripts import P2PKH, parse_address_script
-from hathor.transaction.util import int_to_bytes
+from hathor.transaction.util import MAX_OUTPUT_VALUE_32, int_to_bytes
 from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import Wallet
 from tests import unittest
@@ -789,21 +789,16 @@ class TransactionTest(unittest.TestCase):
         assert isinstance(e.value.__cause__, TransactionDataError)
 
     def test_output_serialization(self):
-        from hathor.transaction.base_transaction import (
-            _MAX_OUTPUT_VALUE_32,
-            MAX_OUTPUT_VALUE,
-            bytes_to_output_value,
-            output_value_to_bytes,
-        )
-        max_32 = output_value_to_bytes(_MAX_OUTPUT_VALUE_32)
+        from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE, bytes_to_output_value, output_value_to_bytes
+        max_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32)
         self.assertEqual(len(max_32), 4)
         value, buf = bytes_to_output_value(max_32)
-        self.assertEqual(value, _MAX_OUTPUT_VALUE_32)
+        self.assertEqual(value, MAX_OUTPUT_VALUE_32)
 
-        over_32 = output_value_to_bytes(_MAX_OUTPUT_VALUE_32 + 1)
+        over_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32 + 1)
         self.assertEqual(len(over_32), 8)
         value, buf = bytes_to_output_value(over_32)
-        self.assertEqual(value, _MAX_OUTPUT_VALUE_32 + 1)
+        self.assertEqual(value, MAX_OUTPUT_VALUE_32 + 1)
 
         max_64 = output_value_to_bytes(MAX_OUTPUT_VALUE)
         self.assertEqual(len(max_64), 8)

@@ -128,7 +128,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> 'Transaction':
-        tx = cls()
+        tx = cls(storage=storage)
         buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
 
         if len(buf) < cls.SERIALIZATION_NONCE_SIZE:
@@ -142,7 +142,6 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             buf = tx.get_header_from_bytes(buf, verbose=verbose)
 
         tx.update_hash()
-        tx.storage = storage
 
         return tx
 

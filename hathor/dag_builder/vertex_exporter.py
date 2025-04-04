@@ -19,7 +19,7 @@ from typing import Iterator, assert_never
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.dag_builder.builder import DAGBuilder, DAGNode
+from hathor.dag_builder.builder import NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY, DAGBuilder, DAGNode
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
 from hathor.dag_builder.utils import get_literal, is_literal
 from hathor.nanocontracts import Blueprint, OnChainBlueprint
@@ -27,7 +27,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
 from hathor.nanocontracts.on_chain_blueprint import Code
-from hathor.nanocontracts.types import BlueprintId, blueprint_id_from_bytes
+from hathor.nanocontracts.types import BlueprintId, NCActionType, blueprint_id_from_bytes
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
@@ -246,13 +246,13 @@ class VertexExporter:
         if 'nc_id' not in node.attrs:
             return
 
-        nc_id_raw = node.get_required_attr('nc_id')
+        nc_id_raw = node.get_attr_str('nc_id')
         if is_literal(nc_id_raw):
             nc_id = bytes.fromhex(get_literal(nc_id_raw))
         else:
             nc_id = self.get_vertex_id(nc_id_raw)
 
-        nc_method_raw = node.get_required_attr('nc_method')
+        nc_method_raw = node.get_attr_str('nc_method')
 
         if nc_method_raw.startswith('initialize('):
             blueprint_id = blueprint_id_from_bytes(nc_id)
@@ -278,6 +278,34 @@ class VertexExporter:
         privkey = wallet.get_key_at_index(0)
         nc_pubkey = privkey.sec()
 
+        from hathor.transaction.headers.nano_header import NanoHeaderAction
+        nc_actions = []
+
+        def append_actions(action: NCActionType, key: str) -> None:
+            actions = node.get_attr_list(key, default=[])
+            for token_name, value in actions:
+                assert isinstance(token_name, str)
+                assert isinstance(value, int)
+                token_index = 0
+                if token_name != 'HTR':
+                    assert isinstance(vertex, Transaction)
+                    token_creation_tx = self._vertices[token_name]
+                    if token_creation_tx.hash not in vertex.tokens:
+                        # when depositing, the token uid must be added to the tokens list
+                        # because it's possible that there are no outputs with this token.
+                        assert action == NCActionType.DEPOSIT
+                        vertex.tokens.append(token_creation_tx.hash)
+                    token_index = 1 + vertex.tokens.index(token_creation_tx.hash)
+
+                nc_actions.append(NanoHeaderAction(
+                    type=action,
+                    token_index=token_index,
+                    amount=value,
+                ))
+
+        append_actions(NCActionType.DEPOSIT, NC_DEPOSIT_KEY)
+        append_actions(NCActionType.WITHDRAWAL, NC_WITHDRAWAL_KEY)
+
         from hathor.transaction.headers import NanoHeader
         nano_header = NanoHeader(
             tx=vertex,
@@ -285,6 +313,7 @@ class VertexExporter:
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
+            nc_actions=nc_actions,
             nc_pubkey=nc_pubkey,
             nc_signature=b'',
         )
@@ -304,7 +333,7 @@ class VertexExporter:
         assert len(block_parents) == 0
         ocb = OnChainBlueprint(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
         self.add_nano_header_if_needed(node, ocb)
-        code_attr = node.get_required_attr('ocb_code')
+        code_attr = node.get_attr_str('ocb_code')
 
         if is_literal(code_attr):
             code_literal = get_literal(code_attr)

@@ -15,6 +15,7 @@ from hathor.nanocontracts.types import NCActionType, public, view
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import TokenAuthorityNotAllowed
 from hathor.transaction.headers import NanoHeader
+from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import KeyPair
 from tests import unittest
@@ -89,6 +90,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             nc_args_bytes=nc_args_bytes,
             nc_pubkey=nc_pubkey,
             nc_signature=b'',
+            nc_actions=[],
         )
         nc.headers.append(nano_header)
 
@@ -296,6 +298,18 @@ class NCNanoContractTestCase(unittest.TestCase):
             nc_args_bytes=b'',
             nc_pubkey=b'',
             nc_signature=b'',
+            nc_actions=[
+                NanoHeaderAction(
+                    type=NCActionType.WITHDRAWAL,
+                    token_index=1,
+                    amount=50,
+                ),
+                NanoHeaderAction(
+                    type=NCActionType.DEPOSIT,
+                    token_index=0,
+                    amount=90,
+                ),
+            ],
         ))
         nc2.update_hash()
         nc2_nano_header = nc2.get_nano_header()
@@ -358,6 +372,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             nc_args_bytes=b'',
             nc_pubkey=b'',
             nc_signature=b'',
+            nc_actions=[],
         ))
         with self.assertRaises(TokenAuthorityNotAllowed):
             self.peer.verification_service.verifiers.nano_header.verify_no_authorities(nc)
@@ -382,6 +397,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             nc_args_bytes=b'',
             nc_pubkey=b'',
             nc_signature=b'',
+            nc_actions=[],
         ))
         with self.assertRaises(TokenAuthorityNotAllowed):
             self.peer.verification_service.verifiers.nano_header.verify_no_authorities(nc)

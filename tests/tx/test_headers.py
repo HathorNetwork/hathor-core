@@ -75,7 +75,8 @@ class VertexHeadersTest(unittest.TestCase):
         for name, _type, should_have_nano_header in expected_to_pass:
             vertex = artifacts.get_typed_vertex(name, _type)
             assert self.has_nano_header(vertex) == should_have_nano_header
-            clone = _type.create_from_struct(bytes(vertex))
+            vertex.storage = manager.tx_storage
+            clone = vertex.clone(include_metadata=False, include_storage=True)
             assert bytes(clone) == bytes(vertex)
             assert manager.on_new_tx(vertex, fails_silently=False)
 

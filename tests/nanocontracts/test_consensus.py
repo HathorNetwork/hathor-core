@@ -1,5 +1,5 @@
 import hashlib
-from typing import cast
+from typing import Any, cast
 
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
@@ -17,8 +17,9 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
-from hathor.transaction import Block, Transaction, TxOutput
+from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 from hathor.transaction.headers import NanoHeader
+from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.types import VertexId
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests.simulation.base import SimulatorTestCase
@@ -105,11 +106,22 @@ class NCConsensusTestCase(SimulatorTestCase):
             meta = blk.get_metadata()
             self.assertIsNone(meta.voided_by)
 
-    def _gen_nc_tx(self, nc_id, nc_method, nc_args, nc=None, *, address=None):
+    def _gen_nc_tx(
+        self,
+        nc_id: VertexId,
+        nc_method: str,
+        nc_args: list[Any],
+        nc: BaseTransaction | None = None,
+        *,
+        address: str | None = None,
+        nc_actions: list[NanoHeaderAction] | None = None,
+        is_custom_token: bool = False,
+    ) -> Transaction:
         method_parser = NCMethodParser(getattr(MyBlueprint, nc_method))
 
         if nc is None:
             nc = Transaction()
+        assert isinstance(nc, Transaction)
 
         nc_args_bytes = method_parser.serialize_args(nc_args)
 
@@ -126,8 +138,12 @@ class NCConsensusTestCase(SimulatorTestCase):
             nc_args_bytes=nc_args_bytes,
             nc_pubkey=pubkey_bytes,
             nc_signature=b'',
+            nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
+
+        if is_custom_token:
+            nc.tokens = [self.token_uid]
 
         data = nc.get_sighash_all()
         data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
@@ -315,7 +331,13 @@ class NCConsensusTestCase(SimulatorTestCase):
             1, self.manager.tx_storage, token_uid=self.token_uid
         )
         tx = self.wallet.prepare_transaction(Transaction, _inputs, [])
-        tx = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx)
+        tx = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx, is_custom_token=is_custom_token, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.DEPOSIT,
+                token_index=1 if is_custom_token else 0,
+                amount=deposit_amount,
+            )
+        ])
         self.manager.cpu_mining_service.resolve(tx)
         self.manager.on_new_tx(tx, fails_silently=False)
         self.assertIsNone(tx.get_metadata().voided_by)
@@ -342,7 +364,13 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         tx2 = Transaction(outputs=[TxOutput(1, b'', _output_token_index)])
         tx2.tokens = _tokens
-        tx2 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx2)
+        tx2 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx2, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.WITHDRAWAL,
+                token_index=1 if is_custom_token else 0,
+                amount=1,
+            )
+        ])
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.on_new_tx(tx2, fails_silently=False)
         self.assertIsNone(tx2.get_metadata().voided_by)
@@ -361,7 +389,13 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         tx3 = Transaction(outputs=[TxOutput(deposit_amount - 2, b'', _output_token_index)])
         tx3.tokens = _tokens
-        tx3 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx3)
+        tx3 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx3, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.WITHDRAWAL,
+                token_index=1 if is_custom_token else 0,
+                amount=deposit_amount - 2,
+            )
+        ])
         self.manager.cpu_mining_service.resolve(tx3)
         self.manager.on_new_tx(tx3, fails_silently=False)
         self.assertIsNone(tx3.get_metadata().voided_by)
@@ -378,8 +412,21 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         # Try to withdraw more than available, so it fails.
 
-        tx4 = Transaction(outputs=[TxOutput(2, b'', 0)])
-        tx4 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx4)
+        _output_token_index = 0
+        _tokens = []
+        if is_custom_token:
+            _tokens.append(self.token_uid)
+            _output_token_index = 1
+
+        tx4 = Transaction(outputs=[TxOutput(2, b'', _output_token_index)])
+        tx4.tokens = _tokens
+        tx4 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx4, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.WITHDRAWAL,
+                token_index=1 if is_custom_token else 0,
+                amount=2,
+            )
+        ])
         self.manager.cpu_mining_service.resolve(tx4)
         self.manager.on_new_tx(tx4, fails_silently=False)
         self.assertIsNone(tx4.get_metadata().voided_by)
@@ -589,14 +636,26 @@ class NCConsensusTestCase(SimulatorTestCase):
         # Prepare three sibling transactions.
         _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
         tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
-        tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1)
+        tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.DEPOSIT,
+                token_index=0,
+                amount=deposit_amount_1,
+            )
+        ])
         self.manager.cpu_mining_service.resolve(tx1)
 
         self.manager.reactor.advance(10)
 
         withdrawal_amount_1 = 123
         tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
-        tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1)
+        tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.WITHDRAWAL,
+                token_index=0,
+                amount=withdrawal_amount_1,
+            )
+        ])
         tx11.weight += 1
         self.manager.cpu_mining_service.resolve(tx11)
 
@@ -604,7 +663,13 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(3, self.manager.tx_storage)
         tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
-        tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2)
+        tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.DEPOSIT,
+                token_index=0,
+                amount=deposit_amount_2,
+            )
+        ])
         tx2.weight += 1
         self.manager.cpu_mining_service.resolve(tx2)
 
@@ -673,14 +738,26 @@ class NCConsensusTestCase(SimulatorTestCase):
         # Prepare three sibling transactions.
         _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(3, self.manager.tx_storage)
         tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
-        tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2)
+        tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.DEPOSIT,
+                token_index=0,
+                amount=deposit_amount_2,
+            )
+        ])
         self.manager.cpu_mining_service.resolve(tx2)
 
         self.manager.reactor.advance(10)
 
         withdrawal_amount_1 = 123
         tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
-        tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1)
+        tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.WITHDRAWAL,
+                token_index=0,
+                amount=withdrawal_amount_1,
+            )
+        ])
         tx11.weight += 1
         self.manager.cpu_mining_service.resolve(tx11)
 
@@ -688,7 +765,13 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
         tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
-        tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1)
+        tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.DEPOSIT,
+                token_index=0,
+                amount=deposit_amount_1,
+            )
+        ])
         tx1.weight += 2
         self.manager.cpu_mining_service.resolve(tx1)
 
@@ -760,8 +843,14 @@ class NCConsensusTestCase(SimulatorTestCase):
         # tx1 is a NanoContract transaction and will fail execution.
         tx1 = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)])
         self.assertEqual(len(tx1.outputs), 1)
-        tx1.outputs[0].value = 3  # sum(inputs) = 10, sum(outputs) = 3, deposit=7
-        tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1)
+        tx1.outputs[0].value = 3
+        tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1, nc_actions=[
+            NanoHeaderAction(
+                type=NCActionType.DEPOSIT,
+                token_index=0,
+                amount=tx0.outputs[0].value - 3,
+            )
+        ])
         self.manager.cpu_mining_service.resolve(tx1)
 
         # tx2 is a NanoContract transaction that spends tx1.

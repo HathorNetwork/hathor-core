@@ -14,8 +14,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, unique
 from typing import Callable, Generic, NamedTuple, NewType, TypeVar
+
+from hathor.transaction.util import bytes_to_int, int_to_bytes
 
 # Types to be used by blueprints.
 VertexId = NewType('VertexId', bytes)
@@ -91,10 +93,21 @@ def view(fn: Callable) -> Callable:
     return fn
 
 
+@unique
 class NCActionType(Enum):
     """Types of interactions a transaction might have with a contract."""
-    DEPOSIT = 'deposit'
-    WITHDRAWAL = 'withdrawal'
+    DEPOSIT = 1
+    WITHDRAWAL = 2
+
+    def __str__(self) -> str:
+        return self.name.lower()
+
+    def to_bytes(self) -> bytes:
+        return int_to_bytes(number=self.value, size=1)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> NCActionType:
+        return NCActionType(bytes_to_int(data))
 
 
 class NCAction(NamedTuple):
