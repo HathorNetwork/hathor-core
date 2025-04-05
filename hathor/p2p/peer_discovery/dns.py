@@ -46,7 +46,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         self.hosts = hosts
         self.default_port = default_port
         self.test_mode = test_mode
-        self.entrypoints = set()
+        self.entrypoints = []
 
     def do_lookup_address(self, host: str) -> Deferred[LookupResult]:
         return lookupAddress(host)
@@ -61,7 +61,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         """
         for host in self.hosts:
             for entrypoint in (await self.dns_seed_lookup(host)):
-                self.entrypoints.add(entrypoint)
+                self.entrypoints.append(entrypoint)
                 connect_to_endpoint(entrypoint)
 
     async def dns_seed_lookup(self, host: str) -> set[PeerEndpoint]:

@@ -142,16 +142,21 @@ class Slot:
             Removes from given instance the protocol passed. Returns protocol from queue
             when disconnection leads to free space in slot.
         """
-
+        print("YEP REMOVE")
         self.connection_slot.discard(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             # If protocol READY, the peer was verified. We take its EP's to the queue.
             dequeued_entrypoint = None
+            print("YEP ENTRYPOINS")
             if protocol.connection_state == HathorProtocol.ConnectionState.READY:
+                print("YEP READY")
+
                 # If protocol not in set, it is a new protocol with new ep's to check.
                 # If in set, it is a connection from a previously dequeued entrypoint.
                 if protocol.entrypoint:
+                    print("YEP there is EP")
+
                     if protocol.entrypoint.addr not in self.entrypoint_set:
                         entrypoints = protocol.peer.info.entrypoints
                         # Unpack the entrypoints and put them in the queue and the set.
@@ -406,9 +411,14 @@ class ConnectionsManager:
         for peer_discovery in self.peer_discoveries:
             coro = peer_discovery.discover_and_connect(self.connect_to_endpoint)
             Deferred.fromCoroutine(coro)
+            print("OOOPPAAA")
             if isinstance(peer_discovery, BootstrapPeerDiscovery | DNSPeerDiscovery):
+                print("OOOPPAAA")
+                print(f"{peer_discovery.entrypoints}")
                 for entrypoint in peer_discovery.entrypoints:
                     self.discovered_entrypoints.add(entrypoint)
+                    print("OOOPPAAA")
+                    print(len(self.discovered_entrypoints))
 
     def disable_rate_limiter(self) -> None:
         """Disable global rate limiter."""
@@ -547,6 +557,7 @@ class ConnectionsManager:
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
 
+        print("ON PEER CONNECTED CALLED")
         # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
