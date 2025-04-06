@@ -22,7 +22,43 @@ from hathor.cli.run_node import RunNode
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
 
-MAGIC_HEADER = b'HathDB'
+MAGIC_HEADER = b'// HathorDB '
+
+
+class TextDbWriter:
+    def __init__(self, fp: io.BufferedWriter):
+        if not fp.seekable():
+            raise ValueError('file cannot be used because it is not seekable')
+
+        self._fp = fp
+        self.tx_count = 0
+        self.block_count = 0
+
+        self._fp.write(MAGIC_HEADER)
+        # XXX: pre-write the count to reserve the space, we will seek to it and write the correct value at the end
+        self._write_pos_count = self._fp.tell()
+        self._write_counters()
+
+    def _write_counters(self):
+        self._fp.write(f'{self.tx_count:10d}'.encode('ascii')
+        self._fp.write(b' ')
+        self._fp.write(f'{self.block_count:10d}'.encode('ascii')
+
+    def write_vertex(self, vertex: 'BaseTransaction') -> None:
+        vertex_bytes = bytes(vertex)
+        self._fp.write(f'// {vertex.hash.hex()} {type(vertex).__name__}\n'.encode('ascii'))
+        self._fp.write(vertex_bytes.hex())
+        self._fp.write('\n')
+
+        if vertex.is_block:
+            self.block_count += 1
+        else:
+            self.tx_count += 1
+
+    def close(self):
+        self._fp.seek(self._write_pos_count)
+        self._write_counters()
+        self._fp.flush()
 
 
 class DbExport(RunNode):
@@ -62,9 +98,7 @@ class DbExport(RunNode):
         super().prepare(register_resources=False)
 
         # allocating io.BufferedWriter here so we "own" it
-        self.out_file = io.BufferedWriter(self._args.export_file)
-        if not self.out_file.seekable():
-            raise ValueError('file cannot be used because it is not seekable')
+        self.out_file = BinaryDbWriter(io.BufferedWriter(self._args.export_file))
 
         self._iter_tx: Iterator['BaseTransaction']
         if self._args.export_iterator == 'metadata':
@@ -97,14 +131,7 @@ class DbExport(RunNode):
         from hathor.transaction import Block
         from hathor.util import tx_progress
         self.log.info('export')
-        self.out_file.write(MAGIC_HEADER)
-        tx_count = 0
-        block_count = 0
         best_height = 0
-        # XXX: pre-write the count to reserve the space, we will seek to it and write the correct value at the end
-        write_pos_count = self.out_file.tell()
-        self.out_file.write(struct.pack('!I', tx_count))
-        self.out_file.write(struct.pack('!I', block_count))
         # estimated total, this will obviously be wrong if we're not exporting everything, but it's still better than
         # nothing, and it's probably better to finish sooner than expected, rather than later than expected
         total = self.tx_storage.get_vertices_count()
@@ -115,28 +142,19 @@ class DbExport(RunNode):
                 if not tx_meta.voided_by:
                     # XXX: max() shouldn't be needed, but just in case
                     best_height = max(best_height, tx.get_height())
-                block_count += 1
-            else:
-                tx_count += 1
             # write tx
             if tx.is_genesis:
                 continue
-            tx_bytes = bytes(tx)
-            self.out_file.write(struct.pack('!I', len(tx_bytes)))
-            self.out_file.write(tx_bytes)
+            self.out_file.write_vertex(tx)
             # stop as soon as we reach our target height (if any) and after writing it
             if self.export_height is not None and best_height >= self.export_height:
                 break
         # warn if we haven't reached self.export_height
         if self.export_height is not None and best_height < self.export_height:
             self.log.warn('max export height not reached', best_height=best_height)
-        # finally, write the correct counts and close
-        self.out_file.seek(write_pos_count)
-        self.out_file.write(struct.pack('!I', tx_count))
-        self.out_file.write(struct.pack('!I', block_count))
-        self.out_file.flush()
+        self.out_file.close()
         del self.out_file
-        self.log.info('exported', tx_count=tx_count, block_count=block_count)
+        self.log.info('exported', tx_count=self.out_file.tx_count, block_count=self.out_file.block_count)
 
 
 def main():

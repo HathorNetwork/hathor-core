@@ -37,7 +37,6 @@ class CliManager:
             generate_genesis,
             generate_poa_keys,
             generate_valid_words,
-            load_from_logs,
             merged_mining,
             mining,
             multisig_address,
@@ -99,8 +98,6 @@ class CliManager:
         self.add_cmd('dev', 'x-export', db_export, 'EXPERIMENTAL: Export database to a simple format.')
         self.add_cmd('dev', 'x-import', db_import, 'EXPERIMENTAL: Import database from exported format.')
         self.add_cmd('dev', 'replay-logs', replay_logs, 'EXPERIMENTAL: re-play json logs as console printed')
-        self.add_cmd('dev', 'load-from-logs', load_from_logs,
-                     'Load vertices as they are found in a log dump that was parsed with parse-logs')
         self.add_cmd('dev', 'parse-logs', parse_logs, 'Parse a log dump to use it with load-from-logs')
 
     def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: Optional[str] = None) -> None:
