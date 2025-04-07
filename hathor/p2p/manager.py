@@ -411,13 +411,13 @@ class ConnectionsManager:
         for peer_discovery in self.peer_discoveries:
             coro = peer_discovery.discover_and_connect(self.connect_to_endpoint)
             Deferred.fromCoroutine(coro)
-            print("OOOPPAAA")
+
             if isinstance(peer_discovery, BootstrapPeerDiscovery | DNSPeerDiscovery):
-                print("OOOPPAAA")
+
                 print(f"{peer_discovery.entrypoints}")
                 for entrypoint in peer_discovery.entrypoints:
                     self.discovered_entrypoints.add(entrypoint)
-                    print("OOOPPAAA")
+
                     print(len(self.discovered_entrypoints))
 
     def disable_rate_limiter(self) -> None:
@@ -556,7 +556,7 @@ class ConnectionsManager:
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
-
+        # assert False
         print("ON PEER CONNECTED CALLED")
         # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:

@@ -145,5 +145,11 @@ class BootstrapTestCase(unittest.TestCase):
         connections.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a, test_mode=True))
         connections.do_discovery()
         self.clock.advance(1)
-
+        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
+        self.assertEqual(connecting_entrypoints, {
+            'tcp://127.0.0.99:40403',
+            'tcp://127.0.0.88:40403',
+            'tcp://foobar:1234',
+            'tcp://baz:456',
+        })
         self.assertTrue(len(connections.discovered_slot.connection_slot) == 1)

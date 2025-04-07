@@ -620,12 +620,9 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         total_conn = len(full_node.connections.connections)
         self.assertTrue(amount_check_ep_conn + max_number_outgoing_connections == total_conn)
     
-    """
-        def test_check_ep_overflow(self):
-        
-            Test the connections made for entrypoints in queue.
-        
 
+    def test_check_ep_overflow(self):
+        
         _settings = HathorSettings(bytes(1), bytes(1), "testnet")
 
         # Create exactly the amount of peers that the outgoing slot can handle
@@ -687,7 +684,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # Now, let's add one more connection. This must go to the peer.
     
-    """
+
 
 
 
