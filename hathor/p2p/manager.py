@@ -423,7 +423,6 @@ class ConnectionsManager:
             return
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
-
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
             protocol=protocol,
