@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import deque
 from typing import Any, Type, Union, get_args, get_origin
 
 from hathor.nanocontracts.exception import UnknownFieldType
 from hathor.nanocontracts.fields.base import Field
-from hathor.nanocontracts.fields.containers import DictField
+from hathor.nanocontracts.fields.deque_field import DequeField
+from hathor.nanocontracts.fields.dict_field import DictField
 from hathor.nanocontracts.fields.others import OptionalField, SignedDataField, TupleField
 from hathor.nanocontracts.fields.singles import BooleanField, BytesField, IntegerField, SingleValueField, StrField
 from hathor.nanocontracts.types import (
@@ -38,6 +40,8 @@ _field_mapping: dict[Any, Type[Field]] = {
     int: IntegerField,
     bool: BooleanField,
     dict: DictField,
+    list: DequeField,
+    deque: DequeField,
     BlueprintId: BytesField,
     ContractId: BytesField,
     Address: BytesField,
