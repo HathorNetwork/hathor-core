@@ -1,4 +1,3 @@
-import struct
 from typing import Any, Optional
 
 from hathor.nanocontracts.exception import UnknownFieldType
@@ -79,7 +78,7 @@ class NCSerializerTestCase(unittest.TestCase):
         self._run_test(int, 100)
 
     def test_int_too_big(self):
-        with self.assertRaises(struct.error):
+        with self.assertRaises(OverflowError):
             self._run_test(int, 2**31)
 
     def test_optional_str_none(self):

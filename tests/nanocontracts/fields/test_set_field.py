@@ -16,7 +16,7 @@ import hashlib
 
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
-from hathor.nanocontracts.fields import IntegerField
+from hathor.nanocontracts.fields import Int32Field
 from hathor.transaction import Block, Transaction
 from tests import unittest
 
@@ -97,6 +97,6 @@ class TestDequeField(unittest.TestCase):
 
     @staticmethod
     def _get_key(n: int) -> str:
-        data = IntegerField('my_set').to_bytes(n)
+        data = Int32Field('my_set').to_bytes(n)
         data_hash = hashlib.sha1(data).digest()
         return f'my_set:{data_hash.hex()}'
