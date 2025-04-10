@@ -15,6 +15,8 @@
 import struct
 from typing import Any, Optional, Type, Union, get_args, get_origin
 
+from typing_extensions import Self
+
 from hathor.nanocontracts.fields.base import Field
 from hathor.nanocontracts.fields.singles import SingleValueField
 from hathor.nanocontracts.types import SignedData
@@ -36,7 +38,7 @@ class OptionalField(SingleValueField):
         self.field = field
 
     @classmethod
-    def create_from_type(cls, name: str, _type: Type[Any]) -> Field:
+    def create_from_type(cls, name: str, _type: Type[Any]) -> Self:
         from hathor.nanocontracts.fields import get_field_for_attr
 
         origin = get_origin(_type)
@@ -78,7 +80,7 @@ class SignedDataField(SingleValueField):
         self.field = field
 
     @classmethod
-    def create_from_type(cls, name: str, _type: Type[Any]) -> Field:
+    def create_from_type(cls, name: str, _type: Type[Any]) -> Self:
         from hathor.nanocontracts.fields import get_field_for_attr
 
         args = get_args(_type)
@@ -115,7 +117,7 @@ class TupleField(SingleValueField):
         self.fields = fields
 
     @classmethod
-    def create_from_type(cls, name: str, _type: Type[Any]) -> Field:
+    def create_from_type(cls, name: str, _type: Type[Any]) -> Self:
         from hathor.nanocontracts.fields import get_field_for_attr
 
         origin = get_origin(_type)

@@ -132,6 +132,14 @@ class NCStorage:
         internal_key = self._to_attr_key(key)
         self._trie_update(bytes(internal_key), DeletedKey)
 
+    def contains(self, key: str) -> bool:
+        """Check whether `key` exists in the storage."""
+        try:
+            _ = self.get(key)
+        except KeyError:
+            return False
+        return True
+
     def get_balance(self, token_uid: bytes) -> int:
         """Return the contract balance for a token."""
         key = BalanceKey(self.nc_id, token_uid)

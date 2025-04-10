@@ -16,50 +16,34 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, Type
+from typing import Any, Iterable, Iterator, Self
+
+from typing_extensions import override
 
 from hathor.nanocontracts.fields import Field
+from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
 from hathor.nanocontracts.storage import NCStorage
 
 
-class DequeField(Field):
-    __slots__ = ('__name',)
-
-    def __init__(self, name: str) -> None:
-        self.__name = name
+class DequeField(ContainerField['StorageDeque']):
+    __slots__ = ()
 
     @classmethod
-    def create_from_type(cls, name: str, type_: Type[Any]) -> Field:
+    @override
+    def create_from_name(cls, name: str, value_field: Field) -> Self:
+        return cls(name, value_field, StorageDeque)
+
+    @classmethod
+    @override
+    def _validate_type_args(cls, name: str, args: list[Any]) -> Field:
         from hathor.nanocontracts.fields import get_field_for_attr
-        args = getattr(type_, '__args__', [])
         if len(args) != 1:
-            raise TypeError(f'deque field `{name}` should have exactly one type argument')
-        # check that it's a valid field type
-        _ = get_field_for_attr('', args[0])
-        return cls(name)
-
-    def __set__(self, blueprint, value):
-        raise AttributeError('cannot set a deque')
-
-    def __get__(self, blueprint, objtype):
-        if obj := blueprint._cache.get(self.__name):
-            return obj
-
-        storage_deque = StorageDeque(blueprint._storage, self.__name)
-        blueprint._cache[self.__name] = storage_deque
-        return storage_deque
-
-    def to_bytes(self, value: Any) -> bytes:
-        raise AssertionError('DequeField should not be used directly')
-
-    def to_python(self, raw: bytes) -> Any:
-        raise AssertionError('DequeField should not be used directly')
-
-    def isinstance(self, value: Any) -> bool:
-        raise AssertionError('DequeField should not be used directly')
+            raise TypeError(f'deque field `{name}` must have exactly one type argument')
+        # check that value type is valid
+        value_field = get_field_for_attr('', args[0])
+        return value_field
 
 
-_KEY_SEPARATOR: str = ':'
 _METADATA_KEY: str = '__metadata__'
 
 
@@ -74,23 +58,22 @@ class _StorageDequeMetadata:
         return self.first_index + self.length - 1
 
 
-class StorageDeque:
-    __slots__ = ('__storage', '__name', '__metadata_key')
+class StorageDeque(StorageContainer):
+    __slots__ = ('__metadata_key',)
 
-    def __init__(self, storage: NCStorage, name: str) -> None:
-        self.__storage = storage
-        self.__name = name
-        self.__metadata_key = f'{name}{_KEY_SEPARATOR}{_METADATA_KEY}'
+    def __init__(self, storage: NCStorage, name: str, value_field: Field) -> None:
+        super().__init__(storage, name, value_field)
+        self.__metadata_key = f'{name}{KEY_SEPARATOR}{_METADATA_KEY}'
 
     def __to_db_key(self, index: int) -> str:
-        return f'{self.__name}{_KEY_SEPARATOR}{index}'
+        return f'{self.__field_name__}{KEY_SEPARATOR}{index}'
 
     def __get_or_create_metadata(self) -> _StorageDequeMetadata:
-        metadata = self.__storage.get(self.__metadata_key, default=None)
+        metadata = self.__storage__.get(self.__metadata_key, default=None)
 
         if metadata is None:
             metadata = _StorageDequeMetadata(first_index=0, length=0, reversed=False)
-            self.__storage.put(self.__metadata_key, metadata)
+            self.__storage__.put(self.__metadata_key, metadata)
 
         assert isinstance(metadata, _StorageDequeMetadata)
         return metadata
@@ -98,8 +81,8 @@ class StorageDeque:
     def __update_metadata(self, new_metadata: _StorageDequeMetadata) -> None:
         assert new_metadata.length >= 0
         if new_metadata.length == 0:
-            return self.__storage.delete(self.__metadata_key)
-        self.__storage.put(self.__metadata_key, new_metadata)
+            return self.__storage__.delete(self.__metadata_key)
+        self.__storage__.put(self.__metadata_key, new_metadata)
 
     @property
     def maxlen(self) -> int | None:
@@ -122,7 +105,7 @@ class StorageDeque:
         for item in items:
             new_last_index += 1
             key = self.__to_db_key(new_last_index)
-            self.__storage.put(key, item)
+            self.__storage__.put(key, item)
         new_metadata = dataclasses.replace(metadata, length=new_last_index - metadata.first_index + 1)
         self.__update_metadata(new_metadata)
 
@@ -137,7 +120,7 @@ class StorageDeque:
         for item in items:
             new_first_index -= 1
             key = self.__to_db_key(new_first_index)
-            self.__storage.put(key, item)
+            self.__storage__.put(key, item)
         new_metadata = dataclasses.replace(
             metadata,
             first_index=new_first_index,
@@ -159,8 +142,8 @@ class StorageDeque:
 
         index = metadata.first_index if left else metadata.last_index
         key = self.__to_db_key(index)
-        item = self.__storage.get(key)
-        self.__storage.delete(key)
+        item = self.__storage__.get(key)
+        self.__storage__.delete(key)
         new_metadata = dataclasses.replace(
             metadata,
             first_index=metadata.first_index + 1 if left else metadata.first_index,
@@ -183,7 +166,7 @@ class StorageDeque:
 
         for i in indexes:
             key = self.__to_db_key(i)
-            yield self.__storage.get(key)
+            yield self.__storage__.get(key)
 
     def __len__(self) -> int:
         metadata = self.__get_or_create_metadata()
@@ -203,9 +186,9 @@ class StorageDeque:
     def __setitem__(self, index: int, value: Any) -> None:
         internal_index = self.__to_internal_index(index=index)
         key = self.__to_db_key(internal_index)
-        self.__storage.put(key, value)
+        self.__storage__.put(key, value)
 
     def __getitem__(self, index: int) -> Any:
         internal_index = self.__to_internal_index(index=index)
         key = self.__to_db_key(internal_index)
-        return self.__storage.get(key)
+        return self.__storage__.get(key)
