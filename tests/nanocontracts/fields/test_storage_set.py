@@ -16,14 +16,14 @@ from typing import Any
 
 import pytest
 
-from hathor.nanocontracts.fields import IntegerField
+from hathor.nanocontracts.fields import Int32Field
 from hathor.nanocontracts.fields.set_field import StorageSet
 from tests.nanocontracts.fields.utils import MockNCStorage
 
 
 def test_basic() -> None:
     storage = MockNCStorage()
-    my_set = StorageSet(storage, 'my_set', IntegerField('my_set'))
+    my_set = StorageSet(storage, 'my_set', Int32Field('my_set'))
 
     assert len(my_set) == 0
     assert storage.store == {}
@@ -31,7 +31,7 @@ def test_basic() -> None:
 
 def test_add_remove_discard() -> None:
     storage = MockNCStorage()
-    my_set = StorageSet(storage, 'my_set', IntegerField('my_set'))
+    my_set = StorageSet(storage, 'my_set', Int32Field('my_set'))
 
     my_set.add(1)
     my_set.add(1)
@@ -54,7 +54,7 @@ def test_add_remove_discard() -> None:
 
 def test_updates_and_contains() -> None:
     storage = MockNCStorage()
-    my_set = StorageSet(storage, 'my_set', IntegerField('my_set'))
+    my_set = StorageSet(storage, 'my_set', Int32Field('my_set'))
 
     my_set.update({1, 2, 3}, [2, 3, 4])
     assert _get_values(storage) == {1, 2, 3, 4}
@@ -73,7 +73,7 @@ def test_updates_and_contains() -> None:
 
 def test_isdisjoint() -> None:
     storage = MockNCStorage()
-    my_set = StorageSet(storage, 'my_set', IntegerField('my_set'))
+    my_set = StorageSet(storage, 'my_set', Int32Field('my_set'))
     my_set.update({1, 2, 3})
 
     assert my_set.isdisjoint(set())
@@ -85,7 +85,7 @@ def test_isdisjoint() -> None:
 
 def issuperset() -> None:
     storage = MockNCStorage()
-    my_set = StorageSet(storage, 'my_set', IntegerField('my_set'))
+    my_set = StorageSet(storage, 'my_set', Int32Field('my_set'))
     my_set.update({1, 2, 3})
 
     assert my_set.issuperset({})
@@ -97,7 +97,7 @@ def issuperset() -> None:
 
 def intersection() -> None:
     storage = MockNCStorage()
-    my_set = StorageSet(storage, 'my_set', IntegerField('my_set'))
+    my_set = StorageSet(storage, 'my_set', Int32Field('my_set'))
     my_set.update({1, 2, 3})
 
     assert my_set.intersection(set()) == set()

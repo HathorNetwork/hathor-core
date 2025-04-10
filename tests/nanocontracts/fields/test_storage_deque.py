@@ -16,14 +16,14 @@ from collections import deque
 
 import pytest
 
-from hathor.nanocontracts.fields import IntegerField, StrField
+from hathor.nanocontracts.fields import Int32Field, StrField
 from hathor.nanocontracts.fields.deque_field import StorageDeque, _StorageDequeMetadata
 from tests.nanocontracts.fields.utils import MockNCStorage
 
 
 def test_basic() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
 
     assert storage.store == {}
     assert list(dq) == []
@@ -84,7 +84,7 @@ def test_appendleft() -> None:
 
 def test_extend() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
 
     dq.extend([1, 2, 3])
 
@@ -118,7 +118,7 @@ def test_extend() -> None:
 
 def test_extendleft() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
 
     dq.extendleft([1, 2, 3])
 
@@ -152,7 +152,7 @@ def test_extendleft() -> None:
 
 def test_pop() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
     dq.extend([1, 2, 3, 4])
 
     assert dq.pop() == 4
@@ -188,7 +188,7 @@ def test_pop() -> None:
 
 def test_popleft() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
     dq.extend([1, 2, 3, 4])
 
     assert dq.popleft() == 1
@@ -225,7 +225,7 @@ def test_popleft() -> None:
 def test_reverse() -> None:
     storage = MockNCStorage()
 
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
     dq.extend(['a', 'b', 'c'])
 
     assert storage.store == {
@@ -249,7 +249,7 @@ def test_reverse() -> None:
 
 def test_indexing() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
 
     dq.extend(['a', 'b', 'c', 'd'])
 
@@ -304,7 +304,7 @@ def test_indexing() -> None:
 
 def test_indexing_reversed() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
 
     dq.extend(['a', 'b', 'c', 'd'])
     dq.reverse()
@@ -348,7 +348,7 @@ def test_indexing_reversed() -> None:
 
 def test_len() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
     assert len(dq) == 0
 
     dq.append('a')
@@ -363,7 +363,7 @@ def test_len() -> None:
 
 def test_reverse_empty() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
+    dq = StorageDeque(storage, 'dq', Int32Field('dq'))
     assert list(dq) == []
     dq.reverse()
     assert list(dq) == []

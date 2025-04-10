@@ -28,6 +28,7 @@ TokenUid = NewType('TokenUid', bytes)
 Timestamp = NewType('Timestamp', int)
 ContractId = NewType('ContractId', VertexId)
 BlueprintId = NewType('BlueprintId', VertexId)
+VarInt = NewType('VarInt', int)
 
 T = TypeVar('T')
 
