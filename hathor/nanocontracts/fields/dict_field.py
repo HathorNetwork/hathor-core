@@ -36,18 +36,22 @@ class DictField(Field):
     Note that this field is not the dict itself. A dict-like object will be returned
     when one tries to access the dict.
     """
-    VALID_KEY_TYPES = set([str,
-                           bytes,
-                           int,
-                           tuple,
-                           Address,
-                           Amount,
-                           BlueprintId,
-                           ContractId,
-                           Timestamp,
-                           TokenUid,
-                           TxOutputScript,
-                           VertexId])
+    __slots__ = ('name', 'key_field', 'value_field')
+
+    VALID_KEY_TYPES = {
+        str,
+        bytes,
+        int,
+        tuple,
+        Address,
+        Amount,
+        BlueprintId,
+        ContractId,
+        Timestamp,
+        TokenUid,
+        TxOutputScript,
+        VertexId,
+    }
 
     def __init__(self, name: str, key_field: Field, value_field: Field) -> None:
         self.name = name
@@ -69,7 +73,7 @@ class DictField(Field):
 
     def __set__(self, blueprint, value):
         """Forbid attribution of a new object as a replacement of this dict."""
-        raise Exception('cannot set a dict')
+        raise AttributeError('cannot set a dict')
 
     def __get__(self, blueprint, objtype):
         """Return the StorageDict object for the given blueprint."""
@@ -80,14 +84,14 @@ class DictField(Field):
         blueprint._cache[self.name] = storage_dict
         return storage_dict
 
-    def isinstance(cls, value: Any) -> bool:
-        raise RuntimeError
+    def isinstance(self, value: Any) -> bool:
+        raise AssertionError('DictField should not be used directly')
 
     def to_bytes(self, value: Any) -> bytes:
-        raise RuntimeError
+        raise AssertionError('DictField should not be used directly')
 
     def to_python(self, raw: bytes) -> Any:
-        raise RuntimeError
+        raise AssertionError('DictField should not be used directly')
 
 
 class StorageDict:
