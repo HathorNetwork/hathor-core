@@ -21,7 +21,14 @@ from hathor.nanocontracts.fields.deque_field import DequeField
 from hathor.nanocontracts.fields.dict_field import DictField
 from hathor.nanocontracts.fields.others import OptionalField, SignedDataField, TupleField
 from hathor.nanocontracts.fields.set_field import SetField
-from hathor.nanocontracts.fields.singles import BooleanField, BytesField, IntegerField, SingleValueField, StrField
+from hathor.nanocontracts.fields.singles import (
+    BooleanField,
+    BytesField,
+    Int32Field,
+    SingleValueField,
+    StrField,
+    VarIntField,
+)
 from hathor.nanocontracts.types import (
     Address,
     Amount,
@@ -31,14 +38,19 @@ from hathor.nanocontracts.types import (
     Timestamp,
     TokenUid,
     TxOutputScript,
+    VarInt,
     VertexId,
 )
 
 # Mapping between types and field classes.
+# TODO: Before going to public testnet, the `int` type should be mapped
+#  to `VarIntField` and the `VarInt` type should be removed. Also, the
+#  `Amount` type should be mapped to the `AmountField`.
 _field_mapping: dict[Any, Type[Field]] = {
     str: StrField,
     bytes: BytesField,
-    int: IntegerField,
+    int: Int32Field,
+    VarInt: VarIntField,
     bool: BooleanField,
     dict: DictField,
     list: DequeField,
@@ -47,9 +59,9 @@ _field_mapping: dict[Any, Type[Field]] = {
     BlueprintId: BytesField,
     ContractId: BytesField,
     Address: BytesField,
-    Amount: IntegerField,
+    Amount: Int32Field,
     TokenUid: BytesField,
-    Timestamp: IntegerField,
+    Timestamp: Int32Field,
     TxOutputScript: BytesField,
     VertexId: BytesField,
 }

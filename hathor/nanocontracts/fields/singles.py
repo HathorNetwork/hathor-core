@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import struct
 from abc import ABC
 from typing import Any, Type
 
@@ -20,7 +19,9 @@ from typing_extensions import Self
 
 from hathor.nanocontracts.exception import NCAttributeError
 from hathor.nanocontracts.fields.base import Field
-from hathor.transaction.util import decode_string_utf8, unpack
+from hathor.transaction.base_transaction import bytes_to_output_value, output_value_to_bytes
+from hathor.transaction.util import bytes_to_int, decode_string_utf8, int_to_bytes
+from hathor.utils import leb128
 
 
 class SingleValueField(Field, ABC):
@@ -79,16 +80,51 @@ class BytesField(SingleValueField):
         return raw
 
 
-class IntegerField(SingleValueField):
-    """This is the field for Python's `int` type."""
+class BoundedInt(SingleValueField, ABC):
+    """This is an abstract base class for Python's `int` type, with a specific size in bytes, and signed."""
+    type = int
+    size: int
+
+    def to_bytes(self, value: Any) -> bytes:
+        assert isinstance(value, int)
+        return int_to_bytes(number=value, size=self.size, signed=True)
+
+    def to_python(self, raw: bytes) -> int:
+        return bytes_to_int(data=raw, signed=True)
+
+
+class Int32Field(BoundedInt):
+    """This is the field for Python's `int` type, with exactly 32 bits, and signed."""
+    size = 4
+
+
+class VarIntField(SingleValueField):
+    """
+    This is the field for Python's `int` type, with varying size, up to 256 bits, and signed.
+    It uses LEB128 for encoding.
+    """
     type = int
 
     def to_bytes(self, value: Any) -> bytes:
         assert isinstance(value, int)
-        return struct.pack('>l', value)
+        return leb128.encode_signed(value, max_bytes=32)
 
     def to_python(self, raw: bytes) -> int:
-        (value,), raw = unpack('>l', raw)
+        value, buf = leb128.decode_signed(raw, max_bytes=32)
+        assert len(buf) == 0  # TODO: this will be updated before mainnet
+        return value
+
+
+class AmountField(SingleValueField):
+    """This is the field for Python's `int` type when representing an Amount, that is, an output value."""
+    type = int
+
+    def to_bytes(self, value: int) -> bytes:
+        assert isinstance(value, int)
+        return output_value_to_bytes(value)
+
+    def to_python(self, raw: bytes) -> int:
+        value, raw = bytes_to_output_value(raw)
         assert len(raw) == 0
         return value
 

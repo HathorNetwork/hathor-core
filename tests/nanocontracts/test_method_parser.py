@@ -1,5 +1,4 @@
 import json
-import struct
 from typing import Optional
 
 from hathor.conf import HathorSettings
@@ -114,11 +113,11 @@ class NCBlueprintTestCase(unittest.TestCase):
         self._run_test(MyBlueprint.method_int, int, 100)
 
     def test_type_int_too_big(self):
-        with self.assertRaises(struct.error):
+        with self.assertRaises(OverflowError):
             self._run_test(MyBlueprint.method_int, int, 2**31)
 
     def test_type_int_too_small(self):
-        with self.assertRaises(struct.error):
+        with self.assertRaises(OverflowError):
             self._run_test(MyBlueprint.method_int, int, -2**31 - 1)
 
     def test_type_int_wrong_type(self):
