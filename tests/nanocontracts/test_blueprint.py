@@ -220,11 +220,11 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_invalid_field(self) -> None:
         with self.assertRaises(UnknownFieldType):
             class WrongBlueprint(Blueprint):
-                a: list[int]
+                a: float
 
                 @public
                 def initialize(self, ctx: Context) -> None:
-                    self.a = [1, 2, 3]
+                    self.a = 1.2
 
     def test_balances(self):
         nc_id = self.my_blueprint_id

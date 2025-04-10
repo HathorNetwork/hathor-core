@@ -34,6 +34,6 @@ class Field(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def isinstance(cls, value: Any) -> bool:
+    def isinstance(self, value: Any) -> bool:
         """Check if value is instance of the type related to this field."""
         raise NotImplementedError
