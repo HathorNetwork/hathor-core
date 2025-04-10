@@ -98,9 +98,10 @@ class OnChainBlueprintVerifier:
 
     def verify_pubkey_is_allowed(self, tx: OnChainBlueprint) -> None:
         """Verify if the on-chain blueprint's pubkey is allowed."""
-        address = get_address_b58_from_public_key_bytes(tx.nc_pubkey)
-        if address not in self._settings.NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
-            raise OCBPubKeyNotAllowed(f'nc_pubkey with address {address} is not allowed')
+        if self._settings.NC_ON_CHAIN_BLUEPRINT_RESTRICTED:
+            address = get_address_b58_from_public_key_bytes(tx.nc_pubkey)
+            if address not in self._settings.NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
+                raise OCBPubKeyNotAllowed(f'nc_pubkey with address {address} is not allowed')
 
     def verify_nc_signature(self, tx: OnChainBlueprint) -> None:
         """Verify if the creatos's signature is valid."""
