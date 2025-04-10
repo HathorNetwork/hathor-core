@@ -464,6 +464,7 @@ class HathorSettings(NamedTuple):
 
     # The pubkeys allowed to create on-chain-blueprints in the network
     # XXX: in the future this restriction will be lifted, possibly through a feature activation
+    NC_ON_CHAIN_BLUEPRINT_RESTRICTED: bool = True
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES: list[str] = []
 
     # Max length in bytes allowed for on-chain blueprint code after decompression, 240KB (not KiB)
