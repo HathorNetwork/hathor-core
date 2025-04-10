@@ -13,14 +13,17 @@
 # limitations under the License.
 
 import struct
+from abc import ABC
 from typing import Any, Type
+
+from typing_extensions import Self
 
 from hathor.nanocontracts.exception import NCAttributeError
 from hathor.nanocontracts.fields.base import Field
 from hathor.transaction.util import decode_string_utf8, unpack
 
 
-class SingleValueField(Field):
+class SingleValueField(Field, ABC):
     """Base class for single-value fields."""
     type: Any
 
@@ -28,7 +31,7 @@ class SingleValueField(Field):
         self.name = name
 
     @classmethod
-    def create_from_type(cls, name: str, _type: Type[Any]) -> Field:
+    def create_from_type(cls, name: str, _type: Type[Any]) -> Self:
         return cls(name)
 
     def isinstance(self, value: Any) -> bool:

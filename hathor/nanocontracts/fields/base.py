@@ -13,10 +13,12 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Any, Type
+from typing import Any, Self, Type
 
 
 class Field(ABC):
+    __slots__ = ()
+
     @abstractmethod
     def to_bytes(self, value: Any) -> bytes:
         """Serialize the `value` in bytes."""
@@ -29,7 +31,7 @@ class Field(ABC):
 
     @classmethod
     @abstractmethod
-    def create_from_type(cls, name: str, _type: Type[Any]) -> 'Field':
+    def create_from_type(cls, name: str, _type: Type[Any]) -> Self:
         """Return a field object given a type."""
         raise NotImplementedError
 

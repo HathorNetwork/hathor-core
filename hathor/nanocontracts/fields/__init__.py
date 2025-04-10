@@ -20,6 +20,7 @@ from hathor.nanocontracts.fields.base import Field
 from hathor.nanocontracts.fields.deque_field import DequeField
 from hathor.nanocontracts.fields.dict_field import DictField
 from hathor.nanocontracts.fields.others import OptionalField, SignedDataField, TupleField
+from hathor.nanocontracts.fields.set_field import SetField
 from hathor.nanocontracts.fields.singles import BooleanField, BytesField, IntegerField, SingleValueField, StrField
 from hathor.nanocontracts.types import (
     Address,
@@ -41,6 +42,7 @@ _field_mapping: dict[Any, Type[Field]] = {
     bool: BooleanField,
     dict: DictField,
     list: DequeField,
+    set: SetField,
     deque: DequeField,
     BlueprintId: BytesField,
     ContractId: BytesField,

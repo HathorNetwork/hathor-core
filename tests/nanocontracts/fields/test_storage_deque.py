@@ -13,38 +13,17 @@
 #  limitations under the License.
 
 from collections import deque
-from typing import Any
 
 import pytest
 
+from hathor.nanocontracts.fields import IntegerField, StrField
 from hathor.nanocontracts.fields.deque_field import StorageDeque, _StorageDequeMetadata
-from hathor.nanocontracts.storage import NCStorage
-from hathor.nanocontracts.storage.types import _NOT_PROVIDED
-
-
-class MockNCStorage(NCStorage):
-    __slots__ = ('store',)
-
-    def __init__(self) -> None:
-        self.store: dict[str, Any] = {}
-
-    def get(self, key: str, default: Any = _NOT_PROVIDED) -> Any:
-        if item := self.store.get(key, default):
-            return item
-        if default is _NOT_PROVIDED:
-            raise KeyError
-        return default
-
-    def put(self, key: str, value: Any) -> None:
-        self.store[key] = value
-
-    def delete(self, key: str) -> None:
-        del self.store[key]
+from tests.nanocontracts.fields.utils import MockNCStorage
 
 
 def test_basic() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
 
     assert storage.store == {}
     assert list(dq) == []
@@ -53,7 +32,7 @@ def test_basic() -> None:
 
 def test_append() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', StrField('dq'))
 
     dq.append('a')
     dq.append('b')
@@ -79,7 +58,7 @@ def test_append() -> None:
 
 def test_appendleft() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', StrField('dq'))
 
     dq.appendleft('a')
     dq.appendleft('b')
@@ -105,7 +84,7 @@ def test_appendleft() -> None:
 
 def test_extend() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
 
     dq.extend([1, 2, 3])
 
@@ -139,7 +118,7 @@ def test_extend() -> None:
 
 def test_extendleft() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
 
     dq.extendleft([1, 2, 3])
 
@@ -173,7 +152,7 @@ def test_extendleft() -> None:
 
 def test_pop() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
     dq.extend([1, 2, 3, 4])
 
     assert dq.pop() == 4
@@ -209,7 +188,7 @@ def test_pop() -> None:
 
 def test_popleft() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
     dq.extend([1, 2, 3, 4])
 
     assert dq.popleft() == 1
@@ -246,7 +225,7 @@ def test_popleft() -> None:
 def test_reverse() -> None:
     storage = MockNCStorage()
 
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
     dq.extend(['a', 'b', 'c'])
 
     assert storage.store == {
@@ -270,7 +249,7 @@ def test_reverse() -> None:
 
 def test_indexing() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
 
     dq.extend(['a', 'b', 'c', 'd'])
 
@@ -325,7 +304,7 @@ def test_indexing() -> None:
 
 def test_indexing_reversed() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
 
     dq.extend(['a', 'b', 'c', 'd'])
     dq.reverse()
@@ -369,7 +348,7 @@ def test_indexing_reversed() -> None:
 
 def test_len() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
     assert len(dq) == 0
 
     dq.append('a')
@@ -384,7 +363,7 @@ def test_len() -> None:
 
 def test_reverse_empty() -> None:
     storage = MockNCStorage()
-    dq = StorageDeque(storage, 'dq')
+    dq = StorageDeque(storage, 'dq', IntegerField('dq'))
     assert list(dq) == []
     dq.reverse()
     assert list(dq) == []
