@@ -79,6 +79,7 @@ class RunNode:
         netargs = parser.add_mutually_exclusive_group()
         netargs.add_argument('--nano-testnet', action='store_true', help='Connect to Hathor nano-testnet')
         netargs.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
+        netargs.add_argument('--localnet', action='store_true', help='Create a localnet with default configuration.')
 
         parser.add_argument('--test-mode-tx-weight', action='store_true',
                             help='Reduces tx weight to 1 for testing purposes')
@@ -487,7 +488,7 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
-        from hathor.conf import NANO_TESTNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH
+        from hathor.conf import LOCALNET_SETTINGS_FILEPATH, NANO_TESTNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH
         from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
 
@@ -506,6 +507,8 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
         elif self._args.nano_testnet:
             os.environ['HATHOR_CONFIG_YAML'] = NANO_TESTNET_SETTINGS_FILEPATH
+        elif self._args.localnet:
+            os.environ['HATHOR_CONFIG_YAML'] = LOCALNET_SETTINGS_FILEPATH
 
         try:
             get_global_settings()

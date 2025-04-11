@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Optional, TypeAlias, Union, cast
+from typing import Any, Optional, TypeAlias, Union, cast
 
 from pydantic import Extra, validator
 from typing_extensions import Self
@@ -31,7 +31,8 @@ class TxOutput(BaseModel, extra=Extra.ignore):
     value: int
     token_data: int
     script: str
-    decoded: Optional[DecodedTxOutput]
+    # Instead of None, an empty dict represents an unknown script, as requested by our wallet-service use case.
+    decoded: DecodedTxOutput | dict[Any, Any]
 
 
 class TxInput(BaseModel):
@@ -123,17 +124,9 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
         tx_json = tx_extra_data_json['tx']
         meta_json = tx_extra_data_json['meta']
         tx_json['metadata'] = meta_json
-        tx_json['outputs'] = [
-            output | dict(decoded=output['decoded'] or None)
-            for output in tx_json['outputs']
-        ]
 
         inputs = []
         for tx_input in tx_json['inputs']:
-            decoded = tx_input.get('decoded')
-            if decoded and decoded.get('address') is None:
-                # we remove the decoded data if it does not contain an address
-                tx_input['decoded'] = None
             inputs.append(
                 dict(
                     tx_id=tx_input['tx_id'],
