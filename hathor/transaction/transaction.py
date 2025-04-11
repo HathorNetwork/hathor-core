@@ -303,11 +303,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             (amount,
              can_mint,
              can_melt,
-             token_info_version) = token_dict.get(token_uid,
-                                                    TokenInfo(amount=0,
-                                                                can_mint=False,
-                                                                can_melt=False,
-                                                                version=token_info_version))
+             token_info_version) = token_dict.get(token_uid, TokenInfo(amount=0, can_mint=False, can_melt=False,
+                                                                       version=token_info_version))
             if spent_output.is_token_authority():
                 can_mint = can_mint or spent_output.can_mint_token()
                 can_melt = can_melt or spent_output.can_melt_token()
