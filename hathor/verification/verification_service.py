@@ -226,7 +226,10 @@ class VerificationService:
         self.verifiers.tx.verify_sigops_input(tx)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.vertex.verify_parents(tx)
-        self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info(), tx)
+
+        _token_dict = token_dict or tx.get_complete_token_info()
+        self.verifiers.tx.verify_fee(_token_dict, tx)
+        self.verifiers.tx.verify_sum(_token_dict, tx)
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 

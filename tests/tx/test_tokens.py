@@ -12,7 +12,13 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfoVersion
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, int_to_bytes
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
+from tests.utils import (
+    add_blocks_unlock_reward,
+    add_new_double_spending,
+    create_fee_tokens,
+    create_tokens,
+    get_genesis_key,
+)
 
 
 class TokenTest(unittest.TestCase):
@@ -318,15 +324,16 @@ class TokenTest(unittest.TestCase):
             self.manager.verification_service.verify(tx4)
 
     def test_fee_token_melt(self):
-        wallet = self.manager.wallet
-        tx = create_tokens(self.manager, self.address_b58, token_info_version=TokenInfoVersion.FEE)
-        token_uid = tx.hash
+        htr_change_utxo_index = 3
+        initial_mint_amount = 500
+        tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
+        token_uid = tx.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
 
         # melt tokens and transfer melt authority
         melt_amount = 100
-        new_amount = tx.outputs[0].value - melt_amount
+        new_token_amount = tx.outputs[0].value - melt_amount
 
         inputs = [
             # token amount
@@ -339,7 +346,7 @@ class TokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount
-            TxOutput(new_amount, script, 1),
+            TxOutput(new_token_amount, script, 1),
             # Melt authority
             TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
         ]
@@ -354,7 +361,7 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
         # pick the last tip tx output in HTR then subtracts the fee
-        change_value = tx.outputs[3].value - tx2.calculate_fee()
+        change_value = tx.outputs[htr_change_utxo_index].value - tx2.calculate_fee(tx2.get_complete_token_info())
         outputs.append(TxOutput(change_value, script, 0))
 
         #  It's the signature of the output of the tx item
@@ -363,18 +370,18 @@ class TokenTest(unittest.TestCase):
 
         self.resolve_and_propagate(tx2)
 
-        self.check_tokens_index(token_uid, tx.hash, 1, tx2.hash, 1, new_amount)        # check total amount of tokens
+        self.check_tokens_index(token_uid, tx.hash, 1, tx2.hash, 1, new_token_amount)  # check total amount of tokens
 
     def test_fee_token_mint(self):
         htr_change_utxo_index = 3
         initial_mint_amount = 500
-        tx = create_tokens(self.manager, self.address_b58, mint_amount=initial_mint_amount, token_info_version=TokenInfoVersion.FEE)
+        tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
         token_uid = tx.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
 
         # mint tokens and transfer mint authority
-        mint_amount = 10000000
+        mint_amount = 100
         inputs = [
             # Token Input
             TxInput(tx.hash, 1, b''),
@@ -397,10 +404,12 @@ class TokenTest(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
+        # pick the last tip tx output in HTR then subtracts the fee
+        change_value = tx.outputs[htr_change_utxo_index].value - tx2.calculate_fee(tx2.get_complete_token_info())
+        outputs.append(TxOutput(change_value, script, 0))
 
-        change_output = TxOutput(tx.outputs[htr_change_utxo_index].value - tx2.calculate_fee(), script, 0)
-        outputs.append(change_output)
-
+        #  It's the signature of the output of the tx item
+        #  this signature_data allows the tx output to be spent by the tx2 inputs
         self.sign_inputs(tx2)
 
         self.resolve_and_propagate(tx2)
@@ -409,37 +418,26 @@ class TokenTest(unittest.TestCase):
         expected_mint_amount = initial_mint_amount + mint_amount
         self.check_tokens_index(token_uid, tx2.hash, 1, tx.hash, 2, expected_mint_amount)
 
-        # # check tokens index
-        # tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
-        # mint = list(tokens_index.iter_mint_utxos())
-        # melt = list(tokens_index.iter_melt_utxos())
-        # self.assertIn(TokenUtxoInfo(tx2.hash, 1), mint)
-        # self.assertIn(TokenUtxoInfo(tx.hash, 2), melt)
-        # # there should only be one element on the indexes for the token
-        # self.assertEqual(1, len(mint))
-        # self.assertEqual(1, len(melt))
-        # # check total amount of tokens
-        # self.assertEqual(500 + mint_amount, tokens_index.get_total())
-
-    def test_fee_token_mint_without_enough_htr(self):
-        htr_change_utxo_index = 3
+    def test_fee_token_tx_without_paying(self):
         initial_mint_amount = 500
-        tx = create_tokens(self.manager, self.address_b58, mint_amount=initial_mint_amount)
+        tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount, genesis_output_amount=1)
         token_uid = tx.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
 
-        # mint tokens and transfer mint authority
-        mint_amount = 10000000
         inputs = [
             # Token Input
-            TxInput(tx.hash, 1, b'')
+            TxInput(tx.hash, 1, b''),
+            # HTR input
+            TxInput(tx.hash, 4, b'')
         ]
         outputs = [
-            # Token minted output
-            TxOutput(mint_amount, script, 1),
-            # Token mint authority
-            TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
+            # Token output
+            TxOutput(250, script, 1),
+            # Token output
+            TxOutput(250, script, 1),
+            # HTR
+            TxOutput(1, script, 0)
         ]
 
         tx2 = Transaction(
@@ -452,15 +450,15 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
 
-        # Sign inputs
+        #  It's the signature of the output of the tx item
+        #  this signature_data allows the tx output to be spent by the tx2 inputs
         self.sign_inputs(tx2)
 
-        # Try to verify without enough HTR for fee
-        self.manager.cpu_mining_service.resolve(tx2)
-        with self.assertRaises(InputOutputMismatch):
-            self.manager.verification_service.verify(tx2)
+        with self.assertRaises(InvalidNewTransaction):
+            self.resolve_and_propagate(tx2)
 
-    def check_tokens_index(self, token_uid: bytes, mint_tx_hash: bytes, mint_output: int, melt_tx_hash: bytes, melt_output: int, token_amount: int):
+    def check_tokens_index(self, token_uid: bytes, mint_tx_hash: bytes, mint_output: int, melt_tx_hash: bytes,
+                           melt_output: int, token_amount: int) -> None:
         # check tokens index
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
         mint = list(tokens_index.iter_mint_utxos())
@@ -473,7 +471,7 @@ class TokenTest(unittest.TestCase):
         # check total amount of tokens
         self.assertEqual(token_amount, tokens_index.get_total())
 
-    def sign_inputs(self, tx: Transaction):
+    def sign_inputs(self, tx: Transaction) -> None:
         wallet = self.manager.wallet
         data_to_sign = tx.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
@@ -482,7 +480,7 @@ class TokenTest(unittest.TestCase):
         for _input in tx.inputs:
             _input.data = signature_data
 
-    def resolve_and_propagate(self, tx: Transaction):
+    def resolve_and_propagate(self, tx: Transaction) -> None:
         self.manager.cpu_mining_service.resolve(tx)
         self.manager.propagate_tx(tx, fails_silently=False)
         self.run_to_completion()

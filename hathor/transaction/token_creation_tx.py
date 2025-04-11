@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import IntEnum
 from struct import error as StructError, pack
 from typing import Any, Optional
 
@@ -21,7 +20,7 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
-from hathor.transaction.transaction import TokenInfo, Transaction, TokenInfoVersion
+from hathor.transaction.transaction import TokenInfo, TokenInfoVersion, Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.types import TokenUid
 
@@ -30,6 +29,7 @@ _FUNDS_FORMAT_STRING = '!BBBB'
 
 # Signal bist (B), version (B), inputs len (B), outputs len (B)
 _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
+
 
 class TokenCreationTransaction(Transaction):
     def __init__(
@@ -71,8 +71,10 @@ class TokenCreationTransaction(Transaction):
 
     def __str__(self) -> str:
         return ('TokenCreationTransaction(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s,'
-                'token_name=%s, token_symbol=%s, token_type=%s)' % (self.nonce, self.timestamp, int(self.version),
-                                                     self.weight, self.hash_hex, self.token_name, self.token_symbol, self.token_type))
+                'token_name=%s, token_symbol=%s, token_info_version=%s)' %
+                (self.nonce, self.timestamp, int(self.version),
+                    self.weight, self.hash_hex, self.token_name,
+                    self.token_symbol, self.token_info_version))
 
     def update_hash(self) -> None:
         """ When we update the hash, we also have to update the tokens uid list
@@ -107,7 +109,10 @@ class TokenCreationTransaction(Transaction):
             self.outputs.append(txout)
 
         # token name and symbol
-        self.token_name, self.token_symbol, self.token_info_version, buf = TokenCreationTransaction.deserialize_token_info(buf, verbose=verbose)
+        (self.token_name,
+         self.token_symbol,
+         self.token_info_version, buf) = TokenCreationTransaction.deserialize_token_info(
+            buf, verbose=verbose)
 
         return buf
 
@@ -187,7 +192,8 @@ class TokenCreationTransaction(Transaction):
         return ret
 
     @classmethod
-    def deserialize_token_info(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple[str, str, TokenInfoVersion, bytes]:
+    def deserialize_token_info(cls, buf: bytes, *, verbose: VerboseCallback = None) \
+            -> tuple[str, str, TokenInfoVersion, bytes]:
         """ Gets the token name and symbol from serialized format
         """
         (token_info_version,), buf = unpack('!B', buf)
