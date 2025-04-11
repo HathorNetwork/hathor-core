@@ -375,11 +375,11 @@ class Builder:
 
     def _get_nc_calls_sorter(self) -> NCSorterCallable:
         if self._nc_anti_mev:
-            from hathor.nanocontracts.sorter.timestamp_sorter import timestamp_nc_calls_sorter
-            return timestamp_nc_calls_sorter
-        else:
             from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
             return random_nc_calls_sorter
+        else:
+            from hathor.nanocontracts.sorter.timestamp_sorter import timestamp_nc_calls_sorter
+            return timestamp_nc_calls_sorter
 
     def _get_or_create_consensus(self) -> ConsensusAlgorithm:
         if self._consensus is None:
