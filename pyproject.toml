@@ -35,7 +35,7 @@ exclude = ["tests", "tests.*"]
 [tool.poetry.scripts]
 hathor-cli = 'hathor.cli.main:main'
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 flake8 = "~7.1.1"
 isort = {version = "~5.13.2", extras = ["colors"]}
 mypy = {version = "^1.10.1", markers = "implementation_name == 'cpython'"}
