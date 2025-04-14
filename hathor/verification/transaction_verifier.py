@@ -223,7 +223,7 @@ class TransactionVerifier:
 
         if fee - paid_fee > 0:
             raise InputOutputMismatch(
-                'HTR or deposit tokens is not enough to pay the fee. (amount={}, expected={}'.format(
+                'HTR or deposit tokens are not enough to pay the fee. (amount={}, expected={}'.format(
                     paid_fee,
                     fee,
                 ))
