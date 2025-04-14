@@ -102,7 +102,7 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Invalid payload.')
             return
 
-        if self._settings.ENABLE_PEER_WHITELIST and self._settings.CAPABILITY_WHITELIST not in data['capabilities']:
+        if self.enable_whitelist and self._settings.CAPABILITY_WHITELIST not in data['capabilities']:
             # If peer is not sending whitelist capability we must close the connection
             protocol.send_error_and_close_connection('Must have whitelist capability.')
             return

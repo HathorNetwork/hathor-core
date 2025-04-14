@@ -187,16 +187,16 @@ class ConnectionsManager:
         self.lc_connect.clock = self.reactor
         self.lc_connect_interval = 0.2  # seconds
 
+        # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
+        self.whitelist_only = whitelist_only
+
         # A timer to try to reconnect to the disconnect known peers.
-        if self._settings.ENABLE_PEER_WHITELIST:
+        if self.whitelist_only:
             self.wl_reconnect = LoopingCall(self.update_whitelist)
             self.wl_reconnect.clock = self.reactor
 
         # Pubsub object to publish events
         self.pubsub = pubsub
-
-        # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
-        self.whitelist_only = whitelist_only
 
         # Parameter to enable IPv6 connections
         self.enable_ipv6 = enable_ipv6
@@ -303,7 +303,7 @@ class ConnectionsManager:
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
 
-        if self._settings.ENABLE_PEER_WHITELIST:
+        if self.whitelist_only:
             self._start_whitelist_reconnect()
 
         for description in self.listen_address_descriptions:

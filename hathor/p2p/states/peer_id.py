@@ -172,7 +172,7 @@ class PeerIdState(BaseState):
             return False
 
         # when ENABLE_PEER_WHITELIST is set, we check if we're on sync-v1 to block non-whitelisted peers
-        if self._settings.ENABLE_PEER_WHITELIST:
+        if self.enable_whitelist:
             assert self.protocol.sync_version is not None
             if not peer_is_whitelisted:
                 if self.protocol.sync_version.is_v1():

@@ -182,7 +182,7 @@ class Builder:
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
 
-        self.whitelist_only: bool = False
+        self.whitelist_enabled: bool = False
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -394,7 +394,7 @@ class Builder:
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
-            whitelist_only=self.whitelist_only,
+            whitelist_only=self.whitelist_enabled,
             rng=self._rng,
             enable_ipv6=self._enable_ipv6,
             disable_ipv4=self._disable_ipv4,
@@ -675,7 +675,7 @@ class Builder:
 
     def enable_whitelist(self) -> 'Builder':
         self.check_if_can_modify()
-        self.whitelist_only = True
+        self.whitelist_enabled = True
         return self
 
     def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':

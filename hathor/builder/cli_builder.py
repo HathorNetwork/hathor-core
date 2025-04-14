@@ -259,7 +259,7 @@ class CliBuilder:
 
         # Whitelist toggling. If true, full_node will only follow its peers (if not empty).
         if self._args.x_whitelist_only:
-           print(bool(str(input("Use only whitelist nodes [y/n]?")).strip().lower[0] == "y"))
+           print(bool(str(input("Use only whitelist nodes [y/n]?")).strip().lower()[0] == "y"))
            self.whitelist_enabled = True
 
 
