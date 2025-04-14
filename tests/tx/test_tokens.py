@@ -7,6 +7,7 @@ from hathor.exception import InvalidNewTransaction
 from hathor.indexes.tokens_index import TokenUtxoInfo
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
+from hathor.transaction.fee import calculate_fee
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfoVersion
@@ -361,7 +362,8 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
         # pick the last tip tx output in HTR then subtracts the fee
-        change_value = tx.outputs[htr_change_utxo_index].value - tx2.calculate_fee(tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
         outputs.append(TxOutput(change_value, script, 0))
 
         #  It's the signature of the output of the tx item
@@ -405,7 +407,8 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
         # pick the last tip tx output in HTR then subtracts the fee
-        change_value = tx.outputs[htr_change_utxo_index].value - tx2.calculate_fee(tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
         outputs.append(TxOutput(change_value, script, 0))
 
         #  It's the signature of the output of the tx item

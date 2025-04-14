@@ -228,8 +228,8 @@ class VerificationService:
         self.verifiers.vertex.verify_parents(tx)
 
         _token_dict = token_dict or tx.get_complete_token_info()
-        self.verifiers.tx.verify_fee(_token_dict, tx)
-        self.verifiers.tx.verify_sum(_token_dict, tx)
+        self.verifiers.tx.verify_fee(_token_dict)
+        self.verifiers.tx.verify_sum(_token_dict)
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 

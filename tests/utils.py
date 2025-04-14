@@ -534,7 +534,7 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
     outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
 
     # fee
-    fee = 3  # replace this with a proper calculation
+    fee = settings.FEE_PER_OUTPUT
 
     # deposit output
     outputs.append(TxOutput(genesis_block.outputs[0].value - fee - (genesis_output_amount or 0), script, 0))
