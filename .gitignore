@@ -7,7 +7,7 @@ __pycache__/
 
 docs/_build/
 
-.coverage
+.coverage*
 cover/
 /coverage*
 
@@ -25,3 +25,8 @@ extras/docker/envvars
 
 # Nix
 .direnv/
+
+keys.json
+
+# Pycharm
+.idea
