@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import defaultdict
 from typing import Any, Type
 
 from typing_extensions import assert_never
@@ -21,7 +22,6 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import (
     NCAlreadyInitializedContractError,
-    NCFail,
     NCInvalidContext,
     NCInvalidContractId,
     NCInvalidInitializeMethodCall,
@@ -149,14 +149,33 @@ class Runner:
             enable_call_trace=self._enable_call_trace,
         )
 
-    def call_public_method(self,
-                           nanocontract_id: ContractId,
-                           method_name: str,
-                           ctx: Context,
-                           *args: Any,
-                           **kwargs: Any) -> Any:
+    def call_public_method(
+        self,
+        nanocontract_id: ContractId,
+        method_name: str,
+        ctx: Context,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         """Call a contract public method."""
+        try:
+            ret = self._unsafe_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
+        finally:
+            self._reset_all_change_trackers()
+        return ret
+
+    def _unsafe_call_public_method(
+        self,
+        nanocontract_id: ContractId,
+        method_name: str,
+        ctx: Context,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         from hathor.transaction.headers import NC_INITIALIZE_METHOD
+        assert self._call_info is None
+        self._call_info = self._build_call_info()
+
         if method_name == NC_INITIALIZE_METHOD:
             if self.has_contract_been_initialized(nanocontract_id):
                 raise NCAlreadyInitializedContractError(nanocontract_id)
@@ -164,16 +183,11 @@ class Runner:
             if not self.has_contract_been_initialized(nanocontract_id):
                 raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
-        assert self._call_info is None
-        self._call_info = self._build_call_info()
         self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
-        try:
-            ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
-        except NCFail:
-            self._reset_all_change_trackers()
-            raise
 
-        self._validate_balances()
+        ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
+
+        self._validate_balances(ctx)
         self._commit_all_changes_to_storage()
         return ret
 
@@ -220,7 +234,7 @@ class Runner:
         ret = self._internal_call_public_method(nanocontract_id, method_name, ctx, *args, **kwargs)
 
         # Execute the transfer on the caller side. The callee side is executed by the `_internal_call_public_method()`
-        # if it succeeds.
+        # call above, if it succeeds.
         previous_changes_tracker = last_call_record.changes_tracker
         for action in actions:
             match action.type:
@@ -243,12 +257,30 @@ class Runner:
         self._last_call_info = self._call_info
         self._call_info = None
 
-    def _validate_balances(self) -> None:
-        """Validate that all balances are non-negative."""
+    def _validate_balances(self, ctx: Context) -> None:
+        """Validate that all balances are non-negative and assert that the total diffs match the actions."""
         assert self._call_info is not None
+        # total_diffs sums the balance differences for all contracts called by this execution
+        total_diffs: defaultdict[TokenUid, int] = defaultdict(int)
+
         for change_trackers in self._call_info.change_trackers.values():
             assert len(change_trackers) == 1
-            change_trackers[0].validate_balances()
+            change_tracker = change_trackers[0]
+            change_tracker.validate_balances()
+
+            for (_, token_uid), balance in change_tracker.balance_diff.items():
+                total_diffs[token_uid] += balance
+
+        for token_uid, action in ctx.actions.items():
+            match action.type:
+                case NCActionType.DEPOSIT:
+                    total_diffs[token_uid] -= action.amount
+                case NCActionType.WITHDRAWAL:
+                    total_diffs[token_uid] += action.amount
+                case _:
+                    assert_never(action.type)
+
+        assert all(diff == 0 for diff in total_diffs.values()), 'change tracker diffs do not match actions'
 
     def _commit_all_changes_to_storage(self) -> None:
         """Commit all change trackers."""
@@ -263,7 +295,6 @@ class Runner:
             change_tracker.commit()
             nc_storage.lock()
             self.block_trie.update(nc_id, nc_storage.get_root_id())
-        self._reset_all_change_trackers()
 
     def commit(self) -> None:
         """Commit all storages and update block trie."""
