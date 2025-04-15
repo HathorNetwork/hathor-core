@@ -83,8 +83,7 @@ class _SingleCallRunner:
     def call_public_method(self, method_name: str, ctx: Context, *args: Any, **kwargs: Any) -> Any:
         """Call a contract public method. If it fails, no change is saved."""
 
-        if self._has_been_called:
-            raise RuntimeError('only one call to a public method per instance')
+        assert not self._has_been_called, 'only one call to a method per instance'
         self._has_been_called = True
 
         self.validate_context(ctx)
@@ -117,6 +116,8 @@ class _SingleCallRunner:
 
     def call_view_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a contract view method. It cannot change the state."""
+        assert not self._has_been_called, 'only one call to a method per instance'
+        self._has_been_called = True
         blueprint = self.blueprint_class(self.runner, self.changes_tracker)
         method = getattr(blueprint, method_name)
         if method is None:
@@ -127,6 +128,6 @@ class _SingleCallRunner:
         ret = self.metered_executor.call(method, *args, **kwargs)
 
         if not self.changes_tracker.is_empty():
-            raise NCPrivateMethodError('private methods cannot change the state')
+            raise NCPrivateMethodError('view methods cannot change the state')
 
         return ret

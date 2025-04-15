@@ -123,6 +123,8 @@ class NCChangesTracker(NCStorage):
         self.balance_diff[internal_key] = new
 
     def is_empty(self) -> bool:
+        # this method is only called in view contexts, so it's impossible for the balance to have changed.
+        assert not bool(self.balance_diff)
         return not bool(self.data)
 
     def get_root_id(self) -> bytes:

@@ -194,5 +194,4 @@ class NCStorage:
 
     def get_root_id(self) -> bytes:
         """Return the current merkle root id of the trie."""
-        assert self._trie.root.id is not None
         return self._trie.root.id
