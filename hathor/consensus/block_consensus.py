@@ -98,7 +98,7 @@ class BlockConsensusAlgorithm:
                 to_be_executed.append(cur)
                 cur = cur.get_block_parent()
         else:
-            # no reorg occured, so simply execute this new block.
+            # no reorg occurred, so simply execute this new block.
             to_be_executed = [block]
 
         for current in to_be_executed[::-1]:
@@ -186,8 +186,11 @@ class BlockConsensusAlgorithm:
             except NCFail:
                 self.log.exception('nc execution failed', tx=tx.hash.hex())
                 self.mark_as_nc_fail_execution(tx)
+            finally:
+                last_call_info = runner.get_last_call_info()
+                assert last_call_info is not None
 
-        # Save block state root id. If nothings happens, it should be the same as its block parent.
+        # Save block state root id. If nothing happens, it should be the same as its block parent.
         block_trie.commit()
         assert block_trie.root.id is not None
         meta.nc_block_root_id = block_trie.root.id
