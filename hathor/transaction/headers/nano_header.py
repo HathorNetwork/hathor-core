@@ -124,13 +124,15 @@ class NanoHeader(VertexBaseHeader):
             verbose('nc_args_bytes', nc_args_bytes)
 
         from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
+        nc_actions: list[NanoHeaderAction] = []
         if isinstance(tx, DeprecatedNanoContract):
-            nc_actions = cls._deprecated_get_actions(tx)
+            # Do nothing!
+            pass
+
         else:
             (nc_actions_len,), buf = unpack('!B', buf)
             if verbose:
                 verbose('nc_actions_len', nc_actions_len)
-            nc_actions = []
             for _ in range(nc_actions_len):
                 action, buf = cls._deserialize_action(buf)
                 nc_actions.append(action)
@@ -258,7 +260,11 @@ class NanoHeader(VertexBaseHeader):
 
     def get_actions(self) -> list[NCAction]:
         """Calculate the actions based on the differences between inputs and outputs."""
+        from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
         from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
+        if isinstance(self.tx, DeprecatedNanoContract):
+            if not self.nc_actions:
+                self.nc_actions = self._deprecated_get_actions(self.tx)
 
         ret = []
         for action in self.nc_actions:
