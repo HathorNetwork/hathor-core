@@ -59,6 +59,10 @@ def get_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
     return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
 
 
+def get_token_amount_from_htr(settings: HathorSettings, htr_amount: int) -> int:
+    return ceil(abs(1 / settings.TOKEN_DEPOSIT_PERCENTAGE) * htr_amount)
+
+
 def clean_token_string(string: str) -> str:
     """ Receives the token name/symbol and returns it after some cleanups.
         It sets to uppercase, removes double spaces and spaces at the beginning and end.

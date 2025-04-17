@@ -215,6 +215,10 @@ class TransactionVerifier:
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     def verify_fee(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        """
+        Verify and collect the fee by summing up all tokens with negative amount until the fee gets paid.
+        :raises InputOutputMismatch: if the amount of deposit tokens and HTR aren't enough to pay the fee.
+        """
         if not should_charge_fee(self._settings, token_dict):
             return
 

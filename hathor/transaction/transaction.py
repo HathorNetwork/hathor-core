@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
 from enum import IntEnum
 from struct import pack
@@ -52,9 +51,9 @@ class TokenInfo(NamedTuple):
     amount: int
     can_mint: bool
     can_melt: bool
-    version: TokenInfoVersion | None = TokenInfoVersion.DEPOSIT
-    inputs: list[TxInput] = []
-    outputs: list[TxOutput] = []
+    version: TokenInfoVersion | None
+    spent_outputs: list[TxOutput]
+    outputs: list[TxOutput]
 
 
 class RewardLockedInfo(NamedTuple):
@@ -281,12 +280,12 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
-        token_dict: dict[TokenUid, TokenInfo] = {}
 
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo(0, False, False, None)
+        token_dict: dict[TokenUid, TokenInfo] = {
+            self._settings.HATHOR_TOKEN_UID: TokenInfo(0, False, False, None, [], [])}
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
@@ -295,27 +294,20 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             token_info_version: TokenInfoVersion | None = None
 
-            if token_uid != self._settings.HATHOR_TOKEN_UID and self.storage is not None:
+            if token_uid != self._settings.HATHOR_TOKEN_UID:
+                assert self.storage is not None
                 from hathor.transaction.token_creation_tx import TokenCreationTransaction
                 token_creation_tx = self.storage.get_transaction(token_uid)
                 assert isinstance(token_creation_tx, TokenCreationTransaction)
                 token_info_version = token_creation_tx.token_info_version
 
-            (amount,
-             can_mint,
-             can_melt,
-             token_info_version,
-             inputs, outputs) = token_dict.get(
+            token_info = token_dict.get(
                  token_uid,
-                 TokenInfo(
-                     amount=0,
-                     can_mint=False,
-                     can_melt=False,
-                     version=token_info_version,
-                     inputs=[],
-                     outputs=[]
-                 )
-             )
+                 TokenInfo(amount=0, can_mint=False, can_melt=False, version=token_info_version,
+                           spent_outputs=[], outputs=[]))
+            amount = token_info.amount
+            can_mint = token_info.can_mint
+            can_melt = token_info.can_melt
             if spent_output.is_token_authority():
                 can_mint = can_mint or spent_output.can_mint_token()
                 can_melt = can_melt or spent_output.can_melt_token()
@@ -327,8 +319,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 can_mint,
                 can_melt,
                 token_info_version,
-                [*copy.deepcopy(inputs), tx_input],
-                outputs
+                [*token_info.spent_outputs, spent_output],
+                token_info.outputs
             )
 
         return token_dict
@@ -367,8 +359,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                         token_info.can_mint,
                         token_info.can_melt,
                         token_info.version,
-                        token_info.inputs,
-                        [*copy.deepcopy(token_info.outputs), tx_output]
+                        token_info.spent_outputs,
+                        [*token_info.outputs, tx_output]
                     )
 
     def is_double_spending(self) -> bool:

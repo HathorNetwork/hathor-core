@@ -480,7 +480,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
 
 
 def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
-                      token_name: str = 'TestCoin', token_symbol: str = 'TTC',
+                      token_name: str = 'TestFeeCoin', token_symbol: str = 'TFC',
                       genesis_output_amount: Optional[int] = None) -> TokenCreationTransaction:
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
