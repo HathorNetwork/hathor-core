@@ -760,14 +760,14 @@ test = ["coverage", "mock (>=4)", "pytest (>=7)", "pytest-cov", "pytest-mock (>=
 
 [[package]]
 name = "hathorlib"
-version = "0.6.1"
+version = "0.8.0"
 description = "Hathor Network base objects library"
 optional = false
 python-versions = "<4,>=3.9"
 groups = ["main"]
 files = [
-    {file = "hathorlib-0.6.1-py3-none-any.whl", hash = "sha256:d5c004379bf46e334161c9b9566afb5b52ab73f1ec9b037567b50ca20083531d"},
-    {file = "hathorlib-0.6.1.tar.gz", hash = "sha256:a0c6be59bfd759598d15d358f77b903c3feb3eecb3a6f8249dd593063aa49ac1"},
+    {file = "hathorlib-0.8.0-py3-none-any.whl", hash = "sha256:49323c17ecf8640bbf15b3b66f24dd6ebd12b2e0723e93767b5f59eca2993d09"},
+    {file = "hathorlib-0.8.0.tar.gz", hash = "sha256:02f7ee708de36046a709cdcc814e7ecf6eed4013b69ba00a4b6fce44e7d05a51"},
 ]
 
 [package.dependencies]
@@ -2606,4 +2606,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4"
-content-hash = "ad638c1c14e77b0ac673c6377a4b42e9713ec24e5df83a873bf0f872301d238f"
+content-hash = "8cb3c84738608bc7d1b4fa2c3c65780120e612b0782b2cadd3685ad73d6e9aad"
