@@ -38,7 +38,8 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
-from hathor.transaction.transaction import TokenInfo
+from hathor.transaction.fee import calculate_fee, collect_fee, should_charge_fee
+from hathor.transaction.transaction import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
 
@@ -213,9 +214,29 @@ class TransactionVerifier:
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
+    def verify_fee(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        """
+        Verify and collect the fee by summing up all tokens with negative amount until the fee gets paid.
+        :raises InputOutputMismatch: if the amount of deposit tokens and HTR aren't enough to pay the fee.
+        """
+        if not should_charge_fee(self._settings, token_dict):
+            return
+
+        fee = calculate_fee(self._settings, token_dict)
+        paid_fee = collect_fee(self._settings, fee, token_dict)
+
+        if fee - paid_fee > 0:
+            raise InputOutputMismatch(
+                'HTR or deposit tokens are not enough to pay the fee. (amount={}, expected={}'.format(
+                    paid_fee,
+                    fee,
+                ))
+
     def verify_sum(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
-        and outputs is not 0, make sure inputs have mint/melt authority.
+        """Verify that the sum of outputs is equal of the sum of inputs, for each token.
+        If sum of inputs and outputs is not 0, at least one of the following should be true:
+        - make sure outputs matches inputs.
+        - make sure inputs have mint/melt authority.
 
         token_dict sums up all tokens present in the tx and their properties (amount, can_mint, can_melt)
         amount = outputs - inputs, thus:
@@ -226,6 +247,7 @@ class TransactionVerifier:
         """
         withdraw = 0
         deposit = 0
+
         for token_uid, token_info in token_dict.items():
             if token_uid == self._settings.HATHOR_TOKEN_UID:
                 continue
@@ -238,17 +260,23 @@ class TransactionVerifier:
                 if not token_info.can_melt:
                     raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
                         token_info.amount, token_uid.hex()))
-                withdraw += get_withdraw_amount(self._settings, token_info.amount)
+
+                if token_info.version == TokenInfoVersion.DEPOSIT:
+                    withdraw += get_withdraw_amount(self._settings, token_info.amount)
             else:
                 # tokens have been minted
                 if not token_info.can_mint:
                     raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
                         (-1) * token_info.amount, token_uid.hex()))
-                deposit += get_deposit_amount(self._settings, token_info.amount)
+
+                if token_info.version == TokenInfoVersion.DEPOSIT:
+                    deposit += get_deposit_amount(self._settings, token_info.amount)
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
+
         htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
+
         if htr_info.amount != htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
                 htr_info.amount,
