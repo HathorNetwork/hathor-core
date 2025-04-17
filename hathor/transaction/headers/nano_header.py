@@ -76,9 +76,10 @@ class NanoHeader(VertexBaseHeader):
 
     @classmethod
     def _deserialize_action(cls, buf: bytes) -> tuple[NanoHeaderAction, bytes]:
+        from hathor.nanocontracts.types import NCActionType
         type_bytes, buf = buf[:1], buf[1:]
         action_type = NCActionType.from_bytes(type_bytes)
-        token_index, buf = unpack('!B', buf)
+        (token_index,), buf = unpack('!B', buf)
         amount, buf = bytes_to_output_value(buf)
         return NanoHeaderAction(
             type=action_type,

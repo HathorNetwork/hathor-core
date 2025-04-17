@@ -3,9 +3,11 @@ import pytest
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
+from hathor.nanocontracts.types import NCActionType
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import HeaderNotSupported
 from hathor.transaction.headers import NanoHeader
+from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
 
@@ -91,3 +93,34 @@ class VertexHeadersTest(unittest.TestCase):
             with pytest.raises(InvalidNewTransaction) as e:
                 manager.on_new_tx(vertex, fails_silently=False)
             assert isinstance(e.value.__cause__, HeaderNotSupported)
+
+    def test_nano_header_round_trip(self) -> None:
+        tx = Transaction()
+        header1 = NanoHeader(
+            tx=tx,
+            nc_id=b'1' * 32,
+            nc_method='some_method',
+            nc_args_bytes=b'some args',
+            nc_actions=[
+                NanoHeaderAction(
+                    type=NCActionType.DEPOSIT,
+                    token_index=0,
+                    amount=123,
+                ),
+            ],
+            nc_pubkey=b'some pubkey',
+            nc_signature=b'some signature',
+        )
+
+        header1_bytes = header1.serialize()
+        header2, buf = NanoHeader.deserialize(tx, header1_bytes)
+
+        assert len(buf) == 0
+        assert header1_bytes == header2.serialize()
+        assert header1.tx is header2.tx
+        assert header1.nc_id == header2.nc_id
+        assert header1.nc_method == header2.nc_method
+        assert header1.nc_args_bytes == header2.nc_args_bytes
+        assert header1.nc_actions == header2.nc_actions
+        assert header1.nc_pubkey == header2.nc_pubkey
+        assert header1.nc_signature == header2.nc_signature
