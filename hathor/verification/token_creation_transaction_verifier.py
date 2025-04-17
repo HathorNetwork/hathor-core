@@ -15,7 +15,7 @@
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
+from hathor.transaction.token_info import TokenInfo
 from hathor.transaction.util import clean_token_string
 from hathor.types import TokenUid
 

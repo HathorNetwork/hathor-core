@@ -10,7 +10,7 @@ from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMisma
 from hathor.transaction.fee import calculate_fee
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfoVersion
+from hathor.transaction.token_info import TokenInfoVersion
 from hathor.transaction.util import get_deposit_amount, get_token_amount_from_htr, get_withdraw_amount, int_to_bytes
 from tests import unittest
 from tests.utils import (

@@ -20,7 +20,8 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
-from hathor.transaction.transaction import TokenInfo, TokenInfoVersion, Transaction
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
+from hathor.transaction.transaction import Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.types import TokenUid
 

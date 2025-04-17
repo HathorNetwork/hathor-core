@@ -20,7 +20,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
+from hathor.transaction.token_info import TokenInfo
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid
 from hathor.verification.vertex_verifiers import VertexVerifiers

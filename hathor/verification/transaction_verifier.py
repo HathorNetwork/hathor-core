@@ -39,7 +39,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.fee import calculate_fee, collect_fee, should_charge_fee
-from hathor.transaction.transaction import TokenInfo, TokenInfoVersion
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from hathor.types import TokenUid, VertexId
 

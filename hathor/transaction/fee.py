@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from hathor.conf.settings import HathorSettings
-from hathor.transaction.transaction import TokenInfo, TokenInfoVersion
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import get_token_amount_from_htr, get_withdraw_amount
 from hathor.types import TokenUid
 

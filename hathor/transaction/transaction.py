@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import hashlib
-from enum import IntEnum
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
@@ -27,6 +26,7 @@ from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.static_metadata import TransactionStaticMetadata
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 
@@ -39,21 +39,6 @@ _FUNDS_FORMAT_STRING = '!BBBBB'
 
 # Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
 _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
-
-
-# used when (de)serializing token information
-class TokenInfoVersion(IntEnum):
-    DEPOSIT = 1
-    FEE = 2
-
-
-class TokenInfo(NamedTuple):
-    amount: int
-    can_mint: bool
-    can_melt: bool
-    version: TokenInfoVersion | None
-    spent_outputs: list[TxOutput]
-    outputs: list[TxOutput]
 
 
 class RewardLockedInfo(NamedTuple):
