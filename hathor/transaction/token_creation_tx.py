@@ -20,7 +20,8 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
-from hathor.transaction.transaction import TokenInfo, Transaction
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
+from hathor.transaction.transaction import Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.types import TokenUid
 
@@ -29,10 +30,6 @@ _FUNDS_FORMAT_STRING = '!BBBB'
 
 # Signal bist (B), version (B), inputs len (B), outputs len (B)
 _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
-
-# used when (de)serializing token information
-# version 1 expects only token name and symbol
-TOKEN_INFO_VERSION = 1
 
 
 class TokenCreationTransaction(Transaction):
@@ -51,6 +48,7 @@ class TokenCreationTransaction(Transaction):
         token_symbol: str = '',
         storage: Optional['TransactionStorage'] = None,
         settings: HathorSettings | None = None,
+        token_info_version: TokenInfoVersion = TokenInfoVersion.DEPOSIT,
     ) -> None:
         super().__init__(
             nonce=nonce,
@@ -65,6 +63,8 @@ class TokenCreationTransaction(Transaction):
             storage=storage,
             settings=settings,
         )
+        self.token_info_version = (
+            TokenInfoVersion.DEPOSIT if self._settings.FEE_FEATURE_FLAG is False else token_info_version)
         self.token_name = token_name
         self.token_symbol = token_symbol
         # for this special tx, its own hash is used as the created token uid. We're artificially
@@ -72,9 +72,11 @@ class TokenCreationTransaction(Transaction):
         self.tokens = [hash] if hash is not None else []
 
     def __str__(self) -> str:
-        return ('TokenCreationTransaction(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s,'
-                'token_name=%s, token_symbol=%s)' % (self.nonce, self.timestamp, int(self.version),
-                                                     self.weight, self.hash_hex, self.token_name, self.token_symbol))
+        return f'TokenCreationTransaction('\
+            f'nonce={self.nonce}, timestamp={self.timestamp}, version={int(self.version)}, ' \
+            f'weight={self.weight}, hash={self.hash_hex}, ' \
+            f'token_name={self.token_name}, token_symbol={self.token_symbol}, ' \
+            f'token_info_version={self.token_info_version})'
 
     def update_hash(self) -> None:
         """ When we update the hash, we also have to update the tokens uid list
@@ -109,7 +111,8 @@ class TokenCreationTransaction(Transaction):
             self.outputs.append(txout)
 
         # token name and symbol
-        self.token_name, self.token_symbol, buf = TokenCreationTransaction.deserialize_token_info(buf, verbose=verbose)
+        (self.token_name, self.token_symbol, self.token_info_version, buf) = (
+            TokenCreationTransaction.deserialize_token_info(self._settings, buf, verbose=verbose))
 
         return buf
 
@@ -180,21 +183,29 @@ class TokenCreationTransaction(Transaction):
         encoded_symbol = self.token_symbol.encode('utf-8')
 
         ret = b''
-        ret += int_to_bytes(TOKEN_INFO_VERSION, 1)
+        ret += int_to_bytes(self.token_info_version, 1)
         ret += int_to_bytes(len(encoded_name), 1)
         ret += encoded_name
         ret += int_to_bytes(len(encoded_symbol), 1)
         ret += encoded_symbol
+
         return ret
 
     @classmethod
-    def deserialize_token_info(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple[str, str, bytes]:
+    def deserialize_token_info(cls, settings: HathorSettings, buf: bytes, *, verbose: VerboseCallback = None) \
+            -> tuple[str, str, TokenInfoVersion, bytes]:
         """ Gets the token name and symbol from serialized format
         """
         (token_info_version,), buf = unpack('!B', buf)
         if verbose:
             verbose('token_info_version', token_info_version)
-        if token_info_version != TOKEN_INFO_VERSION:
+
+        try:
+            # blocks from deserialize with fee value when the feature is disabled
+            token_info_version = TokenInfoVersion(token_info_version)
+            if settings.FEE_FEATURE_FLAG is False and token_info_version != TokenInfoVersion.DEPOSIT:
+                raise ValueError()
+        except ValueError:
             raise ValueError('unknown token info version: {}'.format(token_info_version))
 
         (name_len,), buf = unpack('!B', buf)
@@ -214,7 +225,7 @@ class TokenCreationTransaction(Transaction):
         decoded_name = decode_string_utf8(name, 'Token name')
         decoded_symbol = decode_string_utf8(symbol, 'Token symbol')
 
-        return decoded_name, decoded_symbol, buf
+        return decoded_name, decoded_symbol, token_info_version, buf
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
@@ -235,7 +246,7 @@ class TokenCreationTransaction(Transaction):
         token_dict = super()._get_token_info_from_inputs()
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
-        token_dict[self.hash] = TokenInfo(0, True, True)
+        token_dict[self.hash] = TokenInfo(0, True, True, self.token_info_version, [], [])
 
         return token_dict
 
