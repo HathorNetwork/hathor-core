@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import hashlib
-from enum import IntEnum
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
@@ -27,6 +26,7 @@ from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.static_metadata import TransactionStaticMetadata
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 
@@ -39,21 +39,6 @@ _FUNDS_FORMAT_STRING = '!BBBBB'
 
 # Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
 _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
-
-
-# used when (de)serializing token information
-class TokenInfoVersion(IntEnum):
-    DEPOSIT = 1
-    FEE = 2
-
-
-class TokenInfo(NamedTuple):
-    amount: int
-    can_mint: bool
-    can_melt: bool
-    version: TokenInfoVersion | None
-    spent_outputs: list[TxOutput]
-    outputs: list[TxOutput]
 
 
 class RewardLockedInfo(NamedTuple):
@@ -296,10 +281,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
             if token_uid != self._settings.HATHOR_TOKEN_UID:
                 assert self.storage is not None
-                from hathor.transaction.token_creation_tx import TokenCreationTransaction
-                token_creation_tx = self.storage.get_transaction(token_uid)
-                assert isinstance(token_creation_tx, TokenCreationTransaction)
-                token_info_version = token_creation_tx.token_info_version
+                token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
+                if token_creation_tx is None:
+                    InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
+                else:
+                    token_info_version = token_creation_tx.token_info_version
 
             token_info = token_dict.get(
                  token_uid,

@@ -15,7 +15,7 @@
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import clean_token_string
 from hathor.types import TokenUid
 
@@ -49,8 +49,12 @@ class TokenCreationTransactionVerifier:
         if symbol_len == 0 or symbol_len > self._settings.MAX_LENGTH_TOKEN_SYMBOL:
             raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
 
-        # Can't create token with hathor name or symbol
+        # Can't create the token with hathor name or symbol
         if clean_token_string(tx.token_name) == clean_token_string(self._settings.HATHOR_TOKEN_NAME):
             raise TransactionDataError('Invalid token name ({})'.format(tx.token_name))
         if clean_token_string(tx.token_symbol) == clean_token_string(self._settings.HATHOR_TOKEN_SYMBOL):
             raise TransactionDataError('Invalid token symbol ({})'.format(tx.token_symbol))
+
+        # Can't create the token with a non activated version
+        if tx.token_info_version == TokenInfoVersion.FEE and self._settings.FEE_FEATURE_FLAG is False:
+            raise TransactionDataError('Invalid token info version ({})'.format(tx.token_info_version))

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from hathor.conf.settings import HathorSettings
-from hathor.transaction.transaction import TokenInfo, TokenInfoVersion
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import get_token_amount_from_htr, get_withdraw_amount
 from hathor.types import TokenUid
 
@@ -21,7 +21,7 @@ from hathor.types import TokenUid
 def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo]) -> int:
     """Calculate the fee for this transaction.
 
-    The fee is calculated based on fee tokens outputs. It sums up all tokens with FEE version.
+    The fee is calculated based on fee tokens outputs. It sums up all tokens with TokenInfoVersion.FEE value.
 
     :return: The total fee in HTR
     :rtype: int
@@ -32,35 +32,26 @@ def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo
         if token_uid is settings.HATHOR_TOKEN_UID or token_info.version is TokenInfoVersion.DEPOSIT:
             continue
 
-        chargeable_outputs = [o for o in token_info.outputs if not o.is_token_authority()]
-        chargeable_spent_outputs = [o for o in token_info.outputs if not o.is_token_authority()]
+        chargeable_outputs = [output for output in token_info.outputs if not output.is_token_authority()]
+        chargeable_spent_outputs = [output for output in token_info.spent_outputs if not output.is_token_authority()]
 
-        # is melting fee tokens without an output
+        # melting fee-based token without producing outputs
         if len(chargeable_spent_outputs) > 0 and len(chargeable_outputs) == 0:
-            fee += 1 * settings.FEE_PER_OUTPUT
+            fee += settings.FEE_PER_OUTPUT
 
         fee += len(chargeable_outputs) * settings.FEE_PER_OUTPUT
     return fee
 
 
-def should_charge_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo]) -> bool:
-    """Check if this transaction should charge a fee.
-
-    A transaction should charge a fee if it has at least one token with FEE version
+def should_charge_fee(settings: HathorSettings) -> bool:
+    """Check if this transaction should charge a fee based on the FEE_FEATURE_FLAG
     """
-    if settings.FEE_FEATURE_FLAG is False:
-        return False
-
-    # Check if any token in the transaction has FEE version
-
-    fee_tokens = [(uid, info) for uid, info in token_dict.items() if info.version is TokenInfoVersion.FEE]
-
-    return len(fee_tokens) > 0
+    return settings.FEE_FEATURE_FLAG
 
 
 def collect_fee(settings: HathorSettings, fee: int, token_dict: dict[TokenUid, TokenInfo]) -> int:
     """
-    Check each the tokens amount and collect the fee that should be paid.
+    Check each token amount and collect the fee that should be paid.
     It changes the token_dict in place with the new amount from the affected tokens.
     """
     assert fee >= 0
@@ -80,7 +71,7 @@ def collect_fee(settings: HathorSettings, fee: int, token_dict: dict[TokenUid, T
             value_to_pay = 0
             token_amount = token_info.amount
             if token_uid == settings.HATHOR_TOKEN_UID:
-                # the amount is a negative value, so we sum the paid fee in order to reduce the available value
+                # the amount is a negative value, so we sum the paid fee to reduce the available value
                 # limit the amount to the fee
                 value_to_pay = min(abs(token_amount), remaining_fee)
                 token_amount += value_to_pay

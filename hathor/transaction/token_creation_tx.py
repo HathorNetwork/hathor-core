@@ -20,7 +20,8 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
-from hathor.transaction.transaction import TokenInfo, TokenInfoVersion, Transaction
+from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
+from hathor.transaction.transaction import Transaction
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.types import TokenUid
 
@@ -62,8 +63,7 @@ class TokenCreationTransaction(Transaction):
             storage=storage,
             settings=settings,
         )
-        self.token_info_version = (
-            TokenInfoVersion.DEPOSIT if self._settings.FEE_FEATURE_FLAG is False else token_info_version)
+        self.token_info_version = token_info_version
         self.token_name = token_name
         self.token_symbol = token_symbol
         # for this special tx, its own hash is used as the created token uid. We're artificially
@@ -71,11 +71,17 @@ class TokenCreationTransaction(Transaction):
         self.tokens = [hash] if hash is not None else []
 
     def __str__(self) -> str:
-        return f'TokenCreationTransaction('\
-            f'nonce={self.nonce}, timestamp={self.timestamp}, version={int(self.version)}, ' \
-            f'weight={self.weight}, hash={self.hash_hex}, ' \
-            f'token_name={self.token_name}, token_symbol={self.token_symbol}, ' \
+        return ', '.join([
+            f'TokenCreationTransaction(',
+            f'nonce={self.nonce}',
+            f'timestamp={self.timestamp}',
+            f'version={int(self.version)}',
+            f'weight={self.weight}',
+            f'hash={self.hash_hex}'
+            f'token_name={self.token_name}',
+            f'token_symbol={self.token_symbol}',
             f'token_info_version={self.token_info_version})'
+        ])
 
     def update_hash(self) -> None:
         """ When we update the hash, we also have to update the tokens uid list
@@ -89,10 +95,10 @@ class TokenCreationTransaction(Transaction):
         :param buf: Bytes of a serialized transaction
         :type buf: bytes
 
-        :return: A buffer containing the remaining struct bytes
+        :return: A buffer containing the remaining struct
         :rtype: bytes
 
-        :raises ValueError: when the sequence of bytes is incorect
+        :raises ValueError: when the sequence of bytes is incorrect
         """
         (self.signal_bits, self.version, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
         if verbose:
@@ -200,10 +206,7 @@ class TokenCreationTransaction(Transaction):
             verbose('token_info_version', token_info_version)
 
         try:
-            # blocks from deserialize with fee value when the feature is disabled
             token_info_version = TokenInfoVersion(token_info_version)
-            if settings.FEE_FEATURE_FLAG is False and token_info_version != TokenInfoVersion.DEPOSIT:
-                raise ValueError()
         except ValueError:
             raise ValueError('unknown token info version: {}'.format(token_info_version))
 

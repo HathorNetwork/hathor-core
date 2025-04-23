@@ -24,7 +24,7 @@ from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_double
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfoVersion
+from hathor.transaction.token_info import TokenInfoVersion
 from hathor.transaction.util import get_deposit_amount
 from hathor.util import Random
 
