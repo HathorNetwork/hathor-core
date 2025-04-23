@@ -35,9 +35,9 @@ def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo
         chargeable_outputs = [output for output in token_info.outputs if not output.is_token_authority()]
         chargeable_spent_outputs = [output for output in token_info.spent_outputs if not output.is_token_authority()]
 
-        # is melting fee tokens without an output
+        # melting fee-based token without producing outputs
         if len(chargeable_spent_outputs) > 0 and len(chargeable_outputs) == 0:
-            fee += 1 * settings.FEE_PER_OUTPUT
+            fee += settings.FEE_PER_OUTPUT
 
         fee += len(chargeable_outputs) * settings.FEE_PER_OUTPUT
     return fee

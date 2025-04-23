@@ -71,11 +71,17 @@ class TokenCreationTransaction(Transaction):
         self.tokens = [hash] if hash is not None else []
 
     def __str__(self) -> str:
-        return f'TokenCreationTransaction('\
-            f'nonce={self.nonce}, timestamp={self.timestamp}, version={int(self.version)}, ' \
-            f'weight={self.weight}, hash={self.hash_hex}, ' \
-            f'token_name={self.token_name}, token_symbol={self.token_symbol}, ' \
+        return ', '.join([
+            f'TokenCreationTransaction(',
+            f'nonce={self.nonce}',
+            f'timestamp={self.timestamp}',
+            f'version={int(self.version)}',
+            f'weight={self.weight}',
+            f'hash={self.hash_hex}'
+            f'token_name={self.token_name}',
+            f'token_symbol={self.token_symbol}',
             f'token_info_version={self.token_info_version})'
+        ])
 
     def update_hash(self) -> None:
         """ When we update the hash, we also have to update the tokens uid list
