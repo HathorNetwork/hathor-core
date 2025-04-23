@@ -198,6 +198,8 @@ class NCNanoContractTestCase(unittest.TestCase):
         nc_nano_header = nc.get_nano_header()
         nc_id = nc_nano_header.get_nanocontract_id()
         runner.register_contract(nc_nano_header.get_blueprint_class(), nc_id)
+        nc_metadata = nc.get_metadata()
+        nc_metadata.first_block = self.peer.tx_storage.get_best_block().hash
 
         nano_header = nc.get_nano_header()
         nano_header.execute(runner)
