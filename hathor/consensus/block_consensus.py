@@ -14,9 +14,10 @@
 
 import hashlib
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Iterable, Optional, assert_never, cast
+from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction, Block, Transaction

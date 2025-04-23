@@ -13,7 +13,9 @@
 #  limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, TypeAlias, TypeVar
+
+from typing_extensions import Self
 
 from hathor.nanocontracts.fields import Field
 from hathor.nanocontracts.storage import NCStorage

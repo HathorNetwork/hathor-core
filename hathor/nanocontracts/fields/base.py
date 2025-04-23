@@ -13,7 +13,9 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Any, Self, Type
+from typing import Any, Type
+
+from typing_extensions import Self
 
 
 class Field(ABC):
