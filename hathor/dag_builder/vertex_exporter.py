@@ -14,7 +14,9 @@
 
 import hashlib
 from types import ModuleType
-from typing import Iterator, assert_never
+from typing import Iterator
+
+from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address

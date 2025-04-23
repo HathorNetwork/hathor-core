@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, Self
+from typing import Any, Iterable, Iterator
 
-from typing_extensions import override
+from typing_extensions import Self, override
 
 from hathor.nanocontracts.fields import Field
 from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
