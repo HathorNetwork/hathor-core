@@ -219,7 +219,7 @@ class TransactionVerifier:
         Verify and collect the fee by summing up all tokens with negative amount until the fee gets paid.
         :raises InputOutputMismatch: if the amount of deposit tokens and HTR aren't enough to pay the fee.
         """
-        if not should_charge_fee(self._settings, token_dict):
+        if not should_charge_fee(self._settings):
             return
 
         fee = calculate_fee(self._settings, token_dict)

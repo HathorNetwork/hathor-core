@@ -43,24 +43,15 @@ def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo
     return fee
 
 
-def should_charge_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo]) -> bool:
-    """Check if this transaction should charge a fee.
-
-    A transaction should charge a fee if it has at least one token with FEE version
+def should_charge_fee(settings: HathorSettings) -> bool:
+    """Check if this transaction should charge a fee based on the FEE_FEATURE_FLAG
     """
-    if settings.FEE_FEATURE_FLAG is False:
-        return False
-
-    # Check if any token in the transaction has FEE version
-    for token_uid, token_info in token_dict.items():
-        if token_info.version is TokenInfoVersion.FEE:
-            return True
-    return False
+    return settings.FEE_FEATURE_FLAG
 
 
 def collect_fee(settings: HathorSettings, fee: int, token_dict: dict[TokenUid, TokenInfo]) -> int:
     """
-    Check each the tokens amount and collect the fee that should be paid.
+    Check each token amount and collect the fee that should be paid.
     It changes the token_dict in place with the new amount from the affected tokens.
     """
     assert fee >= 0
@@ -80,7 +71,7 @@ def collect_fee(settings: HathorSettings, fee: int, token_dict: dict[TokenUid, T
             value_to_pay = 0
             token_amount = token_info.amount
             if token_uid == settings.HATHOR_TOKEN_UID:
-                # the amount is a negative value, so we sum the paid fee in order to reduce the available value
+                # the amount is a negative value, so we sum the paid fee to reduce the available value
                 # limit the amount to the fee
                 value_to_pay = min(abs(token_amount), remaining_fee)
                 token_amount += value_to_pay

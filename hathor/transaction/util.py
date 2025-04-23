@@ -79,7 +79,7 @@ def get_token_amount_from_htr(settings: HathorSettings, htr_amount: int) -> int:
         If the computed token amount is not an integer (this should not occur
         when TOKEN_DEPOSIT_PERCENTAGE is a positive divisor).
     """
-    token_amount = ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE / htr_amount))
+    token_amount = ceil(abs(htr_amount / settings.TOKEN_DEPOSIT_PERCENTAGE))
     assert isinstance(token_amount, int)
     return token_amount
 

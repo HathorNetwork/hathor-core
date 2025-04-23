@@ -46,7 +46,6 @@ from hathor.transaction.storage.migrations import (
     include_funds_for_first_block,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
-from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
@@ -54,6 +53,7 @@ from hathor.verification.transaction_verifier import TransactionVerifier
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
 cpu = get_cpu_profiler()
 
@@ -548,11 +548,10 @@ class TransactionStorage(ABC):
 
         :param hash_bytes: Hash in bytes that will be checked.
         """
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+
         tx = self.get_transaction(hash_bytes)
-        if isinstance(tx, TokenCreationTransaction):
-            return tx
-        else:
-            return None
+        return tx if isinstance(tx, TokenCreationTransaction) else None
 
     def get_block_by_height(self, height: int) -> Optional[Block]:
         """Return a block in the best blockchain from the height index. This is fast."""
