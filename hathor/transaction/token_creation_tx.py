@@ -63,8 +63,7 @@ class TokenCreationTransaction(Transaction):
             storage=storage,
             settings=settings,
         )
-        self.token_info_version = (
-            TokenInfoVersion.DEPOSIT if self._settings.FEE_FEATURE_FLAG is False else token_info_version)
+        self.token_info_version = token_info_version
         self.token_name = token_name
         self.token_symbol = token_symbol
         # for this special tx, its own hash is used as the created token uid. We're artificially
@@ -90,10 +89,10 @@ class TokenCreationTransaction(Transaction):
         :param buf: Bytes of a serialized transaction
         :type buf: bytes
 
-        :return: A buffer containing the remaining struct bytes
+        :return: A buffer containing the remaining struct
         :rtype: bytes
 
-        :raises ValueError: when the sequence of bytes is incorect
+        :raises ValueError: when the sequence of bytes is incorrect
         """
         (self.signal_bits, self.version, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
         if verbose:
@@ -201,10 +200,7 @@ class TokenCreationTransaction(Transaction):
             verbose('token_info_version', token_info_version)
 
         try:
-            # blocks from deserialize with fee value when the feature is disabled
             token_info_version = TokenInfoVersion(token_info_version)
-            if settings.FEE_FEATURE_FLAG is False and token_info_version != TokenInfoVersion.DEPOSIT:
-                raise ValueError()
         except ValueError:
             raise ValueError('unknown token info version: {}'.format(token_info_version))
 

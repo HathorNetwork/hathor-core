@@ -21,7 +21,7 @@ from hathor.types import TokenUid
 def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo]) -> int:
     """Calculate the fee for this transaction.
 
-    The fee is calculated based on fee tokens outputs. It sums up all tokens with FEE version.
+    The fee is calculated based on fee tokens outputs. It sums up all tokens with TokenInfoVersion.FEE value.
 
     :return: The total fee in HTR
     :rtype: int
@@ -32,8 +32,8 @@ def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo
         if token_uid is settings.HATHOR_TOKEN_UID or token_info.version is TokenInfoVersion.DEPOSIT:
             continue
 
-        chargeable_outputs = [o for o in token_info.outputs if not o.is_token_authority()]
-        chargeable_spent_outputs = [o for o in token_info.outputs if not o.is_token_authority()]
+        chargeable_outputs = [output for output in token_info.outputs if not output.is_token_authority()]
+        chargeable_spent_outputs = [output for output in token_info.spent_outputs if not output.is_token_authority()]
 
         # is melting fee tokens without an output
         if len(chargeable_spent_outputs) > 0 and len(chargeable_outputs) == 0:
@@ -52,10 +52,10 @@ def should_charge_fee(settings: HathorSettings, token_dict: dict[TokenUid, Token
         return False
 
     # Check if any token in the transaction has FEE version
-
-    fee_tokens = [(uid, info) for uid, info in token_dict.items() if info.version is TokenInfoVersion.FEE]
-
-    return len(fee_tokens) > 0
+    for token_uid, token_info in token_dict.items():
+        if token_info.version is TokenInfoVersion.FEE:
+            return True
+    return False
 
 
 def collect_fee(settings: HathorSettings, fee: int, token_dict: dict[TokenUid, TokenInfo]) -> int:

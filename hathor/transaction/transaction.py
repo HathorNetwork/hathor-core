@@ -281,10 +281,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
             if token_uid != self._settings.HATHOR_TOKEN_UID:
                 assert self.storage is not None
-                from hathor.transaction.token_creation_tx import TokenCreationTransaction
-                token_creation_tx = self.storage.get_transaction(token_uid)
-                assert isinstance(token_creation_tx, TokenCreationTransaction)
-                token_info_version = token_creation_tx.token_info_version
+                token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
+                if token_creation_tx is None:
+                    InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
+                else:
+                    token_info_version = token_creation_tx.token_info_version
 
             token_info = token_dict.get(
                  token_uid,
