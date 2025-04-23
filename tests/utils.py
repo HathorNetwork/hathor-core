@@ -25,7 +25,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxO
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfoVersion
-from hathor.transaction.util import get_deposit_amount
+from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
 
 settings = HathorSettings()
@@ -400,7 +400,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     address = decode_address(address_b58)
     script = P2PKH.create_output_script(address)
 
-    deposit_amount = get_deposit_amount(manager._settings, mint_amount)
+    deposit_amount = get_deposit_token_deposit_amount(manager._settings, mint_amount)
     if nft_data:
         # NFT creation needs 0.01 HTR of fee
         deposit_amount += 1

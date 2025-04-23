@@ -51,15 +51,15 @@ def unpack_len(n: int, buf: bytes) -> tuple[bytes, bytes]:
     return buf[:n], buf[n:]
 
 
-def get_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
+def get_deposit_token_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
     return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
 
 
-def get_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
+def get_deposit_token_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
     return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
 
 
-def get_token_amount_from_htr(settings: HathorSettings, htr_amount: int) -> int:
+def get_deposit_token_amount_from_htr(settings: HathorSettings, htr_amount: int) -> int:
     """
     Calculate how many tokens correspond to a given HTR amount based on the
     configured TOKEN_DEPOSIT_PERCENTAGE.

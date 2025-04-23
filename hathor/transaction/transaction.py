@@ -269,8 +269,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict: dict[TokenUid, TokenInfo] = {
-            self._settings.HATHOR_TOKEN_UID: TokenInfo(0, False, False, None, [], [])}
+        token_dict: dict[TokenUid, TokenInfo] = {self._settings.HATHOR_TOKEN_UID: TokenInfo.create_empty()}
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
@@ -289,8 +288,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
             token_info = token_dict.get(
                  token_uid,
-                 TokenInfo(amount=0, can_mint=False, can_melt=False, version=token_info_version,
-                           spent_outputs=[], outputs=[]))
+                 TokenInfo.create_empty(version=token_info_version))
             amount = token_info.amount
             can_mint = token_info.can_mint
             can_melt = token_info.can_melt

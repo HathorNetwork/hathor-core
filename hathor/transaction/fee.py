@@ -14,7 +14,7 @@
 
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
-from hathor.transaction.util import get_token_amount_from_htr, get_withdraw_amount
+from hathor.transaction.util import get_deposit_token_amount_from_htr, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid
 
 
@@ -76,9 +76,9 @@ def collect_fee(settings: HathorSettings, fee: int, token_dict: dict[TokenUid, T
                 value_to_pay = min(abs(token_amount), remaining_fee)
                 token_amount += value_to_pay
             elif token_info.version == TokenInfoVersion.DEPOSIT:
-                token_htr_value = get_withdraw_amount(settings, token_amount)
+                token_htr_value = get_deposit_token_withdraw_amount(settings, token_amount)
                 value_to_pay = min(token_htr_value, remaining_fee)
-                token_amount += get_token_amount_from_htr(settings, value_to_pay)
+                token_amount += get_deposit_token_amount_from_htr(settings, value_to_pay)
 
             token_dict[token_uid] = TokenInfo(token_amount, token_info.can_mint, token_info.can_melt,
                                               token_info.version, token_info.spent_outputs, token_info.outputs)

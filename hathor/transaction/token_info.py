@@ -19,3 +19,14 @@ class TokenInfo(NamedTuple):
     version: TokenInfoVersion | None
     spent_outputs: list[TxOutput]
     outputs: list[TxOutput]
+
+    @classmethod
+    def create_empty(cls, version: TokenInfoVersion | None = None) -> TokenInfo:
+        return TokenInfo(
+            amount=0,
+            can_mint=False,
+            can_melt=False,
+            version=version,
+            spent_outputs=[],
+            outputs=[],
+        )

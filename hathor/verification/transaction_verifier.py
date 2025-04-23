@@ -40,7 +40,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.fee import calculate_fee, collect_fee, should_charge_fee
 from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
-from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
+from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
@@ -262,7 +262,7 @@ class TransactionVerifier:
                         token_info.amount, token_uid.hex()))
 
                 if token_info.version == TokenInfoVersion.DEPOSIT:
-                    withdraw += get_withdraw_amount(self._settings, token_info.amount)
+                    withdraw += get_deposit_token_withdraw_amount(self._settings, token_info.amount)
             else:
                 # tokens have been minted
                 if not token_info.can_mint:
@@ -270,7 +270,7 @@ class TransactionVerifier:
                         (-1) * token_info.amount, token_uid.hex()))
 
                 if token_info.version == TokenInfoVersion.DEPOSIT:
-                    deposit += get_deposit_amount(self._settings, token_info.amount)
+                    deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit

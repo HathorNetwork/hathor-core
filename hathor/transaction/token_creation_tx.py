@@ -72,12 +72,12 @@ class TokenCreationTransaction(Transaction):
 
     def __str__(self) -> str:
         return ', '.join([
-            f'TokenCreationTransaction(',
+            'TokenCreationTransaction(',
             f'nonce={self.nonce}',
             f'timestamp={self.timestamp}',
             f'version={int(self.version)}',
             f'weight={self.weight}',
-            f'hash={self.hash_hex}'
+            f'hash={self.hash_hex}',
             f'token_name={self.token_name}',
             f'token_symbol={self.token_symbol}',
             f'token_info_version={self.token_info_version})'
