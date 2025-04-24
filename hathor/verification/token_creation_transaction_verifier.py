@@ -14,6 +14,7 @@
 
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
+from hathor.transaction.fee import should_charge_fee
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import clean_token_string
@@ -56,5 +57,5 @@ class TokenCreationTransactionVerifier:
             raise TransactionDataError('Invalid token symbol ({})'.format(tx.token_symbol))
 
         # Can't create the token with a non activated version
-        if tx.token_info_version == TokenInfoVersion.FEE and self._settings.FEE_FEATURE_FLAG is False:
+        if tx.token_info_version == TokenInfoVersion.FEE and not should_charge_fee(self._settings):
             raise TransactionDataError('Invalid token info version ({})'.format(tx.token_info_version))

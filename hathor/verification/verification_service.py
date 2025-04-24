@@ -294,5 +294,4 @@ class VerificationService:
         self.verifiers.vertex.verify_sigops_output(tx)
 
     def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
-        self.verifiers.token_creation_tx.verify_token_info(tx)
         self._verify_without_storage_tx(tx)

@@ -1,10 +1,12 @@
+from unittest.mock import patch
+
 import pytest
 
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes.tokens_index import TokenUtxoInfo
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.exceptions import InputOutputMismatch
+from hathor.transaction.exceptions import InputOutputMismatch, TransactionDataError
 from hathor.transaction.fee import calculate_fee
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.util import get_deposit_token_amount_from_htr, get_deposit_token_withdraw_amount
@@ -459,17 +461,14 @@ class TokenTest(unittest.TestCase):
         self.sign_inputs(tx2)
         self.resolve_and_propagate(tx2)
 
-    # def test_fee_token_activation(self):
-    #     _manager = self.create_peer('testnet2', unlock_wallet=True, wallet_index=True)
-    #     add_blocks_unlock_reward(_manager)
-    #     with patch.object(
-    #         type(_manager._settings),
-    #         "FEE_FEATURE_FLAG",
-    #         False,
-    #     ):
-    #         with pytest.raises(InvalidNewTransaction) as e:
-    #             create_fee_tokens(_manager, self.address_b58)
-    #         assert isinstance(e.value.__cause__, TransactionDataError)
+    def test_fee_token_activation(self):
+        with patch(
+            'hathor.verification.token_creation_transaction_verifier.should_charge_fee',
+            return_value=False
+        ):
+            with pytest.raises(InvalidNewTransaction) as e:
+                create_fee_tokens(self.manager, self.address_b58)
+            assert isinstance(e.value.__cause__, TransactionDataError)
 
     def check_tokens_index(self, token_uid: bytes, mint_tx_hash: bytes, mint_output: int, melt_tx_hash: bytes,
                            melt_output: int, token_amount: int) -> None:
