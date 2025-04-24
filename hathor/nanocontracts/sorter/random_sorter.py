@@ -13,7 +13,9 @@
 # limitations under the License.
 
 import hashlib
-from typing import NamedTuple, Self
+from typing import NamedTuple
+
+from typing_extensions import Self
 
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.transaction import Block, Transaction

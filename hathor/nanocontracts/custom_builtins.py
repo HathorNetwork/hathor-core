@@ -27,11 +27,10 @@ from typing import (
     Sequence,
     SupportsIndex,
     TypeVar,
-    TypeVarTuple,
     final,
 )
 
-from typing_extensions import Self
+from typing_extensions import Self, TypeVarTuple
 
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
 from hathor.nanocontracts.on_chain_blueprint import ALLOWED_IMPORTS, BLUEPRINT_CLASS_NAME
@@ -609,12 +608,15 @@ EXEC_BUILTINS: dict[str, Any] = {
     # (iter1: Iterable[T1], ..., iterN: Iterable[TN], /, *, strict: bool = ...) -> zip[tuple[T1, ..., TN]]
     'zip': builtins.zip,
 
-    # expose all exception types:
+    # these exceptions aren't available in Python 3.10, so don't expose them
+    # 'BaseExceptionGroup': builtins.BaseExceptionGroup,
+    # 'ExceptionGroup': builtins.ExceptionGroup,
+
+    # expose all other exception types:
     'ArithmeticError': builtins.ArithmeticError,
     'AssertionError': builtins.AssertionError,
     'AttributeError': builtins.AttributeError,
     'BaseException': builtins.BaseException,
-    'BaseExceptionGroup': builtins.BaseExceptionGroup,
     'BlockingIOError': builtins.BlockingIOError,
     'BrokenPipeError': builtins.BrokenPipeError,
     'BufferError': builtins.BufferError,
@@ -626,7 +628,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'EOFError': builtins.EOFError,
     'EnvironmentError': builtins.EnvironmentError,
     'Exception': builtins.Exception,
-    'ExceptionGroup': builtins.ExceptionGroup,
     'FileExistsError': builtins.FileExistsError,
     'FileNotFoundError': builtins.FileNotFoundError,
     'FloatingPointError': builtins.FloatingPointError,
