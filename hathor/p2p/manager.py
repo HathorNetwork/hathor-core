@@ -142,39 +142,49 @@ class Slot:
             Removes from given instance the protocol passed. Returns protocol from queue
             when disconnection leads to free space in slot.
         """
-        print("YEP REMOVE")
+        print("Remove Connection Function called.")
         self.connection_slot.discard(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             # If protocol READY, the peer was verified. We take its EP's to the queue.
             dequeued_entrypoint = None
-            print("YEP ENTRYPOINS")
+            print("PROTOCOL IS CHECK_ENTRYPOINTS")
             if protocol.connection_state == HathorProtocol.ConnectionState.READY:
-                print("YEP READY")
+                print("PROTOCOL IS READY when disconnected")
 
-                # If protocol not in set, it is a new protocol with new ep's to check.
-                # If in set, it is a connection from a previously dequeued entrypoint.
                 if protocol.entrypoint:
-                    print("YEP there is EP")
+                    print("Protocol has ENTRYPOINT")
 
+                # If protocol e.p. not in set, it is a new protocol with new e.p.'s to check.
+                # If in set, it is a connection from a previously dequeued entrypoint.
                     if protocol.entrypoint.addr not in self.entrypoint_set:
                         entrypoints = protocol.peer.info.entrypoints
+                        print("All entrypoints of the protocol:")
+                        print(entrypoints)
                         # Unpack the entrypoints and put them in the queue and the set.
                         for each_entrypoint in entrypoints:
                             # Add to the queue and sets (don't add repeats)
+                            if len(self.entrypoint_queue_slot) == self.queue_size_entrypoints:
+                                print("Limit achieved for QUEEEEUUEE")
+                                break
                             if each_entrypoint not in self.entrypoint_queue_slot:
                                 self.entrypoint_queue_slot.appendleft(each_entrypoint)
                             if each_entrypoint not in self.entrypoint_set:
                                 self.entrypoint_set.add(each_entrypoint)
+                            print(f"Queued Entrypoints: {each_entrypoint}")
+                        print("-----")
+
 
             # If protocol not READY, it was a timeout. Peer not trustworthy - do not get its ep's.
             if protocol.entrypoint:
                 if protocol.entrypoint.addr in self.entrypoint_set:
                     self.entrypoint_set.discard(protocol.entrypoint.addr)
+                    # Eventually: Add if not ready, unverified. Or even, to those ready, verify.
             # Take one from the queue and turn it into a connection.
             if self.entrypoint_queue_slot:
                 dequeued_entrypoint = self.entrypoint_queue_slot.pop()
-
+            print("Entrypoint Dequeued:")
+            print(dequeued_entrypoint)
             return dequeued_entrypoint
 
         return None
@@ -557,7 +567,7 @@ class ConnectionsManager:
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
         # assert False
-        print("ON PEER CONNECTED CALLED")
+        print(f"ON PEER CONNECTED CALLED: {protocol.entrypoint.addr if protocol.entrypoint else None}")
         # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
@@ -571,7 +581,16 @@ class ConnectionsManager:
 
         # Next block sends the connection to the appropriate slot.
         if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
+            print("OUTGOING")
+            print("OUTGOING")
+            print("OUTGOING")
+            print("OUTGOING")
             if protocol.entrypoint in self.discovered_entrypoints:
+                print("change to DISCOVERED")
+                print("change to DISCOVERED")
+                print("change to DISCOVERED")
+                print("change to DISCOVERED")
+
                 protocol.connection_type = HathorProtocol.ConnectionType.DISCOVERED
             else:
                 protocol_connected = self.outgoing_slot.add_connection(protocol)
@@ -653,6 +672,7 @@ class ConnectionsManager:
 
         # Connection Ready. If it is a check_entrypoint conn, we must discard it from slot.
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+            print(f"CHECK ENTRYPOINTS CLASS ACHIEVED READY --> Peer {protocol.entrypoint.addr} is TRUSTWORTHY")
             protocol.disconnect(reason="READY connection for check_entrypoint slot.")
 
     def relay_peer_to_ready_connections(self, peer: PublicPeer) -> None:
@@ -665,6 +685,7 @@ class ConnectionsManager:
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
+        print(f"DISCONNECT CALLED: {protocol.entrypoint.addr if protocol.entrypoint else None}")
 
         # Discard handles case when not in connections.
         self.connections.discard(protocol)
@@ -674,16 +695,19 @@ class ConnectionsManager:
 
         # Each conn is from a slot - discard from it as well.
         if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
+            print("Disconnect OUTGOING ")
             self.outgoing_slot.remove_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
             self.incoming_slot.remove_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
+            print("Disconnect DISC DISC DISCOVERED ")
             self.discovered_slot.remove_connection(protocol)
 
         # The only connection type that may pop from a queue is CHECK_ENTRYPOINTS
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+            print("Disconnect CHECK ENTRYPPOINTS ")
             dequeued_entrypoint = self.check_entrypoints_slot.remove_connection(protocol)
 
         # If an entrypoint was dequeued, we need to connect to it. It will trigger on_peer_connect.
