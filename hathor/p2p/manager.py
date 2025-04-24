@@ -127,6 +127,7 @@ class Slot:
                 # The connection must be turned into CHECK_ENTRYPOINTS.
                 # Will return to on_peer_connect and slot it into check_entrypoints.
                 protocol.connection_type = HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS
+                print("CHANGED TO CHECK CHECK CHECKENTRYPOINTS")
                 return False
 
             # Check_EP is disconnected too, as we only queue endpoints of ready/valid peers.
@@ -602,6 +603,10 @@ class ConnectionsManager:
             protocol_connected = self.discovered_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+            if protocol._peer and protocol._peer in self.verified_peer_storage:
+                print("Already verified")
+                protocol.disconnect(reason="Peer already verified", force=True)
+                return 
             protocol_connected = self.check_entrypoints_slot.add_connection(protocol)
 
         # Regardless of the slot sent, the total connections increases.
