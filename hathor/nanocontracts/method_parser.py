@@ -62,6 +62,7 @@ class NCMethodParser:
             raise NCSerializationError('number of args mismatch')
 
         serializer = BytesSerializer()
+        serializer.write_leb128_unsigned(len(args))
         try:
             serializer.write_type_tuple(arg_types_tuple, tuple(args), max_bytes=self._max_bytes)
         except TooLongError as e:
@@ -71,7 +72,12 @@ class NCMethodParser:
     def deserialize_args(self, args_bytes: bytes) -> tuple[Any, ...]:
         """Parse bytes into a list of arguments according to the types."""
         deserializer = BytesDeserializer(args_bytes)
+        num_args = deserializer.read_leb128_unsigned()
         arg_types_tuple = self.get_arg_types()
+        if num_args != len(arg_types_tuple):
+            # XXX: we don't yet support arguments with default values, when we do it will be enough to check that
+            #      num_args <= len(arg_types_tuple) in order to proceed
+            raise NCSerializationError('number of args mismatch')
         try:
             args = deserializer.read_type_tuple(arg_types_tuple)
         except SerializationError as e:
