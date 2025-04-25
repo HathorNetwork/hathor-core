@@ -176,7 +176,7 @@ class NanoHeader(VertexBaseHeader):
         encoded_method = self.nc_method.encode('ascii')
 
         ret: deque[bytes] = deque()
-        ret.append(int_to_bytes(NC_VERSION, 1))
+        ret.append(int_to_bytes(self.nc_version, 1))
         ret.append(self.nc_id)
         ret.append(int_to_bytes(len(encoded_method), 1))
         ret.append(encoded_method)
@@ -259,7 +259,7 @@ class NanoHeader(VertexBaseHeader):
         runner.call_public_method(self.get_nanocontract_id(), self.nc_method, context, *args)
 
     def get_actions(self) -> list[NCAction]:
-        """Calculate the actions based on the differences between inputs and outputs."""
+        """Get a list of NCActions from the header actions."""
         from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
         from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
         if isinstance(self.tx, DeprecatedNanoContract):

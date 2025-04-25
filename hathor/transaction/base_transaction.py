@@ -27,6 +27,7 @@ from struct import pack
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
 from structlog import get_logger
+from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
@@ -301,7 +302,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     @classmethod
     @abstractmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'BaseTransaction':
+                           *, verbose: VerboseCallback = None) -> Self:
         """ Create a transaction from its bytes.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -882,7 +883,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         return ret
 
-    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> 'BaseTransaction':
+    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> Self:
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
