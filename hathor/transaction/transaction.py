@@ -18,7 +18,7 @@ import hashlib
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
-from typing_extensions import assert_never, override
+from typing_extensions import Self, assert_never, override
 
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_public_key_bytes
@@ -127,7 +127,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'Transaction':
+                           *, verbose: VerboseCallback = None) -> Self:
         tx = cls(storage=storage)
         buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
 

@@ -169,6 +169,10 @@ class TokenCreationTransaction(Transaction):
         struct_bytes += b''.join(tx_outputs)
 
         struct_bytes += self.serialize_token_info()
+
+        for header in self.headers:
+            struct_bytes += header.get_sighash_bytes()
+
         self._sighash_cache = struct_bytes
 
         return struct_bytes
