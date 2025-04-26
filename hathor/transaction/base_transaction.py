@@ -578,22 +578,14 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         funds_hash.update(self.get_funds_struct())
         return funds_hash.digest()
 
-    def get_graph_hash(self) -> bytes:
-        """Return the sha256 of the graph part of the transaction
+    def get_graph_and_headers_hash(self) -> bytes:
+        """Return the sha256 of the graph part of the transaction + its headers
 
-        :return: the hash of the funds data
+        :return: the hash of the graph and headers data
         :rtype: bytes
         """
-        graph_hash = hashlib.sha256()
-        graph_hash.update(self.get_graph_struct())
-        return graph_hash.digest()
-
-    def get_headers_hash(self) -> bytes:
-        """Return the sha256 of the headers of the transaction."""
-        if not self.headers:
-            return b''
-
         h = hashlib.sha256()
+        h.update(self.get_graph_struct())
         h.update(self.get_headers_struct())
         return h.digest()
 
@@ -603,7 +595,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :return: transaction header without the nonce
         :rtype: bytes
         """
-        return self.get_funds_hash() + self.get_graph_hash() + self.get_headers_hash()
+        data = self.get_funds_hash() + self.get_graph_and_headers_hash()
+        assert len(data) == 64, 'the mining data should have a fixed size of 64 bytes'
+        return data
 
     def calculate_hash1(self) -> 'HASH':
         """Return the sha256 of the transaction without including the `nonce`
