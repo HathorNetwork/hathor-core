@@ -48,7 +48,9 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         nc_storage_factory = NCMemoryStorageFactory()
         store = MemoryNodeTrieStore()
         block_trie = PatriciaTrie(store)
-        self.runner = TestRunner(self.manager.tx_storage, nc_storage_factory, block_trie)
+        self.runner = TestRunner(
+            self.manager.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
+        )
         self.nc_storage = self.runner.get_storage(self.nc_id)
 
     def _get_any_tx(self):

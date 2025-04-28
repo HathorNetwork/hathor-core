@@ -12,23 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError
 from hathor.nanocontracts.storage import NCChangesTracker, NCStorage
 from hathor.nanocontracts.types import ContractId
 
+if TYPE_CHECKING:
+    from hathor.nanocontracts.nc_exec_logs import NCLogger
 
-class CallType(Enum):
+
+class CallType(str, Enum):
     PUBLIC = 'public'
     VIEW = 'view'
 
 
-@dataclass
+@dataclass(slots=True, frozen=True, kw_only=True)
 class CallRecord:
     """This object keeps information about a single call between contracts."""
 
@@ -48,18 +53,14 @@ class CallRecord:
     ctx: Context | None
 
     # The args and kwargs provided to the method.
-    args: tuple[Any]
+    args: tuple[Any, ...]
     kwargs: dict[str, Any]
 
     # Keep track of all changes made by this call.
     changes_tracker: NCChangesTracker
 
-    def print_dump(self):
-        prefix = '    ' * self.depth
-        print(prefix, self.nanocontract_id.hex(), self.method_name, self.args, self.kwargs)
 
-
-@dataclass(kw_only=True)
+@dataclass(slots=True, kw_only=True)
 class CallInfo:
     """This object keeps information about a method call and its subsequence calls."""
     MAX_RECURSION_DEPTH: int
@@ -77,7 +78,7 @@ class CallInfo:
     enable_call_trace: bool
 
     # A trace of the calls that happened. This will only be filled if `enable_call_trace` is true.
-    calls: list[CallRecord] = field(default_factory=list)
+    calls: list[CallRecord] | None = None
 
     # Current depth of execution. This is a dynamic value that changes as the execution progresses.
     depth: int = 0
@@ -86,10 +87,8 @@ class CallInfo:
     # execution progresses.
     call_counter: int = 0
 
-    def print_dump(self):
-        """Print the call trace in stdout."""
-        for item in self.calls:
-            item.print_dump()
+    # The logger to keep track of log entries during this call.
+    nc_logger: NCLogger
 
     def pre_call(self, call_record: CallRecord) -> None:
         """Called before a new call is executed."""
@@ -100,6 +99,8 @@ class CallInfo:
             raise NCNumberOfCallsExceeded
 
         if self.enable_call_trace:
+            if self.calls is None:
+                self.calls = []
             self.calls.append(call_record)
 
         self.change_trackers[call_record.nanocontract_id].append(call_record.changes_tracker)
@@ -108,6 +109,7 @@ class CallInfo:
         self.call_counter += 1
         self.depth += 1
         self.stack.append(call_record)
+        self.nc_logger.__log_call_begin__(call_record)
 
     def post_call(self, call_record: CallRecord) -> None:
         """Called after a call is finished."""
@@ -122,3 +124,4 @@ class CallInfo:
             assert call_record.changes_tracker == change_trackers.pop()
         else:
             assert type(call_record.changes_tracker.storage) is NCStorage
+        self.nc_logger.__log_call_end__()

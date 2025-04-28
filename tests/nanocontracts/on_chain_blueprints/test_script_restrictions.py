@@ -152,6 +152,10 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             'x = 1\nx._Context__runner',
             'Access to internal attributes and methods is not allowed.',
         )
+        self._test_forbid_syntax(
+            'x = log.__entries__',
+            'Access to internal attributes and methods is not allowed.',
+        )
 
     def test_forbid_async_fn(self) -> None:
         self._test_forbid_syntax(

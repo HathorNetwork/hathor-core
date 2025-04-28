@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import hashlib
+import re
 from types import ModuleType
 from typing import Iterator
 
@@ -36,6 +37,8 @@ from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
+
+_TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
 
 
 class VertexExporter:
@@ -266,6 +269,16 @@ class VertexExporter:
             blueprint_id = blueprint_id_from_bytes(contract_creation_vertex_nano_header.nc_id)
 
         blueprint_class = self._get_blueprint_class(blueprint_id)
+
+        # allows method calls such as
+        # nc2.nc_method = call_another_nc(`nc1`)
+        def _replace_escaped_vertex_id(match: re.Match) -> str:
+            vertex_name = match.group(1)
+            if vertex_ := self._vertices.get(vertex_name):
+                return f'"{vertex_.hash_hex}"'
+            raise SyntaxError(f'unknown vertex: {vertex_name}')
+
+        nc_method_raw = _TEMPLATE_PATTERN.sub(_replace_escaped_vertex_id, nc_method_raw)
 
         from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
         nc_method, nc_args = parse_nc_method_call(blueprint_class, nc_method_raw)

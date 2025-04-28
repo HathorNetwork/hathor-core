@@ -30,12 +30,11 @@ X = TypeVar('X')
 UnionGenericAlias = type(Optional[X])
 
 
-def get_supertype(_type: Type) -> Type:
-    """Return the supertype of a NewType. If it's not a NewType, return the same type.
-    """
-    if hasattr(_type, '__supertype__'):
-        return _type.__supertype__
-    return _type
+def is_subclass(type_: type, super_class: type) -> bool:
+    """Reimplements issubclass() with support for recursive NewTypes."""
+    if super_type := getattr(type_, '__supertype__', None):
+        return is_subclass(super_type, super_class)
+    return inspect.isclass(type_) and issubclass(type_, super_class)
 
 
 def parse_nc_method_call(blueprint_class: Type[Blueprint], call_info: str) -> tuple[str, Any]:
@@ -78,8 +77,7 @@ def parse_arg(arg: Any, expected_type: Type) -> Any:
 
     We support int, float, str, bytes, address, list, tuple, namedtuple, and optional
     """
-    supertype = get_supertype(expected_type)
-    if inspect.isclass(supertype) and issubclass(supertype, bytes):
+    if is_subclass(expected_type, bytes):
         # It can be an address, or it comes as an hexadecimal value
         if arg.startswith("a'") and arg.endswith("'"):
             # It's an address

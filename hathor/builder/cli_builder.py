@@ -33,6 +33,8 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -232,11 +234,27 @@ class CliBuilder:
         nc_calls_sorter = timestamp_nc_calls_sorter
 
         assert self.nc_storage_factory is not None
+        runner_factory = RunnerFactory(
+            reactor=reactor,
+            settings=settings,
+            tx_storage=tx_storage,
+            nc_storage_factory=self.nc_storage_factory,
+        )
+
+        nc_log_storage = NCLogStorage(
+            settings=settings,
+            path=self.rocksdb_storage.path,
+            config=self._args.nc_exec_logs,
+        )
+
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
             self.nc_storage_factory,
             soft_voided_tx_ids,
             pubsub=pubsub,
+            settings=settings,
+            runner_factory=runner_factory,
+            nc_log_storage=nc_log_storage,
             nc_calls_sorter=nc_calls_sorter,
         )
 
@@ -337,6 +355,7 @@ class CliBuilder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            runner_factory=runner_factory,
         )
 
         if self._args.x_ipython_kernel:

@@ -26,6 +26,7 @@ from hathor.nanocontracts.types import NCAction, NCActionType
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.runner.runner import Runner
 
 
@@ -42,12 +43,14 @@ class _SingleCallRunner:
         nanocontract_id: bytes,
         changes_tracker: NCChangesTracker,
         metered_executor: MeteredExecutor,
+        nc_logger: NCLogger,
     ) -> None:
         self.runner = runner
         self.blueprint_class = blueprint_class
         self.nanocontract_id = nanocontract_id
         self.changes_tracker = changes_tracker
         self.metered_executor = metered_executor
+        self._nc_logger = nc_logger
         self._has_been_called = False
         self._settings = get_global_settings()
 
@@ -88,7 +91,7 @@ class _SingleCallRunner:
 
         self.validate_context(ctx)
 
-        blueprint = self.blueprint_class(self.runner, self.changes_tracker)
+        blueprint = self.blueprint_class(self.runner, self.changes_tracker, self._nc_logger)
         method = getattr(blueprint, method_name)
         if method is None:
             raise NCMethodNotFound(method_name)
@@ -118,7 +121,7 @@ class _SingleCallRunner:
         """Call a contract view method. It cannot change the state."""
         assert not self._has_been_called, 'only one call to a method per instance'
         self._has_been_called = True
-        blueprint = self.blueprint_class(self.runner, self.changes_tracker)
+        blueprint = self.blueprint_class(self.runner, self.changes_tracker, self._nc_logger)
         method = getattr(blueprint, method_name)
         if method is None:
             raise NCMethodNotFound(method_name)

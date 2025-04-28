@@ -17,6 +17,7 @@ from typing import Optional
 from pydantic import Extra
 
 from hathor.feature_activation.feature import Feature  # skip-cli-import-custom-check
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig  # skip-cli-import-custom-check
 from hathor.utils.pydantic import BaseModel  # skip-cli-import-custom-check
 
 
@@ -89,3 +90,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     localnet: bool
     nc_history_index: bool
     nc_indices: bool
+    nc_exec_logs: NCLogConfig

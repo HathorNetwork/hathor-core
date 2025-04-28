@@ -51,11 +51,12 @@ Special attributes:
 
 Nano Contracts:
 
-    tx1.nc_id = "{'ff' * 32}"         # create a Nano Contract with some custom nc_id
-    tx1.nc_id = tx2                   # create a Nano Contract with another tx's id as its nc_id
-    tx1.nc_deposit = 10 HTR           # perform a deposit in a Nano Contract
-    tx1.nc_withdrawal = 10 HTR          # perform a withdraw in a Nano Contract
-    tx1.nc_method = initialize("00")  # call a Nano Contract method
+    tx1.nc_id = "{'ff' * 32}"          # create a Nano Contract with some custom nc_id
+    tx1.nc_id = tx2                    # create a Nano Contract with another tx's id as its nc_id
+    tx1.nc_deposit = 10 HTR            # perform a deposit in a Nano Contract
+    tx1.nc_withdrawal = 10 HTR         # perform a withdraw in a Nano Contract
+    tx1.nc_method = initialize("00")   # call a Nano Contract method
+    tx2.nc_method = initialize(`tx1`)  # call a Nano Contract method with another tx's id as an argument
 
 On-chain Blueprints:
 
