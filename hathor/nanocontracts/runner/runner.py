@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import defaultdict
-from typing import Any, Type
+from typing import TYPE_CHECKING, Any, Type
 
 from typing_extensions import assert_never
 
-from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import (
@@ -35,8 +36,12 @@ from hathor.nanocontracts.runner.types import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.storage import NCChangesTracker, NCStorage, NCStorageFactory
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import ContractId, NCAction, NCActionType
+from hathor.reactor import ReactorProtocol
 from hathor.transaction.storage import TransactionStorage
 from hathor.types import Amount, TokenUid
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
 
 
 class Runner:
@@ -47,17 +52,20 @@ class Runner:
 
     def __init__(
         self,
+        *,
+        reactor: ReactorProtocol,
+        settings: HathorSettings,
         tx_storage: TransactionStorage,
         storage_factory: NCStorageFactory,
         block_trie: PatriciaTrie,
-        *,
-        seed: bytes | None = None,
+        seed: bytes | None,
     ) -> None:
         self.tx_storage = tx_storage
         self.storage_factory = storage_factory
         self.block_trie = block_trie
         self._storages: dict[ContractId, NCStorage] = {}
-        self._settings = get_global_settings()
+        self._settings = settings
+        self.reactor = reactor
 
         # For tracking fuel and memory usage
         self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
@@ -134,19 +142,23 @@ class Runner:
     def _create_single_runner(
         self,
         nanocontract_id: ContractId,
-        change_tracker: NCChangesTracker
+        change_tracker: NCChangesTracker,
     ) -> _SingleCallRunner:
         """Return a single runner for a contract."""
         assert self._metered_executor is not None
+        assert self._call_info is not None
         blueprint_class = self.get_blueprint_class(nanocontract_id)
         metered_executor = self._metered_executor
-        return _SingleCallRunner(self, blueprint_class, nanocontract_id, change_tracker, metered_executor)
+        nc_logger = self._call_info.nc_logger
+        return _SingleCallRunner(self, blueprint_class, nanocontract_id, change_tracker, metered_executor, nc_logger)
 
     def _build_call_info(self) -> CallInfo:
+        from hathor.nanocontracts.nc_exec_logs import NCLogger
         return CallInfo(
             MAX_RECURSION_DEPTH=self.MAX_RECURSION_DEPTH,
             MAX_CALL_COUNTER=self.MAX_CALL_COUNTER,
             enable_call_trace=self._enable_call_trace,
+            nc_logger=NCLogger(__reactor__=self.reactor),
         )
 
     def call_public_method(
@@ -303,12 +315,14 @@ class Runner:
             nc_storage.commit()
             nc_storage.lock()
 
-    def _internal_call_public_method(self,
-                                     nanocontract_id: ContractId,
-                                     method_name: str,
-                                     ctx: Context,
-                                     *args: Any,
-                                     **kwargs: Any) -> Any:
+    def _internal_call_public_method(
+        self,
+        nanocontract_id: ContractId,
+        method_name: str,
+        ctx: Context,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         """An internal method that actually execute the public method call.
         It is also used when a contract calls another contract.
         """
@@ -398,3 +412,30 @@ class Runner:
         if self._rng is None:
             raise ValueError('no seed was provided')
         return self._rng
+
+
+class RunnerFactory:
+    __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory')
+
+    def __init__(
+        self,
+        *,
+        reactor: ReactorProtocol,
+        settings: HathorSettings,
+        tx_storage: TransactionStorage,
+        nc_storage_factory: NCStorageFactory,
+    ) -> None:
+        self.reactor = reactor
+        self.settings = settings
+        self.tx_storage = tx_storage
+        self.nc_storage_factory = nc_storage_factory
+
+    def create(self, *, block_trie: PatriciaTrie, seed: bytes | None = None) -> Runner:
+        return Runner(
+            reactor=self.reactor,
+            settings=self.settings,
+            tx_storage=self.tx_storage,
+            storage_factory=self.nc_storage_factory,
+            block_trie=block_trie,
+            seed=seed,
+        )

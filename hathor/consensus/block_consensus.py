@@ -12,21 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
+import traceback
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from structlog import get_logger
 from typing_extensions import assert_never
 
-from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.consensus.context import ConsensusAlgorithmContext
+    from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+    from hathor.nanocontracts.runner.runner import RunnerFactory
 
 logger = get_logger()
 
@@ -36,9 +41,17 @@ _base_transaction_log = logger.new()
 class BlockConsensusAlgorithm:
     """Implement the consensus algorithm for blocks."""
 
-    def __init__(self, context: 'ConsensusAlgorithmContext') -> None:
-        self._settings = get_global_settings()
+    def __init__(
+        self,
+        settings: HathorSettings,
+        context: 'ConsensusAlgorithmContext',
+        runner_factory: RunnerFactory,
+        nc_log_storage: NCLogStorage,
+    ) -> None:
+        self._settings = settings
         self.context = context
+        self._runner_factory = runner_factory
+        self._nc_log_storage = nc_log_storage
 
     @classproperty
     def log(cls) -> Any:
@@ -170,11 +183,8 @@ class BlockConsensusAlgorithm:
                 self.context.save(tx)
                 continue
 
-            from hathor.nanocontracts.runner import Runner
-
-            assert tx.storage is not None
-            storage_factory = self.context.consensus.nc_storage_factory
-            runner = Runner(tx.storage, storage_factory, block_trie, seed=seed_hasher.digest())
+            runner = self._runner_factory.create(block_trie=block_trie, seed=seed_hasher.digest())
+            exception_and_tb: tuple[NCFail, str] | None = None
             try:
                 nc_header = tx.get_nano_header()
                 nc_header.execute(runner)
@@ -184,12 +194,14 @@ class BlockConsensusAlgorithm:
                 #      method once per contract per block, just like we do for the block_trie. This ensures we will
                 #      have a clean database with no orphan nodes.
                 runner.commit()
-            except NCFail:
-                self.log.exception('nc execution failed', tx=tx.hash.hex())
+            except NCFail as e:
+                self.log.info('nc execution failed', tx=tx.hash.hex())
+                exception_and_tb = e, traceback.format_exc()
                 self.mark_as_nc_fail_execution(tx)
             finally:
                 last_call_info = runner.get_last_call_info()
                 assert last_call_info is not None
+                self._nc_log_storage.save_logs(tx, last_call_info, exception_and_tb)
 
         # Save block state root id. If nothing happens, it should be the same as its block parent.
         block_trie.commit()
@@ -713,5 +725,17 @@ class BlockConsensusAlgorithm:
 
 
 class BlockConsensusAlgorithmFactory:
+    __slots__ = ('settings', 'nc_log_storage', '_runner_factory')
+
+    def __init__(
+        self,
+        settings: HathorSettings,
+        runner_factory: RunnerFactory,
+        nc_log_storage: NCLogStorage,
+    ) -> None:
+        self.settings = settings
+        self._runner_factory = runner_factory
+        self.nc_log_storage = nc_log_storage
+
     def __call__(self, context: 'ConsensusAlgorithmContext') -> BlockConsensusAlgorithm:
-        return BlockConsensusAlgorithm(context)
+        return BlockConsensusAlgorithm(self.settings, context, self._runner_factory, self.nc_log_storage)

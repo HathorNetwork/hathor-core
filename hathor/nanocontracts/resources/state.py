@@ -242,9 +242,9 @@ class NanoContractStateResource(Resource):
 
 class NCStateParams(QueryParams):
     id: str
-    fields: list[str] = Field(alias='fields[]', default=[])
-    balances: list[str] = Field(alias='balances[]', default=[])
-    calls: list[str] = Field(alias='calls[]', default=[])
+    fields: list[str] = Field(alias='fields[]', default_factory=list)
+    balances: list[str] = Field(alias='balances[]', default_factory=list)
+    calls: list[str] = Field(alias='calls[]', default_factory=list)
     block_hash: Optional[str]
     block_height: Optional[int]
 

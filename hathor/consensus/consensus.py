@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_global_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
@@ -29,7 +28,10 @@ from hathor.transaction import BaseTransaction
 from hathor.util import not_none
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.nanocontracts import NCStorageFactory
+    from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+    from hathor.nanocontracts.runner.runner import RunnerFactory
     from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.transaction.storage import TransactionStorage
 
@@ -70,14 +72,18 @@ class ConsensusAlgorithm:
         nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
+        *,
+        settings: HathorSettings,
+        runner_factory: RunnerFactory,
         nc_calls_sorter: NCSorterCallable,
+        nc_log_storage: NCLogStorage,
     ) -> None:
-        self._settings = get_global_settings()
+        self._settings = settings
         self.log = logger.new()
         self._pubsub = pubsub
         self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
-        self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
+        self.block_algorithm_factory = BlockConsensusAlgorithmFactory(settings, runner_factory, nc_log_storage)
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
         self.nc_calls_sorter = nc_calls_sorter
 

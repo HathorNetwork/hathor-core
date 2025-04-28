@@ -121,7 +121,9 @@ class NCBlueprintTestCase(unittest.TestCase):
         nc_storage_factory = NCMemoryStorageFactory()
         store = MemoryNodeTrieStore()
         block_trie = PatriciaTrie(store)
-        self.runner = TestRunner(self.manager.tx_storage, nc_storage_factory, block_trie)
+        self.runner = TestRunner(
+            self.manager.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
+        )
 
         self.nc1_id = ContractId(b'1' * 32)
         self.nc2_id = ContractId(b'2' * 32)
@@ -359,10 +361,6 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(storage1.get('counter'), 4)
         self.assertEqual(storage2.get('counter'), 0)
         self.assertEqual(storage3.get('counter'), 3)
-
-        # For debugging:
-        # trace = self.runner.get_last_call_trace()
-        # trace.print_dump()
 
     def test_call_view_after_public(self):
         ctx = Context([], self.tx, b'', timestamp=0)

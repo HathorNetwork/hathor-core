@@ -16,20 +16,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional, final
 
-from structlog import get_logger
-
 from hathor.nanocontracts.fields import get_field_for_attr
 from hathor.nanocontracts.storage import NCStorage
 from hathor.nanocontracts.types import ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
 
-logger = get_logger()
-
 FORBIDDEN_NAMES = {
     'rng',
+    'log',
     'get_nanocontract_id',
     'get_balance',
     'call_public_method',
@@ -96,10 +94,10 @@ class Blueprint(metaclass=_BlueprintBase):
             age: int
     """
 
-    __slots__ = ('log', '__runner', '_storage', '_cache')
+    __slots__ = ('__log', '__runner', '_storage', '_cache')
 
-    def __init__(self, runner: Runner, storage: NCStorage):
-        self.log = logger.new()
+    def __init__(self, runner: Runner, storage: NCStorage, nc_logger: NCLogger) -> None:
+        self.__log = nc_logger
         self.__runner = runner
         self._storage = storage
         self._cache: dict[str, Any] = {}
@@ -109,6 +107,12 @@ class Blueprint(metaclass=_BlueprintBase):
     def rng(self) -> NanoRNG:
         """Return an RNG for the current contract."""
         return self.__runner.get_rng()
+
+    @final
+    @property
+    def log(self) -> NCLogger:
+        """Return the logger for the current contract."""
+        return self.__log
 
     @final
     def get_nanocontract_id(self) -> ContractId:

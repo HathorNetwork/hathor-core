@@ -36,6 +36,8 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig, NCLogStorage
+from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.sorter.types import NCSorterCallable
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
@@ -189,6 +191,9 @@ class Builder:
         self._nc_anti_mev: bool = False
 
         self._nc_storage_factory: NCStorageFactory | None = None
+        self._nc_log_storage: NCLogStorage | None = None
+        self._runner_factory: RunnerFactory | None = None
+        self._nc_log_config: NCLogConfig = NCLogConfig.NONE
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -221,6 +226,7 @@ class Builder:
         vertex_handler = self._get_or_create_vertex_handler()
         vertex_parser = self._get_or_create_vertex_parser()
         poa_block_producer = self._get_or_create_poa_block_producer()
+        runner_factory = self._get_or_create_runner_factory()
 
         if settings.ENABLE_NANO_CONTRACTS:
             tx_storage.nc_catalog = self._get_nc_catalog()
@@ -264,6 +270,7 @@ class Builder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            runner_factory=runner_factory,
             **kwargs
         )
 
@@ -290,7 +297,7 @@ class Builder:
             rocksdb_storage=rocksdb_storage,
             stratum_factory=stratum_factory,
             feature_service=feature_service,
-            bit_signaling_service=bit_signaling_service
+            bit_signaling_service=bit_signaling_service,
         )
 
         return self.artifacts
@@ -381,16 +388,33 @@ class Builder:
             from hathor.nanocontracts.sorter.timestamp_sorter import timestamp_nc_calls_sorter
             return timestamp_nc_calls_sorter
 
+    def _get_or_create_nc_log_storage(self) -> NCLogStorage:
+        if self._nc_log_storage is not None:
+            return self._nc_log_storage
+
+        rocksdb_storage = self._get_or_create_rocksdb_storage()
+        self._nc_log_storage = NCLogStorage(
+            settings=self._get_or_create_settings(),
+            path=rocksdb_storage.path,
+            config=self._nc_log_config,
+        )
+        return self._nc_log_storage
+
     def _get_or_create_consensus(self) -> ConsensusAlgorithm:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             pubsub = self._get_or_create_pubsub()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
             nc_calls_sorter = self._get_nc_calls_sorter()
-            self._consensus = ConsensusAlgorithm(nc_storage_factory,
-                                                 soft_voided_tx_ids,
-                                                 pubsub,
-                                                 nc_calls_sorter)
+            self._consensus = ConsensusAlgorithm(
+                nc_storage_factory=nc_storage_factory,
+                soft_voided_tx_ids=soft_voided_tx_ids,
+                pubsub=pubsub,
+                settings=self._get_or_create_settings(),
+                runner_factory=self._get_or_create_runner_factory(),
+                nc_log_storage=self._get_or_create_nc_log_storage(),
+                nc_calls_sorter=nc_calls_sorter,
+            )
 
         return self._consensus
 
@@ -398,6 +422,16 @@ class Builder:
         from hathor.nanocontracts.catalog import generate_catalog_from_settings
         settings = self._get_or_create_settings()
         return generate_catalog_from_settings(settings)
+
+    def _get_or_create_runner_factory(self) -> RunnerFactory:
+        if self._runner_factory is None:
+            self._runner_factory = RunnerFactory(
+                reactor=self._get_reactor(),
+                settings=self._get_or_create_settings(),
+                tx_storage=self._get_or_create_tx_storage(),
+                nc_storage_factory=self._get_or_create_nc_storage_factory(),
+            )
+        return self._runner_factory
 
     def _get_or_create_pubsub(self) -> PubSubManager:
         if self._pubsub is None:
@@ -823,4 +857,9 @@ class Builder:
     def set_poa_signer(self, signer: PoaSigner) -> 'Builder':
         self.check_if_can_modify()
         self._poa_signer = signer
+        return self
+
+    def set_nc_log_config(self, config: NCLogConfig) -> 'Builder':
+        self.check_if_can_modify()
+        self._nc_log_config = config
         return self
