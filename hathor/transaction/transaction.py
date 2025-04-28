@@ -338,8 +338,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         from hathor.nanocontracts.types import NCActionType
 
         nano_header = self.get_nano_header()
-        context = nano_header.get_context()
-        for action in context.actions.values():
+        for action in nano_header.get_actions():
             token_info = token_dict.get(action.token_uid)
             if token_info is None:
                 token_info = TokenInfo(0, False, False)

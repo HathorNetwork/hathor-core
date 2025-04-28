@@ -250,12 +250,16 @@ class NanoHeader(VertexBaseHeader):
         """Execute the contract's method call."""
         from hathor.nanocontracts.method_parser import NCMethodParser
 
+        vertex_metadata = self.tx.get_metadata()
+        assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
+
         blueprint_class = self.get_blueprint_class()
         method = getattr(blueprint_class, self.nc_method)
         parser = NCMethodParser(method)
         args = parser.parse_args_bytes(self.nc_args_bytes)
 
         context = self.get_context()
+        assert context.vertex.block.hash == vertex_metadata.first_block
         runner.call_public_method(self.get_nanocontract_id(), self.nc_method, context, *args)
 
     def get_actions(self) -> list[NCAction]:
