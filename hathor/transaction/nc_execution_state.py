@@ -16,7 +16,7 @@ from enum import Enum, unique
 
 
 @unique
-class NCExecutionState(Enum):
+class NCExecutionState(str, Enum):
     PENDING = 'pending'  # aka, not even tried to execute it
     SUCCESS = 'success'  # execution was sucessful
     FAILURE = 'failure'  # execution failed and the transaction is voided

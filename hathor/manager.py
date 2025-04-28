@@ -46,6 +46,7 @@ from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.runner import Runner
+from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.storage import NCStorage
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
@@ -110,6 +111,7 @@ class HathorManager:
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
+        runner_factory: RunnerFactory,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -197,6 +199,7 @@ class HathorManager:
         self.connections = p2p_manager
         self.vertex_handler = vertex_handler
         self.vertex_parser = vertex_parser
+        self.runner_factory = runner_factory
 
         self.websocket_factory = websocket_factory
 
@@ -389,7 +392,7 @@ class HathorManager:
         meta = block.get_metadata()
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_trie = nc_storage_factory.get_trie(meta.nc_block_root_id)
-        return Runner(self.tx_storage, nc_storage_factory, block_trie)
+        return self.runner_factory.create(block_trie=block_trie)
 
     def get_best_block_nc_runner(self) -> Runner:
         """Return a contract runner for the best block."""

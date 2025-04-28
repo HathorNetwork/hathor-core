@@ -192,7 +192,9 @@ class NCNanoContractTestCase(unittest.TestCase):
         nc_storage_factory = NCMemoryStorageFactory()
         store = MemoryNodeTrieStore()
         block_trie = PatriciaTrie(store)
-        runner = TestRunner(self.peer.tx_storage, nc_storage_factory, block_trie)
+        runner = TestRunner(
+            self.peer.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
+        )
 
         nc = self._get_nc()
         nc_nano_header = nc.get_nano_header()
