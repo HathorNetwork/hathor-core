@@ -287,7 +287,7 @@ class HathorSettings(NamedTuple):
 
     # Max Number of each connection slot (int):
     PEER_MAX_ENTRYPOINTS: int = 40
-    PEER_MAX_OUTGOING_CONNECTIONS: int = 0
+    PEER_MAX_OUTGOING_CONNECTIONS: int = 1
     PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 5
     PEER_MAX_CHECK_PEER_CONNECTIONS: int = 5
 
