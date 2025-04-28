@@ -116,7 +116,7 @@ class Slot:
         # If check_entrypoints, there is a set.
         # If set not empty, a dequeued entrypoint in remove_connection is being connected
         # We leave at least one space for it.
-        if self.entrypoint_set:
+        if len(self.entrypoint_set) > len(self.entrypoint_queue_slot):
             if len(self.connection_slot) == self.max_slot_connections - 1:
                 protocol.disconnect(reason="Dequeued connection being added. Leaving space for it.")
                 return False
@@ -138,56 +138,57 @@ class Slot:
         self.connection_slot.add(protocol)
         return True
 
-    def remove_connection(self, protocol: HathorProtocol) -> Optional[PeerAddress] | None:
+    def remove_connection(self, protocol: HathorProtocol, revisit: bool = False, previous_entrypoint: PeerAddress | None = None) -> Optional[PeerAddress] | None:
         """
             Removes from given instance the protocol passed. Returns protocol from queue
-            when disconnection leads to free space in slot.
+            when disconnection leads to free space in slot. Revisit flag for continuously popping verified entrypoints
+            from queue and deleting previous entrypoints from set.
         """
-        print("Remove Connection Function called.")
-        self.connection_slot.discard(protocol)
+        if not revisit:
+            print("Remove Connection Function called.")
+            self.connection_slot.discard(protocol)
 
-        if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+        if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS and not revisit:
             # If protocol READY, the peer was verified. We take its EP's to the queue.
             dequeued_entrypoint = None
             print("PROTOCOL IS CHECK_ENTRYPOINTS")
             if protocol.connection_state == HathorProtocol.ConnectionState.READY:
                 print("PROTOCOL IS READY when disconnected")
 
-                if protocol.entrypoint:
-                    print("Protocol has ENTRYPOINT")
-
-                # If protocol e.p. not in set, it is a new protocol with new e.p.'s to check.
-                # If in set, it is a connection from a previously dequeued entrypoint.
-                    if protocol.entrypoint.addr not in self.entrypoint_set:
-                        entrypoints = protocol.peer.info.entrypoints
-                        print("All entrypoints of the protocol:")
-                        print(entrypoints)
-                        # Unpack the entrypoints and put them in the queue and the set.
-                        for each_entrypoint in entrypoints:
-                            # Add to the queue and sets (don't add repeats)
-                            if len(self.entrypoint_queue_slot) == self.queue_size_entrypoints:
-                                print("Limit achieved for QUEEEEUUEE")
-                                break
-                            if each_entrypoint not in self.entrypoint_queue_slot:
-                                self.entrypoint_queue_slot.appendleft(each_entrypoint)
-                            if each_entrypoint not in self.entrypoint_set:
-                                self.entrypoint_set.add(each_entrypoint)
-                            print(f"Queued Entrypoints: {each_entrypoint}")
-                        print("-----")
+            # If protocol e.p. not in set, it is a new protocol with new e.p.'s to check.
+            # If in set, it is a connection from a previously dequeued entrypoint.
+                if protocol.entrypoint.addr not in self.entrypoint_set:
+                    entrypoints = protocol.peer.info.entrypoints
+                    print("All entrypoints of the protocol:")
+                    print(entrypoints)
+                    # Unpack the entrypoints and put them in the queue and the set.
+                    for each_entrypoint in entrypoints:
+                        # Add to the queue and sets (don't add repeats)
+                        if len(self.entrypoint_queue_slot) == self.queue_size_entrypoints:
+                            print("Limit achieved for QUEUE")
+                            break
+                        if each_entrypoint not in self.entrypoint_queue_slot:
+                            self.entrypoint_queue_slot.appendleft(each_entrypoint)
+                        if each_entrypoint not in self.entrypoint_set:
+                            self.entrypoint_set.add(each_entrypoint)
+                        print(f"Queued Entrypoints: {each_entrypoint}")
+                    print("-----")
 
 
             # If protocol not READY, it was a timeout. Peer not trustworthy - do not get its ep's.
-            if protocol.entrypoint:
-                if protocol.entrypoint.addr in self.entrypoint_set:
-                    self.entrypoint_set.discard(protocol.entrypoint.addr)
+            #if protocol.entrypoint:
+            #    if protocol.entrypoint.addr in self.entrypoint_set:
+            #        self.entrypoint_set.discard(protocol.entrypoint.addr)
                     # Eventually: Add if not ready, unverified. Or even, to those ready, verify.
             # Take one from the queue and turn it into a connection.
-            if self.entrypoint_queue_slot:
-                dequeued_entrypoint = self.entrypoint_queue_slot.pop()
+        if self.entrypoint_queue_slot:
+            if revisit:
+                print("REVISIT getting the entrypoint")
+                self.entrypoint_set.discard(previous_entrypoint)
+            dequeued_entrypoint = self.entrypoint_queue_slot.pop()
             print("Entrypoint Dequeued:")
             print(dequeued_entrypoint)
             return dequeued_entrypoint
-
         return None
 
 
@@ -568,18 +569,15 @@ class ConnectionsManager:
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
         # assert False
-        print(f"ON PEER CONNECTED CALLED: {protocol.entrypoint.addr if protocol.entrypoint else None}")
+        print(f"ON PEER CONNECTED CALLED: {protocol.entrypoint.addr if protocol.entrypoint else 'NadaNadaNadaNAAAADA'}")
         # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
 
-        # Note: ^^^^ This alone may lead to a failure of the system.
-        # If all connections are full, but may still handle queues, it will regardless disconnect it.
 
         protocol_connected = False  # If protocol is added to slot, True. If to Queue or disconnected, False.
-
         # Next block sends the connection to the appropriate slot.
         if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
             print("OUTGOING")
@@ -603,10 +601,6 @@ class ConnectionsManager:
             protocol_connected = self.discovered_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-            if protocol._peer and protocol._peer in self.verified_peer_storage:
-                print("Already verified")
-                protocol.disconnect(reason="Peer already verified", force=True)
-                return 
             protocol_connected = self.check_entrypoints_slot.add_connection(protocol)
 
         # Regardless of the slot sent, the total connections increases.
@@ -715,9 +709,17 @@ class ConnectionsManager:
             print("Disconnect CHECK ENTRYPPOINTS ")
             dequeued_entrypoint = self.check_entrypoints_slot.remove_connection(protocol)
 
-        # If an entrypoint was dequeued, we need to connect to it. It will trigger on_peer_connect.
-        if dequeued_entrypoint:
-            self.connect_to_endpoint(entrypoint=dequeued_entrypoint.with_id(None))  # PeerAddress --> Peer Endpoint
+            # For a given ep, check if some verified peer has it. If so, pop it off and restart.
+            while dequeued_entrypoint:
+                for peer in self.verified_peer_storage.values():
+                    if dequeued_entrypoint in peer.info.entrypoints:
+                        dequeued_entrypoint = self.check_entrypoints_slot.remove_connection(protocol, revisit=True)
+                        break
+                    
+                    if dequeued_entrypoint and dequeued_entrypoint not in peer.info.entrypoints:
+                        self.connect_to_endpoint(entrypoint=dequeued_entrypoint.with_id(None))
+
+
 
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
@@ -948,7 +950,7 @@ class ConnectionsManager:
         self,
         entrypoint: PeerEndpoint,
         peer: UnverifiedPeer | PublicPeer | None = None,
-        use_ssl: bool | None = None,
+        use_ssl: bool | None = None
     ) -> None:
         """ Attempt to connect directly to an endpoint, prefer calling `connect_to_peer` when possible.
 
@@ -958,6 +960,11 @@ class ConnectionsManager:
 
         If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
+
+        print("CHEGOU NO CONNECT_TO_ENDPOINT")
+        print("CHEGOU NO CONNECT_TO_ENDPOINT")
+        print("CHEGOU NO CONNECT_TO_ENDPOINT")
+        print("CHEGOU NO CONNECT_TO_ENDPOINT")
         if entrypoint.peer_id is not None and peer is not None and entrypoint.peer_id != peer.id:
             self.log.debug('skipping because the entrypoint peer_id does not match the actual peer_id',
                            entrypoint=str(entrypoint))
