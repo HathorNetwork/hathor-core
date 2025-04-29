@@ -34,7 +34,7 @@ class TokenTest(unittest.TestCase):
         # add some blocks so we can spend the genesis outputs
         add_blocks_unlock_reward(self.manager)
 
-    def test_fee_token_melt(self):
+    def test_fee_token_melt(self) -> None:
         htr_change_utxo_index = 3
         initial_mint_amount = 500
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
@@ -72,7 +72,7 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
         # pick the last tip tx output in HTR then subtracts the fee
-        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
         outputs.append(TxOutput(change_value, script, 0))
 
@@ -82,7 +82,55 @@ class TokenTest(unittest.TestCase):
         self.resolve_and_propagate(tx2)
         self.check_tokens_index(token_uid, tx.hash, 1, tx2.hash, 1, new_token_amount)  # check total amount of tokens
 
-    def test_fee_token_melt_without_output(self):
+    def test_fee_token_melt_without_authority(self) -> None:
+        htr_change_utxo_index = 3
+        initial_mint_amount = 500
+        tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
+        token_uid = tx.tokens[0]
+        parents = self.manager.get_new_tx_parents()
+        script = P2PKH.create_output_script(self.address)
+
+        # melt tokens and transfer melt authority
+        melt_amount = 100
+        new_token_amount = tx.outputs[0].value - melt_amount
+
+        inputs = [
+            # token amount
+            TxInput(tx.hash, 0, b''),
+            # HTR for fee
+            TxInput(tx.hash, 3, b'')
+        ]
+
+        outputs = [
+            # New token amount
+            TxOutput(new_token_amount, script, 1),
+            # # Melt authority
+            # TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
+        ]
+
+        tx2 = Transaction(
+            weight=1,
+            inputs=inputs,
+            outputs=outputs,
+            parents=parents,
+            tokens=[token_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
+        # pick the last tip tx output in HTR then subtracts the fee
+        tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
+        self.assertEqual(tx_fee, 1 * self.manager._settings.FEE_PER_OUTPUT)
+        change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
+        outputs.append(TxOutput(change_value, script, 0))
+
+        #  It's the tx item output signature
+        #  this signature_data allows the tx output to be spent by the tx2 inputs
+        self.sign_inputs(tx2)
+        with pytest.raises(InvalidNewTransaction) as e:
+            self.resolve_and_propagate(tx2)
+        assert isinstance(e.value.__cause__, InputOutputMismatch)
+
+    def test_fee_token_melt_without_output(self) -> None:
         htr_change_utxo_index = 3
         initial_mint_amount = 500
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
@@ -100,19 +148,17 @@ class TokenTest(unittest.TestCase):
             TxInput(tx.hash, 3, b'')
         ]
 
-        outputs = []
-
         tx2 = Transaction(
             weight=1,
             inputs=inputs,
-            outputs=outputs,
+            outputs=[],
             parents=parents,
             tokens=[token_uid],
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
         # pick the last tip tx output in HTR then subtracts the fee
-        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         # check if only the melting operation was considered
         self.assertEqual(tx_fee, 1)
         change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
@@ -121,7 +167,7 @@ class TokenTest(unittest.TestCase):
         self.sign_inputs(tx2)
         self.resolve_and_propagate(tx2)
 
-    def test_fee_token_melt_paid_with_deposit(self):
+    def test_fee_token_melt_paid_with_deposit(self) -> None:
         initial_mint_amount = 500
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
         deposit_tx = create_tokens(self.manager, self.address_b58, initial_mint_amount, use_genesis=False)
@@ -160,7 +206,7 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
 
-        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         change_value = deposit_tx.outputs[0].value - get_deposit_token_amount_from_htr(self.manager._settings, tx_fee)
         outputs.append(TxOutput(change_value, script, 2))
 
@@ -174,7 +220,7 @@ class TokenTest(unittest.TestCase):
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(deposit_token_uid)
         self.assertEqual(change_value, tokens_index.get_total())
 
-    def test_fee_and_deposit_token_melt_paid_with_deposit(self):
+    def test_fee_and_deposit_token_melt_paid_with_deposit(self) -> None:
         initial_mint_amount = 500
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
         deposit_tx = create_tokens(self.manager, self.address_b58, initial_mint_amount, use_genesis=False)
@@ -217,7 +263,7 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
 
-        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         # Deposit token change and melt in the same
         deposit_token_change_value = (
             deposit_tx.outputs[0].value
@@ -235,7 +281,7 @@ class TokenTest(unittest.TestCase):
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(deposit_token_uid)
         self.assertEqual(deposit_token_change_value, tokens_index.get_total())
 
-    def test_fee_token_tx_paid_with_htr_and_deposit(self):
+    def test_fee_token_tx_paid_with_htr_and_deposit(self) -> None:
         initial_mint_amount = 500
         htr_amount = 5
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount, genesis_output_amount=htr_amount)
@@ -282,7 +328,7 @@ class TokenTest(unittest.TestCase):
         self.sign_inputs(tx2)
         self.resolve_and_propagate(tx2)
 
-    def test_fee_token_melt_and_deposit_token_to_pay_the_fee_without_melt_authority(self):
+    def test_fee_token_melt_and_deposit_token_to_pay_the_fee_without_melt_authority(self) -> None:
         initial_mint_amount = 500
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
         deposit_tx = create_tokens(self.manager, self.address_b58, initial_mint_amount, use_genesis=False)
@@ -308,7 +354,7 @@ class TokenTest(unittest.TestCase):
             # New token amount
             TxOutput(new_token_amount, script, 1),
             # Melt authority
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+            tx.outputs[2],
             # HTR change output
             TxOutput(get_deposit_token_withdraw_amount(self.manager._settings, deposit_token_melt_amount), script, 0),
         ]
@@ -323,7 +369,7 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
 
-        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         # Deposit token change and melt in the same
         deposit_token_change_value = (
             deposit_tx.outputs[0].value
@@ -343,7 +389,7 @@ class TokenTest(unittest.TestCase):
         self.check_tokens_index(deposit_token_uid, deposit_tx.hash, 1, deposit_tx.hash, 2,
                                 initial_mint_amount)
 
-    def test_fee_token_mint(self):
+    def test_fee_token_mint(self) -> None:
         htr_change_utxo_index = 3
         initial_mint_amount = 500
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
@@ -376,7 +422,7 @@ class TokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
         # pick the last tip tx output in HTR then subtracts the fee
-        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
         outputs.append(TxOutput(change_value, script, 0))
 
@@ -390,7 +436,7 @@ class TokenTest(unittest.TestCase):
         expected_mint_amount = initial_mint_amount + mint_amount
         self.check_tokens_index(token_uid, tx2.hash, 1, tx.hash, 2, expected_mint_amount)
 
-    def test_fee_token_tx_without_paying(self):
+    def test_fee_token_tx_without_paying(self) -> None:
         initial_mint_amount = 500
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount, genesis_output_amount=1)
         token_uid = tx.tokens[0]
@@ -430,7 +476,7 @@ class TokenTest(unittest.TestCase):
             self.resolve_and_propagate(tx2)
         assert isinstance(e.value.__cause__, InputOutputMismatch)
 
-    def test_fee_token_burn_authority(self):
+    def test_fee_token_burn_authority(self) -> None:
         initial_mint_amount = 500
         tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
         token_uid = tx.tokens[0]
@@ -441,19 +487,17 @@ class TokenTest(unittest.TestCase):
             TxInput(tx.hash, 2, b''),
         ]
 
-        outputs = []
-
         tx2 = Transaction(
             weight=1,
             inputs=inputs,
-            outputs=outputs,
+            outputs=[],
             parents=parents,
             tokens=[token_uid],
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
         # pick the last tip tx output in HTR then subtracts the fee
-        tx_fee = calculate_fee(self.manager._settings, tx2.get_complete_token_info())
+        tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         self.assertEqual(tx_fee, 0)
 
         #  It's the signature of the output of the tx item
@@ -461,7 +505,7 @@ class TokenTest(unittest.TestCase):
         self.sign_inputs(tx2)
         self.resolve_and_propagate(tx2)
 
-    def test_fee_token_activation(self):
+    def test_fee_token_activation(self) -> None:
         with patch(
             'hathor.verification.token_creation_transaction_verifier.should_charge_fee',
             return_value=False

@@ -117,7 +117,7 @@ class TokenCreationTransaction(Transaction):
 
         # token name and symbol
         (self.token_name, self.token_symbol, self.token_info_version, buf) = (
-            TokenCreationTransaction.deserialize_token_info(self._settings, buf, verbose=verbose))
+            TokenCreationTransaction.deserialize_token_info(buf, verbose=verbose))
 
         return buf
 
@@ -197,8 +197,11 @@ class TokenCreationTransaction(Transaction):
         return ret
 
     @classmethod
-    def deserialize_token_info(cls, settings: HathorSettings, buf: bytes, *, verbose: VerboseCallback = None) \
-            -> tuple[str, str, TokenInfoVersion, bytes]:
+    def deserialize_token_info(
+            cls,
+            buf: bytes,
+            *,
+            verbose: VerboseCallback = None) -> tuple[str, str, TokenInfoVersion, bytes]:
         """ Gets the token name and symbol from serialized format
         """
         (token_info_version,), buf = unpack('!B', buf)
@@ -248,7 +251,7 @@ class TokenCreationTransaction(Transaction):
         token_dict = super()._get_token_info_from_inputs()
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
-        token_dict[self.hash] = TokenInfo(0, True, True, self.token_info_version, [], [])
+        token_dict[self.hash] = TokenInfo.create_empty(version=self.token_info_version, is_new_token=True)
 
         return token_dict
 

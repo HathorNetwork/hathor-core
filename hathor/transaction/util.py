@@ -79,9 +79,9 @@ def get_deposit_token_amount_from_htr(settings: HathorSettings, htr_amount: int)
         If the computed token amount is not an integer (this should not occur
         when TOKEN_DEPOSIT_PERCENTAGE is a positive divisor).
     """
-    token_amount = ceil(abs(htr_amount / settings.TOKEN_DEPOSIT_PERCENTAGE))
-    assert isinstance(token_amount, int)
-    return token_amount
+    token_amount = abs(htr_amount / settings.TOKEN_DEPOSIT_PERCENTAGE)
+    assert token_amount.is_integer()
+    return int(token_amount)
 
 
 def clean_token_string(string: str) -> str:

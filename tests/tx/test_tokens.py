@@ -121,6 +121,7 @@ class TokenTest(unittest.TestCase):
         data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx3.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+        tx3.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.manager.cpu_mining_service.resolve(tx3)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx3)
@@ -313,6 +314,7 @@ class TokenTest(unittest.TestCase):
         data = P2PKH.create_input_data(public_bytes, signature)
         tx4.inputs[0].data = data
         tx4.inputs[1].data = data
+        tx4.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.manager.cpu_mining_service.resolve(tx4)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx4)
@@ -488,7 +490,7 @@ class TokenTest(unittest.TestCase):
         tx.token_name = 'Test ∞'
         tx.token_symbol = 'TST'
         token_info = tx.serialize_token_info()
-        TokenCreationTransaction.deserialize_token_info(self.manager._settings, token_info)
+        TokenCreationTransaction.deserialize_token_info(token_info)
         update_tx(tx)
         self.manager.verification_service.verify(tx)
 
@@ -496,7 +498,7 @@ class TokenTest(unittest.TestCase):
         tx.token_name = 'Test Token'
         tx.token_symbol = 'TST∞'
         token_info = tx.serialize_token_info()
-        TokenCreationTransaction.deserialize_token_info(self.manager._settings, token_info)
+        TokenCreationTransaction.deserialize_token_info(token_info)
         update_tx(tx)
         self.manager.verification_service.verify(tx)
 
@@ -557,7 +559,7 @@ class TokenTest(unittest.TestCase):
         info2 = bytes(int_to_bytes(invalid_version, 1)) + info[1:]
 
         with self.assertRaises(ValueError):
-            TokenCreationTransaction.deserialize_token_info(self.manager._settings, info2)
+            TokenCreationTransaction.deserialize_token_info(info2)
 
     def test_token_info_not_utf8(self):
         token_name = 'TestCoin'
@@ -568,7 +570,7 @@ class TokenTest(unittest.TestCase):
         bytes1 = (int_to_bytes(token_info_version, 1) + int_to_bytes(len(token_name), 1) + token_name.encode('utf-8')
                   + int_to_bytes(len(token_symbol), 1) + token_symbol.encode('utf-8'))
 
-        name, symbol, info_version, _ = TokenCreationTransaction.deserialize_token_info(self.manager._settings, bytes1)
+        name, symbol, info_version, _ = TokenCreationTransaction.deserialize_token_info(bytes1)
 
         self.assertEqual(name, token_name)
         self.assertEqual(symbol, token_symbol)
@@ -579,14 +581,14 @@ class TokenTest(unittest.TestCase):
                   + int_to_bytes(len(token_symbol), 1) + token_symbol.encode('utf-8'))
 
         with self.assertRaises(StructError):
-            TokenCreationTransaction.deserialize_token_info(self.manager._settings, bytes2)
+            TokenCreationTransaction.deserialize_token_info(bytes2)
 
         encoded_symbol = token_symbol.encode('utf-16')
         bytes3 = (bytes([0x01]) + int_to_bytes(len(token_name), 1) + token_name.encode('utf-8')
                   + int_to_bytes(len(encoded_symbol), 1) + encoded_symbol)
 
         with self.assertRaises(StructError):
-            TokenCreationTransaction.deserialize_token_info(self.manager._settings, bytes3)
+            TokenCreationTransaction.deserialize_token_info(bytes3)
 
     def test_block_with_htr_authority(self):
         parents = [tx.hash for tx in self.genesis]

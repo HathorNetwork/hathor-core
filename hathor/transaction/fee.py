@@ -13,12 +13,12 @@
 # limitations under the License.
 
 from hathor.conf.settings import HathorSettings
+from hathor.transaction import Transaction, TxOutput
 from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
-from hathor.transaction.util import get_deposit_token_amount_from_htr, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid
 
 
-def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo]) -> int:
+def calculate_fee(settings: HathorSettings, tx: Transaction, token_dict: dict[TokenUid, TokenInfo]) -> int:
     """Calculate the fee for this transaction.
 
     The fee is calculated based on fee tokens outputs. It sums up all tokens with TokenInfoVersion.FEE value.
@@ -28,12 +28,15 @@ def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo
     """
     fee = 0
 
+    spent_outputs_dict = get_non_authority_outputs(tx.get_spent_outputs_grouped_by_token_uid())
+    outputs_dict = get_non_authority_outputs(tx.get_outputs_grouped_by_token_uid())
+
     for token_uid, token_info in token_dict.items():
         if token_uid is settings.HATHOR_TOKEN_UID or token_info.version is TokenInfoVersion.DEPOSIT:
             continue
 
-        chargeable_outputs = [output for output in token_info.outputs if not output.is_token_authority()]
-        chargeable_spent_outputs = [output for output in token_info.spent_outputs if not output.is_token_authority()]
+        chargeable_outputs = outputs_dict.get(token_uid, [])
+        chargeable_spent_outputs = spent_outputs_dict.get(token_uid, [])
 
         # melting fee-based token without producing outputs
         if len(chargeable_spent_outputs) > 0 and len(chargeable_outputs) == 0:
@@ -43,46 +46,14 @@ def calculate_fee(settings: HathorSettings, token_dict: dict[TokenUid, TokenInfo
     return fee
 
 
+def get_non_authority_outputs(outputs_dict: dict[TokenUid, list[TxOutput]]) -> dict[TokenUid, list[TxOutput]]:
+    filtered_dict: dict[TokenUid, list[TxOutput]] = {}
+    for token_uid, outputs in outputs_dict.items():
+        filtered_dict[token_uid] = [output for output in outputs if not output.is_token_authority()]
+    return filtered_dict
+
+
 def should_charge_fee(settings: HathorSettings) -> bool:
     """Check if this transaction should charge a fee based on the FEE_FEATURE_FLAG
     """
     return settings.FEE_FEATURE_FLAG
-
-
-def collect_fee(settings: HathorSettings, fee: int, token_dict: dict[TokenUid, TokenInfo]) -> int:
-    """
-    Check each token amount and collect the fee that should be paid.
-    It changes the token_dict in place with the new amount from the affected tokens.
-    """
-    assert fee >= 0
-    collected_fee = 0
-    remaining_fee = fee
-
-    # Check fee payment
-    for token_uid, token_info in token_dict.items():
-        if remaining_fee == 0:
-            return collected_fee
-
-        if token_info.amount == 0:
-            # this token doesn't have a valid amount to pay, move to the next
-            pass
-        # the input wasn't spent, start charging the fee
-        elif token_info.amount < 0:
-            value_to_pay = 0
-            token_amount = token_info.amount
-            if token_uid == settings.HATHOR_TOKEN_UID:
-                # the amount is a negative value, so we sum the paid fee to reduce the available value
-                # limit the amount to the fee
-                value_to_pay = min(abs(token_amount), remaining_fee)
-                token_amount += value_to_pay
-            elif token_info.version == TokenInfoVersion.DEPOSIT:
-                token_htr_value = get_deposit_token_withdraw_amount(settings, token_amount)
-                value_to_pay = min(token_htr_value, remaining_fee)
-                token_amount += get_deposit_token_amount_from_htr(settings, value_to_pay)
-
-            token_dict[token_uid] = TokenInfo(token_amount, token_info.can_mint, token_info.can_melt,
-                                              token_info.version, token_info.spent_outputs, token_info.outputs)
-            collected_fee += value_to_pay
-            remaining_fee -= value_to_pay
-
-    return collected_fee

@@ -3,8 +3,6 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import NamedTuple
 
-from hathor.transaction import TxOutput
-
 
 class TokenInfoVersion(IntEnum):
     DEPOSIT = 1
@@ -17,16 +15,12 @@ class TokenInfo(NamedTuple):
     can_mint: bool
     can_melt: bool
     version: TokenInfoVersion | None
-    spent_outputs: list[TxOutput]
-    outputs: list[TxOutput]
 
     @classmethod
-    def create_empty(cls, version: TokenInfoVersion | None = None) -> TokenInfo:
+    def create_empty(cls, version: TokenInfoVersion | None = None, is_new_token: bool = False) -> TokenInfo:
         return TokenInfo(
             amount=0,
-            can_mint=False,
-            can_melt=False,
+            can_mint=is_new_token,
+            can_melt=is_new_token,
             version=version,
-            spent_outputs=[],
-            outputs=[],
         )

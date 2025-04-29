@@ -119,6 +119,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         :param buf: Bytes of a serialized transaction
         :type buf: bytes
 
+        :param verbose: Verbose callback
+        :type verbose: VerboseCallback
+
         :return: A buffer containing the remaining struct bytes
         :rtype: bytes
 
@@ -282,9 +285,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 assert self.storage is not None
                 token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
                 if token_creation_tx is None:
-                    InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
-                else:
-                    token_info_version = token_creation_tx.token_info_version
+                    raise InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
+
+                token_info_version = token_creation_tx.token_info_version
 
             token_info = token_dict.get(
                  token_uid,
@@ -298,14 +301,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             else:
                 amount -= spent_output.value
 
-            token_dict[token_uid] = TokenInfo(
-                amount,
-                can_mint,
-                can_melt,
-                token_info_version,
-                [*token_info.spent_outputs, spent_output],
-                token_info.outputs
-            )
+            token_dict[token_uid] = TokenInfo(amount, can_mint, can_melt, token_info_version)
 
         return token_dict
 
@@ -342,9 +338,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                         sum_tokens,
                         token_info.can_mint,
                         token_info.can_melt,
-                        token_info.version,
-                        token_info.spent_outputs,
-                        [*token_info.outputs, tx_output]
+                        token_info.version
                     )
 
     def is_double_spending(self) -> bool:
@@ -375,6 +369,26 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             if meta.voided_by:
                 return True
         return False
+
+    def get_spent_output(self, tx_input: TxInput) -> tuple[TxOutput, TokenUid]:
+        spent_tx = self.get_spent_tx(tx_input)
+        spent_output = spent_tx.outputs[tx_input.index]
+        token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
+        return spent_output, token_uid
+
+    def get_spent_outputs_grouped_by_token_uid(self) -> dict[TokenUid, list[TxOutput]]:
+        outputs_dict: dict[TokenUid, list[TxOutput]] = {}
+        for tx_input in self.inputs:
+            spent_output, token_uid = self.get_spent_output(tx_input)
+            outputs_dict.setdefault(token_uid, []).append(spent_output)
+        return outputs_dict
+
+    def get_outputs_grouped_by_token_uid(self) -> dict[TokenUid, list[TxOutput]]:
+        outputs_dict: dict[TokenUid, list[TxOutput]] = {}
+        for tx_output in self.outputs:
+            token_uid = self.get_token_uid(tx_output.get_token_index())
+            outputs_dict.setdefault(token_uid, []).append(tx_output)
+        return outputs_dict
 
     @override
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
