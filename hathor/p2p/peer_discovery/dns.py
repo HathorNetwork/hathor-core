@@ -46,7 +46,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         self.hosts = hosts
         self.default_port = default_port
         self.test_mode = test_mode
-        self.entrypoints = []
+        self.entrypoints = set()
 
     def do_lookup_address(self, host: str) -> Deferred[LookupResult]:
         return lookupAddress(host)
@@ -61,8 +61,9 @@ class DNSPeerDiscovery(PeerDiscovery):
         """
         for host in self.hosts:
             for entrypoint in (await self.dns_seed_lookup(host)):
-                self.entrypoints.append(entrypoint)
-                connect_to_endpoint(entrypoint)
+                self.entrypoints.add(entrypoint)
+                connect_to_endpoint(entrypoint, discovery_call=True) # By me, should be outgoing --> disc
+
 
     async def dns_seed_lookup(self, host: str) -> set[PeerEndpoint]:
         """ Run a DNS lookup for TXT, A, and AAAA records and return a list of connection strings.

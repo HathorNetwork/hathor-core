@@ -289,6 +289,13 @@ class HathorProtocol:
         self.expected_peer_id = peer.id if peer else entrypoint.peer_id
         self.entrypoint = entrypoint
 
+        if self.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
+            if self not in self.connections.discovered_slot.connection_slot:
+                if len(self.connections.discovered_slot.connection_slot) < HathorSettings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS:
+                    self.connections.discovered_slot.connection_slot.add(self)
+                    self.connections.connections.add(self)
+
+
     def on_peer_ready(self) -> None:
         assert self.connections is not None
         assert self.peer is not None

@@ -286,13 +286,13 @@ class HathorSettings(NamedTuple):
     PEER_MAX_CONNECTIONS: int = 125
 
     # Max Number of each connection slot (int):
-    PEER_MAX_ENTRYPOINTS: int = 40
-    PEER_MAX_OUTGOING_CONNECTIONS: int = 1
-    PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 5
+    PEER_MAX_ENTRYPOINTS: int = 50
+    PEER_MAX_OUTGOING_CONNECTIONS: int = 50
+    PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 20
     PEER_MAX_CHECK_PEER_CONNECTIONS: int = 5
 
     # Queue size for each connection slot:
-    QUEUE_SIZE: int = 10
+    QUEUE_SIZE: int = 100
 
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
