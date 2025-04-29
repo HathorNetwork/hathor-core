@@ -569,7 +569,7 @@ class ConnectionsManager:
         protocol_connected = False  # If protocol is added to slot, True. If to Queue or disconnected, False.
         # Next block sends the connection to the appropriate slot.
         if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
-            if protocol not in self.connections:
+            if protocol not in self.discovered_slot.connection_slot:
                 # Here, it can happend that the protocol changes to Check Entrypoints.
                 protocol_connected = self.outgoing_slot.add_connection(protocol)
             else:
@@ -580,7 +580,8 @@ class ConnectionsManager:
         if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
             protocol_connected = self.incoming_slot.add_connection(protocol)
 
-        # Discovered connections are added in on_outbound_connect() in DNS Query or Bootstrap
+        if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
+            protocol_connected = self.discovered_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             protocol_connected = self.check_entrypoints_slot.add_connection(protocol)
@@ -669,6 +670,9 @@ class ConnectionsManager:
         print(f"CHECKEP:{len(self.check_entrypoints_slot.connection_slot)}")
         print(f"-->TOTAL:{len(self.connections)}")
         print("-"*10)
+
+        if protocol in self.discovered_slot.connection_slot and self.outgoing_slot.connection_slot:
+            print("YEEEEEEEEEEEEEEEEEEEEEEEEEES")
         # Discard handles case when not in connections.
         self.connections.discard(protocol)
 
@@ -683,6 +687,7 @@ class ConnectionsManager:
             self.incoming_slot.remove_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
+            print("Removing DISCOVERED")
             self.discovered_slot.remove_connection(protocol)
 
         # The only connection type that may pop from a queue is CHECK_ENTRYPOINTS

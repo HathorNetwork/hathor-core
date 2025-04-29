@@ -290,10 +290,12 @@ class HathorProtocol:
         self.entrypoint = entrypoint
 
         if self.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
+            
             if self not in self.connections.discovered_slot.connection_slot:
-                if len(self.connections.discovered_slot.connection_slot) < HathorSettings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS:
+                if len(self.connections.discovered_slot.connection_slot) < self._settings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS:
                     self.connections.discovered_slot.connection_slot.add(self)
                     self.connections.connections.add(self)
+                    self.connections.outgoing_slot.connection_slot.discard(self)
 
 
     def on_peer_ready(self) -> None:
