@@ -17,18 +17,27 @@ from typing import Any, Type
 
 from typing_extensions import Self
 
+from hathor.serialization import Deserializer, Serializer
+
 
 class Field(ABC):
     __slots__ = ()
 
-    @abstractmethod
     def to_bytes(self, value: Any) -> bytes:
-        """Serialize the `value` in bytes."""
+        """Serialize the `value` to bytes, useful for a oneshot conversion, otherwise use self.serializer."""
+        from hathor.serialization import BytesSerializer
+        serializer = BytesSerializer()
+        self.serialize(serializer, value)
+        return bytes(serializer.finalize())
+
+    @abstractmethod
+    def serialize(self, serializer: Serializer, value: Any) -> None:
+        """Serialize the `value` to a serializer."""
         raise NotImplementedError
 
     @abstractmethod
-    def to_python(self, raw: bytes) -> Any:
-        """Deserialize bytes in value."""
+    def deserialize(self, deserializer: Deserializer) -> Any:
+        """Deserialize bytes in value from a buffer, only consume the relevant bytes."""
         raise NotImplementedError
 
     @classmethod

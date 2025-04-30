@@ -42,7 +42,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
 
         nc_id = blueprint_id
         nc_method = 'initialize'
-        nc_args_bytes = b''
+        nc_args_bytes = b'\00'
 
         key = KeyPair.create(b'my-pass')
         privkey = key.get_private_key(b'my-pass')

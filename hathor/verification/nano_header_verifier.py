@@ -114,6 +114,6 @@ class NanoHeaderVerifier:
             raise NCMethodNotFound
         parser = NCMethodParser(method)
         try:
-            parser.parse_args_bytes(nano_header.nc_args_bytes)
+            parser.deserialize_args(nano_header.nc_args_bytes)
         except struct.error as e:
             raise NCSerializationError from e
