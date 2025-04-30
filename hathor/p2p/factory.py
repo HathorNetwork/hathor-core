@@ -61,4 +61,5 @@ class HathorServerFactory(_HathorLineReceiverFactory, protocol.ServerFactory):
 class HathorClientFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
     """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
     """
-    connection_type = HathorLineReceiver.ConnectionType.OUTGOING
+    connection_type = HathorLineReceiver.ConnectionType.OUTGOING 
+

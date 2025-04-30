@@ -551,13 +551,7 @@ class ConnectionsManager:
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
 
-        print("-"*10)
-        print(f"OUTGOING:{len(self.outgoing_slot.connection_slot)}")
-        print(f"INCOMING:{len(self.incoming_slot.connection_slot)}")
-        print(f"DISCOVERED:{len(self.discovered_slot.connection_slot)}")
-        print(f"CHECKEP:{len(self.check_entrypoints_slot.connection_slot)}")
-        print(f"-->TOTAL:{len(self.connections)}")
-        print("-"*10)
+
 
         # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:
@@ -580,8 +574,6 @@ class ConnectionsManager:
         if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
             protocol_connected = self.incoming_slot.add_connection(protocol)
 
-        if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
-            protocol_connected = self.discovered_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             protocol_connected = self.check_entrypoints_slot.add_connection(protocol)
@@ -600,6 +592,14 @@ class ConnectionsManager:
                 protocol=protocol,
                 peers_count=self._get_peers_count()
             )
+
+        print("-"*10)
+        print(f"OUTGOING:{len(self.outgoing_slot.connection_slot)}")
+        print(f"INCOMING:{len(self.incoming_slot.connection_slot)}")
+        print(f"DISCOVERED:{len(self.discovered_slot.connection_slot)}")
+        print(f"CHECKEP:{len(self.check_entrypoints_slot.connection_slot)}")
+        print(f"-->TOTAL:{len(self.connections)}")
+        print("-"*10)
 
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
         """Called when a peer is ready."""
