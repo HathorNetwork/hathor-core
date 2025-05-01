@@ -63,3 +63,9 @@ class HathorClientFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
     """
     connection_type = HathorLineReceiver.ConnectionType.OUTGOING 
 
+class HathorDiscoveredFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
+    """
+        HathorDiscoveredFactory is the same as a HathorClientFactory, but the type of connection is set to 
+        discovered, for connection pool slotting.
+    """
+    connection_type = HathorLineReceiver.ConnectionType.DISCOVERED

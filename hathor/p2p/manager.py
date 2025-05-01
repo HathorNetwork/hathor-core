@@ -252,12 +252,15 @@ class ConnectionsManager:
         self.localhost_only = False
 
         # Factories.
-        from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
+        from hathor.p2p.factory import HathorClientFactory, HathorServerFactory, HathorDiscoveredFactory
         self.use_ssl = ssl
         self.server_factory = HathorServerFactory(
             self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
         )
         self.client_factory = HathorClientFactory(
+            self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+        )
+        self.discovered_factory = HathorDiscoveredFactory(
             self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
         )
 
@@ -563,17 +566,18 @@ class ConnectionsManager:
         protocol_connected = False  # If protocol is added to slot, True. If to Queue or disconnected, False.
         # Next block sends the connection to the appropriate slot.
         if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
-            if protocol not in self.discovered_slot.connection_slot:
-                # Here, it can happend that the protocol changes to Check Entrypoints.
-                protocol_connected = self.outgoing_slot.add_connection(protocol)
-            else:
-                print("YOLO")
+            # Here, it can happend that the protocol changes to Check Entrypoints.
+            protocol_connected = self.outgoing_slot.add_connection(protocol)
 
             # The check is done so discovered connections are not added doubly.
 
         if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
             protocol_connected = self.incoming_slot.add_connection(protocol)
 
+        if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
+            print("On peer connect: Discovered Slot!")
+            print("On peer connect: Discovered Slot!")
+            protocol_connected = self.discovered_slot.add_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
             protocol_connected = self.check_entrypoints_slot.add_connection(protocol)
@@ -671,7 +675,7 @@ class ConnectionsManager:
         print(f"-->TOTAL:{len(self.connections)}")
         print("-"*10)
 
-        if protocol in self.discovered_slot.connection_slot and self.outgoing_slot.connection_slot:
+        if protocol in self.discovered_slot.connection_slot and protocol in self.outgoing_slot.connection_slot:
             print("YEEEEEEEEEEEEEEEEEEEEEEEEEES")
         # Discard handles case when not in connections.
         self.connections.discard(protocol)
@@ -687,7 +691,6 @@ class ConnectionsManager:
             self.incoming_slot.remove_connection(protocol)
 
         if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
-            print("Removing DISCOVERED")
             self.discovered_slot.remove_connection(protocol)
 
         # The only connection type that may pop from a queue is CHECK_ENTRYPOINTS
@@ -978,12 +981,17 @@ class ConnectionsManager:
 
         if discovery_call:
             self.discovered_entrypoints.add(entrypoint)
+            factory = self.discovered_factory
+            print("Connect to Endpoint: Discovery Call: Discovered FACTORY.")
+        else:
+            factory = self.client_factory
+
 
         endpoint = entrypoint.addr.to_client_endpoint(self.reactor)
 
         factory: IProtocolFactory
         if use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.client_factory)
+            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
         else:
             factory = self.client_factory
 
