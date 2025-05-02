@@ -61,11 +61,12 @@ class HathorServerFactory(_HathorLineReceiverFactory, protocol.ServerFactory):
 class HathorClientFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
     """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
     """
-    connection_type = HathorLineReceiver.ConnectionType.OUTGOING 
+    connection_type = HathorLineReceiver.ConnectionType.OUTGOING
+
 
 class HathorDiscoveredFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
     """
-        HathorDiscoveredFactory is the same as a HathorClientFactory, but the type of connection is set to 
+        HathorDiscoveredFactory is the same as a HathorClientFactory, but the type of connection is set to
         discovered, for connection pool slotting.
     """
     connection_type = HathorLineReceiver.ConnectionType.DISCOVERED

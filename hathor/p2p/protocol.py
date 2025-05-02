@@ -276,8 +276,6 @@ class HathorProtocol:
 
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
-        if self.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
-            print("DISC MEU NEGO CHAMEGOOOOOOOOOO" )
 
         if self.connections:
             self.connections.on_peer_connect(self)
@@ -290,17 +288,6 @@ class HathorProtocol:
 
         self.expected_peer_id = peer.id if peer else entrypoint.peer_id
         self.entrypoint = entrypoint
-
-        #if self.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
-        #    if self in self.connections.outgoing_slot.connection_slot:
-        #        print("AAAAAAAAAIN PAI PARAAAAAAAAAAAAA")
-            
-#            if self not in self.connections.discovered_slot.connection_slot:
-#                if len(self.connections.discovered_slot.connection_slot) < self._settings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS:
-#                    self.connections.discovered_slot.connection_slot.add(self)
-#                    self.connections.connections.add(self)
-#                    self.connections.outgoing_slot.connection_slot.discard(self)
-
 
     def on_peer_ready(self) -> None:
         assert self.connections is not None

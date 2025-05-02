@@ -26,7 +26,7 @@ class MockPeerDiscovery(PeerDiscovery):
 
 
 class MockDNSPeerDiscovery(DNSPeerDiscovery):
-    def __init__(self, reactor: TestMemoryReactorClock, bootstrap_txt: list[tuple[str, int]], bootstrap_a: list[str], test_mode:bool = False):
+    def __init__(self, reactor: TestMemoryReactorClock, bootstrap_txt: list[tuple[str, int]], bootstrap_a: list[str], test_mode: bool = False):
         super().__init__(['test.example'])
         self.reactor = reactor
         self.mocked_lookup_a = [RRHeader(type=A, payload=Record_A(address)) for address in bootstrap_a]
@@ -119,7 +119,6 @@ class BootstrapTestCase(unittest.TestCase):
 
     def test_discovered_update(self) -> None:
 
-        ### Keep going ###
         pubsub = PubSubManager(self.clock)
         full_node = PrivatePeer.auto_generated()
         connections = ConnectionsManager(

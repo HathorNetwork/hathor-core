@@ -619,10 +619,8 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # Assert the numbers add up to the max of connections.
         total_conn = len(full_node.connections.connections)
         self.assertTrue(amount_check_ep_conn + max_number_outgoing_connections == total_conn)
-    
 
     def test_check_ep_overflow(self):
-        
         _settings = HathorSettings(bytes(1), bytes(1), "testnet")
 
         # Create exactly the amount of peers that the outgoing slot can handle
@@ -663,28 +661,17 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # Amount of established connections in check_ep slot.
         amount_check_ep_conn = len(full_node.connections.check_entrypoints_slot.connection_slot)
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
         print(amount_check_ep_conn)
 
-        xConn  = out_connList[-1]
+        xConn = out_connList[-1]
         for conn in full_node.connections.check_entrypoints_slot.connection_slot:
             self.assertTrue(conn.connection_state == HathorProtocol.ConnectionState.CONNECTING)
+
         self.assertTrue(xConn in full_node.connections.check_entrypoints_slot.connection_slot)
         self.simulator.run(300)
 
-        #self.assertTrue(xConn in full_node.connections.check_entrypoints_slot.connection_slot)
         for conn in full_node.connections.check_entrypoints_slot.connection_slot:
             self.assertTrue(conn.connection_state == HathorProtocol.ConnectionState.CONNECTING)
 
         # It passed through the cap of check_entrypoints. It mush be capped.
         self.assertTrue(amount_check_ep_conn == max_check_ep_connections)
-
-        # Let's see if the queue of entrypoint has updated:
-        #self.assertTrue(len(full_node.connections.check_entrypoints_slot.entrypoint_queue_slot) > 0)
-
-        # Now, let's add one more connection. This must go to the peer.
-    
-
-
-
-

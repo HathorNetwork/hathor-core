@@ -35,7 +35,6 @@ LookupResult: TypeAlias = tuple[list[RRHeader], list[RRHeader], list[RRHeader]]
 class DNSPeerDiscovery(PeerDiscovery):
     """ It implements a DNS peer discovery, which looks for peers in A, AAA, and TXT records.
     """
-    entrypoints: set[PeerEndpoint]
 
     def __init__(self, hosts: list[str], default_port: int = 40403, test_mode: int = 0):
         """
@@ -46,7 +45,6 @@ class DNSPeerDiscovery(PeerDiscovery):
         self.hosts = hosts
         self.default_port = default_port
         self.test_mode = test_mode
-        self.entrypoints = set()
 
     def do_lookup_address(self, host: str) -> Deferred[LookupResult]:
         return lookupAddress(host)
@@ -61,9 +59,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         """
         for host in self.hosts:
             for entrypoint in (await self.dns_seed_lookup(host)):
-                self.entrypoints.add(entrypoint)
-                connect_to_endpoint(entrypoint, discovery_call=True) # By me, should be outgoing --> disc
-
+                connect_to_endpoint(entrypoint, discovery_call=True)
 
     async def dns_seed_lookup(self, host: str) -> set[PeerEndpoint]:
         """ Run a DNS lookup for TXT, A, and AAAA records and return a list of connection strings.
