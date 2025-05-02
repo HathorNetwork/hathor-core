@@ -8,10 +8,10 @@ from twisted.python.failure import Failure
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
 from hathor.simulator import FakeConnection
-from hathor.p2p.protocol import HathorProtocol
 from hathor.simulator.trigger import (
     StopAfterNMinedBlocks,
     StopAfterNTransactions,
@@ -620,7 +620,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         total_conn = len(full_node.connections.connections)
         self.assertTrue(amount_check_ep_conn + max_number_outgoing_connections == total_conn)
 
-    def test_check_ep_overflow(self):
+    def test_check_ep_overflow(self) -> None:
         _settings = HathorSettings(bytes(1), bytes(1), "testnet")
 
         # Create exactly the amount of peers that the outgoing slot can handle
@@ -667,7 +667,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for conn in full_node.connections.check_entrypoints_slot.connection_slot:
             self.assertTrue(conn.connection_state == HathorProtocol.ConnectionState.CONNECTING)
 
-        self.assertTrue(xConn in full_node.connections.check_entrypoints_slot.connection_slot)
+        self.assertTrue(xConn in full_node.connections.check_entrypoints_slot.connection_slot)  # type: ignore
         self.simulator.run(300)
 
         for conn in full_node.connections.check_entrypoints_slot.connection_slot:

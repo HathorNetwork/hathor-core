@@ -26,13 +26,12 @@ class MockPeerDiscovery(PeerDiscovery):
 
 
 class MockDNSPeerDiscovery(DNSPeerDiscovery):
-    def __init__(self, reactor: TestMemoryReactorClock, bootstrap_txt: list[tuple[str, int]], bootstrap_a: list[str], test_mode: bool = False):
+    def __init__(self, reactor: TestMemoryReactorClock, bootstrap_txt: list[tuple[str, int]], bootstrap_a: list[str]):
         super().__init__(['test.example'])
         self.reactor = reactor
         self.mocked_lookup_a = [RRHeader(type=A, payload=Record_A(address)) for address in bootstrap_a]
         txt_entries = [f'tcp://{h}:{p}'.encode() for h, p in bootstrap_txt]
         self.mocked_lookup_txt = [RRHeader(type=TXT, payload=Record_TXT(*txt_entries))]
-        self.test_mode = test_mode
 
     def do_lookup_address(self, host: str) -> Deferred[LookupResult]:
         deferred: Deferred[LookupResult] = Deferred()
@@ -141,7 +140,7 @@ class BootstrapTestCase(unittest.TestCase):
             ('foobar', 1234),
             ('baz', 456),
         ]
-        connections.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a, test_mode=True))
+        connections.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a))
         connections.do_discovery()
         self.clock.advance(1)
         connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}

@@ -28,7 +28,7 @@ from twisted.web.client import Agent
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
-from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery, PeerDiscovery
+from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import VerifiedPeerStorage
@@ -74,7 +74,7 @@ class Slot:
     type: HathorProtocol.ConnectionType
     max_slot_connections: int
     queue_size_entrypoints: int
-    entrypoint_set: set[PeerAddress]
+    entrypoint_set: set[PeerAddress | None]
 
     def __init__(self, type: HathorProtocol.ConnectionType, _settings: HathorSettings):
         self.type = type
@@ -154,11 +154,11 @@ class Slot:
             # If protocol e.p. not in set, it is a new protocol with new e.p.'s to check.
             # If in set, it is a connection from a previously dequeued entrypoint.
             if protocol.connection_state == HathorProtocol.ConnectionState.READY:
-                if protocol.entrypoint.addr not in self.entrypoint_set:
+                if protocol.entrypoint and protocol.entrypoint.addr not in self.entrypoint_set:
                     entrypoints = protocol.peer.info.entrypoints
                     # Unpack the entrypoints and put them in the queue and the set.
                     for each_entrypoint in entrypoints:
-                        if each_entrypoint != protocol.entrypoint.addr:
+                        if protocol.entrypoint and each_entrypoint != protocol.entrypoint.addr:
                             if len(self.entrypoint_queue_slot) == self.queue_size_entrypoints:
                                 # Limit achieved for QUEUE
                                 break
@@ -249,7 +249,7 @@ class ConnectionsManager:
         self.localhost_only = False
 
         # Factories.
-        from hathor.p2p.factory import HathorClientFactory, HathorServerFactory, HathorDiscoveredFactory
+        from hathor.p2p.factory import HathorClientFactory, HathorDiscoveredFactory, HathorServerFactory
         self.use_ssl = ssl
         self.server_factory = HathorServerFactory(
             self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
@@ -932,18 +932,19 @@ class ConnectionsManager:
         if use_ssl is None:
             use_ssl = self.use_ssl
 
-        if discovery_call:
-            factory = self.discovered_factory
-        else:
-            factory = self.client_factory
-
         endpoint = entrypoint.addr.to_client_endpoint(self.reactor)
 
         factory: IProtocolFactory
-        if use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
+        if discovery_call:
+            if use_ssl:
+                factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.discovered_factory)
+            else:
+                factory = self.discovered_factory
         else:
-            factory = self.client_factory
+            if use_ssl:
+                factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.client_factory)
+            else:
+                factory = self.client_factory
 
         if peer is not None:
             now = int(self.reactor.seconds())
