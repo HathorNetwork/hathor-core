@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.indexes.rocksdb_utils import InternalUid, RocksDBIndexUtils, from_internal_token_uid, to_internal_token_uid
 from hathor.indexes.utxo_index import UtxoIndex, UtxoIndexItem
@@ -311,8 +312,8 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
-        super().__init__()
+    def __init__(self, db: 'rocksdb.DB', *, settings: HathorSettings, cf_name: Optional[bytes] = None) -> None:
+        super().__init__(settings=settings)
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_UTXO_INDEX)
 

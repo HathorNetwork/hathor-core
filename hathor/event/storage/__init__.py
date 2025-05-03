@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from hathor.event.storage.event_storage import EventStorage
-from hathor.event.storage.memory_storage import EventMemoryStorage
 from hathor.event.storage.rocksdb_storage import EventRocksDBStorage
 
-__all__ = ['EventStorage', 'EventMemoryStorage', 'EventRocksDBStorage']
+__all__ = ['EventStorage', 'EventRocksDBStorage']

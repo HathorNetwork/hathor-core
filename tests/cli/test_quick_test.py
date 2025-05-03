@@ -11,7 +11,7 @@ class TestQuickTest(unittest.TestCase):
             def register_signal_handlers(self) -> None:
                 pass
 
-        quick_test = CustomQuickTest(argv=['--memory-storage', '--no-wait'])
+        quick_test = CustomQuickTest(argv=['--temp-data', '--no-wait'])
         assert quick_test is not None
 
         self.clean_pending(required_to_quiesce=False)

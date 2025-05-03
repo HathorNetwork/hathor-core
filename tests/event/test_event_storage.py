@@ -1,23 +1,17 @@
-import tempfile
-
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.node_state import NodeState
-from hathor.event.storage import EventStorage
-from hathor.event.storage.memory_storage import EventMemoryStorage
 from hathor.event.storage.rocksdb_storage import EventRocksDBStorage
-from hathor.storage.rocksdb_storage import RocksDBStorage
 from tests import unittest
 from tests.utils import EventMocker
 
 
-class EventStorageBaseTest(unittest.TestCase):
-    __test__ = False
-
-    event_storage: EventStorage
-
+class EventStorageTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.event_mocker = EventMocker(self.rng)
+        self.event_storage = EventRocksDBStorage(
+            rocksdb_storage=self.create_rocksdb_storage(),
+        )
 
     def test_save_event_and_retrieve(self) -> None:
         event = self.event_mocker.generate_mocked_event()
@@ -233,22 +227,3 @@ class EventStorageBaseTest(unittest.TestCase):
 
         assert node_state is None
         assert event_queue_state is False
-
-
-class EventStorageRocksDBTest(EventStorageBaseTest):
-    __test__ = True
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.directory = tempfile.mkdtemp()
-        self.tmpdirs.append(self.directory)
-        self.rocksdb_storage = RocksDBStorage(path=self.directory)
-        self.event_storage = EventRocksDBStorage(self.rocksdb_storage)
-
-
-class EventStorageMemoryTest(EventStorageBaseTest):
-    __test__ = True
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.event_storage = EventMemoryStorage()
