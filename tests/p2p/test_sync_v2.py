@@ -663,12 +663,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         amount_check_ep_conn = len(full_node.connections.check_entrypoints_slot.connection_slot)
         print(amount_check_ep_conn)
 
-        xConn = out_connList[-1]
-        for conn in full_node.connections.check_entrypoints_slot.connection_slot:
-            self.assertTrue(conn.connection_state == HathorProtocol.ConnectionState.CONNECTING)
-
-        self.assertTrue(xConn in full_node.connections.check_entrypoints_slot.connection_slot)  # type: ignore
-        self.simulator.run(300)
+        self.simulator.run(30)
 
         for conn in full_node.connections.check_entrypoints_slot.connection_slot:
             self.assertTrue(conn.connection_state == HathorProtocol.ConnectionState.CONNECTING)

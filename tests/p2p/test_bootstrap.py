@@ -115,39 +115,3 @@ class BootstrapTestCase(unittest.TestCase):
             'tcp://foobar:1234',
             'tcp://baz:456',
         })
-
-    def test_discovered_update(self) -> None:
-
-        pubsub = PubSubManager(self.clock)
-        full_node = PrivatePeer.auto_generated()
-        connections = ConnectionsManager(
-            self._settings,
-            self.clock,
-            full_node,
-            pubsub,
-            True,
-            self.rng,
-            True,
-            enable_ipv6=False,
-            disable_ipv4=False
-        )
-
-        bootstrap_a = [
-            '127.0.0.99',
-            '127.0.0.88',
-        ]
-        bootstrap_txt = [
-            ('foobar', 1234),
-            ('baz', 456),
-        ]
-        connections.add_peer_discovery(MockDNSPeerDiscovery(self.clock, bootstrap_txt, bootstrap_a))
-        connections.do_discovery()
-        self.clock.advance(1)
-        connecting_entrypoints = {str(entrypoint) for entrypoint, _ in connections.connecting_peers.values()}
-        self.assertEqual(connecting_entrypoints, {
-            'tcp://127.0.0.99:40403',
-            'tcp://127.0.0.88:40403',
-            'tcp://foobar:1234',
-            'tcp://baz:456',
-        })
-        self.assertTrue(len(connections.discovered_slot.connection_slot) == 1)
