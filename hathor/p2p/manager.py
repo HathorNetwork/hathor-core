@@ -423,11 +423,14 @@ class ConnectionsManager:
             return
         
         # If whitelist only flag ON and whitelist not empty, deny peer not in whitelist.
-        if self.whitelist_only and self.manager.peers_whitelist:
+        # Important Note: Perhaps no peer ID in the connection...
+        '''
+                if self.whitelist_only and self.manager.peers_whitelist:
             if protocol.peer.id not in self.manager.peers_whitelist:
                 self.log.warn('Denied: Connection not in whitelist but node is whitelist-only.')
                 protocol.disconnect(force=True)
                 return 
+        '''
 
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
