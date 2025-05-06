@@ -24,6 +24,7 @@ from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
+from hathor_cli.util import create_file_logger
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
@@ -185,6 +186,8 @@ class HathorProtocol:
 
         self.log = logger.new()
 
+        self.file_logger = None
+
         self.capabilities = set()
 
     def change_state(self, state_enum: PeerState) -> None:
@@ -316,13 +319,17 @@ class HathorProtocol:
         to the peer. It depends on the underlying protocol in which
         HathorProtocol is running.
         """
-        raise NotImplementedError
+        if self.file_logger:
+            self.file_logger.debug('send_message', cmd=cmd, payload=payload)
 
     @cpu.profiler(key=lambda self, cmd: 'p2p-cmd!{}'.format(str(cmd)))
     def recv_message(self, cmd: ProtocolMessages, payload: str) -> None:
         """ Executed when a new message arrives.
         """
         assert self.state is not None
+
+        if self.file_logger:
+            self.file_logger.debug('recv_message', cmd=cmd, payload=payload)
 
         now = self.reactor.seconds()
         self.last_message = now
@@ -385,6 +392,17 @@ class HathorProtocol:
             self.aborting = True
         else:
             transport.abortConnection()
+
+    def enable_protocol_logging(self, log_path: str) -> None:
+        """Enable protocol logging for this connection to the specified path."""
+
+        self.file_logger = create_file_logger(log_path)
+
+    def disable_protocol_logging(self) -> None:
+        """Disable protocol logging for this connection."""
+        if self.file_logger:
+            self.file_logger.info('Protocol logging disabled')
+            self.file_logger = None
 
     def on_receive_peer(self, peer: UnverifiedPeer) -> None:
         """ Update a peer information in our storage, the manager's connection loop will pick it later.
@@ -477,6 +495,7 @@ class HathorLineReceiver(LineReceiver, HathorProtocol):
         self.recv_message(cmd, msgdata)
 
     def send_message(self, cmd_enum: ProtocolMessages, payload: Optional[str] = None) -> None:
+        super().send_message(cmd_enum, payload)
         cmd = cmd_enum.value
         if payload:
             line = '{} {}'.format(cmd, payload).encode('utf-8')

@@ -154,6 +154,11 @@ docker-push-aws: docker
 	docker tag $(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_subtag)
 	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_subtag)
 
+.PHONY: docker-push-gcp
+docker-push-gcp: docker
+	docker tag $(docker_tag) us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/hathor-core:$(docker_subtag)
+	docker push us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/hathor-core:$(docker_subtag)
+
 # If you get errors similar to the one below, running `make fix-rocksdb` may fix the problem.
 #
 # Traceback (most recent call last):
