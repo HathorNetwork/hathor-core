@@ -30,8 +30,8 @@ logger = get_logger()
 
 
 class PeerIdState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
-        super().__init__(protocol, settings)
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings, whitelist_only: bool) -> None:
+        super().__init__(protocol, settings, whitelist_only)
         self.log = logger.new(remote=protocol.get_short_remote())
         self.cmd_map.update({
             ProtocolMessages.PEER_ID: self.handle_peer_id,
@@ -171,7 +171,8 @@ class PeerIdState(BaseState):
         if peer_is_whitelisted:
             return False
 
-        # when ENABLE_PEER_WHITELIST is set, we check if we're on sync-v1 to block non-whitelisted peers
+        # when whitelist_only (old ENABLE_PEER_WHITELIST) is set,
+        # we check if we're on sync-v1 to block non-whitelisted peers
         if self.enable_whitelist:
             assert self.protocol.sync_version is not None
             if not peer_is_whitelisted:

@@ -255,12 +255,12 @@ class CliBuilder:
 
         cpu_mining_service = CpuMiningService()
 
-        self.whitelist_enabled: bool = False
+        self.whitelist_only: bool = False
 
         # Whitelist toggling. If true, full_node will only follow its peers (if not empty).
         if self._args.x_whitelist_only:
            print(bool(str(input("Use only whitelist nodes [y/n]?")).strip().lower()[0] == "y"))
-           self.whitelist_enabled = True
+           self.whitelist_only = True
 
 
 
@@ -270,7 +270,7 @@ class CliBuilder:
             my_peer=peer,
             pubsub=pubsub,
             ssl=True,
-            whitelist_only=self.whitelist_enabled,
+            whitelist_only=self.whitelist_only,
             rng=Random(),
             enable_ipv6=self._args.x_enable_ipv6,
             disable_ipv4=self._args.x_disable_ipv4,

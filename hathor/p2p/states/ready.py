@@ -35,8 +35,8 @@ logger = get_logger()
 
 
 class ReadyState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
-        super().__init__(protocol, settings)
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings, whitelist_only: bool) -> None:
+        super().__init__(protocol, settings, whitelist_only)
 
         self.log = logger.new(**self.protocol.get_logger_context())
 
