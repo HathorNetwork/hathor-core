@@ -6,6 +6,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid, public
 from hathor.transaction import Transaction
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 
 settings = HathorSettings()
 
@@ -36,7 +37,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.manager.tx_storage.nc_catalog = self.catalog
 
     def test_token_creation(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         vertices = dag_builder.build_from_str(f'''
             blockchain genesis b[1..40]
             b30 < dummy

@@ -18,6 +18,7 @@ from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.resources.on_chain import BlueprintOnChainResource
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
@@ -30,7 +31,7 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
             nc_indices=True,
         )
         self.web = StubSite(BlueprintOnChainResource(self.manager))
-        self.dag_builder = self.get_dag_builder(self.manager)
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
     def propagate_ocbs(self) -> list[OnChainBlueprint]:
         bet_code = load_builtin_blueprint_for_ocb('bet.py', 'Bet')

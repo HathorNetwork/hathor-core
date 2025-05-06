@@ -29,6 +29,7 @@ from hathor.nanocontracts.types import ContractId, NCAction, NCActionType, Token
 from hathor.transaction import Block, Transaction
 from hathor.util import not_none
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 
 MY_BLUEPRINT1_ID: bytes = b'\x11' * 32
 MY_BLUEPRINT2_ID: bytes = b'\x22' * 32
@@ -121,7 +122,7 @@ class BaseNCExecLogs(unittest.TestCase):
             MY_BLUEPRINT1_ID: MyBlueprint1,
             MY_BLUEPRINT2_ID: MyBlueprint2,
         }
-        self.dag_builder = self.get_dag_builder(self.manager)
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
 
 class TestNCExecLogs(BaseNCExecLogs):

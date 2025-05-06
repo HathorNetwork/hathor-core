@@ -4,6 +4,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.vertex_data import BlockData, VertexData
 from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import TxVersion
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -33,7 +34,7 @@ class ContextTestCase(BlueprintTestCase):
         self.address = self.gen_random_address()
 
     def test_vertex_data(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..12]
             b10 < dummy

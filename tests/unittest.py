@@ -17,7 +17,6 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
-from hathor.dag_builder import DAGBuilder
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.manager import HathorManager
@@ -30,10 +29,10 @@ from hathor.storage import RocksDBStorage
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.types import VertexId
-from hathor.util import Random, not_none
-from hathor.wallet import BaseWallet, HDWallet, Wallet
+from hathor.util import Random, initialize_hd_wallet, not_none
+from hathor.wallet import BaseWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
-from tests.utils import GENESIS_SEED
+from tests.utils import DEFAULT_WORDS
 
 logger = get_logger()
 main = ut_main
@@ -162,23 +161,6 @@ class TestCase(unittest.TestCase):
         if not unlocked:
             wallet.lock()
         return wallet
-
-    def get_dag_builder(self, manager: HathorManager) -> DAGBuilder:
-        genesis_wallet = HDWallet(words=GENESIS_SEED)
-        genesis_wallet._manually_initialize()
-
-        assert manager.tx_storage.nc_catalog
-        from tests.nanocontracts import test_blueprints
-
-        return DAGBuilder(
-            settings=manager._settings,
-            daa=manager.daa,
-            genesis_wallet=genesis_wallet,
-            wallet_factory=self.get_wallet,
-            vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
-            nc_catalog=manager.tx_storage.nc_catalog,
-            blueprints_module=test_blueprints,
-        )
 
     def get_builder(self, settings: HathorSettings | None = None) -> TestBuilder:
         builder = TestBuilder(settings)
@@ -522,18 +504,10 @@ class TestCase(unittest.TestCase):
         if required_to_quiesce and active:
             self.fail('Reactor was still active when it was required to be quiescent.')
 
-    def get_wallet(self) -> HDWallet:
-        words = ('bind daring above film health blush during tiny neck slight clown salmon '
-                 'wine brown good setup later omit jaguar tourist rescue flip pet salute')
-
-        hd = HDWallet(words=words)
-        hd._manually_initialize()
-        return hd
-
     def get_address(self, index: int) -> Optional[str]:
         """ Generate a fixed HD Wallet and return an address
         """
-        hd = self.get_wallet()
+        hd = initialize_hd_wallet(DEFAULT_WORDS)
 
         if index >= hd.gap_limit:
             return None

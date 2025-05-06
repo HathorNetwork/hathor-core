@@ -22,6 +22,7 @@ from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.types import VertexId
 from hathor.wallet.base_wallet import WalletOutputInfo
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx, create_tokens, gen_custom_base_tx
 
@@ -1020,7 +1021,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self._run_nc_consensus_conflict_block_executed_2(conflict_with_nano=True)
 
     def test_nc_consensus_voided_tx_at_mempool(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         vertices = dag_builder.build_from_str(f'''
             blockchain genesis b[1..40]
             b30 < dummy
@@ -1076,7 +1077,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertEqual(meta3.voided_by, {tx2.hash})
 
     def test_reexecute_fail_on_reorg_different_blocks(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..33]
             blockchain b31 a[32..34]
@@ -1144,7 +1145,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         assert self.manager.get_nc_storage(a33, nc1.hash).get('counter') == 0
 
     def test_reexecute_fail_on_reorg_same_block(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..33]
             blockchain b31 a[32..34]
@@ -1211,7 +1212,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         assert self.manager.get_nc_storage(a33, nc1.hash).get('counter') == 0
 
     def test_reexecute_success_on_reorg_different_blocks(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..33]
             blockchain b31 a[32..34]
@@ -1291,7 +1292,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         assert self.manager.get_nc_storage(a33, nc1.hash).get('counter') == 2  # increments by nc4 and nc3
 
     def test_reexecute_success_on_reorg_same_block(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..33]
             blockchain b31 a[32..34]

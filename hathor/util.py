@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import datetime
 import gc
 import json
@@ -36,6 +38,7 @@ if TYPE_CHECKING:
     import structlog
 
     from hathor.transaction.base_transaction import BaseTransaction
+    from hathor.wallet import HDWallet
 
 logger = get_logger()
 
@@ -862,3 +865,11 @@ def bytes_from_hex(hex_str: str) -> bytes | None:
         return bytes.fromhex(hex_str)
     except ValueError:
         return None
+
+
+def initialize_hd_wallet(words: str) -> HDWallet:
+    """Get an initialized HDWallet from the provided words."""
+    from hathor.wallet import HDWallet
+    hd = HDWallet(words=words)
+    hd._manually_initialize()
+    return hd

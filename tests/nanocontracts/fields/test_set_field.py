@@ -19,6 +19,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.fields import Int32Field
 from hathor.transaction import Block, Transaction
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 
 
 class MyBlueprint(Blueprint):
@@ -52,7 +53,7 @@ class TestDequeField(unittest.TestCase):
         })
 
     def test_set_field(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..12]
             b10 < dummy

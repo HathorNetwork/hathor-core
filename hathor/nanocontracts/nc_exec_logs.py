@@ -27,6 +27,7 @@ from typing_extensions import override
 
 from hathor.nanocontracts import NCFail
 from hathor.nanocontracts.runner import CallInfo, CallRecord, CallType
+from hathor.nanocontracts.types import ContractId
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.types import VertexId
@@ -34,6 +35,8 @@ from hathor.utils.pydantic import BaseModel
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+
+MAX_EVENT_SIZE: int = 100 * 1024  # 100KiB
 
 
 @unique
@@ -195,6 +198,13 @@ class NCExecEntries(BaseModel):
         }
 
 
+@dataclass(slots=True, frozen=True, kw_only=True)
+class NCEvent:
+    nc_id: ContractId
+    data: bytes
+
+
+# TODO: Rename to something else now that it has events? move it?
 @dataclass(slots=True)
 class NCLogger:
     """
@@ -202,7 +212,9 @@ class NCLogger:
     To be used inside Blueprints.
     """
     __reactor__: ReactorProtocol
+    __nc_id__: ContractId
     __entries__: list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry] = field(default_factory=list)
+    __events__: list[NCEvent] = field(default_factory=list)
 
     def debug(self, message: str, **kwargs: Any) -> None:
         """Create a new DEBUG log entry."""
@@ -219,6 +231,12 @@ class NCLogger:
     def error(self, message: str, **kwargs: Any) -> None:
         """Create a new ERROR log entry."""
         self.__log__(NCLogLevel.ERROR, message, **kwargs)
+
+    def emit_event(self, data: bytes) -> None:
+        """Emit a custom event from a Nano Contract."""
+        if len(data) > MAX_EVENT_SIZE:
+            raise ValueError(f'event data cannot be larger than {MAX_EVENT_SIZE} bytes, is {len(data)}')
+        self.__events__.append(NCEvent(nc_id=self.__nc_id__, data=data))
 
     def __log__(self, level: NCLogLevel, message: str, **kwargs: Any) -> None:
         """Create a new log entry."""

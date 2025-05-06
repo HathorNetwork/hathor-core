@@ -20,6 +20,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.storage import DeletedKey, NCStorage
 from hathor.transaction import Block, Transaction
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 
 
 def _test1(dq: deque[int]) -> None:
@@ -96,7 +97,7 @@ class TestDequeField(unittest.TestCase):
         })
 
     def _test_deque_field(self, bp_id: bytes) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..12]
             b10 < dummy
