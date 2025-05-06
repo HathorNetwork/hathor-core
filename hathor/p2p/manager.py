@@ -192,6 +192,7 @@ class ConnectionsManager:
 
         # A timer to try to reconnect to the disconnect known peers.
         if self.whitelist_only:
+            print(str(input("WHITELIST ONLY ENABLED. PUT SOME LETTER.").lower().strip()[0]))
             self.wl_reconnect = LoopingCall(self.update_whitelist)
             self.wl_reconnect.clock = self.reactor
 
@@ -617,6 +618,7 @@ class ConnectionsManager:
         from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
         assert self._settings.WHITELIST_URL is not None
+        print("Here")
         self.log.info('update whitelist')
         d = self._http_agent.request(
             b'GET',

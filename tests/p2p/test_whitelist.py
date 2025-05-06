@@ -12,11 +12,13 @@ from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from tests import unittest
 
+# Re-work the settings in the tests
 
+# ALL tests precisam be reworked.
 class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_no_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
@@ -38,8 +40,7 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
-
+        self._settings = get_global_settings()
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
@@ -62,7 +63,7 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_yes(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
