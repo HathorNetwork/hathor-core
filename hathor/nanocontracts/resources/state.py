@@ -237,6 +237,12 @@ class NanoContractStateResource(Resource):
                 return str(decode_address(address))
             except InvalidAddress as e:
                 raise ValueError from e
+        elif field.startswith("b'") and field.endswith("'"):
+            # This field is bytes and we receive this in hexa
+            hexa = field[2:-1]
+            # This will raise ValueError in case it's an invalid hexa
+            # and this will be handled in the get_key_for_field method
+            return str(bytes.fromhex(hexa))
         return field
 
 

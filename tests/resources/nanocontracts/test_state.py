@@ -37,6 +37,8 @@ class MyBlueprint(Blueprint):
     total: Amount
     date_last_bet: Timestamp
     address_details: dict[Address, dict[str, Amount]]
+    bytes_field: bytes
+    dict_with_bytes: dict[bytes, str]
 
     @public
     def initialize(self, ctx: Context, token_uid: TokenUid, date_last_bet: Timestamp) -> None:
@@ -54,6 +56,10 @@ class MyBlueprint(Blueprint):
         else:
             partial[score] += action.amount
         self.address_details[address] = partial
+
+        encoded_score = score.encode()
+        self.bytes_field = encoded_score
+        self.dict_with_bytes[encoded_score] = score
 
     @view
     def has_result(self) -> bool:
@@ -259,11 +265,12 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             storage=self.tx_storage,
             timestamp=timestamp
         )
+        bet_result = '1x0'
         self._fill_nc(
             nc_bet,
             nc.hash,
             'bet',
-            [decode_address(address_b58), '1x0'],
+            [decode_address(address_b58), bet_result],
             self.genesis_private_key,
             nc_actions=[
                 NanoHeaderAction(
@@ -287,6 +294,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         add_new_block(self.manager)
 
         address_param = "address_details.a'{}'".format(address_b58)
+        dict_with_bytes_param = "dict_with_bytes.b'{}'".format(bet_result.encode().hex())
         response2 = yield self.web.get(
             'state', [
                 (b'id', nc.hash.hex().encode('ascii')),
@@ -294,6 +302,8 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'fields[]', b'total'),
                 (b'fields[]', b'date_last_bet'),
                 (b'fields[]', address_param.encode()),
+                (b'fields[]', b'bytes_field'),
+                (b'fields[]', dict_with_bytes_param.encode()),
                 (b'balances[]', settings.HATHOR_TOKEN_UID.hex().encode('ascii')),
             ]
         )
@@ -306,6 +316,8 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(fields2['date_last_bet'], {'value': date_last_bet})
         self.assertEqual(len(fields2[address_param]), 1)
         self.assertEqual(fields2[address_param], {'value': {'1x0': 10**11}})
+        self.assertEqual(fields2['bytes_field'], {'value': bet_result.encode().hex()})
+        self.assertEqual(fields2[dict_with_bytes_param], {'value': '1x0'})
         balances2 = data2['balances']
         self.assertEqual(balances2, {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000'}})
 
