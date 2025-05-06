@@ -618,7 +618,6 @@ class ConnectionsManager:
         from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
         assert self._settings.WHITELIST_URL is not None
-        print("Here")
         self.log.info('update whitelist')
         d = self._http_agent.request(
             b'GET',
