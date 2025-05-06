@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+import logging
 import sys
 import traceback
 from argparse import ArgumentParser
@@ -368,3 +369,41 @@ def check_or_exit(condition: bool, message: str) -> None:
     if not condition:
         print(message)
         sys.exit(2)
+
+def create_file_logger(log_file: str, log_level: int = logging.DEBUG) -> structlog.BoundLogger:
+    """Create a structlog logger that logs to a specific file.
+       This logger should be used for special cases where we want to log to a file instead of stdout.
+
+    :param log_file: Path to the log file.
+    :return: A structlog logger instance.
+    """
+    # Create a file handler
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(log_level)
+
+    # Define a logging format
+    formatter = logging.Formatter(
+        fmt="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    file_handler.setFormatter(formatter)
+
+    # Create a logger instance
+    logger = logging.getLogger(f"file_logger_{log_file}")
+    logger.setLevel(log_level)
+    logger.addHandler(file_handler)
+
+    # Create a structlog logger with a custom configuration
+    custom_logger = structlog.wrap_logger(
+        logger,
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            ConsoleRenderer(),
+        ],
+    )
+
+    return custom_logger

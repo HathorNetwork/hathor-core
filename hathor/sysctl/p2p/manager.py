@@ -16,6 +16,7 @@ import os
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
 from hathor.sysctl.exception import SysctlException
@@ -106,6 +107,16 @@ class ConnectionsManagerSysctl(Sysctl):
             'kill_connection',
             None,
             self.set_kill_connection,
+        )
+        self.register(
+            'enable_connection_logs',
+            None,
+            self.set_enable_connection_logs,
+        )
+        self.register(
+            'disable_connection_logs',
+            None,
+            self.set_disable_connection_logs,
         )
         self.register(
             'hostname',
@@ -223,6 +234,17 @@ class ConnectionsManagerSysctl(Sysctl):
         """Disable the given sync version."""
         self.connections.disable_sync_version(sync_version)
 
+    def _get_conn_from_peer_id(self, peer_id: str) -> HathorProtocol:
+        """Get the connection object from a peer_id."""
+        try:
+            peer_id_obj = PeerId(peer_id)
+        except ValueError:
+            raise SysctlException('invalid peer-id')
+        conn = self.connections.connected_peers.get(peer_id_obj, None)
+        if conn is None:
+            raise SysctlException('peer-id is not connected')
+        return conn
+
     @signal_handler_safe
     def set_kill_connection(self, peer_id: str, force: bool = False) -> None:
         """Kill connection with peer_id or kill all connections if peer_id == '*'."""
@@ -232,14 +254,34 @@ class ConnectionsManagerSysctl(Sysctl):
             return
 
         try:
-            peer_id_obj = PeerId(peer_id)
-        except ValueError:
-            raise SysctlException('invalid peer-id')
-        conn = self.connections.connected_peers.get(peer_id_obj, None)
-        if conn is None:
+            conn = self._get_conn_from_peer_id(peer_id)
+        except SysctlException as e:
             self.log.warn('Killing connection', peer_id=peer_id)
-            raise SysctlException('peer-id is not connected')
+            raise e
+
         conn.disconnect(force=force)
+
+    @signal_handler_safe
+    def set_enable_connection_logs(self, peer_id: str, log_path: str) -> None:
+        """Enable logging the protocol messages exchanged with peer_id"""
+        try:
+            conn = self._get_conn_from_peer_id(peer_id)
+        except SysctlException as e:
+            self.log.warn('Enabling connection logs', peer_id=peer_id)
+            raise e
+
+        conn.enable_protocol_logging(log_path)
+
+    @signal_handler_safe
+    def set_disable_connection_logs(self, peer_id: str) -> None:
+        """Disable logging the protocol messages exchanged with peer_id"""
+        try:
+            conn = self._get_conn_from_peer_id(peer_id)
+        except SysctlException as e:
+            self.log.warn('Disabling connection logs', peer_id=peer_id)
+            raise e
+
+        conn.disable_protocol_logging()
 
     def get_hostname(self) -> str | None:
         """Return the configured hostname."""
