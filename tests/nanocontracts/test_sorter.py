@@ -2,6 +2,7 @@ from hathor.nanocontracts.sorter.random_sorter import NCBlockSorter
 from hathor.transaction import Transaction
 from hathor.types import VertexId
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 
 
 class NCBlockSorterTestCase(unittest.TestCase):
@@ -146,7 +147,7 @@ class NCBlockSorterTestCase(unittest.TestCase):
         builder = self.get_builder()
         builder.enable_nc_anti_mev()
         manager = self.create_peer_from_builder(builder)
-        dag_builder = self.get_dag_builder(manager)
+        dag_builder = TestDAGBuilder.from_manager(manager)
 
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()

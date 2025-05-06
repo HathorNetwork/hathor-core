@@ -18,6 +18,7 @@ from hathor.nanocontracts.resources.nc_creation import NCCreationResource
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Transaction
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import get_genesis_key
 
@@ -37,7 +38,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         bet_code = load_builtin_blueprint_for_ocb('bet.py', 'Bet')
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy
@@ -123,7 +124,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
     async def test_tx_aggregation(self) -> None:
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy

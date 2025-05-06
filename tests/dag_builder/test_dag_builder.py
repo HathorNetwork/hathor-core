@@ -6,6 +6,7 @@ from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Block, Transaction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 
 
 class MyBlueprint(Blueprint):
@@ -41,7 +42,7 @@ class DAGBuilderTestCase(unittest.TestCase):
 
         self.manager = self.create_peer_from_builder(builder)
         self.nc_catalog = self.manager.tx_storage.nc_catalog
-        self.dag_builder = self.get_dag_builder(self.manager)
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
     def test_one_tx(self) -> None:
         artifacts = self.dag_builder.build_from_str("""

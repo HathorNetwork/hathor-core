@@ -6,6 +6,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.transaction import Transaction
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.simulation.base import SimulatorTestCase
 
 settings = HathorSettings()
@@ -199,7 +200,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertGoodnessOfFitTest(frequencies, [expected] * size)
 
     def test_simple_rng(self) -> None:
-        dag_builder = self.get_dag_builder(self.manager)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
 
         n = 250
         nc_calls_parts = []

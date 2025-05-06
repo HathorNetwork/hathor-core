@@ -62,6 +62,8 @@ class BlockConsensusAlgorithm:
         return _base_transaction_log
 
     def update_consensus(self, block: Block) -> None:
+        assert self.context.nc_events is None
+        self.context.nc_events = []
         self.update_voided_info(block)
         if self._settings.ENABLE_NANO_CONTRACTS:
             self.execute_nano_contracts(block)
@@ -198,10 +200,14 @@ class BlockConsensusAlgorithm:
                 self.log.info('nc execution failed', tx=tx.hash.hex())
                 exception_and_tb = e, traceback.format_exc()
                 self.mark_as_nc_fail_execution(tx)
-            finally:
+            else:
+                # We only emit events when the nc is successfully executed.
+                assert self.context.nc_events is not None
                 last_call_info = runner.get_last_call_info()
-                assert last_call_info is not None
-                self._nc_log_storage.save_logs(tx, last_call_info, exception_and_tb)
+                self.context.nc_events.append((tx, last_call_info.nc_logger.__events__))
+            finally:
+                # We save logs regardless of whether the nc successfully executed.
+                self._nc_log_storage.save_logs(tx, runner.get_last_call_info(), exception_and_tb)
 
         # Save block state root id. If nothing happens, it should be the same as its block parent.
         block_trie.commit()

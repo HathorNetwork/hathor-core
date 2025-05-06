@@ -1,7 +1,9 @@
 import hashlib
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from hathor.conf import HathorSettings
+from hathor.dag_builder.artifacts import DAGArtifacts
+from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint, Context, NCFail, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
@@ -10,12 +12,9 @@ from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlo
 from hathor.transaction import BaseTransaction, Transaction, TxOutput
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.types import AddressB58
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from tests.simulation.base import SimulatorTestCase
-
-if TYPE_CHECKING:
-    from hathor.dag_builder.artifacts import DAGArtifacts
-    from hathor.manager import HathorManager
 
 settings = HathorSettings()
 
@@ -158,8 +157,8 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         v = [node.name for node, _ in vertices.list]
         self.assertTrue(v.index('b35') < v.index('tx3'))
 
-    def _run_test_remove_voided_nano_tx_from_parents(self, order: str) -> 'DAGArtifacts':
-        builder = self.get_dag_builder(self.manager)
+    def _run_test_remove_voided_nano_tx_from_parents(self, order: str) -> DAGArtifacts:
+        builder = TestDAGBuilder.from_manager(self.manager)
         vertices = builder.build_from_str(f'''
             blockchain genesis b[0..40]
             b0.weight = 50

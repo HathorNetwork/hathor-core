@@ -12,10 +12,11 @@ from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.scripts import P2PKH
-from hathor.util import not_none
+from hathor.util import initialize_hd_wallet, not_none
 from hathor.wallet import KeyPair
 from tests import unittest
 
+from ...utils import DEFAULT_WORDS
 from .utils import get_ocb_private_key
 
 settings = HathorSettings()
@@ -37,7 +38,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')
-        self.wallet = self.get_wallet()
+        self.wallet = initialize_hd_wallet(DEFAULT_WORDS)
         self.token_uid = settings.HATHOR_TOKEN_UID
         self.initialize_contract()  # will set self.nc_id, self.runner, self.nc_storage
 

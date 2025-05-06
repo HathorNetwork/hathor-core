@@ -82,9 +82,10 @@ function check_deprecated_typing() {
 }
 
 function check_do_not_import_tests_in_hathor() {
-	if grep -R '\<.*import .*tests.*\>\|\<.*from .*tests.* import\>' "hathor"; then
+	if grep -R '\<.*import .*tests.*\>\|\<.*from .*tests.* import\>' "hathor" | grep -v '# skip-import-tests-custom-check'; then
 		echo 'do not import test definitions in the hathor module'
 		echo 'move them from tests to hathor instead'
+		echo 'alternatively, comment `# skip-import-tests-custom-check` to exclude a line.'
 		return 1
 	fi
 	return 0

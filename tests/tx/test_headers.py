@@ -11,6 +11,7 @@ from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import VerboseCallback
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 
 
 class MyTestBlueprint(Blueprint):
@@ -53,7 +54,7 @@ class VertexHeadersTest(unittest.TestCase):
         self.blueprint_id = b'x' * 32
         self.manager = self.create_peer('testnet')
         self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyTestBlueprint
-        self.dag_builder = self.get_dag_builder(self.manager)
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()

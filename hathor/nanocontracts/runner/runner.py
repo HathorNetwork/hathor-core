@@ -90,10 +90,10 @@ class Runner:
     def disable_call_trace(self) -> None:
         """Disable call trace."""
         self._enable_call_trace = False
-        self._last_call_info = None
 
-    def get_last_call_info(self) -> CallInfo | None:
+    def get_last_call_info(self) -> CallInfo:
         """Get last call information."""
+        assert self._last_call_info is not None
         return self._last_call_info
 
     def has_contract_been_initialized(self, nanocontract_id: ContractId) -> bool:
@@ -152,13 +152,13 @@ class Runner:
         nc_logger = self._call_info.nc_logger
         return _SingleCallRunner(self, blueprint_class, nanocontract_id, change_tracker, metered_executor, nc_logger)
 
-    def _build_call_info(self) -> CallInfo:
+    def _build_call_info(self, nanocontract_id: ContractId) -> CallInfo:
         from hathor.nanocontracts.nc_exec_logs import NCLogger
         return CallInfo(
             MAX_RECURSION_DEPTH=self.MAX_RECURSION_DEPTH,
             MAX_CALL_COUNTER=self.MAX_CALL_COUNTER,
             enable_call_trace=self._enable_call_trace,
-            nc_logger=NCLogger(__reactor__=self.reactor),
+            nc_logger=NCLogger(__reactor__=self.reactor, __nc_id__=nanocontract_id),
         )
 
     def call_public_method(
@@ -186,7 +186,7 @@ class Runner:
     ) -> Any:
         from hathor.transaction.headers import NC_INITIALIZE_METHOD
         assert self._call_info is None
-        self._call_info = self._build_call_info()
+        self._call_info = self._build_call_info(nanocontract_id)
 
         if method_name == NC_INITIALIZE_METHOD:
             if self.has_contract_been_initialized(nanocontract_id):
@@ -352,7 +352,7 @@ class Runner:
     def call_view_method(self, nanocontract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a contract view method."""
         if self._call_info is None:
-            self._call_info = self._build_call_info()
+            self._call_info = self._build_call_info(nanocontract_id)
         if self._metered_executor is None:
             self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
 

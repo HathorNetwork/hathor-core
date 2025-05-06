@@ -13,9 +13,10 @@
 #  limitations under the License.
 
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
+    from hathor.dag_builder.artifacts import DAGArtifacts
     from hathor.manager import HathorManager
     from hathor.simulator import Simulator
 
@@ -29,8 +30,10 @@ class Scenario(Enum):
     INVALID_MEMPOOL_TRANSACTION = 'INVALID_MEMPOOL_TRANSACTION'
     EMPTY_SCRIPT = 'EMPTY_SCRIPT'
     CUSTOM_SCRIPT = 'CUSTOM_SCRIPT'
+    NC_EVENTS = 'NC_EVENTS'
+    NC_EVENTS_REORG = 'NC_EVENTS_REORG'
 
-    def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> None:
+    def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
         simulate_fns = {
             Scenario.ONLY_LOAD: simulate_only_load,
             Scenario.SINGLE_CHAIN_ONE_BLOCK: simulate_single_chain_one_block,
@@ -40,24 +43,31 @@ class Scenario(Enum):
             Scenario.INVALID_MEMPOOL_TRANSACTION: simulate_invalid_mempool_transaction,
             Scenario.EMPTY_SCRIPT: simulate_empty_script,
             Scenario.CUSTOM_SCRIPT: simulate_custom_script,
+            Scenario.NC_EVENTS: simulate_nc_events,
+            Scenario.NC_EVENTS_REORG: simulate_nc_events_reorg,
         }
 
         simulate_fn = simulate_fns[self]
 
-        simulate_fn(simulator, manager)
+        return simulate_fn(simulator, manager)
 
 
-def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> None:
+def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> Optional['DAGArtifacts']:
     simulator.run(60)
+    return None
 
 
-def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorManager') -> None:
+def simulate_single_chain_one_block(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
     from hathor.simulator.utils import add_new_blocks
     add_new_blocks(manager, 1)
     simulator.run(60)
+    return None
 
 
-def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manager: 'HathorManager') -> None:
+def simulate_single_chain_blocks_and_transactions(
+    simulator: 'Simulator',
+    manager: 'HathorManager',
+) -> Optional['DAGArtifacts']:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
 
@@ -83,8 +93,10 @@ def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manage
     add_new_blocks(manager, 1)
     simulator.run(60)
 
+    return None
 
-def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
     from hathor.simulator import FakeConnection
     from hathor.simulator.utils import add_new_blocks
 
@@ -101,8 +113,10 @@ def simulate_reorg(simulator: 'Simulator', manager: 'HathorManager') -> None:
     simulator.add_connection(connection)
     simulator.run(60)
 
+    return None
 
-def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 
@@ -147,13 +161,14 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     assert tx.get_metadata().voided_by
     assert not tx2.get_metadata().voided_by
 
+    return None
 
-def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'HathorManager') -> None:
-    from hathor.conf.get_settings import get_global_settings
+
+def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
     from hathor.transaction import Block
 
-    settings = get_global_settings()
+    settings = manager._settings
     assert manager.wallet is not None
     address = manager.wallet.get_unused_address(mark_as_used=False)
 
@@ -186,8 +201,10 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
     assert balance_per_address[address] == 6400
 
+    return None
 
-def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
     from hathor.transaction import TxInput, TxOutput
@@ -218,8 +235,10 @@ def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> N
     add_new_blocks(manager, 1)
     simulator.run(60)
 
+    return None
 
-def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> None:
+
+def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
     from hathor.transaction import TxInput, TxOutput
@@ -255,3 +274,111 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
 
     add_new_blocks(manager, 1)
     simulator.run(60)
+
+    return None
+
+
+def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
+    from hathor.nanocontracts import Blueprint, NCFail, public, view
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.context import Context
+    from hathor.nanocontracts.types import ContractId
+    from tests.dag_builder.builder import TestDAGBuilder  # skip-import-tests-custom-check
+
+    class TestEventsBlueprint1(Blueprint):
+        @public
+        def initialize(self, ctx: Context) -> None:
+            self.log.emit_event(b'test event on initialize 1')
+
+        @public
+        def fail(self, ctx: Context) -> None:
+            # This will not be emitted because the tx will fail.
+            self.log.emit_event(b'test event on fail')
+            raise NCFail
+
+        @public
+        def call_another(self, ctx: Context, contract_id: ContractId) -> None:
+            self.log.emit_event(b'test event on call_another')
+            self.call_view_method(contract_id, 'some_method')
+
+    class TestEventsBlueprint2(Blueprint):
+        @public
+        def initialize(self, ctx: Context) -> None:
+            self.log.emit_event(b'test event on initialize 2')
+
+        @view
+        def some_method(self) -> None:
+            self.log.emit_event(b'test event on some_method')
+
+    blueprint1_id = b'\x11' * 32
+    blueprint2_id = b'\x22' * 32
+    manager.tx_storage.nc_catalog = NCBlueprintCatalog({
+        blueprint1_id: TestEventsBlueprint1,
+        blueprint2_id: TestEventsBlueprint2,
+    })
+    dag_builder = TestDAGBuilder.from_manager(manager)
+    artifacts = dag_builder.build_from_str(f'''
+        blockchain genesis b[1..3]
+        b1 < dummy
+
+        # test simple event
+        nc1.nc_id = "{blueprint1_id.hex()}"
+        nc1.nc_method = initialize()
+
+        nc2.nc_id = "{blueprint2_id.hex()}"
+        nc2.nc_method = initialize()
+
+        # # test events across contracts
+        nc3.nc_id = nc1
+        nc3.nc_method = call_another(`nc2`)
+
+        # test NC failure
+        nc4.nc_id = nc1
+        nc4.nc_method = fail()
+
+        nc1 <-- nc2 <-- nc3 <-- nc4
+        nc2 <-- b2
+        nc4 <-- b3
+        nc4 < b2
+    ''')
+    artifacts.propagate_with(manager, up_to='b2')
+    simulator.run(1)
+    artifacts.propagate_with(manager)
+    simulator.run(1)
+
+    return artifacts
+
+
+def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
+    from hathor.nanocontracts import Blueprint, public
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.context import Context
+    from tests.dag_builder.builder import TestDAGBuilder  # skip-import-tests-custom-check
+
+    class TestEventsBlueprint1(Blueprint):
+        @public
+        def initialize(self, ctx: Context) -> None:
+            self.log.emit_event(b'test event on initialize 1')
+
+    blueprint1_id = b'\x11' * 32
+    manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint1_id: TestEventsBlueprint1})
+    dag_builder = TestDAGBuilder.from_manager(manager)
+
+    # 2 reorgs happen, so nc1.initialize() gets executed 3 times, once in block a2 and twice in block b2
+    artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..4]
+            blockchain b1 a[2..3]
+            b1 < dummy
+            b2 < a2 < a3 < b3 < b4
+
+            nc1.nc_id = "{blueprint1_id.hex()}"
+            nc1.nc_method = initialize()
+
+            nc1 <-- b2
+            nc1 <-- a2
+    ''')
+
+    artifacts.propagate_with(manager)
+    simulator.run(1)
+
+    return artifacts

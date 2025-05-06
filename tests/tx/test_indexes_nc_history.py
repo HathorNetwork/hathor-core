@@ -12,6 +12,7 @@ from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.util import not_none
 from hathor.wallet import KeyPair, Wallet
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
 
 settings = HathorSettings()
@@ -90,7 +91,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
         manager = self.create_peer('testnet', nc_indices=True)
         nc_history_index = manager.tx_storage.indexes.nc_history
         manager.tx_storage.nc_catalog = catalog
-        dag_builder = self.get_dag_builder(manager)
+        dag_builder = TestDAGBuilder.from_manager(manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy
@@ -122,7 +123,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
         nc_history_index = not_none(indexes_manager.nc_history)
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()
-        dag_builder = self.get_dag_builder(manager)
+        dag_builder = TestDAGBuilder.from_manager(manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy

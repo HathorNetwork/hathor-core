@@ -35,7 +35,9 @@ from hathor.dag_builder.types import (
     WalletFactoryType,
 )
 from hathor.dag_builder.utils import is_literal, parse_amount_token
+from hathor.manager import HathorManager
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.util import initialize_hd_wallet
 from hathor.wallet import BaseWallet
 
 logger = get_logger()
@@ -72,6 +74,25 @@ class DAGBuilder:
             wallet_factory=wallet_factory,
             vertex_resolver=vertex_resolver,
             nc_catalog=nc_catalog,
+            blueprints_module=blueprints_module,
+        )
+
+    @staticmethod
+    def from_manager(
+        manager: HathorManager,
+        genesis_words: str,
+        wallet_factory: WalletFactoryType,
+        blueprints_module: ModuleType | None = None
+    ) -> DAGBuilder:
+        """Create a DAGBuilder instance from a HathorManager instance."""
+        assert manager.tx_storage.nc_catalog
+        return DAGBuilder(
+            settings=manager._settings,
+            daa=manager.daa,
+            genesis_wallet=initialize_hd_wallet(genesis_words),
+            wallet_factory=wallet_factory,
+            vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
+            nc_catalog=manager.tx_storage.nc_catalog,
             blueprints_module=blueprints_module,
         )
 

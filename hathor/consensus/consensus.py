@@ -161,6 +161,16 @@ class ConsensusAlgorithm:
             tx_affected.storage.indexes.update(tx_affected)
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
 
+        # handle custom NC events
+        if isinstance(base, Block):
+            assert context.nc_events is not None
+            for tx, events in context.nc_events:
+                assert tx.is_nano_contract()
+                for event in events:
+                    context.pubsub.publish(HathorEvents.NC_EVENT, tx=tx, nc_event=event)
+        else:
+            assert context.nc_events is None
+
         # And emit events for txs that were removed
         for tx_removed in txs_to_remove:
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx=tx_removed)
