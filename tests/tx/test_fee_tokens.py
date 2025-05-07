@@ -12,7 +12,12 @@ from hathor.transaction.scripts import P2PKH
 from hathor.transaction.util import get_deposit_token_withdraw_amount
 from tests import unittest
 from tests.utils import (
-    add_blocks_unlock_reward, create_fee_tokens, create_tokens, get_genesis_key, get_deposit_token_amount_from_htr)
+    add_blocks_unlock_reward,
+    create_fee_tokens,
+    create_tokens,
+    get_deposit_token_amount_from_htr,
+    get_genesis_key,
+)
 
 
 class TokenTest(unittest.TestCase):
@@ -210,7 +215,7 @@ class TokenTest(unittest.TestCase):
 
         tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         self.assertEqual(tx_fee, 1)
-        change_value = deposit_tx.outputs[0].value - get_deposit_token_amount_from_htr(self.manager._settings, tx_fee)
+        change_value = deposit_tx.outputs[0].value - get_deposit_token_amount_from_htr(tx_fee)
         outputs.append(TxOutput(change_value, script, 2))
 
         #  It's the signature of the output of the tx item
@@ -271,7 +276,7 @@ class TokenTest(unittest.TestCase):
         # Deposit token change and melt in the same
         deposit_token_change_value = (
             deposit_tx.outputs[0].value
-            - get_deposit_token_amount_from_htr(self.manager._settings, tx_fee)
+            - get_deposit_token_amount_from_htr(tx_fee)
             - deposit_token_melt_amount)
         outputs.append(TxOutput(deposit_token_change_value, script, 2))
 
@@ -304,7 +309,7 @@ class TokenTest(unittest.TestCase):
             TxInput(tx.hash, 4, b'')
         ]
         tx_output_value = initial_mint_amount - get_deposit_token_amount_from_htr(
-            self.manager._settings, 2 * self.manager._settings.FEE_PER_OUTPUT)
+                                                    2 * self.manager._settings.FEE_PER_OUTPUT)
         outputs = [
             # New token amount
             TxOutput(100, script, 1),
@@ -379,7 +384,7 @@ class TokenTest(unittest.TestCase):
         # Deposit token change and melt in the same
         deposit_token_change_value = (
             deposit_tx.outputs[0].value
-            - get_deposit_token_amount_from_htr(self.manager._settings, tx_fee)
+            - get_deposit_token_amount_from_htr(tx_fee)
             - deposit_token_melt_amount)
         outputs.append(TxOutput(deposit_token_change_value, script, 2))
 

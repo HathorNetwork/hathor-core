@@ -257,9 +257,9 @@ class TransactionVerifier:
                         withdraw += get_deposit_token_withdraw_amount(self._settings, token_info.amount)
                     else:
                         # When we don't have a fee, melting is only allowed with an authority.
-                        # To use a deposit token to pay the fee, the result of the conversion to HTR should be an integer
-                        # otherwise it will allow users to melt tokens due to `ceil` function in the get_deposit_token_withdraw_amount.
-                        # For example, 199 Tokens -> 1HTR could
+                        # To use a deposit token to pay the fee, the result of the conversion to HTR should be an
+                        # integer otherwise it will allow users to melt tokens due to `ceil` function in the
+                        # get_deposit_token_withdraw_amount. For example, 199 Tokens -> 1HTR could
                         if fee == 0 or not (token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer():
                             raise InputOutputMismatch(
                                 '{} {} tokens melted, but there is no melt authority input'.format(

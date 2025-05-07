@@ -567,7 +567,7 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
     return tx
 
 
-def get_deposit_token_amount_from_htr(settings: HathorSettings, htr_amount: int) -> int:
+def get_deposit_token_amount_from_htr(htr_amount: int) -> int:
     """
     Calculate how many tokens correspond to a given HTR amount based on the
     configured TOKEN_DEPOSIT_PERCENTAGE.
