@@ -27,7 +27,6 @@ def calculate_fee(settings: HathorSettings, tx: Transaction, token_dict: dict[To
     :rtype: int
     """
     fee = 0
-
     spent_outputs_dict = get_non_authority_outputs(tx.get_spent_outputs_grouped_by_token_uid())
     outputs_dict = get_non_authority_outputs(tx.get_outputs_grouped_by_token_uid())
 

@@ -59,31 +59,6 @@ def get_deposit_token_withdraw_amount(settings: HathorSettings, melt_amount: int
     return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
 
 
-def get_deposit_token_amount_from_htr(settings: HathorSettings, htr_amount: int) -> int:
-    """
-    Calculate how many tokens correspond to a given HTR amount based on the
-    configured TOKEN_DEPOSIT_PERCENTAGE.
-
-    The conversion uses the formula:
-
-        token_amount = ceil(htr_amount ÷ TOKEN_DEPOSIT_PERCENTAGE)
-
-    and always returns a non-negative integer.
-    Returns
-    -------
-    int
-        The smallest integer number of tokens that covers the given HTR amount.
-    Raises
-    ------
-    AssertionError
-        If the computed token amount is not an integer (this should not occur
-        when TOKEN_DEPOSIT_PERCENTAGE is a positive divisor).
-    """
-    token_amount = abs(htr_amount / settings.TOKEN_DEPOSIT_PERCENTAGE)
-    assert token_amount.is_integer()
-    return int(token_amount)
-
-
 def clean_token_string(string: str) -> str:
     """ Receives the token name/symbol and returns it after some cleanups.
         It sets to uppercase, removes double spaces and spaces at the beginning and end.

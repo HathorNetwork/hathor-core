@@ -371,12 +371,31 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         return False
 
     def get_spent_output(self, tx_input: TxInput) -> tuple[TxOutput, TokenUid]:
+        """
+        Retrieves the output spent by a given input, along with its associated token UID.
+
+        Args:
+            tx_input (TxInput): The transaction input referencing the spent output.
+
+        Returns:
+            tuple[TxOutput, TokenUid]: A tuple containing the spent TxOutput and its corresponding TokenUid.
+        """
         spent_tx = self.get_spent_tx(tx_input)
         spent_output = spent_tx.outputs[tx_input.index]
         token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
         return spent_output, token_uid
 
     def get_spent_outputs_grouped_by_token_uid(self) -> dict[TokenUid, list[TxOutput]]:
+        """
+        Groups all spent outputs by their associated token UID.
+
+        Iterates over the transaction's inputs, retrieves the spent outputs, and
+        organizes them into a dictionary grouped by TokenUid.
+
+        Returns:
+            dict[TokenUid, list[TxOutput]]: A dictionary where each key is a TokenUid
+            and the value is a list of TxOutputs associated with that token.
+        """
         outputs_dict: dict[TokenUid, list[TxOutput]] = {}
         for tx_input in self.inputs:
             spent_output, token_uid = self.get_spent_output(tx_input)
@@ -384,6 +403,16 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         return outputs_dict
 
     def get_outputs_grouped_by_token_uid(self) -> dict[TokenUid, list[TxOutput]]:
+        """
+        Groups the current transaction's outputs by their associated token UID.
+
+        Iterates over the transaction's outputs and organizes them into a dictionary
+        where each entry represents a token and its corresponding outputs.
+
+        Returns:
+            dict[TokenUid, list[TxOutput]]: A dictionary mapping each TokenUid to a
+            list of TxOutputs that belong to that token.
+        """
         outputs_dict: dict[TokenUid, list[TxOutput]] = {}
         for tx_output in self.outputs:
             token_uid = self.get_token_uid(tx_output.get_token_index())

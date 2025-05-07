@@ -9,9 +9,10 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InputOutputMismatch, TransactionDataError
 from hathor.transaction.fee import calculate_fee
 from hathor.transaction.scripts import P2PKH
-from hathor.transaction.util import get_deposit_token_amount_from_htr, get_deposit_token_withdraw_amount
+from hathor.transaction.util import get_deposit_token_withdraw_amount
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, create_fee_tokens, create_tokens, get_genesis_key
+from tests.utils import (
+    add_blocks_unlock_reward, create_fee_tokens, create_tokens, get_genesis_key, get_deposit_token_amount_from_htr)
 
 
 class TokenTest(unittest.TestCase):
@@ -73,6 +74,7 @@ class TokenTest(unittest.TestCase):
         )
         # pick the last tip tx output in HTR then subtracts the fee
         tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
+        self.assertEqual(tx_fee, 1)
         change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
         outputs.append(TxOutput(change_value, script, 0))
 
@@ -207,6 +209,7 @@ class TokenTest(unittest.TestCase):
         )
 
         tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
+        self.assertEqual(tx_fee, 1)
         change_value = deposit_tx.outputs[0].value - get_deposit_token_amount_from_htr(self.manager._settings, tx_fee)
         outputs.append(TxOutput(change_value, script, 2))
 
@@ -264,6 +267,7 @@ class TokenTest(unittest.TestCase):
         )
 
         tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
+        self.assertEqual(tx_fee, 1)
         # Deposit token change and melt in the same
         deposit_token_change_value = (
             deposit_tx.outputs[0].value
@@ -349,14 +353,14 @@ class TokenTest(unittest.TestCase):
             # Deposit token to pay the fee
             TxInput(deposit_tx.hash, 0, b'')
         ]
-        deposit_token_melt_amount = 200
+
         outputs = [
             # New token amount
             TxOutput(new_token_amount, script, 1),
             # Melt authority
             tx.outputs[2],
             # HTR change output
-            TxOutput(get_deposit_token_withdraw_amount(self.manager._settings, deposit_token_melt_amount), script, 0),
+            TxOutput(1, script, 0),
         ]
 
         tx2 = Transaction(
@@ -370,6 +374,8 @@ class TokenTest(unittest.TestCase):
         )
 
         tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
+        self.assertEqual(tx_fee, 1)
+        deposit_token_melt_amount = 99
         # Deposit token change and melt in the same
         deposit_token_change_value = (
             deposit_tx.outputs[0].value
@@ -423,6 +429,7 @@ class TokenTest(unittest.TestCase):
         )
         # pick the last tip tx output in HTR then subtracts the fee
         tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
+        self.assertEqual(tx_fee, 1)
         change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
         outputs.append(TxOutput(change_value, script, 0))
 
@@ -496,7 +503,7 @@ class TokenTest(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
-        # pick the last tip tx output in HTR then subtracts the fee
+
         tx_fee = calculate_fee(self.manager._settings, tx2, tx2.get_complete_token_info())
         self.assertEqual(tx_fee, 0)
 
