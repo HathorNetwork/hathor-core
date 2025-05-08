@@ -166,6 +166,7 @@ class PeerIdState(BaseState):
 
         Currently this is only because the peer is not in a whitelist and whitelist blocking is active.
         """
+        # If wl is empty, we don't block peer, regardless of whitelist flag.
         peer_is_whitelisted = peer_id in self.protocol.node.peers_whitelist
         # never block whitelisted peers
         if peer_is_whitelisted:
@@ -175,8 +176,7 @@ class PeerIdState(BaseState):
         # we check if we're on sync-v1 to block non-whitelisted peers
         if self.enable_whitelist:
             assert self.protocol.sync_version is not None
-            # Must check whether whitelist is empty
-            if not peer_is_whitelisted and self.protocol.node.peers_whitelist:
+            if not peer_is_whitelisted:
                 if self.protocol.sync_version.is_v1():
                     return True
                 elif self._settings.USE_PEER_WHITELIST_ON_SYNC_V2:
@@ -185,9 +185,8 @@ class PeerIdState(BaseState):
         # otherwise we block non-whitelisted peers when on "whitelist-only mode"
         if self.protocol.connections is not None:
             protocol_is_whitelist_only = self.protocol.connections.whitelist_only
-            if self.protocol.node.peers_whitelist:
-                if protocol_is_whitelist_only and not peer_is_whitelisted:
-                    return True
+            if protocol_is_whitelist_only and not peer_is_whitelisted:
+                return True
 
         # default is not blocking, this will be sync-v2 peers not on whitelist when not on whitelist-only mode
         return False
