@@ -34,7 +34,7 @@ class BaseState:
         Callable[[str], None] | Callable[[str], Deferred[None]] | Callable[[str], Coroutine[Deferred[None], Any, None]]
     ]
 
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings, enable_whitelist:bool=False ):
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings, enable_whitelist: bool = False):
         self.log = logger.new(**protocol.get_logger_context())
         self._settings = settings
         self.protocol = protocol
