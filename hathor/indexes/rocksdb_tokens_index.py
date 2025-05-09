@@ -60,6 +60,7 @@ class _InfoDict(TypedDict):
     name: str
     symbol: str
     total: int
+    version: int | None
 
 
 class _TxIndex(NamedTuple):
@@ -168,7 +169,8 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     def _from_value_info(self, value: bytes) -> _InfoDict:
         return cast(_InfoDict, json_loadb(value))
 
-    def _create_token_info(self, token_uid: bytes, name: str, symbol: str, total: int = 0) -> None:
+    def _create_token_info(
+            self, token_uid: bytes, name: str, symbol: str, token_info_version: Optional[int], total: int = 0) -> None:
         key = self._to_key_info(token_uid)
         old_value = self._db.get((self._cf, key))
         assert old_value is None
@@ -176,6 +178,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             'name': name,
             'symbol': symbol,
             'total': total,
+            'version': token_info_version
         })
         self._db.put((self._cf, key), value)
 
@@ -222,6 +225,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self._settings.HATHOR_TOKEN_UID,
             self._settings.HATHOR_TOKEN_NAME,
             self._settings.HATHOR_TOKEN_SYMBOL,
+            None,
             self._settings.GENESIS_TOKENS,
         )
 
@@ -292,7 +296,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             key_info = self._to_key_info(tx.hash)
             token_info = self._db.get((self._cf, key_info))
             if token_info is None:
-                self._create_token_info(tx.hash, tx.token_name, tx.token_symbol)
+                self._create_token_info(tx.hash, tx.token_name, tx.token_symbol, tx.token_info_version)
 
         if tx.is_transaction:
             # Adding this tx to the transactions key list
@@ -416,6 +420,9 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
 
     def get_symbol(self) -> Optional[str]:
         return self._info['symbol']
+
+    def get_version(self) -> Optional[int]:
+        return self._info['version']
 
     def get_total(self) -> int:
         return self._info['total']
