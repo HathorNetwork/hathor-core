@@ -114,6 +114,7 @@ class VertexHeadersTest(unittest.TestCase):
             assert isinstance(vertex, Transaction)
             attributes_and_new_values = [
                 ('nc_id', b'123'),
+                ('nc_seqnum', vertex.get_nano_header().nc_seqnum + 1),
                 ('nc_method', 'new_method'),
                 ('nc_args_bytes', b'new args'),
                 ('nc_actions', [NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=123)]),
@@ -154,6 +155,7 @@ class VertexHeadersTest(unittest.TestCase):
             assert isinstance(vertex, Transaction)
             attributes_and_new_values = [
                 ('nc_id', b'123'),
+                ('nc_seqnum', vertex.get_nano_header().nc_seqnum + 1),
                 ('nc_method', 'new_method'),
                 ('nc_args_bytes', b'new args'),
                 ('nc_actions', [NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=123)]),
@@ -202,6 +204,7 @@ class VertexHeadersTest(unittest.TestCase):
         header1 = NanoHeader(
             tx=tx,
             nc_id=b'1' * 32,
+            nc_seqnum=0,
             nc_method='some_method',
             nc_args_bytes=b'some args',
             nc_actions=[

@@ -162,6 +162,7 @@ class HeaderData:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NanoHeaderData(HeaderData):
+    nc_seqnum: int
     nc_id: VertexId
     nc_method: str
     nc_args_bytes: bytes
@@ -169,6 +170,7 @@ class NanoHeaderData(HeaderData):
     @classmethod
     def create_from_nano_header(cls, nc_header: NanoHeader) -> Self:
         return cls(
+            nc_seqnum=nc_header.nc_seqnum,
             nc_id=nc_header.nc_id,
             nc_method=nc_header.nc_method,
             nc_args_bytes=nc_header.nc_args_bytes,

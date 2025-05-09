@@ -36,13 +36,13 @@ from hathor.utils import leb128
 if TYPE_CHECKING:
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.context import Context
-    from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid
     from hathor.transaction import Transaction
     from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.block import Block
 
 ADDRESS_LEN_BYTES: int = 25
+ADDRESS_SEQNUM_SIZE: int = 8  # bytes
 _NC_SCRIPT_LEN_MAX_BYTES: int = 2
 
 
@@ -102,6 +102,9 @@ class NanoHeaderAction:
 class NanoHeader(VertexBaseHeader):
     tx: Transaction
 
+    # Sequence number for the caller.
+    nc_seqnum: int
+
     # nc_id equals to the blueprint_id when a Nano Contract is being created.
     # nc_id equals to the contract_id when a method is being called.
     nc_id: VertexId
@@ -153,6 +156,9 @@ class NanoHeader(VertexBaseHeader):
         nc_id, buf = unpack_len(32, buf)
         if verbose:
             verbose('nc_id', nc_id)
+        nc_seqnum, buf = leb128.decode_unsigned(buf, max_bytes=ADDRESS_SEQNUM_SIZE)
+        if verbose:
+            verbose('nc_seqnum', nc_seqnum)
         (nc_method_len,), buf = unpack('!B', buf)
         if verbose:
             verbose('nc_method_len', nc_method_len)
@@ -188,6 +194,7 @@ class NanoHeader(VertexBaseHeader):
 
         return cls(
             tx=tx,
+            nc_seqnum=nc_seqnum,
             nc_id=nc_id,
             nc_method=decoded_nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -210,6 +217,7 @@ class NanoHeader(VertexBaseHeader):
 
         ret: deque[bytes] = deque()
         ret.append(self.nc_id)
+        ret.append(leb128.encode_unsigned(self.nc_seqnum, max_bytes=ADDRESS_SEQNUM_SIZE))
         ret.append(int_to_bytes(len(encoded_method), 1))
         ret.append(encoded_method)
         ret.append(int_to_bytes(len(self.nc_args_bytes), 2))
@@ -290,36 +298,6 @@ class NanoHeader(VertexBaseHeader):
 
         blueprint_id = BlueprintId(NCVertexId(nc_creation.get_nano_header().nc_id))
         return blueprint_id
-
-    def execute(self, runner: Runner) -> None:
-        """Execute the contract's method call."""
-        from hathor.nanocontracts.runner.types import NCRawArgs
-        from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId
-
-        vertex_metadata = self.tx.get_metadata()
-        assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
-
-        blueprint_id: BlueprintId
-        contract_id: ContractId
-
-        if self.is_creating_a_new_contract():
-            blueprint_id = BlueprintId(VertexId(self.nc_id))
-            contract_id = ContractId(VertexId(self.tx.hash))
-        else:
-            contract_id = ContractId(VertexId(self.nc_id))
-            nc_storage = runner.get_storage(contract_id)
-            blueprint_id = nc_storage.get_blueprint_id()
-
-        assert self.tx.storage is not None
-
-        context = self.get_context()
-        assert context.vertex.block.hash == vertex_metadata.first_block
-
-        nc_args = NCRawArgs(self.nc_args_bytes)
-        if self.is_creating_a_new_contract():
-            runner.create_contract_with_nc_args(contract_id, blueprint_id, context, nc_args)
-        else:
-            runner.call_public_method_with_nc_args(contract_id, self.nc_method, context, nc_args)
 
     def get_actions(self) -> list[NCAction]:
         """Get a list of NCActions from the header actions."""

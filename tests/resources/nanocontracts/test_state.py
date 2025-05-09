@@ -121,6 +121,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         })
 
         self.tx_storage.nc_catalog = self.catalog
+        self.nc_seqnum = 0
 
     @inlineCallbacks
     def test_fail_missing_id(self):
@@ -164,6 +165,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
 
         nano_header = NanoHeader(
             tx=nc,
+            nc_seqnum=self.nc_seqnum,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -172,6 +174,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
+        self.nc_seqnum += 1
 
         sign_openssl(nano_header, private_key)
         self.manager.cpu_mining_service.resolve(nc)

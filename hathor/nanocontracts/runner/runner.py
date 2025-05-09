@@ -56,6 +56,7 @@ from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCCon
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
     NC_ALLOWED_ACTIONS_ATTR,
+    Address,
     BaseTokenAction,
     BlueprintId,
     ContractId,
@@ -66,6 +67,7 @@ from hathor.nanocontracts.types import (
     NCGrantAuthorityAction,
     NCWithdrawalAction,
     TokenUid,
+    VertexId,
 )
 from hathor.nanocontracts.utils import (
     derive_child_contract_id,
@@ -74,6 +76,7 @@ from hathor.nanocontracts.utils import (
     is_nc_view_method,
 )
 from hathor.reactor import ReactorProtocol
+from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TransactionDataError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.util import (
@@ -85,6 +88,8 @@ from hathor.transaction.util import (
 
 P = ParamSpec('P')
 T = TypeVar('T')
+
+MAX_SEQNUM_JUMP_SIZE: int = 10
 
 
 def _forbid_syscall_from_view(
@@ -142,6 +147,38 @@ class Runner:
 
         # Information about updated tokens in the current call via syscalls.
         self._updated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
+
+    def execute_from_tx(self, tx: Transaction) -> None:
+        """Execute the contract's method call."""
+        # Check seqnum.
+        nano_header = tx.get_nano_header()
+
+        if nano_header.is_creating_a_new_contract():
+            contract_id = ContractId(VertexId(tx.hash))
+        else:
+            contract_id = ContractId(VertexId(nano_header.nc_id))
+
+        assert nano_header.nc_seqnum >= 0
+        current_seqnum = self.block_storage.get_address_seqnum(Address(nano_header.nc_address))
+        diff = nano_header.nc_seqnum - current_seqnum
+        if diff <= 0 or diff > MAX_SEQNUM_JUMP_SIZE:
+            # Fail execution if seqnum is invalid.
+            self._last_call_info = self._build_call_info(contract_id)
+            raise NCFail(f'invalid seqnum (diff={diff})')
+        self.block_storage.set_address_seqnum(Address(nano_header.nc_address), nano_header.nc_seqnum)
+
+        vertex_metadata = tx.get_metadata()
+        assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
+
+        context = nano_header.get_context()
+        assert context.vertex.block.hash == vertex_metadata.first_block
+
+        nc_args = NCRawArgs(nano_header.nc_args_bytes)
+        if nano_header.is_creating_a_new_contract():
+            blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
+            self.create_contract_with_nc_args(contract_id, blueprint_id, context, nc_args)
+        else:
+            self.call_public_method_with_nc_args(contract_id, nano_header.nc_method, context, nc_args)
 
     def disable_call_trace(self) -> None:
         """Disable call trace. Useful when the runner is only used to call view methods, for example in APIs."""

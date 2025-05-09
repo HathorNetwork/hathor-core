@@ -50,6 +50,10 @@ class NCInvalidPubKey(NCTxValidationError):
     pass
 
 
+class NCInvalidSeqNum(NCTxValidationError):
+    pass
+
+
 class NCMethodNotFound(NCTxValidationError):
     """Raised when a method is not found in a nano contract."""
     pass

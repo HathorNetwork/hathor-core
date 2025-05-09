@@ -45,6 +45,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         self.catalog = NCBlueprintCatalog({
             self.myblueprint_id: MyBlueprint
         })
+        self.nc_seqnum = 0
 
         self.manager.allow_mining_without_peers()
         self.manager.tx_storage.nc_catalog = self.catalog
@@ -79,6 +80,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         from hathor.transaction.headers import NanoHeader
         nano_header = NanoHeader(
             tx=nc,
+            nc_seqnum=self.nc_seqnum,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -87,6 +89,8 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
             nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
+        self.nc_seqnum += 1
+
         sign_pycoin(nano_header, privkey)
 
     def finish_and_broadcast_tx(self, tx: BaseTransaction, confirmations: int = 1) -> None:

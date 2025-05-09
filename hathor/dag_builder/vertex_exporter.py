@@ -14,13 +14,14 @@
 
 import ast
 import re
+from collections import defaultdict
 from types import ModuleType
 from typing import Iterator, cast
 
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.crypto.util import decode_address
+from hathor.crypto.util import decode_address, get_address_from_public_key_bytes
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY, DAGBuilder, DAGNode
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
@@ -71,6 +72,8 @@ class VertexExporter:
 
         self._wallets['genesis'] = genesis_wallet
         self._wallets['main'] = self._wallet_factory()
+
+        self._next_nc_seqnum: defaultdict[bytes, int] = defaultdict(int)
 
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
@@ -294,6 +297,12 @@ class VertexExporter:
         child_contract_id = derive_child_contract_id(parent_id, salt, blueprint_id)
         return child_contract_id, blueprint_id
 
+    def _get_next_nc_seqnum(self, nc_pubkey: bytes) -> int:
+        address = get_address_from_public_key_bytes(nc_pubkey)
+        cur = self._next_nc_seqnum[address]
+        self._next_nc_seqnum[address] = cur + 1
+        return cur
+
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
             return
@@ -332,7 +341,7 @@ class VertexExporter:
             method = Method.from_callable(getattr(blueprint_class, nc_method))
             nc_args_bytes = method.serialize_args_bytes(nc_args)
 
-        wallet_name = node.attrs.get('nc_address', 'main')
+        wallet_name = node.attrs.get('nc_address', f'node_{node.name}')
         wallet = self.get_wallet(wallet_name)
         assert isinstance(wallet, HDWallet)
         privkey = wallet.get_key_at_index(0)
@@ -370,6 +379,7 @@ class VertexExporter:
             # Even though we know the NanoHeader only supports Transactions, we force the typing here so we can test
             # that other types of vertices such as blocks would fail verification by using an unsupported header.
             tx=cast(Transaction, vertex),
+            nc_seqnum=0,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -381,6 +391,11 @@ class VertexExporter:
 
         if isinstance(vertex, Transaction):
             sign_pycoin(nano_header, privkey)
+
+        if 'nc_seqnum' in node.attrs:
+            nano_header.nc_seqnum = int(node.attrs['nc_seqnum'])
+        else:
+            nano_header.nc_seqnum = self._get_next_nc_seqnum(nano_header.nc_address)
 
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
         """Create an OnChainBlueprint given a node."""
