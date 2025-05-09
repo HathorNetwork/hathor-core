@@ -43,7 +43,11 @@ class NCStorageFactory(ABC):
         return trie
 
     def get_block_storage_from_block(self, block: Block) -> NCBlockStorage:
+        """Return a block storage. If the block is genesis, it will return an empty block storage."""
         meta = block.get_metadata()
+        if block.is_genesis:
+            assert meta.nc_block_root_id is None
+            return self.get_empty_block_storage()
         assert meta.nc_block_root_id is not None
         return self.get_block_storage(meta.nc_block_root_id)
 

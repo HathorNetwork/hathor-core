@@ -57,6 +57,7 @@ Nano Contracts:
     tx1.nc_withdrawal = 10 HTR         # perform a withdraw in a Nano Contract
     tx1.nc_method = initialize("00")   # call a Nano Contract method
     tx2.nc_method = initialize(`tx1`)  # call a Nano Contract method with another tx's id as an argument
+    tx2.nc_seqnum = 5
 
     # Points to a contract created by another contract.
     tx1.nc_id = child_contract(contract_creator_id, salt.hex(), blueprint_id.hex())

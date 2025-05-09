@@ -126,6 +126,7 @@ class BlockConsensusAlgorithm:
         """Internal method to execute the method calls for transactions confirmed by this block.
         """
         from hathor.nanocontracts import NCFail
+        from hathor.nanocontracts.types import Address
 
         assert self._settings.ENABLE_NANO_CONTRACTS
 
@@ -185,13 +186,17 @@ class BlockConsensusAlgorithm:
                 # mark this tx as voided.
                 tx_meta.nc_execution = NCExecutionState.SKIPPED
                 self.context.save(tx)
+                # Update seqnum even for skipped nano transactions.
+                nc_header = tx.get_nano_header()
+                seqnum = block_storage.get_address_seqnum(Address(nc_header.nc_address))
+                if nc_header.nc_seqnum > seqnum:
+                    block_storage.set_address_seqnum(Address(nc_header.nc_address), nc_header.nc_seqnum)
                 continue
 
             runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
             exception_and_tb: tuple[NCFail, str] | None = None
-            nc_header = tx.get_nano_header()
             try:
-                nc_header.execute(runner)
+                runner.execute_from_tx(tx)
             except NCFail as e:
                 kwargs: dict[str, Any] = {}
                 if tx.name:

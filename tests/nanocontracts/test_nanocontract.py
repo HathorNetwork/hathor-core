@@ -17,9 +17,6 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInvalidSignature, NCMethodNotFound, NCSerializationError
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_types import make_nc_type_for_type
-from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
-from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import (
     NCActionType,
     NCDepositAction,
@@ -45,7 +42,6 @@ from hathor.transaction.validation_state import ValidationState
 from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT, MAX_NC_SCRIPT_SIZE
 from hathor.wallet import KeyPair
 from tests import unittest
-from tests.nanocontracts.utils import TestRunner
 
 STR_NC_TYPE = make_nc_type_for_type(str)
 INT_NC_TYPE = make_nc_type_for_type(int)
@@ -81,6 +77,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.catalog = NCBlueprintCatalog({
             self.myblueprint_id: MyBlueprint
         })
+        self.nc_seqnum = 0
 
         self.peer = self.create_peer('testnet')
         self.peer.tx_storage.nc_catalog = self.catalog
@@ -120,6 +117,7 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         nano_header = NanoHeader(
             tx=nc,
+            nc_seqnum=self.nc_seqnum,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -128,6 +126,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             nc_actions=[],
         )
         nc.headers.append(nano_header)
+        self.nc_seqnum += 1
 
         sign_openssl(nano_header, privkey)
         self.peer.cpu_mining_service.resolve(nc)
@@ -148,6 +147,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nc_header = nc.get_nano_header()
         nc2_header = nc2.get_nano_header()
 
+        self.assertEqual(nc_header.nc_seqnum, nc2_header.nc_seqnum)
         self.assertEqual(nc_header.nc_id, nc2_header.nc_id)
         self.assertEqual(nc_header.nc_method, nc2_header.nc_method)
         self.assertEqual(nc_header.nc_args_bytes, nc2_header.nc_args_bytes)
@@ -162,6 +162,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         deserialized, buf = NanoHeader.deserialize(Transaction(), VertexHeaderId.NANO_HEADER.value + sighash_bytes)
 
         assert len(buf) == 0
+        assert deserialized.nc_seqnum == nano_header.nc_seqnum
         assert deserialized.nc_id == nano_header.nc_id
         assert deserialized.nc_method == nano_header.nc_method
         assert deserialized.nc_args_bytes == nano_header.nc_args_bytes
@@ -384,32 +385,6 @@ class NCNanoContractTestCase(unittest.TestCase):
         address = get_address_b58_from_bytes(nano_header.nc_address)
         self.assertIn(address, related_addresses)
 
-    def test_execute_success(self) -> None:
-        nc_storage_factory = NCMemoryStorageFactory()
-        store = MemoryNodeTrieStore()
-        block_trie = PatriciaTrie(store)
-        block_storage = NCBlockStorage(block_trie)
-        runner = TestRunner(
-            self.peer.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
-        )
-
-        nc = self._get_nc()
-        nano_header = nc.get_nano_header()
-        nc_id = nano_header.get_contract_id()
-
-        nc_metadata = nc.get_metadata()
-        nc_metadata.first_block = self.peer.tx_storage.get_best_block().hash
-
-        # Create contract.
-        nano_header.execute(runner)
-
-        self.assertEqual('string', runner.call_view_method(nc_id, 'get_a'))
-        self.assertEqual(1, runner.call_view_method(nc_id, 'get_b'))
-
-        nc_storage = runner.get_storage(nc_id)
-        self.assertEqual('string', nc_storage.get_obj(b'a', STR_NC_TYPE))
-        self.assertEqual(1, nc_storage.get_obj(b'b', INT_NC_TYPE))
-
     def create_nano(self) -> Transaction:
         parents = [tx.hash for tx in self.genesis_txs]
         timestamp = 1 + max(tx.timestamp for tx in self.genesis)
@@ -506,6 +481,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         )
         nc2.headers.append(NanoHeader(
             tx=nc2,
+            nc_seqnum=0,
             nc_id=b'',
             nc_method='',
             nc_args_bytes=b'',

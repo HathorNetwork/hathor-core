@@ -90,6 +90,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.catalog = NCBlueprintCatalog({
             self.myblueprint_id: MyBlueprint
         })
+        self.nc_seqnum = 0
 
         self.manager = self.simulator.create_peer()
         self.manager.allow_mining_without_peers()
@@ -136,6 +137,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         nano_header = NanoHeader(
             tx=nc,
+            nc_seqnum=self.nc_seqnum,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -144,6 +146,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
+        self.nc_seqnum += 1
 
         if is_custom_token:
             nc.tokens = [self.token_uid]

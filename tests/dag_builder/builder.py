@@ -14,15 +14,26 @@
 
 from types import ModuleType
 
+from mnemonic import Mnemonic
+
 from hathor.dag_builder import DAGBuilder
 from hathor.dag_builder.types import WalletFactoryType
 from hathor.manager import HathorManager
-from hathor.util import initialize_hd_wallet
+from hathor.util import Random
+from hathor.wallet import HDWallet
 from tests.nanocontracts import test_blueprints
-from tests.utils import DEFAULT_WORDS, GENESIS_SEED
+from tests.utils import GENESIS_SEED
 
 
 class TestDAGBuilder:
+    @staticmethod
+    def create_random_hd_wallet(rng: Random) -> HDWallet:
+        m = Mnemonic('english')
+        words = m.to_mnemonic(rng.randbytes(32))
+        hd = HDWallet(words=words)
+        hd._manually_initialize()
+        return hd
+
     @staticmethod
     def from_manager(
         manager: HathorManager,
@@ -34,6 +45,6 @@ class TestDAGBuilder:
         return DAGBuilder.from_manager(
             manager=manager,
             genesis_words=genesis_words or GENESIS_SEED,
-            wallet_factory=wallet_factory or (lambda: initialize_hd_wallet(DEFAULT_WORDS)),
+            wallet_factory=wallet_factory or (lambda: TestDAGBuilder.create_random_hd_wallet(manager.rng)),
             blueprints_module=blueprints_module or test_blueprints,
         )

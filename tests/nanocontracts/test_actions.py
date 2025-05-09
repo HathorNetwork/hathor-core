@@ -87,6 +87,7 @@ class TestActions(unittest.TestCase):
         })
         assert self.manager.tx_storage.indexes is not None
         self.tokens_index: TokensIndex = not_none(self.manager.tx_storage.indexes.tokens)
+        self.nc_seqnum = 0
 
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
         self.artifacts = self.dag_builder.build_from_str(f'''
@@ -154,6 +155,7 @@ class TestActions(unittest.TestCase):
 
         nano_header = NanoHeader(
             tx=tx,
+            nc_seqnum=self.nc_seqnum,
             nc_id=self.tx0.hash,
             nc_method=nc_method if nc_method is not None else 'nop',
             nc_args_bytes=nc_args_bytes,
@@ -161,6 +163,7 @@ class TestActions(unittest.TestCase):
             nc_script=b'',
             nc_actions=nc_actions if nc_actions is not None else [],
         )
+        self.nc_seqnum += 1
 
         sign_pycoin(nano_header, privkey)
         tx.headers.append(nano_header)
