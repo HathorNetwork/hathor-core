@@ -15,15 +15,11 @@ from hathor.nanocontracts.blueprints.bet import (
     WithdrawalNotAllowed,
 )
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.storage import NCMemoryStorageFactory
-from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import Address, Amount, BlueprintId, ContractId, NCAction, NCActionType, SignedData
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
-from tests import unittest
-from tests.nanocontracts.utils import TestRunner
+from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 settings = HathorSettings()
 
@@ -35,23 +31,13 @@ class BetInfo(NamedTuple):
     score: str
 
 
-class NCBetBlueprintTestCase(unittest.TestCase):
-    use_memory_storage = True
-
+class NCBetBlueprintTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
-        self.manager = self.create_peer('testnet')
         self.token_uid = settings.HATHOR_TOKEN_UID
         self.nc_id = ContractId(b'1' * 32)
         self.blueprint_id = BlueprintId(
             bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595')
-        )
-
-        nc_storage_factory = NCMemoryStorageFactory()
-        store = MemoryNodeTrieStore()
-        block_trie = PatriciaTrie(store)
-        self.runner = TestRunner(
-            self.manager.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
         )
         self.initialize_contract()
         self.nc_storage = self.runner.get_storage(self.nc_id)

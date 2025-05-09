@@ -1142,17 +1142,18 @@ class TransactionStorage(ABC):
 
     def get_nc_storage(self, block: Block, contract_id: ContractId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
-        from hathor.nanocontracts.types import VertexId as NCVertexId
-        meta = block.get_metadata()
+        from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
         if not block.is_genesis:
-            assert meta.nc_block_root_id is not None
-        block_trie = self._nc_storage_factory.get_trie(meta.nc_block_root_id)
+            block_storage = self._nc_storage_factory.get_block_storage_from_block(block)
+        else:
+            block_storage = self._nc_storage_factory.get_empty_block_storage()
+
         try:
-            nc_root_id = block_trie.get(contract_id)
+            contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(contract_id)))
         except KeyError:
             from hathor.nanocontracts.exception import NanoContractDoesNotExist
             raise NanoContractDoesNotExist(contract_id.hex())
-        return self._nc_storage_factory(NCVertexId(contract_id), nc_root_id)
+        return contract_storage
 
     def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
         from hathor.nanocontracts.exception import BlueprintDoesNotExist

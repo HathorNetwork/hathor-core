@@ -1,10 +1,10 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail, NCInsufficientFunds, NCPrivateMethodError, UnknownFieldType
-from hathor.nanocontracts.storage import NCMemoryStorageFactory
+from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
+from hathor.nanocontracts.storage.contract_storage import BalanceKey
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.storage.storage import BalanceKey
 from hathor.nanocontracts.types import ContractId, NCAction, NCActionType, VertexId, public, view
 from tests import unittest
 from tests.nanocontracts.utils import TestRunner
@@ -87,9 +87,10 @@ class NCBlueprintTestCase(unittest.TestCase):
         nc_storage_factory = NCMemoryStorageFactory()
         store = MemoryNodeTrieStore()
         block_trie = PatriciaTrie(store)
+        block_storage = NCBlockStorage(block_trie)
         self.manager = self.create_peer('testnet')
         self.runner = TestRunner(
-            self.manager.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
+            self.manager.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
         )
 
         self.blueprint_ids = {

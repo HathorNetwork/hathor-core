@@ -1,8 +1,7 @@
 
 from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.storage import NCStorageFactory
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
+from hathor.nanocontracts.storage import NCBlockStorage, NCStorageFactory
 from hathor.reactor import ReactorProtocol
 from hathor.transaction.storage import TransactionStorage
 
@@ -14,7 +13,7 @@ class TestRunner(Runner):
         self,
         tx_storage: TransactionStorage,
         storage_factory: NCStorageFactory,
-        block_trie: PatriciaTrie,
+        block_storage: NCBlockStorage,
         *,
         settings: HathorSettings,
         reactor: ReactorProtocol,
@@ -25,7 +24,7 @@ class TestRunner(Runner):
         super().__init__(
             tx_storage=tx_storage,
             storage_factory=storage_factory,
-            block_trie=block_trie,
+            block_storage=block_storage,
             settings=settings,
             reactor=reactor,
             seed=seed,

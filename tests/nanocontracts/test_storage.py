@@ -81,5 +81,5 @@ class NCMemoryStorageTestCase(BaseNCStorageTestCase):
     def setUp(self):
         from hathor.nanocontracts.storage import NCMemoryStorageFactory
         factory = NCMemoryStorageFactory()
-        self.storage = factory(b'', None)
+        self.storage = factory.get_empty_contract_storage(b'')
         super().setUp()

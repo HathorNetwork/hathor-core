@@ -389,10 +389,9 @@ class HathorManager:
 
     def get_nc_runner(self, block: Block) -> Runner:
         """Return a contract runner for a given block."""
-        meta = block.get_metadata()
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
-        block_trie = nc_storage_factory.get_trie(meta.nc_block_root_id)
-        return self.runner_factory.create(block_trie=block_trie)
+        block_storage = nc_storage_factory.get_block_storage_from_block(block)
+        return self.runner_factory.create(block_storage=block_storage)
 
     def get_best_block_nc_runner(self) -> Runner:
         """Return a contract runner for the best block."""
@@ -401,14 +400,13 @@ class HathorManager:
 
     def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
-        from hathor.nanocontracts.types import VertexId as NCVertexId
-        meta = block.get_metadata()
-        block_trie = self.consensus_algorithm.nc_storage_factory.get_trie(meta.nc_block_root_id)
+        from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
+        block_storage = self.consensus_algorithm.nc_storage_factory.get_block_storage_from_block(block)
         try:
-            nc_root_id = block_trie.get(nc_id)
+            contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(nc_id)))
         except KeyError:
             raise NanoContractDoesNotExist(nc_id.hex())
-        return self.consensus_algorithm.nc_storage_factory(NCVertexId(nc_id), nc_root_id)
+        return contract_storage
 
     def get_best_block_nc_storage(self, nc_id: VertexId) -> NCContractStorage:
         """Return a contract storage with the contract state at the best block."""

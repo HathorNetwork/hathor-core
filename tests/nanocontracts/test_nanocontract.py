@@ -8,7 +8,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, NCMethodNotFound, NCSerializationError
 from hathor.nanocontracts.method_parser import NCMethodParser
-from hathor.nanocontracts.storage import NCMemoryStorageFactory
+from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import NCActionType, public, view
@@ -192,8 +192,9 @@ class NCNanoContractTestCase(unittest.TestCase):
         nc_storage_factory = NCMemoryStorageFactory()
         store = MemoryNodeTrieStore()
         block_trie = PatriciaTrie(store)
+        block_storage = NCBlockStorage(block_trie)
         runner = TestRunner(
-            self.peer.tx_storage, nc_storage_factory, block_trie, settings=self._settings, reactor=self.reactor
+            self.peer.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
         )
 
         nc = self._get_nc()

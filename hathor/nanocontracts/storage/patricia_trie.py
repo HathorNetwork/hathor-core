@@ -112,6 +112,9 @@ class PatriciaTrie:
             self.root = self._db[root_id]
             assert self.root.id == root_id
 
+    def get_store(self) -> NodeTrieStore:
+        return self._db
+
     def commit(self) -> None:
         """Flush all local changes from self.root to the database. All other nodes not accessed from self.root
         will be discarded.

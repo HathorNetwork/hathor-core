@@ -33,8 +33,7 @@ from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.single import _SingleCallRunner
 from hathor.nanocontracts.runner.types import CallInfo, CallRecord, CallType
-from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage, NCStorageFactory
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
+from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
 from hathor.nanocontracts.utils import derive_child_contract_id
 from hathor.reactor import ReactorProtocol
@@ -58,12 +57,12 @@ class Runner:
         settings: HathorSettings,
         tx_storage: TransactionStorage,
         storage_factory: NCStorageFactory,
-        block_trie: PatriciaTrie,
+        block_storage: NCBlockStorage,
         seed: bytes | None,
     ) -> None:
         self.tx_storage = tx_storage
         self.storage_factory = storage_factory
-        self.block_trie = block_trie
+        self.block_storage = block_storage
         self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
@@ -99,11 +98,9 @@ class Runner:
 
     def has_contract_been_initialized(self, nanocontract_id: ContractId) -> bool:
         """Check whether a contract has been initialized or not."""
-        try:
-            self.block_trie.get(nanocontract_id)
+        if nanocontract_id in self._storages:
             return True
-        except KeyError:
-            return nanocontract_id in self._storages
+        return self.block_storage.has_contract(nanocontract_id)
 
     def get_storage(self, nanocontract_id: ContractId) -> NCContractStorage:
         """Return the storage for a contract.
@@ -111,8 +108,7 @@ class Runner:
         If no storage has been created, then one will be created."""
         storage = self._storages.get(nanocontract_id)
         if storage is None:
-            nc_root_id = self.block_trie.get(nanocontract_id)
-            storage = self.storage_factory(nanocontract_id, nc_root_id)
+            storage = self.block_storage.get_contract_storage(nanocontract_id)
             storage.lock()
             self._storages[nanocontract_id] = storage
         return storage
@@ -325,7 +321,7 @@ class Runner:
             nc_storage.unlock()
             change_tracker.commit()
             nc_storage.lock()
-            self.block_trie.update(nc_id, nc_storage.get_root_id())
+            self.block_storage.update_contract_trie(nc_id, nc_storage.get_root_id())
 
     def commit(self) -> None:
         """Commit all storages and update block trie."""
@@ -443,7 +439,7 @@ class Runner:
         """Create a new contract without calling the initialize() method."""
         assert not self.has_contract_been_initialized(nanocontract_id)
         assert nanocontract_id not in self._storages
-        nc_storage = self.storage_factory(nanocontract_id, None)
+        nc_storage = self.storage_factory.get_empty_contract_storage(nanocontract_id)
         nc_storage.set_blueprint_id(blueprint_id)
         self._storages[nanocontract_id] = nc_storage
 
@@ -513,12 +509,12 @@ class RunnerFactory:
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
 
-    def create(self, *, block_trie: PatriciaTrie, seed: bytes | None = None) -> Runner:
+    def create(self, *, block_storage: NCBlockStorage, seed: bytes | None = None) -> Runner:
         return Runner(
             reactor=self.reactor,
             settings=self.settings,
             tx_storage=self.tx_storage,
             storage_factory=self.nc_storage_factory,
-            block_trie=block_trie,
+            block_storage=block_storage,
             seed=seed,
         )

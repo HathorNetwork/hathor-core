@@ -173,8 +173,8 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert len(set(contracts)) == len(contracts)
 
         runner = self.manager.get_best_block_nc_runner()
-        for nc_id in contracts:
-            assert runner.has_contract_been_initialized(nc_id)
+        for idx, nc_id in enumerate(contracts):
+            assert runner.has_contract_been_initialized(nc_id), f'index={idx}'
 
         indexes = self.manager.tx_storage.indexes
 

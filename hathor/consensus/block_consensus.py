@@ -73,12 +73,12 @@ class BlockConsensusAlgorithm:
         """Initialize the genesis block with an empty contract trie."""
         assert block.is_genesis
         meta = block.get_metadata()
-        trie = self.context.consensus.nc_storage_factory.get_trie(root_id=None)
-        trie.commit()
+        block_storage = self.context.consensus.nc_storage_factory.get_empty_block_storage()
+        block_storage.commit()
         if meta.nc_block_root_id is not None:
-            assert meta.nc_block_root_id == trie.root.id
+            assert meta.nc_block_root_id == block_storage.get_root_id()
         else:
-            meta.nc_block_root_id = trie.root.id
+            meta.nc_block_root_id = block_storage.get_root_id()
             self.context.save(block)
 
     def execute_nano_contracts(self, block: Block) -> None:
@@ -171,12 +171,12 @@ class BlockConsensusAlgorithm:
             return
 
         nc_sorted_calls = self.context.consensus.nc_calls_sorter(block, nc_calls)
-        block_trie = self.context.consensus.nc_storage_factory.get_trie(block_root_id)
+        block_storage = self.context.consensus.nc_storage_factory.get_block_storage(block_root_id)
         seed_hasher = hashlib.sha256(block.hash)
 
         for tx in nc_sorted_calls:
             seed_hasher.update(tx.hash)
-            seed_hasher.update(block_trie.root.id)
+            seed_hasher.update(block_storage.get_root_id())
 
             tx_meta = tx.get_metadata()
             if tx_meta.voided_by:
@@ -186,7 +186,7 @@ class BlockConsensusAlgorithm:
                 self.context.save(tx)
                 continue
 
-            runner = self._runner_factory.create(block_trie=block_trie, seed=seed_hasher.digest())
+            runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
             runner.enable_call_trace()
             exception_and_tb: tuple[NCFail, str] | None = None
             nc_header = tx.get_nano_header()
@@ -200,7 +200,7 @@ class BlockConsensusAlgorithm:
                 tx_meta.nc_execution = NCExecutionState.SUCCESS
                 self.context.save(tx)
                 # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
-                #      method once per contract per block, just like we do for the block_trie. This ensures we will
+                #      method once per contract per block, just like we do for the block_storage. This ensures we will
                 #      have a clean database with no orphan nodes.
                 runner.commit()
 
@@ -216,9 +216,9 @@ class BlockConsensusAlgorithm:
                 self._nc_log_storage.save_logs(tx, runner.get_last_call_info(), exception_and_tb)
 
         # Save block state root id. If nothing happens, it should be the same as its block parent.
-        block_trie.commit()
-        assert block_trie.root.id is not None
-        meta.nc_block_root_id = block_trie.root.id
+        block_storage.commit()
+        assert block_storage.get_root_id() is not None
+        meta.nc_block_root_id = block_storage.get_root_id()
         self.context.save(block)
 
         for tx in nc_calls:

@@ -15,7 +15,7 @@
 from typing import Any
 
 from hathor.nanocontracts.exception import NCInsufficientFunds
-from hathor.nanocontracts.storage.storage import AttrKey, BalanceKey, NCContractStorage
+from hathor.nanocontracts.storage.contract_storage import AttrKey, BalanceKey, NCContractStorage
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey
 from hathor.nanocontracts.types import ContractId
 
