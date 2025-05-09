@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError
-from hathor.nanocontracts.storage import NCChangesTracker, NCStorage
+from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage
 from hathor.nanocontracts.types import BlueprintId, ContractId
 
 if TYPE_CHECKING:
@@ -126,5 +126,5 @@ class CallInfo:
             assert call_record.changes_tracker.storage == change_trackers[-2]
             assert call_record.changes_tracker == change_trackers.pop()
         else:
-            assert type(call_record.changes_tracker.storage) is NCStorage
+            assert type(call_record.changes_tracker.storage) is NCContractStorage
         self.nc_logger.__log_call_end__()

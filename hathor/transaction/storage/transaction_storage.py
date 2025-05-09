@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts import OnChainBlueprint
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
-    from hathor.nanocontracts.storage import NCStorage, NCStorageFactory
+    from hathor.nanocontracts.storage import NCContractStorage, NCStorageFactory
     from hathor.nanocontracts.types import BlueprintId, ContractId
 
 cpu = get_cpu_profiler()
@@ -1140,7 +1140,7 @@ class TransactionStorage(ABC):
         with self.allow_partially_validated_context():
             return self.transaction_exists(vertex_id)
 
-    def get_nc_storage(self, block: Block, contract_id: ContractId) -> NCStorage:
+    def get_nc_storage(self, block: Block, contract_id: ContractId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
         from hathor.nanocontracts.types import VertexId as NCVertexId
         meta = block.get_metadata()

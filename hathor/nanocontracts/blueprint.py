@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional, final
 
 from hathor.nanocontracts.fields import get_field_for_attr
-from hathor.nanocontracts.storage import NCStorage
+from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
@@ -98,7 +98,7 @@ class Blueprint(metaclass=_BlueprintBase):
 
     __slots__ = ('__log', '__runner', '_storage', '_cache')
 
-    def __init__(self, runner: Runner, storage: NCStorage, nc_logger: NCLogger) -> None:
+    def __init__(self, runner: Runner, storage: NCContractStorage, nc_logger: NCLogger) -> None:
         self.__log = nc_logger
         self.__runner = runner
         self._storage = storage

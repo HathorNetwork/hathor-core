@@ -56,7 +56,7 @@ class MetadataKey(NamedTuple):
 BLUEPRINT_ID_KEY = b'blueprint_id'
 
 
-class NCStorage:
+class NCContractStorage:
     """This is the storage used by NanoContracts.
 
     This implementation works for both memory and rocksdb backends."""

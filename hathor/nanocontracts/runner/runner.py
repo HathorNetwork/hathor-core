@@ -33,7 +33,7 @@ from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.single import _SingleCallRunner
 from hathor.nanocontracts.runner.types import CallInfo, CallRecord, CallType
-from hathor.nanocontracts.storage import NCChangesTracker, NCStorage, NCStorageFactory
+from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
 from hathor.nanocontracts.utils import derive_child_contract_id
@@ -64,7 +64,7 @@ class Runner:
         self.tx_storage = tx_storage
         self.storage_factory = storage_factory
         self.block_trie = block_trie
-        self._storages: dict[ContractId, NCStorage] = {}
+        self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
 
@@ -105,7 +105,7 @@ class Runner:
         except KeyError:
             return nanocontract_id in self._storages
 
-    def get_storage(self, nanocontract_id: ContractId) -> NCStorage:
+    def get_storage(self, nanocontract_id: ContractId) -> NCContractStorage:
         """Return the storage for a contract.
 
         If no storage has been created, then one will be created."""
@@ -121,7 +121,7 @@ class Runner:
         """Return the latest change tracker for a contract."""
         assert self._call_info is not None
         change_trackers = self._call_info.change_trackers[nanocontract_id]
-        storage: NCStorage
+        storage: NCContractStorage
         if len(change_trackers) > 0:
             storage = change_trackers[-1]
         else:
@@ -416,7 +416,7 @@ class Runner:
         if token_uid is None:
             token_uid = self._settings.HATHOR_TOKEN_UID
 
-        storage: NCStorage
+        storage: NCContractStorage
         if self._call_info is None:
             storage = self.get_storage(nanocontract_id)
         else:

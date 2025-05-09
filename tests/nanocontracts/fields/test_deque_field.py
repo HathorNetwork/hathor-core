@@ -17,7 +17,7 @@ from typing import Any, cast
 
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
-from hathor.nanocontracts.storage import DeletedKey, NCStorage
+from hathor.nanocontracts.storage import DeletedKey, NCContractStorage
 from hathor.transaction import Block, Transaction
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
@@ -153,7 +153,7 @@ class TestDequeField(unittest.TestCase):
         self._test_deque_field(self.bp_list)
 
     @staticmethod
-    def _get_internal_value(storage: NCStorage, key: str) -> Any:
+    def _get_internal_value(storage: NCContractStorage, key: str) -> Any:
         internal_key = storage._to_attr_key(key)
         internal_key_bytes = bytes(internal_key)
         return storage._trie_get(internal_key_bytes)

@@ -19,7 +19,7 @@ from typing_extensions import Self, override
 
 from hathor.nanocontracts.fields import Field
 from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
-from hathor.nanocontracts.storage import NCStorage
+from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import (
     Address,
     Amount,
@@ -76,7 +76,7 @@ _LENGTH_KEY: str = '__length__'
 class StorageSet(StorageContainer):
     __slots__ = ('__length_key',)
 
-    def __init__(self, storage: NCStorage, name: str, value_field: Field) -> None:
+    def __init__(self, storage: NCContractStorage, name: str, value_field: Field) -> None:
         super().__init__(storage, name, value_field)
         self.__length_key = f'{name}{KEY_SEPARATOR}{_LENGTH_KEY}'
 

@@ -16,11 +16,11 @@ from typing import Any
 
 from typing_extensions import override
 
-from hathor.nanocontracts.storage import NCStorage
+from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED
 
 
-class MockNCStorage(NCStorage):
+class MockNCStorage(NCContractStorage):
     __slots__ = ('store',)
 
     def __init__(self) -> None:

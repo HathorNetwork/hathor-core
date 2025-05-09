@@ -18,11 +18,11 @@ from typing import Any, Callable, Generic, TypeAlias, TypeVar
 from typing_extensions import Self
 
 from hathor.nanocontracts.fields import Field
-from hathor.nanocontracts.storage import NCStorage
+from hathor.nanocontracts.storage import NCContractStorage
 from hathor.serialization import Deserializer, Serializer
 
 T = TypeVar('T', bound='StorageContainer')
-StorageFactoryType: TypeAlias = Callable[[NCStorage, str, Field], T]
+StorageFactoryType: TypeAlias = Callable[[NCContractStorage, str, Field], T]
 
 KEY_SEPARATOR: str = ':'
 
@@ -75,7 +75,7 @@ class ContainerField(Field, ABC, Generic[T]):
 class StorageContainer:
     __slots__ = ('__storage__', '__field_name__', '__value_field__')
 
-    def __init__(self, storage: NCStorage, name: str, value_field: Field) -> None:
+    def __init__(self, storage: NCContractStorage, name: str, value_field: Field) -> None:
         self.__storage__ = storage
         self.__field_name__ = name
         self.__value_field__ = value_field

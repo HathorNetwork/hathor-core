@@ -14,14 +14,14 @@
 
 from hathor.nanocontracts.storage.changes_tracker import NCChangesTracker
 from hathor.nanocontracts.storage.factory import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
-from hathor.nanocontracts.storage.storage import NCStorage
+from hathor.nanocontracts.storage.storage import NCContractStorage
 from hathor.nanocontracts.storage.types import DeletedKey
 
 __all__ = [
-    'NCStorage',
     'NCChangesTracker',
     'NCMemoryStorageFactory',
     'NCRocksDBStorageFactory',
+    'NCContractStorage',
     'NCStorageFactory',
     'DeletedKey',
 ]

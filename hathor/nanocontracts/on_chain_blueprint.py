@@ -36,7 +36,7 @@ from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpac
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
-    from hathor.nanocontracts.storage import NCStorage  # noqa: F401
+    from hathor.nanocontracts.storage import NCContractStorage  # noqa: F401
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()

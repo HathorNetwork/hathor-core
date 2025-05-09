@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from twisted.web.http import Request
 
     from hathor.manager import HathorManager
-    from hathor.nanocontracts.storage import NCStorage
+    from hathor.nanocontracts.storage import NCContractStorage
     from hathor.transaction import Block
 
 
@@ -88,7 +88,7 @@ class NanoContractStateResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Nano contract failed execution: {params.id}')
             return error_response.json_dumpb()
 
-        nc_storage: NCStorage
+        nc_storage: NCContractStorage
         block: Block
         block_hash: Optional[bytes]
         try:

@@ -16,7 +16,7 @@ from abc import ABC
 from typing import TYPE_CHECKING, Optional
 
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore, NodeTrieStore, RocksDBNodeTrieStore
-from hathor.nanocontracts.storage.storage import NCStorage
+from hathor.nanocontracts.storage.storage import NCContractStorage
 from hathor.nanocontracts.types import VertexId
 
 if TYPE_CHECKING:
@@ -40,10 +40,10 @@ class NCStorageFactory(ABC):
         trie = PatriciaTrie(self._store, root_id=self.bytes_to_node_id(root_id))
         return trie
 
-    def __call__(self, nano_contract_id: VertexId, nc_root_id: Optional[bytes]) -> NCStorage:
-        """Return a storage object for a given nano contract."""
+    def __call__(self, nano_contract_id: VertexId, nc_root_id: Optional[bytes]) -> NCContractStorage:
+        """Create a new storage instance for a given contract."""
         trie = self.get_trie(nc_root_id)
-        return NCStorage(trie=trie, nc_id=nano_contract_id)
+        return NCContractStorage(trie=trie, nc_id=nano_contract_id)
 
 
 class NCMemoryStorageFactory(NCStorageFactory):

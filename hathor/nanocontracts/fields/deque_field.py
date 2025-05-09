@@ -22,7 +22,7 @@ from typing_extensions import Self, override
 
 from hathor.nanocontracts.fields import Field
 from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
-from hathor.nanocontracts.storage import NCStorage
+from hathor.nanocontracts.storage import NCContractStorage
 
 
 class DequeField(ContainerField['StorageDeque']):
@@ -61,7 +61,7 @@ class _StorageDequeMetadata:
 class StorageDeque(StorageContainer):
     __slots__ = ('__metadata_key',)
 
-    def __init__(self, storage: NCStorage, name: str, value_field: Field) -> None:
+    def __init__(self, storage: NCContractStorage, name: str, value_field: Field) -> None:
         super().__init__(storage, name, value_field)
         self.__metadata_key = f'{name}{KEY_SEPARATOR}{_METADATA_KEY}'
 
