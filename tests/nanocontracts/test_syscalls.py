@@ -1,7 +1,6 @@
 from typing import Optional
 
 from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.types import BlueprintId, ContractId, public
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -42,7 +41,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         tx = self.get_genesis_tx()
 
-        ctx = Context([], tx, b'', timestamp=0)
+        ctx = Context([], tx, self.gen_random_address(), timestamp=0)
         self.runner.create_contract(nc1_id, other_blueprint_id, ctx)
         self.runner.create_contract(nc2_id, my_blueprint_id, ctx, nc1_id)
 
