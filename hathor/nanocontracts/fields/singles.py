@@ -41,17 +41,17 @@ class SingleValueField(Field, ABC):
 
     def __set__(self, blueprint, value):
         """Store the value in the storage."""
-        blueprint._storage.put(self.name, value)
-        blueprint._cache[self.name] = value
+        blueprint.syscall.__storage__.put(self.name, value)
+        blueprint.syscall.__cache__[self.name] = value
 
     def __get__(self, blueprint, objtype):
         """Return the value from the storage."""
-        if self.name in blueprint._cache:
-            return blueprint._cache[self.name]
+        if self.name in blueprint.syscall.__cache__:
+            return blueprint.syscall.__cache__[self.name]
 
         try:
-            value = blueprint._storage.get(self.name)
-            blueprint._cache[self.name] = value
+            value = blueprint.syscall.__storage__.get(self.name)
+            blueprint.syscall.__cache__[self.name] = value
             return value
         except KeyError:
             raise NCAttributeError(f'Contract has no attribute \'{self.name}\'')

@@ -204,11 +204,12 @@ class NCEvent:
     data: bytes
 
 
-# TODO: Rename to something else now that it has events? move it?
+# TODO: Rename to something else now that it has events? move events out of it?
 @dataclass(slots=True)
 class NCLogger:
     """
-    A dataclass that provides logging-equivalent functionality, saving log entries in memory.
+    A dataclass that provides instrumentation-related features, including logging-equivalent functionality
+    saving log entries in memory, and emission of events.
     To be used inside Blueprints.
     """
     __reactor__: ReactorProtocol
@@ -232,7 +233,7 @@ class NCLogger:
         """Create a new ERROR log entry."""
         self.__log__(NCLogLevel.ERROR, message, **kwargs)
 
-    def emit_event(self, data: bytes) -> None:
+    def __emit_event__(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
         if len(data) > MAX_EVENT_SIZE:
             raise ValueError(f'event data cannot be larger than {MAX_EVENT_SIZE} bytes, is {len(data)}')

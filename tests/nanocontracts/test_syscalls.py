@@ -15,11 +15,11 @@ class MyBlueprint(Blueprint):
 
     @public
     def initialize(self, ctx: Context, other_nc_id: ContractId) -> None:
-        self.my_nc_id = self.get_contract_id()
-        self.my_blueprint_id = self.get_blueprint_id()
+        self.my_nc_id = self.syscall.get_contract_id()
+        self.my_blueprint_id = self.syscall.get_blueprint_id()
 
         self.other_nc_id = other_nc_id
-        self.other_blueprint_id = self.get_blueprint_id(other_nc_id)
+        self.other_blueprint_id = self.syscall.get_blueprint_id(other_nc_id)
 
 
 class OtherBlueprint(Blueprint):

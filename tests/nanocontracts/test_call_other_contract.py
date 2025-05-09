@@ -45,7 +45,7 @@ class MyBlueprint(Blueprint):
         for action in ctx.actions.values():
             amount = 1 + action.amount // 2
             actions.append(NCAction(NCActionType.DEPOSIT, action.token_uid, amount))
-        self.call_public_method(self.contract, 'split_balance', actions)
+        self.syscall.call_public_method(self.contract, 'split_balance', actions)
 
     @public
     def get_tokens_from_another_contract(self, ctx: Context) -> None:
@@ -54,13 +54,13 @@ class MyBlueprint(Blueprint):
 
         actions = []
         for action in ctx.actions.values():
-            balance = self.get_balance(action.token_uid)
+            balance = self.syscall.get_balance(action.token_uid)
             diff = balance - action.amount
             if diff < 0:
                 actions.append(NCAction(NCActionType.WITHDRAWAL, action.token_uid, -diff))
 
         if actions:
-            self.call_public_method(self.contract, 'get_tokens_from_another_contract', actions)
+            self.syscall.call_public_method(self.contract, 'get_tokens_from_another_contract', actions)
 
     @public
     def dec(self, ctx: Context, fail_on_zero: bool = True) -> None:
@@ -72,28 +72,28 @@ class MyBlueprint(Blueprint):
         self.counter -= 1
         if self.contract:
             actions: list[NCAction] = []
-            self.call_public_method(self.contract, 'dec', actions, fail_on_zero=fail_on_zero)
+            self.syscall.call_public_method(self.contract, 'dec', actions, fail_on_zero=fail_on_zero)
 
     @public
     def non_stop_call(self, ctx: Context) -> None:
         assert self.contract is not None
         while True:
             actions: list[NCAction] = []
-            self.call_public_method(self.contract, 'dec', actions, fail_on_zero=False)
+            self.syscall.call_public_method(self.contract, 'dec', actions, fail_on_zero=False)
 
     @view
     def get_total_counter(self) -> int:
         mine = self.counter
         other = 0
         if self.contract:
-            other = self.call_view_method(self.contract, 'get_counter')
+            other = self.syscall.call_view_method(self.contract, 'get_counter')
         return mine + other
 
     @public
     def dec_and_get_counter(self, ctx: Context) -> int:
         assert self.contract is not None
         self.dec(ctx)
-        other = self.call_view_method(self.contract, 'get_counter')
+        other = self.syscall.call_view_method(self.contract, 'get_counter')
         return self.counter + other
 
     @view
@@ -103,12 +103,12 @@ class MyBlueprint(Blueprint):
     @public
     def invalid_call_initialize(self, ctx: Context) -> None:
         assert self.contract is not None
-        self.call_public_method(self.contract, 'initialize', [])
+        self.syscall.call_public_method(self.contract, 'initialize', [])
 
     @view
     def invalid_call_public_from_view(self):
         assert self.contract is not None
-        self.call_public_method(self.contract, 'dec', [])
+        self.syscall.call_public_method(self.contract, 'dec', [])
 
 
 class NCBlueprintTestCase(unittest.TestCase):

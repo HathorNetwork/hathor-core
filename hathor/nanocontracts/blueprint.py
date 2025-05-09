@@ -14,26 +14,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, final
+from typing import TYPE_CHECKING, final
 
+from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.fields import get_field_for_attr
-from hathor.nanocontracts.storage import NCContractStorage
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
-    from hathor.nanocontracts.rng import NanoRNG
-    from hathor.nanocontracts.runner import Runner
 
 FORBIDDEN_NAMES = {
-    'rng',
+    'syscall',
     'log',
-    'get_balance',
-    'get_blueprint_id',
-    'get_contract_id',
-    'call_public_method',
-    'call_view_method',
-    'create_contract',
 }
 
 
@@ -96,70 +87,19 @@ class Blueprint(metaclass=_BlueprintBase):
             age: int
     """
 
-    __slots__ = ('__log', '__runner', '_storage', '_cache')
+    __slots__ = ('__env',)
 
-    def __init__(self, runner: Runner, storage: NCContractStorage, nc_logger: NCLogger) -> None:
-        self.__log = nc_logger
-        self.__runner = runner
-        self._storage = storage
-        self._cache: dict[str, Any] = {}
+    def __init__(self, env: BlueprintEnvironment) -> None:
+        self.__env = env
 
     @final
     @property
-    def rng(self) -> NanoRNG:
-        """Return an RNG for the current contract."""
-        return self.__runner.get_rng()
+    def syscall(self) -> BlueprintEnvironment:
+        """Return the syscall provider for the current contract."""
+        return self.__env
 
     @final
     @property
     def log(self) -> NCLogger:
         """Return the logger for the current contract."""
-        return self.__log
-
-    @final
-    def get_contract_id(self) -> ContractId:
-        """Return the current contract id."""
-        return self.__runner.get_current_contract_id()
-
-    @final
-    def get_balance(self,
-                    token_uid: Optional[TokenUid] = None,
-                    *,
-                    nanocontract_id: Optional[ContractId] = None) -> int:
-        """Return the balance for a given token without considering the current transaction.
-
-        For instance, if a contract has 50 HTR and a transaction is requesting to withdraw 3 HTR,
-        then this method will return 50 HTR."""
-        return self.__runner.get_balance(nanocontract_id, token_uid)
-
-    @final
-    def get_blueprint_id(self, nanocontract_id: Optional[ContractId] = None) -> BlueprintId:
-        """Return the blueprint id of a nano contract. By default, it returns for the current contract."""
-        if nanocontract_id is None:
-            nanocontract_id = self.get_contract_id()
-        return self.__runner.get_blueprint_id(nanocontract_id)
-
-    @final
-    def call_public_method(self,
-                           nc_id: ContractId,
-                           method_name: str,
-                           actions: list[NCAction],
-                           *args: Any,
-                           **kwargs: Any) -> Any:
-        """Call a public method of another contract."""
-        return self.__runner.call_another_contract_public_method(nc_id, method_name, actions, *args, **kwargs)
-
-    @final
-    def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        """Call a view method of another contract."""
-        return self.__runner.call_view_method(nc_id, method_name, *args, **kwargs)
-
-    @final
-    def create_contract(self,
-                        blueprint_id: BlueprintId,
-                        salt: bytes,
-                        actions: list[NCAction],
-                        *args: Any,
-                        **kwargs: Any) -> tuple[ContractId, Any]:
-        """Create a new contract."""
-        return self.__runner.create_another_contract(blueprint_id, salt, actions, *args, **kwargs)
+        return self.syscall.__log__

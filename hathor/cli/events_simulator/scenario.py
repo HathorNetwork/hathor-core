@@ -288,27 +288,27 @@ def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Opti
     class TestEventsBlueprint1(Blueprint):
         @public
         def initialize(self, ctx: Context) -> None:
-            self.log.emit_event(b'test event on initialize 1')
+            self.syscall.emit_event(b'test event on initialize 1')
 
         @public
         def fail(self, ctx: Context) -> None:
             # This will not be emitted because the tx will fail.
-            self.log.emit_event(b'test event on fail')
+            self.syscall.emit_event(b'test event on fail')
             raise NCFail
 
         @public
         def call_another(self, ctx: Context, contract_id: ContractId) -> None:
-            self.log.emit_event(b'test event on call_another')
-            self.call_view_method(contract_id, 'some_method')
+            self.syscall.emit_event(b'test event on call_another')
+            self.syscall.call_view_method(contract_id, 'some_method')
 
     class TestEventsBlueprint2(Blueprint):
         @public
         def initialize(self, ctx: Context) -> None:
-            self.log.emit_event(b'test event on initialize 2')
+            self.syscall.emit_event(b'test event on initialize 2')
 
         @view
         def some_method(self) -> None:
-            self.log.emit_event(b'test event on some_method')
+            self.syscall.emit_event(b'test event on some_method')
 
     blueprint1_id = b'\x11' * 32
     blueprint2_id = b'\x22' * 32
@@ -358,7 +358,7 @@ def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -
     class TestEventsBlueprint1(Blueprint):
         @public
         def initialize(self, ctx: Context) -> None:
-            self.log.emit_event(b'test event on initialize 1')
+            self.syscall.emit_event(b'test event on initialize 1')
 
     blueprint1_id = b'\x11' * 32
     manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint1_id: TestEventsBlueprint1})

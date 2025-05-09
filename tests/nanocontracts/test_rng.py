@@ -19,7 +19,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def nop(self, ctx: Context) -> None:
-        x = self.rng.random()
+        x = self.syscall.rng.random()
         if x < 0.5:
             raise NCFail('bad luck')
 

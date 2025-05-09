@@ -150,7 +150,9 @@ class Runner:
         blueprint_class = self.get_blueprint_class(nanocontract_id)
         metered_executor = self._metered_executor
         nc_logger = self._call_info.nc_logger
-        return _SingleCallRunner(self, blueprint_class, nanocontract_id, change_tracker, metered_executor, nc_logger)
+        return _SingleCallRunner(
+            self, blueprint_class, nanocontract_id, change_tracker, metered_executor, nc_logger
+        )
 
     def _build_call_info(self, nanocontract_id: ContractId) -> CallInfo:
         from hathor.nanocontracts.nc_exec_logs import NCLogger

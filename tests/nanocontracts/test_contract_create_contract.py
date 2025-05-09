@@ -20,7 +20,7 @@ class MyBlueprint1(Blueprint):
             action = ctx.actions[token_uid]
             salt = b'x'
             new_actions = [NCAction(NCActionType.DEPOSIT, token_uid, action.amount - initial)]
-            self.contract, _ = self.create_contract(blueprint_id, salt, new_actions, blueprint_id, initial - 1)
+            self.contract, _ = self.syscall.create_contract(blueprint_id, salt, new_actions, blueprint_id, initial - 1)
         else:
             self.contract = None
         self.counter = initial
@@ -28,9 +28,9 @@ class MyBlueprint1(Blueprint):
     @public
     def create_children(self, ctx: Context, blueprint_id: BlueprintId, salt: bytes) -> None:
         new_actions: list[NCAction] = []
-        self.create_contract(blueprint_id, salt + b'1', new_actions, blueprint_id, 0)
-        self.create_contract(blueprint_id, salt + b'2', new_actions, blueprint_id, 0)
-        self.create_contract(blueprint_id, salt + b'3', new_actions, blueprint_id, 0)
+        self.syscall.create_contract(blueprint_id, salt + b'1', new_actions, blueprint_id, 0)
+        self.syscall.create_contract(blueprint_id, salt + b'2', new_actions, blueprint_id, 0)
+        self.syscall.create_contract(blueprint_id, salt + b'3', new_actions, blueprint_id, 0)
 
     @public
     def nop(self, ctx: Context) -> None:

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Type
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts.blueprint import Blueprint
+from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCError, NCFail, NCInvalidContext, NCMethodNotFound, NCPrivateMethodError
 from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
@@ -91,7 +92,7 @@ class _SingleCallRunner:
 
         self.validate_context(ctx)
 
-        blueprint = self.blueprint_class(self.runner, self.changes_tracker, self._nc_logger)
+        blueprint = self._create_blueprint()
         method = getattr(blueprint, method_name)
         if method is None:
             raise NCMethodNotFound(method_name)
@@ -121,7 +122,7 @@ class _SingleCallRunner:
         """Call a contract view method. It cannot change the state."""
         assert not self._has_been_called, 'only one call to a method per instance'
         self._has_been_called = True
-        blueprint = self.blueprint_class(self.runner, self.changes_tracker, self._nc_logger)
+        blueprint = self._create_blueprint()
         method = getattr(blueprint, method_name)
         if method is None:
             raise NCMethodNotFound(method_name)
@@ -134,3 +135,8 @@ class _SingleCallRunner:
             raise NCPrivateMethodError('view methods cannot change the state')
 
         return ret
+
+    def _create_blueprint(self) -> Blueprint:
+        """Create a new blueprint instance."""
+        env = BlueprintEnvironment(self.runner, self.changes_tracker, self._nc_logger)
+        return self.blueprint_class(env)

@@ -55,11 +55,11 @@ class ContainerField(Field, ABC, Generic[T]):
         raise AttributeError('cannot set a container field')
 
     def __get__(self, blueprint, objtype):
-        if obj := blueprint._cache.get(self.__name):
+        if obj := blueprint.syscall.__cache__.get(self.__name):
             return obj
 
-        storage = self.__storage_factory(blueprint._storage, self.__name, self.__value_field)
-        blueprint._cache[self.__name] = storage
+        storage = self.__storage_factory(blueprint.syscall.__storage__, self.__name, self.__value_field)
+        blueprint.syscall.__cache__[self.__name] = storage
         return storage
 
     def serialize(self, serializer: Serializer, value: Any) -> None:
