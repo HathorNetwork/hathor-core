@@ -292,12 +292,6 @@ class ConnectionsManagerSysctl(Sysctl):
         if on:
             for conn in self.connections.connections:
                 # If there is no whitelist, no point in itering.
-                # Comment this statement in testnet to allow blocking peers, and do the same
-                # in PeerId.py, at should_block_peers.
-                if not conn.node.peers_whitelist:
-                    self.connections.log.warn("Set_Whitelist_Flag ignored: No whitelist in testnet.")
-                    return
-
                 if conn.get_peer_id():
                     if conn.get_peer_id() not in conn.node.peers_whitelist:
                         print(conn.get_peer_id())

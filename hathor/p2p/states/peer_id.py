@@ -167,8 +167,7 @@ class PeerIdState(BaseState):
         Currently this is only because the peer is not in a whitelist and whitelist blocking is active.
         """
         # If peer_whitelist is empty, we always allow the peer.
-        # Comment this statement in testnet to allow blocking peers, as well as in
-        # sysctl/p2p/manager.py in set_whitelist_flag.
+        # Comment this statement in testnet to allow blocking peers.
         if not self.protocol.node.peers_whitelist:
             self.protocol.connections.log.warn("No whitelist - Allow all peers to connect.")
             return False
@@ -187,6 +186,7 @@ class PeerIdState(BaseState):
                 if self.protocol.sync_version.is_v1():
                     return True
                 elif self._settings.USE_PEER_WHITELIST_ON_SYNC_V2:
+                    print("Nope! Blocked in SYNC V2")
                     return True
 
         # default is not blocking, this will be sync-v2 peers not on whitelist when not on whitelist-only mode
