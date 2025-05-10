@@ -186,7 +186,6 @@ class PeerIdState(BaseState):
                 if self.protocol.sync_version.is_v1():
                     return True
                 elif self._settings.USE_PEER_WHITELIST_ON_SYNC_V2:
-                    print("Nope! Blocked in SYNC V2")
                     return True
 
         # default is not blocking, this will be sync-v2 peers not on whitelist when not on whitelist-only mode

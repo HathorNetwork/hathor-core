@@ -294,5 +294,4 @@ class ConnectionsManagerSysctl(Sysctl):
                 # If there is no whitelist, no point in itering.
                 if conn.get_peer_id():
                     if conn.get_peer_id() not in conn.node.peers_whitelist:
-                        print(conn.get_peer_id())
                         conn.disconnect(reason='Whitelist turned on', force=True)
