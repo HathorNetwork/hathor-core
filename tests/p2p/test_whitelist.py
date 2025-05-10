@@ -122,7 +122,8 @@ class WhitelistTestCase(unittest.TestCase):
             agent_mock.request.return_value = Deferred()
             read_body_mock.return_value = b'body'
             d = connections_manager.update_whitelist()
-            d.callback(None)
+            if d:
+                d.callback(None)
 
             read_body_mock.assert_called_once_with(None)
             _update_whitelist_cb_mock.assert_called_once_with(b'body')
@@ -136,7 +137,8 @@ class WhitelistTestCase(unittest.TestCase):
             agent_mock.request.return_value = Deferred()
             d = connections_manager.update_whitelist()
             error = Failure('some_error')
-            d.errback(error)
+            if d:
+                d.errback(error)
 
             read_body_mock.assert_not_called()
             _update_whitelist_cb_mock.assert_not_called()

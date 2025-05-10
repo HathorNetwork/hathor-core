@@ -613,11 +613,11 @@ class ConnectionsManager:
         for peer in list(self.verified_peer_storage.values()):
             self.connect_to_peer(peer, int(now))
 
-    def update_whitelist(self) -> Deferred[None]:
+    def update_whitelist(self) -> Deferred[None] | None:
         from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
         if self._settings.WHITELIST_URL is None:
-            return 
+            return None
         self.log.info('update whitelist')
         d = self._http_agent.request(
             b'GET',

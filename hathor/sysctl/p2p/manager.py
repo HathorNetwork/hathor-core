@@ -280,12 +280,13 @@ class ConnectionsManagerSysctl(Sysctl):
         """Get whether whitelist-only mode is on or off."""
         return self.connections.whitelist_only
 
-    def set_whitelist_flag(self, on: bool):
+    def set_whitelist_flag(self, on: bool) -> None:
         """Set the whitelist-only mode (if on, node will only allow peers in whitelist
         if it is not empty.)"""
 
         self.connections.whitelist_only = on
-        self.connections.manager.whitelist_only = on
+        if self.connections.manager:
+            self.connections.manager.whitelist_only = on
 
         # When setting on, all connections that are from peers not in the whitelist must
         # be discarded, if whitelist not empty.
