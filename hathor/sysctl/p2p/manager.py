@@ -124,7 +124,7 @@ class ConnectionsManagerSysctl(Sysctl):
         )
 
         self.register(
-            'toggle_whitelist_on_off',
+            'whitelist_on',
             self.get_whitelist_flag,
             self.set_whitelist_flag,
         )
@@ -283,6 +283,22 @@ class ConnectionsManagerSysctl(Sysctl):
     def set_whitelist_flag(self, on: bool):
         """Set the whitelist-only mode (if on, node will only allow peers in whitelist
         if it is not empty.)"""
+
         self.connections.whitelist_only = on
+        self.connections.manager.whitelist_only = on
+
         # When setting on, all connections that are from peers not in the whitelist must
         # be discarded, if whitelist not empty.
+        if on:
+            for conn in self.connections.connections:
+                # If there is no whitelist, no point in itering.
+                # Comment this statement in testnet to allow blocking peers, and do the same
+                # in PeerId.py, at should_block_peers.
+                if not conn.node.peers_whitelist:
+                    self.connections.log.warn("Set_Whitelist_Flag ignored: No whitelist in testnet.")
+                    return
+
+                if conn.get_peer_id():
+                    if conn.get_peer_id() not in conn.node.peers_whitelist:
+                        print(conn.get_peer_id())
+                        conn.disconnect(reason='Whitelist turned on', force=True)
