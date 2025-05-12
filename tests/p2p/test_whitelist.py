@@ -35,6 +35,13 @@ class WhitelistTestCase(unittest.TestCase):
         self.assertFalse(conn.tr1.disconnecting)
         self.assertFalse(conn.tr2.disconnecting)
 
+        # Since testing requires a non-null whitelist, we create a dummy peer.
+        # With the non-null wl, peers only connect to those in wl.
+        # If it was empty, this'd be overridden.
+        dummy_peer = self.create_peer(network)
+        manager1.peers_whitelist.append(dummy_peer.my_peer.id)
+        manager2.peers_whitelist.append(dummy_peer.my_peer.id)
+
         # Run the p2p protocol.
         for _ in range(100):
             conn.run_one_step(debug=True)
@@ -62,6 +69,13 @@ class WhitelistTestCase(unittest.TestCase):
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
         self.assertFalse(conn.tr2.disconnecting)
+
+        # Since testing requires a non-null whitelist, we create a dummy peer.
+        # With the non-null wl, peers only connect to those in wl.
+        # If it was empty, this'd be overridden.
+        dummy_peer = self.create_peer(network)
+        manager1.peers_whitelist.append(dummy_peer.my_peer.id)
+        manager2.peers_whitelist.append(dummy_peer.my_peer.id)
 
         # Run the p2p protocol.
         for _ in range(100):
