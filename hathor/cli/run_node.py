@@ -165,7 +165,7 @@ class RunNode:
                             help='Enables listening on IPv6 interface and connecting to IPv6 peers')
         parser.add_argument('--x-disable-ipv4', action='store_true',
                             help='Disables connecting to IPv4 peers')
-        parser.add_argument("--x-whitelist-only", action="store_true",
+        parser.add_argument("--x-no-whitelist", action="store_true",
                             help="Node will only connect to peers on the whitelist")
         return parser
 

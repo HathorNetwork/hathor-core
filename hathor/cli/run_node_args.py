@@ -87,4 +87,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_enable_ipv6: bool
     x_disable_ipv4: bool
     localnet: bool
-    x_whitelist_only: bool
+    x_no_whitelist: bool
