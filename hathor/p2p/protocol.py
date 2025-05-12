@@ -183,7 +183,7 @@ class HathorProtocol:
         """Called to change the state of the connection."""
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
-            instance = state_cls(self, self._settings)
+            instance = state_cls(self, self._settings, self.connections.whitelist_only)
             instance.state_name = state_enum.name
             self._state_instances[state_enum] = instance
         new_state = self._state_instances[state_enum]

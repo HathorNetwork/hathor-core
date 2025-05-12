@@ -123,6 +123,12 @@ class ConnectionsManagerSysctl(Sysctl):
             self.reload_entrypoints_and_connections,
         )
 
+        self.register(
+            'whitelist_on',
+            self.get_whitelist_flag,
+            self.set_whitelist_flag,
+        )
+
     def set_force_sync_rotate(self) -> None:
         """Force a sync rotate."""
         self.connections._sync_rotate_if_needed(force=True)
@@ -269,3 +275,24 @@ class ConnectionsManagerSysctl(Sysctl):
     def reload_entrypoints_and_connections(self) -> None:
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
+
+    def get_whitelist_flag(self):
+        """Get whether whitelist-only mode is on or off."""
+        return self.connections.whitelist_only
+
+    def set_whitelist_flag(self, on: bool) -> None:
+        """Set the whitelist-only mode (if on, node will only allow peers in whitelist
+        if it is not empty.)"""
+
+        self.connections.whitelist_only = on
+        if self.connections.manager:
+            self.connections.manager.whitelist_only = on
+
+        # When setting on, all connections that are from peers not in the whitelist must
+        # be discarded, if whitelist not empty.
+        if on:
+            for conn in self.connections.connections:
+                # If there is no whitelist, no point in itering.
+                if conn.get_peer_id():
+                    if conn.get_peer_id() not in conn.node.peers_whitelist:
+                        conn.disconnect(reason='Whitelist turned on', force=True)

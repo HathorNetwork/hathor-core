@@ -255,13 +255,19 @@ class CliBuilder:
 
         cpu_mining_service = CpuMiningService()
 
+        self.whitelist_only: bool = True
+
+        # Whitelist toggling. If true, full_node will only follow its peers (if not empty).
+        if self._args.x_no_whitelist:
+            self.whitelist_only = False
+
         p2p_manager = ConnectionsManager(
             settings=settings,
             reactor=reactor,
             my_peer=peer,
             pubsub=pubsub,
             ssl=True,
-            whitelist_only=False,
+            whitelist_only=self.whitelist_only,
             rng=Random(),
             enable_ipv6=self._args.x_enable_ipv6,
             disable_ipv4=self._args.x_disable_ipv4,
