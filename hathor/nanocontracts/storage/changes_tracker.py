@@ -21,10 +21,11 @@ from typing import Any
 from typing_extensions import override
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts.exception import NCInsufficientFunds
+from hathor.nanocontracts.exception import NCInsufficientFunds, NCTokenAlreadyExists
 from hathor.nanocontracts.storage.contract_storage import AttrKey, Balance, BalanceKey, NCContractStorage
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey
-from hathor.nanocontracts.types import ContractId
+from hathor.nanocontracts.types import ContractId, TokenUid
+from hathor.transaction.token_creation_tx import TokenDescription
 
 
 class _NCAuthorityState(Enum):
@@ -69,9 +70,26 @@ class NCChangesTracker(NCContractStorage):
         self.data: dict[AttrKey, Any] = {}
         self._balance_diff: dict[BalanceKey, int] = {}
         self._authorities_diff: dict[BalanceKey, _NCAuthorityDiff] = {}
+        self._created_tokens: dict[TokenUid, TokenDescription] = {}
 
         self.has_been_commited = False
         self.has_been_blocked = False
+
+    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+        """Create a new token in this changes tracker."""
+        if self.has_token(token_id):
+            raise NCTokenAlreadyExists
+        self._created_tokens[token_id] = TokenDescription(
+            token_id=token_id,
+            token_name=token_name,
+            token_symbol=token_symbol,
+        )
+
+    def has_token(self, token_id: TokenUid) -> bool:
+        """Return True if a given token_id already exists."""
+        if token_id in self._created_tokens:
+            return True
+        return self.storage.has_token(token_id)
 
     def get_balance_diff(self) -> MappingProxyType[BalanceKey, int]:
         """Return the balance diff of this change tracker."""
@@ -142,6 +160,9 @@ class NCChangesTracker(NCContractStorage):
                 revoke_mint=diff.revoke_mint(),
                 revoke_melt=diff.revoke_melt(),
             )
+
+        for td in self._created_tokens.values():
+            self.storage.create_token(TokenUid(td.token_id), td.token_name, td.token_symbol)
 
         self.has_been_commited = True
 

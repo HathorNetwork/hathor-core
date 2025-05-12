@@ -1,13 +1,35 @@
+# Copyright 2023 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import annotations
+
+import pickle
 from enum import Enum
-from typing import NamedTuple, Optional
+from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
 from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
-from hathor.nanocontracts.types import ContractId
+from hathor.nanocontracts.storage.token_proxy import TokenProxy
+from hathor.nanocontracts.types import ContractId, TokenUid
+
+if TYPE_CHECKING:
+    from hathor.transaction.token_creation_tx import TokenDescription
 
 
 class _Tag(Enum):
     CONTRACT = b'\0'
+    TOKEN = b'\1'
 
 
 class ContractKey(NamedTuple):
@@ -15,6 +37,13 @@ class ContractKey(NamedTuple):
 
     def __bytes__(self):
         return _Tag.CONTRACT.value + self.nc_id
+
+
+class TokenKey(NamedTuple):
+    token_id: bytes
+
+    def __bytes__(self):
+        return _Tag.TOKEN.value + self.token_id
 
 
 class NCBlockStorage:
@@ -66,4 +95,37 @@ class NCBlockStorage:
     def get_contract_storage(self, contract_id: ContractId) -> NCContractStorage:
         nc_root_id = self.get_contract_root_id(contract_id)
         trie = self._get_trie(nc_root_id)
-        return NCContractStorage(trie=trie, nc_id=contract_id)
+        token_proxy = TokenProxy(self)
+        return NCContractStorage(trie=trie, nc_id=contract_id, token_proxy=token_proxy)
+
+    def get_empty_contract_storage(self, contract_id: ContractId) -> NCContractStorage:
+        """Create a new contract storage instance for a given contract."""
+        trie = self._get_trie(None)
+        token_proxy = TokenProxy(self)
+        return NCContractStorage(trie=trie, nc_id=contract_id, token_proxy=token_proxy)
+
+    def get_token_description(self, token_id: TokenUid) -> TokenDescription:
+        """Return the token description for a given token_id."""
+        key = TokenKey(token_id)
+        token_description_bytes = self._block_trie.get(bytes(key))
+        token_description = pickle.loads(token_description_bytes)
+        return token_description
+
+    def has_token(self, token_id: TokenUid) -> bool:
+        """Return True if the token_id already exists in this block's nano state."""
+        key = TokenKey(token_id)
+        try:
+            self._block_trie.get(bytes(key))
+        except KeyError:
+            return False
+        else:
+            return True
+
+    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+        """Create a new token in this block's nano state."""
+        from hathor.transaction.token_creation_tx import TokenDescription
+
+        key = TokenKey(token_id)
+        token_description = TokenDescription(token_id=token_id, token_name=token_name, token_symbol=token_symbol)
+        token_description_bytes = pickle.dumps(token_description)
+        self._block_trie.update(bytes(key), token_description_bytes)

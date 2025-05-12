@@ -144,3 +144,21 @@ class BlueprintEnvironment:
     def emit_event(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
         self.__log__.__emit_event__(data)
+
+    @final
+    def create_token(
+        self,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool = True,
+        melt_authority: bool = True,
+    ) -> TokenUid:
+        """Create a new token."""
+        return self.__runner.syscall_create_child_token(
+            token_name,
+            token_symbol,
+            amount,
+            mint_authority,
+            melt_authority,
+        )

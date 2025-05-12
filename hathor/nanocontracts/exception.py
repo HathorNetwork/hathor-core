@@ -133,6 +133,10 @@ class NCInvalidSyscall(NCFail):
     pass
 
 
+class NCTokenAlreadyExists(NCFail):
+    """Raised when one tries to create a duplicated token."""
+
+
 class UnknownFieldType(NCError):
     """Raised when there is no field available for a given type."""
     pass

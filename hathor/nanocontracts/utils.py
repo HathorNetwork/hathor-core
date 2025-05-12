@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from pycoin.key.Key import Key as PycoinKey
 
 from hathor.crypto.util import decode_address, get_address_from_public_key_bytes, get_public_key_bytes_compressed
-from hathor.nanocontracts.types import NC_METHOD_TYPE_ATTR, BlueprintId, ContractId, NCMethodType, VertexId
+from hathor.nanocontracts.types import NC_METHOD_TYPE_ATTR, BlueprintId, ContractId, NCMethodType, TokenUid, VertexId
 from hathor.transaction import Transaction
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.storage import TransactionStorage
@@ -31,6 +31,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import not_none
 
 CHILD_CONTRACT_ID_PREFIX: bytes = b'child-contract'
+CHILD_TOKEN_ID_PREFIX: bytes = b'child-token'
 
 
 def is_nc_public_method(method: Callable) -> bool:
@@ -111,6 +112,15 @@ def derive_child_contract_id(parent_id: ContractId, salt: bytes, blueprint_id: B
     h.update(salt)
     h.update(blueprint_id)
     return ContractId(VertexId(h.digest()))
+
+
+def derive_child_token_id(parent_id: ContractId, token_symbol: str) -> TokenUid:
+    """Derive the token id for a token created by a (parent) contract."""
+    h = hashlib.sha256()
+    h.update(CHILD_TOKEN_ID_PREFIX)
+    h.update(parent_id)
+    h.update(token_symbol.encode('utf-8'))
+    return TokenUid(VertexId(h.digest()))
 
 
 def sign_openssl(nano_header: NanoHeader, privkey: ec.EllipticCurvePrivateKey) -> None:

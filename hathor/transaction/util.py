@@ -20,7 +20,7 @@ from math import ceil, floor
 from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from hathor.transaction.exceptions import InvalidOutputValue
+from hathor.transaction.exceptions import InvalidOutputValue, TransactionDataError
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -101,3 +101,19 @@ def output_value_to_bytes(number: int) -> bytes:
     except ValueError as e:
         raise InvalidOutputValue(*e.args)
     return bytes(serializer.finalize())
+
+
+def validate_token_name_and_symbol(settings: HathorSettings, token_name: str, token_symbol: str) -> None:
+    """Validate token_name and token_symbol before creating a new token."""
+    name_len = len(token_name)
+    symbol_len = len(token_symbol)
+    if name_len == 0 or name_len > settings.MAX_LENGTH_TOKEN_NAME:
+        raise TransactionDataError('Invalid token name length ({})'.format(name_len))
+    if symbol_len == 0 or symbol_len > settings.MAX_LENGTH_TOKEN_SYMBOL:
+        raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
+
+    # Can't create token with hathor name or symbol
+    if clean_token_string(token_name) == clean_token_string(settings.HATHOR_TOKEN_NAME):
+        raise TransactionDataError('Invalid token name ({})'.format(token_name))
+    if clean_token_string(token_symbol) == clean_token_string(settings.HATHOR_TOKEN_SYMBOL):
+        raise TransactionDataError('Invalid token symbol ({})'.format(token_symbol))

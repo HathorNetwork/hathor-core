@@ -22,8 +22,9 @@ from typing import Any, NamedTuple
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
+from hathor.nanocontracts.storage.token_proxy import TokenProxy
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
-from hathor.nanocontracts.types import BlueprintId, VertexId
+from hathor.nanocontracts.types import BlueprintId, TokenUid, VertexId
 
 
 class _Tag(Enum):
@@ -117,7 +118,7 @@ class NCContractStorage:
 
     This implementation works for both memory and rocksdb backends."""
 
-    def __init__(self, *, trie: PatriciaTrie, nc_id: VertexId) -> None:
+    def __init__(self, *, trie: PatriciaTrie, nc_id: VertexId, token_proxy: TokenProxy) -> None:
         # State (balances and attributes)
         self._trie: PatriciaTrie = trie
 
@@ -126,6 +127,16 @@ class NCContractStorage:
 
         # Flag to check whether any change or commit can be executed.
         self.is_locked = False
+
+        self._token_proxy = token_proxy
+
+    def has_token(self, token_id: TokenUid) -> bool:
+        """Return True if token_id exists in the current block."""
+        return self._token_proxy.has_token(token_id)
+
+    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+        """Create a new token in the current block."""
+        self._token_proxy.create_token(token_id, token_name, token_symbol)
 
     def lock(self) -> None:
         """Lock the storage for changes or commits."""

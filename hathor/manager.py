@@ -47,7 +47,7 @@ from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.runner.runner import RunnerFactory
-from hathor.nanocontracts.storage import NCContractStorage
+from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
@@ -398,10 +398,14 @@ class HathorManager:
         best_block = self.tx_storage.get_best_block()
         return self.get_nc_runner(best_block)
 
+    def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
+        """Return the nano block storage for a given block."""
+        return self.consensus_algorithm.nc_storage_factory.get_block_storage_from_block(block)
+
     def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
         from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
-        block_storage = self.consensus_algorithm.nc_storage_factory.get_block_storage_from_block(block)
+        block_storage = self.get_nc_block_storage(block)
         try:
             contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(nc_id)))
         except KeyError:

@@ -46,12 +46,18 @@ from hathor.nanocontracts.types import (
     NCGrantAuthorityAction,
     NCInvokeAuthorityAction,
     NCWithdrawalAction,
+    TokenUid,
 )
-from hathor.nanocontracts.utils import derive_child_contract_id
+from hathor.nanocontracts.utils import derive_child_contract_id, derive_child_token_id
 from hathor.reactor import ReactorProtocol
+from hathor.transaction.exceptions import TransactionDataError
 from hathor.transaction.storage import TransactionStorage
-from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
-from hathor.types import TokenUid
+from hathor.transaction.util import (
+    clean_token_string,
+    get_deposit_amount,
+    get_withdraw_amount,
+    validate_token_name_and_symbol,
+)
 
 
 class Runner:
@@ -319,7 +325,7 @@ class Runner:
             change_tracker.validate_balances()
 
             for (_, token_uid), balance in change_tracker.get_balance_diff().items():
-                total_diffs[token_uid] += balance
+                total_diffs[TokenUid(token_uid)] += balance
 
         for token_uid, amount in self._mint_melt_totals.items():
             total_diffs[token_uid] -= amount
@@ -447,7 +453,7 @@ class Runner:
             assert self._call_info is not None
             nanocontract_id = self.get_current_contract_id()
         if token_uid is None:
-            token_uid = self._settings.HATHOR_TOKEN_UID
+            token_uid = TokenUid(self._settings.HATHOR_TOKEN_UID)
 
         storage: NCContractStorage
         if self._call_info is None:
@@ -455,7 +461,7 @@ class Runner:
         else:
             storage = self.get_current_changes_tracker(nanocontract_id)
 
-        return storage.get_balance(token_uid)
+        return storage.get_balance(bytes(token_uid))
 
     def get_current_contract_id(self) -> ContractId:
         """Return the contract id for the current method being executed."""
@@ -479,7 +485,7 @@ class Runner:
         """Create a new contract without calling the initialize() method."""
         assert not self.has_contract_been_initialized(nanocontract_id)
         assert nanocontract_id not in self._storages
-        nc_storage = self.storage_factory.get_empty_contract_storage(nanocontract_id)
+        nc_storage = self.block_storage.get_empty_contract_storage(nanocontract_id)
         nc_storage.set_blueprint_id(blueprint_id)
         self._storages[nanocontract_id] = nc_storage
 
@@ -586,6 +592,42 @@ class Runner:
 
         self._mint_melt_totals[token_uid] += token_amount
         self._mint_melt_totals[TokenUid(HATHOR_TOKEN_UID)] += htr_amount
+
+    def syscall_create_child_token(
+        self,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool,
+        melt_authority: bool,
+    ) -> TokenUid:
+        """Create a child token from a contract."""
+        try:
+            validate_token_name_and_symbol(self._settings, token_name, token_symbol)
+        except TransactionDataError as e:
+            raise NCInvalidSyscall('invalid token description') from e
+
+        assert self._call_info is not None
+        last_call_record = self._call_info.stack[-1]
+        parent_id = last_call_record.nanocontract_id
+        cleaned_token_symbol = clean_token_string(token_symbol)
+        token_id = derive_child_token_id(parent_id, cleaned_token_symbol)
+
+        token_amount = amount
+        htr_amount = get_deposit_amount(self._settings, token_amount)
+
+        changes_tracker = self.get_current_changes_tracker(parent_id)
+        changes_tracker.create_token(token_id, token_name, token_symbol)
+        changes_tracker.grant_authorities(
+            token_id,
+            grant_mint=mint_authority,
+            grant_melt=melt_authority,
+        )
+        changes_tracker.add_balance(token_id, amount)
+        changes_tracker.add_balance(HATHOR_TOKEN_UID, -htr_amount)
+        self._mint_melt_totals[token_id] += amount
+        self._mint_melt_totals[TokenUid(HATHOR_TOKEN_UID)] -= htr_amount
+        return token_id
 
 
 class RunnerFactory:

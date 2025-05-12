@@ -19,8 +19,6 @@ from typing import TYPE_CHECKING, Optional
 
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore, NodeTrieStore, RocksDBNodeTrieStore
 from hathor.nanocontracts.storage.block_storage import NCBlockStorage
-from hathor.nanocontracts.storage.contract_storage import NCContractStorage
-from hathor.nanocontracts.types import VertexId
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
@@ -58,11 +56,6 @@ class NCStorageFactory(ABC):
         """Create an empty block storage."""
         trie = self._get_trie(None)
         return NCBlockStorage(trie)
-
-    def get_empty_contract_storage(self, contract_id: VertexId) -> NCContractStorage:
-        """Create a new contract storage instance for a given contract."""
-        trie = self._get_trie(None)
-        return NCContractStorage(trie=trie, nc_id=contract_id)
 
 
 class NCMemoryStorageFactory(NCStorageFactory):

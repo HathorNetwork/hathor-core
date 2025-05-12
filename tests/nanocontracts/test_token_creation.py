@@ -3,11 +3,16 @@ from hathor.conf import HathorSettings
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.storage.contract_storage import Balance
-from hathor.nanocontracts.types import NCWithdrawalAction, TokenUid, public
-from hathor.transaction import Transaction
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig
+from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
+from hathor.nanocontracts.types import ContractId, NCWithdrawalAction, TokenUid, VertexId, public
+from hathor.nanocontracts.utils import derive_child_token_id
+from hathor.transaction import Block, Transaction
+from hathor.transaction.nc_execution_state import NCExecutionState
+from hathor.transaction.token_creation_tx import TokenDescription
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
+from tests.nanocontracts.utils import assert_nc_failure_reason
 
 settings = HathorSettings()
 
@@ -24,6 +29,18 @@ class MyBlueprint(Blueprint):
     def withdraw(self, ctx: Context) -> None:
         pass
 
+    @public
+    def create_token(
+        self,
+        ctx: Context,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool,
+        melt_authority: bool,
+    ) -> None:
+        self.syscall.create_token(token_name, token_symbol, amount, mint_authority, melt_authority)
+
 
 class NCNanoContractTestCase(unittest.TestCase):
     def setUp(self):
@@ -34,10 +51,10 @@ class NCNanoContractTestCase(unittest.TestCase):
             self.myblueprint_id: MyBlueprint
         })
 
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('testnet', nc_log_config=NCLogConfig.FAILED)
         self.manager.tx_storage.nc_catalog = self.catalog
 
-    def test_token_creation(self) -> None:
+    def test_token_creation_by_vertex(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         vertices = dag_builder.build_from_str(f'''
             blockchain genesis b[1..40]
@@ -143,3 +160,76 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         assert not tx3.is_nano_contract()
         assert tx3.get_metadata().voided_by == {TKB.hash}
+
+    def test_token_creation_by_contract(self) -> None:
+        token_symbol = 'TKA'
+
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        vertices = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..40]
+            b30 < dummy
+
+            tx1.nc_id = "{self.myblueprint_id.hex()}"
+            tx1.nc_method = initialize()
+
+            tx2.nc_id = tx1
+            tx2.nc_method = create_token("MyToken", "{token_symbol}", 100, false, false)
+            tx2.nc_deposit = 3 HTR
+
+            tx3.nc_id = tx1
+            tx3.nc_method = create_token("MyToken (2)", "{token_symbol}", 50, true, false)
+            tx3.nc_deposit = 1 HTR
+
+            tx2 < tx3
+
+            b31 --> tx1
+            b31 --> tx2
+            b32 --> tx3
+        ''')
+
+        vertices.propagate_with(self.manager)
+
+        tx1, tx2, tx3 = vertices.get_typed_vertices(['tx1', 'tx2', 'tx3'], Transaction)
+        b31, b32 = vertices.get_typed_vertices(['b31', 'b32'], Block)
+
+        # Uncomment for debugging:
+        # from tests.nanocontracts.utils import get_nc_failure_entry
+        # failure_entry = get_nc_failure_entry(manager=self.manager, tx_id=tx2.hash, block_id=b31.hash)
+        # print(failure_entry.error_traceback)
+
+        assert tx1.get_metadata().voided_by is None
+        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        assert tx2.get_metadata().voided_by is None
+        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        assert tx3.get_metadata().voided_by == {tx3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
+
+        assert b31.get_metadata().voided_by is None
+        assert b32.get_metadata().voided_by is None
+
+        assert_nc_failure_reason(
+            manager=self.manager,
+            tx_id=tx3.hash,
+            block_id=b32.hash,
+            reason='NCTokenAlreadyExists',
+        )
+
+        child_token_id = derive_child_token_id(ContractId(VertexId(tx1.hash)), token_symbol)
+        child_token_balance_key = BalanceKey(nc_id=tx1.hash, token_uid=child_token_id)
+        htr_balance_key = BalanceKey(nc_id=tx1.hash, token_uid=settings.HATHOR_TOKEN_UID)
+
+        block_storage = self.manager.get_nc_block_storage(b31)
+        expected_token_info = TokenDescription(
+            token_id=child_token_id,
+            token_name='MyToken',
+            token_symbol=token_symbol,
+        )
+        assert block_storage.get_token_description(child_token_id) == expected_token_info
+
+        nc_storage = block_storage.get_contract_storage(tx1.hash)
+        assert nc_storage.get_all_balances() == {
+            child_token_balance_key: Balance(value=100, can_mint=False, can_melt=False),
+            htr_balance_key: Balance(value=2, can_mint=False, can_melt=False),
+        }
