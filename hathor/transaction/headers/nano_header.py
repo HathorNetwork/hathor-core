@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
+    from hathor.transaction import Transaction
     from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.block import Block
 
@@ -53,7 +54,7 @@ class NanoHeaderAction:
 
 @dataclass(slots=True, kw_only=True)
 class NanoHeader(VertexBaseHeader):
-    tx: BaseTransaction
+    tx: Transaction
 
     nc_version: int = NC_VERSION
 
@@ -96,6 +97,8 @@ class NanoHeader(VertexBaseHeader):
         *,
         verbose: VerboseCallback = None
     ) -> tuple[NanoHeader, bytes]:
+        from hathor.transaction import Transaction
+        assert isinstance(tx, Transaction)
         buf = memoryview(buf)
 
         header_id, buf = buf[:1], buf[1:]

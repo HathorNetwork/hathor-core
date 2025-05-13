@@ -18,7 +18,14 @@ import hashlib
 from types import ModuleType
 from typing import Callable
 
-from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId
+from hathor.nanocontracts.types import (
+    NC_METHOD_TYPE_ATTR,
+    NC_METHOD_TYPE_PUBLIC,
+    NC_METHOD_TYPE_VIEW,
+    BlueprintId,
+    ContractId,
+    VertexId,
+)
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -29,12 +36,12 @@ CHILD_CONTRACT_ID_PREFIX: bytes = b'child-contract'
 
 def is_nc_public_method(method: Callable) -> bool:
     """Return True if the method is nc_public."""
-    return getattr(method, '_nc_method_type', None) == 'public'
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) == NC_METHOD_TYPE_PUBLIC
 
 
 def is_nc_view_method(method: Callable) -> bool:
     """Return True if the method is nc_view."""
-    return getattr(method, '_nc_method_type', None) == 'view'
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) == NC_METHOD_TYPE_VIEW
 
 
 def get_nano_contract_creation(tx_storage: TransactionStorage,

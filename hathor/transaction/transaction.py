@@ -18,7 +18,7 @@ import hashlib
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
-from typing_extensions import Self, assert_never, override
+from typing_extensions import Self, override
 
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_public_key_bytes
@@ -46,6 +46,15 @@ class TokenInfo(NamedTuple):
     amount: int
     can_mint: bool
     can_melt: bool
+
+    @staticmethod
+    def get_default() -> TokenInfo:
+        """Create a default, emtpy token info."""
+        return TokenInfo(
+            amount=0,
+            can_mint=False,
+            can_melt=False,
+        )
 
 
 class RewardLockedInfo(NamedTuple):
@@ -335,37 +344,24 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         if not self.is_nano_contract():
             return
 
-        from hathor.nanocontracts.types import NCActionType
-
+        from hathor.nanocontracts.balance_rules import BalanceRules
         nano_header = self.get_nano_header()
+
         for action in nano_header.get_actions():
-            token_info = token_dict.get(action.token_uid)
-            if token_info is None:
-                token_info = TokenInfo(0, False, False)
-
-            # amount = sum(outputs) - sum(inputs)
-            new_amount = token_info.amount
-            match action.type:
-                case NCActionType.DEPOSIT:
-                    new_amount += action.amount
-                case NCActionType.WITHDRAWAL:
-                    new_amount -= action.amount
-                case _:
-                    assert_never(action.type)
-
-            token_dict[action.token_uid] = TokenInfo(new_amount, token_info.can_mint, token_info.can_melt)
+            rules = BalanceRules.get_rules(self._settings, action)
+            rules.verification_rule(token_dict)
 
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
         token_dict: dict[TokenUid, TokenInfo] = {}
 
-        default_info: TokenInfo = TokenInfo(0, False, False)
+        default_info: TokenInfo = TokenInfo.get_default()
 
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo(0, False, False)
+        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo.get_default()
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)

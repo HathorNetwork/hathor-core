@@ -48,7 +48,8 @@ class NanoContractStateResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: 'HathorManager'):
+    def __init__(self, manager: 'HathorManager') -> None:
+        super().__init__()
         self.manager = manager
 
     def render_GET(self, request: 'Request') -> bytes:
@@ -75,10 +76,6 @@ class NanoContractStateResource(Resource):
         # Check if the contract exists.
         try:
             get_nano_contract_creation(self.manager.tx_storage, nc_id_bytes)
-        except NCContractCreationNotFound:
-            request.setResponseCode(404)
-            error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')
-            return error_response.json_dumpb()
         except NCContractCreationAtMempool:
             request.setResponseCode(204)
             error_response = ErrorResponse(success=False, error=f'Nano contract at mempool: {params.id}')
@@ -86,6 +83,10 @@ class NanoContractStateResource(Resource):
         except NCContractCreationVoided:
             request.setResponseCode(204)
             error_response = ErrorResponse(success=False, error=f'Nano contract failed execution: {params.id}')
+            return error_response.json_dumpb()
+        except NCContractCreationNotFound:
+            request.setResponseCode(404)
+            error_response = ErrorResponse(success=False, error=f'Nano contract not found: {params.id}')
             return error_response.json_dumpb()
 
         nc_storage: NCContractStorage

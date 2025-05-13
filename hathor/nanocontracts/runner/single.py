@@ -17,13 +17,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Type
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.nanocontracts.balance_rules import BalanceRules
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCError, NCFail, NCInvalidContext, NCMethodNotFound, NCPrivateMethodError
 from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
 from hathor.nanocontracts.storage import NCChangesTracker
-from hathor.nanocontracts.types import NCAction, NCActionType
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 
 if TYPE_CHECKING:
@@ -55,14 +55,6 @@ class _SingleCallRunner:
         self._has_been_called = False
         self._settings = get_global_settings()
 
-    def get_nc_balance(self, token_id: bytes) -> int:
-        """Return a Nano Contract balance for a given token."""
-        return self.changes_tracker.get_balance(token_id)
-
-    def add_nc_balance(self, token_uid: bytes, amount: int) -> None:
-        """Add balance to a token. Notice that the amount might be negative."""
-        self.changes_tracker.add_balance(token_uid, amount)
-
     def validate_context(self, ctx: Context) -> None:
         """Validate if the context is valid."""
         for token_uid, action in ctx.actions.items():
@@ -71,18 +63,11 @@ class _SingleCallRunner:
             if action.amount < 0:
                 raise NCInvalidContext('amount must be positive')
 
-    def update_deposits_and_withdrawals(self, ctx: Context) -> None:
-        """Update the contract balance according to deposits and withdrawals."""
+    def _execute_actions(self, ctx: Context) -> None:
+        """Update the contract balance according to the context actions."""
         for action in ctx.actions.values():
-            self.update_balance(action)
-
-    def update_balance(self, action: NCAction) -> None:
-        """Update the contract balance according to the given action."""
-        if action.type == NCActionType.WITHDRAWAL:
-            self.add_nc_balance(action.token_uid, -action.amount)
-        else:
-            assert action.type == NCActionType.DEPOSIT
-            self.add_nc_balance(action.token_uid, action.amount)
+            rules = BalanceRules.get_rules(self._settings, action)
+            rules.nc_execution_rule(self.changes_tracker)
 
     def call_public_method(self, method_name: str, ctx: Context, *args: Any, **kwargs: Any) -> Any:
         """Call a contract public method. If it fails, no change is saved."""
@@ -115,7 +100,7 @@ class _SingleCallRunner:
             # Convert any other exception to NCFail.
             raise NCFail from e
 
-        self.update_deposits_and_withdrawals(ctx)
+        self._execute_actions(ctx)
         return ret
 
     def call_view_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:

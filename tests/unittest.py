@@ -20,6 +20,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.manager import HathorManager
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.pubsub import PubSubManager
@@ -203,6 +204,7 @@ class TestCase(unittest.TestCase):
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
         nc_indices: bool = False,
+        nc_log_config: NCLogConfig | None = None,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
 
         settings = self._settings._replace(NETWORK_NAME=network)
@@ -258,6 +260,9 @@ class TestCase(unittest.TestCase):
 
         if nc_indices:
             builder.enable_nc_indices()
+
+        if nc_log_config:
+            builder.set_nc_log_config(nc_log_config)
 
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 

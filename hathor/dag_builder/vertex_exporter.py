@@ -16,7 +16,7 @@ import ast
 import hashlib
 import re
 from types import ModuleType
-from typing import Iterator
+from typing import Iterator, cast
 
 from typing_extensions import assert_never
 
@@ -352,7 +352,9 @@ class VertexExporter:
 
         from hathor.transaction.headers import NanoHeader
         nano_header = NanoHeader(
-            tx=vertex,
+            # Even though we know the NanoHeader only supports Transactions, we force the typing here so we can test
+            # that other types of vertices such as blocks would fail verification by using an unsupported header.
+            tx=cast(Transaction, vertex),
             nc_version=1,
             nc_id=nc_id,
             nc_method=nc_method,

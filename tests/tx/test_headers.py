@@ -211,8 +211,6 @@ class VertexHeadersTest(unittest.TestCase):
         for name, _type, should_have_nano_header in expected_to_fail:
             vertex = self.artifacts.get_typed_vertex(name, _type)
             assert self.has_nano_header(vertex) == should_have_nano_header
-            clone = _type.create_from_struct(bytes(vertex))
-            assert bytes(clone) == bytes(vertex)
             with pytest.raises(InvalidNewTransaction) as e:
                 self.manager.on_new_tx(vertex, fails_silently=False)
             assert isinstance(e.value.__cause__, HeaderNotSupported)

@@ -90,6 +90,11 @@ class RawSignedData(Generic[T]):
             return True
 
 
+NC_METHOD_TYPE_ATTR = '__nc_method_type'
+NC_METHOD_TYPE_PUBLIC = 'public'
+NC_METHOD_TYPE_VIEW = 'view'
+
+
 class SignedData(Generic[T]):
     def __init__(self, data: T, script_input: bytes) -> None:
         self.data = data
@@ -128,15 +133,15 @@ class SignedData(Generic[T]):
 
 def public(fn: Callable) -> Callable:
     """Decorator to mark a blueprint method as public."""
-    assert not hasattr(fn, '_nc_method_type')
-    setattr(fn, '_nc_method_type', 'public')
+    assert not hasattr(fn, NC_METHOD_TYPE_ATTR)
+    setattr(fn, NC_METHOD_TYPE_ATTR, NC_METHOD_TYPE_PUBLIC)
     return fn
 
 
 def view(fn: Callable) -> Callable:
     """Decorator to mark a blueprint method as view (read-only)."""
-    assert not hasattr(fn, '_nc_method_type')
-    setattr(fn, '_nc_method_type', 'view')
+    assert not hasattr(fn, NC_METHOD_TYPE_ATTR)
+    setattr(fn, NC_METHOD_TYPE_ATTR, NC_METHOD_TYPE_VIEW)
     return fn
 
 

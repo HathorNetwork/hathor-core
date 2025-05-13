@@ -212,7 +212,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'fields[]', b'token_uid'),
              ]
         )
-        self.assertEqual(404, response0.responseCode)
+        self.assertEqual(204, response0.responseCode)
         # Execute the nano contract
         block = add_new_block(self.manager)
 
