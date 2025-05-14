@@ -32,7 +32,6 @@ WalletFactoryType: TypeAlias = Callable[[], BaseWallet]
 class DAGNodeType(Enum):
     Unknown = 'unknown'
     Block = 'block'
-    NanoContract = 'nanocontract'
     Transaction = 'transaction'
     Token = 'token'
     Genesis = 'genesis'

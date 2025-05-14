@@ -29,7 +29,6 @@ from hathor.dag_builder.utils import get_literal, is_literal
 from hathor.nanocontracts import Blueprint, OnChainBlueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
-from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
 from hathor.nanocontracts.on_chain_blueprint import Code
 from hathor.nanocontracts.types import BlueprintId, ContractId, NCActionType, VertexId, blueprint_id_from_bytes
 from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb
@@ -417,11 +416,6 @@ class VertexExporter:
         self.update_vertex_hash(ocb)
         return ocb
 
-    def create_vertex_nanocontract(self, node: DAGNode) -> DeprecatedNanoContract:
-        vertex = self.create_vertex_transaction(node, cls=DeprecatedNanoContract)
-        assert isinstance(vertex, DeprecatedNanoContract)
-        return vertex
-
     def create_vertex_transaction(self, node: DAGNode, *, cls: type[Transaction] = Transaction) -> Transaction:
         """Create a Transaction given a node."""
         block_parents, txs_parents = self._create_vertex_parents(node)
@@ -480,9 +474,6 @@ class VertexExporter:
 
             case DAGNodeType.Token:
                 vertex = self.create_vertex_token(node)
-
-            case DAGNodeType.NanoContract:
-                vertex = self.create_vertex_nanocontract(node)
 
             case DAGNodeType.Transaction:
                 vertex = self.create_vertex_transaction(node)

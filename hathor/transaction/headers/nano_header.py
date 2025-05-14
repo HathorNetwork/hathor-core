@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Type
 
@@ -34,7 +34,6 @@ from hathor.types import VertexId
 if TYPE_CHECKING:
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.context import Context
-    from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
     from hathor.transaction import Transaction
@@ -127,19 +126,13 @@ class NanoHeader(VertexBaseHeader):
         if verbose:
             verbose('nc_args_bytes', nc_args_bytes)
 
-        from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
         nc_actions: list[NanoHeaderAction] = []
-        if isinstance(tx, DeprecatedNanoContract):
-            # Do nothing!
-            pass
-
-        else:
-            (nc_actions_len,), buf = unpack('!B', buf)
-            if verbose:
-                verbose('nc_actions_len', nc_actions_len)
-            for _ in range(nc_actions_len):
-                action, buf = cls._deserialize_action(buf)
-                nc_actions.append(action)
+        (nc_actions_len,), buf = unpack('!B', buf)
+        if verbose:
+            verbose('nc_actions_len', nc_actions_len)
+        for _ in range(nc_actions_len):
+            action, buf = cls._deserialize_action(buf)
+            nc_actions.append(action)
 
         (nc_pubkey_len,), buf = unpack('!B', buf)
         if verbose:
@@ -187,11 +180,9 @@ class NanoHeader(VertexBaseHeader):
         ret.append(int_to_bytes(len(self.nc_args_bytes), 2))
         ret.append(self.nc_args_bytes)
 
-        from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
-        if not isinstance(self.tx, DeprecatedNanoContract):
-            ret.append(int_to_bytes(len(self.nc_actions), 1))
-            for action in self.nc_actions:
-                ret.append(self._serialize_action(action))
+        ret.append(int_to_bytes(len(self.nc_actions), 1))
+        for action in self.nc_actions:
+            ret.append(self._serialize_action(action))
 
         ret.append(int_to_bytes(len(self.nc_pubkey), 1))
         ret.append(self.nc_pubkey)
@@ -300,12 +291,7 @@ class NanoHeader(VertexBaseHeader):
 
     def get_actions(self) -> list[NCAction]:
         """Get a list of NCActions from the header actions."""
-        from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
         from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
-        if isinstance(self.tx, DeprecatedNanoContract):
-            if not self.nc_actions:
-                self.nc_actions = self._deprecated_get_actions(self.tx)
-
         ret = []
         for action in self.nc_actions:
             token_uid = self.tx.get_token_uid(action.token_index)
@@ -315,65 +301,6 @@ class NanoHeader(VertexBaseHeader):
                 amount=action.amount,
             ))
         return ret
-
-    @staticmethod
-    def _deprecated_get_actions(tx: DeprecatedNanoContract) -> list[NanoHeaderAction]:
-        """This is the deprecated way of getting implicit actions, only supported by the DeprecatedNanoContract."""
-        from hathor.nanocontracts.types import NCActionType, TokenUid
-
-        diff_by_token: defaultdict[TokenUid, int] = defaultdict(int)
-
-        for txin in tx.inputs:
-            assert tx.storage is not None
-            spent_tx = tx.storage.get_transaction(txin.tx_id)
-            spent_txout = spent_tx.outputs[txin.index]
-            token_uid = TokenUid(spent_tx.get_token_uid(spent_txout.get_token_index()))
-            diff_by_token[token_uid] += spent_txout.value
-
-        for txout in tx.outputs:
-            token_uid = TokenUid(tx.get_token_uid(txout.get_token_index()))
-            diff_by_token[token_uid] -= txout.value
-
-        tokens: set[TokenUid] = set(diff_by_token.keys())
-
-        from hathor.transaction.token_creation_tx import TokenCreationTransaction
-        from hathor.transaction.util import get_deposit_amount
-        if isinstance(tx, TokenCreationTransaction):
-            # This implementation assumes that all missing deposit for minting tokens will be fulfilled by the contract
-            # through a withdrawal action.
-            new_token_uid = TokenUid(tx.hash)
-            htr_token_uid = TokenUid(tx._settings.HATHOR_TOKEN_UID)
-            mint_amount = diff_by_token[new_token_uid]
-            assert mint_amount < 0
-            required_deposit = get_deposit_amount(tx._settings, -mint_amount)
-            # Set diff_by_token[] of the newly created token to zero, so no action will be generated for it.
-            diff_by_token[new_token_uid] = 0
-            # Subtract the required deposit for minting tokens.
-            diff_by_token[htr_token_uid] -= required_deposit
-
-        action_list = []
-        for token_uid in tokens:
-            diff = diff_by_token[token_uid]
-
-            if diff == 0:
-                continue
-            elif diff < 0:
-                action = NCActionType.WITHDRAWAL
-                amount = -diff
-            else:
-                # diff > 0:
-                action = NCActionType.DEPOSIT
-                amount = diff
-            assert amount >= 0
-            action_list.append(
-                NanoHeaderAction(
-                    type=action,
-                    token_index=0 if token_uid == tx._settings.HATHOR_TOKEN_UID else tx.tokens.index(token_uid) + 1,
-                    amount=amount,
-                )
-            )
-
-        return action_list
 
     def get_context(self) -> Context:
         """Return a context to be used in a method call."""

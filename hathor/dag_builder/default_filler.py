@@ -223,7 +223,7 @@ class DefaultFiller:
                     self.fill_parents(node)
                     self.balance_node_inputs_and_outputs(node)
 
-                case DAGNodeType.NanoContract | DAGNodeType.OnChainBlueprint:
+                case DAGNodeType.OnChainBlueprint:
                     self.fill_parents(node)
                     self.balance_node_inputs_and_outputs(node)
 

@@ -277,10 +277,7 @@ class DAGBuilder:
 
         node = self._get_or_create_node(name)
         if key not in node.attrs:
-            if key == 'type' and value == 'NanoContract':
-                node.type = DAGNodeType.NanoContract
-            else:
-                node.attrs[key] = value
+            node.attrs[key] = value
         else:
             raise SyntaxError('attribute key duplicated')
 

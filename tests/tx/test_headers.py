@@ -2,7 +2,6 @@ import pytest
 
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
-from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
 from hathor.nanocontracts.types import NCActionType
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import HeaderNotSupported
@@ -66,10 +65,6 @@ class VertexHeadersTest(unittest.TestCase):
             nc1.nc_id = "{self.blueprint_id.hex()}"
             nc1.nc_method = initialize()
 
-            nc2.type = NanoContract
-            nc2.nc_id = "{self.blueprint_id.hex()}"
-            nc2.nc_method = initialize()
-
             tx1.out[0] = 5 TKA
             tx2.out[0] = 3 TKB
 
@@ -86,14 +81,13 @@ class VertexHeadersTest(unittest.TestCase):
             ocb1.ocb_password = "{password}"
             ocb1.ocb_code = test_blueprint1.py, TestBlueprint1
 
-            dummy < b11 < nc1 < nc2 < TKA < tx1 < b12 < TKB < tx2 < ocb1
+            dummy < b11 < nc1 < TKA < tx1 < b12 < TKB < tx2 < ocb1
         ''')
         self.artifacts.propagate_with(self.manager, up_to='dummy')
 
         self.valid_vertices: list[tuple[str, type[BaseTransaction], bool]] = [
             ('b11', Block, False),
             ('nc1', Transaction, True),
-            ('nc2', DeprecatedNanoContract, True),
             ('TKA', TokenCreationTransaction, False),
             ('TKB', TokenCreationTransaction, True),
             ('tx1', Transaction, False),
@@ -105,11 +99,6 @@ class VertexHeadersTest(unittest.TestCase):
         for name, type_, is_nano in self.valid_vertices:
             vertex: BaseTransaction = self.artifacts.get_typed_vertex(name, type_)
             assert self.has_nano_header(vertex) == is_nano
-
-            if type_ is DeprecatedNanoContract:
-                # DeprecatedNanoContract will be removed before it supports
-                # any other headers, so we just skip testing it for now.
-                continue
 
             # Test adding a new header.
             msg = f'changing headers should change the hash on "{name}"'
@@ -145,11 +134,6 @@ class VertexHeadersTest(unittest.TestCase):
         for name, type_, is_nano in self.valid_vertices:
             vertex: BaseTransaction = self.artifacts.get_typed_vertex(name, type_)
             assert self.has_nano_header(vertex) == is_nano
-
-            if type_ is DeprecatedNanoContract:
-                # DeprecatedNanoContract will be removed before it supports
-                # any other headers, so we just skip testing it for now.
-                continue
 
             if not isinstance(vertex, Transaction):
                 # only transactions have sighash

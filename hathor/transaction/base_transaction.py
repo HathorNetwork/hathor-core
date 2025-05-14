@@ -99,9 +99,8 @@ class TxVersion(IntEnum):
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
+    ON_CHAIN_BLUEPRINT = 4
     POA_BLOCK = 5
-    NANO_CONTRACT = 4
-    ON_CHAIN_BLUEPRINT = 6
 
     @classmethod
     def _missing_(cls, value: Any) -> None:
@@ -126,15 +125,10 @@ class TxVersion(IntEnum):
         }
 
         settings = get_global_settings()
-        if settings.ENABLE_NANO_CONTRACTS:
+        if settings.ENABLE_NANO_CONTRACTS and settings.ENABLE_ON_CHAIN_BLUEPRINTS:
             # XXX This code should not run on any network except nano-testnet.
-            from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
-            cls_map[TxVersion.NANO_CONTRACT] = DeprecatedNanoContract
-
-            if settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-                # XXX This code should not run on any network except nano-testnet.
-                from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
-                cls_map[TxVersion.ON_CHAIN_BLUEPRINT] = OnChainBlueprint
+            from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
+            cls_map[TxVersion.ON_CHAIN_BLUEPRINT] = OnChainBlueprint
 
         cls = cls_map.get(self)
 

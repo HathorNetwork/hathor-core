@@ -16,7 +16,6 @@ from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts import OnChainBlueprint
-from hathor.nanocontracts.nanocontract import DeprecatedNanoContract
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.poa import PoaBlock
@@ -116,9 +115,6 @@ class VerificationService:
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
                 self._verify_basic_tx(vertex)
-            case TxVersion.NANO_CONTRACT:
-                assert type(vertex) is DeprecatedNanoContract
-                self._verify_basic_tx(vertex)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_basic_token_creation_tx(vertex)
@@ -178,9 +174,6 @@ class VerificationService:
                 self._verify_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
-                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
-            case TxVersion.NANO_CONTRACT:
-                assert type(vertex) is DeprecatedNanoContract
                 self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
@@ -288,9 +281,6 @@ class VerificationService:
                 self._verify_without_storage_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
-                self._verify_without_storage_tx(vertex)
-            case TxVersion.NANO_CONTRACT:
-                assert type(vertex) is DeprecatedNanoContract
                 self._verify_without_storage_tx(vertex)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
