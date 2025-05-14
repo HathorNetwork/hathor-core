@@ -1,4 +1,3 @@
-
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig

@@ -1,15 +1,14 @@
 from typing import Any
 
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
-from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractHistoryResource
+from hathor.nanocontracts.utils import sign_openssl
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction
 from hathor.transaction.headers import NanoHeader
@@ -107,24 +106,19 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         method_parser = NCMethodParser(method)
         nc_args_bytes = method_parser.serialize_args(nc_args)
 
-        pubkey = private_key.public_key()
-        nc_pubkey = get_public_key_bytes_compressed(pubkey)
-
         nano_header = NanoHeader(
             tx=nc,
             nc_version=1,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
-            nc_pubkey=nc_pubkey,
-            nc_signature=b'',
+            nc_address=b'',
+            nc_script=b'',
             nc_actions=[],
         )
         nc.headers.append(nano_header)
 
-        data = nc.get_sighash_all_data()
-        nano_header.nc_signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
-
+        sign_openssl(nano_header, private_key)
         self.manager.cpu_mining_service.resolve(nc)
 
     def _create_contract(self, parents: list[bytes], timestamp: int) -> Transaction:

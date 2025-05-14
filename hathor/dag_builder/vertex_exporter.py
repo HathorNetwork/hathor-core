@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import ast
-import hashlib
 import re
 from types import ModuleType
 from typing import Iterator, cast
@@ -31,9 +30,10 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.on_chain_blueprint import Code
 from hathor.nanocontracts.types import BlueprintId, ContractId, NCActionType, VertexId, blueprint_id_from_bytes
-from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb
+from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb, sign_pycoin
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
+from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
@@ -319,7 +319,6 @@ class VertexExporter:
         wallet = self.get_wallet(wallet_name)
         assert isinstance(wallet, HDWallet)
         privkey = wallet.get_key_at_index(0)
-        nc_pubkey = privkey.sec()
 
         from hathor.transaction.headers.nano_header import NanoHeaderAction
         nc_actions = []
@@ -359,15 +358,13 @@ class VertexExporter:
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
             nc_actions=nc_actions,
-            nc_pubkey=nc_pubkey,
-            nc_signature=b'',
+            nc_address=b'\x00' * ADDRESS_LEN_BYTES,
+            nc_script=b'',
         )
         vertex.headers.append(nano_header)
 
         if isinstance(vertex, Transaction):
-            data = vertex.get_sighash_all()
-            data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-            nano_header.nc_signature = privkey.sign(data_hash)
+            sign_pycoin(nano_header, privkey)
 
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
         """Create an OnChainBlueprint given a node."""

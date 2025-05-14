@@ -1,4 +1,3 @@
-import hashlib
 from typing import Any, Optional
 
 from hathor.conf import HathorSettings
@@ -8,6 +7,7 @@ from hathor.nanocontracts import Blueprint, Context, NCFail, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.types import NCActionType
+from hathor.nanocontracts.utils import sign_pycoin
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from hathor.transaction import BaseTransaction, Transaction, TxOutput
 from hathor.transaction.headers.nano_header import NanoHeaderAction
@@ -77,8 +77,6 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         if address is None:
             address = self.wallet.get_unused_address()
         privkey = self.wallet.get_private_key(address)
-        pubkey_bytes = privkey.sec()
-        nc_pubkey = pubkey_bytes
 
         from hathor.transaction.headers import NanoHeader
         nano_header = NanoHeader(
@@ -87,15 +85,12 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
-            nc_pubkey=nc_pubkey,
-            nc_signature=b'',
+            nc_address=b'',
+            nc_script=b'',
             nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
-
-        data = nc.get_sighash_all()
-        data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        nano_header.nc_signature = privkey.sign(data_hash)
+        sign_pycoin(nano_header, privkey)
 
     def finish_and_broadcast_tx(self, tx: BaseTransaction, confirmations: int = 1) -> None:
         tx.timestamp = int(self.manager.reactor.seconds())

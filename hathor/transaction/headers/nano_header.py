@@ -18,7 +18,6 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Type
 
-from hathor.crypto.util import get_address_from_public_key_bytes
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import (
@@ -42,6 +41,7 @@ if TYPE_CHECKING:
 
 NC_VERSION = 1
 NC_INITIALIZE_METHOD = 'initialize'
+ADDRESS_LEN_BYTES = 25
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -69,9 +69,9 @@ class NanoHeader(VertexBaseHeader):
 
     nc_actions: list[NanoHeaderAction]
 
-    # Pubkey and signature of the transaction owner / caller.
-    nc_pubkey: bytes
-    nc_signature: bytes
+    # Address and script with signature(s) of the transaction owner(s)/caller(s). Supports P2PKH and P2SH.
+    nc_address: bytes
+    nc_script: bytes
 
     _blueprint_class: Optional[Type[Blueprint]] = None
 
@@ -134,18 +134,15 @@ class NanoHeader(VertexBaseHeader):
             action, buf = cls._deserialize_action(buf)
             nc_actions.append(action)
 
-        (nc_pubkey_len,), buf = unpack('!B', buf)
+        nc_address, buf = unpack_len(ADDRESS_LEN_BYTES, buf)
         if verbose:
-            verbose('nc_pubkey_len', nc_pubkey_len)
-        nc_pubkey, buf = unpack_len(nc_pubkey_len, buf)
+            verbose('nc_address', nc_address)
+        (nc_script_len,), buf = unpack('!H', buf)
         if verbose:
-            verbose('nc_pubkey', nc_pubkey)
-        (nc_signature_len,), buf = unpack('!B', buf)
+            verbose('nc_script_len', nc_script_len)
+        nc_script, buf = unpack_len(nc_script_len, buf)
         if verbose:
-            verbose('nc_signature_len', nc_signature_len)
-        nc_signature, buf = unpack_len(nc_signature_len, buf)
-        if verbose:
-            verbose('nc_signature', nc_signature)
+            verbose('nc_script', nc_script)
 
         decoded_nc_method = nc_method.decode('ascii')
 
@@ -156,8 +153,8 @@ class NanoHeader(VertexBaseHeader):
             nc_method=decoded_nc_method,
             nc_args_bytes=nc_args_bytes,
             nc_actions=nc_actions,
-            nc_pubkey=nc_pubkey,
-            nc_signature=nc_signature,
+            nc_address=nc_address,
+            nc_script=nc_script,
         ), bytes(buf)
 
     def _serialize_action(self, action: NanoHeaderAction) -> bytes:
@@ -184,11 +181,10 @@ class NanoHeader(VertexBaseHeader):
         for action in self.nc_actions:
             ret.append(self._serialize_action(action))
 
-        ret.append(int_to_bytes(len(self.nc_pubkey), 1))
-        ret.append(self.nc_pubkey)
+        ret.append(self.nc_address)
         if not skip_signature:
-            ret.append(int_to_bytes(len(self.nc_signature), 1))
-            ret.append(self.nc_signature)
+            ret.append(int_to_bytes(len(self.nc_script), 2))
+            ret.append(self.nc_script)
         else:
             ret.append(int_to_bytes(0, 1))
         return ret
@@ -316,14 +312,12 @@ class NanoHeader(VertexBaseHeader):
             first_block = self.tx.storage.get_transaction(meta.first_block)
             timestamp = first_block.timestamp
 
-        address = get_address_from_public_key_bytes(self.nc_pubkey)
-
         from hathor.nanocontracts.context import Context
-
+        from hathor.nanocontracts.types import Address
         context = Context(
             actions=action_list,
             vertex=self.tx,
-            address=address,
+            address=Address(self.nc_address),
             timestamp=timestamp,
         )
         return context

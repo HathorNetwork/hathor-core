@@ -1,4 +1,3 @@
-import hashlib
 import os
 import re
 from typing import NamedTuple, Optional
@@ -8,7 +7,7 @@ from hathor.crypto.util import decode_address, get_address_b58_from_public_key_b
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.types import Address, ContractId, NCAction, NCActionType, SignedData
-from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
+from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb, sign_pycoin
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.scripts import P2PKH
@@ -126,7 +125,6 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         # private_key = self.wallet.get_private_key(address)
         # nc.nc_pubkey = private_key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
         private_key = self.wallet.get_private_key(address)
-        nc_pubkey = private_key.sec()
 
         from hathor.transaction.headers import NanoHeader
         nano_header = NanoHeader(
@@ -135,15 +133,13 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
-            nc_pubkey=nc_pubkey,
-            nc_signature=b'',
+            nc_address=b'',
+            nc_script=b'',
             nc_actions=[],
         )
         nc.headers.append(nano_header)
 
-        data = nc.get_sighash_all()
-        data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        nano_header.nc_signature = private_key.sign(data_hash)
+        sign_pycoin(nano_header, private_key)
 
         # mine
         nc.weight = self.manager.daa.minimum_tx_weight(nc)

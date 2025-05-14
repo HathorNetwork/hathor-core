@@ -1,7 +1,7 @@
-import hashlib
 from typing import Any, cast
 
 from hathor.conf import HathorSettings
+from hathor.crypto.util import get_address_from_public_key_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
@@ -9,13 +9,13 @@ from hathor.nanocontracts.exception import (
     BlueprintDoesNotExist,
     NanoContractDoesNotExist,
     NCFail,
-    NCInvalidPubKey,
     NCInvalidSignature,
     NCMethodNotFound,
     NCSerializationError,
 )
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
+from hathor.nanocontracts.utils import sign_pycoin
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 from hathor.transaction.headers import NanoHeader
@@ -130,7 +130,6 @@ class NCConsensusTestCase(SimulatorTestCase):
         if address is None:
             address = self.wallet.get_unused_address()
         privkey = self.wallet.get_private_key(address)
-        pubkey_bytes = privkey.sec()
 
         nano_header = NanoHeader(
             tx=nc,
@@ -138,8 +137,8 @@ class NCConsensusTestCase(SimulatorTestCase):
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
-            nc_pubkey=pubkey_bytes,
-            nc_signature=b'',
+            nc_address=b'',
+            nc_script=b'',
             nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
@@ -147,10 +146,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         if is_custom_token:
             nc.tokens = [self.token_uid]
 
-        data = nc.get_sighash_all()
-        data_hash = hashlib.sha256(hashlib.sha256(data).digest()).digest()
-        nano_header.nc_signature = privkey.sign(data_hash)
-
+        sign_pycoin(nano_header, privkey)
         self._finish_preparing_tx(nc)
         self.manager.reactor.advance(10)
         return nc
@@ -263,13 +259,14 @@ class NCConsensusTestCase(SimulatorTestCase):
     def test_nc_consensus_invalid_signature_change_nc_args_bytes(self):
         self._run_invalid_signature('nc_args_bytes', b'x')
 
-    def test_nc_consensus_invalid_signature_change_nc_pubkey_1(self):
-        self._run_invalid_signature('nc_pubkey', b'x', cause=NCInvalidPubKey)
+    def test_nc_consensus_invalid_signature_change_nc_address_1(self):
+        self._run_invalid_signature('nc_address', b'x', cause=NCInvalidSignature)
 
-    def test_nc_consensus_invalid_signature_change_nc_pubkey_2(self):
+    def test_nc_consensus_invalid_signature_change_nc_address_2(self):
         privkey = self.wallet.get_key_at_index(100)
         pubkey_bytes = privkey.sec()
-        self._run_invalid_signature('nc_pubkey', pubkey_bytes)
+        address = get_address_from_public_key_bytes(pubkey_bytes)
+        self._run_invalid_signature('nc_address', address)
 
     def test_nc_consensus_execution_fails(self):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])

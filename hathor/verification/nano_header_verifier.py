@@ -16,15 +16,9 @@ from __future__ import annotations
 
 import struct
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-
-from hathor.crypto.util import get_public_key_from_bytes_compressed
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
-    NCInvalidPubKey,
     NCInvalidSignature,
     NCMethodNotFound,
     NCSerializationError,
@@ -32,7 +26,13 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.types import BlueprintId
 from hathor.transaction import BaseTransaction, Transaction
-from hathor.transaction.exceptions import TokenAuthorityNotAllowed
+from hathor.transaction.exceptions import ScriptError, TokenAuthorityNotAllowed, TooManySigOps
+from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
+from hathor.transaction.scripts import create_output_script, get_sigops_count
+from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
+
+MAX_NC_SCRIPT_SIZE: int = 1024
+MAX_NC_SCRIPT_SIGOPS_COUNT: int = 20
 
 
 class NanoHeaderVerifier:
@@ -73,16 +73,26 @@ class NanoHeaderVerifier:
         assert isinstance(tx, Transaction)
 
         nano_header = tx.get_nano_header()
-        try:
-            pubkey = get_public_key_from_bytes_compressed(nano_header.nc_pubkey)
-        except ValueError as e:
-            # pubkey is not compressed public key
-            raise NCInvalidPubKey('nc_pubkey is not a public key') from e
+        if len(nano_header.nc_address) != ADDRESS_LEN_BYTES:
+            raise NCInvalidSignature(f'invalid address: {nano_header.nc_address.hex()}')
 
-        data = tx.get_sighash_all_data()
+        if len(nano_header.nc_script) > MAX_NC_SCRIPT_SIZE:
+            raise NCInvalidSignature(
+                f'nc_script larger than max: {len(nano_header.nc_script)} > {MAX_NC_SCRIPT_SIZE}'
+            )
+
+        output_script = create_output_script(nano_header.nc_address)
+        sigops_count = get_sigops_count(nano_header.nc_script, output_script)
+        if sigops_count > MAX_NC_SCRIPT_SIGOPS_COUNT:
+            raise TooManySigOps(f'sigops count greater than max: {sigops_count} > {MAX_NC_SCRIPT_SIGOPS_COUNT}')
+
         try:
-            pubkey.verify(nano_header.nc_signature, data, ec.ECDSA(hashes.SHA256()))
-        except InvalidSignature as e:
+            raw_script_eval(
+                input_data=nano_header.nc_script,
+                output_script=output_script,
+                extras=ScriptExtras(tx=tx)
+            )
+        except ScriptError as e:
             raise NCInvalidSignature from e
 
     def verify_nc_method_and_args(self, tx: BaseTransaction) -> None:

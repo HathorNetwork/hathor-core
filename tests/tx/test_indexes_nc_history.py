@@ -1,10 +1,8 @@
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-
 from hathor.conf import HathorSettings
-from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_bytes_compressed
+from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.nanocontracts.utils import sign_openssl
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
 from hathor.transaction.headers import NanoHeader
@@ -47,9 +45,6 @@ class NCHistoryIndexesTest(unittest.TestCase):
 
         key = KeyPair.create(b'my-pass')
         privkey = key.get_private_key(b'my-pass')
-        pubkey = privkey.public_key()
-        data = nc.get_sighash_all_data()
-        nc_pubkey = get_public_key_bytes_compressed(pubkey)
 
         nano_header = NanoHeader(
             tx=nc,
@@ -57,14 +52,13 @@ class NCHistoryIndexesTest(unittest.TestCase):
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
-            nc_pubkey=nc_pubkey,
-            nc_signature=b'',
+            nc_address=b'',
+            nc_script=b'',
             nc_actions=[],
         )
         nc.headers.append(nano_header)
 
-        nano_header.nc_signature = privkey.sign(data, ec.ECDSA(hashes.SHA256()))
-
+        sign_openssl(nano_header, privkey)
         self.manager.cpu_mining_service.resolve(nc)
 
         self.assertTrue(self.manager.on_new_tx(nc, fails_silently=False))
@@ -77,7 +71,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
         )
 
         addresses_index = self.manager.tx_storage.indexes.addresses
-        address = get_address_b58_from_public_key_bytes(nano_header.nc_pubkey)
+        address = get_address_b58_from_bytes(nano_header.nc_address)
         self.assertEqual(
             [nc.hash],
             list(addresses_index.get_sorted_from_address(address))

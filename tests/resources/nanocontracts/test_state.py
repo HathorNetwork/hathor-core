@@ -13,6 +13,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractStateResource
 from hathor.nanocontracts.types import Address, NCActionType, Timestamp, TokenUid
+from hathor.nanocontracts.utils import sign_openssl
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.headers import NanoHeader
@@ -161,24 +162,19 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         method_parser = NCMethodParser(method)
         nc_args_bytes = method_parser.serialize_args(nc_args)
 
-        pubkey = private_key.public_key()
-        nc_pubkey = get_public_key_bytes_compressed(pubkey)
-
         nano_header = NanoHeader(
             tx=nc,
             nc_version=1,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
-            nc_pubkey=nc_pubkey,
-            nc_signature=b'',
+            nc_address=b'',
+            nc_script=b'',
             nc_actions=nc_actions or [],
         )
         nc.headers.append(nano_header)
 
-        data = nc.get_sighash_all_data()
-        nano_header.nc_signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
-
+        sign_openssl(nano_header, private_key)
         self.manager.cpu_mining_service.resolve(nc)
 
     @inlineCallbacks

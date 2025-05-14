@@ -6,7 +6,7 @@ from hathor.nanocontracts.types import NCActionType
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import HeaderNotSupported
 from hathor.transaction.headers import NanoHeader, VertexBaseHeader
-from hathor.transaction.headers.nano_header import NanoHeaderAction
+from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES, NanoHeaderAction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import VerboseCallback
 from tests import unittest
@@ -118,8 +118,8 @@ class VertexHeadersTest(unittest.TestCase):
                 ('nc_method', 'new_method'),
                 ('nc_args_bytes', b'new args'),
                 ('nc_actions', [NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=123)]),
-                ('nc_pubkey', b'new key'),
-                ('nc_signature', b'new signature'),
+                ('nc_address', b'\x01' * ADDRESS_LEN_BYTES),
+                ('nc_script', b'new script'),
             ]
 
             # Test editing existing nano header.
@@ -159,7 +159,7 @@ class VertexHeadersTest(unittest.TestCase):
                 ('nc_method', 'new_method'),
                 ('nc_args_bytes', b'new args'),
                 ('nc_actions', [NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=123)]),
-                ('nc_pubkey', b'new key'),
+                ('nc_address', b'\x01' * ADDRESS_LEN_BYTES),
             ]
 
             # Test editing existing nano header.
@@ -171,11 +171,11 @@ class VertexHeadersTest(unittest.TestCase):
                 sighash_after = clone.get_sighash_all(skip_cache=True)
                 assert sighash_before != sighash_after, msg
 
-            # Changing the nc_signature does not affect sighash all.
+            # Changing the nc_script does not affect sighash all.
             clone = vertex.clone(include_storage=False, include_metadata=False)
             sighash_before = clone.get_sighash_all(skip_cache=True)
             assert sighash_before == vertex.get_sighash_all(skip_cache=True)
-            clone.get_nano_header().nc_signature = b'new signature'
+            clone.get_nano_header().nc_script = b'new script'
             sighash_after = clone.get_sighash_all(skip_cache=True)
             assert sighash_before == sighash_after, msg
 
@@ -213,8 +213,8 @@ class VertexHeadersTest(unittest.TestCase):
                     amount=123,
                 ),
             ],
-            nc_pubkey=b'some pubkey',
-            nc_signature=b'some signature',
+            nc_address=b'\x01' * ADDRESS_LEN_BYTES,
+            nc_script=b'some script',
         )
 
         header1_bytes = header1.serialize()
@@ -227,5 +227,5 @@ class VertexHeadersTest(unittest.TestCase):
         assert header1.nc_method == header2.nc_method
         assert header1.nc_args_bytes == header2.nc_args_bytes
         assert header1.nc_actions == header2.nc_actions
-        assert header1.nc_pubkey == header2.nc_pubkey
-        assert header1.nc_signature == header2.nc_signature
+        assert header1.nc_address == header2.nc_address
+        assert header1.nc_script == header2.nc_script

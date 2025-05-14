@@ -81,7 +81,7 @@ class RawSignedData(Generic[T]):
         from hathor.transaction.scripts.execute import execute_eval
         full_data = self.script_input + script
         log: list[str] = []
-        extras = ScriptExtras(tx=self, txin=None, spent_tx=None)  # type: ignore
+        extras = ScriptExtras(tx=self)  # type: ignore[arg-type]
         try:
             execute_eval(full_data, log, extras)
         except ScriptError:
