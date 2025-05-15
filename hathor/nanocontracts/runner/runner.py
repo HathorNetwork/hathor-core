@@ -15,10 +15,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Type
+from typing import Any, Type
 
 from typing_extensions import assert_never
 
+from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import (
@@ -27,6 +28,7 @@ from hathor.nanocontracts.exception import (
     NCInvalidContractId,
     NCInvalidInitializeMethodCall,
     NCInvalidPublicMethodCallFromView,
+    NCInvalidSyscall,
     NCUninitializedContractError,
 )
 from hathor.nanocontracts.metered_exec import MeteredExecutor
@@ -34,14 +36,22 @@ from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.single import _SingleCallRunner
 from hathor.nanocontracts.runner.types import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
+from hathor.nanocontracts.storage.contract_storage import Balance
+from hathor.nanocontracts.types import (
+    BaseTokenAction,
+    BlueprintId,
+    ContractId,
+    NCAction,
+    NCDepositAction,
+    NCGrantAuthorityAction,
+    NCInvokeAuthorityAction,
+    NCWithdrawalAction,
+)
 from hathor.nanocontracts.utils import derive_child_contract_id
 from hathor.reactor import ReactorProtocol
 from hathor.transaction.storage import TransactionStorage
-from hathor.types import Amount, TokenUid
-
-if TYPE_CHECKING:
-    from hathor.conf.settings import HathorSettings
+from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
+from hathor.types import TokenUid
 
 
 class Runner:
@@ -82,6 +92,9 @@ class Runner:
         self._call_info: CallInfo | None = None
 
         self._rng: NanoRNG | None = NanoRNG(seed) if seed is not None else None
+
+        # Information about minted and melted tokens in the current call via syscalls.
+        self._mint_melt_totals: defaultdict[TokenUid, int] = defaultdict(int)
 
     def enable_call_trace(self) -> None:
         """Enable call trace for debugging."""
@@ -203,14 +216,19 @@ class Runner:
 
         self._validate_balances(ctx)
         self._commit_all_changes_to_storage()
+
+        # Reset the mint/melt counters so this Runner can be reused (in blueprint tests, for example).
+        self._mint_melt_totals = defaultdict(int)
         return ret
 
-    def call_another_contract_public_method(self,
-                                            nanocontract_id: ContractId,
-                                            method_name: str,
-                                            actions: list[NCAction],
-                                            *args: Any,
-                                            **kwargs: Any) -> Any:
+    def call_another_contract_public_method(
+        self,
+        nanocontract_id: ContractId,
+        method_name: str,
+        actions: list[NCAction],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         """Call another contract's public method. This method must be called by a blueprint during an execution."""
         from hathor.transaction.headers import NC_INITIALIZE_METHOD
         if method_name == NC_INITIALIZE_METHOD:
@@ -245,7 +263,7 @@ class Runner:
 
         # Validate actions.
         for action in actions:
-            if action.amount < 0:
+            if isinstance(action, BaseTokenAction) and action.amount < 0:
                 raise NCInvalidContext('amount must be positive')
 
         first_ctx = self._call_info.stack[0].ctx
@@ -264,13 +282,18 @@ class Runner:
         # call above, if it succeeds.
         previous_changes_tracker = last_call_record.changes_tracker
         for action in actions:
-            match action.type:
-                case NCActionType.DEPOSIT:
+            match action:
+                case NCDepositAction():
                     previous_changes_tracker.add_balance(action.token_uid, -action.amount)
-                case NCActionType.WITHDRAWAL:
+                case NCWithdrawalAction():
                     previous_changes_tracker.add_balance(action.token_uid, action.amount)
+                # TODO: implement new actions here.
+                case NCGrantAuthorityAction():
+                    raise NotImplementedError
+                case NCInvokeAuthorityAction():
+                    raise NotImplementedError
                 case _:
-                    assert_never(action.type)
+                    assert_never(action)
 
         return ret
 
@@ -295,19 +318,31 @@ class Runner:
             change_tracker = change_trackers[0]
             change_tracker.validate_balances()
 
-            for (_, token_uid), balance in change_tracker.balance_diff.items():
+            for (_, token_uid), balance in change_tracker.get_balance_diff().items():
                 total_diffs[token_uid] += balance
 
-        for token_uid, action in ctx.actions.items():
-            match action.type:
-                case NCActionType.DEPOSIT:
-                    total_diffs[token_uid] -= action.amount
-                case NCActionType.WITHDRAWAL:
-                    total_diffs[token_uid] += action.amount
-                case _:
-                    assert_never(action.type)
+        for token_uid, amount in self._mint_melt_totals.items():
+            total_diffs[token_uid] -= amount
 
-        assert all(diff == 0 for diff in total_diffs.values()), 'change tracker diffs do not match actions'
+        for token_uid, action in ctx.actions.items():
+            match action:
+                case NCDepositAction():
+                    total_diffs[token_uid] -= action.amount
+
+                case NCWithdrawalAction():
+                    total_diffs[token_uid] += action.amount
+
+                case NCGrantAuthorityAction() | NCInvokeAuthorityAction():
+                    # These actions don't affect the tx balance,
+                    # so no need to account for them.
+                    pass
+
+                case _:
+                    assert_never(action)
+
+        assert all(diff == 0 for diff in total_diffs.values()), (
+            f'change tracker diffs do not match actions: {total_diffs}'
+        )
 
     def _commit_all_changes_to_storage(self) -> None:
         """Commit all change trackers."""
@@ -406,7 +441,7 @@ class Runner:
 
         return ret
 
-    def get_balance(self, nanocontract_id: ContractId | None, token_uid: TokenUid | None) -> Amount:
+    def get_balance(self, nanocontract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
         """Return a contract balance for a given token."""
         if nanocontract_id is None:
             assert self._call_info is not None
@@ -428,6 +463,13 @@ class Runner:
         """Return the contract id for the current method being executed."""
         assert self._call_info is not None
         return self._call_info.stack[-1].nanocontract_id
+
+    def get_current_changes_tracker(self, nanocontract_id: ContractId) -> NCChangesTracker:
+        """Return the NCChangesTracker for the current method being executed."""
+        assert self._call_info is not None
+        change_trackers = self._call_info.change_trackers[nanocontract_id]
+        assert len(change_trackers) > 0
+        return change_trackers[-1]
 
     def get_rng(self) -> NanoRNG:
         """Return the RNG for the current contract being executed."""
@@ -491,6 +533,61 @@ class Runner:
             **kwargs
         )
         return child_id, ret
+
+    def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
+        """Revoke authorities from this nano contract."""
+        contract_id = self.get_current_contract_id()
+        if token_uid == HATHOR_TOKEN_UID:
+            raise NCInvalidSyscall(f'contract {contract_id.hex()} cannot revoke authorities from HTR token')
+
+        changes_tracker = self.get_current_changes_tracker(contract_id)
+        changes_tracker.revoke_authorities(
+            token_uid,
+            revoke_mint=revoke_mint,
+            revoke_melt=revoke_melt,
+        )
+
+    def mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
+        """Mint tokens and add them to the balance of this nano contract."""
+        contract_id = self.get_current_contract_id()
+        if token_uid == HATHOR_TOKEN_UID:
+            raise NCInvalidSyscall(f'contract {contract_id.hex()} cannot mint HTR tokens')
+
+        changes_tracker = self.get_current_changes_tracker(contract_id)
+        assert changes_tracker.nc_id == contract_id
+        balance = changes_tracker.get_balance(token_uid)
+
+        if not balance.can_mint:
+            raise NCInvalidSyscall(f'contract {contract_id.hex()} cannot mint {token_uid.hex()} tokens')
+
+        token_amount = amount
+        htr_amount = -get_deposit_amount(self._settings, token_amount)
+        changes_tracker.add_balance(token_uid, token_amount)
+        changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
+
+        self._mint_melt_totals[token_uid] += token_amount
+        self._mint_melt_totals[TokenUid(HATHOR_TOKEN_UID)] += htr_amount
+
+    def melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
+        """Melt tokens by removing them from the balance of this nano contract."""
+        contract_id = self.get_current_contract_id()
+        if token_uid == HATHOR_TOKEN_UID:
+            raise NCInvalidSyscall(f'contract {contract_id.hex()} cannot melt HTR tokens')
+
+        changes_tracker = self.get_current_changes_tracker(contract_id)
+        assert changes_tracker.nc_id == contract_id
+        balance = changes_tracker.get_balance(token_uid)
+
+        if not balance.can_melt:
+            raise NCInvalidSyscall(f'contract {contract_id.hex()} cannot melt {token_uid.hex()} tokens')
+
+        token_amount = -amount
+        htr_amount = get_withdraw_amount(self._settings, token_amount)
+        changes_tracker.add_balance(token_uid, token_amount)
+        changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
+
+        self._mint_melt_totals[token_uid] += token_amount
+        self._mint_melt_totals[TokenUid(HATHOR_TOKEN_UID)] += htr_amount
 
 
 class RunnerFactory:

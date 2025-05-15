@@ -150,10 +150,6 @@ class InvalidVersionError(TxValidationError):
     """Vertex version is invalid."""
 
 
-class TokenAuthorityNotAllowed(TxValidationError):
-    """Transaction has at least one authority token and it is not allowed"""
-
-
 class BlockWithInputs(BlockError):
     """Block has inputs"""
 

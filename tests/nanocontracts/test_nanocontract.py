@@ -17,7 +17,7 @@ from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import NCActionType, TokenUid, public, view
+from hathor.nanocontracts.types import NCActionType, NCDepositAction, NCWithdrawalAction, TokenUid, public, view
 from hathor.nanocontracts.utils import sign_openssl, sign_openssl_multisig
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
@@ -25,7 +25,6 @@ from hathor.transaction.exceptions import (
     FinalStackInvalid,
     InvalidScriptError,
     MissingStackItems,
-    TokenAuthorityNotAllowed,
     TooManySigOps,
 )
 from hathor.transaction.headers import NanoHeader
@@ -483,11 +482,11 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.assertEqual(2, len(context.actions))
 
         action1 = context.actions[TokenUid(b'token-a')]
-        self.assertEqual(action1.type, NCActionType.WITHDRAWAL)
+        assert isinstance(action1, NCWithdrawalAction)
         self.assertEqual(action1.amount, 50)
 
         action2 = context.actions[TokenUid(b'\0')]
-        self.assertEqual(action2.type, NCActionType.DEPOSIT)
+        assert isinstance(action2, NCDepositAction)
         self.assertEqual(action2.amount, 90)
 
         def _to_frozenset(x: list[dict]) -> set[frozenset]:
@@ -505,65 +504,3 @@ class NCNanoContractTestCase(unittest.TestCase):
         data = context.to_json()
         json_actions = data['actions']
         self.assertEqual(_to_frozenset(json_actions), _to_frozenset(expected_json_actions))
-
-    def test_no_authorities(self) -> None:
-        tx_storage = self.peer.tx_storage
-
-        # Incomplete transaction. It will be used as input of nc.
-        inputs: list[TxInput] = []
-        outputs = [
-            TxOutput(TxOutput.TOKEN_MINT_MASK, b'', TxOutput.TOKEN_AUTHORITY_MASK | 1),  # TOKEN A
-        ]
-        tokens = [b'token-a']
-        tx = Transaction(inputs=inputs, outputs=outputs, tokens=tokens)
-        tx.parents = [tx.hash for tx in self.genesis_txs]
-        tx.get_metadata().validation = ValidationState.FULL
-        tx.update_hash()
-        tx.init_static_metadata_from_storage(self._settings, tx_storage)
-        tx_storage.save_transaction(tx)
-
-        # Incomplete nanocontract transaction with a token authority on one output.
-        nc = Transaction(
-            weight=1,
-            inputs=inputs,
-            outputs=outputs,
-            tokens=tokens,
-            storage=tx_storage,
-        )
-        nc.headers.append(NanoHeader(
-            tx=nc,
-            nc_version=1,
-            nc_id=b'',
-            nc_method='',
-            nc_args_bytes=b'',
-            nc_address=b'',
-            nc_script=b'',
-            nc_actions=[],
-        ))
-        with self.assertRaises(TokenAuthorityNotAllowed):
-            self.peer.verification_service.verifiers.nano_header.verify_no_authorities(nc)
-
-        # Incomplete nanocontract transaction with a token authority on one input.
-        inputs = [
-            TxInput(tx.hash, 0, b''),
-        ]
-        outputs = []
-        nc = Transaction(
-            weight=1,
-            inputs=inputs,
-            outputs=outputs,
-            tokens=tokens,
-            storage=tx_storage,
-        )
-        nc.headers.append(NanoHeader(
-            tx=nc,
-            nc_version=1,
-            nc_id=b'',
-            nc_method='',
-            nc_args_bytes=b'',
-            nc_address=b'',
-            nc_script=b'',
-            nc_actions=[],
-        ))
-        with self.assertRaises(TokenAuthorityNotAllowed):
-            self.peer.verification_service.verifiers.nano_header.verify_no_authorities(nc)

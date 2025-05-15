@@ -149,13 +149,17 @@ class NanoContractStateResource(Resource):
 
         value: Any
         # Get balances.
-        balances: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
+        balances: dict[str, NCBalanceSuccessResponse | NCValueErrorResponse] = {}
         for token_uid_hex in params.balances:
             if token_uid_hex == '__all__':
                 # User wants to get the balance of all tokens in the nano contract
                 all_balances = nc_storage.get_all_balances()
-                for key_balance, value in all_balances.items():
-                    balances[key_balance.token_uid.hex()] = NCValueSuccessResponse(value=str(value))
+                for key_balance, balance in all_balances.items():
+                    balances[key_balance.token_uid.hex()] = NCBalanceSuccessResponse(
+                        value=str(balance.value),
+                        can_mint=balance.can_mint,
+                        can_melt=balance.can_melt,
+                    )
                 break
 
             try:
@@ -164,8 +168,12 @@ class NanoContractStateResource(Resource):
                 balances[token_uid_hex] = NCValueErrorResponse(errmsg='invalid token id')
                 continue
 
-            value = nc_storage.get_balance(token_uid)
-            balances[token_uid_hex] = NCValueSuccessResponse(value=str(value))
+            balance = nc_storage.get_balance(token_uid)
+            balances[token_uid_hex] = NCBalanceSuccessResponse(
+                value=str(balance.value),
+                can_mint=balance.can_mint,
+                can_melt=balance.can_melt,
+            )
 
         # Get fields.
         fields: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
@@ -251,6 +259,12 @@ class NCValueSuccessResponse(Response):
     value: Any
 
 
+class NCBalanceSuccessResponse(Response):
+    value: str
+    can_mint: bool
+    can_melt: bool
+
+
 class NCValueErrorResponse(Response):
     errmsg: str
 
@@ -261,7 +275,7 @@ class NCStateResponse(Response):
     blueprint_id: str
     blueprint_name: str
     fields: dict[str, NCValueSuccessResponse | NCValueErrorResponse]
-    balances: dict[str, NCValueSuccessResponse | NCValueErrorResponse]
+    balances: dict[str, NCBalanceSuccessResponse | NCValueErrorResponse]
     calls: dict[str, NCValueSuccessResponse | NCValueErrorResponse]
 
 

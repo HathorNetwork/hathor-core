@@ -3,9 +3,9 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail, NCInsufficientFunds, NCPrivateMethodError, UnknownFieldType
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
-from hathor.nanocontracts.storage.contract_storage import BalanceKey
+from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import ContractId, NCAction, NCActionType, VertexId, public, view
+from hathor.nanocontracts.types import ContractId, NCDepositAction, NCWithdrawalAction, VertexId, public, view
 from tests import unittest
 from tests.nanocontracts.utils import TestRunner
 
@@ -173,7 +173,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
         storage = self.runner.get_storage(nc_id)
-        self.assertEqual(0, storage.get_balance(b''))
+        self.assertEqual(Balance(value=0, can_mint=False, can_melt=False), storage.get_balance(b''))
 
     def test_nop(self):
         self._create_my_blueprint_contract()
@@ -184,7 +184,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_withdrawal_fail(self):
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        action = NCAction(NCActionType.WITHDRAWAL, b'\0', 1)
+        action = NCWithdrawalAction(token_uid=b'\0', amount=1)
         ctx = Context([action], self.tx, b'', timestamp=0)
         with self.assertRaises(NCInsufficientFunds):
             self.runner.call_public_method(nc_id, 'nop', ctx)
@@ -195,22 +195,22 @@ class NCBlueprintTestCase(unittest.TestCase):
         storage = self.runner.get_storage(nc_id)
 
         token_uid = b'\0'
-        action = NCAction(NCActionType.DEPOSIT, token_uid, 100)
+        action = NCDepositAction(token_uid=token_uid, amount=100)
         ctx = Context([action], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(100, storage.get_balance(token_uid))
+        self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
 
-        action = NCAction(NCActionType.WITHDRAWAL, token_uid, 1)
+        action = NCWithdrawalAction(token_uid=token_uid, amount=1)
         ctx = Context([action], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(99, storage.get_balance(token_uid))
+        self.assertEqual(Balance(value=99, can_mint=False, can_melt=False), storage.get_balance(token_uid))
 
-        action = NCAction(NCActionType.WITHDRAWAL, token_uid, 50)
+        action = NCWithdrawalAction(token_uid=token_uid, amount=50)
         ctx = Context([action], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(49, storage.get_balance(token_uid))
+        self.assertEqual(Balance(value=49, can_mint=False, can_melt=False), storage.get_balance(token_uid))
 
-        action = NCAction(NCActionType.WITHDRAWAL, token_uid, 50)
+        action = NCWithdrawalAction(token_uid=token_uid, amount=50)
         ctx = Context([action], self.tx, b'', timestamp=0)
         with self.assertRaises(NCInsufficientFunds):
             self.runner.call_public_method(nc_id, 'nop', ctx)
@@ -223,16 +223,16 @@ class NCBlueprintTestCase(unittest.TestCase):
         token_uid = b'\0'
         wrong_token_uid = b'\1'
 
-        action = NCAction(NCActionType.DEPOSIT, token_uid, 100)
+        action = NCDepositAction(token_uid=token_uid, amount=100)
         ctx = Context([action], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(100, storage.get_balance(token_uid))
+        self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
 
-        action = NCAction(NCActionType.WITHDRAWAL, wrong_token_uid, 1)
+        action = NCWithdrawalAction(token_uid=wrong_token_uid, amount=1)
         ctx = Context([action], self.tx, b'', timestamp=0)
         with self.assertRaises(NCInsufficientFunds):
             self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(100, storage.get_balance(token_uid))
+        self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
 
     def test_invalid_field(self) -> None:
         with self.assertRaises(UnknownFieldType):
@@ -249,19 +249,25 @@ class NCBlueprintTestCase(unittest.TestCase):
         storage = self.runner.get_storage(nc_id)
 
         token_uid = b'\0'  # HTR
-        action = NCAction(NCActionType.DEPOSIT, token_uid, 100)
+        action = NCDepositAction(token_uid=token_uid, amount=100)
         ctx = Context([action], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(100, storage.get_balance(token_uid))
+        self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
 
         token_uid2 = b'\0' + b'\1' * 31
-        action = NCAction(NCActionType.DEPOSIT, token_uid2, 200)
+        action = NCDepositAction(token_uid=token_uid2, amount=200)
         ctx = Context([action], self.tx, b'', timestamp=0)
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(200, storage.get_balance(token_uid2))
+        self.assertEqual(Balance(value=200, can_mint=False, can_melt=False), storage.get_balance(token_uid2))
 
         all_balances = storage.get_all_balances()
         key1 = BalanceKey(nc_id, token_uid)
         key2 = BalanceKey(nc_id, token_uid2)
 
-        self.assertEqual(all_balances, {key1: 100, key2: 200})
+        self.assertEqual(
+            all_balances,
+            {
+                key1: Balance(value=100, can_mint=False, can_melt=False),
+                key2: Balance(value=200, can_mint=False, can_melt=False),
+            }
+        )

@@ -14,10 +14,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Callable, Generic, NamedTuple, NewType, TypeVar
-
-from hathor.transaction.util import bytes_to_int, int_to_bytes
+from typing import Any, Callable, Generic, NewType, TypeAlias, TypeGuard, TypeVar
 
 # Types to be used by blueprints.
 VertexId = NewType('VertexId', bytes)
@@ -147,22 +146,123 @@ def view(fn: Callable) -> Callable:
 
 @unique
 class NCActionType(Enum):
-    """Types of interactions a transaction might have with a contract."""
+    """
+    Types of interactions a transaction might have with a contract.
+    Check the respective dataclasses below for more info.
+    """
     DEPOSIT = 1
     WITHDRAWAL = 2
+    GRANT_AUTHORITY = 3
+    INVOKE_AUTHORITY = 4
 
     def __str__(self) -> str:
-        return self.name.lower()
+        return self.name
 
     def to_bytes(self) -> bytes:
+        from hathor.transaction.util import int_to_bytes
         return int_to_bytes(number=self.value, size=1)
 
     @staticmethod
     def from_bytes(data: bytes) -> NCActionType:
+        from hathor.transaction.util import bytes_to_int
         return NCActionType(bytes_to_int(data))
 
 
-class NCAction(NamedTuple):
-    type: NCActionType
+@dataclass(slots=True, frozen=True, kw_only=True)
+class BaseAction:
+    """The base dataclass for all NC actions. Shouldn't be instantiated directly."""
     token_uid: TokenUid
+
+    @property
+    def type(self) -> NCActionType:
+        """The respective NCActionType for each NCAction."""
+        action_types: dict[type[BaseAction], NCActionType] = {
+            NCDepositAction: NCActionType.DEPOSIT,
+            NCWithdrawalAction: NCActionType.WITHDRAWAL,
+            NCGrantAuthorityAction: NCActionType.GRANT_AUTHORITY,
+            NCInvokeAuthorityAction: NCActionType.INVOKE_AUTHORITY,
+        }
+
+        if action_type := action_types.get(type(self)):
+            return action_type
+
+        raise NotImplementedError(f'unknown action type {type(self)}')
+
+    @property
+    def name(self) -> str:
+        """The action name."""
+        return str(self.type)
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class BaseTokenAction(BaseAction):
+    """The base dataclass for all token-related NC actions. Shouldn't be instantiated directly."""
     amount: int
+
+    def to_json(self) -> dict[str, Any]:
+        return dict(
+            type=self.name.lower(),
+            token_uid=self.token_uid.hex(),
+            amount=self.amount,
+        )
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class BaseAuthorityAction(BaseAction):
+    """The base dataclass for all authority-related NC actions. Shouldn't be instantiated directly."""
+    mint: bool
+    melt: bool
+
+    def __post_init__(self) -> None:
+        """Validate the token uid."""
+        from hathor.conf.settings import HATHOR_TOKEN_UID
+        from hathor.nanocontracts.exception import NCInvalidAction
+        if self.token_uid == HATHOR_TOKEN_UID:
+            raise NCInvalidAction(f'{self.name} action cannot be executed on HTR token')
+
+    def to_json(self) -> dict[str, Any]:
+        return dict(
+            type=self.name,
+            token_uid=self.token_uid.hex(),
+            mint=self.mint,
+            melt=self.melt,
+        )
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class NCDepositAction(BaseTokenAction):
+    """Deposit tokens into the contract."""
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class NCWithdrawalAction(BaseTokenAction):
+    """Withdraw tokens from the contract."""
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class NCGrantAuthorityAction(BaseAuthorityAction):
+    """Grant an authority to the contract."""
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class NCInvokeAuthorityAction(BaseAuthorityAction):
+    """Invoke an authority stored in the contract to create authority outputs or mint/melt tokens in the tx."""
+
+
+"""A sum type representing all possible nano contract actions."""
+NCAction: TypeAlias = (
+    NCDepositAction
+    | NCWithdrawalAction
+    | NCGrantAuthorityAction
+    | NCInvokeAuthorityAction
+)
+
+ActionT = TypeVar('ActionT', bound=BaseAction)
+
+
+def is_action_type(action: NCAction, action_type: type[ActionT]) -> TypeGuard[ActionT]:
+    """
+    Check whether the type of this action is the provided type,
+    to be used in blueprints (as `isinstance` is not allowed).
+    """
+    return isinstance(action, action_type)

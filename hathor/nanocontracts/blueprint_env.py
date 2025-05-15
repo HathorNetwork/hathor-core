@@ -65,7 +65,36 @@ class BlueprintEnvironment:
 
         For instance, if a contract has 50 HTR and a transaction is requesting to withdraw 3 HTR,
         then this method will return 50 HTR."""
-        return self.__runner.get_balance(nanocontract_id, token_uid)
+        balance = self.__runner.get_balance(nanocontract_id, token_uid)
+        return balance.value
+
+    @final
+    def can_mint(
+        self,
+        token_uid: Optional[TokenUid] = None,
+        *,
+        nanocontract_id: Optional[ContractId] = None,
+    ) -> int:
+        """Return whether a given token can be minted, without considering the current transaction.
+
+        For instance, if a contract has a mint authority and a transaction is revoking it,
+        then this method will return the mint authority."""
+        balance = self.__runner.get_balance(nanocontract_id, token_uid)
+        return balance.can_mint
+
+    @final
+    def can_melt(
+        self,
+        token_uid: Optional[TokenUid] = None,
+        *,
+        nanocontract_id: Optional[ContractId] = None,
+    ) -> int:
+        """Return whether a given token can be melted, without considering the current transaction.
+
+        For instance, if a contract has a mint authority and a transaction is revoking it,
+        then this method will return the mint authority."""
+        balance = self.__runner.get_balance(nanocontract_id, token_uid)
+        return balance.can_melt
 
     @final
     def call_public_method(
@@ -83,6 +112,21 @@ class BlueprintEnvironment:
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a view method of another contract."""
         return self.__runner.call_view_method(nc_id, method_name, *args, **kwargs)
+
+    @final
+    def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
+        """Revoke authorities from this nano contract."""
+        self.__runner.revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
+
+    @final
+    def mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
+        """Mint tokens and add them to the balance of this nano contract."""
+        self.__runner.mint_tokens(token_uid=token_uid, amount=amount)
+
+    @final
+    def melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
+        """Melt tokens by removing them from the balance of this nano contract."""
+        self.__runner.melt_tokens(token_uid=token_uid, amount=amount)
 
     @final
     def create_contract(

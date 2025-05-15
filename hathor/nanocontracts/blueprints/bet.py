@@ -21,11 +21,13 @@ from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.types import (
     Address,
     NCAction,
-    NCActionType,
+    NCDepositAction,
+    NCWithdrawalAction,
     SignedData,
     Timestamp,
     TokenUid,
     TxOutputScript,
+    is_action_type,
     public,
     view,
 )
@@ -158,7 +160,7 @@ class Bet(Blueprint):
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         """Make a bet."""
         action = self._get_action(ctx)
-        if action.type != NCActionType.DEPOSIT:
+        if not is_action_type(action, NCDepositAction):
             raise WithdrawalNotAllowed('must be deposit')
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
@@ -196,7 +198,7 @@ class Bet(Blueprint):
     def withdraw(self, ctx: Context) -> None:
         """Withdraw tokens after the final result is set."""
         action = self._get_action(ctx)
-        if action.type != NCActionType.WITHDRAWAL:
+        if not is_action_type(action, NCWithdrawalAction):
             raise DepositNotAllowed('action must be withdrawal')
         self.fail_if_result_is_not_available()
         self.fail_if_invalid_token(action)

@@ -12,11 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
 import pickle
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, NamedTuple
 
+from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathor.nanocontracts.types import BlueprintId, VertexId
@@ -43,6 +47,58 @@ class BalanceKey(NamedTuple):
 
     def __bytes__(self):
         return _Tag.BALANCE.value + self.token_uid
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class Balance:
+    """
+    The balance of a token in the storage, which includes its value (amount of tokens), and the
+    stored authorities. This class is immutable and therefore suitable to be used externally.
+    """
+    value: int
+    can_mint: bool
+    can_melt: bool
+
+    def to_mutable(self) -> MutableBalance:
+        return MutableBalance(
+            value=self.value,
+            can_mint=self.can_mint,
+            can_melt=self.can_melt,
+        )
+
+
+@dataclass(slots=True, kw_only=True)
+class MutableBalance:
+    """
+    The balance of a token in the storage, which includes its value (amount of tokens),
+    and the stored authorities. This is a mutable version of the `Balance` class and
+    therefore only suitable to be used in NCContractStorage and its subclasses.
+    """
+    value: int
+    can_mint: bool
+    can_melt: bool
+
+    def grant_authorities(self, *, grant_mint: bool, grant_melt: bool) -> None:
+        """Grant authorities to this balance, returning a new updated one."""
+        self.can_mint = self.can_mint or grant_mint
+        self.can_melt = self.can_melt or grant_melt
+
+    def revoke_authorities(self, *, revoke_mint: bool, revoke_melt: bool) -> None:
+        """Revoke authorities from this balance, returning a new updated one."""
+        self.can_mint = self.can_mint and not revoke_mint
+        self.can_melt = self.can_melt and not revoke_melt
+
+    @staticmethod
+    def get_default() -> MutableBalance:
+        """Get the default empty balance."""
+        return MutableBalance(value=0, can_mint=False, can_melt=False)
+
+    def to_immutable(self) -> Balance:
+        return Balance(
+            value=self.value,
+            can_mint=self.can_mint,
+            can_melt=self.can_melt,
+        )
 
 
 class MetadataKey(NamedTuple):
@@ -170,14 +226,20 @@ class NCContractStorage:
         """Set a new blueprint id for the contract."""
         return self._put_metadata(BLUEPRINT_ID_KEY, value)
 
-    def get_balance(self, token_uid: bytes) -> int:
+    def get_balance(self, token_uid: bytes) -> Balance:
         """Return the contract balance for a token."""
-        key = BalanceKey(self.nc_id, token_uid)
-        return self._trie_get(bytes(key), default=0)
+        return self._get_mutable_balance(token_uid).to_immutable()
 
-    def get_all_balances(self) -> dict[BalanceKey, int]:
+    def _get_mutable_balance(self, token_uid: bytes) -> MutableBalance:
+        """Return the mutable balance for a token. For internal use only."""
+        key = BalanceKey(self.nc_id, token_uid)
+        balance = self._trie_get(bytes(key), default=MutableBalance.get_default())
+        assert isinstance(balance, MutableBalance)
+        return balance
+
+    def get_all_balances(self) -> dict[BalanceKey, Balance]:
         """Return the contract balances of all tokens."""
-        balances: dict[BalanceKey, int] = {}
+        balances: dict[BalanceKey, Balance] = {}
         balance_tag = self._trie._encode_key(_Tag.BALANCE.value)
 
         node = self._trie._find_nearest_node(balance_tag)
@@ -199,23 +261,47 @@ class NCContractStorage:
                 continue
             # Found a token.
             assert node.value is not None
-            value = self._deserialize(node.value)
+            balance = self._deserialize(node.value)
+            assert isinstance(balance, MutableBalance)
             token_uid = self._trie._decode_key(node.key)[1:]
             key = BalanceKey(self.nc_id, token_uid)
-            balances[key] = value
+            balances[key] = balance.to_immutable()
         return balances
 
     def add_balance(self, token_uid: bytes, amount: int) -> None:
-        """Change the contract balance for a token. The amount will be added to the previous balance.
+        """Change the contract balance value for a token. The amount will be added to the previous balance value.
 
-        Note that the amount might be negative."""
+        Note that the provided `amount` might be negative, but not the result."""
         self.check_if_locked()
         key = BalanceKey(self.nc_id, token_uid)
         key_bytes = bytes(key)
-        old = self._trie_get(key_bytes, default=0)
-        new = old + amount
-        assert new >= 0, 'balance cannot be negative'
-        self._trie_update(key_bytes, new)
+        balance = self._trie_get(key_bytes, default=MutableBalance.get_default())
+        assert isinstance(balance, MutableBalance)
+        balance.value += amount
+        assert balance.value >= 0, f'balance cannot be negative: {balance.value}'
+        self._trie_update(key_bytes, balance)
+
+    def grant_authorities(self, token_uid: bytes, *, grant_mint: bool, grant_melt: bool) -> None:
+        """Grant authorities to the contract for a token."""
+        assert token_uid != HATHOR_TOKEN_UID
+        self.check_if_locked()
+        key = BalanceKey(self.nc_id, token_uid)
+        key_bytes = bytes(key)
+        balance = self._trie_get(key_bytes, default=MutableBalance.get_default())
+        assert isinstance(balance, MutableBalance)
+        balance.grant_authorities(grant_mint=grant_mint, grant_melt=grant_melt)
+        self._trie_update(key_bytes, balance)
+
+    def revoke_authorities(self, token_uid: bytes, *, revoke_mint: bool, revoke_melt: bool) -> None:
+        """Revoke authorities from the contract for a token."""
+        assert token_uid != HATHOR_TOKEN_UID
+        self.check_if_locked()
+        key = BalanceKey(self.nc_id, token_uid)
+        key_bytes = bytes(key)
+        balance = self._trie_get(key_bytes, default=MutableBalance.get_default())
+        assert isinstance(balance, MutableBalance)
+        balance.revoke_authorities(revoke_mint=revoke_mint, revoke_melt=revoke_melt)
+        self._trie_update(key_bytes, balance)
 
     def commit(self) -> None:
         """Flush all local changes to the storage."""

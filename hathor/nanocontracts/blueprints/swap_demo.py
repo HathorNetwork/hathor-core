@@ -15,7 +15,7 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import NCActionType, TokenUid, public, view
+from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid, is_action_type, public, view
 
 
 class SwapDemo(Blueprint):
@@ -67,7 +67,10 @@ class SwapDemo(Blueprint):
         action_a = ctx.actions[self.token_a]
         action_b = ctx.actions[self.token_b]
 
-        if {action_a.type, action_b.type} != {NCActionType.WITHDRAWAL, NCActionType.DEPOSIT}:
+        if not (
+            (is_action_type(action_a, NCDepositAction) and is_action_type(action_b, NCWithdrawalAction))
+            or (is_action_type(action_a, NCWithdrawalAction) and is_action_type(action_b, NCDepositAction))
+        ):
             raise InvalidActions
 
         if not self.is_ratio_valid(action_a.amount, action_b.amount):

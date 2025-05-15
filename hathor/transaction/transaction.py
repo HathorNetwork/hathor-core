@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
@@ -42,7 +43,8 @@ _FUNDS_FORMAT_STRING = '!BBBBB'
 _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 
-class TokenInfo(NamedTuple):
+@dataclass(slots=True, kw_only=True)
+class TokenInfo:
     amount: int
     can_mint: bool
     can_melt: bool
@@ -356,8 +358,6 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """
         token_dict: dict[TokenUid, TokenInfo] = {}
 
-        default_info: TokenInfo = TokenInfo.get_default()
-
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
@@ -368,13 +368,20 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            (amount, can_mint, can_melt) = token_dict.get(token_uid, default_info)
+            token_info = token_dict.get(token_uid, TokenInfo.get_default())
+            amount = token_info.amount
+            can_mint = token_info.can_mint
+            can_melt = token_info.can_melt
             if spent_output.is_token_authority():
                 can_mint = can_mint or spent_output.can_mint_token()
                 can_melt = can_melt or spent_output.can_melt_token()
             else:
                 amount -= spent_output.value
-            token_dict[token_uid] = TokenInfo(amount, can_mint, can_melt)
+            token_dict[token_uid] = TokenInfo(
+                amount=amount,
+                can_mint=can_mint,
+                can_melt=can_melt,
+            )
 
         return token_dict
 
@@ -394,11 +401,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
             # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
             if tx_output.can_mint_token() and not token_info.can_mint:
-                raise InvalidToken('output has mint authority, but no input has it: {}'.format(
-                    tx_output.to_human_readable()))
+                raise InvalidToken(f'output at index {index} has mint authority, but no input has it')
             if tx_output.can_melt_token() and not token_info.can_melt:
-                raise InvalidToken('output has melt authority, but no input has it: {}'.format(
-                    tx_output.to_human_readable()))
+                raise InvalidToken(f'output at index {index} has melt authority, but no input has it')
 
             if tx_output.is_token_authority():
                 # make sure we only have authorities that we know of
@@ -406,8 +411,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                     raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
             else:
                 # for regular outputs, just subtract from the total amount
-                sum_tokens = token_info.amount + tx_output.value
-                token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
+                token_dict[token_uid].amount = token_info.amount + tx_output.value
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent

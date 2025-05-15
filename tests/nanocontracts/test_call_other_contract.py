@@ -13,8 +13,16 @@ from hathor.nanocontracts.exception import (
 )
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
+from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
+from hathor.nanocontracts.types import (
+    BlueprintId,
+    ContractId,
+    NCAction,
+    NCDepositAction,
+    NCWithdrawalAction,
+    is_action_type,
+)
 from tests import unittest
 from tests.nanocontracts.utils import TestRunner
 
@@ -41,10 +49,12 @@ class MyBlueprint(Blueprint):
         if self.contract is None:
             return
 
-        actions = []
+        actions: list[NCAction] = []
         for action in ctx.actions.values():
+            if not is_action_type(action, NCDepositAction):
+                raise ValueError('invalid action')
             amount = 1 + action.amount // 2
-            actions.append(NCAction(NCActionType.DEPOSIT, action.token_uid, amount))
+            actions.append(NCDepositAction(token_uid=action.token_uid, amount=amount))
         self.syscall.call_public_method(self.contract, 'split_balance', actions)
 
     @public
@@ -52,12 +62,14 @@ class MyBlueprint(Blueprint):
         if self.contract is None:
             return
 
-        actions = []
+        actions: list[NCAction] = []
         for action in ctx.actions.values():
+            if not is_action_type(action, NCWithdrawalAction):
+                raise ValueError('invalid action')
             balance = self.syscall.get_balance(action.token_uid)
             diff = balance - action.amount
             if diff < 0:
-                actions.append(NCAction(NCActionType.WITHDRAWAL, action.token_uid, -diff))
+                actions.append(NCWithdrawalAction(token_uid=action.token_uid, amount=-diff))
 
         if actions:
             self.syscall.call_public_method(self.contract, 'get_tokens_from_another_contract', actions)
@@ -240,64 +252,100 @@ class NCBlueprintTestCase(unittest.TestCase):
         token3_uid = b'c' * 32
 
         actions = [
-            NCAction(NCActionType.DEPOSIT, token1_uid, 11),
-            NCAction(NCActionType.DEPOSIT, token2_uid, 12),
-            NCAction(NCActionType.DEPOSIT, token3_uid, 13),
+            NCDepositAction(token_uid=token1_uid, amount=11),
+            NCDepositAction(token_uid=token2_uid, amount=12),
+            NCDepositAction(token_uid=token3_uid, amount=13),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
         self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 0)
-        self.assertEqual(11, self.runner.get_balance(self.nc1_id, token1_uid))
-        self.assertEqual(12, self.runner.get_balance(self.nc1_id, token2_uid))
-        self.assertEqual(13, self.runner.get_balance(self.nc1_id, token3_uid))
+        self.assertEqual(
+            Balance(value=11, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=13, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token3_uid)
+        )
 
         actions = [
-            NCAction(NCActionType.DEPOSIT, token1_uid, 21),
-            NCAction(NCActionType.DEPOSIT, token2_uid, 22),
-            NCAction(NCActionType.DEPOSIT, token3_uid, 23),
+            NCDepositAction(token_uid=token1_uid, amount=21),
+            NCDepositAction(token_uid=token2_uid, amount=22),
+            NCDepositAction(token_uid=token3_uid, amount=23),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
         self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 0)
-        self.assertEqual(21, self.runner.get_balance(self.nc2_id, token1_uid))
-        self.assertEqual(22, self.runner.get_balance(self.nc2_id, token2_uid))
-        self.assertEqual(23, self.runner.get_balance(self.nc2_id, token3_uid))
+        self.assertEqual(
+            Balance(value=21, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=22, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=23, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token3_uid)
+        )
 
         actions = [
-            NCAction(NCActionType.DEPOSIT, token1_uid, 31),
-            NCAction(NCActionType.DEPOSIT, token2_uid, 32),
-            NCAction(NCActionType.DEPOSIT, token3_uid, 33),
+            NCDepositAction(token_uid=token1_uid, amount=31),
+            NCDepositAction(token_uid=token2_uid, amount=32),
+            NCDepositAction(token_uid=token3_uid, amount=33),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
         self.runner.create_contract(self.nc3_id, self.blueprint_id, ctx, 0)
-        self.assertEqual(31, self.runner.get_balance(self.nc3_id, token1_uid))
-        self.assertEqual(32, self.runner.get_balance(self.nc3_id, token2_uid))
-        self.assertEqual(33, self.runner.get_balance(self.nc3_id, token3_uid))
+        self.assertEqual(
+            Balance(value=31, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=32, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=33, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token3_uid)
+        )
 
         ctx = Context([], self.tx, b'', timestamp=0)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc3_id)
 
         actions = [
-            NCAction(NCActionType.WITHDRAWAL, token1_uid, 7),
-            NCAction(NCActionType.WITHDRAWAL, token2_uid, 18),
-            NCAction(NCActionType.WITHDRAWAL, token3_uid, 65),
+            NCWithdrawalAction(token_uid=token1_uid, amount=7),
+            NCWithdrawalAction(token_uid=token2_uid, amount=18),
+            NCWithdrawalAction(token_uid=token3_uid, amount=65),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
         self.runner.call_public_method(self.nc1_id, 'get_tokens_from_another_contract', ctx)
 
-        self.assertEqual(4, self.runner.get_balance(self.nc1_id, token1_uid))
-        self.assertEqual(0, self.runner.get_balance(self.nc1_id, token2_uid))
-        self.assertEqual(0, self.runner.get_balance(self.nc1_id, token3_uid))
+        self.assertEqual(
+            Balance(value=4, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token3_uid)
+        )
 
-        self.assertEqual(21, self.runner.get_balance(self.nc2_id, token1_uid))
-        self.assertEqual(16, self.runner.get_balance(self.nc2_id, token2_uid))
-        self.assertEqual(0, self.runner.get_balance(self.nc2_id, token3_uid))
+        self.assertEqual(
+            Balance(value=21, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=16, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token3_uid)
+        )
 
-        self.assertEqual(31, self.runner.get_balance(self.nc3_id, token1_uid))
-        self.assertEqual(32, self.runner.get_balance(self.nc3_id, token2_uid))
-        self.assertEqual(4, self.runner.get_balance(self.nc3_id, token3_uid))
+        self.assertEqual(
+            Balance(value=31, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=32, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=4, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token3_uid)
+        )
 
         actions = [
-            NCAction(NCActionType.WITHDRAWAL, token1_uid, 100),
+            NCWithdrawalAction(token_uid=token1_uid, amount=100),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
         with self.assertRaises(NCInsufficientFunds):
@@ -323,24 +371,42 @@ class NCBlueprintTestCase(unittest.TestCase):
         token3_uid = b'c' * 32
 
         actions = [
-            NCAction(NCActionType.DEPOSIT, token1_uid, 100),
-            NCAction(NCActionType.DEPOSIT, token2_uid, 50),
-            NCAction(NCActionType.DEPOSIT, token3_uid, 25),
+            NCDepositAction(token_uid=token1_uid, amount=100),
+            NCDepositAction(token_uid=token2_uid, amount=50),
+            NCDepositAction(token_uid=token3_uid, amount=25),
         ]
         ctx = Context(actions, self.tx, b'', timestamp=0)
         self.runner.call_public_method(self.nc1_id, 'split_balance', ctx)
 
-        self.assertEqual(49, self.runner.get_balance(self.nc1_id, token1_uid))
-        self.assertEqual(24, self.runner.get_balance(self.nc1_id, token2_uid))
-        self.assertEqual(12, self.runner.get_balance(self.nc1_id, token3_uid))
+        self.assertEqual(
+            Balance(value=49, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=24, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_balance(self.nc1_id, token3_uid)
+        )
 
-        self.assertEqual(25, self.runner.get_balance(self.nc2_id, token1_uid))
-        self.assertEqual(12, self.runner.get_balance(self.nc2_id, token2_uid))
-        self.assertEqual(6, self.runner.get_balance(self.nc2_id, token3_uid))
+        self.assertEqual(
+            Balance(value=25, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=6, can_mint=False, can_melt=False), self.runner.get_balance(self.nc2_id, token3_uid)
+        )
 
-        self.assertEqual(26, self.runner.get_balance(self.nc3_id, token1_uid))
-        self.assertEqual(14, self.runner.get_balance(self.nc3_id, token2_uid))
-        self.assertEqual(7, self.runner.get_balance(self.nc3_id, token3_uid))
+        self.assertEqual(
+            Balance(value=26, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(value=14, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(value=7, can_mint=False, can_melt=False), self.runner.get_balance(self.nc3_id, token3_uid)
+        )
 
     def test_loop(self):
         ctx = Context([], self.tx, b'', timestamp=0)

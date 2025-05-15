@@ -14,7 +14,15 @@ from hathor.nanocontracts.exception import (
     NCSerializationError,
 )
 from hathor.nanocontracts.method_parser import NCMethodParser
-from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
+from hathor.nanocontracts.storage.contract_storage import Balance
+from hathor.nanocontracts.types import (
+    NCAction,
+    NCActionType,
+    NCDepositAction,
+    NCWithdrawalAction,
+    TokenUid,
+    is_action_type,
+)
 from hathor.nanocontracts.utils import sign_pycoin
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
@@ -59,7 +67,7 @@ class MyBlueprint(Blueprint):
     def deposit(self, ctx: Context) -> None:
         self.counter += 1
         action = self._get_action(ctx)
-        if action.type != NCActionType.DEPOSIT:
+        if not is_action_type(action, NCDepositAction):
             raise NCFail('deposits only')
         self.total += action.amount
 
@@ -67,7 +75,7 @@ class MyBlueprint(Blueprint):
     def withdraw(self, ctx: Context) -> None:
         self.counter += 1
         action = self._get_action(ctx)
-        if action.type != NCActionType.WITHDRAWAL:
+        if not is_action_type(action, NCWithdrawalAction):
             raise NCFail('withdrawal only')
         self.total -= action.amount
 
@@ -351,7 +359,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         block_deposit = self.manager.tx_storage.get_best_block()
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(deposit_amount, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=deposit_amount, can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid)
+        )
 
         # Make a withdrawal of 1 HTR.
 
@@ -382,7 +393,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(meta2.voided_by)
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(deposit_amount - 1, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=deposit_amount - 1, can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid)
+        )
 
         # Make a withdrawal of the remainder.
 
@@ -407,7 +421,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(meta3.voided_by)
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(1, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(Balance(value=1, can_mint=False, can_melt=False), nc_storage.get_balance(self.token_uid))
 
         # Try to withdraw more than available, so it fails.
 
@@ -438,17 +452,20 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertEqual(meta4.voided_by, {tx4.hash, settings.NC_EXECUTION_FAIL_ID})
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(1, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(Balance(value=1, can_mint=False, can_melt=False), nc_storage.get_balance(self.token_uid))
 
         self.assertNoBlocksVoided()
 
         # Check balance at different blocks
 
         nc_storage = self.manager.get_nc_storage(block_initialize, nc_id)
-        self.assertEqual(0, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(Balance(value=0, can_mint=False, can_melt=False), nc_storage.get_balance(self.token_uid))
 
         nc_storage = self.manager.get_nc_storage(block_deposit, nc_id)
-        self.assertEqual(deposit_amount, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=deposit_amount, can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid)
+        )
 
     def test_nc_consensus_failure_voided_by_propagation(self):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
@@ -701,7 +718,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(tx11.get_metadata().voided_by)
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(deposit_amount_1 - withdrawal_amount_1, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=deposit_amount_1 - withdrawal_amount_1, can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid)
+        )
 
         # Cause a reorg that will execute tx2 and tx11 (but not tx1).
         blk20 = self._add_new_block(parents=[
@@ -729,7 +749,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertEqual(tx11.get_metadata().voided_by, {tx11.hash, settings.NC_EXECUTION_FAIL_ID})
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(deposit_amount_2, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=deposit_amount_2, can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid)
+        )
 
     def test_nc_consensus_reorg_fail_before_reorg(self):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
@@ -811,7 +834,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertEqual(tx11.get_metadata().voided_by, {tx11.hash, settings.NC_EXECUTION_FAIL_ID})
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(deposit_amount_1, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=deposit_amount_1, can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid)
+        )
 
         # Cause a reorg that will execute tx2 and tx11 (but not tx1).
         blk20 = self._add_new_block(parents=[
@@ -834,7 +860,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(tx11.get_metadata().voided_by)
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(deposit_amount_2 - withdrawal_amount_1, nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=deposit_amount_2 - withdrawal_amount_1, can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid)
+        )
 
     def _prepare_nc_consensus_conflict(self, *, conflict_with_nano: bool) -> tuple[Transaction, ...]:
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])

@@ -146,6 +146,21 @@ class VertexExporter:
             script = self.get_next_p2pkh_script()
             outputs.append(TxOutput(value=amount, token_data=index, script=script))
 
+        if token_creation:
+            # Create mint and melt authorities to be used by future transactions
+            outputs.extend([
+                TxOutput(
+                    value=TxOutput.TOKEN_MINT_MASK,
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
+                    script=self.get_next_p2pkh_script(),
+                ),
+                TxOutput(
+                    value=TxOutput.TOKEN_MELT_MASK,
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
+                    script=self.get_next_p2pkh_script(),
+                ),
+            ])
+
         return tokens, outputs
 
     def get_next_p2pkh_script(self) -> bytes:
@@ -176,7 +191,7 @@ class VertexExporter:
                 self._vertex_resolver(vertex)
                 vertex.update_hash()
 
-    def sign_all_inputs(self, node: DAGNode, vertex: Transaction) -> None:
+    def sign_all_inputs(self, vertex: Transaction, *, node: DAGNode | None = None) -> None:
         """Sign all inputs of a vertex."""
         data_to_sign = vertex.get_sighash_all()
         for txin in vertex.inputs:
@@ -212,7 +227,7 @@ class VertexExporter:
         vertex.token_symbol = node.name
         vertex.timestamp = self.get_min_timestamp(node)
         self.add_nano_header_if_needed(node, vertex)
-        self.sign_all_inputs(node, vertex)
+        self.sign_all_inputs(vertex, node=node)
         if 'weight' in node.attrs:
             vertex.weight = float(node.attrs['weight'])
         else:
@@ -395,7 +410,7 @@ class VertexExporter:
 
         ocb.code = Code.from_python_code(code_str, self._settings)
         ocb.timestamp = self.get_min_timestamp(node)
-        self.sign_all_inputs(node, ocb)
+        self.sign_all_inputs(ocb, node=node)
 
         private_key_literal = node.get_required_literal('ocb_private_key')
         private_key_bytes = bytes.fromhex(private_key_literal)
@@ -423,7 +438,7 @@ class VertexExporter:
         tx = cls(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
         tx.timestamp = self.get_min_timestamp(node)
         self.add_nano_header_if_needed(node, tx)
-        self.sign_all_inputs(node, tx)
+        self.sign_all_inputs(tx, node=node)
         if 'weight' in node.attrs:
             tx.weight = float(node.attrs['weight'])
         else:

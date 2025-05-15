@@ -1,7 +1,7 @@
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
-from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
+from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Block, Transaction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -281,14 +281,14 @@ class DAGBuilderTestCase(unittest.TestCase):
 
         ctx2 = tx2.get_nano_header().get_context()
         self.assertEqual(ctx2.actions, {
-            tka_id: NCAction(NCActionType.DEPOSIT, tka_id, 5),
-            htr_id: NCAction(NCActionType.DEPOSIT, htr_id, 10),
+            tka_id: NCDepositAction(token_uid=tka_id, amount=5),
+            htr_id: NCDepositAction(token_uid=htr_id, amount=10),
         })
 
         ctx3 = tx3.get_nano_header().get_context()
         self.assertEqual(ctx3.actions, {
-            htr_id: NCAction(NCActionType.DEPOSIT, htr_id, 3),
-            tka_id: NCAction(NCActionType.WITHDRAWAL, tka_id, 2),
+            htr_id: NCDepositAction(token_uid=htr_id, amount=3),
+            tka_id: NCWithdrawalAction(token_uid=tka_id, amount=2),
         })
 
     def test_multiline_literals(self) -> None:

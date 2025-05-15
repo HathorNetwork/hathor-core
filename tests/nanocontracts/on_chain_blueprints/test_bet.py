@@ -6,7 +6,7 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key_bytes
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import Address, ContractId, NCAction, NCActionType, SignedData
+from hathor.nanocontracts.types import Address, ContractId, NCDepositAction, NCWithdrawalAction, SignedData
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb, sign_pycoin
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
@@ -59,7 +59,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
     def _make_a_bet(self, amount: int, score: str, *, timestamp: Optional[int] = None) -> BetInfo:
         (address_bytes, key) = self._get_any_address()
         tx = self._get_any_tx()
-        action = NCAction(NCActionType.DEPOSIT, self.token_uid, amount)
+        action = NCDepositAction(token_uid=self.token_uid, amount=amount)
         if timestamp is None:
             timestamp = self.get_current_timestamp()
         context = Context([action], tx, address_bytes, timestamp=timestamp)
@@ -82,7 +82,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
 
     def _withdraw(self, address: Address, amount: int) -> None:
         tx = self._get_any_tx()
-        action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
+        action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
         context = Context([action], tx, address, timestamp=self.get_current_timestamp())
         self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
@@ -215,7 +215,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
 
         # Out of funds! Any withdrawal must fail from now on...
         amount = 1
-        action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
+        action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
         context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
         with self.assertNCFail('InsufficientBalance', 'withdrawal amount is greater than available (max: 0)'):
             runner.call_public_method(self.nc_id, 'withdraw', context)
@@ -225,7 +225,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
 
         (address_bytes, _) = self._get_any_address()
         tx = self._get_any_tx()
-        action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, 1)
+        action = NCWithdrawalAction(token_uid=self.token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
         with self.assertNCFail('WithdrawalNotAllowed', 'must be deposit'):
@@ -259,7 +259,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
     def test_withdraw_with_deposits(self):
         (address_bytes, _) = self._get_any_address()
         tx = self._get_any_tx()
-        action = NCAction(NCActionType.DEPOSIT, self.token_uid, 1)
+        action = NCDepositAction(token_uid=self.token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         with self.assertNCFail('DepositNotAllowed', 'action must be withdrawal'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)
@@ -270,7 +270,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         tx = self._get_any_tx()
         token_uid = b'xxx'
         self.assertNotEqual(token_uid, self.token_uid)
-        action = NCAction(NCActionType.DEPOSIT, token_uid, 1)
+        action = NCDepositAction(token_uid=token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
         with self.assertNCFail('InvalidToken', 'token different from 00'):
@@ -282,7 +282,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         tx = self._get_any_tx()
         token_uid = b'xxx'
         self.assertNotEqual(token_uid, self.token_uid)
-        action = NCAction(NCActionType.WITHDRAWAL, token_uid, 1)
+        action = NCWithdrawalAction(token_uid=token_uid, amount=1)
         context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
         with self.assertNCFail('InvalidToken', 'token different from 00'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)

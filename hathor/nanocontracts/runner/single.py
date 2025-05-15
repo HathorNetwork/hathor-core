@@ -24,6 +24,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCError, NCFail, NCInvalidContext, NCMethodNotFound, NCPrivateMethodError
 from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
 from hathor.nanocontracts.storage import NCChangesTracker
+from hathor.nanocontracts.types import BaseTokenAction
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 
 if TYPE_CHECKING:
@@ -60,7 +61,7 @@ class _SingleCallRunner:
         for token_uid, action in ctx.actions.items():
             if token_uid != action.token_uid:
                 raise NCInvalidContext('token_uid mismatch')
-            if action.amount < 0:
+            if isinstance(action, BaseTokenAction) and action.amount < 0:
                 raise NCInvalidContext('amount must be positive')
 
     def _execute_actions(self, ctx: Context) -> None:

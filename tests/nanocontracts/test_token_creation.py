@@ -3,7 +3,8 @@ from hathor.conf import HathorSettings
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid, public
+from hathor.nanocontracts.storage.contract_storage import Balance
+from hathor.nanocontracts.types import NCWithdrawalAction, TokenUid, public
 from hathor.transaction import Transaction
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
@@ -89,7 +90,7 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(tx1.hash)
         assert tx1.is_nano_contract()
-        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == 1
+        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(value=1, can_mint=False, can_melt=False)
 
         vertices.propagate_with(self.manager, up_to='b32')
         TKA, ABC, DEF, GHI, JKL, tx2 = vertices.get_typed_vertices(
@@ -113,10 +114,12 @@ class NCNanoContractTestCase(unittest.TestCase):
         assert JKL.get_metadata().voided_by is None
 
         nc_storage = self.manager.get_best_block_nc_storage(tx1.hash)
-        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == 0
+        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(value=0, can_mint=False, can_melt=False)
 
         ghi_nc_storage = self.manager.get_best_block_nc_storage(GHI.hash)
-        assert ghi_nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == 7
+        assert ghi_nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == (
+            Balance(value=7, can_mint=False, can_melt=False)
+        )
 
         jkl_token_info = JKL._get_token_info_from_inputs()
         JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
@@ -124,7 +127,7 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         jkl_context = JKL.get_nano_header().get_context()
         htr_token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
-        assert jkl_context.actions[htr_token_uid] == NCAction(NCActionType.WITHDRAWAL, htr_token_uid, 3)
+        assert jkl_context.actions[htr_token_uid] == NCWithdrawalAction(token_uid=htr_token_uid, amount=3)
 
         assert not tx2.is_nano_contract()
         assert tx2.get_metadata().voided_by is None
@@ -133,7 +136,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         TKB, tx3 = vertices.get_typed_vertices(['TKB', 'tx3'], Transaction)
 
         nc_storage = self.manager.get_best_block_nc_storage(tx1.hash)
-        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == 0
+        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(value=0, can_mint=False, can_melt=False)
 
         assert TKB.is_nano_contract()
         assert TKB.get_metadata().voided_by == {TKB.hash, settings.NC_EXECUTION_FAIL_ID}

@@ -18,6 +18,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Type
 
+from typing_extensions import assert_never
+
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import (
@@ -34,7 +36,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.context import Context
     from hathor.nanocontracts.runner import Runner
-    from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType
+    from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid
     from hathor.transaction import Transaction
     from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.block import Block
@@ -49,6 +51,51 @@ class NanoHeaderAction:
     type: NCActionType
     token_index: int
     amount: int
+
+    def to_nc_action(self, tx: Transaction) -> NCAction:
+        """Create a NCAction from this NanoHeaderAction"""
+        from hathor.nanocontracts.types import (
+            NCActionType,
+            NCDepositAction,
+            NCGrantAuthorityAction,
+            NCInvokeAuthorityAction,
+            NCWithdrawalAction,
+            TokenUid,
+        )
+        from hathor.transaction.base_transaction import TxOutput
+
+        try:
+            token_uid = TokenUid(tx.get_token_uid(self.token_index))
+        except IndexError:
+            from hathor.nanocontracts.exception import NCInvalidAction
+            raise NCInvalidAction(f'{self.type.name} token index {self.token_index} not found')
+
+        match self.type:
+            case NCActionType.DEPOSIT:
+                return NCDepositAction(token_uid=token_uid, amount=self.amount)
+            case NCActionType.WITHDRAWAL:
+                return NCWithdrawalAction(token_uid=token_uid, amount=self.amount)
+            case NCActionType.GRANT_AUTHORITY:
+                mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
+                melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
+                self._validate_authorities(token_uid)
+                return NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+            case NCActionType.INVOKE_AUTHORITY:
+                mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
+                melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
+                self._validate_authorities(token_uid)
+                return NCInvokeAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+            case _:
+                assert_never(self.type)
+
+    def _validate_authorities(self, token_uid: TokenUid) -> None:
+        """Check that the authorities in the `amount` are valid."""
+        from hathor.transaction.base_transaction import TxOutput
+        if self.amount > TxOutput.ALL_AUTHORITIES:
+            from hathor.nanocontracts.exception import NCInvalidAction
+            raise NCInvalidAction(
+                f'action {self.type.name} token {token_uid.hex()} invalid authorities: 0b{self.amount:b}'
+            )
 
 
 @dataclass(slots=True, kw_only=True)
@@ -287,16 +334,7 @@ class NanoHeader(VertexBaseHeader):
 
     def get_actions(self) -> list[NCAction]:
         """Get a list of NCActions from the header actions."""
-        from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
-        ret = []
-        for action in self.nc_actions:
-            token_uid = self.tx.get_token_uid(action.token_index)
-            ret.append(NCAction(
-                type=NCActionType[action.type.name],
-                token_uid=TokenUid(token_uid),
-                amount=action.amount,
-            ))
-        return ret
+        return [header_action.to_nc_action(self.tx) for header_action in self.nc_actions]
 
     def get_context(self) -> Context:
         """Return a context to be used in a method call."""

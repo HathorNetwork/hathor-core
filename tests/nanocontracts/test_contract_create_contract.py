@@ -1,7 +1,16 @@
 from typing import Optional
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid, VertexId
+from hathor.nanocontracts.storage.contract_storage import Balance
+from hathor.nanocontracts.types import (
+    BlueprintId,
+    ContractId,
+    NCAction,
+    NCDepositAction,
+    TokenUid,
+    VertexId,
+    is_action_type,
+)
 from hathor.nanocontracts.utils import derive_child_contract_id
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -19,7 +28,8 @@ class MyBlueprint1(Blueprint):
             token_uid = TokenUid(HTR_TOKEN_UID)
             action = ctx.actions[token_uid]
             salt = b'x'
-            new_actions = [NCAction(NCActionType.DEPOSIT, token_uid, action.amount - initial)]
+            assert is_action_type(action, NCDepositAction)
+            new_actions: list[NCAction] = [NCDepositAction(token_uid=token_uid, amount=action.amount - initial)]
             self.contract, _ = self.syscall.create_contract(blueprint_id, salt, new_actions, blueprint_id, initial - 1)
         else:
             self.contract = None
@@ -59,7 +69,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
 
         token_uid = HTR_TOKEN_UID
         deposit = 100
-        actions = [NCAction(NCActionType.DEPOSIT, token_uid, deposit)]
+        actions: list[NCAction] = [NCDepositAction(token_uid=token_uid, amount=deposit)]
         address = self.gen_random_address()
         ctx = Context(actions, self.get_genesis_tx(), address, timestamp=0)
         self.runner.create_contract(nc1_id, self.blueprint1_id, ctx, self.blueprint1_id, counter)
@@ -76,10 +86,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
             if new_nc_id is not None:
                 expected_nc_id = derive_child_contract_id(nc_id, b'x', self.blueprint1_id)
                 assert new_nc_id == expected_nc_id
-                assert balance == expected
-                remainder -= balance
+                assert balance == Balance(value=expected, can_mint=False, can_melt=False)
+                remainder -= balance.value
             else:
-                assert balance == remainder
+                assert balance.value == remainder
                 break
             nc_id = new_nc_id
             expected -= 1

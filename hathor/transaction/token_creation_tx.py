@@ -239,6 +239,10 @@ class TokenCreationTransaction(Transaction):
         token_dict = super()._get_token_info_from_inputs()
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
-        token_dict[self.hash] = TokenInfo(0, True, True)
+        token_dict[self.hash] = TokenInfo(
+            amount=0,
+            can_mint=True,
+            can_melt=True,
+        )
 
         return token_dict

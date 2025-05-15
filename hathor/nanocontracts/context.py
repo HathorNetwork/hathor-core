@@ -63,6 +63,10 @@ class Context:
                 actions_map[action.token_uid] = action
             self.__actions = MappingProxyType(actions_map)
 
+        from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
+        if len(self.__actions) > MAX_ACTIONS_LEN:
+            raise NCInvalidContext(f'more actions than the max allowed: {len(self.__actions)} > {MAX_ACTIONS_LEN}')
+
         # Vertex calling the method.
         if isinstance(vertex, VertexData):
             self.__vertex = vertex
@@ -103,11 +107,7 @@ class Context:
     def to_json(self) -> dict[str, Any]:
         """Return a JSON representation of the context."""
         return {
-            'actions': [{
-                'type': str(action.type),
-                'token_uid': action.token_uid.hex(),
-                'amount': action.amount,
-            } for token_uid, action in self.actions.items()],
+            'actions': [action.to_json() for action in self.actions.values()],
             'address': get_address_b58_from_bytes(self.address),
             'timestamp': self.timestamp,
         }

@@ -50,6 +50,11 @@ class NCMethodNotFound(NCTxValidationError):
     pass
 
 
+class NCInvalidAction(NCTxValidationError):
+    """Raised when an action is invalid."""
+    pass
+
+
 class BlueprintDoesNotExist(NCTxValidationError):
     pass
 
@@ -111,6 +116,16 @@ class NCAlreadyInitializedContractError(NCFail):
 
 class NCUninitializedContractError(NCFail):
     """Raised when a contract calls a method from an uninitialized contract."""
+
+
+class NCInvalidActionExecution(NCFail):
+    """Raised when an action execution is invalid."""
+    pass
+
+
+class NCInvalidSyscall(NCFail):
+    """Raised when a syscall is invalid."""
+    pass
 
 
 class UnknownFieldType(NCError):

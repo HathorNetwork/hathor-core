@@ -63,8 +63,26 @@ ALLOWED_IMPORTS = {
     'hathor.nanocontracts.blueprint': {'Blueprint'},
     'hathor.nanocontracts.context': {'Context'},
     'hathor.nanocontracts.exception': {'NCFail'},
-    'hathor.nanocontracts.types': {'NCAction', 'NCActionType', 'SignedData', 'public', 'view', 'Address', 'Amount',
-                                   'Timestamp', 'TokenUid', 'TxOutputScript', 'BlueprintId', 'ContractId', 'VertexId'},
+    'hathor.nanocontracts.types': {
+        'NCAction',
+        'NCActionType',
+        'SignedData',
+        'public',
+        'view',
+        'Address',
+        'Amount',
+        'Timestamp',
+        'TokenUid',
+        'TxOutputScript',
+        'BlueprintId',
+        'ContractId',
+        'VertexId',
+        'NCDepositAction',
+        'NCWithdrawalAction',
+        'NCGrantAuthorityAction',
+        'NCInvokeAuthorityAction',
+        'is_action_type',
+    },
 }
 
 # these names aren't allowed in the code, to be checked in the AST only

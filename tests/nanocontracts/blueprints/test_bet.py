@@ -15,7 +15,15 @@ from hathor.nanocontracts.blueprints.bet import (
     WithdrawalNotAllowed,
 )
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import Address, Amount, BlueprintId, ContractId, NCAction, NCActionType, SignedData
+from hathor.nanocontracts.types import (
+    Address,
+    Amount,
+    BlueprintId,
+    ContractId,
+    NCDepositAction,
+    NCWithdrawalAction,
+    SignedData,
+)
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
@@ -60,7 +68,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
     def _make_a_bet(self, amount: int, score: str, *, timestamp: Optional[int] = None) -> BetInfo:
         (address_bytes, key) = self._get_any_address()
         tx = self._get_any_tx()
-        action = NCAction(NCActionType.DEPOSIT, self.token_uid, amount)
+        action = NCDepositAction(token_uid=self.token_uid, amount=amount)
         if timestamp is None:
             timestamp = self.get_current_timestamp()
         context = Context([action], tx, address_bytes, timestamp=timestamp)
@@ -83,7 +91,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
 
     def _withdraw(self, address: Address, amount: int) -> None:
         tx = self._get_any_tx()
-        action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
+        action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
         context = Context([action], tx, address, timestamp=self.get_current_timestamp())
         self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
@@ -143,7 +151,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
 
         # Out of funds! Any withdrawal must fail from now on...
         amount = 1
-        action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
+        action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
         context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
         with self.assertRaises(InsufficientBalance):
             runner.call_public_method(self.nc_id, 'withdraw', context)
@@ -153,7 +161,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
 
         (address_bytes, _) = self._get_any_address()
         tx = self._get_any_tx()
-        action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, 1)
+        action = NCWithdrawalAction(token_uid=self.token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
         with self.assertRaises(WithdrawalNotAllowed):
@@ -187,7 +195,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
     def test_withdraw_with_deposits(self):
         (address_bytes, _) = self._get_any_address()
         tx = self._get_any_tx()
-        action = NCAction(NCActionType.DEPOSIT, self.token_uid, 1)
+        action = NCDepositAction(token_uid=self.token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         with self.assertRaises(DepositNotAllowed):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)
@@ -198,7 +206,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         tx = self._get_any_tx()
         token_uid = b'xxx'
         self.assertNotEqual(token_uid, self.token_uid)
-        action = NCAction(NCActionType.DEPOSIT, token_uid, 1)
+        action = NCDepositAction(token_uid=token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
         with self.assertRaises(InvalidToken):
@@ -210,7 +218,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         tx = self._get_any_tx()
         token_uid = b'xxx'
         self.assertNotEqual(token_uid, self.token_uid)
-        action = NCAction(NCActionType.WITHDRAWAL, token_uid, 1)
+        action = NCWithdrawalAction(token_uid=token_uid, amount=1)
         context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
         with self.assertRaises(InvalidToken):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)

@@ -12,7 +12,7 @@ from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.resources import NanoContractStateResource
-from hathor.nanocontracts.types import Address, NCActionType, Timestamp, TokenUid
+from hathor.nanocontracts.types import Address, NCActionType, NCDepositAction, Timestamp, TokenUid, is_action_type
 from hathor.nanocontracts.utils import sign_openssl
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction, TxInput
@@ -50,6 +50,8 @@ class MyBlueprint(Blueprint):
     @public
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         action = ctx.actions[self.token_uid]
+        if not is_action_type(action, NCDepositAction):
+            raise ValueError('invalid action')
         self.total += action.amount
         partial = self.address_details.get(address, {})
         if score not in partial:
@@ -237,7 +239,10 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(fields1['total'], {'value': 0})
         self.assertEqual(fields1['date_last_bet'], {'value': date_last_bet})
         balances1 = data1['balances']
-        self.assertEqual(balances1, {settings.HATHOR_TOKEN_UID.hex(): {'value': '0'}})
+        self.assertEqual(
+            balances1,
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+        )
         calls1 = data1['calls']
         self.assertEqual(calls1, {
             'has_result()': {'value': False},
@@ -315,7 +320,10 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(fields2['bytes_field'], {'value': bet_result.encode().hex()})
         self.assertEqual(fields2[dict_with_bytes_param], {'value': '1x0'})
         balances2 = data2['balances']
-        self.assertEqual(balances2, {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000'}})
+        self.assertEqual(
+            balances2,
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000', 'can_mint': False, 'can_melt': False}}
+        )
 
         # Test __all__ balance
         response3 = yield self.web.get(
@@ -329,7 +337,10 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data3['blueprint_id'], self.bet_id.hex())
         self.assertEqual(data3['blueprint_name'], 'MyBlueprint')
         balances3 = data3['balances']
-        self.assertEqual(balances3, {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000'}})
+        self.assertEqual(
+            balances3,
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000', 'can_mint': False, 'can_melt': False}}
+        )
 
         # Test getting the state in a previous block
         # With block hash
@@ -353,7 +364,10 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(fields4['date_last_bet'], {'value': date_last_bet})
         self.assertEqual(fields4[address_param].get('value'), None)
         balances4 = data4['balances']
-        self.assertEqual(balances4, {settings.HATHOR_TOKEN_UID.hex(): {'value': '0'}})
+        self.assertEqual(
+            balances4,
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+        )
 
         # With block height
         response5 = yield self.web.get(
@@ -376,7 +390,10 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(fields5['date_last_bet'], {'value': date_last_bet})
         self.assertEqual(fields5[address_param].get('value'), None)
         balances5 = data5['balances']
-        self.assertEqual(balances5, {settings.HATHOR_TOKEN_UID.hex(): {'value': '0'}})
+        self.assertEqual(
+            balances5,
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+        )
 
         # Validate errors using block_hash / block_height
 

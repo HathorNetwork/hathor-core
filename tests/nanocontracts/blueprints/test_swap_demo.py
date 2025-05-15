@@ -1,6 +1,7 @@
 from hathor.nanocontracts.blueprints.swap_demo import InvalidActions, InvalidRatio, InvalidTokens, SwapDemo
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import NCAction, NCActionType, TokenUid
+from hathor.nanocontracts.storage.contract_storage import Balance
+from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -28,8 +29,8 @@ class SwapDemoTestCase(BlueprintTestCase):
         # Arrange:
         token_a, multiplier_a, amount_a = init_token_a
         token_b, multiplier_b, amount_b = init_token_b
-        deposit_a = NCAction(NCActionType.DEPOSIT, token_a, amount_a)
-        deposit_b = NCAction(NCActionType.DEPOSIT, token_b, amount_b)
+        deposit_a = NCDepositAction(token_uid=token_a, amount=amount_a)
+        deposit_b = NCDepositAction(token_uid=token_b, amount=amount_b)
         context = Context(
             actions=[deposit_a, deposit_b],
             vertex=self.tx,
@@ -57,8 +58,10 @@ class SwapDemoTestCase(BlueprintTestCase):
         # Arrange:
         value_a, token_a = amount_a
         value_b, token_b = amount_b
-        swap_a = NCAction(self.get_action_type(value_a), token_a, abs(value_a))
-        swap_b = NCAction(self.get_action_type(value_b), token_b, abs(value_b))
+        action_a_type = self.get_action_type(value_a)
+        action_b_type = self.get_action_type(value_b)
+        swap_a = action_a_type(token_uid=token_a, amount=abs(value_a))
+        swap_b = action_b_type(token_uid=token_b, amount=abs(value_b))
         context = Context(
             actions=[swap_a, swap_b],
             vertex=self.tx,
@@ -75,16 +78,24 @@ class SwapDemoTestCase(BlueprintTestCase):
         self._initialize((self.token_a, 1, 100_00), (self.token_b, 1, 100_00))
 
         # Assert:
-        self.assertEqual(100_00, self.nc_storage.get_balance(self.token_a))
-        self.assertEqual(100_00, self.nc_storage.get_balance(self.token_b))
+        self.assertEqual(
+            Balance(value=100_00, can_mint=False, can_melt=False), self.nc_storage.get_balance(self.token_a)
+        )
+        self.assertEqual(
+            Balance(value=100_00, can_mint=False, can_melt=False), self.nc_storage.get_balance(self.token_b)
+        )
         self.assertEqual(0, self.nc_storage.get('swaps_counter'))
 
         # Make a valid swap.
         # Arrange and act within:
         self._swap((20_00, self.token_a), (-20_00, self.token_b))
         # Assert:
-        self.assertEqual(120_00, self.nc_storage.get_balance(self.token_a))
-        self.assertEqual(80_00, self.nc_storage.get_balance(self.token_b))
+        self.assertEqual(
+            Balance(value=120_00, can_mint=False, can_melt=False), self.nc_storage.get_balance(self.token_a)
+        )
+        self.assertEqual(
+            Balance(value=80_00, can_mint=False, can_melt=False), self.nc_storage.get_balance(self.token_b)
+        )
         self.assertEqual(1, self.nc_storage.get('swaps_counter'))
 
         # Make multiple invalid swaps raising all possible exceptions.
@@ -95,8 +106,8 @@ class SwapDemoTestCase(BlueprintTestCase):
         with self.assertRaises(InvalidRatio):
             self._swap((20_00, self.token_a), (-40_00, self.token_b))
 
-    def get_action_type(self, amount: int) -> NCActionType:
+    def get_action_type(self, amount: int) -> type[NCDepositAction] | type[NCWithdrawalAction]:
         if amount >= 0:
-            return NCActionType.DEPOSIT
+            return NCDepositAction
         else:
-            return NCActionType.WITHDRAWAL
+            return NCWithdrawalAction
