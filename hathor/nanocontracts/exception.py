@@ -16,6 +16,11 @@ from hathor.exception import HathorError
 from hathor.transaction.exceptions import TxValidationError
 
 
+class BlueprintSyntaxError(SyntaxError):
+    """Raised when a blueprint contains invalid syntax."""
+    pass
+
+
 class NCError(HathorError):
     """Base exception for nano contract's exceptions."""
     pass

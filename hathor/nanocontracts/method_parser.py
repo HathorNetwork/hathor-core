@@ -39,8 +39,8 @@ class NCMethodParser:
         assert argspec.args[0] == 'self'
         if is_nc_public_method(self.method):
             begin_idx = 2
-            assert argspec.args[1] == 'ctx'
-            if argspec.annotations['ctx'] is not Context:
+            second_arg = argspec.args[1]
+            if argspec.annotations[second_arg] is not Context:
                 raise TypeError('ctx must be of type Context')
         else:
             begin_idx = 1

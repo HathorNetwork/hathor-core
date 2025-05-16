@@ -1,6 +1,6 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail, NCInsufficientFunds, NCPrivateMethodError, UnknownFieldType
+from hathor.nanocontracts.exception import NCFail, NCInsufficientFunds, NCPrivateMethodError
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
@@ -233,15 +233,6 @@ class NCBlueprintTestCase(unittest.TestCase):
         with self.assertRaises(NCInsufficientFunds):
             self.runner.call_public_method(nc_id, 'nop', ctx)
         self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
-
-    def test_invalid_field(self) -> None:
-        with self.assertRaises(UnknownFieldType):
-            class WrongBlueprint(Blueprint):
-                a: float
-
-                @public
-                def initialize(self, ctx: Context) -> None:
-                    self.a = 1.2
 
     def test_balances(self):
         self._create_my_blueprint_contract()

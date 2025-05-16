@@ -38,10 +38,6 @@ class MyBlueprint:
         pass
 
     @public
-    def method_no_ctx(self) -> None:
-        pass
-
-    @public
     def method_with_optional(self, ctx: Context, x: Optional[str]) -> None:
         pass
 

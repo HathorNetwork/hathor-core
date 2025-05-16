@@ -118,7 +118,7 @@ class MyBlueprint(Blueprint):
         self.syscall.call_public_method(self.contract, 'initialize', [])
 
     @view
-    def invalid_call_public_from_view(self):
+    def invalid_call_public_from_view(self) -> None:
         assert self.contract is not None
         self.syscall.call_public_method(self.contract, 'dec', [])
 

@@ -18,6 +18,15 @@ from dataclasses import dataclass
 from enum import Enum, unique
 from typing import Any, Callable, Generic, NewType, TypeAlias, TypeGuard, TypeVar
 
+from hathor.nanocontracts.blueprint_syntax_validation import (
+    validate_has_ctx_arg,
+    validate_has_not_ctx_arg,
+    validate_has_self_arg,
+    validate_method_types,
+)
+from hathor.nanocontracts.exception import BlueprintSyntaxError
+from hathor.transaction.headers import NC_INITIALIZE_METHOD
+
 # Types to be used by blueprints.
 VertexId = NewType('VertexId', bytes)
 Amount = NewType('Amount', int)
@@ -30,6 +39,15 @@ BlueprintId = NewType('BlueprintId', VertexId)
 VarInt = NewType('VarInt', int)
 
 T = TypeVar('T')
+
+NC_METHOD_TYPE_ATTR: str = '__nc_method_type'
+NC_METHOD_TYPE_PUBLIC = 'public'
+NC_METHOD_TYPE_VIEW = 'view'
+
+
+class NCMethodType(Enum):
+    PUBLIC = 'public'
+    VIEW = 'view'
 
 
 def blueprint_id_from_bytes(data: bytes) -> BlueprintId:
@@ -89,11 +107,6 @@ class RawSignedData(Generic[T]):
             return True
 
 
-NC_METHOD_TYPE_ATTR = '__nc_method_type'
-NC_METHOD_TYPE_PUBLIC = 'public'
-NC_METHOD_TYPE_VIEW = 'view'
-
-
 class SignedData(Generic[T]):
     def __init__(self, data: T, script_input: bytes) -> None:
         self.data = data
@@ -130,17 +143,34 @@ class SignedData(Generic[T]):
         return raw_signed_data.checksig(script)
 
 
+def _set_method_type(fn: Callable, method_type: NCMethodType) -> None:
+    if hasattr(fn, NC_METHOD_TYPE_ATTR):
+        raise BlueprintSyntaxError(f'method must be annotated with at most one method type: `{fn.__name__}()`')
+    setattr(fn, NC_METHOD_TYPE_ATTR, method_type)
+
+
 def public(fn: Callable) -> Callable:
     """Decorator to mark a blueprint method as public."""
-    assert not hasattr(fn, NC_METHOD_TYPE_ATTR)
-    setattr(fn, NC_METHOD_TYPE_ATTR, NC_METHOD_TYPE_PUBLIC)
+    annotation_name = 'public'
+    _set_method_type(fn, NCMethodType.PUBLIC)
+    validate_has_self_arg(fn, annotation_name)
+    validate_method_types(fn)
+    validate_has_ctx_arg(fn, annotation_name)
     return fn
 
 
 def view(fn: Callable) -> Callable:
     """Decorator to mark a blueprint method as view (read-only)."""
-    assert not hasattr(fn, NC_METHOD_TYPE_ATTR)
-    setattr(fn, NC_METHOD_TYPE_ATTR, NC_METHOD_TYPE_VIEW)
+    annotation_name = 'view'
+    forbidden_methods = [NC_INITIALIZE_METHOD]
+    _set_method_type(fn, NCMethodType.VIEW)
+
+    if fn.__name__ in forbidden_methods:
+        raise BlueprintSyntaxError(f'`{fn.__name__}` method cannot be annotated with @{annotation_name}')
+
+    validate_has_self_arg(fn, annotation_name)
+    validate_has_not_ctx_arg(fn, annotation_name)
+    validate_method_types(fn)
     return fn
 
 

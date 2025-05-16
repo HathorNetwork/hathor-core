@@ -14,10 +14,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, Any, final
 
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathor.nanocontracts.exception import BlueprintSyntaxError, UnknownFieldType
 from hathor.nanocontracts.fields import get_field_for_attr
+from hathor.nanocontracts.types import NC_METHOD_TYPE_ATTR, NCMethodType
+from hathor.transaction.headers import NC_INITIALIZE_METHOD
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -26,6 +29,8 @@ FORBIDDEN_NAMES = {
     'syscall',
     'log',
 }
+
+NC_FIELDS_ATTR: str = '__fields'
 
 
 class _BlueprintBase(type):
@@ -40,41 +45,62 @@ class _BlueprintBase(type):
         if not parents:
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
-        # Create the `_fields` attribute with the type for each field.
-        attrs['_fields'] = attrs.get('__annotations__', {})
+        cls._validate_initialize_method(attrs)
+        nc_fields = attrs.get('__annotations__', {})
+
+        # Check for forbidden names.
+        for field_name in nc_fields:
+            if field_name in FORBIDDEN_NAMES:
+                raise BlueprintSyntaxError(f'field name is forbidden: `{field_name}`')
+
+            if field_name.startswith('_'):
+                raise BlueprintSyntaxError(f'field name cannot start with underscore: `{field_name}`')
+
+        # Create the fields attribute with the type for each field.
+        attrs[NC_FIELDS_ATTR] = nc_fields
+
         # Use an empty __slots__ to prevent storing any attributes directly on instances.
         # The declared attributes are stored as fields on the class, so they still work despite the empty slots.
         attrs['__slots__'] = tuple()
+
         # Finally, create class!
         new_class = super().__new__(cls, name, bases, attrs, **kwargs)
 
-        # Check for forbidden names.
-        # Note: This verification must be done AFTER calling super().__new__().
-        for name in attrs.keys():
-            if name in FORBIDDEN_NAMES:
-                raise SyntaxError(f'Attempt to have a forbidden name: {name}')
-
         # Create the Field instance according to each type.
-        for name, _type in attrs['_fields'].items():
-            if name.startswith('_'):
-                raise SyntaxError('cannot start with _')
-            value = getattr(new_class, name, None)
+        for field_name, field_type in attrs[NC_FIELDS_ATTR].items():
+            value = getattr(new_class, field_name, None)
             if value is None:
                 # This is the case when a type is specified but not a value.
                 # Example:
                 #     name: str
                 #     age: int
-                field = get_field_for_attr(name, _type)
-                setattr(new_class, name, field)
+                try:
+                    field = get_field_for_attr(field_name, field_type)
+                except UnknownFieldType:
+                    raise BlueprintSyntaxError(
+                        f'unsupported field type `{field_type.__name__}` on field `{field_name}`'
+                    )
+                setattr(new_class, field_name, field)
             else:
                 # This is the case when a value is specified.
                 # Example:
                 #     name: str = StrField()
                 #
                 # This was not implemented yet and will be extended later.
-                raise NotImplementedError
+                raise BlueprintSyntaxError(f'fields with default values are currently not supported: `{field_name}`')
 
         return new_class
+
+    @staticmethod
+    def _validate_initialize_method(attrs: Any) -> None:
+        if NC_INITIALIZE_METHOD not in attrs:
+            raise BlueprintSyntaxError(f'blueprints require a method called `{NC_INITIALIZE_METHOD}`')
+
+        method = attrs[NC_INITIALIZE_METHOD]
+        method_type = getattr(method, NC_METHOD_TYPE_ATTR, None)
+
+        if method_type is not NCMethodType.PUBLIC:
+            raise BlueprintSyntaxError(f'`{NC_INITIALIZE_METHOD}` method must be annotated with @public')
 
 
 class Blueprint(metaclass=_BlueprintBase):

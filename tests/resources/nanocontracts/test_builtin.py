@@ -12,18 +12,22 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.nanocontracts import Blueprint
+from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.resources.builtin import BlueprintBuiltinResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class MyBlueprint1(Blueprint):
-    pass
+    @public
+    def initialize(self, ctx: Context) -> None:
+        pass
 
 
 class MyBlueprint2(Blueprint):
-    pass
+    @public
+    def initialize(self, ctx: Context) -> None:
+        pass
 
 
 class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):

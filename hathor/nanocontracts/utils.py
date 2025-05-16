@@ -23,14 +23,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from pycoin.key.Key import Key as PycoinKey
 
 from hathor.crypto.util import decode_address, get_address_from_public_key_bytes, get_public_key_bytes_compressed
-from hathor.nanocontracts.types import (
-    NC_METHOD_TYPE_ATTR,
-    NC_METHOD_TYPE_PUBLIC,
-    NC_METHOD_TYPE_VIEW,
-    BlueprintId,
-    ContractId,
-    VertexId,
-)
+from hathor.nanocontracts.types import NC_METHOD_TYPE_ATTR, BlueprintId, ContractId, NCMethodType, VertexId
 from hathor.transaction import Transaction
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.storage import TransactionStorage
@@ -42,12 +35,12 @@ CHILD_CONTRACT_ID_PREFIX: bytes = b'child-contract'
 
 def is_nc_public_method(method: Callable) -> bool:
     """Return True if the method is nc_public."""
-    return getattr(method, NC_METHOD_TYPE_ATTR, None) == NC_METHOD_TYPE_PUBLIC
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.PUBLIC
 
 
 def is_nc_view_method(method: Callable) -> bool:
     """Return True if the method is nc_view."""
-    return getattr(method, NC_METHOD_TYPE_ATTR, None) == NC_METHOD_TYPE_VIEW
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.VIEW
 
 
 def get_nano_contract_creation(tx_storage: TransactionStorage,

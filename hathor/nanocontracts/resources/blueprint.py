@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Optional, Type, get_args, get_origin
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts import types as nc_types
+from hathor.nanocontracts.blueprint import NC_FIELDS_ATTR
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.types import blueprint_id_from_bytes
@@ -94,7 +95,8 @@ class BlueprintInfoResource(Resource):
             return error_response.json_dumpb()
 
         attributes: dict[str, str] = {}
-        for name, _type in blueprint_class._fields.items():  # type: ignore
+        fields = getattr(blueprint_class, NC_FIELDS_ATTR)
+        for name, _type in fields.items():
             assert name not in attributes
             attributes[name] = self.get_type_name(_type)
 
