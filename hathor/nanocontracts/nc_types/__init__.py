@@ -21,6 +21,7 @@ from hathor.nanocontracts.nc_types.bool_nc_type import BoolNCType
 from hathor.nanocontracts.nc_types.bytes_nc_type import BytesLikeNCType, BytesNCType
 from hathor.nanocontracts.nc_types.collection_nc_type import DequeNCType, FrozenSetNCType, ListNCType, SetNCType
 from hathor.nanocontracts.nc_types.dataclass_nc_type import DataclassNCType
+from hathor.nanocontracts.nc_types.fixed_size_bytes_nc_type import Bytes32NCType
 from hathor.nanocontracts.nc_types.map_nc_type import DictNCType, MappingProxyNCType
 from hathor.nanocontracts.nc_types.namedtuple_nc_type import NamedTupleNCType
 from hathor.nanocontracts.nc_types.nc_type import NCType
@@ -29,6 +30,7 @@ from hathor.nanocontracts.nc_types.optional_nc_type import OptionalNCType
 from hathor.nanocontracts.nc_types.signed_data_nc_type import SignedDataNCType
 from hathor.nanocontracts.nc_types.sized_int_nc_type import Int32NCType
 from hathor.nanocontracts.nc_types.str_nc_type import StrNCType
+from hathor.nanocontracts.nc_types.token_uid_nc_type import TokenUidNCType
 from hathor.nanocontracts.nc_types.tuple_nc_type import TupleNCType
 from hathor.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
 from hathor.nanocontracts.nc_types.varint_nc_type import VarInt32NCType, VarUint32NCType
@@ -115,12 +117,12 @@ DEFAULT_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     # hathor types:
     Address: AddressNCType,
     Amount: VarUint32NCType,
-    BlueprintId: BytesLikeNCType[BlueprintId],
-    ContractId: BytesLikeNCType[ContractId],
+    BlueprintId: Bytes32NCType,
+    ContractId: Bytes32NCType,
     Timestamp: Int32NCType,
-    TokenUid: BytesLikeNCType[TokenUid],
+    TokenUid: TokenUidNCType,
     TxOutputScript: BytesLikeNCType[TxOutputScript],
-    VertexId: BytesLikeNCType[VertexId],
+    VertexId: Bytes32NCType,
     SignedData: SignedDataNCType,
 }
 
