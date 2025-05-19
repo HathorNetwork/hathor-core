@@ -26,7 +26,7 @@ class MyBlueprint1(Blueprint):
     def initialize(self, ctx: Context, blueprint_id: BlueprintId, initial: int) -> None:
         if initial > 0:
             token_uid = TokenUid(HTR_TOKEN_UID)
-            action = ctx.actions[token_uid]
+            action = ctx.get_single_action(token_uid)
             salt = b'x'
             assert is_action_type(action, NCDepositAction)
             new_actions: list[NCAction] = [NCDepositAction(token_uid=token_uid, amount=action.amount - initial)]

@@ -151,10 +151,10 @@ class Bet(Blueprint):
     def _get_action(self, ctx: Context) -> NCAction:
         """Return the only action available; fails otherwise."""
         if len(ctx.actions) != 1:
-            raise TooManyActions('only one action supported')
+            raise TooManyActions('only one token supported')
         if self.token_uid not in ctx.actions:
             raise InvalidToken(f'token different from {self.token_uid.hex()}')
-        return ctx.actions[self.token_uid]
+        return ctx.get_single_action(self.token_uid)
 
     @public
     def bet(self, ctx: Context, address: Address, score: str) -> None:

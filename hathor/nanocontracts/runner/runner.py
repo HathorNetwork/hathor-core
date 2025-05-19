@@ -324,13 +324,13 @@ class Runner:
         for token_uid, amount in self._mint_melt_totals.items():
             total_diffs[token_uid] -= amount
 
-        for token_uid, action in ctx.actions.items():
+        for action in ctx.__all_actions__:
             match action:
                 case NCDepositAction():
-                    total_diffs[token_uid] -= action.amount
+                    total_diffs[action.token_uid] -= action.amount
 
                 case NCWithdrawalAction():
-                    total_diffs[token_uid] += action.amount
+                    total_diffs[action.token_uid] += action.amount
 
                 case NCGrantAuthorityAction() | NCInvokeAuthorityAction():
                     # These actions don't affect the tx balance,
@@ -453,9 +453,7 @@ class Runner:
         if self._call_info is None:
             storage = self.get_storage(nanocontract_id)
         else:
-            change_trackers = self._call_info.change_trackers[nanocontract_id]
-            assert len(change_trackers) > 0
-            storage = change_trackers[-1]
+            storage = self.get_current_changes_tracker(nanocontract_id)
 
         return storage.get_balance(token_uid)
 

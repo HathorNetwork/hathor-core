@@ -517,6 +517,33 @@ class TestActions(unittest.TestCase):
             tka_total=self.initial_tka_total,
         )
 
+    # TODO
+    @pytest.mark.xfail(strict=True, reason='The grant action only occurs after the mint syscall, fix this')
+    def test_grant_and_mint_same_tx_success(self) -> None:
+        # Add a GRANT_AUTHORITY action to mint TKA, and add a mint authority input accordingly.
+        # Also add a call to mint
+        self._change_tx_balance(tx=self.tx1, add_inputs=[self._create_tka_mint_input()])
+        self._set_nano_header(
+            tx=self.tx1,
+            nc_actions=[
+                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+            ],
+            nc_method='mint',
+            nc_args=(self.tka.hash, 100)
+        )
+
+        # Execute tx1
+        self.artifacts.propagate_with(self.manager, up_to='b11')
+        assert self.b11.get_metadata().voided_by is None
+        assert self.tx1.get_metadata().voided_by is None
+        assert self.tx1.get_metadata().first_block == self.b11.hash
+
+        # Check that the nano contract balance is updated with the mint authority.
+        assert self._get_all_balances() == {
+            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
+            self.tka_balance_key: Balance(value=1100, can_mint=True, can_melt=False),
+        }
+
     def test_mint_tokens_keep_in_contract_success(self) -> None:
         # Grant a TKA mint authority to the nano contract and then use it to mint tokens.
         self.test_grant_authority_mint_success()
@@ -717,6 +744,32 @@ class TestActions(unittest.TestCase):
             tka_total=self.initial_tka_total,
         )
 
+    def test_invoke_and_grant_same_token_not_allowed(self) -> None:
+        self._set_nano_header(
+            tx=self.tx1,
+            nc_actions=[
+                NanoHeaderAction(type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+            ],
+        )
+
+        with pytest.raises(NCInvalidAction) as e:
+            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+        assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
+
+    def test_grant_and_invoke_same_token_not_allowed(self) -> None:
+        self._set_nano_header(
+            tx=self.tx1,
+            nc_actions=[
+                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+                NanoHeaderAction(type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+            ],
+        )
+
+        with pytest.raises(NCInvalidAction) as e:
+            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+        assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
+
     def test_conflicting_actions(self) -> None:
         # Add 2 conflicting actions for the same token.
         self._set_nano_header(tx=self.tx1, nc_actions=[
@@ -726,7 +779,32 @@ class TestActions(unittest.TestCase):
 
         with pytest.raises(NCInvalidAction) as e:
             self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
-        assert str(e.value) == 'two or more actions with the same token uid'
+        assert str(e.value) == 'conflicting actions for token 00'
+
+    def test_non_conflicting_actions_success(self) -> None:
+        # Add a GRANT_AUTHORITY action to mint TKA, and add a mint authority input accordingly.
+        # Also add a DEPOSIT action with the same token and update the tx output accordingly.
+        self._change_tx_balance(tx=self.tx1, add_inputs=[self._create_tka_mint_input()])
+        self._change_tx_balance(tx=self.tx1, update_tka_output=-100)
+        self._set_nano_header(
+            tx=self.tx1,
+            nc_actions=[
+                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+                NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=100),
+            ],
+        )
+
+        # Execute tx1
+        self.artifacts.propagate_with(self.manager, up_to='b11')
+        assert self.b11.get_metadata().voided_by is None
+        assert self.tx1.get_metadata().voided_by is None
+        assert self.tx1.get_metadata().first_block == self.b11.hash
+
+        # Check that the nano contract balance is updated with the mint authority.
+        assert self._get_all_balances() == {
+            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
+            self.tka_balance_key: Balance(value=1100, can_mint=True, can_melt=False),
+        }
 
     def test_token_index_not_found(self) -> None:
         # Add an action with a token index out of bounds.

@@ -320,7 +320,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             assert isinstance(tx, Transaction)
             nano_header = tx.get_nano_header()
             ctx = nano_header.get_context()
-            for action in ctx.actions.values():
+            for action in ctx.__all_actions__:
                 match action:
                     case NCDepositAction():
                         self._add_to_total(action.token_uid, action.amount)
@@ -356,7 +356,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             assert isinstance(tx, Transaction)
             nano_header = tx.get_nano_header()
             ctx = nano_header.get_context()
-            for action in ctx.actions.values():
+            for action in ctx.__all_actions__:
                 match action:
                     case NCDepositAction():
                         self._subtract_from_total(action.token_uid, action.amount)

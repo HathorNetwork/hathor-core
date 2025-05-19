@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import struct
+from collections import defaultdict
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.blueprint import Blueprint
@@ -26,7 +27,7 @@ from hathor.nanocontracts.exception import (
     NCSerializationError,
 )
 from hathor.nanocontracts.method_parser import NCMethodParser
-from hathor.nanocontracts.types import BaseAuthorityAction, BlueprintId
+from hathor.nanocontracts.types import BaseAuthorityAction, BlueprintId, NCAction, NCActionType, TokenUid
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import ScriptError, TooManySigOps
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
@@ -36,6 +37,17 @@ from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
 MAX_NC_SCRIPT_SIZE: int = 1024
 MAX_NC_SCRIPT_SIGOPS_COUNT: int = 20
 MAX_ACTIONS_LEN: int = 16
+ALLOWED_ACTION_SETS: frozenset[frozenset[NCActionType]] = frozenset([
+    frozenset(),
+    frozenset([NCActionType.DEPOSIT]),
+    frozenset([NCActionType.WITHDRAWAL]),
+    frozenset([NCActionType.GRANT_AUTHORITY]),
+    frozenset([NCActionType.INVOKE_AUTHORITY]),
+    frozenset([NCActionType.DEPOSIT, NCActionType.GRANT_AUTHORITY]),
+    frozenset([NCActionType.DEPOSIT, NCActionType.INVOKE_AUTHORITY]),
+    frozenset([NCActionType.WITHDRAWAL, NCActionType.GRANT_AUTHORITY]),
+    frozenset([NCActionType.WITHDRAWAL, NCActionType.INVOKE_AUTHORITY]),
+])
 
 
 class NanoHeaderVerifier:
@@ -109,24 +121,31 @@ class NanoHeaderVerifier:
         assert isinstance(tx, Transaction)
 
         tx_tokens_set = set(tx.tokens)
-        seen_tokens = set()
         nano_header = tx.get_nano_header()
         actions = nano_header.get_actions()
-
-        if len(actions) > MAX_ACTIONS_LEN:
-            raise NCInvalidAction(f'more actions than the max allowed: {len(actions)} > {MAX_ACTIONS_LEN}')
+        NanoHeaderVerifier.verify_action_list(actions)
 
         for action in actions:
             if isinstance(action, BaseAuthorityAction):
                 # This is verified in model creation, so we just assert here.
                 assert action.token_uid != HATHOR_TOKEN_UID
 
-            if action.token_uid in seen_tokens:
-                raise NCInvalidAction('two or more actions with the same token uid')
-
             if action.token_uid != HATHOR_TOKEN_UID and action.token_uid not in tx_tokens_set:
                 raise NCInvalidAction(
                     f'{action.name} action requires token {action.token_uid.hex()} in tokens list'
                 )
 
-            seen_tokens.add(action.token_uid)
+    @staticmethod
+    def verify_action_list(actions: list[NCAction]) -> None:
+        """Perform NCAction verifications that do not depend on the tx."""
+        if len(actions) > MAX_ACTIONS_LEN:
+            raise NCInvalidAction(f'more actions than the max allowed: {len(actions)} > {MAX_ACTIONS_LEN}')
+
+        actions_map: defaultdict[TokenUid, list[NCAction]] = defaultdict(list)
+        for action in actions:
+            actions_map[action.token_uid].append(action)
+
+        for token_uid, actions_per_token in actions_map.items():
+            action_types = {action.type for action in actions_per_token}
+            if action_types not in ALLOWED_ACTION_SETS:
+                raise NCInvalidAction(f'conflicting actions for token {token_uid.hex()}')

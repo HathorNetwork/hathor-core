@@ -58,15 +58,16 @@ class _SingleCallRunner:
 
     def validate_context(self, ctx: Context) -> None:
         """Validate if the context is valid."""
-        for token_uid, action in ctx.actions.items():
-            if token_uid != action.token_uid:
-                raise NCInvalidContext('token_uid mismatch')
-            if isinstance(action, BaseTokenAction) and action.amount < 0:
-                raise NCInvalidContext('amount must be positive')
+        for token_uid, actions in ctx.actions.items():
+            for action in actions:
+                if token_uid != action.token_uid:
+                    raise NCInvalidContext('token_uid mismatch')
+                if isinstance(action, BaseTokenAction) and action.amount < 0:
+                    raise NCInvalidContext('amount must be positive')
 
     def _execute_actions(self, ctx: Context) -> None:
         """Update the contract balance according to the context actions."""
-        for action in ctx.actions.values():
+        for action in ctx.__all_actions__:
             rules = BalanceRules.get_rules(self._settings, action)
             rules.nc_execution_rule(self.changes_tracker)
 

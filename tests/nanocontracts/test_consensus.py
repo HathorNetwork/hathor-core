@@ -51,10 +51,10 @@ class MyBlueprint(Blueprint):
 
     def _get_action(self, ctx: Context) -> NCAction:
         if len(ctx.actions) != 1:
-            raise NCFail('only one action allowed')
+            raise NCFail('only one token allowed')
         if self.token_uid not in ctx.actions:
             raise NCFail('invalid token')
-        action = ctx.actions[self.token_uid]
+        action = ctx.get_single_action(self.token_uid)
         if action.token_uid != self.token_uid:
             raise NCFail('invalid token')
         return action

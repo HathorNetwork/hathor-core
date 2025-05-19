@@ -50,7 +50,7 @@ class MyBlueprint(Blueprint):
             return
 
         actions: list[NCAction] = []
-        for action in ctx.actions.values():
+        for action in ctx.__all_actions__:
             if not is_action_type(action, NCDepositAction):
                 raise ValueError('invalid action')
             amount = 1 + action.amount // 2
@@ -63,7 +63,7 @@ class MyBlueprint(Blueprint):
             return
 
         actions: list[NCAction] = []
-        for action in ctx.actions.values():
+        for action in ctx.__all_actions__:
             if not is_action_type(action, NCWithdrawalAction):
                 raise ValueError('invalid action')
             balance = self.syscall.get_balance(action.token_uid)

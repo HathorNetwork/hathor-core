@@ -49,7 +49,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def bet(self, ctx: Context, address: Address, score: str) -> None:
-        action = ctx.actions[self.token_uid]
+        action = ctx.get_single_action(self.token_uid)
         if not is_action_type(action, NCDepositAction):
             raise ValueError('invalid action')
         self.total += action.amount

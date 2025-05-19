@@ -127,7 +127,7 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         jkl_context = JKL.get_nano_header().get_context()
         htr_token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
-        assert jkl_context.actions[htr_token_uid] == NCWithdrawalAction(token_uid=htr_token_uid, amount=3)
+        assert jkl_context.actions[htr_token_uid] == (NCWithdrawalAction(token_uid=htr_token_uid, amount=3),)
 
         assert not tx2.is_nano_contract()
         assert tx2.get_metadata().voided_by is None

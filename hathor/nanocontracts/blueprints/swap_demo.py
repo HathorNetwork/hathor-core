@@ -64,8 +64,8 @@ class SwapDemo(Blueprint):
         if set(ctx.actions.keys()) != {self.token_a, self.token_b}:
             raise InvalidTokens
 
-        action_a = ctx.actions[self.token_a]
-        action_b = ctx.actions[self.token_b]
+        action_a = ctx.get_single_action(self.token_a)
+        action_b = ctx.get_single_action(self.token_b)
 
         if not (
             (is_action_type(action_a, NCDepositAction) and is_action_type(action_b, NCWithdrawalAction))

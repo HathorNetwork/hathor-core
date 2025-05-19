@@ -14,18 +14,21 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from itertools import chain
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
 from hathor.crypto.util import get_address_b58_from_bytes
-from hathor.nanocontracts.exception import NCInvalidContext
+from hathor.nanocontracts.exception import NCFail, NCInvalidContext
 from hathor.nanocontracts.types import Address, ContractId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import VertexData
+from hathor.transaction.exceptions import TxValidationError
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
 
-_EMPTY_MAP: MappingProxyType[TokenUid, NCAction] = MappingProxyType({})
+_EMPTY_MAP: MappingProxyType[TokenUid, tuple[NCAction, ...]] = MappingProxyType({})
 
 
 @final
@@ -36,36 +39,36 @@ class Context:
     Deposits and withdrawals are grouped by token. Note that it is impossible
     to have both a deposit and a withdrawal for the same token.
     """
-    __slots__ = ('__actions', '__address', '__vertex', '__timestamp')
-    __actions: MappingProxyType[TokenUid, NCAction]
+    __slots__ = ('__actions', '__address', '__vertex', '__timestamp', '__all_actions__')
+    __actions: MappingProxyType[TokenUid, tuple[NCAction, ...]]
     __address: Address | ContractId
     __vertex: VertexData
     __timestamp: int
 
     def __init__(
         self,
-        actions: list[NCAction] | MappingProxyType[TokenUid, NCAction],
+        actions: list[NCAction],
         vertex: BaseTransaction | VertexData,
         address: Address | ContractId,
         timestamp: int,
     ) -> None:
         # Dict of action where the key is the token_uid.
-        # If empty, it is a method call without deposits and withdrawals.
-        if isinstance(actions, MappingProxyType):
-            self.__actions = actions
-        elif not actions:
+        # If empty, it is a method call without any actions.
+        if not actions:
             self.__actions = _EMPTY_MAP
         else:
-            actions_map: dict[TokenUid, NCAction] = {}
+            from hathor.verification.nano_header_verifier import NanoHeaderVerifier
+            try:
+                NanoHeaderVerifier.verify_action_list(actions)
+            except TxValidationError as e:
+                raise NCInvalidContext('invalid nano context') from e
+
+            actions_map: defaultdict[TokenUid, tuple[NCAction, ...]] = defaultdict(tuple)
             for action in actions:
-                if action.token_uid in actions_map:
-                    raise NCInvalidContext('Two or more actions with the same token uid')
-                actions_map[action.token_uid] = action
+                actions_map[action.token_uid] = (*actions_map[action.token_uid], action)
             self.__actions = MappingProxyType(actions_map)
 
-        from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
-        if len(self.__actions) > MAX_ACTIONS_LEN:
-            raise NCInvalidContext(f'more actions than the max allowed: {len(self.__actions)} > {MAX_ACTIONS_LEN}')
+        self.__all_actions__: tuple[NCAction, ...] = tuple(chain(*self.__actions.values()))
 
         # Vertex calling the method.
         if isinstance(vertex, VertexData):
@@ -92,13 +95,21 @@ class Context:
         return self.__timestamp
 
     @property
-    def actions(self) -> MappingProxyType[TokenUid, NCAction]:
+    def actions(self) -> MappingProxyType[TokenUid, tuple[NCAction, ...]]:
+        """Get a mapping of actions per token."""
         return self.__actions
+
+    def get_single_action(self, token_uid: TokenUid) -> NCAction:
+        """Get exactly one action for the provided token, and fail otherwise."""
+        actions = self.actions.get(token_uid)
+        if actions is None or len(actions) != 1:
+            raise NCFail(f'expected exactly 1 action for token {token_uid.hex()}')
+        return actions[0]
 
     def copy(self) -> Context:
         """Return a copy of the context."""
         return Context(
-            actions=self.actions,
+            actions=list(self.__all_actions__),
             vertex=self.vertex,
             address=self.address,
             timestamp=self.timestamp,
@@ -107,7 +118,7 @@ class Context:
     def to_json(self) -> dict[str, Any]:
         """Return a JSON representation of the context."""
         return {
-            'actions': [action.to_json() for action in self.actions.values()],
+            'actions': [action.to_json() for action in self.__all_actions__],
             'address': get_address_b58_from_bytes(self.address),
             'timestamp': self.timestamp,
         }
