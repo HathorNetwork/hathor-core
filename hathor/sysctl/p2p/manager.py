@@ -7,7 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
+# distributed under the License is distributed enable an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
@@ -276,23 +276,19 @@ class ConnectionsManagerSysctl(Sysctl):
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
 
-    def get_whitelist_flag(self):
-        """Get whether whitelist-only mode is on or off."""
+    def get_whitelist_flag(self) -> bool:
+        """Get whether whitelist-only mode is enable or off."""
         return self.connections.whitelist_only
 
-    def set_whitelist_flag(self, on: bool) -> None:
-        """Set the whitelist-only mode (if on, node will only allow peers in whitelist
+    def set_whitelist_flag(self, enable: bool) -> None:
+        """Set the whitelist-only mode (if enable, node will only allow peers in whitelist
         if it is not empty.)"""
 
-        self.connections.whitelist_only = on
+        self.connections.whitelist_only = enable
         if self.connections.manager:
-            self.connections.manager.whitelist_only = on
+            self.connections.manager.whitelist_only = enable
 
-        # When setting on, all connections that are from peers not in the whitelist must
+        # When setting enable, all connections that are from peers not in the whitelist must
         # be discarded, if whitelist not empty.
-        if on:
-            for conn in self.connections.connections:
-                # If there is no whitelist, no point in itering.
-                if conn.get_peer_id():
-                    if conn.get_peer_id() not in conn.node.peers_whitelist:
-                        conn.disconnect(reason='Whitelist turned on', force=True)
+        if enable:
+            self.connections.enable_whitelist()

@@ -952,3 +952,10 @@ class ConnectionsManager:
         self.log.warn('Killing all connections and resetting entrypoints...')
         self.disconnect_all_peers(force=True)
         self.my_peer.reload_entrypoints_from_source_file()
+
+    def enable_whitelist(self) -> None:
+        for conn in self.connections:
+            # If there is no whitelist, no point in itering.
+            if conn.get_peer_id():
+                if conn.get_peer_id() not in conn.node.peers_whitelist:
+                    conn.disconnect(reason='Whitelist turned on', force=True)
