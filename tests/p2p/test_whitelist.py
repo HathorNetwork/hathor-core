@@ -12,6 +12,7 @@ from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from tests import unittest
 
+
 class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_no_no(self) -> None:
         network = 'testnet'
