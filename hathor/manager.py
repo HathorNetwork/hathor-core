@@ -221,7 +221,7 @@ class HathorManager:
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
 
         # Parameter to track whitelist condition of the full-node
-        self.whitelist_only: bool = p2p_manager.whitelist_only
+        self.is_whitelist_only: bool = p2p_manager.is_whitelist_only
 
         # List of whitelisted peers
         self.peers_whitelist: list[PeerId] = []
@@ -805,7 +805,7 @@ class HathorManager:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
 
     def add_peer_to_whitelist(self, peer_id: PeerId) -> None:
-        if not self.connections.whitelist_only:
+        if not self.connections.is_whitelist_only:
             return
 
         if peer_id in self.peers_whitelist:
@@ -814,7 +814,7 @@ class HathorManager:
             self.peers_whitelist.append(peer_id)
 
     def remove_peer_from_whitelist_and_disconnect(self, peer_id: PeerId) -> None:
-        if not self.connections.whitelist_only:
+        if not self.connections.is_whitelist_only:
             return
 
         if peer_id in self.peers_whitelist:

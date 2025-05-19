@@ -22,13 +22,13 @@ class WhitelistTestCase(unittest.TestCase):
         self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
-        manager1.whitelist_only = True
-        manager1.connections.whitelist_only = True
+        manager1.is_whitelist_only = True
+        manager1.connections.is_whitelist_only = True
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        manager2.whitelist_only = True
-        manager2.connections.whitelist_only = True
+        manager2.is_whitelist_only = True
+        manager2.connections.is_whitelist_only = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         conn = FakeConnection(manager1, manager2)
@@ -47,14 +47,14 @@ class WhitelistTestCase(unittest.TestCase):
         network = 'testnet'
         self._settings = get_global_settings()
         manager1 = self.create_peer(network)
-        manager1.whitelist_only = True
-        manager1.connections.whitelist_only = True
+        manager1.is_whitelist_only = True
+        manager1.connections.is_whitelist_only = True
 
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        manager2.whitelist_only = True
-        manager2.connections.whitelist_only = True
+        manager2.is_whitelist_only = True
+        manager2.connections.is_whitelist_only = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager1.peers_whitelist.append(manager2.my_peer.id)
@@ -76,13 +76,13 @@ class WhitelistTestCase(unittest.TestCase):
         self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
-        manager1.whitelist_only = True
-        manager1.connections.whitelist_only = True
+        manager1.is_whitelist_only = True
+        manager1.connections.is_whitelist_only = True
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        manager2.whitelist_only = True
-        manager2.connections.whitelist_only = True
+        manager2.is_whitelist_only = True
+        manager2.connections.is_whitelist_only = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager1.peers_whitelist.append(manager2.my_peer.id)

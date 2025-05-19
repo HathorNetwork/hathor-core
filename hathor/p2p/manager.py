@@ -85,7 +85,7 @@ class ConnectionsManager:
     new_connection_from_queue: deque[PeerId]
     connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
     handshaking_peers: set[HathorProtocol]
-    whitelist_only: bool
+    is_whitelist_only: bool
     verified_peer_storage: VerifiedPeerStorage
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
@@ -100,7 +100,7 @@ class ConnectionsManager:
         pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
-        whitelist_only: bool,
+        is_whitelist_only: bool,
         enable_ipv6: bool,
         disable_ipv4: bool,
     ) -> None:
@@ -188,10 +188,10 @@ class ConnectionsManager:
         self.lc_connect_interval = 0.2  # seconds
 
         # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
-        self.whitelist_only = whitelist_only
+        self.is_whitelist_only = is_whitelist_only
 
         # A timer to try to reconnect to the disconnect known peers.
-        if self.whitelist_only:
+        if self.is_whitelist_only:
             self.wl_reconnect = LoopingCall(self.update_whitelist)
             self.wl_reconnect.clock = self.reactor
 
@@ -303,7 +303,7 @@ class ConnectionsManager:
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
 
-        if self.whitelist_only:
+        if self.is_whitelist_only:
             self._start_whitelist_reconnect()
 
         for description in self.listen_address_descriptions:
@@ -424,13 +424,6 @@ class ConnectionsManager:
 
         # If whitelist only flag ON and whitelist not empty, deny peer not in whitelist.
         # Important Note: Perhaps no peer ID in the connection...
-        '''
-                if self.whitelist_only and self.manager.peers_whitelist:
-            if protocol.peer.id not in self.manager.peers_whitelist:
-                self.log.warn('Denied: Connection not in whitelist but node is whitelist-only.')
-                protocol.disconnect(force=True)
-                return
-        '''
 
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
