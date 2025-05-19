@@ -57,14 +57,10 @@ class AddressNCType(NCType[Address]):
     def _json_to_value(self, json_value: NCType.Json, /) -> Address:
         if not isinstance(json_value, str):
             raise ValueError('expected str')
-        # XXX: should we just support a bare address format and drop support for hex?
-        if json_value.startswith("a'") and json_value.endswith("'"):
-            return Address(decode_address(json_value[2:-1]))
-        else:
-            return Address(bytes.fromhex(json_value))
+        # XXX: maybe decode_address could be migrated to hathor.serializers.encoding.b58_address
+        return Address(decode_address(json_value))
 
     @override
     def _value_to_json(self, value: Address, /) -> NCType.Json:
-        # XXX: is there a case we try to use hex encoding instead?
-        address = get_address_b58_from_bytes(value)
-        return f"a'{address}'"
+        # XXX: maybe get_address_b58_from_bytes could be migrated to hathor.serializers.encoding.b58_address
+        return get_address_b58_from_bytes(value)
