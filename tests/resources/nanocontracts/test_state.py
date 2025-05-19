@@ -223,7 +223,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'calls[]', b'unknown_method()'),
                 (b'calls[]', b'add(5, 12)'),
                 (b'calls[]', b'conditional_add([2, 4, null])'),
-                (b'calls[]', b'conditional_add([2, 4, "a\'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN\'"])'),
+                (b'calls[]', b'conditional_add([2, 4, "WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN"])'),
                 (b'calls[]', b'multiply([2, 5, 8, 10])'),
                 (b'calls[]', b'conditional_multiply_bytes([5, "01"])'),
                 (b'calls[]', b'conditional_multiply_bytes([3, null])'),
@@ -247,7 +247,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             'unknown_method()': {'errmsg': "NCMethodNotFound('MyBlueprint.unknown_method')"},
             'add(5, 12)': {'value': 17},
             'conditional_add([2, 4, null])': {'value': None},
-            'conditional_add([2, 4, "a\'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN\'"])': {'value': 6},
+            'conditional_add([2, 4, "WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN"])': {'value': 6},
             'multiply([2, 5, 8, 10])': {'value': 800},
             'conditional_multiply_bytes([5, "01"])': {'value': '0101010101'},
             'conditional_multiply_bytes([3, null])': {'value': None}
