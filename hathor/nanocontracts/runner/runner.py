@@ -20,6 +20,7 @@ from typing import Any, Type
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathor.nanocontracts.balance_rules import BalanceRules
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import (
@@ -284,22 +285,12 @@ class Runner:
         )
         ret = self._execute_public_method_call(nanocontract_id, method_name, ctx, *args, **kwargs)
 
-        # Execute the transfer on the caller side. The callee side is executed by the `_execute_public_method_call()`
+        # Execute the actions on the caller side. The callee side is executed by the `_execute_public_method_call()`
         # call above, if it succeeds.
         previous_changes_tracker = last_call_record.changes_tracker
         for action in actions:
-            match action:
-                case NCDepositAction():
-                    previous_changes_tracker.add_balance(action.token_uid, -action.amount)
-                case NCWithdrawalAction():
-                    previous_changes_tracker.add_balance(action.token_uid, action.amount)
-                # TODO: implement new actions here.
-                case NCGrantAuthorityAction():
-                    raise NotImplementedError
-                case NCInvokeAuthorityAction():
-                    raise NotImplementedError
-                case _:
-                    assert_never(action)
+            rules = BalanceRules.get_rules(self._settings, action)
+            rules.nc_caller_execution_rule(previous_changes_tracker)
 
         return ret
 

@@ -69,7 +69,7 @@ class _SingleCallRunner:
         """Update the contract balance according to the context actions."""
         for action in ctx.__all_actions__:
             rules = BalanceRules.get_rules(self._settings, action)
-            rules.nc_execution_rule(self.changes_tracker)
+            rules.nc_callee_execution_rule(self.changes_tracker)
 
     def call_public_method(self, method_name: str, ctx: Context, *args: Any, **kwargs: Any) -> Any:
         """Call a contract public method. If it fails, no change is saved."""

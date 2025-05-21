@@ -5,7 +5,7 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import Address, BlueprintId, ContractId, TokenUid
+from hathor.nanocontracts.types import Address, BlueprintId, ContractId, TokenUid, VertexId
 from hathor.transaction import Transaction
 from hathor.util import not_none
 from hathor.wallet import KeyPair
@@ -52,7 +52,7 @@ class BlueprintTestCase(unittest.TestCase):
         """Generate a random token UID (32 bytes)."""
         token = self._token_index.to_bytes(32, byteorder='big', signed=False)
         self._token_index += 1
-        return token
+        return TokenUid(token)
 
     def gen_random_address(self) -> Address:
         """Generate a random wallet address."""
@@ -69,7 +69,7 @@ class BlueprintTestCase(unittest.TestCase):
 
     def gen_random_nanocontract_id(self) -> ContractId:
         """Generate a random contract id."""
-        return ContractId(self.rng.randbytes(32))
+        return ContractId(VertexId(self.rng.randbytes(32)))
 
     def gen_random_blueprint_id(self) -> BlueprintId:
         """Generate a random contract id."""
