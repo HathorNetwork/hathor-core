@@ -280,15 +280,15 @@ class DAGBuilderTestCase(unittest.TestCase):
         tx3 = artifacts.by_name['tx3'].vertex
 
         ctx2 = tx2.get_nano_header().get_context()
-        self.assertEqual(ctx2.actions, {
-            tka_id: [NCDepositAction(token_uid=tka_id, amount=5)],
-            htr_id: [NCDepositAction(token_uid=htr_id, amount=10)],
+        self.assertEqual(dict(ctx2.actions), {
+            tka_id: (NCDepositAction(token_uid=tka_id, amount=5),),
+            htr_id: (NCDepositAction(token_uid=htr_id, amount=10),),
         })
 
         ctx3 = tx3.get_nano_header().get_context()
-        self.assertEqual(ctx3.actions, {
-            htr_id: [NCDepositAction(token_uid=htr_id, amount=3)],
-            tka_id: [NCWithdrawalAction(token_uid=tka_id, amount=2)],
+        self.assertEqual(dict(ctx3.actions), {
+            htr_id: (NCDepositAction(token_uid=htr_id, amount=3),),
+            tka_id: (NCWithdrawalAction(token_uid=tka_id, amount=2),),
         })
 
     def test_multiline_literals(self) -> None:

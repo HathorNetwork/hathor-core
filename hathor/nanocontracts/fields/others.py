@@ -98,7 +98,7 @@ class SignedDataField(SingleValueField):
         from hathor.nanocontracts.fields import BytesField
         data = self.field.deserialize(deserializer)
         script_input = BytesField('').deserialize(deserializer)
-        return SignedData[self.field.type](data, script_input)
+        return SignedData[self.field.type](data, script_input)  # type: ignore[name-defined]
 
 
 class TupleField(SingleValueField):
