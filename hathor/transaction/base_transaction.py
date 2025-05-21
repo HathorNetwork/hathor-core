@@ -99,8 +99,9 @@ class TxVersion(IntEnum):
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
-    ON_CHAIN_BLUEPRINT = 4
+    # DEPRECATED_NANO_CONTRACT = 4  # XXX: Temporary to keep compatibility
     POA_BLOCK = 5
+    ON_CHAIN_BLUEPRINT = 6
 
     @classmethod
     def _missing_(cls, value: Any) -> None:

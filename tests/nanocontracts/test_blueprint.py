@@ -105,7 +105,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         nc_catalog.blueprints[self.blueprint_ids['my_blueprint']] = MyBlueprint
 
         genesis = self.manager.tx_storage.get_all_genesis()
-        self.tx = list(genesis)[0]
+        self.tx = [t for t in genesis if t.is_transaction][0]
 
     def test_simple_fields(self):
         blueprint_id = self.blueprint_ids['simple_fields']

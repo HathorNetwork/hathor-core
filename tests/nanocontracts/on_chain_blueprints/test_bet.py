@@ -9,7 +9,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.types import Address, ContractId, NCDepositAction, NCWithdrawalAction, SignedData
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb, sign_pycoin
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import Transaction
+from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.scripts import P2PKH
 from hathor.util import initialize_hd_wallet, not_none
 from hathor.wallet import KeyPair
@@ -41,9 +41,9 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         self.token_uid = settings.HATHOR_TOKEN_UID
         self.initialize_contract()  # will set self.nc_id, self.runner, self.nc_storage
 
-    def _get_any_tx(self):
+    def _get_any_tx(self) -> BaseTransaction:
         genesis = self.manager.tx_storage.get_all_genesis()
-        tx = list(genesis)[0]
+        tx = [t for t in genesis if t.is_transaction][0]
         return tx
 
     def _get_any_address(self):
