@@ -1,4 +1,4 @@
-# Copyright 2021 Hathor Labs
+# Copyright 2024 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,87 +12,47 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
-import struct
 import sys
 from argparse import ArgumentParser, FileType
-from typing import TYPE_CHECKING, Iterator
+
+from twisted.internet.defer import Deferred
+from twisted.internet.task import deferLater
 
 from hathor.cli.run_node import RunNode
 
-if TYPE_CHECKING:
-    from hathor.transaction import BaseTransaction
 
-
-class DbImport(RunNode):
-    def start_manager(self) -> None:
-        pass
-
-    def register_signal_handlers(self) -> None:
-        pass
-
+class LoadFromLogs(RunNode):
     @classmethod
     def create_parser(cls) -> ArgumentParser:
         parser = super().create_parser()
-        parser.add_argument('--import-file', type=FileType('rb', 0), required=True,
-                            help='Save the export to this file')
+        parser.add_argument('--log-dump', type=FileType('r', encoding='UTF-8'), default=sys.stdin, nargs='?',
+                            help='Where to read logs from, defaults to stdin. Should be pre-parsed with parse-logs.')
         return parser
 
-    def prepare(self, *, register_resources: bool = True) -> None:
-        super().prepare(register_resources=False)
-
-        # allocating io.BufferedReader here so we "own" it
-        self.in_file = io.BufferedReader(self._args.import_file)
-
     def run(self) -> None:
-        from hathor.cli.db_export import MAGIC_HEADER
-        from hathor.util import tx_progress
+        self.reactor.callLater(0, lambda: Deferred.fromCoroutine(self._load_from_logs()))
+        super().run()
 
-        header = self.in_file.read(len(MAGIC_HEADER))
-        if header != MAGIC_HEADER:
-            self.log.error('wrong header, not a valid file')
-            sys.exit(1)
-
-        tx_count, = struct.unpack('!I', self.in_file.read(4))
-        block_count, = struct.unpack('!I', self.in_file.read(4))
-        total = tx_count + block_count
-        self.log.info('import database', tx_count=tx_count, block_count=block_count)
-        self.tx_storage.pre_init()
-        actual_tx_count = 0
-        actual_block_count = 0
-        for tx in tx_progress(self._import_txs(), log=self.log, total=total):
-            if tx.is_block:
-                actual_block_count += 1
-            else:
-                actual_tx_count += 1
-        if actual_block_count != block_count:
-            self.log.error('block count mismatch', expected=block_count, actual=actual_block_count)
-        if actual_tx_count != tx_count:
-            self.log.error('tx count mismatch', expected=tx_count, actual=actual_tx_count)
-        del self.in_file
-        self.log.info('imported', tx_count=tx_count, block_count=block_count)
-
-    def _import_txs(self) -> Iterator['BaseTransaction']:
+    async def _load_from_logs(self) -> None:
         from hathor.conf.get_settings import get_global_settings
         from hathor.transaction.vertex_parser import VertexParser
         settings = get_global_settings()
         parser = VertexParser(settings=settings)
+
         while True:
-            # read tx
-            tx_len_bytes = self.in_file.read(4)
-            if len(tx_len_bytes) != 4:
+            line_with_break = self._args.log_dump.readline()
+            if not line_with_break:
                 break
-            tx_len, = struct.unpack('!I', tx_len_bytes)
-            tx_bytes = self.in_file.read(tx_len)
-            if len(tx_bytes) != tx_len:
-                self.log.error('unexpected end of file', expected=tx_len, got=len(tx_bytes))
-                sys.exit(2)
-            tx = parser.deserialize(tx_bytes)
-            assert tx is not None
-            tx.storage = self.tx_storage
-            self.manager.on_new_tx(tx, quiet=True, fails_silently=False)
-            yield tx
+            if line_with_break.startswith('//'):
+                continue
+            line = line_with_break.strip()
+            vertex_bytes = bytes.fromhex(line)
+            vertex = parser.deserialize(vertex_bytes)
+            await deferLater(self.reactor, 0, self.manager.on_new_tx, vertex)
+
+        self.manager.connections.disconnect_all_peers(force=True)
+        self.reactor.fireSystemEvent('shutdown')
 
 
 def main():
-    DbImport().run()
+    LoadFromLogs().run()
