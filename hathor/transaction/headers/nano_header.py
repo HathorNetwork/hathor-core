@@ -233,7 +233,7 @@ class NanoHeader(VertexBaseHeader):
             ret.append(int_to_bytes(len(self.nc_script), 2))
             ret.append(self.nc_script)
         else:
-            ret.append(int_to_bytes(0, 1))
+            ret.append(int_to_bytes(0, 2))
         return ret
 
     def serialize(self) -> bytes:

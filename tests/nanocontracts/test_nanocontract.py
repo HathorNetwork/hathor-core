@@ -27,7 +27,7 @@ from hathor.transaction.exceptions import (
     MissingStackItems,
     TooManySigOps,
 )
-from hathor.transaction.headers import NanoHeader
+from hathor.transaction.headers import NanoHeader, VertexHeaderId
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.validation_state import ValidationState
@@ -126,11 +126,28 @@ class NCNanoContractTestCase(unittest.TestCase):
         nc_header = nc.get_nano_header()
         nc2_header = nc2.get_nano_header()
 
+        self.assertEqual(nc_header.nc_version, nc2_header.nc_version)
         self.assertEqual(nc_header.nc_id, nc2_header.nc_id)
         self.assertEqual(nc_header.nc_method, nc2_header.nc_method)
         self.assertEqual(nc_header.nc_args_bytes, nc2_header.nc_args_bytes)
+        self.assertEqual(nc_header.nc_actions, nc2_header.nc_actions)
         self.assertEqual(nc_header.nc_address, nc2_header.nc_address)
         self.assertEqual(nc_header.nc_script, nc2_header.nc_script)
+
+    def test_serialization_skip_signature(self) -> None:
+        nc = self._get_nc()
+        nano_header = nc.get_nano_header()
+        sighash_bytes = nano_header.get_sighash_bytes()
+        deserialized, buf = NanoHeader.deserialize(Transaction(), VertexHeaderId.NANO_HEADER.value + sighash_bytes)
+
+        assert len(buf) == 0
+        assert deserialized.nc_version == nano_header.nc_version
+        assert deserialized.nc_id == nano_header.nc_id
+        assert deserialized.nc_method == nano_header.nc_method
+        assert deserialized.nc_args_bytes == nano_header.nc_args_bytes
+        assert deserialized.nc_actions == nano_header.nc_actions
+        assert deserialized.nc_address == nano_header.nc_address
+        assert deserialized.nc_script == b''
 
     def test_verify_method_and_args(self) -> None:
         nc = self._get_nc()
