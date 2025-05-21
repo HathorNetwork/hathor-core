@@ -13,7 +13,7 @@ from hathor.nanocontracts.types import (
 )
 from hathor.nanocontracts.utils import derive_child_contract_id
 from tests.dag_builder.builder import TestDAGBuilder
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 
 HTR_TOKEN_UID = TokenUid(b'\0')
 
@@ -22,7 +22,7 @@ class MyBlueprint1(Blueprint):
     counter: int
     contract: Optional[ContractId]
 
-    @public
+    @public(allow_deposit=True)
     def initialize(self, ctx: Context, blueprint_id: BlueprintId, initial: int) -> None:
         if initial > 0:
             token_uid = TokenUid(HTR_TOKEN_UID)

@@ -48,14 +48,6 @@ class ResultNotAvailable(NCFail):
     pass
 
 
-class WithdrawalNotAllowed(NCFail):
-    pass
-
-
-class DepositNotAllowed(NCFail):
-    pass
-
-
 class TooManyActions(NCFail):
     pass
 
@@ -156,12 +148,11 @@ class Bet(Blueprint):
             raise InvalidToken(f'token different from {self.token_uid.hex()}')
         return ctx.get_single_action(self.token_uid)
 
-    @public
+    @public(allow_deposit=True)
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         """Make a bet."""
         action = self._get_action(ctx)
-        if not is_action_type(action, NCDepositAction):
-            raise WithdrawalNotAllowed('must be deposit')
+        assert is_action_type(action, NCDepositAction)
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
         if ctx.timestamp > self.date_last_bet:
@@ -194,12 +185,11 @@ class Bet(Blueprint):
             raise InvalidOracleSignature
         self.final_result = result.data
 
-    @public
+    @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
         """Withdraw tokens after the final result is set."""
         action = self._get_action(ctx)
-        if not is_action_type(action, NCWithdrawalAction):
-            raise DepositNotAllowed('action must be withdrawal')
+        assert is_action_type(action, NCWithdrawalAction)
         self.fail_if_result_is_not_available()
         self.fail_if_invalid_token(action)
         address = Address(ctx.address)

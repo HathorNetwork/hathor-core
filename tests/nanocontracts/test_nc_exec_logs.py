@@ -58,7 +58,7 @@ class MyBlueprint1(Blueprint):
         self.log.warn('value_error() called')
         raise ValueError('some value error')
 
-    @public
+    @public(allow_deposit=True)
     def call_another_public(self, ctx: Context, contract_id: ContractId) -> None:
         self.log.debug('call_another_public() called on MyBlueprint1', contract_id=contract_id)
         actions: list[NCAction] = [NCDepositAction(token_uid=TokenUid(b'\x00'), amount=5)]
@@ -72,7 +72,7 @@ class MyBlueprint2(Blueprint):
     def initialize(self, ctx: Context) -> None:
         self.log.info('initialize() called on MyBlueprint2')
 
-    @public
+    @public(allow_deposit=True)
     def sum(self, ctx: Context, a: int, b: int) -> int:
         self.log.debug('sum() called on MyBlueprint2', a=a, b=b)
         return a + b

@@ -63,20 +63,18 @@ class MyBlueprint(Blueprint):
     def nop(self, ctx: Context, a: int) -> None:
         self.counter += 1
 
-    @public
+    @public(allow_deposit=True)
     def deposit(self, ctx: Context) -> None:
         self.counter += 1
         action = self._get_action(ctx)
-        if not is_action_type(action, NCDepositAction):
-            raise NCFail('deposits only')
+        assert is_action_type(action, NCDepositAction)
         self.total += action.amount
 
-    @public
+    @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
         self.counter += 1
         action = self._get_action(ctx)
-        if not is_action_type(action, NCWithdrawalAction):
-            raise NCFail('withdrawal only')
+        assert is_action_type(action, NCWithdrawalAction)
         self.total -= action.amount
 
     @public

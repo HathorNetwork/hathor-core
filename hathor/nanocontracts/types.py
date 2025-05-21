@@ -40,9 +40,8 @@ VarInt = NewType('VarInt', int)
 
 T = TypeVar('T')
 
+NC_ALLOWED_ACTIONS_ATTR = '__nc_allowed_actions'
 NC_METHOD_TYPE_ATTR: str = '__nc_method_type'
-NC_METHOD_TYPE_PUBLIC = 'public'
-NC_METHOD_TYPE_VIEW = 'view'
 
 
 class NCMethodType(Enum):
@@ -149,14 +148,42 @@ def _set_method_type(fn: Callable, method_type: NCMethodType) -> None:
     setattr(fn, NC_METHOD_TYPE_ATTR, method_type)
 
 
-def public(fn: Callable) -> Callable:
+def public(
+    maybe_fn: Callable | None = None,
+    /,
+    *,
+    allow_deposit: bool | None = None,
+    allow_withdrawal: bool | None = None,
+    allow_grant_authority: bool | None = None,
+    allow_invoke_authority: bool | None = None,
+    allow_actions: list[NCActionType] | None = None,
+) -> Callable:
     """Decorator to mark a blueprint method as public."""
-    annotation_name = 'public'
-    _set_method_type(fn, NCMethodType.PUBLIC)
-    validate_has_self_arg(fn, annotation_name)
-    validate_method_types(fn)
-    validate_has_ctx_arg(fn, annotation_name)
-    return fn
+    flags = {
+        NCActionType.DEPOSIT: allow_deposit,
+        NCActionType.WITHDRAWAL: allow_withdrawal,
+        NCActionType.GRANT_AUTHORITY: allow_grant_authority,
+        NCActionType.INVOKE_AUTHORITY: allow_invoke_authority,
+    }
+
+    def decorator(fn: Callable) -> Callable:
+        if allow_actions is not None and any(flag is not None for flag in flags.values()):
+            raise BlueprintSyntaxError(f'use only one of `allow_actions` or per-action flags: `{fn.__name__}()`')
+
+        allowed_actions = set(allow_actions) if allow_actions else set()
+        allowed_actions.update(action for action, flag in flags.items() if flag)
+        setattr(fn, NC_ALLOWED_ACTIONS_ATTR, allowed_actions)
+
+        annotation_name = 'public'
+        _set_method_type(fn, NCMethodType.PUBLIC)
+        validate_has_self_arg(fn, annotation_name)
+        validate_method_types(fn)
+        validate_has_ctx_arg(fn, annotation_name)
+        return fn
+
+    if maybe_fn is not None:
+        return decorator(maybe_fn)
+    return decorator
 
 
 def view(fn: Callable) -> Callable:

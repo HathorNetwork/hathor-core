@@ -47,11 +47,10 @@ class MyBlueprint(Blueprint):
         self.date_last_bet = date_last_bet
         self.total = 0
 
-    @public
+    @public(allow_deposit=True)
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         action = ctx.get_single_action(self.token_uid)
-        if not is_action_type(action, NCDepositAction):
-            raise ValueError('invalid action')
+        assert is_action_type(action, NCDepositAction)
         self.total += action.amount
         partial = self.address_details.get(address, {})
         if score not in partial:

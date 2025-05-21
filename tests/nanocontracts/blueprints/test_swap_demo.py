@@ -2,7 +2,7 @@ from hathor.nanocontracts.blueprints.swap_demo import InvalidActions, InvalidRat
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 
 
 class SwapDemoTestCase(BlueprintTestCase):

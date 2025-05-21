@@ -21,15 +21,15 @@ class MyBlueprint(Blueprint):
     a: str
     b: int
 
-    @public
+    @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
         pass
 
-    @public
+    @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
         pass
 
-    @public
+    @public(allow_deposit=True)
     def create_token(
         self,
         ctx: Context,

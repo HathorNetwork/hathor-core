@@ -1,0 +1,116 @@
+#  Copyright 2025 Hathor Labs
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+import re
+
+import pytest
+
+from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts.exception import BlueprintSyntaxError, NCForbiddenAction
+from hathor.nanocontracts.types import (
+    NCAction,
+    NCActionType,
+    NCDepositAction,
+    NCGrantAuthorityAction,
+    NCInvokeAuthorityAction,
+    NCWithdrawalAction,
+)
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
+
+
+class MyBlueprint(Blueprint):
+    @public
+    def initialize(self, ctx: Context) -> None:
+        pass
+
+    @public
+    def nop(self, ctx: Context) -> None:
+        pass
+
+    @public(allow_deposit=True)
+    def deposit(self, ctx: Context) -> None:
+        pass
+
+    @public(allow_withdrawal=True)
+    def withdrawal(self, ctx: Context) -> None:
+        pass
+
+    @public(allow_grant_authority=True)
+    def grant_authority(self, ctx: Context) -> None:
+        pass
+
+    @public(allow_invoke_authority=True)
+    def invoke_authority(self, ctx: Context) -> None:
+        pass
+
+
+class TestAllowedActions(BlueprintTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+
+        self.blueprint_id = self.gen_random_blueprint_id()
+        self.contract_id = self.gen_random_nanocontract_id()
+        self.nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
+
+        self.token_a = self.gen_random_token_uid()
+        self.address = self.gen_random_address()
+        self.tx = self.get_genesis_tx()
+
+        self.all_actions: set[NCAction] = {
+            NCDepositAction(token_uid=self.token_a, amount=123),
+            NCWithdrawalAction(token_uid=self.token_a, amount=123),
+            NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=True),
+            NCInvokeAuthorityAction(token_uid=self.token_a, mint=True, melt=True),
+        }
+
+        all_actions_types = [action.type for action in self.all_actions]
+        for action_type in NCActionType:
+            # To make sure we remember to test new action types when we implement them
+            assert action_type in all_actions_types, f'missing {action_type.name}'
+
+    def _get_context(self, *actions: NCAction) -> Context:
+        return Context(
+            actions=list(actions),
+            vertex=self.tx,
+            address=self.address,
+            timestamp=self.now,
+        )
+
+    def test_no_actions_allowed(self) -> None:
+        self.runner.create_contract(self.contract_id, self.blueprint_id, self._get_context())
+        for action in self.all_actions:
+            ctx = self._get_context(action)
+            with pytest.raises(NCForbiddenAction, match=f'action {action.name} is forbidden on method `nop`'):
+                self.runner.call_public_method(self.contract_id, 'nop', ctx)
+
+    def test_conflicting_params(self) -> None:
+        msg = 'use only one of `allow_actions` or per-action flags: `initialize()`'
+        with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
+            class InvalidBlueprint(Blueprint):
+                @public(allow_deposit=True, allow_actions=[NCActionType.DEPOSIT])
+                def initialize(self, ctx: Context) -> None:
+                    pass
+
+    def test_allow_specific_action(self) -> None:
+        for allowed_action in self.all_actions:
+            runner = self.build_runner()
+            runner.create_contract(self.contract_id, self.blueprint_id, self._get_context())
+            method_name = allowed_action.name.lower()
+            forbidden_actions = self.all_actions.difference({allowed_action})
+
+            for forbidden_action in forbidden_actions:
+                msg = f'action {forbidden_action.name} is forbidden on method `{method_name}`'
+                ctx = self._get_context(forbidden_action)
+                with pytest.raises(NCForbiddenAction, match=msg):
+                    runner.call_public_method(self.contract_id, method_name, ctx)

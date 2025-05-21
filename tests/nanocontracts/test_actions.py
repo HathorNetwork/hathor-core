@@ -41,11 +41,16 @@ from tests.nanocontracts.utils import assert_nc_failure_reason
 
 
 class MyBlueprint(Blueprint):
-    @public
+    @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
         pass
 
-    @public
+    @public(allow_actions=[
+        NCActionType.DEPOSIT,
+        NCActionType.WITHDRAWAL,
+        NCActionType.GRANT_AUTHORITY,
+        NCActionType.INVOKE_AUTHORITY,
+    ])
     def nop(self, ctx: Context) -> None:
         pass
 
@@ -53,11 +58,11 @@ class MyBlueprint(Blueprint):
     def revoke(self, ctx: Context, token_uid: TokenUid, revoke_mint: bool, revoke_melt: bool) -> None:
         self.syscall.revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
 
-    @public
+    @public(allow_deposit=True, allow_withdrawal=True)
     def mint(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
         self.syscall.mint_tokens(token_uid, amount)
 
-    @public
+    @public(allow_deposit=True, allow_withdrawal=True)
     def melt(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
         self.syscall.melt_tokens(token_uid, amount)
 

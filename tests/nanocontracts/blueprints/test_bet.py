@@ -4,7 +4,6 @@ from typing import NamedTuple, Optional
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.blueprints.bet import (
-    DepositNotAllowed,
     InsufficientBalance,
     InvalidOracleSignature,
     InvalidToken,
@@ -12,9 +11,9 @@ from hathor.nanocontracts.blueprints.bet import (
     ResultAlreadySet,
     ResultNotAvailable,
     TooLate,
-    WithdrawalNotAllowed,
 )
 from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.exception import NCForbiddenAction
 from hathor.nanocontracts.types import (
     Address,
     Amount,
@@ -27,7 +26,7 @@ from hathor.nanocontracts.types import (
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 
 settings = HathorSettings()
 
@@ -164,7 +163,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
-        with self.assertRaises(WithdrawalNotAllowed):
+        with self.assertRaises(NCForbiddenAction):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_make_a_bet_after_result(self):
@@ -197,7 +196,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         tx = self._get_any_tx()
         action = NCDepositAction(token_uid=self.token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
-        with self.assertRaises(DepositNotAllowed):
+        with self.assertRaises(NCForbiddenAction):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_wrong_token(self):

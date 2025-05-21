@@ -13,7 +13,7 @@ from hathor.transaction import BaseTransaction, Transaction, TxOutput
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.types import AddressB58
 from tests.dag_builder.builder import TestDAGBuilder
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 from tests.simulation.base import SimulatorTestCase
 
 settings = HathorSettings()
@@ -22,14 +22,12 @@ settings = HathorSettings()
 class MyBlueprint(Blueprint):
     counter: int
 
-    @public
+    @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
-        # Accepts all deposits and withdrawals.
         self.counter = 0
 
     @public
     def nop(self, ctx: Context) -> None:
-        # Accepts all deposits and withdrawals.
         self.counter += 1
 
     @public

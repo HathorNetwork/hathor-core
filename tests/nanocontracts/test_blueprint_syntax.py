@@ -19,7 +19,7 @@ import pytest
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.exception import BlueprintSyntaxError
 from hathor.nanocontracts.types import Address
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 
 
 class TestBlueprintSyntax(BlueprintTestCase):

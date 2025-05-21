@@ -5,7 +5,7 @@ from hathor.nanocontracts.vertex_data import BlockData, NanoHeaderData, VertexDa
 from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from tests.dag_builder.builder import TestDAGBuilder
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 
 
 class RememberVertexDataBlueprint(Blueprint):

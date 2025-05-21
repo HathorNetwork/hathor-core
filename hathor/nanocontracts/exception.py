@@ -137,6 +137,11 @@ class NCTokenAlreadyExists(NCFail):
     """Raised when one tries to create a duplicated token."""
 
 
+class NCForbiddenAction(NCFail):
+    """Raised when an action is forbidden on a method."""
+    pass
+
+
 class UnknownFieldType(NCError):
     """Raised when there is no field available for a given type."""
     pass

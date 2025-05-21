@@ -15,7 +15,7 @@ from hathor.nanocontracts.types import (
     TokenUid,
     public,
 )
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 
 
 class MyBlueprint(Blueprint):
@@ -35,11 +35,11 @@ class MyBlueprint(Blueprint):
 
 
 class OtherBlueprint(Blueprint):
-    @public
+    @public(allow_deposit=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
         pass
 
-    @public
+    @public(allow_grant_authority=True)
     def nop(self, ctx: Context) -> None:
         pass
 

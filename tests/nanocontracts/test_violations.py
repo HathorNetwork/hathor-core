@@ -2,7 +2,7 @@ from hathor.nanocontracts import Blueprint, public
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.types import NCDepositAction
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 
 
 class MyBlueprint(Blueprint):

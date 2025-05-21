@@ -56,7 +56,7 @@ class MyBlueprint(Blueprint):
     def initialize(self, ctx: Context) -> None:
         self.a = 1
 
-    @public
+    @public(allow_deposit=True, allow_withdrawal=True)
     def nop(self, ctx: Context) -> None:
         pass
 

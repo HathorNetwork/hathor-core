@@ -228,7 +228,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
-        with self.assertNCFail('WithdrawalNotAllowed', 'must be deposit'):
+        with self.assertNCFail('NCForbiddenAction', 'action WITHDRAWAL is forbidden on method `bet`'):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_make_a_bet_after_result(self):
@@ -261,7 +261,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         tx = self._get_any_tx()
         action = NCDepositAction(token_uid=self.token_uid, amount=1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
-        with self.assertNCFail('DepositNotAllowed', 'action must be withdrawal'):
+        with self.assertNCFail('NCForbiddenAction', 'action DEPOSIT is forbidden on method `withdraw`'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_wrong_token(self):

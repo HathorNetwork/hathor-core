@@ -21,10 +21,17 @@ from hathor.nanocontracts.balance_rules import BalanceRules
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCError, NCFail, NCInvalidContext, NCMethodNotFound, NCPrivateMethodError
+from hathor.nanocontracts.exception import (
+    NCError,
+    NCFail,
+    NCForbiddenAction,
+    NCInvalidContext,
+    NCMethodNotFound,
+    NCPrivateMethodError,
+)
 from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
 from hathor.nanocontracts.storage import NCChangesTracker
-from hathor.nanocontracts.types import BaseTokenAction
+from hathor.nanocontracts.types import NC_ALLOWED_ACTIONS_ATTR, BaseTokenAction, NCActionType
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 
 if TYPE_CHECKING:
@@ -56,14 +63,24 @@ class _SingleCallRunner:
         self._has_been_called = False
         self._settings = get_global_settings()
 
-    def validate_context(self, ctx: Context) -> None:
-        """Validate if the context is valid."""
+    def _validate_context(self, ctx: Context) -> None:
+        """Check whether the context is valid."""
         for token_uid, actions in ctx.actions.items():
             for action in actions:
                 if token_uid != action.token_uid:
                     raise NCInvalidContext('token_uid mismatch')
                 if isinstance(action, BaseTokenAction) and action.amount < 0:
                     raise NCInvalidContext('amount must be positive')
+
+    def _validate_actions(self, method: Any, method_name: str, ctx: Context) -> None:
+        """Check whether actions are allowed."""
+        allowed_actions: set[NCActionType] = getattr(method, NC_ALLOWED_ACTIONS_ATTR, set())
+        assert isinstance(allowed_actions, set)
+
+        for actions in ctx.actions.values():
+            for action in actions:
+                if action.type not in allowed_actions:
+                    raise NCForbiddenAction(f'action {action.name} is forbidden on method `{method_name}`')
 
     def _execute_actions(self, ctx: Context) -> None:
         """Update the contract balance according to the context actions."""
@@ -77,7 +94,7 @@ class _SingleCallRunner:
         assert not self._has_been_called, 'only one call to a method per instance'
         self._has_been_called = True
 
-        self.validate_context(ctx)
+        self._validate_context(ctx)
 
         blueprint = self._create_blueprint()
         method = getattr(blueprint, method_name)
@@ -85,6 +102,8 @@ class _SingleCallRunner:
             raise NCMethodNotFound(method_name)
         if not is_nc_public_method(method):
             raise NCError('not a public method')
+
+        self._validate_actions(method, method_name, ctx)
 
         try:
             # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.

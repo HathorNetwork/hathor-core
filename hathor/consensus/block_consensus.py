@@ -193,7 +193,7 @@ class BlockConsensusAlgorithm:
             try:
                 nc_header.execute(runner)
             except NCFail as e:
-                self.log.info('nc execution failed', tx=tx.hash.hex())
+                self.log.info('nc execution failed', tx=tx.hash.hex(), error=repr(e))
                 exception_and_tb = e, traceback.format_exc()
                 self.mark_as_nc_fail_execution(tx)
             else:

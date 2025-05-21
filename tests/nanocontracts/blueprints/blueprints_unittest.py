@@ -27,26 +27,29 @@ class BlueprintTestCase(unittest.TestCase):
         self.nc_catalog = self.manager.tx_storage.nc_catalog
 
         self.htr_token_uid = settings.HATHOR_TOKEN_UID
-
-        nc_storage_factory = NCMemoryStorageFactory()
-        store = MemoryNodeTrieStore()
-        block_trie = PatriciaTrie(store)
-        block_storage = NCBlockStorage(block_trie)
-        self.runner = TestRunner(
-            self.manager.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
-        )
-
+        self.runner = self.build_runner()
         self.now = int(self.reactor.seconds())
 
         self._token_index = 1
 
     def build_manager(self) -> HathorManager:
+        """Create a HathorManager instance."""
         return self.create_peer('testnet', nc_indices=True)
 
     def register_blueprint_class(self, blueprint_id: BlueprintId, blueprint_class: type[Blueprint]) -> None:
         """Register a blueprint class with a given id, allowing contracts to be created from it."""
         assert blueprint_id not in self.nc_catalog.blueprints
         self.nc_catalog.blueprints[blueprint_id] = blueprint_class
+
+    def build_runner(self) -> TestRunner:
+        """Create a Runner instance."""
+        nc_storage_factory = NCMemoryStorageFactory()
+        store = MemoryNodeTrieStore()
+        block_trie = PatriciaTrie(store)
+        block_storage = NCBlockStorage(block_trie)
+        return TestRunner(
+            self.manager.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
+        )
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""

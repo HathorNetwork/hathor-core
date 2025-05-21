@@ -18,7 +18,7 @@ from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import NCInvalidActionExecution
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import ContractId, NCAction, NCGrantAuthorityAction, NCInvokeAuthorityAction, TokenUid
-from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.blueprints.blueprints_unittest import BlueprintTestCase
 
 
 class CalleeBlueprint(Blueprint):
@@ -26,7 +26,7 @@ class CalleeBlueprint(Blueprint):
     def initialize(self, ctx: Context) -> None:
         pass
 
-    @public
+    @public(allow_grant_authority=True, allow_invoke_authority=True)
     def nop(self, ctx: Context) -> None:
         pass
 
@@ -47,11 +47,11 @@ class CalleeBlueprint(Blueprint):
 class CallerBlueprint(Blueprint):
     other_id: ContractId
 
-    @public
+    @public(allow_grant_authority=True)
     def initialize(self, ctx: Context, other_id: ContractId) -> None:
         self.other_id = other_id
 
-    @public
+    @public(allow_grant_authority=True)
     def nop(self, ctx: Context) -> None:
         pass
 
@@ -60,7 +60,7 @@ class CallerBlueprint(Blueprint):
         action = NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
         self.syscall.call_public_method(self.other_id, 'nop', [action])
 
-    @public
+    @public(allow_grant_authority=True)
     def revoke_from_self(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
         self.syscall.revoke_authorities(token_uid, revoke_mint=mint, revoke_melt=melt)
 
@@ -91,7 +91,7 @@ class CallerBlueprint(Blueprint):
         assert not self.syscall.can_mint(token_uid)
         assert not self.syscall.can_melt(token_uid)
 
-    @public
+    @public(allow_grant_authority=True)
     def call_revoke_all_from_other(self, ctx: Context, token_uid: TokenUid) -> None:
         assert not self.syscall.can_mint(token_uid)
         assert not self.syscall.can_melt(token_uid)

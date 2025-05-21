@@ -35,7 +35,7 @@ class MyBlueprint(Blueprint):
     counter: int
     contract: Optional[ContractId]
 
-    @public
+    @public(allow_deposit=True)
     def initialize(self, ctx: Context, initial: int) -> None:
         self.counter = initial
         self.contract = None
@@ -44,28 +44,26 @@ class MyBlueprint(Blueprint):
     def set_contract(self, ctx: Context, contract: ContractId) -> None:
         self.contract = contract
 
-    @public
+    @public(allow_deposit=True)
     def split_balance(self, ctx: Context) -> None:
         if self.contract is None:
             return
 
         actions: list[NCAction] = []
         for action in ctx.__all_actions__:
-            if not is_action_type(action, NCDepositAction):
-                raise ValueError('invalid action')
+            assert is_action_type(action, NCDepositAction)
             amount = 1 + action.amount // 2
             actions.append(NCDepositAction(token_uid=action.token_uid, amount=amount))
         self.syscall.call_public_method(self.contract, 'split_balance', actions)
 
-    @public
+    @public(allow_withdrawal=True)
     def get_tokens_from_another_contract(self, ctx: Context) -> None:
         if self.contract is None:
             return
 
         actions: list[NCAction] = []
         for action in ctx.__all_actions__:
-            if not is_action_type(action, NCWithdrawalAction):
-                raise ValueError('invalid action')
+            assert is_action_type(action, NCWithdrawalAction)
             balance = self.syscall.get_balance(action.token_uid)
             diff = balance - action.amount
             if diff < 0:

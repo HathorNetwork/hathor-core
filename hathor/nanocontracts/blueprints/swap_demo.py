@@ -34,7 +34,7 @@ class SwapDemo(Blueprint):
     # Count number of swaps executed.
     swaps_counter: int
 
-    @public
+    @public(allow_deposit=True)
     def initialize(
         self,
         ctx: Context,
@@ -57,7 +57,7 @@ class SwapDemo(Blueprint):
         self.multiplier_b = multiplier_b
         self.swaps_counter = 0
 
-    @public
+    @public(allow_deposit=True, allow_withdrawal=True)
     def swap(self, ctx: Context) -> None:
         """Execute a token swap."""
 
