@@ -16,17 +16,28 @@ from tests import unittest
 class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_no_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
+        manager1.whitelist_only = True
+        manager1.connections.whitelist_only = True
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
+        manager2.whitelist_only = True
+        manager2.connections.whitelist_only = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
         self.assertFalse(conn.tr2.disconnecting)
+
+        # Since testing requires a non-null whitelist, we create a dummy peer.
+        # With the non-null wl, peers only connect to those in wl.
+        # If it was empty, this'd be overridden.
+        dummy_peer = self.create_peer(network)
+        manager1.peers_whitelist.append(dummy_peer.my_peer.id)
+        manager2.peers_whitelist.append(dummy_peer.my_peer.id)
 
         # Run the p2p protocol.
         for _ in range(100):
@@ -38,12 +49,16 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
-
+        self._settings = get_global_settings()
         manager1 = self.create_peer(network)
+        manager1.whitelist_only = True
+        manager1.connections.whitelist_only = True
+
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
+        manager2.whitelist_only = True
+        manager2.connections.whitelist_only = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager1.peers_whitelist.append(manager2.my_peer.id)
@@ -51,6 +66,13 @@ class WhitelistTestCase(unittest.TestCase):
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
         self.assertFalse(conn.tr2.disconnecting)
+
+        # Since testing requires a non-null whitelist, we create a dummy peer.
+        # With the non-null wl, peers only connect to those in wl.
+        # If it was empty, this'd be overridden.
+        dummy_peer = self.create_peer(network)
+        manager1.peers_whitelist.append(dummy_peer.my_peer.id)
+        manager2.peers_whitelist.append(dummy_peer.my_peer.id)
 
         # Run the p2p protocol.
         for _ in range(100):
@@ -62,12 +84,16 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_yes(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
+        manager1.whitelist_only = True
+        manager1.connections.whitelist_only = True
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
+        manager2.whitelist_only = True
+        manager2.connections.whitelist_only = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager1.peers_whitelist.append(manager2.my_peer.id)
@@ -107,7 +133,8 @@ class WhitelistTestCase(unittest.TestCase):
             agent_mock.request.return_value = Deferred()
             read_body_mock.return_value = b'body'
             d = connections_manager.update_whitelist()
-            d.callback(None)
+            if d:
+                d.callback(None)
 
             read_body_mock.assert_called_once_with(None)
             _update_whitelist_cb_mock.assert_called_once_with(b'body')
@@ -121,7 +148,8 @@ class WhitelistTestCase(unittest.TestCase):
             agent_mock.request.return_value = Deferred()
             d = connections_manager.update_whitelist()
             error = Failure('some_error')
-            d.errback(error)
+            if d:
+                d.errback(error)
 
             read_body_mock.assert_not_called()
             _update_whitelist_cb_mock.assert_not_called()
