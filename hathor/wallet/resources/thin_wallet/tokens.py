@@ -62,6 +62,7 @@ class TokenResource(Resource):
         data = {
             'name': token_info.get_name(),
             'symbol': token_info.get_symbol(),
+            'version': token_info.get_version(),
             'success': True,
             'mint': mint,
             'melt': melt,
@@ -96,6 +97,7 @@ class TokenResource(Resource):
                     'uid': uid.hex(),
                     'name': token_info.get_name(),
                     'symbol': token_info.get_symbol(),
+                    'version': token_info.get_version(),
                 }
             )
 
@@ -186,6 +188,7 @@ TokenResource.openapi = {
                                         'success': True,
                                         'name': 'MyCoin',
                                         'symbol': 'MYC',
+                                        'version': 1,
                                         'mint': [
                                             {
                                                 "tx_id": "00000299670db5814f69cede8b347f83"
@@ -222,12 +225,14 @@ TokenResource.openapi = {
                                                        "50b1fe58093e97bc94a0275fbeb226b2",
                                                 'name': 'MyCoin',
                                                 'symbol': 'MYC',
+                                                'version': 1,
                                             },
                                             {
                                                 'uid': "00000093f76f44c664907a017bbf9ef6"
                                                        "bb289692e30c7cf7361e6872c5ee1796",
                                                 'name': 'New Token',
                                                 'symbol': 'NTK',
+                                                'version': 1,
                                             },
                                         ],
                                     }
