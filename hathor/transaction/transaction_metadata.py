@@ -44,7 +44,7 @@ class TransactionMetadata:
     accumulated_weight: int
     score: int
     first_block: Optional[bytes]
-    validation: ValidationState
+    _validation: ValidationState
 
     # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
     # is None otherwise. This is only used for caching, so it can be safely cleared up, as it would be recalculated
@@ -66,6 +66,7 @@ class TransactionMetadata:
         settings: HathorSettings | None = None,
     ) -> None:
         from hathor.transaction.genesis import is_genesis
+        self._settings = get_global_settings()
 
         # Hash of the transaction.
         self.hash = hash
@@ -85,7 +86,7 @@ class TransactionMetadata:
         # voided_by. The logic is that the transaction is voiding itself.
         # - When a block is voided, its own hash is added to voided_by.
         # - When it is constructed it will be voided by "partially validated" until it is validated
-        self.voided_by = None
+        self.voided_by = {self._settings.PARTIALLY_VALIDATED_ID}
         self._last_voided_by_hash = None
 
         # List of peers which have sent this transaction.
@@ -111,13 +112,26 @@ class TransactionMetadata:
         self.first_block = None
 
         # Validation
-        self.validation = ValidationState.INITIAL
+        self._validation = ValidationState.INITIAL
 
         settings = settings or get_global_settings()
 
         # Genesis specific:
-        if hash is not None and is_genesis(hash, settings=settings):
-            self.validation = ValidationState.FULL
+        if hash is not None and is_genesis(hash, settings=self._settings):
+            self._validation = ValidationState.FULL
+            self.voided_by = None
+
+    @property
+    def validation(self) -> ValidationState:
+        return self._validation
+
+    @validation.setter
+    def validation(self, validation: ValidationState) -> None:
+        self._validation = validation
+        if validation.is_fully_connected():
+            self.del_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
+        else:
+            self.add_voided_by(self._settings.PARTIALLY_VALIDATED_ID)
 
     def get_tx(self) -> 'BaseTransaction':
         assert self._tx_ref is not None
