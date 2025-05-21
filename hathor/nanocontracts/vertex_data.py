@@ -23,6 +23,7 @@ from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion
+    from hathor.transaction.headers.nano_header import NanoHeader
 
 
 def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
@@ -55,9 +56,13 @@ class VertexData:
     tokens: tuple[TokenUid, ...]
     parents: tuple[VertexId, ...]
     block: BlockData
+    headers: tuple[HeaderData, ...]
 
     @classmethod
     def create_from_vertex(cls, vertex: BaseTransaction) -> Self:
+        from hathor.transaction import Transaction
+        from hathor.transaction.headers.nano_header import NanoHeader
+
         inputs = tuple(
             TxInputData.create_from_txin(txin, _get_txin_output(vertex, txin))
             for txin in vertex.inputs
@@ -75,6 +80,15 @@ class VertexData:
             # XXX: use dummy data instead
             block_data = BlockData(hash=VertexId(b''), timestamp=0, height=0)
 
+        assert isinstance(vertex, Transaction)
+        headers_data: list[HeaderData] = []
+        has_nano_header = False
+        for header in vertex.headers:
+            if isinstance(header, NanoHeader):
+                assert not has_nano_header, 'code should guarantee NanoHeader only appears once'
+                headers_data.append(NanoHeaderData.create_from_nano_header(header))
+                has_nano_header = True
+
         original_tokens = getattr(vertex, 'tokens', None)
         if original_tokens is not None:
             # XXX Should we add HTR_TOKEN_ID as first token?
@@ -91,6 +105,7 @@ class VertexData:
             tokens=tokens,
             parents=parents,
             block=block_data,
+            headers=tuple(headers_data),
         )
 
 
@@ -138,4 +153,25 @@ class BlockData:
             hash=block.hash,
             timestamp=block.timestamp,
             height=block.get_height(),
+        )
+
+
+class HeaderData:
+    """Marker class, represents an arbitrary vertex-header."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NanoHeaderData(HeaderData):
+    nc_version: int
+    nc_id: VertexId
+    nc_method: str
+    nc_args_bytes: bytes
+
+    @classmethod
+    def create_from_nano_header(cls, nc_header: NanoHeader) -> Self:
+        return cls(
+            nc_version=nc_header.nc_version,
+            nc_id=nc_header.nc_id,
+            nc_method=nc_header.nc_method,
+            nc_args_bytes=nc_header.nc_args_bytes,
         )

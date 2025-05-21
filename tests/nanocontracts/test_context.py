@@ -1,7 +1,7 @@
 from hathor.nanocontracts import Blueprint, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.vertex_data import BlockData, VertexData
+from hathor.nanocontracts.vertex_data import BlockData, NanoHeaderData, VertexData
 from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from tests.dag_builder.builder import TestDAGBuilder
@@ -33,6 +33,13 @@ class ContextTestCase(BlueprintTestCase):
         })
         self.address = self.gen_random_address()
 
+    def _reconstruct_vertex_data(self, dict_: dict) -> VertexData:
+        block_data = BlockData(**dict_.pop('block'))
+        dict_ |= {'inputs': (), 'outputs': (), 'parents': ()}
+        nano_header_data, = dict_.pop('headers')
+        dict_['headers'] = (NanoHeaderData(**nano_header_data),)
+        return VertexData(block=block_data, **dict_)
+
     def test_vertex_data(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
@@ -52,9 +59,7 @@ class ContextTestCase(BlueprintTestCase):
 
         # this is the vertex data that was observed by nc2 when remember_context was called
         vertex_data_dict, = nc_storage.get('last_vertex')
-        block_data = BlockData(**vertex_data_dict.pop('block'))
-        vertex_data_dict |= {'inputs': (), 'outputs': (), 'parents': ()}
-        vertex_data = VertexData(block=block_data, **vertex_data_dict)
+        vertex_data = self._reconstruct_vertex_data(vertex_data_dict)
 
         # XXX: nonce varies, even for a weight of 1.0
         # XXX: inptus/outputs/parents ignored since the dag builder will pick whatever to fill it in
@@ -67,3 +72,9 @@ class ContextTestCase(BlueprintTestCase):
         self.assertEqual(vertex_data.block.hash, b12.hash)
         self.assertEqual(vertex_data.block.timestamp, b12.timestamp)
         self.assertEqual(vertex_data.block.height, b12.get_height())
+        nano_header_data, = vertex_data.headers
+        assert isinstance(nano_header_data, NanoHeaderData)
+        self.assertEqual(nano_header_data.nc_version, 1)
+        self.assertEqual(nano_header_data.nc_id, nc1.hash)
+        self.assertEqual(nano_header_data.nc_method, 'remember_context')
+        self.assertEqual(nano_header_data.nc_args_bytes, b'\x00')
