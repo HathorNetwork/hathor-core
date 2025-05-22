@@ -30,6 +30,7 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     unsafe_mode: Optional[str]
     testnet: bool
     test_mode_tx_weight: bool
+    test_mode_all_weight: bool
     dns: Optional[str]
     peer: Optional[str]
     sysctl: Optional[str]

@@ -236,7 +236,14 @@ class CliBuilder:
 
         test_mode = TestMode.DISABLED
         if self._args.test_mode_tx_weight:
+            self.check_or_warn(self._args.test_mode_all_weight is None,
+       'cannot use --test_mode_tx_weight with --test_mode_all_weight it will be overridden')
             test_mode = TestMode.TEST_TX_WEIGHT
+            if self.wallet:
+                self.wallet.test_mode = True
+
+        if self._args.test_mode_all_weight:
+            test_mode = TestMode.TEST_ALL_WEIGHT
             if self.wallet:
                 self.wallet.test_mode = True
 

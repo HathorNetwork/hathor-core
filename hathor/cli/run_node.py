@@ -49,6 +49,7 @@ def temp_fifo(filename: str, tempdir: str | None) -> Iterator[None]:
 class RunNode:
     UNSAFE_ARGUMENTS: list[tuple[str, Callable[['RunNodeArgs'], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
+        ('--test-mode-all-weight', lambda args: bool(args.test_mode_all_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--sync-bridge', lambda args: bool(args.sync_bridge)),
         ('--sync-v1-only', lambda args: bool(args.sync_v1_only)),
@@ -83,6 +84,8 @@ class RunNode:
 
         parser.add_argument('--test-mode-tx-weight', action='store_true',
                             help='Reduces tx weight to 1 for testing purposes')
+        parser.add_argument('--test-mode-all-weight', action='store_true',
+                            help='Reduces tx and block weight to 1 for testing purposes')
         parser.add_argument('--dns', action='append', help='Seed DNS')
         parser.add_argument('--peer', help='json file with peer info')
         parser.add_argument('--sysctl',
