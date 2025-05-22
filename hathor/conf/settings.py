@@ -92,7 +92,7 @@ class HathorSettings(NamedTuple):
         return int(log(self.INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_UNITS_PER_BLOCK, 2))
 
     # Average time between blocks.
-    AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
+    AVG_TIME_BETWEEN_BLOCKS: int = 1  # in seconds
 
     # Genesis pre-mined outputs
     # P2PKH HMcJymyctyhnWsWTXqhP9txDwgNZaMWf42
