@@ -47,7 +47,7 @@ class BlueprintEnvironment:
     @property
     def rng(self) -> NanoRNG:
         """Return an RNG for the current contract."""
-        return self.__runner.get_rng()
+        return self.__runner.syscall_get_rng()
 
     @final
     def get_contract_id(self) -> ContractId:
@@ -187,27 +187,27 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> Any:
         """Call a public method of another contract."""
-        return self.__runner.call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
 
     @final
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a view method of another contract."""
-        return self.__runner.call_another_contract_view_method(nc_id, method_name, args, kwargs)
+        return self.__runner.syscall_call_another_contract_view_method(nc_id, method_name, args, kwargs)
 
     @final
     def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
         """Revoke authorities from this nano contract."""
-        self.__runner.revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
+        self.__runner.syscall_revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
 
     @final
     def mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Mint tokens and add them to the balance of this nano contract."""
-        self.__runner.mint_tokens(token_uid=token_uid, amount=amount)
+        self.__runner.syscall_mint_tokens(token_uid=token_uid, amount=amount)
 
     @final
     def melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Melt tokens by removing them from the balance of this nano contract."""
-        self.__runner.melt_tokens(token_uid=token_uid, amount=amount)
+        self.__runner.syscall_melt_tokens(token_uid=token_uid, amount=amount)
 
     @final
     def create_contract(
@@ -219,7 +219,7 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> tuple[ContractId, Any]:
         """Create a new contract."""
-        return self.__runner.create_another_contract(blueprint_id, salt, actions, args, kwargs)
+        return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs)
 
     @final
     def emit_event(self, data: bytes) -> None:

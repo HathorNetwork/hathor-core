@@ -260,7 +260,7 @@ class Runner:
         return ret
 
     @_forbid_syscall_from_view('call_public_method')
-    def call_another_contract_public_method(
+    def syscall_call_another_contract_public_method(
         self,
         contract_id: ContractId,
         method_name: str,
@@ -519,7 +519,7 @@ class Runner:
         finally:
             self._reset_all_change_trackers()
 
-    def call_another_contract_view_method(
+    def syscall_call_another_contract_view_method(
         self,
         contract_id: ContractId,
         method_name: str,
@@ -641,7 +641,7 @@ class Runner:
         return change_trackers[-1]
 
     @_forbid_syscall_from_view('rng')
-    def get_rng(self) -> NanoRNG:
+    def syscall_get_rng(self) -> NanoRNG:
         """Return the RNG for the current contract being executed."""
         if self._rng is None:
             raise ValueError('no seed was provided')
@@ -688,7 +688,7 @@ class Runner:
         return ret
 
     @_forbid_syscall_from_view('create_contract')
-    def create_another_contract(
+    def syscall_create_another_contract(
         self,
         blueprint_id: BlueprintId,
         salt: bytes,
@@ -725,7 +725,7 @@ class Runner:
         return child_id, ret
 
     @_forbid_syscall_from_view('revoke_authorities')
-    def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
+    def syscall_revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
         """Revoke authorities from this nano contract."""
         contract_id = self.get_current_contract_id()
         if token_uid == HATHOR_TOKEN_UID:
@@ -739,7 +739,7 @@ class Runner:
         )
 
     @_forbid_syscall_from_view('mint_tokens')
-    def mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
+    def syscall_mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Mint tokens and add them to the balance of this nano contract."""
         call_record = self.get_current_call_record()
         if token_uid == HATHOR_TOKEN_UID:
@@ -771,7 +771,7 @@ class Runner:
         call_record.index_updates.append(syscall_record)
 
     @_forbid_syscall_from_view('melt_tokens')
-    def melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
+    def syscall_melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Melt tokens by removing them from the balance of this nano contract."""
         call_record = self.get_current_call_record()
         if token_uid == HATHOR_TOKEN_UID:
