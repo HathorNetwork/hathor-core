@@ -29,9 +29,9 @@ from hathor.indexes.rocksdb_utils import (
 )
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
 from hathor.nanocontracts.types import (
+    NCAcquireAuthorityAction,
     NCDepositAction,
     NCGrantAuthorityAction,
-    NCInvokeAuthorityAction,
     NCWithdrawalAction,
 )
 from hathor.transaction import BaseTransaction, Transaction
@@ -315,7 +315,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                         self.add_to_total(action.token_uid, action.amount)
                     case NCWithdrawalAction():
                         self.add_to_total(action.token_uid, -action.amount)
-                    case NCGrantAuthorityAction() | NCInvokeAuthorityAction():
+                    case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
                         # These actions don't affect the nc token balance,
                         # so no need for any special handling on the index.
                         pass
@@ -351,7 +351,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                         self.add_to_total(action.token_uid, -action.amount)
                     case NCWithdrawalAction():
                         self.add_to_total(action.token_uid, action.amount)
-                    case NCGrantAuthorityAction() | NCInvokeAuthorityAction():
+                    case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
                         # These actions don't affect the nc token balance,
                         # so no need for any special handling on the index.
                         pass

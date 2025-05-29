@@ -49,7 +49,7 @@ class MyBlueprint(Blueprint):
         NCActionType.DEPOSIT,
         NCActionType.WITHDRAWAL,
         NCActionType.GRANT_AUTHORITY,
-        NCActionType.INVOKE_AUTHORITY,
+        NCActionType.ACQUIRE_AUTHORITY,
     ])
     def nop(self, ctx: Context) -> None:
         pass
@@ -347,10 +347,10 @@ class TestActions(unittest.TestCase):
             self.tka_balance_key: Balance(value=1000, can_mint=True, can_melt=True),
         }
 
-    def _test_invoke_authority_to_create_output(self, authority: int) -> None:
+    def _test_acquire_authority_to_create_output(self, authority: int) -> None:
         token_index = 1
 
-        # Add an INVOKE_AUTHORITY action for TKA, and add a new authority output accordingly,
+        # Add an ACQUIRE_AUTHORITY action for TKA, and add a new authority output accordingly,
         # both with the provided `authority`.
         self._change_tx_balance(
             tx=self.tx2,
@@ -360,7 +360,7 @@ class TestActions(unittest.TestCase):
         )
         self._set_nano_header(tx=self.tx2, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=authority
+                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=authority
             ),
         ])
 
@@ -369,17 +369,17 @@ class TestActions(unittest.TestCase):
         assert self.b12.get_metadata().voided_by is None
         assert self.tx2.get_metadata().first_block == self.b12.hash
 
-    def test_invoke_authority_create_mint_success(self) -> None:
+    def test_acquire_authority_create_mint_success(self) -> None:
         # Grant a mint authority to the nano contract and use it to create a new mint authority output.
         self.test_grant_authority_mint_success()
-        self._test_invoke_authority_to_create_output(TxOutput.TOKEN_MINT_MASK)
+        self._test_acquire_authority_to_create_output(TxOutput.TOKEN_MINT_MASK)
 
         # Check that tx2 successfully executes.
         assert self.tx2.get_metadata().voided_by is None
 
-    def test_invoke_authority_create_mint_nc_fail(self) -> None:
+    def test_acquire_authority_create_mint_nc_fail(self) -> None:
         # Try to create a new mint authority output, but the contract doesn't have that authority.
-        self._test_invoke_authority_to_create_output(TxOutput.TOKEN_MINT_MASK)
+        self._test_acquire_authority_to_create_output(TxOutput.TOKEN_MINT_MASK)
 
         # Check that tx2 fails execution.
         assert self.tx2.get_metadata().voided_by == {self.tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
@@ -387,20 +387,20 @@ class TestActions(unittest.TestCase):
             manager=self.manager,
             tx_id=self.tx2.hash,
             block_id=self.b12.hash,
-            reason=f'NCInvalidActionExecution: cannot invoke mint authority for token {self.tka.hash_hex}'
+            reason=f'NCInvalidActionExecution: cannot acquire mint authority for token {self.tka.hash_hex}'
         )
 
-    def test_invoke_authority_create_melt_success(self) -> None:
+    def test_acquire_authority_create_melt_success(self) -> None:
         # Grant a melt authority to the nano contract and use it to create a new melt authority output.
         self.test_grant_authority_melt_success()
-        self._test_invoke_authority_to_create_output(TxOutput.TOKEN_MELT_MASK)
+        self._test_acquire_authority_to_create_output(TxOutput.TOKEN_MELT_MASK)
 
         # Check that tx2 successfully executes.
         assert self.tx2.get_metadata().voided_by is None
 
-    def test_invoke_authority_create_melt_nc_fail(self) -> None:
+    def test_acquire_authority_create_melt_nc_fail(self) -> None:
         # Try to create a new melt authority output, but the contract doesn't have that authority.
-        self._test_invoke_authority_to_create_output(TxOutput.TOKEN_MELT_MASK)
+        self._test_acquire_authority_to_create_output(TxOutput.TOKEN_MELT_MASK)
 
         # Check that tx2 fails execution.
         assert self.tx2.get_metadata().voided_by == {self.tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
@@ -408,20 +408,20 @@ class TestActions(unittest.TestCase):
             manager=self.manager,
             tx_id=self.tx2.hash,
             block_id=self.b12.hash,
-            reason=f'NCInvalidActionExecution: cannot invoke melt authority for token {self.tka.hash_hex}'
+            reason=f'NCInvalidActionExecution: cannot acquire melt authority for token {self.tka.hash_hex}'
         )
 
-    def test_invoke_authority_create_all_success(self) -> None:
+    def test_acquire_authority_create_all_success(self) -> None:
         # Grant all authorities to the nano contract and use it to create a new all authorities output.
         self.test_grant_authority_all_success()
-        self._test_invoke_authority_to_create_output(TxOutput.ALL_AUTHORITIES)
+        self._test_acquire_authority_to_create_output(TxOutput.ALL_AUTHORITIES)
 
         # Check that tx2 successfully executes.
         assert self.tx2.get_metadata().voided_by is None
 
-    def test_invoke_authority_create_all_nc_fail(self) -> None:
+    def test_acquire_authority_create_all_nc_fail(self) -> None:
         # Try to create a new all authorities output, but the contract doesn't have any authorities.
-        self._test_invoke_authority_to_create_output(TxOutput.ALL_AUTHORITIES)
+        self._test_acquire_authority_to_create_output(TxOutput.ALL_AUTHORITIES)
 
         # Check that tx2 fails execution.
         assert self.tx2.get_metadata().voided_by == {self.tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
@@ -429,14 +429,14 @@ class TestActions(unittest.TestCase):
             manager=self.manager,
             tx_id=self.tx2.hash,
             block_id=self.b12.hash,
-            reason=f'NCInvalidActionExecution: cannot invoke mint authority for token {self.tka.hash_hex}'
+            reason=f'NCInvalidActionExecution: cannot acquire mint authority for token {self.tka.hash_hex}'
         )
 
-    def test_invoke_authority_mint_tokens_success(self) -> None:
+    def test_acquire_authority_mint_tokens_success(self) -> None:
         # Grant a mint authority to the nano contract and use it to mint tokens.
         self.test_grant_authority_mint_success()
 
-        # Add an INVOKE_AUTHORITY action for TKA, minting new TKA, and updating the HTR balance accordingly.
+        # Add an ACQUIRE_AUTHORITY action for TKA, minting new TKA, and updating the HTR balance accordingly.
         self._change_tx_balance(
             tx=self.tx2,
             update_htr_output=-10,
@@ -444,7 +444,7 @@ class TestActions(unittest.TestCase):
         )
         self._set_nano_header(tx=self.tx2, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK
+                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK
             ),
         ])
 
@@ -456,11 +456,11 @@ class TestActions(unittest.TestCase):
         # Check that tx2 successfully executes.
         assert self.tx2.get_metadata().voided_by is None
 
-    def test_invoke_authority_melt_tokens_success(self) -> None:
+    def test_acquire_authority_melt_tokens_success(self) -> None:
         # Grant a melt authority to the nano contract and use it to melt tokens.
         self.test_grant_authority_melt_success()
 
-        # Add an INVOKE_AUTHORITY action for TKA, melting TKA, and updating the HTR balance accordingly.
+        # Add an ACQUIRE_AUTHORITY action for TKA, melting TKA, and updating the HTR balance accordingly.
         self._change_tx_balance(
             tx=self.tx2,
             update_htr_output=5,
@@ -468,7 +468,7 @@ class TestActions(unittest.TestCase):
         )
         self._set_nano_header(tx=self.tx2, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MELT_MASK
+                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MELT_MASK
             ),
         ])
 
@@ -729,11 +729,11 @@ class TestActions(unittest.TestCase):
             tka_total=self.initial_tka_total - 500,
         )
 
-    def test_invoke_and_grant_same_token_not_allowed(self) -> None:
+    def test_acquire_and_grant_same_token_not_allowed(self) -> None:
         self._set_nano_header(
             tx=self.tx1,
             nc_actions=[
-                NanoHeaderAction(type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+                NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
                 NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
             ],
         )
@@ -742,12 +742,12 @@ class TestActions(unittest.TestCase):
             self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
         assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
 
-    def test_grant_and_invoke_same_token_not_allowed(self) -> None:
+    def test_grant_and_acquire_same_token_not_allowed(self) -> None:
         self._set_nano_header(
             tx=self.tx1,
             nc_actions=[
                 NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
-                NanoHeaderAction(type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+                NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
             ],
         )
 
@@ -842,14 +842,14 @@ class TestActions(unittest.TestCase):
     def test_invalid_grant_unknown_authority(self) -> None:
         self._test_invalid_unknown_authority(NCActionType.GRANT_AUTHORITY)
 
-    def test_invalid_invoke_unknown_authority(self) -> None:
-        self._test_invalid_unknown_authority(NCActionType.INVOKE_AUTHORITY)
+    def test_invalid_acquire_unknown_authority(self) -> None:
+        self._test_invalid_unknown_authority(NCActionType.ACQUIRE_AUTHORITY)
 
     def test_invalid_grant_htr_authority(self) -> None:
         self._test_invalid_htr_authority(NCActionType.GRANT_AUTHORITY)
 
-    def test_invalid_invoke_htr_authority(self) -> None:
-        self._test_invalid_htr_authority(NCActionType.INVOKE_AUTHORITY)
+    def test_invalid_acquire_htr_authority(self) -> None:
+        self._test_invalid_htr_authority(NCActionType.ACQUIRE_AUTHORITY)
 
     def test_grant_authority_cannot_mint(self) -> None:
         # Try to grant a TKA mint authority without an authority input.
@@ -879,8 +879,8 @@ class TestActions(unittest.TestCase):
             self.manager.verification_service.verify(self.tx1)
         assert str(e.value) == f'GRANT_AUTHORITY token {self.tka.hash_hex} requires melt, but no input has it'
 
-    def test_invoke_authority_cannot_mint_with_melt(self) -> None:
-        # Try to create a mint authority output with an action to invoke a melt authority.
+    def test_acquire_authority_cannot_mint_with_melt(self) -> None:
+        # Try to create a mint authority output with an action to acquire a melt authority.
         self._change_tx_balance(
             tx=self.tx1,
             add_outputs=[
@@ -889,7 +889,7 @@ class TestActions(unittest.TestCase):
         )
         self._set_nano_header(tx=self.tx1, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MELT_MASK
+                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MELT_MASK
             ),
         ])
 
@@ -897,7 +897,7 @@ class TestActions(unittest.TestCase):
             self.manager.verification_service.verify(self.tx1)
 
     def test_use_authority_cannot_melt_with_mint(self) -> None:
-        # Try to create a melt authority output with an action to invoke a mint authority.
+        # Try to create a melt authority output with an action to acquire a mint authority.
         self._change_tx_balance(
             tx=self.tx1,
             add_outputs=[
@@ -906,7 +906,7 @@ class TestActions(unittest.TestCase):
         )
         self._set_nano_header(tx=self.tx1, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK
+                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK
             ),
         ])
 
@@ -915,7 +915,7 @@ class TestActions(unittest.TestCase):
 
     def test_actions_max_len_fail(self) -> None:
         # Try to create too many actions.
-        action = NanoHeaderAction(type=NCActionType.INVOKE_AUTHORITY, token_index=1, amount=1)
+        action = NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=1)
         actions = [action] * (MAX_ACTIONS_LEN + 1)
 
         self._set_nano_header(tx=self.tx1, nc_actions=actions)

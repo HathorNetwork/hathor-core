@@ -150,7 +150,7 @@ def _create_decorator_with_allowed_actions(
     allow_deposit: bool | None,
     allow_withdrawal: bool | None,
     allow_grant_authority: bool | None,
-    allow_invoke_authority: bool | None,
+    allow_acquire_authority: bool | None,
     allow_actions: list[NCActionType] | None,
 ) -> Callable:
     """Internal utility to create a decorator that sets allowed actions."""
@@ -158,7 +158,7 @@ def _create_decorator_with_allowed_actions(
         NCActionType.DEPOSIT: allow_deposit,
         NCActionType.WITHDRAWAL: allow_withdrawal,
         NCActionType.GRANT_AUTHORITY: allow_grant_authority,
-        NCActionType.INVOKE_AUTHORITY: allow_invoke_authority,
+        NCActionType.ACQUIRE_AUTHORITY: allow_acquire_authority,
     }
 
     def decorator(fn: Callable) -> Callable:
@@ -184,7 +184,7 @@ def public(
     allow_deposit: bool | None = None,
     allow_withdrawal: bool | None = None,
     allow_grant_authority: bool | None = None,
-    allow_invoke_authority: bool | None = None,
+    allow_acquire_authority: bool | None = None,
     allow_actions: list[NCActionType] | None = None,
 ) -> Callable:
     """Decorator to mark a blueprint method as public."""
@@ -206,7 +206,7 @@ def public(
         allow_deposit=allow_deposit,
         allow_withdrawal=allow_withdrawal,
         allow_grant_authority=allow_grant_authority,
-        allow_invoke_authority=allow_invoke_authority,
+        allow_acquire_authority=allow_acquire_authority,
         allow_actions=allow_actions,
     )
 
@@ -233,7 +233,7 @@ def fallback(
     allow_deposit: bool | None = None,
     allow_withdrawal: bool | None = None,
     allow_grant_authority: bool | None = None,
-    allow_invoke_authority: bool | None = None,
+    allow_acquire_authority: bool | None = None,
     allow_actions: list[NCActionType] | None = None,
 ) -> Callable:
     """Decorator to mark a blueprint method as fallback. The method must also be called `fallback`."""
@@ -267,7 +267,7 @@ def fallback(
         allow_deposit=allow_deposit,
         allow_withdrawal=allow_withdrawal,
         allow_grant_authority=allow_grant_authority,
-        allow_invoke_authority=allow_invoke_authority,
+        allow_acquire_authority=allow_acquire_authority,
         allow_actions=allow_actions,
     )
 
@@ -281,7 +281,7 @@ class NCActionType(Enum):
     DEPOSIT = 1
     WITHDRAWAL = 2
     GRANT_AUTHORITY = 3
-    INVOKE_AUTHORITY = 4
+    ACQUIRE_AUTHORITY = 4
 
     def __str__(self) -> str:
         return self.name
@@ -306,7 +306,7 @@ class BaseAction:
             NCDepositAction: NCActionType.DEPOSIT,
             NCWithdrawalAction: NCActionType.WITHDRAWAL,
             NCGrantAuthorityAction: NCActionType.GRANT_AUTHORITY,
-            NCInvokeAuthorityAction: NCActionType.INVOKE_AUTHORITY,
+            NCAcquireAuthorityAction: NCActionType.ACQUIRE_AUTHORITY,
         }
 
         if action_type := action_types.get(type(self)):
@@ -329,8 +329,8 @@ class BaseAction:
         {'type': 'withdrawal', 'token_uid': '01', 'amount': 123}
         >>> NCGrantAuthorityAction(token_uid=TokenUid(b'\x01'), mint=True, melt=False).to_json()
         {'type': 'grant_authority', 'token_uid': '01', 'mint': True, 'melt': False}
-        >>> NCInvokeAuthorityAction(token_uid=TokenUid(b'\x01'), mint=False, melt=True).to_json()
-        {'type': 'invoke_authority', 'token_uid': '01', 'mint': False, 'melt': True}
+        >>> NCAcquireAuthorityAction(token_uid=TokenUid(b'\x01'), mint=False, melt=True).to_json()
+        {'type': 'acquire_authority', 'token_uid': '01', 'mint': False, 'melt': True}
         """
         return dict(
             type=self.name.lower(),
@@ -391,10 +391,10 @@ class NCGrantAuthorityAction(BaseAuthorityAction):
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
-class NCInvokeAuthorityAction(BaseAuthorityAction):
+class NCAcquireAuthorityAction(BaseAuthorityAction):
     """
-    Invoke an authority stored in a contract to create authority outputs or mint/melt tokens in the tx,
-    or to copy the authority to a caller contract.
+    Acquire an authority stored in a contract to create authority outputs or mint/melt tokens in the tx,
+    or to store and use in a caller contract.
     """
 
 
@@ -403,5 +403,5 @@ NCAction: TypeAlias = (
     NCDepositAction
     | NCWithdrawalAction
     | NCGrantAuthorityAction
-    | NCInvokeAuthorityAction
+    | NCAcquireAuthorityAction
 )

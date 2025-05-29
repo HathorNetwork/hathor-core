@@ -59,11 +59,11 @@ from hathor.nanocontracts.types import (
     BaseTokenAction,
     BlueprintId,
     ContractId,
+    NCAcquireAuthorityAction,
     NCAction,
     NCActionType,
     NCDepositAction,
     NCGrantAuthorityAction,
-    NCInvokeAuthorityAction,
     NCWithdrawalAction,
     TokenUid,
 )
@@ -390,7 +390,7 @@ class Runner:
                 case NCWithdrawalAction():
                     total_diffs[action.token_uid] += action.amount
 
-                case NCGrantAuthorityAction() | NCInvokeAuthorityAction():
+                case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
                     # These actions don't affect the tx balance,
                     # so no need to account for them.
                     pass

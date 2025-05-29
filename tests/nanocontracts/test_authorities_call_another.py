@@ -17,7 +17,7 @@ import pytest
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import NCInvalidActionExecution
 from hathor.nanocontracts.storage.contract_storage import Balance
-from hathor.nanocontracts.types import ContractId, NCAction, NCGrantAuthorityAction, NCInvokeAuthorityAction, TokenUid
+from hathor.nanocontracts.types import ContractId, NCAcquireAuthorityAction, NCAction, NCGrantAuthorityAction, TokenUid
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -26,7 +26,7 @@ class CalleeBlueprint(Blueprint):
     def initialize(self, ctx: Context) -> None:
         pass
 
-    @public(allow_grant_authority=True, allow_invoke_authority=True)
+    @public(allow_grant_authority=True, allow_acquire_authority=True)
     def nop(self, ctx: Context) -> None:
         pass
 
@@ -69,8 +69,8 @@ class CallerBlueprint(Blueprint):
         self.syscall.call_public_method(self.other_id, 'revoke_from_self', [], token_uid, True, True)
 
     @public
-    def invoke_another(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
-        action = NCInvokeAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+    def acquire_another(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
+        action = NCAcquireAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
         self.syscall.call_public_method(self.other_id, 'nop', [action])
 
     @public
@@ -214,7 +214,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
             self._grant_to_other(mint=False, melt=True)
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
 
-    def test_invoke_mint(self) -> None:
+    def test_acquire_mint(self) -> None:
         self._initialize()
         context = Context(
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=False)],
@@ -233,13 +233,13 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
             timestamp=self.now
         )
         self.runner.call_public_method(
-            self.caller_id, 'invoke_another', context, token_uid=self.token_a, mint=True, melt=False
+            self.caller_id, 'acquire_another', context, token_uid=self.token_a, mint=True, melt=False
         )
 
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=False)
         assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=False)
 
-    def test_invoke_melt(self) -> None:
+    def test_acquire_melt(self) -> None:
         self._initialize()
         context = Context(
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=False, melt=True)],
@@ -258,7 +258,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
             timestamp=self.now
         )
         self.runner.call_public_method(
-            self.caller_id, 'invoke_another', context, token_uid=self.token_a, mint=False, melt=True
+            self.caller_id, 'acquire_another', context, token_uid=self.token_a, mint=False, melt=True
         )
 
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=True)

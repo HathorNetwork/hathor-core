@@ -54,10 +54,10 @@ class NanoHeaderAction:
     def to_nc_action(self, tx: Transaction) -> NCAction:
         """Create a NCAction from this NanoHeaderAction"""
         from hathor.nanocontracts.types import (
+            NCAcquireAuthorityAction,
             NCActionType,
             NCDepositAction,
             NCGrantAuthorityAction,
-            NCInvokeAuthorityAction,
             NCWithdrawalAction,
             TokenUid,
         )
@@ -79,11 +79,11 @@ class NanoHeaderAction:
                 melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
                 self._validate_authorities(token_uid)
                 return NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
-            case NCActionType.INVOKE_AUTHORITY:
+            case NCActionType.ACQUIRE_AUTHORITY:
                 mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
                 melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
                 self._validate_authorities(token_uid)
-                return NCInvokeAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+                return NCAcquireAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
             case _:
                 assert_never(self.type)
 

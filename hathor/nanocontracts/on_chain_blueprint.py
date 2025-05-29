@@ -81,7 +81,7 @@ ALLOWED_IMPORTS: dict[str, set[str]] = {
         'NCDepositAction',
         'NCWithdrawalAction',
         'NCGrantAuthorityAction',
-        'NCInvokeAuthorityAction',
+        'NCAcquireAuthorityAction',
     },
 }
 

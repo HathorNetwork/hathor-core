@@ -49,11 +49,11 @@ ALLOWED_ACTION_SETS: frozenset[frozenset[NCActionType]] = frozenset([
     frozenset([NCActionType.DEPOSIT]),
     frozenset([NCActionType.WITHDRAWAL]),
     frozenset([NCActionType.GRANT_AUTHORITY]),
-    frozenset([NCActionType.INVOKE_AUTHORITY]),
+    frozenset([NCActionType.ACQUIRE_AUTHORITY]),
     frozenset([NCActionType.DEPOSIT, NCActionType.GRANT_AUTHORITY]),
-    frozenset([NCActionType.DEPOSIT, NCActionType.INVOKE_AUTHORITY]),
+    frozenset([NCActionType.DEPOSIT, NCActionType.ACQUIRE_AUTHORITY]),
     frozenset([NCActionType.WITHDRAWAL, NCActionType.GRANT_AUTHORITY]),
-    frozenset([NCActionType.WITHDRAWAL, NCActionType.INVOKE_AUTHORITY]),
+    frozenset([NCActionType.WITHDRAWAL, NCActionType.ACQUIRE_AUTHORITY]),
 ])
 
 
