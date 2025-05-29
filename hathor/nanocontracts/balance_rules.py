@@ -24,10 +24,10 @@ from hathor.nanocontracts.exception import NCInvalidAction, NCInvalidActionExecu
 from hathor.nanocontracts.storage import NCChangesTracker
 from hathor.nanocontracts.types import (
     BaseAction,
+    NCAcquireAuthorityAction,
     NCAction,
     NCDepositAction,
     NCGrantAuthorityAction,
-    NCInvokeAuthorityAction,
     NCWithdrawalAction,
 )
 from hathor.transaction.transaction import TokenInfo
@@ -84,8 +84,8 @@ class BalanceRules(ABC, Generic[T]):
                 return _WithdrawalRules(settings, action)
             case NCGrantAuthorityAction():
                 return _GrantAuthorityRules(settings, action)
-            case NCInvokeAuthorityAction():
-                return _InvokeAuthorityRules(settings, action)
+            case NCAcquireAuthorityAction():
+                return _AcquireAuthorityRules(settings, action)
             case _:
                 assert_never(action)
 
@@ -190,13 +190,13 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
             )
 
 
-class _InvokeAuthorityRules(BalanceRules[NCInvokeAuthorityAction]):
+class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
     """
-    Define balance rules for the INVOKE_AUTHORITY action.
+    Define balance rules for the ACQUIRE_AUTHORITY action.
 
     - In the verification phase, we allow the respective authorities in the transaction's token_info.
-    - In the execution phase (callee), we check whether the nano contract balance can invoke those authorities.
-    - In the execution phase (caller), we grant the invoked authorities to the caller.
+    - In the execution phase (callee), we check whether the nano contract balance can grant those authorities.
+    - In the execution phase (caller), we grant the authorities to the caller.
     """
 
     @override
@@ -213,10 +213,10 @@ class _InvokeAuthorityRules(BalanceRules[NCInvokeAuthorityAction]):
         balance = callee_changes_tracker.get_balance(self.action.token_uid)
 
         if self.action.mint and not balance.can_mint:
-            raise NCInvalidActionExecution(f'cannot invoke mint authority for token {self.action.token_uid.hex()}')
+            raise NCInvalidActionExecution(f'cannot acquire mint authority for token {self.action.token_uid.hex()}')
 
         if self.action.melt and not balance.can_melt:
-            raise NCInvalidActionExecution(f'cannot invoke melt authority for token {self.action.token_uid.hex()}')
+            raise NCInvalidActionExecution(f'cannot acquire melt authority for token {self.action.token_uid.hex()}')
 
     @override
     def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:

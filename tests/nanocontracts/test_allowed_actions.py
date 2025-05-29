@@ -20,11 +20,11 @@ from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCForbiddenAction
 from hathor.nanocontracts.runner.types import NCArgs
 from hathor.nanocontracts.types import (
+    NCAcquireAuthorityAction,
     NCAction,
     NCActionType,
     NCDepositAction,
     NCGrantAuthorityAction,
-    NCInvokeAuthorityAction,
     NCWithdrawalAction,
     fallback,
 )
@@ -52,8 +52,8 @@ class MyBlueprint(Blueprint):
     def grant_authority(self, ctx: Context) -> None:
         pass
 
-    @public(allow_invoke_authority=True)
-    def invoke_authority(self, ctx: Context) -> None:
+    @public(allow_acquire_authority=True)
+    def acquire_authority(self, ctx: Context) -> None:
         pass
 
     @fallback
@@ -77,7 +77,7 @@ class TestAllowedActions(BlueprintTestCase):
             NCDepositAction(token_uid=self.token_a, amount=123),
             NCWithdrawalAction(token_uid=self.token_a, amount=123),
             NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=True),
-            NCInvokeAuthorityAction(token_uid=self.token_a, mint=True, melt=True),
+            NCAcquireAuthorityAction(token_uid=self.token_a, mint=True, melt=True),
         }
 
         all_actions_types = [action.type for action in self.all_actions]
