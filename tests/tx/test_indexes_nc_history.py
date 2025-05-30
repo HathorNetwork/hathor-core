@@ -48,7 +48,6 @@ class NCHistoryIndexesTest(unittest.TestCase):
 
         nano_header = NanoHeader(
             tx=nc,
-            nc_version=1,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,

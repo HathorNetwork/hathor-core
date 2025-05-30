@@ -120,7 +120,6 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         nano_header = NanoHeader(
             tx=nc,
-            nc_version=1,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -149,7 +148,6 @@ class NCNanoContractTestCase(unittest.TestCase):
         nc_header = nc.get_nano_header()
         nc2_header = nc2.get_nano_header()
 
-        self.assertEqual(nc_header.nc_version, nc2_header.nc_version)
         self.assertEqual(nc_header.nc_id, nc2_header.nc_id)
         self.assertEqual(nc_header.nc_method, nc2_header.nc_method)
         self.assertEqual(nc_header.nc_args_bytes, nc2_header.nc_args_bytes)
@@ -164,7 +162,6 @@ class NCNanoContractTestCase(unittest.TestCase):
         deserialized, buf = NanoHeader.deserialize(Transaction(), VertexHeaderId.NANO_HEADER.value + sighash_bytes)
 
         assert len(buf) == 0
-        assert deserialized.nc_version == nano_header.nc_version
         assert deserialized.nc_id == nano_header.nc_id
         assert deserialized.nc_method == nano_header.nc_method
         assert deserialized.nc_args_bytes == nano_header.nc_args_bytes
@@ -509,7 +506,6 @@ class NCNanoContractTestCase(unittest.TestCase):
         )
         nc2.headers.append(NanoHeader(
             tx=nc2,
-            nc_version=1,
             nc_id=b'',
             nc_method='',
             nc_args_bytes=b'',

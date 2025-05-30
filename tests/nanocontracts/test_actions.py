@@ -154,7 +154,6 @@ class TestActions(unittest.TestCase):
 
         nano_header = NanoHeader(
             tx=tx,
-            nc_version=1,
             nc_id=self.tx0.hash,
             nc_method=nc_method if nc_method is not None else 'nop',
             nc_args_bytes=nc_args_bytes,

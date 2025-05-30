@@ -370,7 +370,6 @@ class VertexExporter:
             # Even though we know the NanoHeader only supports Transactions, we force the typing here so we can test
             # that other types of vertices such as blocks would fail verification by using an unsupported header.
             tx=cast(Transaction, vertex),
-            nc_version=1,
             nc_id=nc_id,
             nc_method=nc_method,
             nc_args_bytes=nc_args_bytes,
