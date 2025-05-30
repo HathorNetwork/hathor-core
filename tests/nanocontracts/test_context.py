@@ -80,7 +80,6 @@ class ContextTestCase(BlueprintTestCase):
         self.assertEqual(vertex_data.block.height, b12.get_height())
         nano_header_data, = vertex_data.headers
         assert isinstance(nano_header_data, NanoHeaderData)
-        self.assertEqual(nano_header_data.nc_version, 1)
         self.assertEqual(nano_header_data.nc_id, nc1.hash)
         self.assertEqual(nano_header_data.nc_method, 'remember_context')
         self.assertEqual(nano_header_data.nc_args_bytes, b'\x00')

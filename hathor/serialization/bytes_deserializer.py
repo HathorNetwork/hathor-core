@@ -63,7 +63,7 @@ class BytesDeserializer(Deserializer):
 
     @override
     def read_bytes(self, n: int, *, exact: bool = True) -> memoryview:
-        b = self.peek_bytes(n)
+        b = self.peek_bytes(n, exact=exact)
         if exact and len(self._view) < n:
             raise OutOfDataError('not enough bytes to read')
         self._view = self._view[n:]

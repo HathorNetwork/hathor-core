@@ -113,7 +113,6 @@ class VertexHeadersTest(unittest.TestCase):
 
             assert isinstance(vertex, Transaction)
             attributes_and_new_values = [
-                ('nc_version', 123),
                 ('nc_id', b'123'),
                 ('nc_method', 'new_method'),
                 ('nc_args_bytes', b'new args'),
@@ -154,7 +153,6 @@ class VertexHeadersTest(unittest.TestCase):
 
             assert isinstance(vertex, Transaction)
             attributes_and_new_values = [
-                ('nc_version', 123),
                 ('nc_id', b'123'),
                 ('nc_method', 'new_method'),
                 ('nc_args_bytes', b'new args'),

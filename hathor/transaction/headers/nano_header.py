@@ -31,6 +31,7 @@ from hathor.transaction.util import (
     unpack_len,
 )
 from hathor.types import VertexId
+from hathor.utils import leb128
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.blueprint import Blueprint
@@ -41,8 +42,8 @@ if TYPE_CHECKING:
     from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.block import Block
 
-NC_VERSION = 1
-ADDRESS_LEN_BYTES = 25
+ADDRESS_LEN_BYTES: int = 25
+_NC_SCRIPT_LEN_MAX_BYTES: int = 2
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -101,8 +102,6 @@ class NanoHeaderAction:
 class NanoHeader(VertexBaseHeader):
     tx: Transaction
 
-    nc_version: int = NC_VERSION
-
     # nc_id equals to the blueprint_id when a Nano Contract is being created.
     # nc_id equals to the contract_id when a method is being called.
     nc_id: VertexId
@@ -150,11 +149,6 @@ class NanoHeader(VertexBaseHeader):
         if verbose:
             verbose('header_id', header_id)
         assert header_id == VertexHeaderId.NANO_HEADER.value
-        (nc_version,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('nc_version', nc_version)
-        if nc_version != NC_VERSION:
-            raise ValueError('unknown nanocontract version: {}'.format(nc_version))
 
         nc_id, buf = unpack_len(32, buf)
         if verbose:
@@ -183,7 +177,7 @@ class NanoHeader(VertexBaseHeader):
         nc_address, buf = unpack_len(ADDRESS_LEN_BYTES, buf)
         if verbose:
             verbose('nc_address', nc_address)
-        (nc_script_len,), buf = unpack('!H', buf)
+        nc_script_len, buf = leb128.decode_unsigned(buf, max_bytes=_NC_SCRIPT_LEN_MAX_BYTES)
         if verbose:
             verbose('nc_script_len', nc_script_len)
         nc_script, buf = unpack_len(nc_script_len, buf)
@@ -194,7 +188,6 @@ class NanoHeader(VertexBaseHeader):
 
         return cls(
             tx=tx,
-            nc_version=nc_version,
             nc_id=nc_id,
             nc_method=decoded_nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -216,7 +209,6 @@ class NanoHeader(VertexBaseHeader):
         encoded_method = self.nc_method.encode('ascii')
 
         ret: deque[bytes] = deque()
-        ret.append(int_to_bytes(self.nc_version, 1))
         ret.append(self.nc_id)
         ret.append(int_to_bytes(len(encoded_method), 1))
         ret.append(encoded_method)
@@ -229,10 +221,10 @@ class NanoHeader(VertexBaseHeader):
 
         ret.append(self.nc_address)
         if not skip_signature:
-            ret.append(int_to_bytes(len(self.nc_script), 2))
+            ret.append(leb128.encode_unsigned(len(self.nc_script), max_bytes=_NC_SCRIPT_LEN_MAX_BYTES))
             ret.append(self.nc_script)
         else:
-            ret.append(int_to_bytes(0, 2))
+            ret.append(leb128.encode_unsigned(0, max_bytes=_NC_SCRIPT_LEN_MAX_BYTES))
         return ret
 
     def serialize(self) -> bytes:
