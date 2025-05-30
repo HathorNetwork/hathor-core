@@ -12,21 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
-from hathor.nanocontracts.storage import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
-from hathor.nanocontracts.types import public, view
+from typing import TYPE_CHECKING, Type
 
-__all__ = [
-    'Blueprint',
-    'Context',
-    'OnChainBlueprint',
-    'NCFail',
-    'NCMemoryStorageFactory',
-    'NCRocksDBStorageFactory',
-    'NCStorageFactory',
-    'public',
-    'view',
-]
+if TYPE_CHECKING:
+    from hathor.nanocontracts.blueprint import Blueprint
+
+
+_blueprints_mapper: dict[str, Type['Blueprint']] = {
+}
