@@ -3,8 +3,8 @@ import unittest
 
 from extras.github.docker import prep_base_version, prep_tags
 
-DEFAULT_PYTHON_VERSION = '3.11'
-NON_DEFAULT_PYTHON_VERSION = '3.10'
+DEFAULT_PYTHON_VERSION = '3.12'
+NON_DEFAULT_PYTHON_VERSION = '3.11'
 
 
 class DockerWorkflowTest(unittest.TestCase):
