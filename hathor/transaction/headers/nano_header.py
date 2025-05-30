@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Type
 
 from typing_extensions import assert_never
 
@@ -27,6 +27,7 @@ from hathor.types import VertexId
 from hathor.utils import leb128
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.context import Context
     from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid
     from hathor.transaction import Transaction
@@ -108,6 +109,8 @@ class NanoHeader(VertexBaseHeader):
     # Address and script with signature(s) of the transaction owner(s)/caller(s). Supports P2PKH and P2SH.
     nc_address: bytes
     nc_script: bytes
+
+    _blueprint_class: Optional[Type[Blueprint]] = None
 
     @classmethod
     def _deserialize_action(cls, buf: bytes) -> tuple[NanoHeaderAction, bytes]:
