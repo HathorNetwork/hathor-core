@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import struct
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from typing_extensions import Self
 
@@ -90,5 +90,20 @@ class Deserializer(ABC):
         return struct.unpack_from(format, data)
 
     def with_max_bytes(self, max_bytes: int) -> MaxBytesDeserializer[Self]:
+        """Helper method to wrap the current deserializer with MaxBytesDeserializer."""
         from .adapters import MaxBytesDeserializer
         return MaxBytesDeserializer(self, max_bytes)
+
+    @overload
+    def with_optional_max_bytes(self, max_bytes: None) -> Self:
+        ...
+
+    @overload
+    def with_optional_max_bytes(self, max_bytes: int) -> MaxBytesDeserializer[Self]:
+        ...
+
+    def with_optional_max_bytes(self, max_bytes: int | None) -> Self | MaxBytesDeserializer[Self]:
+        """Helper method to optionally wrap the current deserializer."""
+        if max_bytes is None:
+            return self
+        return self.with_max_bytes(max_bytes)
