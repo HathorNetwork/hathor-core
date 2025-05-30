@@ -33,7 +33,7 @@
             shellHook = ''
               export CFLAGS="-I${pkgs.rocksdb}/include"
               export LDFLAGS="-L${pkgs.rocksdb}/lib"
-              poetry env use python3.10
+              poetry env use python3.11
             '';
           };
     });
