@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import struct
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from typing_extensions import Self
 
@@ -54,8 +54,23 @@ class Serializer(ABC):
         self.write_bytes(data_bytes)
 
     def with_max_bytes(self, max_bytes: int) -> MaxBytesSerializer[Self]:
+        """Helper method to wrap the current serializer with MaxBytesSerializer."""
         from .adapters import MaxBytesSerializer
         return MaxBytesSerializer(self, max_bytes)
+
+    @overload
+    def with_optional_max_bytes(self, max_bytes: None) -> Self:
+        ...
+
+    @overload
+    def with_optional_max_bytes(self, max_bytes: int) -> MaxBytesSerializer[Self]:
+        ...
+
+    def with_optional_max_bytes(self, max_bytes: int | None) -> Self | MaxBytesSerializer[Self]:
+        """Helper method to optionally wrap the current serializer."""
+        if max_bytes is None:
+            return self
+        return self.with_max_bytes(max_bytes)
 
     @staticmethod
     def build_bytes_serializer() -> BytesSerializer:

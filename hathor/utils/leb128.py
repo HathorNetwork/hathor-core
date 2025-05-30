@@ -29,10 +29,8 @@ def encode_signed(value: int, *, max_bytes: int | None = None) -> bytes:
     True
     """
     serializer: Serializer = Serializer.build_bytes_serializer()
-    if max_bytes is not None:
-        serializer = serializer.with_max_bytes(max_bytes)
     try:
-        encode_leb128(serializer, value, signed=True)
+        encode_leb128(serializer.with_optional_max_bytes(max_bytes), value, signed=True)
     except MaxBytesExceededError as e:
         raise ValueError(f'cannot encode more than {max_bytes} bytes') from e
     except SerializationError as e:
@@ -50,10 +48,8 @@ def encode_unsigned(value: int, *, max_bytes: int | None = None) -> bytes:
     True
     """
     serializer: Serializer = Serializer.build_bytes_serializer()
-    if max_bytes is not None:
-        serializer = serializer.with_max_bytes(max_bytes)
     try:
-        encode_leb128(serializer, value, signed=False)
+        encode_leb128(serializer.with_optional_max_bytes(max_bytes), value, signed=False)
     except MaxBytesExceededError as e:
         raise ValueError(f'cannot encode more than {max_bytes} bytes') from e
     except SerializationError as e:
@@ -72,12 +68,17 @@ def decode_signed(data: bytes, *, max_bytes: int | None = None) -> tuple[int, by
     (624485, b'test')
     >>> decode_signed(bytes([0xC0, 0xBB, 0x78]) + b'test')
     (-123456, b'test')
+    >>> decode_signed(bytes([0xC0, 0xBB, 0x78]) + b'test', max_bytes=3)
+    (-123456, b'test')
+    >>> try:
+    ...     decode_signed(bytes([0xC0, 0xBB, 0x78]) + b'test', max_bytes=2)
+    ... except ValueError as e:
+    ...     print(e)
+    cannot decode more than 2 bytes
     """
-    deserializer: Deserializer = Deserializer.build_bytes_deserializer(data)
-    if max_bytes is not None:
-        deserializer = deserializer.with_max_bytes(max_bytes)
+    deserializer = Deserializer.build_bytes_deserializer(data)
     try:
-        value = decode_leb128(deserializer, signed=True)
+        value = decode_leb128(deserializer.with_optional_max_bytes(max_bytes), signed=True)
     except MaxBytesExceededError as e:
         raise ValueError(f'cannot decode more than {max_bytes} bytes') from e
     except SerializationError as e:
@@ -96,12 +97,17 @@ def decode_unsigned(data: bytes, *, max_bytes: int | None = None) -> tuple[int, 
     (0, b'test')
     >>> decode_unsigned(bytes([0xE5, 0x8E, 0x26]) + b'test')
     (624485, b'test')
+    >>> decode_unsigned(bytes([0xE5, 0x8E, 0x26]) + b'test', max_bytes=3)
+    (624485, b'test')
+    >>> try:
+    ...     decode_unsigned(bytes([0xE5, 0x8E, 0x26]) + b'test', max_bytes=2)
+    ... except ValueError as e:
+    ...     print(e)
+    cannot decode more than 2 bytes
     """
-    deserializer: Deserializer = Deserializer.build_bytes_deserializer(data)
-    if max_bytes is not None:
-        deserializer = deserializer.with_max_bytes(max_bytes)
+    deserializer = Deserializer.build_bytes_deserializer(data)
     try:
-        value = decode_leb128(deserializer, signed=False)
+        value = decode_leb128(deserializer.with_optional_max_bytes(max_bytes), signed=False)
     except MaxBytesExceededError as e:
         raise ValueError(f'cannot decode more than {max_bytes} bytes') from e
     except SerializationError as e:
