@@ -1,6 +1,6 @@
-# before changing these variables, make sure the tag $PYTHON-alpine$ALPINE exists first
+# before changing these variables, make sure the tag $PYTHON-slim-$DEBIAN exists first
 # list of valid tags hese: https://hub.docker.com/_/python
-ARG PYTHON=3.11
+ARG PYTHON=3.12
 ARG DEBIAN=bullseye
 
 # stage-0: copy pyproject.toml/poetry.lock and install the production set of dependencies
