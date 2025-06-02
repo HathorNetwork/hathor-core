@@ -187,16 +187,16 @@ class ConnectionsManager:
         self.lc_connect.clock = self.reactor
         self.lc_connect_interval = 0.2  # seconds
 
+        # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
+        self.whitelist_only = whitelist_only
+
         # A timer to try to reconnect to the disconnect known peers.
-        if self._settings.ENABLE_PEER_WHITELIST:
+        if self.whitelist_only:
             self.wl_reconnect = LoopingCall(self.update_whitelist)
             self.wl_reconnect.clock = self.reactor
 
         # Pubsub object to publish events
         self.pubsub = pubsub
-
-        # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
-        self.whitelist_only = whitelist_only
 
         # Parameter to enable IPv6 connections
         self.enable_ipv6 = enable_ipv6
@@ -303,7 +303,7 @@ class ConnectionsManager:
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
 
-        if self._settings.ENABLE_PEER_WHITELIST:
+        if self.whitelist_only:
             self._start_whitelist_reconnect()
 
         for description in self.listen_address_descriptions:
@@ -421,9 +421,19 @@ class ConnectionsManager:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
+
+        # If whitelist only flag ON and whitelist not empty, deny peer not in whitelist.
+        # Important Note: Perhaps no peer ID in the connection...
+        '''
+                if self.whitelist_only and self.manager.peers_whitelist:
+            if protocol.peer.id not in self.manager.peers_whitelist:
+                self.log.warn('Denied: Connection not in whitelist but node is whitelist-only.')
+                protocol.disconnect(force=True)
+                return
+        '''
+
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
-
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
             protocol=protocol,
@@ -603,10 +613,11 @@ class ConnectionsManager:
         for peer in list(self.verified_peer_storage.values()):
             self.connect_to_peer(peer, int(now))
 
-    def update_whitelist(self) -> Deferred[None]:
+    def update_whitelist(self) -> Deferred[None] | None:
         from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
-        assert self._settings.WHITELIST_URL is not None
+        if self._settings.WHITELIST_URL is None:
+            return None
         self.log.info('update whitelist')
         d = self._http_agent.request(
             b'GET',
@@ -941,3 +952,10 @@ class ConnectionsManager:
         self.log.warn('Killing all connections and resetting entrypoints...')
         self.disconnect_all_peers(force=True)
         self.my_peer.reload_entrypoints_from_source_file()
+
+    def enable_whitelist(self) -> None:
+        for conn in self.connections:
+            # If there is no whitelist, no point in itering.
+            if conn.get_peer_id():
+                if conn.get_peer_id() not in conn.node.peers_whitelist:
+                    conn.disconnect(reason='Whitelist turned on', force=True)
