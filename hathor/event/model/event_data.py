@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 from typing import Any, Optional, TypeAlias, Union, cast
 
 from pydantic import Extra, validator
@@ -61,6 +63,7 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     first_block: Optional[str]
     height: int
     validation: str
+    nc_execution: str | None
 
     @validator('spent_outputs', pre=True, each_item=True)
     def _parse_spent_outputs(cls, spent_output: Union[SpentOutput, list[Union[int, list[str]]]]) -> SpentOutput:
@@ -160,5 +163,38 @@ class ReorgData(BaseEventData):
         )
 
 
+class NCEventData(BaseEventData):
+    """Class that represents data for a custom nano contract event."""
+
+    # The ID of the transaction that executed a nano contract.
+    vertex_id: str
+
+    # The ID of the nano contract that was executed.
+    nc_id: str
+
+    # The nano contract execution state.
+    nc_execution: str
+
+    # The block that confirmed this transaction, executing the nano contract.
+    first_block: str
+
+    # Custom data provided by the blueprint.
+    data_hex: str
+
+    @classmethod
+    def from_event_arguments(cls, args: EventArguments) -> NCEventData:
+        meta = args.tx.get_metadata()
+        assert meta.nc_execution is not None
+        assert meta.first_block is not None
+
+        return cls(
+            vertex_id=args.tx.hash_hex,
+            nc_id=args.nc_event.nc_id.hex(),
+            nc_execution=meta.nc_execution,
+            first_block=meta.first_block.hex(),
+            data_hex=args.nc_event.data.hex(),
+        )
+
+
 # Union type to encompass BaseEventData polymorphism
-EventData: TypeAlias = EmptyData | TxData | TxDataWithoutMeta | ReorgData
+EventData: TypeAlias = EmptyData | TxData | TxDataWithoutMeta | ReorgData | NCEventData
