@@ -149,13 +149,13 @@ class TokenCreationTransaction(Transaction):
 
         return struct_bytes
 
-    def get_sighash_all(self) -> bytes:
+    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
         """ Returns a serialization of the inputs and outputs without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
-        if self._sighash_cache:
+        if not skip_cache and self._sighash_cache:
             return self._sighash_cache
 
         struct_bytes = pack(
@@ -247,6 +247,10 @@ class TokenCreationTransaction(Transaction):
         token_dict = super()._get_token_info_from_inputs()
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
-        token_dict[self.hash] = TokenInfo(0, True, True)
+        token_dict[self.hash] = TokenInfo(
+            amount=0,
+            can_mint=True,
+            can_melt=True,
+        )
 
         return token_dict

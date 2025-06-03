@@ -115,6 +115,16 @@ class TokensIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
+    def create_token_info(self, token_uid: bytes, name: str, symbol: str, total: int = 0) -> None:
+        """Create a token info for a new token."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def destroy_token(self, token_uid: bytes) -> None:
+        """Destroy a token."""
+        raise NotImplementedError
+
+    @abstractmethod
     def get_transactions_count(self, token_uid: bytes) -> int:
         """ Get quantity of transactions from requested token
         """
@@ -138,4 +148,9 @@ class TokensIndex(BaseIndex):
                                ) -> tuple[list[bytes], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the newest
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    def add_to_total(self, token_uid: bytes, amount: int) -> None:
+        """Add an amount to the total of `token_uid`. The amount may be negative."""
         raise NotImplementedError
