@@ -82,10 +82,6 @@ class NCBlockSorter:
             for txin in tx.inputs:
                 sorter.add_edge(tx.hash, txin.tx_id)
 
-            if tx.is_nano_contract():
-                nano_header = tx.get_nano_header()
-                sorter.add_edge(tx.hash, nano_header.nc_id)
-
         # Add edges from nano seqnum.
         tx_info_list = []
         for tx in nc_calls:

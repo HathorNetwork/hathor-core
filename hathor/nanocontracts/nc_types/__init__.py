@@ -27,6 +27,7 @@ from hathor.nanocontracts.nc_types.namedtuple_nc_type import NamedTupleNCType
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.nanocontracts.nc_types.null_nc_type import NullNCType
 from hathor.nanocontracts.nc_types.optional_nc_type import OptionalNCType
+from hathor.nanocontracts.nc_types.signed_data_nc_type import SignedDataNCType
 from hathor.nanocontracts.nc_types.sized_int_nc_type import Int32NCType
 from hathor.nanocontracts.nc_types.str_nc_type import StrNCType
 from hathor.nanocontracts.nc_types.token_uid_nc_type import TokenUidNCType
@@ -38,6 +39,7 @@ from hathor.nanocontracts.types import (
     Amount,
     BlueprintId,
     ContractId,
+    SignedData,
     Timestamp,
     TokenUid,
     TxOutputScript,
@@ -62,6 +64,7 @@ __all__ = [
     'NamedTupleNCType',
     'OptionalNCType',
     'SetNCType',
+    'SignedDataNCType',
     'StrNCType',
     'TupleNCType',
     'TypeAliasMap',
@@ -118,6 +121,7 @@ DEFAULT_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     TokenUid: TokenUidNCType,
     TxOutputScript: BytesLikeNCType[TxOutputScript],
     VertexId: Bytes32NCType,
+    SignedData: SignedDataNCType,
 }
 
 # This mapping includes all supported NCType classes, should only be used for parsing function calls

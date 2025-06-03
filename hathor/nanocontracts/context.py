@@ -14,14 +14,16 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from itertools import chain
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
 from hathor.crypto.util import get_address_b58_from_bytes
-from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.exception import NCFail, NCInvalidContext
 from hathor.nanocontracts.types import Address, ContractId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import VertexData
+from hathor.transaction.exceptions import TxValidationError
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -55,7 +57,16 @@ class Context:
         if not actions:
             self.__actions = _EMPTY_MAP
         else:
-            raise NotImplementedError('temporarily removed during nano merge')
+            from hathor.verification.nano_header_verifier import NanoHeaderVerifier
+            try:
+                NanoHeaderVerifier.verify_action_list(actions)
+            except TxValidationError as e:
+                raise NCInvalidContext('invalid nano context') from e
+
+            actions_map: defaultdict[TokenUid, tuple[NCAction, ...]] = defaultdict(tuple)
+            for action in actions:
+                actions_map[action.token_uid] = (*actions_map[action.token_uid], action)
+            self.__actions = MappingProxyType(actions_map)
 
         self.__all_actions__: tuple[NCAction, ...] = tuple(chain(*self.__actions.values()))
 
