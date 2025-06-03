@@ -32,6 +32,11 @@ settings = HathorSettings()
 # useful for adding blocks to a different wallet
 BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
 
+DEFAULT_WORDS: str = (
+    'bind daring above film health blush during tiny neck slight clown salmon '
+    'wine brown good setup later omit jaguar tourist rescue flip pet salute'
+)
+
 
 def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningService) -> bytes:
     """ From block bytes we create a block and resolve pow

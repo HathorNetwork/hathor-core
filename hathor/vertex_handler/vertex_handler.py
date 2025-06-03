@@ -251,4 +251,7 @@ class VertexHandler:
             log_func = self._log.info
         else:
             log_func = self._log.debug
+
+        if tx.name:
+            kwargs['__name'] = tx.name
         log_func(message, **kwargs)
