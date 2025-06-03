@@ -99,6 +99,7 @@ class VerificationService:
 
         Used by `self.validate_basic`. Should not modify the validation state."""
         self.verifiers.vertex.verify_version(vertex)
+        self.verifiers.vertex.verify_headers(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -261,10 +262,7 @@ class VerificationService:
     def _verify_nano_header(self, tx: BaseTransaction) -> None:
         """Add `verify_no_authorities()` to the transaction verification."""
         assert tx.is_nano_contract()
-
         self.verifiers.nano_header.verify_actions(tx)
-        self.verifiers.nano_header.verify_nc_id(tx)
-        self.verifiers.nano_header.verify_nc_method_and_args(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         # We assert with type() instead of isinstance() because each subclass has a specific branch.

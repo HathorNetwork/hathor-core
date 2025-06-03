@@ -26,18 +26,6 @@ class NCError(HathorError):
     pass
 
 
-class NCSerializationError(NCError):
-    pass
-
-
-class NCSerializationArgTooLong(NCSerializationError):
-    pass
-
-
-class NCSerializationTypeError(NCSerializationError):
-    pass
-
-
 class NCTxValidationError(TxValidationError):
     pass
 
@@ -50,30 +38,37 @@ class NCInvalidPubKey(NCTxValidationError):
     pass
 
 
-class NCMethodNotFound(NCTxValidationError):
-    """Raised when a method is not found in a nano contract."""
-    pass
-
-
-class NCInvalidAction(NCTxValidationError):
-    """Raised when an action is invalid."""
-    pass
-
-
-class BlueprintDoesNotExist(NCTxValidationError):
-    pass
-
-
-class NanoContractDoesNotExist(NCTxValidationError):
-    pass
-
-
-class NCViewMethodError(NCError):
-    """Raised when a private method changes the state of the contract."""
-
-
 class NCFail(NCError):
     """Raised by Blueprint's methods to fail execution."""
+
+
+class NanoContractDoesNotExist(NCFail):
+    pass
+
+
+class BlueprintDoesNotExist(NCFail):
+    pass
+
+
+class NCSerializationError(NCFail):
+    pass
+
+
+class NCSerializationArgTooLong(NCSerializationError):
+    pass
+
+
+class NCSerializationTypeError(NCSerializationError):
+    pass
+
+
+class NCViewMethodError(NCFail):
+    """Raised when a view method changes the state of the contract."""
+    pass
+
+
+class NCMethodNotFound(NCFail):
+    """Raised when a method is not found in a nano contract."""
     pass
 
 
@@ -123,8 +118,8 @@ class NCUninitializedContractError(NCFail):
     """Raised when a contract calls a method from an uninitialized contract."""
 
 
-class NCInvalidActionExecution(NCFail):
-    """Raised when an action execution is invalid."""
+class NCInvalidAction(NCFail):
+    """Raised when an action is invalid."""
     pass
 
 
