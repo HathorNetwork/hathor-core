@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
@@ -27,6 +29,7 @@ from hathor.transaction.storage.tx_allow_scope import TxAllowScope
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts.storage import NCStorageFactory
 
 
 class TransactionCacheStorage(BaseTransactionStorage):
@@ -44,6 +47,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         capacity: int = 10000,
         *,
         settings: 'HathorSettings',
+        nc_storage_factory: NCStorageFactory,
         indexes: Optional[IndexesManager],
         _clone_if_needed: bool = False,
     ) -> None:
@@ -81,7 +85,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         # we need to use only one weakref dict, so we must first initialize super, and then
         # attribute the same weakref for both.
-        super().__init__(indexes=indexes, settings=settings)
+        super().__init__(indexes=indexes, settings=settings, nc_storage_factory=nc_storage_factory)
         self._tx_weakref = store._tx_weakref
         # XXX: just to make sure this isn't being used anywhere, setters/getters should be used instead
         del self._allow_scope
