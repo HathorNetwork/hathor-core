@@ -21,7 +21,9 @@ from typing import TYPE_CHECKING, NamedTuple, Optional
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
 from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
 from hathor.nanocontracts.storage.token_proxy import TokenProxy
-from hathor.nanocontracts.types import ContractId, TokenUid
+from hathor.nanocontracts.types import Address, ContractId, TokenUid
+from hathor.transaction.headers.nano_header import ADDRESS_SEQNUM_SIZE
+from hathor.utils import leb128
 
 if TYPE_CHECKING:
     from hathor.transaction.token_creation_tx import TokenDescription
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
 class _Tag(Enum):
     CONTRACT = b'\0'
     TOKEN = b'\1'
+    ADDRESS = b'\2'
 
 
 class ContractKey(NamedTuple):
@@ -44,6 +47,13 @@ class TokenKey(NamedTuple):
 
     def __bytes__(self):
         return _Tag.TOKEN.value + self.token_id
+
+
+class AddressKey(NamedTuple):
+    address: Address
+
+    def __bytes__(self):
+        return _Tag.ADDRESS.value + self.address
 
 
 class NCBlockStorage:
@@ -129,3 +139,26 @@ class NCBlockStorage:
         token_description = TokenDescription(token_id=token_id, token_name=token_name, token_symbol=token_symbol)
         token_description_bytes = pickle.dumps(token_description)
         self._block_trie.update(bytes(key), token_description_bytes)
+
+    def get_address_seqnum(self, address: Address) -> int:
+        """Get the latest seqnum for an address.
+
+        For clarity, new transactions must have a GREATER seqnum to be able to be executed."""
+        key = AddressKey(address)
+        try:
+            seqnum_bytes = self._block_trie.get(bytes(key))
+        except KeyError:
+            return -1
+        else:
+            seqnum, buf = leb128.decode_unsigned(seqnum_bytes, max_bytes=ADDRESS_SEQNUM_SIZE)
+            assert len(buf) == 0
+            return seqnum
+
+    def set_address_seqnum(self, address: Address, seqnum: int) -> None:
+        """Update seqnum for an adress."""
+        assert seqnum >= 0
+        old_seqnum = self.get_address_seqnum(address)
+        assert seqnum > old_seqnum
+        key = AddressKey(address)
+        seqnum_bytes = leb128.encode_unsigned(seqnum, max_bytes=ADDRESS_SEQNUM_SIZE)
+        self._block_trie.update(bytes(key), seqnum_bytes)
