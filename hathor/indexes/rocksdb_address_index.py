@@ -66,7 +66,7 @@ class RocksDBAddressIndex(RocksDBTxGroupIndex[str], AddressIndex, RocksDBIndexUt
         self._publish_tx(tx)
 
     def get_from_address(self, address: str) -> list[bytes]:
-        return list(self._get_from_key(address))
+        return list(self._get_sorted_from_key(address))
 
     def get_sorted_from_address(self, address: str, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         return self._get_sorted_from_key(address, tx_start)
