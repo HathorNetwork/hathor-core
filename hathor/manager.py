@@ -44,6 +44,7 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
@@ -107,6 +108,7 @@ class HathorManager:
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
+        runner_factory: RunnerFactory,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -194,6 +196,7 @@ class HathorManager:
         self.connections = p2p_manager
         self.vertex_handler = vertex_handler
         self.vertex_parser = vertex_parser
+        self.runner_factory = runner_factory
 
         self.websocket_factory = websocket_factory
 
