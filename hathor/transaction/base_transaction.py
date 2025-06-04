@@ -825,8 +825,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :return: Transaction or Block copy
         """
         new_tx = self.create_from_struct(self.get_struct())
-        # static_metadata can be safely copied as it is a frozen dataclass
-        new_tx.set_static_metadata(self._static_metadata)
+        if include_metadata:
+            # static_metadata can be safely copied as it is a frozen dataclass
+            new_tx.set_static_metadata(self._static_metadata)
         if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
@@ -841,23 +842,18 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     @property
     def static_metadata(self) -> StaticMetadataT:
         """Get this vertex's static metadata. Assumes it has been initialized."""
-        assert self._static_metadata is not None
+        assert self._static_metadata is not None, 'static metadata is not initialized'
         return self._static_metadata
 
-    @abstractmethod
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
-        """Initialize this vertex's static metadata using dependencies from a storage. This can be called multiple
-        times, provided the dependencies don't change. Also, this must be fast, ideally O(1)."""
-        raise NotImplementedError
+        """Initialize this vertex's static metadata using dependencies from a storage. This can only be called once.
+        Also, this must be fast, ideally O(1)."""
+        static_metadata = VertexStaticMetadata.from_storage(settings, storage, target=self)
+        self.set_static_metadata(static_metadata)
 
     def set_static_metadata(self, static_metadata: StaticMetadataT | None) -> None:
-        """Set this vertex's static metadata. After it's set, it can only be set again to the same value."""
-        if self._static_metadata is not None:
-            assert self._static_metadata == static_metadata, 'trying to set static metadata with different values'
-            self.log.warn(
-                'redundant call on set_static_metadata', vertex_id=self.hash_hex, static_metadata=static_metadata
-            )
-
+        """Set this vertex's static metadata. It can only be set once."""
+        assert self._static_metadata is None, 'static metadata is already set'
         self._static_metadata = static_metadata
 
 

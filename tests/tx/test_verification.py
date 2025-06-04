@@ -106,7 +106,7 @@ class VerificationTest(unittest.TestCase):
     def _get_valid_token_creation_tx(self) -> TokenCreationTransaction:
         add_blocks_unlock_reward(self.manager)
         assert self.manager.wallet
-        tx = create_tokens(self.manager, self.manager.wallet.get_unused_address())
+        tx = create_tokens(self.manager, self.manager.wallet.get_unused_address(), propagate=False)
         tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         return tx
 

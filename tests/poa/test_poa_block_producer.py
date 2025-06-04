@@ -47,55 +47,56 @@ def test_poa_block_producer_one_signer() -> None:
     reactor = manager.reactor
     assert isinstance(reactor, TestMemoryReactorClock)
     manager = Mock(wraps=manager)
+    vertex_handler = manager.vertex_handler
     producer = PoaBlockProducer(settings=settings, reactor=reactor, poa_signer=signer)
     producer.manager = manager
     producer.start()
 
     # at the beginning no blocks are produced
     reactor.advance(60)
-    manager.on_new_tx.assert_not_called()
+    vertex_handler.on_new_vertex.assert_not_called()
 
     # when we can start mining, we start producing blocks
     manager.can_start_mining = Mock(return_value=True)
 
     # we produce our first block
     reactor.advance(10)
-    manager.on_new_tx.assert_called_once()
-    block1 = manager.on_new_tx.call_args.args[0]
+    vertex_handler.on_new_vertex.assert_called_once()
+    block1 = vertex_handler.on_new_vertex.call_args.args[0]
     assert isinstance(block1, PoaBlock)
     assert block1.timestamp == reactor.seconds()
     assert block1.weight == poa.BLOCK_WEIGHT_IN_TURN
     assert block1.outputs == []
     assert block1.get_block_parent_hash() == settings.GENESIS_BLOCK_HASH
-    manager.on_new_tx.reset_mock()
+    vertex_handler.on_new_vertex.reset_mock()
 
     # haven't produced the second block yet
     reactor.advance(9)
 
     # we produce our second block
     reactor.advance(1)
-    manager.on_new_tx.assert_called_once()
-    block2 = manager.on_new_tx.call_args.args[0]
+    vertex_handler.on_new_vertex.assert_called_once()
+    block2 = vertex_handler.on_new_vertex.call_args.args[0]
     assert isinstance(block2, PoaBlock)
     assert block2.timestamp == block1.timestamp + 10
     assert block2.weight == poa.BLOCK_WEIGHT_IN_TURN
     assert block2.outputs == []
     assert block2.get_block_parent_hash() == block1.hash
-    manager.on_new_tx.reset_mock()
+    vertex_handler.on_new_vertex.reset_mock()
 
     # haven't produced the third block yet
     reactor.advance(9)
 
     # we produce our third block
     reactor.advance(1)
-    manager.on_new_tx.assert_called_once()
-    block3 = manager.on_new_tx.call_args.args[0]
+    vertex_handler.on_new_vertex.assert_called_once()
+    block3 = vertex_handler.on_new_vertex.call_args.args[0]
     assert isinstance(block3, PoaBlock)
     assert block3.timestamp == block2.timestamp + 10
     assert block3.weight == poa.BLOCK_WEIGHT_IN_TURN
     assert block3.outputs == []
     assert block3.get_block_parent_hash() == block2.hash
-    manager.on_new_tx.reset_mock()
+    vertex_handler.on_new_vertex.reset_mock()
 
 
 def test_poa_block_producer_two_signers() -> None:
@@ -105,55 +106,56 @@ def test_poa_block_producer_two_signers() -> None:
     reactor = manager.reactor
     assert isinstance(reactor, TestMemoryReactorClock)
     manager = Mock(wraps=manager)
+    vertex_handler = manager.vertex_handler
     producer = PoaBlockProducer(settings=settings, reactor=reactor, poa_signer=signer1)
     producer.manager = manager
     producer.start()
 
     # at the beginning no blocks are produced
     reactor.advance(60)
-    manager.on_new_tx.assert_not_called()
+    vertex_handler.on_new_vertex.assert_not_called()
 
     # when we can start mining, we start producing blocks
     manager.can_start_mining = Mock(return_value=True)
 
     # we produce our first block
     reactor.advance(10)
-    manager.on_new_tx.assert_called_once()
-    block1 = manager.on_new_tx.call_args.args[0]
+    vertex_handler.on_new_vertex.assert_called_once()
+    block1 = vertex_handler.on_new_vertex.call_args.args[0]
     assert isinstance(block1, PoaBlock)
     assert block1.timestamp == reactor.seconds()
     assert block1.weight == poa.BLOCK_WEIGHT_OUT_OF_TURN
     assert block1.outputs == []
     assert block1.get_block_parent_hash() == settings.GENESIS_BLOCK_HASH
-    manager.on_new_tx.reset_mock()
+    vertex_handler.on_new_vertex.reset_mock()
 
     # haven't produced the second block yet
     reactor.advance(9)
 
     # we produce our second block
     reactor.advance(1)
-    manager.on_new_tx.assert_called_once()
-    block2 = manager.on_new_tx.call_args.args[0]
+    vertex_handler.on_new_vertex.assert_called_once()
+    block2 = vertex_handler.on_new_vertex.call_args.args[0]
     assert isinstance(block2, PoaBlock)
     assert block2.timestamp == block1.timestamp + 10
     assert block2.weight == poa.BLOCK_WEIGHT_IN_TURN
     assert block2.outputs == []
     assert block2.get_block_parent_hash() == block1.hash
-    manager.on_new_tx.reset_mock()
+    vertex_handler.on_new_vertex.reset_mock()
 
     # haven't produced the third block yet
     reactor.advance(29)
 
     # we produce our third block
     reactor.advance(1)
-    manager.on_new_tx.assert_called_once()
-    block3 = manager.on_new_tx.call_args.args[0]
+    vertex_handler.on_new_vertex.assert_called_once()
+    block3 = vertex_handler.on_new_vertex.call_args.args[0]
     assert isinstance(block3, PoaBlock)
     assert block3.timestamp == block2.timestamp + 30
     assert block3.weight == poa.BLOCK_WEIGHT_OUT_OF_TURN
     assert block3.outputs == []
     assert block3.get_block_parent_hash() == block2.hash
-    manager.on_new_tx.reset_mock()
+    vertex_handler.on_new_vertex.reset_mock()
 
 
 @pytest.mark.parametrize(

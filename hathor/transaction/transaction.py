@@ -18,8 +18,6 @@ import hashlib
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
-from typing_extensions import override
-
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
@@ -354,8 +352,3 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             if meta.voided_by:
                 return True
         return False
-
-    @override
-    def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
-        static_metadata = TransactionStaticMetadata.create_from_storage(self, settings, storage)
-        self.set_static_metadata(static_metadata)
