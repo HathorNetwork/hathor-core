@@ -30,9 +30,10 @@ from hathor.storage import RocksDBStorage
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.types import VertexId
-from hathor.util import Random, not_none
-from hathor.wallet import BaseWallet, HDWallet, Wallet
+from hathor.util import Random, initialize_hd_wallet, not_none
+from hathor.wallet import BaseWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
+from tests.utils import DEFAULT_WORDS
 
 logger = get_logger()
 main = ut_main
@@ -508,18 +509,10 @@ class TestCase(unittest.TestCase):
         if required_to_quiesce and active:
             self.fail('Reactor was still active when it was required to be quiescent.')
 
-    def get_wallet(self) -> HDWallet:
-        words = ('bind daring above film health blush during tiny neck slight clown salmon '
-                 'wine brown good setup later omit jaguar tourist rescue flip pet salute')
-
-        hd = HDWallet(words=words)
-        hd._manually_initialize()
-        return hd
-
     def get_address(self, index: int) -> Optional[str]:
         """ Generate a fixed HD Wallet and return an address
         """
-        hd = self.get_wallet()
+        hd = initialize_hd_wallet(DEFAULT_WORDS)
 
         if index >= hd.gap_limit:
             return None
