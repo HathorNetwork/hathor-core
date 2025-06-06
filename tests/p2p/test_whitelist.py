@@ -7,7 +7,7 @@ from twisted.web.client import Agent
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
-from hathor.p2p.manager import WHITELIST_REQUEST_TIMEOUT
+from hathor.p2p.peers_whitelist import WHITELIST_REQUEST_TIMEOUT
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from tests import unittest

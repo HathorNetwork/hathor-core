@@ -36,6 +36,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peers_whitelist import PeersWhitelist
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
@@ -182,7 +183,7 @@ class Builder:
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
 
-        self.whitelist_enabled: bool = False
+        self._peers_whitelist: PeersWhitelist | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -394,7 +395,7 @@ class Builder:
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
-            is_whitelist_only=self.whitelist_enabled,
+            peers_whitelist=self._peers_whitelist,
             rng=self._rng,
             enable_ipv6=self._enable_ipv6,
             disable_ipv4=self._disable_ipv4,
@@ -673,9 +674,9 @@ class Builder:
         self._enable_event_queue = True
         return self
 
-    def enable_whitelist(self) -> 'Builder':
+    def set_whitelist(self, peers_whitelist: PeersWhitelist) -> 'Builder':
         self.check_if_can_modify()
-        self.whitelist_enabled = True
+        self._peers_whitelist = peers_whitelist
         return self
 
     def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':

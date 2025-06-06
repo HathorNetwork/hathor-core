@@ -30,8 +30,8 @@ logger = get_logger()
 
 
 class PeerIdState(BaseState):
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings, is_whitelist_only: bool) -> None:
-        super().__init__(protocol, settings, is_whitelist_only)
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings) -> None:
+        super().__init__(protocol, settings)
         self.log = logger.new(remote=protocol.get_short_remote())
         self.cmd_map.update({
             ProtocolMessages.PEER_ID: self.handle_peer_id,
@@ -116,7 +116,7 @@ class PeerIdState(BaseState):
             return
 
         # is it on the whitelist?
-        if peer.id and self._should_block_peer(peer.id):
+        if not self._is_peer_allowed(peer.id):
             if self._settings.WHITELIST_WARN_BLOCKED_PEERS:
                 protocol.send_error_and_close_connection(f'Blocked (by {peer.id}). Get in touch with Hathor team.')
             else:
@@ -161,32 +161,11 @@ class PeerIdState(BaseState):
 
         self.send_ready()
 
-    def _should_block_peer(self, peer_id: PeerId) -> bool:
-        """ Determine if peer should not be allowed to connect.
+    def _is_peer_allowed(self, peer_id: PeerId) -> bool:
+        """Return True if peer is allowed to connect; False otherwise."""
+        peers_whitelist = self.protocol.connections.peers_whitelist
 
-        Currently this is only because the peer is not in a whitelist and whitelist blocking is active.
-        """
-        # If wl is empty, we don't block peer, regardless of whitelist flag.
-        peer_is_whitelisted = peer_id in self.protocol.node.peers_whitelist
-        # never block whitelisted peers
-        if peer_is_whitelisted:
-            return False
+        if peers_whitelist is None:
+            return True
 
-        # when is_whitelist_only (old ENABLE_PEER_WHITELIST) is set,
-        # we check if we're on sync-v1 to block non-whitelisted peers
-        if self.enable_whitelist:
-            assert self.protocol.sync_version is not None
-            if not peer_is_whitelisted:
-                if self.protocol.sync_version.is_v1():
-                    return True
-                elif self._settings.USE_PEER_WHITELIST_ON_SYNC_V2:
-                    return True
-
-        # otherwise we block non-whitelisted peers when on "whitelist-only mode"
-        if self.protocol.connections is not None:
-            protocol_is_whitelist_only = self.protocol.connections.is_whitelist_only
-            if protocol_is_whitelist_only and not peer_is_whitelisted:
-                return True
-
-        # default is not blocking, this will be sync-v2 peers not on whitelist when not on whitelist-only mode
-        return False
+        return peers_whitelist.is_peer_whitelisted(peer_id)

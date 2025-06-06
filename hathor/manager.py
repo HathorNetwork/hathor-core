@@ -46,7 +46,6 @@ from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
-from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
@@ -219,12 +218,6 @@ class HathorManager:
 
         # Thread pool used to resolve pow when sending tokens
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
-
-        # Parameter to track whitelist condition of the full-node
-        self.is_whitelist_only: bool = p2p_manager.is_whitelist_only
-
-        # List of whitelisted peers
-        self.peers_whitelist: list[PeerId] = []
 
         # List of capabilities of the peer
         if capabilities is not None:
@@ -796,24 +789,6 @@ class HathorManager:
 
     def has_sync_version_capability(self) -> bool:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
-
-    def add_peer_to_whitelist(self, peer_id: PeerId) -> None:
-        if not self.connections.is_whitelist_only:
-            return
-
-        if peer_id in self.peers_whitelist:
-            self.log.info('peer already in whitelist', peer_id=peer_id)
-        else:
-            self.peers_whitelist.append(peer_id)
-
-    def remove_peer_from_whitelist_and_disconnect(self, peer_id: PeerId) -> None:
-        if not self.connections.is_whitelist_only:
-            return
-
-        if peer_id in self.peers_whitelist:
-            self.peers_whitelist.remove(peer_id)
-            # disconnect from node
-            self.connections.drop_connection_by_peer_id(peer_id)
 
     def has_recent_activity(self) -> bool:
         current_timestamp = time.time()

@@ -34,7 +34,7 @@ class BaseState:
         Callable[[str], None] | Callable[[str], Deferred[None]] | Callable[[str], Coroutine[Deferred[None], Any, None]]
     ]
 
-    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings, enable_whitelist: bool = False):
+    def __init__(self, protocol: 'HathorProtocol', settings: HathorSettings):
         self.log = logger.new(**protocol.get_logger_context())
         self._settings = settings
         self.protocol = protocol
@@ -42,7 +42,6 @@ class BaseState:
             ProtocolMessages.ERROR: self.handle_error,
             ProtocolMessages.THROTTLE: self.handle_throttle,
         }
-        self.enable_whitelist = enable_whitelist
 
         # This variable is set by HathorProtocol after instantiating the state
         self.state_name = None
