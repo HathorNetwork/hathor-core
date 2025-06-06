@@ -51,7 +51,7 @@ def add_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     """Add a custom tx based on the gen_custom_tx(...) method."""
     tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight,
                        resolve=resolve, address=address, inc_timestamp=inc_timestamp)
-    manager.propagate_tx(tx, fails_silently=False)
+    manager.propagate_tx(tx)
     return tx
 
 
@@ -122,7 +122,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
 def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
                             tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
     tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
-    manager.propagate_tx(tx, fails_silently=False)
+    manager.propagate_tx(tx)
     return tx
 
 
@@ -149,7 +149,7 @@ def add_new_tx(
     """
     tx = gen_new_tx(manager, address, value)
     if propagate:
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
     if advance_clock:
         manager.reactor.advance(advance_clock)  # type: ignore[attr-defined]
     return tx
@@ -472,7 +472,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
 
     manager.cpu_mining_service.resolve(tx)
     if propagate:
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
     return tx
@@ -561,7 +561,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
 
     if propagate:
         manager.verification_service.verify(tx)
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
 

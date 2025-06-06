@@ -91,7 +91,7 @@ class GeometricMiner(AbstractMiner):
             self._block.nonce = self._rng.getrandbits(32)
             self._block.update_hash()
             self.log.debug('randomized step: found new block', hash=self._block.hash_hex, nonce=self._block.nonce)
-            self._manager.propagate_tx(self._block, fails_silently=False)
+            self._manager.propagate_tx(self._block)
             self._blocks_found += 1
             self._blocks_before_pause -= 1
             self._block = None

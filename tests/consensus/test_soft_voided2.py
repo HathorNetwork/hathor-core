@@ -99,7 +99,7 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
         block.timestamp = max(block.timestamp, tx.timestamp + 1)
         block.nonce = self.rng.getrandbits(32)
         block.update_hash()
-        self.assertTrue(manager1.propagate_tx(block, fails_silently=False))
+        self.assertTrue(manager1.propagate_tx(block))
         return block
 
     def _run_test(self, simulator: Simulator, soft_voided_tx_ids: set[VertexId]) -> Iterator[None]:
@@ -124,7 +124,7 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()
-        manager1.propagate_tx(initial, fails_silently=False)
+        manager1.propagate_tx(initial)
         self.graphviz.labels[initial.hash] = 'initial'
 
         x = initial

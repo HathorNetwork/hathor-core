@@ -71,13 +71,13 @@ def simulate_single_chain_blocks_and_transactions(simulator: 'Simulator', manage
     tx = gen_new_tx(manager, address, 1000)
     tx.weight = manager.daa.minimum_tx_weight(tx)
     tx.update_hash()
-    assert manager.propagate_tx(tx, fails_silently=False)
+    assert manager.propagate_tx(tx)
     simulator.run(60)
 
     tx = gen_new_tx(manager, address, 2000)
     tx.weight = manager.daa.minimum_tx_weight(tx)
     tx.update_hash()
-    assert manager.propagate_tx(tx, fails_silently=False)
+    assert manager.propagate_tx(tx)
     simulator.run(60)
 
     add_new_blocks(manager, 1)
@@ -117,7 +117,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     tx = gen_new_tx(manager, address, 1000)
     tx.weight = 19.0005
     tx.update_hash()
-    assert manager.propagate_tx(tx, fails_silently=False)
+    assert manager.propagate_tx(tx)
     simulator.run(60)
 
     # A clone is created with a greater timestamp and a lower weight. It's a voided twin tx.
@@ -125,7 +125,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     tx2.timestamp += 60
     tx2.weight = 19
     tx2.update_hash()
-    assert manager.propagate_tx(tx2, fails_silently=False)
+    assert manager.propagate_tx(tx2)
     simulator.run(60)
 
     # Only the second tx is voided
@@ -140,7 +140,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
         tx2.hash,
     ]
     block.update_hash()
-    assert manager.propagate_tx(block, fails_silently=False)
+    assert manager.propagate_tx(block)
     simulator.run(60)
 
     # The first tx gets voided and the second gets unvoided
@@ -165,7 +165,7 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     tx = gen_new_tx(manager, address, 1000)
     tx.weight = manager.daa.minimum_tx_weight(tx)
     tx.update_hash()
-    assert manager.propagate_tx(tx, fails_silently=False)
+    assert manager.propagate_tx(tx)
     simulator.run(60)
     balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
     assert balance_per_address[address] == 1000
@@ -176,7 +176,7 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     b0: Block = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
     b0.weight = 10
     manager.cpu_mining_service.resolve(b0)
-    assert manager.propagate_tx(b0, fails_silently=False)
+    assert manager.propagate_tx(b0)
     simulator.run(60)
 
     # the transaction should have been removed from the mempool and the storage after the re-org
@@ -204,7 +204,7 @@ def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> N
     tx1.outputs[1].script = b''
     tx1.weight = manager.daa.minimum_tx_weight(tx1)
     tx1.update_hash()
-    assert manager.propagate_tx(tx1, fails_silently=False)
+    assert manager.propagate_tx(tx1)
     simulator.run(60)
 
     tx2 = gen_new_tx(manager, address, 1000)
@@ -212,7 +212,7 @@ def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> N
     tx2.outputs = [TxOutput(value=1000, script=original_script)]
     tx2.weight = manager.daa.minimum_tx_weight(tx2)
     tx2.update_hash()
-    assert manager.propagate_tx(tx2, fails_silently=False)
+    assert manager.propagate_tx(tx2)
     simulator.run(60)
 
     add_new_blocks(manager, 1)
@@ -242,7 +242,7 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
     tx1.outputs[1].script = s.data
     tx1.weight = manager.daa.minimum_tx_weight(tx1)
     tx1.update_hash()
-    assert manager.propagate_tx(tx1, fails_silently=False)
+    assert manager.propagate_tx(tx1)
     simulator.run(60)
 
     tx2 = gen_new_tx(manager, address, 1000)
@@ -250,7 +250,7 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
     tx2.outputs = [TxOutput(value=1000, script=original_script)]
     tx2.weight = manager.daa.minimum_tx_weight(tx2)
     tx2.update_hash()
-    assert manager.propagate_tx(tx2, fails_silently=False)
+    assert manager.propagate_tx(tx2)
     simulator.run(60)
 
     add_new_blocks(manager, 1)

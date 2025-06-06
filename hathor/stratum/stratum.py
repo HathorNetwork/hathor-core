@@ -560,7 +560,7 @@ class StratumProtocol(JSONRPC):
                 # We only propagate blocks here in stratum
                 # For tx we need to propagate in the resource,
                 # so we can get the possible errors
-                self.manager.submit_block(tx, fails_silently=False)
+                self.manager.submit_block(tx)
                 self.blocks_found += 1
             except (InvalidNewTransaction, TxValidationError) as e:
                 # Block propagation failed, but the share was succesfully submited

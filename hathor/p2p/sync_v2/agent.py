@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
-from twisted.internet.task import LoopingCall, deferLater
+from twisted.internet.task import LoopingCall
 
 from hathor.conf.settings import HathorSettings
 from hathor.exception import InvalidNewTransaction
@@ -613,17 +613,11 @@ class NodeBlockSync(SyncAgent):
         return lo
 
     @inlineCallbacks
-    def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> Generator[Any, Any, None]:
+    def on_block_complete(self, blk: Block, vertex_list: list[Transaction]) -> Generator[Any, Any, None]:
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         try:
-            for tx in vertex_list:
-                if not self.tx_storage.transaction_exists(tx.hash):
-                    self.vertex_handler.on_new_vertex(tx, fails_silently=False)
-                yield deferLater(self.reactor, 0, lambda: None)
-
-            if not self.tx_storage.transaction_exists(blk.hash):
-                self.vertex_handler.on_new_vertex(blk, fails_silently=False)
+            yield self.vertex_handler.on_new_block(blk, deps=vertex_list)
         except InvalidNewTransaction:
             self.protocol.send_error_and_close_connection('invalid vertex received')
 
@@ -1038,6 +1032,7 @@ class NodeBlockSync(SyncAgent):
         tx.storage = self.tx_storage
 
         assert self._tx_streaming_client is not None
+        assert isinstance(tx, Transaction)
         self._tx_streaming_client.handle_transaction(tx)
 
     @inlineCallbacks
@@ -1166,17 +1161,18 @@ class NodeBlockSync(SyncAgent):
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
             self.tx_storage.compare_bytes_with_local_tx(tx)
             return
-        else:
-            # If we have not requested the data, it is a new transaction being propagated
-            # in the network, thus, we propagate it as well.
-            if self.tx_storage.can_validate_full(tx):
-                self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                try:
-                    success = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
-                    if success:
-                        self.protocol.connections.send_tx_to_peers(tx)
-                except InvalidNewTransaction:
-                    self.protocol.send_error_and_close_connection('invalid vertex received')
-            else:
-                self.log.debug('skipping tx received in real time from peer',
-                               tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+
+        # Unsolicited vertices must be fully validated.
+        if not self.tx_storage.can_validate_full(tx):
+            self.log.debug('skipping tx received in real time from peer',
+                           tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+            return
+
+        # Finally, it is either an unsolicited new transaction or block.
+        self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+        try:
+            success = self.vertex_handler.on_new_relayed_vertex(tx)
+            if success:
+                self.protocol.connections.send_tx_to_peers(tx)
+        except InvalidNewTransaction:
+            self.protocol.send_error_and_close_connection('invalid vertex received')

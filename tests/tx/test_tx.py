@@ -684,26 +684,30 @@ class TransactionTest(unittest.TestCase):
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]
         genesis_block.storage = manager.tx_storage
-        self.assertFalse(manager.propagate_tx(genesis_block))
+        with self.assertRaises(InvalidNewTransaction):
+            manager.propagate_tx(genesis_block)
 
         # 2. propagate block with weight 1
         block = manager.generate_mining_block()
         block.weight = 1
         self.manager.cpu_mining_service.resolve(block)
-        self.assertFalse(manager.propagate_tx(block))
+        with self.assertRaises(InvalidNewTransaction):
+            manager.propagate_tx(block)
 
         # 3. propagate block with wrong amount of tokens
         block = manager.generate_mining_block()
         output = TxOutput(1, block.outputs[0].script)
         block.outputs = [output]
         self.manager.cpu_mining_service.resolve(block)
-        self.assertFalse(manager.propagate_tx(block))
+        with self.assertRaises(InvalidNewTransaction):
+            manager.propagate_tx(block)
 
         # 4. propagate block from the future
         block = manager.generate_mining_block()
         block.timestamp = int(self.clock.seconds()) + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED + 100
         manager.cpu_mining_service.resolve(block, update_time=False)
-        self.assertFalse(manager.propagate_tx(block))
+        with self.assertRaises(InvalidNewTransaction):
+            manager.propagate_tx(block)
 
     def test_tx_methods(self):
         blocks = add_new_blocks(self.manager, 2, advance_clock=1)

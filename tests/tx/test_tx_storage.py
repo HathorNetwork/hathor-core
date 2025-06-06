@@ -513,7 +513,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             block.parents = parents
         block.weight = 10
         self.assertTrue(self.manager.cpu_mining_service.resolve(block))
-        self.manager.propagate_tx(block, fails_silently=False)
+        self.manager.propagate_tx(block)
         self.reactor.advance(5)
         return block
 

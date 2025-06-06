@@ -707,7 +707,7 @@ class HathorManager:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         return self.daa.get_tokens_issued_per_block(height)
 
-    def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
+    def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.
         """
         tips = self.tx_storage.get_best_block_tips()
@@ -724,7 +724,7 @@ class HathorManager:
         )
         if blk.weight <= min_insignificant_weight:
             self.log.warn('submit_block(): insignificant weight? accepted anyway', blk=blk.hash_hex, weight=blk.weight)
-        return self.propagate_tx(blk, fails_silently=fails_silently)
+        return self.propagate_tx(blk)
 
     def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,
                 max_output_script_size: int | None = None) -> None:
@@ -755,9 +755,9 @@ class HathorManager:
         if not tx_from_lib.is_standard(max_output_script_size, not allow_non_standard_script):
             raise NonStandardTxError('Transaction is non standard.')
 
-        self.propagate_tx(tx, fails_silently=False)
+        self.propagate_tx(tx)
 
-    def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
+    def propagate_tx(self, tx: BaseTransaction) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
         :return: True if the transaction was accepted
@@ -768,14 +768,13 @@ class HathorManager:
         else:
             tx.storage = self.tx_storage
 
-        return self.on_new_tx(tx, fails_silently=fails_silently, propagate_to_peers=True)
+        return self.on_new_tx(tx, propagate_to_peers=True)
 
     def on_new_tx(
         self,
-        tx: BaseTransaction,
+        vertex: BaseTransaction,
         *,
         quiet: bool = False,
-        fails_silently: bool = True,
         propagate_to_peers: bool = True,
         reject_locked_reward: bool = True
     ) -> bool:
@@ -783,18 +782,12 @@ class HathorManager:
 
         :param tx: transaction to be added
         :param quiet: if True will not log when a new tx is accepted
-        :param fails_silently: if False will raise an exception when tx cannot be added
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        success = self.vertex_handler.on_new_vertex(
-            tx,
-            quiet=quiet,
-            fails_silently=fails_silently,
-            reject_locked_reward=reject_locked_reward,
-        )
+        success = self.vertex_handler.on_new_relayed_vertex(vertex, reject_locked_reward=reject_locked_reward)
 
         if propagate_to_peers and success:
-            self.connections.send_tx_to_peers(tx)
+            self.connections.send_tx_to_peers(vertex)
 
         return success
 

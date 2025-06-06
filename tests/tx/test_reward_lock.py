@@ -78,7 +78,7 @@ class TransactionTest(unittest.TestCase):
         # now it should be spendable
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.propagate_tx(tx, fails_silently=False))
+        self.assertTrue(self.manager.propagate_tx(tx))
 
     def test_block_with_not_enough_height(self) -> None:
         # add block with a reward we can spend
@@ -92,7 +92,7 @@ class TransactionTest(unittest.TestCase):
         #      transaction before it can the RewardLocked exception is raised
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False, reject_locked_reward=False))
+        self.assertTrue(self.manager.on_new_tx(tx, reject_locked_reward=False))
 
         # new block will try to confirm it and fail
         with pytest.raises(InvalidNewTransaction) as e:
@@ -114,7 +114,7 @@ class TransactionTest(unittest.TestCase):
         # add tx that spends the reward
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx))
 
         # new block will be able to confirm it
         add_new_blocks(self.manager, 1, advance_clock=1)
@@ -134,7 +134,7 @@ class TransactionTest(unittest.TestCase):
         with self.assertRaises(RewardLocked):
             self.manager.verification_service.verify(tx)
         with self.assertRaises(InvalidNewTransaction):
-            self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+            self.assertTrue(self.manager.on_new_tx(tx))
 
     def test_mempool_tx_with_enough_height(self) -> None:
         # add block with a reward we can spend
@@ -146,7 +146,7 @@ class TransactionTest(unittest.TestCase):
         # add tx that spends the reward, must not fail
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx))
 
     def test_mempool_tx_invalid_after_reorg(self) -> None:
         # add block with a reward we can spend
@@ -160,7 +160,7 @@ class TransactionTest(unittest.TestCase):
         balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
         assert tx_address not in balance_per_address
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx))
         balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
         assert balance_per_address[tx_address] == 6400
 
@@ -170,7 +170,7 @@ class TransactionTest(unittest.TestCase):
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage)
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
-        self.manager.propagate_tx(b0, fails_silently=False)
+        self.manager.propagate_tx(b0)
         self.clock.advance(1)
 
         # now the new tx should not pass verification considering the reward lock

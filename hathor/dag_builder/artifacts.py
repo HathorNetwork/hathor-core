@@ -63,7 +63,7 @@ class DAGArtifacts:
 
         for node, vertex in self.list:
             if found_begin:
-                assert manager.on_new_tx(vertex, fails_silently=False)
+                assert manager.on_new_tx(vertex)
                 self._last_propagated = node.name
 
             if node.name == self._last_propagated:

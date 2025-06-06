@@ -13,8 +13,11 @@
 #  limitations under the License.
 
 import datetime
+from typing import Any, Generator
 
 from structlog import get_logger
+from twisted.internet.defer import inlineCallbacks
+from twisted.internet.task import deferLater
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
@@ -24,7 +27,7 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
-from hathor.transaction import BaseTransaction, Block
+from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.verification.verification_service import VerificationService
@@ -75,24 +78,50 @@ class VertexHandler:
         self._wallet = wallet
         self._log_vertex_bytes = log_vertex_bytes
 
-    @cpu.profiler('on_new_vertex')
-    def on_new_vertex(
+    @cpu.profiler('on_new_block')
+    @inlineCallbacks
+    def on_new_block(self, block: Block, *, deps: list[Transaction]) -> Generator[Any, Any, bool]:
+        for tx in deps:
+            if not self._tx_storage.transaction_exists(tx.hash):
+                if not self._old_on_new_vertex(tx):
+                    return False
+                yield deferLater(self._reactor, 0, lambda: None)
+
+        if not self._tx_storage.transaction_exists(block.hash):
+            if not self._old_on_new_vertex(block):
+                return False
+
+        return True
+
+    @cpu.profiler('on_new_mempool_transaction')
+    def on_new_mempool_transaction(self, tx: Transaction) -> bool:
+        return self._old_on_new_vertex(tx)
+
+    @cpu.profiler('on_new_relayed_vertex')
+    def on_new_relayed_vertex(
         self,
         vertex: BaseTransaction,
         *,
         quiet: bool = False,
-        fails_silently: bool = True,
+        reject_locked_reward: bool = True
+    ) -> bool:
+        return self._old_on_new_vertex(vertex, quiet=quiet, reject_locked_reward=reject_locked_reward)
+
+    @cpu.profiler('_old_on_new_vertex')
+    def _old_on_new_vertex(
+        self,
+        vertex: BaseTransaction,
+        *,
+        quiet: bool = False,
         reject_locked_reward: bool = True,
     ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param vertex: transaction to be added
         :param quiet: if True will not log when a new tx is accepted
-        :param fails_silently: if False will raise an exception when tx cannot be added
         """
         is_valid = self._validate_vertex(
             vertex,
-            fails_silently=fails_silently,
             reject_locked_reward=reject_locked_reward
         )
 
@@ -119,7 +148,6 @@ class VertexHandler:
         self,
         vertex: BaseTransaction,
         *,
-        fails_silently: bool,
         reject_locked_reward: bool,
     ) -> bool:
         assert self._tx_storage.is_only_valid_allowed()
@@ -129,43 +157,27 @@ class VertexHandler:
             already_exists = True
 
         if vertex.timestamp - self._reactor.seconds() > self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
-            if not fails_silently:
-                raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
-                    vertex.hash_hex, vertex.timestamp))
-            self._log.warn('on_new_tx(): Ignoring transaction in the future', tx=vertex.hash_hex,
-                           future_timestamp=vertex.timestamp)
-            return False
+            raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
+                vertex.hash_hex, vertex.timestamp))
 
         vertex.storage = self._tx_storage
 
         try:
             metadata = vertex.get_metadata()
         except TransactionDoesNotExist:
-            if not fails_silently:
-                raise InvalidNewTransaction('cannot get metadata')
-            self._log.warn('on_new_tx(): cannot get metadata', tx=vertex.hash_hex)
-            return False
+            raise InvalidNewTransaction('cannot get metadata')
 
         if already_exists and metadata.validation.is_fully_connected():
-            if not fails_silently:
-                raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))
-            self._log.warn('on_new_tx(): Transaction already exists', tx=vertex.hash_hex)
-            return False
+            raise InvalidNewTransaction('Transaction already exists {}'.format(vertex.hash_hex))
 
         if metadata.validation.is_invalid():
-            if not fails_silently:
-                raise InvalidNewTransaction('previously marked as invalid')
-            self._log.warn('on_new_tx(): previously marked as invalid', tx=vertex.hash_hex)
-            return False
+            raise InvalidNewTransaction('previously marked as invalid')
 
         if not metadata.validation.is_fully_connected():
             try:
                 self._verification_service.validate_full(vertex, reject_locked_reward=reject_locked_reward)
             except HathorError as e:
-                if not fails_silently:
-                    raise InvalidNewTransaction(f'full validation failed: {str(e)}') from e
-                self._log.warn('on_new_tx(): full validation failed', tx=vertex.hash_hex, exc_info=True)
-                return False
+                raise InvalidNewTransaction(f'full validation failed: {str(e)}') from e
 
         return True
 

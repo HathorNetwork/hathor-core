@@ -35,7 +35,7 @@ class EventReorgTest(unittest.TestCase):
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage, address=BURN_ADDRESS)
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
-        self.manager.propagate_tx(b0, fails_silently=False)
+        self.manager.propagate_tx(b0)
         self.log.debug('reorg block propagated')
         self.run_to_completion()
 
