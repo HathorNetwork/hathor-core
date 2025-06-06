@@ -64,7 +64,7 @@ class DAGArtifacts:
         for node, vertex in self.list:
             if found_begin:
                 try:
-                    assert manager.on_new_tx(vertex)
+                    assert manager.vertex_handler._old_on_new_vertex(vertex)
                 except Exception as e:
                     raise Exception(f'failed on_new_tx({node.name})') from e
                 self._last_propagated = node.name
