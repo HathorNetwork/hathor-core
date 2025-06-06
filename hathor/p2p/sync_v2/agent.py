@@ -171,8 +171,9 @@ class NodeBlockSync(SyncAgent):
         # Maximum running time to consider a sync stale.
         self.max_running_time: int = 30 * 60  # seconds
 
-        # Whether we propagate transactions or not
-        self._is_relaying = False
+        # Whether vertex relay is enabled or not.
+        self._outbound_relay_enabled = False  # from us to the peer
+        self._inbound_relay_enabled = False   # from the peer to us
 
         # Whether to sync with this peer
         self._is_enabled: bool = False
@@ -224,7 +225,7 @@ class NodeBlockSync(SyncAgent):
         # blocks as priorities to help miners get the blocks as fast as we can
         # We decided not to implement this right now because we already have some producers
         # being used in the sync algorithm and the code was becoming a bit too complex
-        if self._is_relaying:
+        if self._outbound_relay_enabled:
             self.send_data(tx)
 
     def is_started(self) -> bool:
@@ -515,6 +516,7 @@ class NodeBlockSync(SyncAgent):
         """ Send a RELAY message.
         """
         self.log.debug('send_relay', enable=enable)
+        self._inbound_relay_enabled = enable
         self.send_message(ProtocolMessages.RELAY, json.dumps(enable))
 
     def handle_relay(self, payload: str) -> None:
@@ -522,11 +524,11 @@ class NodeBlockSync(SyncAgent):
         """
         if not payload:
             # XXX: "legacy" nothing means enable
-            self._is_relaying = True
+            self._outbound_relay_enabled = True
         else:
             val = json.loads(payload)
             if isinstance(val, bool):
-                self._is_relaying = val
+                self._outbound_relay_enabled = val
             else:
                 self.protocol.send_error_and_close_connection('RELAY: invalid value')
                 return
@@ -1123,6 +1125,12 @@ class NodeBlockSync(SyncAgent):
     def handle_data(self, payload: str) -> None:
         """ Handle a DATA message.
         """
+        if not self._inbound_relay_enabled:
+            # Unsolicited vertex.
+            # Should we have a grace period when incoming relay is disabled? Is the decay mechanism enough?
+            self.protocol.increase_misbehavior_score(weight=1)
+            return
+
         if not payload:
             return
         part1, _, part2 = payload.partition(' ')
