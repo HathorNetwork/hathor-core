@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Iterator, NamedTuple, Sequence, TypeVar
 
 from hathor.dag_builder.types import DAGNode
 from hathor.manager import HathorManager
+from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -53,18 +54,39 @@ class DAGArtifacts:
         """Get a list of vertices by name, asserting they are of the provided type."""
         return tuple(self.get_typed_vertex(name, type_) for name in names)
 
-    def propagate_with(self, manager: HathorManager, *, up_to: str | None = None) -> None:
+    def propagate_with(
+        self,
+        manager: HathorManager,
+        *,
+        up_to: str | None = None,
+        up_to_before: str | None = None,
+        new_relayed_vertex: bool = False
+    ) -> None:
         """
-        Propagate vertices using the provided manager up to the provided node name, included.
-        Last propagation is preserved in memory so you can make a sequence of propagate_with().
+        Propagate vertices using the provided manager up to the provided node name, included.  Last propagation is
+        preserved in memory so you can make a sequence of propagate_with().
+
+        Use `up_to` to stop propagation after the specified node has been propagated. Alternatively, use `up_to_before`
+        to stop right before propagating the specified node.
+
+        Propagations are performed using `VertexHandler._old_on_new_vertex()`, which bypasses mempool rules by default.
+        Set `new_relayed_vertex` to True to apply these rules during propagation.
         """
         found_begin = self._last_propagated is None
         found_end = False
 
         for node, vertex in self.list:
+            if up_to_before and node.name == up_to_before:
+                found_end = True
+                break
+
             if found_begin:
                 try:
-                    assert manager.on_new_tx(vertex)
+                    if new_relayed_vertex:
+                        assert manager.vertex_handler.on_new_relayed_vertex(vertex)
+                    else:
+                        params = VerificationParams(enable_checkdatasig_count=True, enable_nano=True)
+                        assert manager.vertex_handler._old_on_new_vertex(vertex, params)
                 except Exception as e:
                     raise Exception(f'failed on_new_tx({node.name})') from e
                 self._last_propagated = node.name

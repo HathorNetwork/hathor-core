@@ -105,6 +105,7 @@ class VerificationService:
             return
 
         self.verifiers.vertex.verify_version_basic(vertex)
+        self.verifiers.vertex.verify_old_timestamp(vertex, params)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -139,6 +140,7 @@ class VerificationService:
         if not params.skip_block_weight_verification:
             self.verifiers.block.verify_weight(block)
         self.verifiers.block.verify_reward(block)
+        self.verifiers.block.verify_checkpoints(block)
 
     def _verify_basic_merge_mined_block(self, block: MergeMinedBlock, params: VerificationParams) -> None:
         self._verify_basic_block(block, params)
@@ -197,7 +199,8 @@ class VerificationService:
 
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
-            # nothing to do
+            self.verifiers.nano_header.verify_method_call(vertex, params)
+            self.verifiers.nano_header.verify_seqnum(vertex, params)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def _verify_block(self, block: Block, params: VerificationParams) -> None:
@@ -258,6 +261,7 @@ class VerificationService:
         self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
         self.verifiers.tx.verify_version(tx, params)
         self.verifiers.vertex.verify_parents(tx)
+        self.verifiers.tx.verify_conflict(tx, params)
         if params.reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 
@@ -331,6 +335,7 @@ class VerificationService:
         self.verifiers.vertex.verify_outputs(tx)
         self.verifiers.tx.verify_output_token_indexes(tx)
         self.verifiers.vertex.verify_sigops_output(tx, params.enable_checkdatasig_count)
+        self.verifiers.tx.verify_tokens(tx, params)
 
     def _verify_without_storage_token_creation_tx(
         self,

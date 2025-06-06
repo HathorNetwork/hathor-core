@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor import Blueprint, Context, export, public
+from hathor import Blueprint, Context, export, public, view
 
 
 @export
@@ -23,6 +23,10 @@ class TestBlueprint1(Blueprint):
 
     @public
     def nop(self, ctx: Context) -> None:
+        pass
+
+    @view
+    def view(self) -> None:
         pass
 
     @public

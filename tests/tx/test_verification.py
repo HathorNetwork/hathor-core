@@ -18,6 +18,7 @@ from hathor.crypto.util import get_address_from_public_key
 from hathor.manager import HathorManager
 from hathor.transaction import BitcoinAuxPow, Block, MergeMinedBlock, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
+from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.block_verifier import BlockVerifier
@@ -1016,7 +1017,8 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual(tx.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(tx, self.verification_params)
+        with tx_allow_context(self.manager.tx_storage, allow_scope=TxAllowScope.PARTIAL | TxAllowScope.VALID):
+            self.manager.verification_service.validate_full(tx, self.verification_params)
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state

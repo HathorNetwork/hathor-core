@@ -34,13 +34,19 @@ class GenesisTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self._daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
-        verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa, feature_service=Mock())
-        self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
         self.storage = self.create_tx_storage()
+        verifiers = VertexVerifiers.create_defaults(
+            reactor=self.reactor,
+            settings=self._settings,
+            daa=self._daa,
+            feature_service=Mock(),
+            tx_storage=self.storage,
+        )
+        self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
 
     def test_pow(self):
         feature_service = FeatureService(settings=self._settings, tx_storage=self.storage)
-        verifier = VertexVerifier(settings=self._settings, feature_service=feature_service)
+        verifier = VertexVerifier(reactor=self.reactor, settings=self._settings, feature_service=feature_service)
         genesis = self.storage.get_all_genesis()
         for g in genesis:
             self.assertEqual(g.calculate_hash(), g.hash)

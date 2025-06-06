@@ -13,7 +13,11 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         tx = next(iter(manager1.tx_storage.get_all_genesis()))
         # optional argument must be valid, it just has to not raise any exception, there's no assert for that
         feature_service = FeatureService(settings=self._settings, tx_storage=manager1.tx_storage)
-        VertexVerifier(settings=self._settings, feature_service=feature_service).verify_pow(tx, override_weight=0.)
+        VertexVerifier(
+            reactor=self.reactor,
+            settings=self._settings,
+            feature_service=feature_service
+        ).verify_pow(tx, override_weight=0.)
 
     def test_one_node(self) -> None:
         manager1 = self.create_peer()

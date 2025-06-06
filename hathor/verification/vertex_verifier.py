@@ -18,6 +18,7 @@ from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction, TxVersion
 from hathor.transaction.exceptions import (
     DuplicatedParents,
@@ -45,11 +46,14 @@ _TX_PARENTS_BLOCKS = 0
 _BLOCK_PARENTS_TXS = 2
 _BLOCK_PARENTS_BLOCKS = 1
 
+MAX_PAST_TIMESTAMP_ALLOWED: int = 3600 * 36  # 36 hours
+
 
 class VertexVerifier:
-    __slots__ = ('_settings', '_feature_service',)
+    __slots__ = ('_settings', '_feature_service', '_reactor')
 
-    def __init__(self, *, settings: HathorSettings, feature_service: FeatureService):
+    def __init__(self, *, reactor: Reactor, settings: HathorSettings, feature_service: FeatureService):
+        self._reactor = reactor
         self._settings = settings
         self._feature_service = feature_service
 
@@ -225,3 +229,13 @@ class VertexVerifier:
                 raise HeaderNotSupported(
                     f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
                 )
+
+    def verify_old_timestamp(self, vertex: BaseTransaction, params: VerificationParams) -> None:
+        """Verify that the timestamp is not too old. Mempool only."""
+        if not params.reject_too_old_vertices:
+            return
+
+        now = self._reactor.seconds()
+        t_diff = now - vertex.timestamp
+        if t_diff > MAX_PAST_TIMESTAMP_ALLOWED:
+            raise TimestampError(f'transaction is too old (now={now}, timestamp={vertex.timestamp}, diff={t_diff})')

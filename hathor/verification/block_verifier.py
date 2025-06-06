@@ -14,6 +14,7 @@
 
 from typing_extensions import assert_never
 
+from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
@@ -22,15 +23,17 @@ from hathor.transaction.exceptions import (
     BlockMustSignalError,
     BlockWithInputs,
     BlockWithTokensError,
+    CheckpointError,
     InvalidBlockReward,
     RewardLocked,
     TransactionDataError,
     WeightError,
 )
+from hathor.transaction.storage import TransactionStorage
 
 
 class BlockVerifier:
-    __slots__ = ('_settings', '_daa', '_feature_service')
+    __slots__ = ('_settings', '_daa', '_feature_service', '_checkpoints', '_latest_checkpoint', '_tx_storage')
 
     def __init__(
         self,
@@ -38,10 +41,14 @@ class BlockVerifier:
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
+        tx_storage: TransactionStorage,
     ) -> None:
         self._settings = settings
         self._daa = daa
         self._feature_service = feature_service
+        self._tx_storage = tx_storage
+        self._checkpoints: dict[int, Checkpoint] = {cp.height: cp for cp in settings.CHECKPOINTS}
+        self._latest_checkpoint: Checkpoint | None = settings.CHECKPOINTS[-1] if settings.CHECKPOINTS else None
 
     def verify_height(self, block: Block) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
@@ -96,3 +103,21 @@ class BlockVerifier:
                 )
             case _:
                 assert_never(signaling_state)
+
+    def verify_checkpoints(self, block: Block) -> None:
+        """Verify whether this block would fork a checkpoint."""
+        if self._latest_checkpoint is None:
+            return
+
+        block_height = block.get_height()
+        if block_height > self._latest_checkpoint.height:
+            return
+
+        best_block = self._tx_storage.get_best_block()
+        if best_block.get_height() >= self._latest_checkpoint.height:
+            raise CheckpointError('forking within checkpoints is forbidden')
+
+        # still syncing checkpoints, so we just enforce the hash at checkpoint heights.
+        cp = self._checkpoints.get(block.get_height())
+        if cp is not None and cp.hash != block.hash:
+            raise CheckpointError(f'invalid checkpoint block (height={cp.height})')
