@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
 from struct import error as StructError, pack
 from typing import Any, Optional
 
@@ -33,6 +34,13 @@ _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 # used when (de)serializing token information
 # version 1 expects only token name and symbol
 TOKEN_INFO_VERSION = 1
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class TokenDescription:
+    token_id: bytes
+    token_name: str
+    token_symbol: str
 
 
 class TokenCreationTransaction(Transaction):
