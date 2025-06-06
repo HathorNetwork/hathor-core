@@ -22,6 +22,7 @@ from hathor.transaction.exceptions import (
     BlockMustSignalError,
     BlockWithInputs,
     BlockWithTokensError,
+    CheckpointError,
     InvalidBlockReward,
     RewardLocked,
     TransactionDataError,
@@ -96,3 +97,23 @@ class BlockVerifier:
                 )
             case _:
                 assert_never(signaling_state)
+
+    def verify_checkpoints(self, block: Block) -> None:
+        """Verify whether this block would fork a checkpoint."""
+        if not self._settings.CHECKPOINTS:
+            return
+
+        latest_checkpoint = self._settings.CHECKPOINTS[-1]
+        block_height = block.get_height()
+        if block_height > latest_checkpoint.height:
+            return
+
+        best_block = self._tx_storage.get_best_block()
+        if best_block.get_height() <= latest_checkpoint.height:
+            # still syncing checkpoints, so we just enforce the hash at checkpoint heights.
+            for cp in self._settings.CHECKPOINTS:
+                if cp.height == block_height and cp.hash != block.hash:
+                    raise CheckpointError(f'invalid checkpoint block (height={cp.height})')
+            return
+
+        raise CheckpointError('forking within checkpoints is forbidden')

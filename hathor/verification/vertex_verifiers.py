@@ -17,6 +17,7 @@ from typing import NamedTuple
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
 from hathor.verification.nano_header_verifier import NanoHeaderVerifier
@@ -42,6 +43,7 @@ class VertexVerifiers(NamedTuple):
     def create_defaults(
         cls,
         *,
+        reactor: Reactor,
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
@@ -50,9 +52,10 @@ class VertexVerifiers(NamedTuple):
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
         """
-        vertex_verifier = VertexVerifier(settings=settings, feature_service=feature_service)
+        vertex_verifier = VertexVerifier(reactor=reactor, settings=settings, feature_service=feature_service)
 
         return cls.create(
+            reactor=reactor,
             settings=settings,
             vertex_verifier=vertex_verifier,
             daa=daa,
@@ -63,6 +66,7 @@ class VertexVerifiers(NamedTuple):
     def create(
         cls,
         *,
+        reactor: Reactor,
         settings: HathorSettings,
         vertex_verifier: VertexVerifier,
         daa: DifficultyAdjustmentAlgorithm,
