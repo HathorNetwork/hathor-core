@@ -27,10 +27,12 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.p2p.peer import PrivatePeer
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.patches import SimulatorCpuMiningService, SimulatorVertexVerifier
 from hathor.simulator.tx_generator import RandomTransactionGenerator
+from hathor.transaction.storage import TransactionStorage
 from hathor.util import Random
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import HDWallet
@@ -239,16 +241,20 @@ class Simulator:
 
 
 def _build_vertex_verifiers(
+    reactor: Reactor,
     settings: HathorSettings,
     daa: DifficultyAdjustmentAlgorithm,
-    feature_service: FeatureService
+    feature_service: FeatureService,
+    tx_storage: TransactionStorage,
 ) -> VertexVerifiers:
     """
     A custom VertexVerifiers builder to be used by the simulator.
     """
     return VertexVerifiers.create(
+        reactor=reactor,
         settings=settings,
-        vertex_verifier=SimulatorVertexVerifier(settings=settings, feature_service=feature_service),
+        vertex_verifier=SimulatorVertexVerifier(reactor=reactor, settings=settings, feature_service=feature_service),
         daa=daa,
         feature_service=feature_service,
+        tx_storage=tx_storage,
     )

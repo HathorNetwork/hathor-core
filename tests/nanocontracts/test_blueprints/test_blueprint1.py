@@ -14,7 +14,7 @@
 
 from hathor.nanocontracts import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import public
+from hathor.nanocontracts.types import public, view
 
 
 class TestBlueprint1(Blueprint):
@@ -24,6 +24,10 @@ class TestBlueprint1(Blueprint):
 
     @public
     def nop(self, ctx: Context) -> None:
+        pass
+
+    @view
+    def view(self) -> None:
         pass
 
     @public

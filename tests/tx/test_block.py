@@ -140,11 +140,12 @@ def test_get_feature_activation_bit_value() -> None:
 
 def test_verify_must_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
+    settings.CHECKPOINTS = []
     feature_service = Mock(spec_set=FeatureService)
     feature_service.is_signaling_mandatory_features = Mock(
         return_value=BlockIsMissingSignal(feature=Feature.NOP_FEATURE_1)
     )
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock(), tx_storage=Mock())
     block = Block()
 
     with pytest.raises(BlockMustSignalError) as e:
@@ -155,9 +156,10 @@ def test_verify_must_signal() -> None:
 
 def test_verify_must_not_signal() -> None:
     settings = Mock(spec_set=HathorSettings)
+    settings.CHECKPOINTS = []
     feature_service = Mock(spec_set=FeatureService)
     feature_service.is_signaling_mandatory_features = Mock(return_value=BlockIsSignaling())
-    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock())
+    verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock(), tx_storage=Mock())
     block = Block()
 
     verifier.verify_mandatory_signaling(block)
