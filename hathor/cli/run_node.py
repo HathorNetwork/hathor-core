@@ -167,6 +167,8 @@ class RunNode:
                             help='Disables connecting to IPv4 peers')
         parser.add_argument("--x-whitelist-only", action="store_true",
                             help="Node will only connect to peers on the whitelist")
+        parser.add_argument("--x-p2p-whitelist", help="Add whitelist to follow from since boot.")
+
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:

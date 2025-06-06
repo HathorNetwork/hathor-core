@@ -88,3 +88,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_disable_ipv4: bool
     localnet: bool
     x_whitelist_only: bool
+    x_p2p_whitelist: Optional[str]
