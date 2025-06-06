@@ -14,17 +14,14 @@
 
 from __future__ import annotations
 
-import pickle
 from enum import Enum
-from typing import TYPE_CHECKING, NamedTuple, Optional
+from typing import NamedTuple, Optional
 
+from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
 from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
 from hathor.nanocontracts.storage.token_proxy import TokenProxy
 from hathor.nanocontracts.types import ContractId, TokenUid
-
-if TYPE_CHECKING:
-    from hathor.transaction.token_creation_tx import TokenDescription
 
 
 class _Tag(Enum):
@@ -50,6 +47,8 @@ class NCBlockStorage:
     """This is the storage used by NanoContracts.
 
     This implementation works for both memory and rocksdb backends."""
+    from hathor.transaction.token_creation_tx import TokenDescription
+    _TOKEN_DESCRIPTION_NC_TYPE = make_dataclass_nc_type(TokenDescription)
 
     def __init__(self, block_trie: PatriciaTrie) -> None:
         self._block_trie: PatriciaTrie = block_trie
@@ -108,7 +107,7 @@ class NCBlockStorage:
         """Return the token description for a given token_id."""
         key = TokenKey(token_id)
         token_description_bytes = self._block_trie.get(bytes(key))
-        token_description = pickle.loads(token_description_bytes)
+        token_description = self._TOKEN_DESCRIPTION_NC_TYPE.from_bytes(token_description_bytes)
         return token_description
 
     def has_token(self, token_id: TokenUid) -> bool:
@@ -127,5 +126,5 @@ class NCBlockStorage:
 
         key = TokenKey(token_id)
         token_description = TokenDescription(token_id=token_id, token_name=token_name, token_symbol=token_symbol)
-        token_description_bytes = pickle.dumps(token_description)
+        token_description_bytes = self._TOKEN_DESCRIPTION_NC_TYPE.to_bytes(token_description)
         self._block_trie.update(bytes(key), token_description_bytes)

@@ -262,6 +262,8 @@ class NCChangesTracker(NCContractStorage):
     def is_empty(self) -> bool:
         # this method is only called in view contexts, so it's impossible for the balance to have changed.
         assert not bool(self._balance_diff)
+        assert not bool(self._authorities_diff)
+        assert not bool(self._created_tokens)
         return not bool(self.data)
 
     @override
