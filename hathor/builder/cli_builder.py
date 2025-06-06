@@ -17,7 +17,7 @@ import os
 import platform
 import sys
 from typing import Any, Optional
-
+from urllib.parse import urlparse
 from structlog import get_logger
 
 from hathor.cli.run_node_args import RunNodeArgs
@@ -254,6 +254,55 @@ class CliBuilder:
         )
 
         cpu_mining_service = CpuMiningService()
+        
+        # We are remodeling the whitelist_only trope.
+        # Now, we must use solely the p2p_whitelist flag, which shall receive
+
+        # Check whitelist pathing. Default values: 
+        x_p2p_wl = None
+
+        if self._args.x_p2p_whitelist:
+            x_p2p_wl = str(self._args.x_p2p_whitelist).strip()
+    
+        whitelist_only = True
+        p2p_whitelist = settings.WHITELIST_URL
+        if x_p2p_wl:
+            # Check: If it is expected arguments from the flag, not giving any returns true or false?
+            if x_p2p_wl == "off":
+                whitelist_only = False
+
+            elif x_p2p_wl == "auto" or x_p2p_wl == "hathorlabs":
+                pass
+
+            elif os.path.isfile(x_p2p_wl):
+                with open(x_p2p_wl, "r", encoding="utf-8") as file:
+                    # Checks whether the file is blank.
+                    lines = file.readlines()
+                    if not lines:
+                        whitelist_only= False
+                        p2p_whitelist = None
+                    else:
+                        for line in lines:
+                            line = line.strip().lower()
+                            if line == "off":
+                                # Whitelist if off. Hence, no p2p_whitelist.
+                                whitelist_only = False
+                                p2p_whitelist = None
+                                break
+                        # If the file does is not empty or OFF, read from it.
+                        if whitelist_only:
+                            p2p_whitelist = file.read()
+            
+            # The received string may also be an URL. If so, we check if it parses as one.
+            elif all([urlparse(x_p2p_wl).scheme in ("http", "https", "ftp"), urlparse(x_p2p_wl).netloc]):
+                p2p_whitelist = x_p2p_wl
+            else: 
+                raise Exception("Invalid Argument for --p2p-whitelist")
+            
+
+        # If there is no whitelist available in the settings, do not follow whitelist by default.
+        if not p2p_whitelist:
+            whitelist_only = False
 
         p2p_manager = ConnectionsManager(
             settings=settings,
@@ -261,7 +310,8 @@ class CliBuilder:
             my_peer=peer,
             pubsub=pubsub,
             ssl=True,
-            is_whitelist_only=self._args.x_whitelist_only,
+            is_whitelist_only= whitelist_only,
+            p2p_whitelist_path=p2p_whitelist,
             rng=Random(),
             enable_ipv6=self._args.x_enable_ipv6,
             disable_ipv4=self._args.x_disable_ipv4,

@@ -86,6 +86,7 @@ class ConnectionsManager:
     connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
     handshaking_peers: set[HathorProtocol]
     is_whitelist_only: bool
+    p2p_whitelist_path: Optional[str]
     verified_peer_storage: VerifiedPeerStorage
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
@@ -101,6 +102,7 @@ class ConnectionsManager:
         ssl: bool,
         rng: Random,
         is_whitelist_only: bool,
+        p2p_whitelist_path: Optional[str],
         enable_ipv6: bool,
         disable_ipv4: bool,
     ) -> None:
@@ -189,6 +191,8 @@ class ConnectionsManager:
 
         # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
         self.is_whitelist_only = is_whitelist_only
+
+        self.p2p_whitelist_path = p2p_whitelist_path
 
         # A timer to try to reconnect to the disconnect known peers.
         if self.is_whitelist_only:
