@@ -27,6 +27,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.p2p.peer import PrivatePeer
+from hathor.reactor import ReactorProtocol as Reactor
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.patches import SimulatorCpuMiningService, SimulatorVertexVerifier
@@ -239,6 +240,7 @@ class Simulator:
 
 
 def _build_vertex_verifiers(
+    reactor: Reactor,
     settings: HathorSettings,
     daa: DifficultyAdjustmentAlgorithm,
     feature_service: FeatureService
@@ -247,6 +249,7 @@ def _build_vertex_verifiers(
     A custom VertexVerifiers builder to be used by the simulator.
     """
     return VertexVerifiers.create(
+        reactor=reactor,
         settings=settings,
         vertex_verifier=SimulatorVertexVerifier(settings=settings, feature_service=feature_service),
         daa=daa,
