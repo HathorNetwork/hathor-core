@@ -63,7 +63,8 @@ TX_STORAGE_METRICS = {
 }
 
 GC_METRICS = {
-    'objects': 'Number of objects tracked by the garbage collector',
+    'tracked_objects': 'Number of objects tracked by the garbage collector',
+    'objects': 'Collection counts from the garbage collector',
     'collections': 'Number of collections done by the garbage collector',
     'collected': 'Number of objects collected by the garbage collector',
     'uncollectable': 'Number of objects that could not be collected by the garbage collector',
@@ -212,6 +213,8 @@ class PrometheusMetricsExporter:
         threshold = gc.get_threshold()
 
         for i in range(3):
+            self.gc_metrics['tracked_objects'].labels(generation=i).set(len(gc.get_objects(i)))
+            # This metric is called `objects` for historical reasons, to keep compatibility with existing graphs.
             self.gc_metrics['objects'].labels(generation=i).set(counts[i])
             self.gc_metrics['collections'].labels(generation=i).set(stats[i]['collections'])
             self.gc_metrics['collected'].labels(generation=i).set(stats[i]['collected'])
