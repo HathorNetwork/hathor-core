@@ -36,6 +36,7 @@ from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
+from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -255,13 +256,30 @@ class CliBuilder:
 
         cpu_mining_service = CpuMiningService()
 
+        # We are remodeling the whitelist_only trope.
+        # Now, we must use solely the p2p_whitelist flag, which shall receive
+
+        # Check whitelist pathing. Default values:
+        p2p_wl = self._args.x_p2p_whitelist or 'default'
+        p2p_wl = p2p_wl.strip()
+        p2p_whitelist = None
+
+        if p2p_wl in ('default', 'hathorlabs'):
+            p2p_whitelist = URLPeersWhitelist(reactor, settings.WHITELIST_URL)
+        elif p2p_wl in ('none', 'disabled'):
+            p2p_whitelist = None
+        elif os.path.isfile(p2p_wl):
+            p2p_whitelist = FilePeersWhitelist(reactor, p2p_wl)
+        else:
+            p2p_whitelist = URLPeersWhitelist(reactor, p2p_wl)
+
         p2p_manager = ConnectionsManager(
             settings=settings,
             reactor=reactor,
             my_peer=peer,
             pubsub=pubsub,
             ssl=True,
-            whitelist_only=False,
+            p2p_whitelist=p2p_whitelist,
             rng=Random(),
             enable_ipv6=self._args.x_enable_ipv6,
             disable_ipv4=self._args.x_disable_ipv4,
