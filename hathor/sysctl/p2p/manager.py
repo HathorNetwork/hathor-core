@@ -269,3 +269,20 @@ class ConnectionsManagerSysctl(Sysctl):
     def reload_entrypoints_and_connections(self) -> None:
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
+    
+    def get_whitelist_flag(self) -> bool:
+        """Get whether whitelist-only mode is enable or off."""
+        return self.connections.whitelist_only
+
+    def set_whitelist_flag(self, enable: bool) -> None:
+        """Set the whitelist-only mode (if enable, node will only allow peers in whitelist
+        if it is not empty.)"""
+
+        self.connections.whitelist_only = enable
+        if self.connections.manager:
+            self.connections.manager.whitelist_only = enable
+
+        # When setting enable, all connections that are from peers not in the whitelist must
+        # be discarded, if whitelist not empty.
+        if enable:
+            self.connections.enable_whitelist()
