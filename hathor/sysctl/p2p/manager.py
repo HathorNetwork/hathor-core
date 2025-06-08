@@ -122,6 +122,11 @@ class ConnectionsManagerSysctl(Sysctl):
             None,
             self.reload_entrypoints_and_connections,
         )
+        self.register(
+            'whitelist_on',
+            self.get_whitelist_flag,
+            self.set_whitelist_flag,
+        )
 
     def set_force_sync_rotate(self) -> None:
         """Force a sync rotate."""
