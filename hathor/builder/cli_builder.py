@@ -281,7 +281,7 @@ class CliBuilder:
             my_peer=peer,
             pubsub=pubsub,
             ssl=True,
-            p2p_whitelist=p2p_whitelist,
+            peers_whitelist=p2p_whitelist,
             rng=Random(),
             enable_ipv6=self._args.x_enable_ipv6,
             disable_ipv4=self._args.x_disable_ipv4,

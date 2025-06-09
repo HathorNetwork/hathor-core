@@ -31,8 +31,8 @@ from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.peer_storage import VerifiedPeerStorage
-from hathor.p2p.peers_whitelist import PeersWhitelist
+from hathor.p2p.peer_storage import VerifiedPeerStorage 
+from hathor.p2p.peers_whitelist import URLPeersWhitelist, FilePeersWhitelist
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
@@ -85,6 +85,7 @@ class ConnectionsManager:
     verified_peer_storage: VerifiedPeerStorage
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
+    p2p_whitelist: Optional[U]
 
     rate_limiter: RateLimiter
 
@@ -96,7 +97,7 @@ class ConnectionsManager:
         pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
-        peers_whitelist: PeersWhitelist | None,
+        peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None,
         enable_ipv6: bool,
         disable_ipv4: bool,
     ) -> None:
@@ -184,7 +185,7 @@ class ConnectionsManager:
         self.lc_connect_interval = 0.2  # seconds
 
         # Whitelisted peers.
-        self.peers_whitelist: PeersWhitelist | None = peers_whitelist
+        self.peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = peers_whitelist
 
         # Pubsub object to publish events
         self.pubsub = pubsub
@@ -887,5 +888,5 @@ class ConnectionsManager:
         for conn in self.connections:
             # If there is no whitelist, no point in itering.
             if conn.get_peer_id():
-                if conn.get_peer_id() not in conn.node.peers_whitelist:
+                if conn.get_peer_id() not in self.peers_whitelist._current:
                     conn.disconnect(reason='Whitelist turned on', force=True)
