@@ -50,7 +50,7 @@ class PeersWhitelist(ABC):
            We log the error and start the looping call again.
         """
         self.log.error('whitelist refresh had an exception. Start looping call again.', args=args, kwargs=kwargs)
-        self.reactor.callLater(WHITELIST_RETRY_INTERVAL, self._start_lc)
+        self._reactor.callLater(WHITELIST_RETRY_INTERVAL, self._start_lc)
 
     def update(self) -> None:
         self._is_running = True

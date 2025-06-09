@@ -85,7 +85,8 @@ class ConnectionsManager:
     verified_peer_storage: VerifiedPeerStorage
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
-    p2p_whitelist: Optional[U]
+    p2p_whitelist: Optional[URLPeersWhitelist | FilePeersWhitelist]
+    only_whitelist: bool
 
     rate_limiter: RateLimiter
 
@@ -186,6 +187,9 @@ class ConnectionsManager:
 
         # Whitelisted peers.
         self.peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = peers_whitelist
+
+        # One may chose whether to follow the whitelist or not. Alterable by sysctl.
+        self.only_whitelist = bool(self.peers_whitelist)
 
         # Pubsub object to publish events
         self.pubsub = pubsub

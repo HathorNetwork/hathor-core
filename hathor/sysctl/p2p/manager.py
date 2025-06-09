@@ -283,9 +283,7 @@ class ConnectionsManagerSysctl(Sysctl):
         """Set the whitelist-only mode (if enable, node will only allow peers in whitelist
         if it is not empty.)"""
 
-        self.connections.whitelist_only = enable
-        if self.connections.manager:
-            self.connections.manager.whitelist_only = enable
+        self.connections.only_whitelist = enable
 
         # When setting enable, all connections that are from peers not in the whitelist must
         # be discarded, if whitelist not empty.
