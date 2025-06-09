@@ -73,11 +73,21 @@ class FilePeersWhitelist(PeersWhitelist):
         self._path = path
 
     def refresh(self) -> None:
+        self._unsafe_update()
+
+    def is_peer_whitelisted(self, peer_id: PeerId) -> None:
+        return peer_id in self._current
+
+    def _unsafe_update(self) -> Deferred[None]:
+        """
+            Implementation of base class function.
+            Reads the file in the class path.
+        """
         with open(self._path, 'r', encoding='utf-8') as fp:
             content = fp.read()
         new_whitelist = parse_whitelist(content)
         self._current = new_whitelist
-
+        return super()._unsafe_update()
 
 class URLPeersWhitelist(PeersWhitelist):
     def __init__(self, reactor: Reactor, url: str) -> None:
@@ -92,26 +102,17 @@ class URLPeersWhitelist(PeersWhitelist):
             raise ValueError(f'invalid url: {self._url}')
 
     def update(self) -> Deferred[None]:
-        from twisted.web.client import readBody
-        from twisted.web.http_headers import Headers
-        assert self._settings.WHITELIST_URL is not None
-        self.log.info('update whitelist')
-        d = self._http_agent.request(
-            b'GET',
-            self._settings.WHITELIST_URL.encode(),
-            Headers({'User-Agent': ['hathor-core']}),
-            None)
-        d.addCallback(readBody)
-        d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self.reactor)
-        d.addCallback(self._update_whitelist_cb)
-        d.addErrback(self._update_whitelist_err)
+        """
+            Updates the whitelist fetching the data via the url of the class.
+        """
+        d = self._unsafe_update(self._url)
         return d
 
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
 
     def _update_whitelist_cb(self, body: bytes) -> None:
-        assert self.manager is not None
+        # assert self.manager is not None  # Assumes manager always not to be None.
         self.log.info('update whitelist got response')
         try:
             text = body.decode()
@@ -134,3 +135,27 @@ class URLPeersWhitelist(PeersWhitelist):
             self.on_remove_callback(peer_id)
 
         self._current = new_whitelist
+    
+    def is_peer_whitelisted(self, peer_id: PeerId) -> None:
+        return peer_id in self._current
+
+    def _unsafe_update(self, whitelist_url: str) -> Deferred[None]:
+        """
+            Implementation of the child class of PeersWhitelist, called by update() 
+            to fetch data from the provided url.
+        """
+        from twisted.web.client import readBody
+        from twisted.web.http_headers import Headers
+        assert whitelist_url is not None  ### No settings URL! Fix this.
+        self.log.info('update whitelist')
+        d = self._http_agent.request(
+            b'GET',
+            whitelist_url.encode(),
+            Headers({'User-Agent': ['hathor-core']}),
+            None)
+        d.addCallback(readBody)
+        d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self.reactor)
+        d.addCallback(self._update_whitelist_cb)
+        d.addErrback(self._update_whitelist_err)
+        return d
+    
