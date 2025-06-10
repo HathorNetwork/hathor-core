@@ -20,6 +20,7 @@ from hathor.transaction.scripts.base_script import BaseScript
 from hathor.transaction.scripts.construct import get_pushdata, re_compile
 from hathor.transaction.scripts.hathor_script import HathorScript
 from hathor.transaction.scripts.opcode import Opcode
+from hathor.transaction.scripts.sighash import InputsOutputsLimit, SighashBitmask
 
 
 class P2PKH(BaseScript):
@@ -91,7 +92,14 @@ class P2PKH(BaseScript):
         return s.data
 
     @classmethod
-    def create_input_data(cls, public_key_bytes: bytes, signature: bytes) -> bytes:
+    def create_input_data(
+        cls,
+        public_key_bytes: bytes,
+        signature: bytes,
+        *,
+        sighash: SighashBitmask | None = None,
+        inputs_outputs_limit: InputsOutputsLimit | None = None
+    ) -> bytes:
         """
         :param private_key: key corresponding to the address we want to spend tokens from
         :type private_key: :py:class:`cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey`
@@ -99,8 +107,20 @@ class P2PKH(BaseScript):
         :rtype: bytes
         """
         s = HathorScript()
+
+        if sighash:
+            s.pushData(sighash.inputs)
+            s.pushData(sighash.outputs)
+            s.addOpcode(Opcode.OP_SIGHASH_BITMASK)
+
+        if inputs_outputs_limit:
+            s.pushData(inputs_outputs_limit.max_inputs)
+            s.pushData(inputs_outputs_limit.max_outputs)
+            s.addOpcode(Opcode.OP_MAX_INPUTS_OUTPUTS)
+
         s.pushData(signature)
         s.pushData(public_key_bytes)
+
         return s.data
 
     @classmethod
