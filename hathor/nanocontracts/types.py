@@ -14,12 +14,19 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
 from typing import Any, Callable, Generic, NewType, TypeAlias, TypeVar
 
 from typing_extensions import override
 
+from hathor.nanocontracts.blueprint_syntax_validation import (
+    validate_has_ctx_arg,
+    validate_has_not_ctx_arg,
+    validate_has_self_arg,
+    validate_method_types,
+)
 from hathor.nanocontracts.exception import BlueprintSyntaxError
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
@@ -69,6 +76,12 @@ class SignedData(InnerTypeMixin[T], Generic[T]):
         raise NotImplementedError('temporarily removed during nano merge')
 
 
+def _set_method_type(fn: Callable, method_type: NCMethodType) -> None:
+    if hasattr(fn, NC_METHOD_TYPE_ATTR):
+        raise BlueprintSyntaxError(f'method must be annotated with at most one method type: `{fn.__name__}()`')
+    setattr(fn, NC_METHOD_TYPE_ATTR, method_type)
+
+
 def _create_decorator_with_allowed_actions(
     *,
     decorator_body: Callable[[Callable], None],
@@ -115,7 +128,16 @@ def public(
 ) -> Callable:
     """Decorator to mark a blueprint method as public."""
     def decorator(fn: Callable) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        annotation_name = 'public'
+        forbidden_methods = {NC_FALLBACK_METHOD}
+        _set_method_type(fn, NCMethodType.PUBLIC)
+
+        if fn.__name__ in forbidden_methods:
+            raise BlueprintSyntaxError(f'`{fn.__name__}` method cannot be annotated with @{annotation_name}')
+
+        validate_has_self_arg(fn, annotation_name)
+        validate_method_types(fn)
+        validate_has_ctx_arg(fn, annotation_name)
 
     return _create_decorator_with_allowed_actions(
         decorator_body=decorator,
@@ -130,7 +152,17 @@ def public(
 
 def view(fn: Callable) -> Callable:
     """Decorator to mark a blueprint method as view (read-only)."""
-    raise NotImplementedError('temporarily removed during nano merge')
+    annotation_name = 'view'
+    forbidden_methods = {NC_INITIALIZE_METHOD, NC_FALLBACK_METHOD}
+    _set_method_type(fn, NCMethodType.VIEW)
+
+    if fn.__name__ in forbidden_methods:
+        raise BlueprintSyntaxError(f'`{fn.__name__}` method cannot be annotated with @{annotation_name}')
+
+    validate_has_self_arg(fn, annotation_name)
+    validate_has_not_ctx_arg(fn, annotation_name)
+    validate_method_types(fn)
+    return fn
 
 
 def fallback(
@@ -145,7 +177,28 @@ def fallback(
 ) -> Callable:
     """Decorator to mark a blueprint method as fallback. The method must also be called `fallback`."""
     def decorator(fn: Callable) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        annotation_name = 'fallback'
+        _set_method_type(fn, NCMethodType.FALLBACK)
+
+        if fn.__name__ != NC_FALLBACK_METHOD:
+            raise BlueprintSyntaxError(f'@{annotation_name} method must be called `fallback`: `{fn.__name__}()`')
+
+        validate_has_self_arg(fn, annotation_name)
+        validate_method_types(fn)
+        validate_has_ctx_arg(fn, annotation_name)
+
+        arg_spec = inspect.getfullargspec(fn)
+        msg = f'@{annotation_name} method must have these args: `ctx: Context, method_name: str, nc_args: NCArgs`'
+
+        if len(arg_spec.args) < 4:
+            raise BlueprintSyntaxError(msg)
+
+        third_arg = arg_spec.args[2]
+        fourth_arg = arg_spec.args[3]
+
+        from hathor.nanocontracts.runner.types import NCArgs
+        if arg_spec.annotations[third_arg] is not str or arg_spec.annotations[fourth_arg] is not NCArgs:
+            raise BlueprintSyntaxError(msg)
 
     return _create_decorator_with_allowed_actions(
         decorator_body=decorator,

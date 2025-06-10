@@ -25,6 +25,7 @@ from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
@@ -100,6 +101,18 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def is_transaction(self) -> bool:
         """Returns true if this is a transaction"""
         return True
+
+    def is_nano_contract(self) -> bool:
+        try:
+            self.get_nano_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_nano_header(self) -> NanoHeader:
+        """Return the NanoHeader or raise ValueError."""
+        raise ValueError('temporarily removed during nano merge')
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
