@@ -41,4 +41,6 @@ SETTINGS = HathorSettings(
         default_threshold=3
     ),
     ENABLE_NANO_CONTRACTS=True,
+    FEE_PER_OUTPUT=1,
+    FEE_FEATURE_FLAG=True
 )
