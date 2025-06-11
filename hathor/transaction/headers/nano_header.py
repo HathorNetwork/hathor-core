@@ -258,7 +258,46 @@ class NanoHeader(VertexBaseHeader):
 
     def get_blueprint_id(self, block: Block | None = None) -> BlueprintId:
         """Return the blueprint id."""
-        raise NotImplementedError('temporarily removed during nano merge')
+        from hathor.nanocontracts.exception import NanoContractDoesNotExist, NCContractCreationNotFound
+        from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId as NCVertexId
+        from hathor.nanocontracts.utils import get_nano_contract_creation
+
+        assert self.tx.storage is not None
+
+        if self.is_creating_a_new_contract():
+            blueprint_id = BlueprintId(NCVertexId(self.nc_id))
+            return blueprint_id
+
+        if block is None:
+            block = self.tx.storage.get_best_block()
+
+        try:
+            nc_storage = self.tx.storage.get_nc_storage(block, ContractId(NCVertexId(self.nc_id)))
+            blueprint_id = nc_storage.get_blueprint_id()
+            return blueprint_id
+        except NanoContractDoesNotExist:
+            pass
+
+        try:
+            nc_creation = get_nano_contract_creation(
+                self.tx.storage,
+                NCVertexId(self.nc_id),
+                allow_mempool=True,
+                allow_voided=True,
+            )
+        except NCContractCreationNotFound as e:
+            raise NanoContractDoesNotExist from e
+
+        # must be in the mempool
+        nc_creation_meta = nc_creation.get_metadata()
+        if nc_creation_meta.first_block is not None:
+            # otherwise, it failed or skipped execution
+            from hathor.transaction.nc_execution_state import NCExecutionState
+            assert nc_creation_meta.nc_execution in (NCExecutionState.FAILURE, NCExecutionState.SKIPPED)
+            raise NanoContractDoesNotExist
+
+        blueprint_id = BlueprintId(NCVertexId(nc_creation.get_nano_header().nc_id))
+        return blueprint_id
 
     def get_actions(self) -> list[NCAction]:
         """Get a list of NCActions from the header actions."""

@@ -101,7 +101,9 @@ class _DepositRules(BalanceRules[NCDepositAction]):
 
     @override
     def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
+        token_info.amount = token_info.amount + self.action.amount
+        token_dict[self.action.token_uid] = token_info
 
     @override
     def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
@@ -123,7 +125,9 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
 
     @override
     def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
+        token_info.amount = token_info.amount - self.action.amount
+        token_dict[self.action.token_uid] = token_info
 
     @override
     def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
@@ -145,7 +149,17 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
 
     @override
     def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        assert self.action.token_uid != HATHOR_TOKEN_UID
+        token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
+        if self.action.mint and not token_info.can_mint:
+            raise NCInvalidAction(
+                f'{self.action.name} token {self.action.token_uid.hex()} requires mint, but no input has it'
+            )
+
+        if self.action.melt and not token_info.can_melt:
+            raise NCInvalidAction(
+                f'{self.action.name} token {self.action.token_uid.hex()} requires melt, but no input has it'
+            )
 
     @override
     def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
@@ -187,7 +201,11 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
 
     @override
     def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        assert self.action.token_uid != HATHOR_TOKEN_UID
+        token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
+        token_info.can_mint = token_info.can_mint or self.action.mint
+        token_info.can_melt = token_info.can_melt or self.action.melt
+        token_dict[self.action.token_uid] = token_info
 
     @override
     def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
