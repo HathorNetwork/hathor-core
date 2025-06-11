@@ -404,7 +404,17 @@ class Builder:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             pubsub = self._get_or_create_pubsub()
-            self._consensus = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
+            nc_storage_factory = self._get_or_create_nc_storage_factory()
+            nc_calls_sorter = self._get_nc_calls_sorter()
+            self._consensus = ConsensusAlgorithm(
+                nc_storage_factory=nc_storage_factory,
+                soft_voided_tx_ids=soft_voided_tx_ids,
+                pubsub=pubsub,
+                settings=self._get_or_create_settings(),
+                runner_factory=self._get_or_create_runner_factory(),
+                nc_log_storage=self._get_or_create_nc_log_storage(),
+                nc_calls_sorter=nc_calls_sorter,
+            )
 
         return self._consensus
 

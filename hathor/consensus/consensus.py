@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_global_settings
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
@@ -29,6 +28,11 @@ from hathor.transaction import BaseTransaction
 from hathor.util import not_none
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts import NCStorageFactory
+    from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+    from hathor.nanocontracts.runner.runner import RunnerFactory
+    from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -65,15 +69,23 @@ class ConsensusAlgorithm:
 
     def __init__(
         self,
+        nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
+        *,
+        settings: HathorSettings,
+        runner_factory: RunnerFactory,
+        nc_calls_sorter: NCSorterCallable,
+        nc_log_storage: NCLogStorage,
     ) -> None:
-        self._settings = get_global_settings()
+        self._settings = settings
         self.log = logger.new()
         self._pubsub = pubsub
+        self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
-        self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
+        self.block_algorithm_factory = BlockConsensusAlgorithmFactory(settings, runner_factory, nc_log_storage)
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
+        self.nc_calls_sorter = nc_calls_sorter
 
     def create_context(self) -> ConsensusAlgorithmContext:
         """Handy method to create a context that can be used to access block and transaction algorithms."""
@@ -113,21 +125,39 @@ class ConsensusAlgorithm:
         else:
             raise NotImplementedError
 
-        new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
         txs_to_remove: list[BaseTransaction] = []
+
+        from hathor.nanocontracts.exception import NanoContractDoesNotExist
+        for tx_affected in context.txs_affected:
+            if not tx_affected.is_nano_contract():
+                # Not a nano tx? Skip!
+                continue
+            if tx_affected.get_metadata().first_block:
+                # Not in mempool? Skip!
+                continue
+            assert isinstance(tx_affected, Transaction)
+            nano_header = tx_affected.get_nano_header()
+            try:
+                nano_header.get_blueprint_id()
+            except NanoContractDoesNotExist:
+                from hathor.transaction.validation_state import ValidationState
+                tx_affected.set_validation(ValidationState.INVALID)
+
+        new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
         if new_best_height < best_height:
             self.log.warn('height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
                           prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
             # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
             #      reward lock
-            txs_to_remove = storage.compute_transactions_that_became_invalid(new_best_height)
-            if txs_to_remove:
-                self.log.warn('some transactions on the mempool became invalid and will be removed',
-                              count=len(txs_to_remove))
-                # XXX: because transactions in `txs_to_remove` are marked as invalid, we need this context to be
-                # able to remove them
-                with storage.allow_invalid_context():
-                    self._remove_transactions(txs_to_remove, storage, context)
+            txs_to_remove.extend(storage.compute_transactions_that_became_invalid(new_best_height))
+
+        if txs_to_remove:
+            self.log.warn('some transactions on the mempool became invalid and will be removed',
+                          count=len(txs_to_remove))
+            # XXX: because transactions in `txs_to_remove` are marked as invalid, we need this context to be
+            # able to remove them
+            with storage.allow_invalid_context():
+                self._remove_transactions(txs_to_remove, storage, context)
 
         # emit the reorg started event if needed
         if context.reorg_common_block is not None:
@@ -149,6 +179,16 @@ class ConsensusAlgorithm:
             tx_affected.storage.indexes.update(tx_affected)
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
 
+        # handle custom NC events
+        if isinstance(base, Block):
+            assert context.nc_events is not None
+            for tx, events in context.nc_events:
+                assert tx.is_nano_contract()
+                for event in events:
+                    context.pubsub.publish(HathorEvents.NC_EVENT, tx=tx, nc_event=event)
+        else:
+            assert context.nc_events is None
+
         # And emit events for txs that were removed
         for tx_removed in txs_to_remove:
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx=tx_removed)
@@ -157,7 +197,15 @@ class ConsensusAlgorithm:
         if context.reorg_common_block is not None:
             context.pubsub.publish(HathorEvents.REORG_FINISHED)
 
-    def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+    def filter_out_voided_by_entries_from_parents(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+        """Filter out voided_by entries that should be inherited from parents."""
+        voided_by = set(voided_by)
+        voided_by = self._filter_out_nc_fail_entries(tx, voided_by)
+        voided_by = self._filter_out_soft_voided_entries(tx, voided_by)
+        return voided_by
+
+    def _filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+        """Remove voided_by entries of soft voided transactions."""
         if not (self.soft_voided_tx_ids & voided_by):
             return voided_by
         ret = set()
@@ -165,6 +213,8 @@ class ConsensusAlgorithm:
             if h == self._settings.SOFT_VOIDED_ID:
                 continue
             if h == self._settings.CONSENSUS_FAIL_ID:
+                continue
+            if h == self._settings.NC_EXECUTION_FAIL_ID:
                 continue
             if h == tx.hash:
                 continue
@@ -176,6 +226,31 @@ class ConsensusAlgorithm:
             tx3_voided_by: set[bytes] = tx3_meta.voided_by or set()
             if not (self.soft_voided_tx_ids & tx3_voided_by):
                 ret.add(h)
+        return ret
+
+    def _filter_out_nc_fail_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
+        """Remove NC_EXECUTION_FAIL_ID flag from voided_by inherited by parents."""
+        ret = set(voided_by)
+        if self._settings.NC_EXECUTION_FAIL_ID in ret:
+            # If NC_EXECUTION_FAIL_ID is in voided_by, then tx.hash must be in voided_by too.
+            # So we remove both of them.
+            ret.remove(self._settings.NC_EXECUTION_FAIL_ID)
+            ret.remove(tx.hash)
+        # Then we remove all hashes from transactions that also have the NC_EXECUTION_FAIL_ID flag.
+        for h in voided_by:
+            if h == self._settings.SOFT_VOIDED_ID:
+                continue
+            if h == self._settings.NC_EXECUTION_FAIL_ID:
+                continue
+            if h == tx.hash:
+                continue
+            assert tx.storage is not None
+            tx2 = tx.storage.get_transaction(h)
+            tx2_meta = tx2.get_metadata()
+            tx2_voided_by: set[bytes] = tx2_meta.voided_by or set()
+            if self._settings.NC_EXECUTION_FAIL_ID in tx2_voided_by:
+                ret.discard(h)
+        assert self._settings.NC_EXECUTION_FAIL_ID not in ret
         return ret
 
     def _remove_transactions(
