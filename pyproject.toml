@@ -175,6 +175,7 @@ addopts = "-n auto"
 markers = [
     "slow",
 ]
+norecursedirs = ["tests/nanocontracts/test_blueprints"]
 
 [build-system]
 requires = ["poetry-core >= 1.3.2", "cython < 0.30"]
