@@ -17,9 +17,13 @@ from __future__ import annotations
 from collections import defaultdict
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts.exception import NCInvalidAction
+from hathor.nanocontracts.exception import NCInvalidAction, NCInvalidSignature
 from hathor.nanocontracts.types import BaseAuthorityAction, NCAction, NCActionType, TokenUid
 from hathor.transaction import BaseTransaction, Transaction
+from hathor.transaction.exceptions import ScriptError, TooManySigOps
+from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
+from hathor.transaction.scripts import create_output_script, get_sigops_count
+from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
 
 MAX_NC_SCRIPT_SIZE: int = 1024
 MAX_NC_SCRIPT_SIGOPS_COUNT: int = 20
@@ -42,7 +46,31 @@ class NanoHeaderVerifier:
 
     def verify_nc_signature(self, tx: BaseTransaction) -> None:
         """Verify if the caller's signature is valid."""
-        raise NotImplementedError('temporarily removed during nano merge')
+        assert tx.is_nano_contract()
+        assert isinstance(tx, Transaction)
+
+        nano_header = tx.get_nano_header()
+        if len(nano_header.nc_address) != ADDRESS_LEN_BYTES:
+            raise NCInvalidSignature(f'invalid address: {nano_header.nc_address.hex()}')
+
+        if len(nano_header.nc_script) > MAX_NC_SCRIPT_SIZE:
+            raise NCInvalidSignature(
+                f'nc_script larger than max: {len(nano_header.nc_script)} > {MAX_NC_SCRIPT_SIZE}'
+            )
+
+        output_script = create_output_script(nano_header.nc_address)
+        sigops_count = get_sigops_count(nano_header.nc_script, output_script)
+        if sigops_count > MAX_NC_SCRIPT_SIGOPS_COUNT:
+            raise TooManySigOps(f'sigops count greater than max: {sigops_count} > {MAX_NC_SCRIPT_SIGOPS_COUNT}')
+
+        try:
+            raw_script_eval(
+                input_data=nano_header.nc_script,
+                output_script=output_script,
+                extras=ScriptExtras(tx=tx)
+            )
+        except ScriptError as e:
+            raise NCInvalidSignature from e
 
     @staticmethod
     def verify_actions(tx: BaseTransaction) -> None:

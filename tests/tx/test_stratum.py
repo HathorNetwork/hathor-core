@@ -232,7 +232,7 @@ class StratumClientTest(unittest.TestCase):
         self.protocol = StratumClient(reactor=self.clock)
         self.protocol.makeConnection(self.transport)
         self.job_request_params = {
-            'data': self.block.get_header_without_nonce().hex(),
+            'data': self.block.get_mining_header_without_nonce().hex(),
             'job_id': 'a734d03fe4b64739be2894742f3de20f',
             'nonce_size': Block.SERIALIZATION_NONCE_SIZE,
             'weight': self.block.weight,

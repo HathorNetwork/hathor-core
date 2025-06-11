@@ -114,12 +114,14 @@ class VerificationTest(unittest.TestCase):
         block = self._get_valid_block()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
@@ -127,6 +129,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_called_once()
@@ -213,12 +216,14 @@ class VerificationTest(unittest.TestCase):
         block = self._get_valid_block()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
@@ -226,6 +231,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_called_once()
@@ -259,6 +265,7 @@ class VerificationTest(unittest.TestCase):
         block = self._get_valid_block()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
@@ -275,6 +282,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
@@ -292,6 +300,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Block methods
@@ -311,12 +320,14 @@ class VerificationTest(unittest.TestCase):
         block = self._get_valid_merge_mined_block()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
@@ -324,6 +335,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_called_once()
@@ -416,12 +428,14 @@ class VerificationTest(unittest.TestCase):
         block = self._get_valid_merge_mined_block()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
@@ -429,6 +443,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_called_once()
@@ -462,6 +477,7 @@ class VerificationTest(unittest.TestCase):
         block = self._get_valid_merge_mined_block()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
@@ -480,6 +496,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
@@ -498,6 +515,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Block methods
@@ -520,6 +538,7 @@ class VerificationTest(unittest.TestCase):
         tx = self._get_valid_tx()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -532,6 +551,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -545,6 +565,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Transaction methods
@@ -643,6 +664,7 @@ class VerificationTest(unittest.TestCase):
         tx = self._get_valid_tx()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -655,6 +677,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -668,6 +691,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Transaction methods
@@ -723,6 +747,7 @@ class VerificationTest(unittest.TestCase):
         tx = self._get_valid_tx()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -741,6 +766,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -760,6 +786,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         assert verify_outputs_wrapped.call_count == 2
 
         # Transaction methods
@@ -816,6 +843,7 @@ class VerificationTest(unittest.TestCase):
         tx = self._get_valid_token_creation_tx()
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -828,6 +856,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -841,6 +870,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Transaction methods
@@ -946,6 +976,7 @@ class VerificationTest(unittest.TestCase):
         tx.get_metadata().validation = ValidationState.INITIAL
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -958,6 +989,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -971,6 +1003,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Transaction methods
@@ -1026,6 +1059,7 @@ class VerificationTest(unittest.TestCase):
         tx.get_metadata().validation = ValidationState.INITIAL
 
         verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -1047,6 +1081,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -1068,6 +1103,7 @@ class VerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_version_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         assert verify_outputs_wrapped.call_count == 2
 
         # Transaction methods
