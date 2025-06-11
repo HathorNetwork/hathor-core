@@ -21,6 +21,7 @@ from hathor.dag_builder.types import WalletFactoryType
 from hathor.manager import HathorManager
 from hathor.util import Random
 from hathor.wallet import HDWallet
+from tests.nanocontracts import test_blueprints
 from tests.utils import GENESIS_SEED
 
 
@@ -45,4 +46,5 @@ class TestDAGBuilder:
             manager=manager,
             genesis_words=genesis_words or GENESIS_SEED,
             wallet_factory=wallet_factory or (lambda: TestDAGBuilder.create_random_hd_wallet(manager.rng)),
+            blueprints_module=blueprints_module or test_blueprints,
         )
