@@ -37,6 +37,7 @@ from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig, NCLogStorage
+from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.sorter.types import NCSorterCallable
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
@@ -191,6 +192,7 @@ class Builder:
 
         self._nc_storage_factory: NCStorageFactory | None = None
         self._nc_log_storage: NCLogStorage | None = None
+        self._runner_factory: RunnerFactory | None = None
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
 
     def build(self) -> BuildArtifacts:
@@ -224,6 +226,7 @@ class Builder:
         vertex_handler = self._get_or_create_vertex_handler()
         vertex_parser = self._get_or_create_vertex_parser()
         poa_block_producer = self._get_or_create_poa_block_producer()
+        runner_factory = self._get_or_create_runner_factory()
 
         if settings.ENABLE_NANO_CONTRACTS:
             tx_storage.nc_catalog = self._get_nc_catalog()
@@ -267,6 +270,7 @@ class Builder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            runner_factory=runner_factory,
             **kwargs
         )
 
@@ -408,6 +412,16 @@ class Builder:
         from hathor.nanocontracts.catalog import generate_catalog_from_settings
         settings = self._get_or_create_settings()
         return generate_catalog_from_settings(settings)
+
+    def _get_or_create_runner_factory(self) -> RunnerFactory:
+        if self._runner_factory is None:
+            self._runner_factory = RunnerFactory(
+                reactor=self._get_reactor(),
+                settings=self._get_or_create_settings(),
+                tx_storage=self._get_or_create_tx_storage(),
+                nc_storage_factory=self._get_or_create_nc_storage_factory(),
+            )
+        return self._runner_factory
 
     def _get_or_create_pubsub(self) -> PubSubManager:
         if self._pubsub is None:

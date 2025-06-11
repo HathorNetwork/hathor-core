@@ -14,10 +14,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, final
 
+from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.exception import BlueprintSyntaxError
 from hathor.nanocontracts.types import NC_FALLBACK_METHOD, NC_INITIALIZE_METHOD, NC_METHOD_TYPE_ATTR, NCMethodType
+
+if TYPE_CHECKING:
+    from hathor.nanocontracts.nc_exec_logs import NCLogger
 
 FORBIDDEN_NAMES = {
     'syscall',
@@ -122,3 +126,18 @@ class Blueprint(metaclass=_BlueprintBase):
     """
 
     __slots__ = ('__env',)
+
+    def __init__(self, env: BlueprintEnvironment) -> None:
+        self.__env = env
+
+    @final
+    @property
+    def syscall(self) -> BlueprintEnvironment:
+        """Return the syscall provider for the current contract."""
+        return self.__env
+
+    @final
+    @property
+    def log(self) -> NCLogger:
+        """Return the logger for the current contract."""
+        return self.syscall.__log__
