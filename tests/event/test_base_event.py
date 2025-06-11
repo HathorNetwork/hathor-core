@@ -64,7 +64,8 @@ def test_create_base_event(event_id: int, group_id: int | None) -> None:
                 accumulated_weight_raw="1024",
                 score_raw="1048576",
                 height=100,
-                validation='validation'
+                validation='validation',
+                nc_execution=None,
             )
         ),
         group_id=group_id
