@@ -14,10 +14,14 @@ from tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_n
 
 class ModifiedTransactionRocksDBStorage(TransactionRocksDBStorage):
     def __init__(self, path: str, settings: HathorSettings):
+        from hathor.nanocontracts.storage import NCRocksDBStorageFactory
+        rocksdb_storage = RocksDBStorage(path=path)
+        nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         super().__init__(
-            rocksdb_storage=RocksDBStorage(path=path),
+            rocksdb_storage=rocksdb_storage,
             settings=settings,
             vertex_parser=VertexParser(settings=settings),
+            nc_storage_factory=nc_storage_factory,
         )
         self._first_tx: BaseTransaction | None = None
 

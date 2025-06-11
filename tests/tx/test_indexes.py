@@ -4,10 +4,10 @@ from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import iwindows
+from hathor.util import initialize_hd_wallet, iwindows
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
+from tests.utils import DEFAULT_WORDS, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
 
 
 class BaseIndexesTest(unittest.TestCase):
@@ -470,7 +470,7 @@ class BaseIndexesTest(unittest.TestCase):
         # spend that utxo and check that it is gone from the index
         address1 = self.get_address(1)
 
-        wallet = self.get_wallet()
+        wallet = initialize_hd_wallet(DEFAULT_WORDS)
         tx1 = Transaction(
             timestamp=int(self.clock.seconds()),
             weight=1.0,
@@ -544,7 +544,7 @@ class BaseIndexesTest(unittest.TestCase):
 
         change_value = 26
         transfer_value = 6400 - change_value
-        wallet = self.get_wallet()
+        wallet = initialize_hd_wallet(DEFAULT_WORDS)
         tx1 = Transaction(
             timestamp=int(self.clock.seconds()),
             weight=1.0,
@@ -693,6 +693,7 @@ class RocksDBIndexesTest(BaseIndexesTest):
     def setUp(self):
         import tempfile
 
+        from hathor.nanocontracts.storage import NCRocksDBStorageFactory
         from hathor.transaction.storage import TransactionRocksDBStorage
 
         super().setUp()
@@ -701,7 +702,13 @@ class RocksDBIndexesTest(BaseIndexesTest):
         self.tmpdirs.append(directory)
         rocksdb_storage = RocksDBStorage(path=directory)
         parser = VertexParser(settings=self._settings)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage, settings=self._settings, vertex_parser=parser)
+        nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
+        self.tx_storage = TransactionRocksDBStorage(
+            rocksdb_storage,
+            settings=self._settings,
+            vertex_parser=parser,
+            nc_storage_factory=nc_storage_factory,
+        )
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
