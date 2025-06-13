@@ -20,8 +20,6 @@ from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.nanocontracts.types import Address
 from hathor.serialization import Deserializer, Serializer
-from hathor.serialization.consts import DEFAULT_BYTES_MAX_LENGTH
-from hathor.serialization.encoding.bytes import decode_bytes, encode_bytes
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.utils.typing import is_subclass
 
@@ -47,11 +45,14 @@ class AddressNCType(NCType[Address]):
 
     @override
     def _serialize(self, serializer: Serializer, value: Address, /) -> None:
-        encode_bytes(serializer.with_max_bytes(DEFAULT_BYTES_MAX_LENGTH), value)
+        data = bytes(value)
+        assert len(data) == ADDRESS_LEN_BYTES  # XXX: double check
+        serializer.write_bytes(data)
 
     @override
     def _deserialize(self, deserializer: Deserializer, /) -> Address:
-        return Address(decode_bytes(deserializer.with_max_bytes(DEFAULT_BYTES_MAX_LENGTH)))
+        data = bytes(deserializer.read_bytes(ADDRESS_LEN_BYTES))
+        return Address(data)
 
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> Address:

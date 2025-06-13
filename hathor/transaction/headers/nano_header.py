@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from hathor.transaction.block import Block
 
 ADDRESS_LEN_BYTES: int = 25
+ADDRESS_SEQNUM_SIZE: int = 8  # bytes
 _NC_SCRIPT_LEN_MAX_BYTES: int = 2
 
 
@@ -93,6 +94,9 @@ class NanoHeaderAction:
 class NanoHeader(VertexBaseHeader):
     tx: Transaction
 
+    # Sequence number for the caller.
+    nc_seqnum: int
+
     # nc_id equals to the blueprint_id when a Nano Contract is being created.
     # nc_id equals to the contract_id when a method is being called.
     nc_id: VertexId
@@ -133,6 +137,9 @@ class NanoHeader(VertexBaseHeader):
         nc_id, buf = unpack_len(32, buf)
         if verbose:
             verbose('nc_id', nc_id)
+        nc_seqnum, buf = leb128.decode_unsigned(buf, max_bytes=ADDRESS_SEQNUM_SIZE)
+        if verbose:
+            verbose('nc_seqnum', nc_seqnum)
         (nc_method_len,), buf = unpack('!B', buf)
         if verbose:
             verbose('nc_method_len', nc_method_len)
@@ -168,6 +175,7 @@ class NanoHeader(VertexBaseHeader):
 
         return cls(
             tx=tx,
+            nc_seqnum=nc_seqnum,
             nc_id=nc_id,
             nc_method=decoded_nc_method,
             nc_args_bytes=nc_args_bytes,
@@ -185,6 +193,7 @@ class NanoHeader(VertexBaseHeader):
 
         ret: deque[bytes] = deque()
         ret.append(self.nc_id)
+        ret.append(leb128.encode_unsigned(self.nc_seqnum, max_bytes=ADDRESS_SEQNUM_SIZE))
         ret.append(int_to_bytes(len(encoded_method), 1))
         ret.append(encoded_method)
         ret.append(int_to_bytes(len(self.nc_args_bytes), 2))
