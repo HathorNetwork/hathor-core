@@ -12,21 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
-from hathor.nanocontracts.storage import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
-from hathor.nanocontracts.types import public, view
+from hathor.transaction import Block, Transaction
 
-__all__ = [
-    'Blueprint',
-    'Context',
-    'OnChainBlueprint',
-    'NCFail',
-    'NCMemoryStorageFactory',
-    'NCRocksDBStorageFactory',
-    'NCStorageFactory',
-    'public',
-    'view',
-]
+
+def timestamp_nc_calls_sorter(block: Block, nc_calls: list[Transaction]) -> list[Transaction]:
+    """Return the nc_calls sorted by (timestamp, hash).
+
+    DEPRECATED: This is used only to keep compatibility with the alpha nano-testnet.
+    """
+    return sorted(nc_calls, key=lambda tx: (tx.timestamp, tx.hash))

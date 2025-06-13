@@ -91,7 +91,9 @@ class TxVersion(IntEnum):
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
+    # DEPRECATED_NANO_CONTRACT = 4  # XXX: Temporary to keep compatibility
     POA_BLOCK = 5
+    ON_CHAIN_BLUEPRINT = 6
 
     @classmethod
     def _missing_(cls, value: Any) -> None:
@@ -233,6 +235,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     @abstractmethod
     def is_transaction(self) -> bool:
         raise NotImplementedError
+
+    def is_nano_contract(self) -> bool:
+        """Return True if this transaction is a nano contract or not."""
+        return False
 
     def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
