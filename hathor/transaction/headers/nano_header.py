@@ -22,7 +22,14 @@ from typing_extensions import assert_never
 
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
-from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import (
+    VerboseCallback,
+    bytes_to_output_value,
+    int_to_bytes,
+    output_value_to_bytes,
+    unpack,
+    unpack_len,
+)
 from hathor.types import VertexId
 from hathor.utils import leb128
 
@@ -115,7 +122,16 @@ class NanoHeader(VertexBaseHeader):
 
     @classmethod
     def _deserialize_action(cls, buf: bytes) -> tuple[NanoHeaderAction, bytes]:
-        raise NotImplementedError('temporarily removed during nano merge')
+        from hathor.nanocontracts.types import NCActionType
+        type_bytes, buf = buf[:1], buf[1:]
+        action_type = NCActionType.from_bytes(type_bytes)
+        (token_index,), buf = unpack('!B', buf)
+        amount, buf = bytes_to_output_value(buf)
+        return NanoHeaderAction(
+            type=action_type,
+            token_index=token_index,
+            amount=amount,
+        ), buf
 
     @classmethod
     def deserialize(
@@ -185,7 +201,12 @@ class NanoHeader(VertexBaseHeader):
         ), bytes(buf)
 
     def _serialize_action(self, action: NanoHeaderAction) -> bytes:
-        raise NotImplementedError('temporarily removed during nano merge')
+        ret = [
+            action.type.to_bytes(),
+            int_to_bytes(action.token_index, 1),
+            output_value_to_bytes(action.amount),
+        ]
+        return b''.join(ret)
 
     def _serialize_without_header_id(self, *, skip_signature: bool) -> deque[bytes]:
         """Serialize the header with the option to skip the signature."""

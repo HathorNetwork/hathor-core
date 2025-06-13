@@ -18,7 +18,7 @@ import hashlib
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
-from typing_extensions import override
+from typing_extensions import Self, override
 
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_bytes
@@ -54,6 +54,8 @@ class RewardLockedInfo(NamedTuple):
 
 
 class Transaction(GenericVertex[TransactionStaticMetadata]):
+
+    __slots__ = ['tokens', '_sighash_cache', '_sighash_data_cache']
 
     SERIALIZATION_NONCE_SIZE = 4
 
@@ -113,23 +115,28 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
     def get_nano_header(self) -> NanoHeader:
         """Return the NanoHeader or raise ValueError."""
-        raise ValueError('temporarily removed during nano merge')
+        for header in self.headers:
+            if isinstance(header, NanoHeader):
+                return header
+        raise ValueError('nano header not found')
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'Transaction':
-        tx = cls()
+                           *, verbose: VerboseCallback = None) -> Self:
+        tx = cls(storage=storage)
         buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
 
-        if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
+        if len(buf) < cls.SERIALIZATION_NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
 
         [tx.nonce, ], buf = unpack('!I', buf)
         if verbose:
             verbose('nonce', tx.nonce)
 
+        while buf:
+            buf = tx.get_header_from_bytes(buf, verbose=verbose)
+
         tx.update_hash()
-        tx.storage = storage
 
         return tx
 
@@ -229,6 +236,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
+
+        for header in self.headers:
+            struct_bytes += header.get_sighash_bytes()
 
         ret = bytes(struct_bytes)
         self._sighash_cache = ret

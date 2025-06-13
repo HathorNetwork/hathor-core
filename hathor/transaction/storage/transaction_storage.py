@@ -1161,14 +1161,14 @@ class TransactionStorage(ABC):
         from hathor.nanocontracts.exception import BlueprintDoesNotExist
         assert self.nc_catalog is not None
 
-        try:
-            return self.nc_catalog.get_blueprint_class(blueprint_id)
-        except BlueprintDoesNotExist as e:
-            self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
-            if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-                raise e
-            self.log.debug('on-chain blueprints enabled, looking for that instead')
-            return self.get_on_chain_blueprint(blueprint_id)
+        if blueprint_class := self.nc_catalog.get_blueprint_class(blueprint_id):
+            return blueprint_class
+
+        self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
+        if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
+            raise BlueprintDoesNotExist(blueprint_id.hex())
+        self.log.debug('on-chain blueprints enabled, looking for that instead')
+        return self.get_on_chain_blueprint(blueprint_id)
 
     def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
         """Returns the source code associated with the given blueprint_id.

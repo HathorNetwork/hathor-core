@@ -13,10 +13,10 @@
 #  limitations under the License.
 
 from hathor.conf.settings import HathorSettings
-from hathor.transaction.exceptions import InvalidToken, TransactionDataError
+from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.transaction import TokenInfo
-from hathor.transaction.util import clean_token_string
+from hathor.transaction.util import validate_token_name_and_symbol
 from hathor.types import TokenUid
 
 
@@ -42,15 +42,4 @@ class TokenCreationTransactionVerifier:
     def verify_token_info(self, tx: TokenCreationTransaction) -> None:
         """ Validates token info
         """
-        name_len = len(tx.token_name)
-        symbol_len = len(tx.token_symbol)
-        if name_len == 0 or name_len > self._settings.MAX_LENGTH_TOKEN_NAME:
-            raise TransactionDataError('Invalid token name length ({})'.format(name_len))
-        if symbol_len == 0 or symbol_len > self._settings.MAX_LENGTH_TOKEN_SYMBOL:
-            raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
-
-        # Can't create token with hathor name or symbol
-        if clean_token_string(tx.token_name) == clean_token_string(self._settings.HATHOR_TOKEN_NAME):
-            raise TransactionDataError('Invalid token name ({})'.format(tx.token_name))
-        if clean_token_string(tx.token_symbol) == clean_token_string(self._settings.HATHOR_TOKEN_SYMBOL):
-            raise TransactionDataError('Invalid token symbol ({})'.format(tx.token_symbol))
+        validate_token_name_and_symbol(self._settings, tx.token_name, tx.token_symbol)

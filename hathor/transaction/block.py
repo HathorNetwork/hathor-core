@@ -95,9 +95,14 @@ class Block(GenericVertex[BlockStaticMetadata]):
         blc = cls()
         buf = blc.get_fields_from_struct(struct_bytes, verbose=verbose)
 
-        blc.nonce = int.from_bytes(buf, byteorder='big')
-        if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
+        if len(buf) < cls.SERIALIZATION_NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
+
+        blc.nonce = int.from_bytes(buf[:cls.SERIALIZATION_NONCE_SIZE], byteorder='big')
+        buf = buf[cls.SERIALIZATION_NONCE_SIZE:]
+
+        while buf:
+            buf = blc.get_header_from_bytes(buf, verbose=verbose)
 
         blc.hash = blc.calculate_hash()
         blc.storage = storage
@@ -291,9 +296,9 @@ class Block(GenericVertex[BlockStaticMetadata]):
             # TODO: check whether self is a parent of any checkpoint-valid block, this is left for a future PR
             pass
 
-    def get_base_hash(self) -> bytes:
+    def get_mining_base_hash(self) -> bytes:
         from hathor.merged_mining.bitcoin import sha256d_hash
-        return sha256d_hash(self.get_header_without_nonce())
+        return sha256d_hash(self.get_mining_header_without_nonce())
 
     def get_height(self) -> int:
         """Return this block's height."""

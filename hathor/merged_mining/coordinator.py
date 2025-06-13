@@ -233,7 +233,7 @@ class SingleMinerJob(NamedTuple):
         bitcoin_header, coinbase_tx = self._make_bitcoin_block_and_coinbase(work)
         header = bytes(bitcoin_header)
         header_head, header_tail = header[:36], header[-12:]
-        block_base_hash = self.hathor_block.get_base_hash()
+        block_base_hash = self.hathor_block.get_mining_base_hash()
         coinbase = bytes(coinbase_tx)
         assert block_base_hash in coinbase
         coinbase_head, coinbase_tail = coinbase.split(block_base_hash)
@@ -619,7 +619,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.last_submit_at = time.time()
 
         bitcoin_block_header = job.build_bitcoin_block_header(work)
-        block_base_hash = job.hathor_block.get_base_hash()
+        block_base_hash = job.hathor_block.get_mining_base_hash()
         block_hash = Hash(bitcoin_block_header.hash)
         self.log.debug('work received', bitcoin_header=bytes(bitcoin_block_header).hex(),
                        hathor_block=job.hathor_block, block_base_hash=block_base_hash.hex(),
@@ -1068,7 +1068,7 @@ class MergedJob(NamedTuple):
             hathor_block.update_hash()
 
         # build coinbase transaction with hathor block hash
-        hathor_block_hash = hathor_block.get_base_hash()
+        hathor_block_hash = hathor_block.get_mining_base_hash()
         coinbase_tx = self.bitcoin_coord.make_coinbase_transaction(
             hathor_block_hash,
             payback_script_bitcoin,
