@@ -50,8 +50,8 @@ class InvalidInputDataSize(TxValidationError):
     """Input data is too big"""
 
 
-class NoInputError(TxValidationError):
-    """There is not input"""
+class TooFewInputs(TxValidationError):
+    """There are less inputs than the minimum required"""
 
 
 class InvalidScriptError(TxValidationError):
