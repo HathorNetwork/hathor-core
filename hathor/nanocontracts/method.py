@@ -22,7 +22,7 @@ from typing import Any, TypeVar
 from typing_extensions import Self, assert_never, override
 
 from hathor.nanocontracts import Context
-from hathor.nanocontracts.exception import NCSerializationArgTooLong, NCSerializationError
+from hathor.nanocontracts.exception import NCFail, NCSerializationArgTooLong, NCSerializationError
 from hathor.nanocontracts.nc_types import (
     ESSENTIAL_TYPE_ALIAS_MAP,
     EXTENDED_TYPE_TO_NC_TYPE_MAP,
@@ -263,9 +263,12 @@ class Method:
         return _serialize_map_exception(self.args, args)
 
     def deserialize_args_bytes(self, data: bytes) -> tuple[Any, ...]:
-        """ Shortcut to deserialize args directly from bytes instead of using a deserilizer.
+        """ Shortcut to deserialize args directly from bytes instead of using a deserializer.
         """
-        return _deserialize_map_exception(self.args, data)
+        try:
+            return _deserialize_map_exception(self.args, data)
+        except Exception as e:
+            raise NCFail from e
 
     def serialize_return_bytes(self, return_value: Any) -> bytes:
         """ Shortcut to serialize a return value directly to a bytes instead of using a serializer.
@@ -273,6 +276,6 @@ class Method:
         return _serialize_map_exception(self.return_, return_value)
 
     def deserialize_return_bytes(self, data: bytes) -> Any:
-        """ Shortcut to deserialize a return value directly from bytes instead of using a deserilizer.
+        """ Shortcut to deserialize a return value directly from bytes instead of using a deserializer.
         """
         return _deserialize_map_exception(self.return_, data)

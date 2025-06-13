@@ -99,6 +99,7 @@ class VerificationService:
 
         Used by `self.validate_basic`. Should not modify the validation state."""
         self.verifiers.vertex.verify_version(vertex)
+        self.verifiers.vertex.verify_headers(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
