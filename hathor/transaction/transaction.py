@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 from typing_extensions import override
 
 from hathor.checkpoint import Checkpoint
+from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
@@ -255,10 +256,35 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             return self._settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
+    def get_related_addresses(self) -> set[str]:
+        ret = super().get_related_addresses()
+        if self.is_nano_contract():
+            nano_header = self.get_nano_header()
+            ret.add(get_address_b58_from_bytes(nano_header.nc_address))
+        return ret
+
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
+
+        if self.is_nano_contract():
+            nano_header = self.get_nano_header()
+            json['nc_id'] = nano_header.get_contract_id().hex()
+            json['nc_seqnum'] = nano_header.nc_seqnum
+            json['nc_blueprint_id'] = nano_header.get_blueprint_id().hex()
+            json['nc_method'] = nano_header.nc_method
+            json['nc_args'] = nano_header.nc_args_bytes.hex()
+            json['nc_address'] = get_address_b58_from_bytes(nano_header.nc_address)
+            json['nc_context'] = nano_header.get_context().to_json()
+
         return json
+
+    def to_json_extended(self) -> dict[str, Any]:
+        json_extended = super().to_json_extended()
+        if self.is_nano_contract():
+            json = self.to_json()
+            return {**json, **json_extended}
+        return json_extended
 
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.storage is not None
@@ -280,6 +306,13 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self._update_token_info_from_outputs(token_dict=token_dict)
 
         return token_dict
+
+    def get_minimum_number_of_inputs(self) -> int:
+        """Return the minimum number of inputs for this transaction.
+        This is used by the verification services."""
+        if self.is_nano_contract():
+            return 0
+        return 1
 
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)

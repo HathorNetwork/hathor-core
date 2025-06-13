@@ -82,6 +82,26 @@ class NCBlockSorter:
             for txin in tx.inputs:
                 sorter.add_edge(tx.hash, txin.tx_id)
 
+        # Add edges from nano seqnum.
+        tx_info_list = []
+        for tx in nc_calls:
+            assert tx.is_nano_contract()
+            nano_header = tx.get_nano_header()
+            tx_info_list.append((nano_header.nc_address, nano_header.nc_seqnum, tx.hash))
+
+        tx_info_list.sort()
+        for i in range(1, len(tx_info_list)):
+            prev_address, prev_seqnum, prev_hash = tx_info_list[i - 1]
+            curr_address, curr_seqnum, curr_hash = tx_info_list[i]
+
+            if curr_address != prev_address:
+                # Address is different, so do nothing.
+                continue
+
+            # XXX What to do if seqnums are the same?!
+            assert curr_seqnum > prev_seqnum
+            sorter.add_edge(curr_hash, prev_hash)
+
         # Remove all transactions that do not belong to nc_calls.
         allowed_keys = set(tx.hash for tx in nc_calls)
         to_be_removed = [key for key in sorter.db.keys() if key not in allowed_keys]

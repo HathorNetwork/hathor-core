@@ -147,7 +147,14 @@ class Code:
     settings: InitVar[HathorSettings]
 
     def __post_init__(self, settings: HathorSettings) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        # used to initialize self.text with
+        match self.kind:
+            case CodeKind.PYTHON_ZLIB:
+                text = _decompress_code(self.data, settings.NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_UNCOMPRESSED)
+                # set self.text using object.__setattr__ to bypass frozen protection
+                object.__setattr__(self, 'text', text)
+            case _:
+                raise ValueError('Invalid code kind value')
 
     def __bytes__(self) -> bytes:
         # Code serialization format: [kind:variable bytes][null byte][data:variable bytes]

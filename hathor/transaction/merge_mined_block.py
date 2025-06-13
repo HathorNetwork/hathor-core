@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
+from typing_extensions import Self
+
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
 from hathor.transaction.block import Block
@@ -67,7 +69,7 @@ class MergeMinedBlock(Block):
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'MergeMinedBlock':
+                           *, verbose: VerboseCallback = None) -> Self:
         blc = cls()
         buf = blc.get_fields_from_struct(struct_bytes, verbose=verbose)
         blc.aux_pow = BitcoinAuxPow.from_bytes(buf)

@@ -12,18 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ast
+import re
+from collections import defaultdict
+from types import ModuleType
 from typing import Iterator
 
+from typing_extensions import assert_never
+
 from hathor.conf.settings import HathorSettings
-from hathor.crypto.util import decode_address
+from hathor.crypto.util import decode_address, get_address_from_public_key_bytes
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import DAGBuilder, DAGNode
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
+from hathor.dag_builder.utils import get_literal, is_literal
+from hathor.nanocontracts import Blueprint, OnChainBlueprint
+from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.nanocontracts.exception import BlueprintDoesNotExist
+from hathor.nanocontracts.on_chain_blueprint import Code
+from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId
+from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.wallet import BaseWallet
+from hathor.wallet import BaseWallet, KeyPair
+
+_TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
 
 
 class VertexExporter:
@@ -38,6 +53,8 @@ class VertexExporter:
         genesis_wallet: BaseWallet,
         wallet_factory: WalletFactoryType,
         vertex_resolver: VertexResolverType,
+        nc_catalog: NCBlueprintCatalog,
+        blueprints_module: ModuleType | None,
     ) -> None:
         self._builder = builder
         self._vertices: dict[str, BaseTransaction] = {}
@@ -49,13 +66,22 @@ class VertexExporter:
         self._daa = daa
         self._wallet_factory = wallet_factory
         self._vertex_resolver = vertex_resolver
+        self._nc_catalog = nc_catalog
+        self._blueprints_module = blueprints_module
 
         self._wallets['genesis'] = genesis_wallet
         self._wallets['main'] = self._wallet_factory()
 
+        self._next_nc_seqnum: defaultdict[bytes, int] = defaultdict(int)
+
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
         return self._builder._get_node(name)
+
+    def get_wallet(self, name: str) -> BaseWallet:
+        if name not in self._wallets:
+            self._wallets[name] = self._wallet_factory()
+        return self._wallets[name]
 
     def get_vertex_id(self, name: str) -> bytes:
         """Get the vertex id given its node name."""
@@ -122,6 +148,21 @@ class VertexExporter:
             script = self.get_next_p2pkh_script()
             outputs.append(TxOutput(value=amount, token_data=index, script=script))
 
+        if token_creation:
+            # Create mint and melt authorities to be used by future transactions
+            outputs.extend([
+                TxOutput(
+                    value=TxOutput.TOKEN_MINT_MASK,
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
+                    script=self.get_next_p2pkh_script(),
+                ),
+                TxOutput(
+                    value=TxOutput.TOKEN_MELT_MASK,
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
+                    script=self.get_next_p2pkh_script(),
+                ),
+            ])
+
         return tokens, outputs
 
     def get_next_p2pkh_script(self) -> bytes:
@@ -152,7 +193,7 @@ class VertexExporter:
                 self._vertex_resolver(vertex)
                 vertex.update_hash()
 
-    def sign_all_inputs(self, node: DAGNode, vertex: Transaction) -> None:
+    def sign_all_inputs(self, vertex: Transaction, *, node: DAGNode | None = None) -> None:
         """Sign all inputs of a vertex."""
         data_to_sign = vertex.get_sighash_all()
         for txin in vertex.inputs:
@@ -167,6 +208,8 @@ class VertexExporter:
                     break
                 except KeyError:
                     pass
+            else:
+                raise ValueError('private key not found')
 
             public_key_bytes, signature = wallet.get_input_aux_data(data_to_sign, private_key)
             txin.data = P2PKH.create_input_data(public_key_bytes, signature)
@@ -185,7 +228,7 @@ class VertexExporter:
         vertex.token_name = node.name
         vertex.token_symbol = node.name
         vertex.timestamp = self.get_min_timestamp(node)
-        self.sign_all_inputs(node, vertex)
+        self.sign_all_inputs(vertex, node=node)
         if 'weight' in node.attrs:
             vertex.weight = float(node.attrs['weight'])
         else:
@@ -219,16 +262,100 @@ class VertexExporter:
         self._block_height[blk.hash] = height
         return blk
 
-    def create_vertex_transaction(self, node: DAGNode) -> Transaction:
+    def _get_ast_value_bytes(self, ast_node: ast.AST) -> bytes:
+        if isinstance(ast_node, ast.Constant):
+            return bytes.fromhex(ast_node.value)
+        elif isinstance(ast_node, ast.Name):
+            return self.get_vertex_id(ast_node.id)
+        elif isinstance(ast_node, ast.Attribute):
+            assert isinstance(ast_node.value, ast.Name)
+            vertex = self._vertices[ast_node.value.id]
+            assert isinstance(vertex, Transaction)
+            if ast_node.attr == 'nc_id':
+                return vertex.get_nano_header().nc_id
+            else:
+                raise ValueError
+        else:
+            raise ValueError('unsupported ast node')
+
+    def _parse_nc_id(self, ast_node: ast.AST) -> tuple[bytes, BlueprintId | None]:
+        if not isinstance(ast_node, ast.Call):
+            return self._get_ast_value_bytes(ast_node), None
+
+        assert isinstance(ast_node.func, ast.Name)
+        if ast_node.func.id != 'child_contract':
+            raise ValueError(f'unknown function: {ast_node.func.id}')
+        args = [self._get_ast_value_bytes(x) for x in ast_node.args]
+        if len(args) != 3:
+            raise ValueError('wrong number of args')
+        parent_id_bytes, salt, blueprint_id_bytes = args
+        parent_id = ContractId(VertexId(parent_id_bytes))
+        blueprint_id = BlueprintId(VertexId(blueprint_id_bytes))
+        child_contract_id = derive_child_contract_id(parent_id, salt, blueprint_id)
+        return child_contract_id, blueprint_id
+
+    def _get_next_nc_seqnum(self, nc_pubkey: bytes) -> int:
+        address = get_address_from_public_key_bytes(nc_pubkey)
+        cur = self._next_nc_seqnum[address]
+        self._next_nc_seqnum[address] = cur + 1
+        return cur
+
+    def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
+        """Create an OnChainBlueprint given a node."""
+        block_parents, txs_parents = self._create_vertex_parents(node)
+        inputs = self._create_vertex_txin(node)
+        tokens, outputs = self._create_vertex_txout(node)
+
+        assert len(block_parents) == 0
+        ocb = OnChainBlueprint(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+        code_attr = node.get_attr_str('ocb_code')
+
+        if is_literal(code_attr):
+            code_literal = get_literal(code_attr)
+            try:
+                code_bytes = bytes.fromhex(code_literal)
+            except ValueError:
+                code_str = code_literal
+            else:
+                code_str = code_bytes.decode()
+        else:
+            assert self._blueprints_module is not None
+            filename, _, class_name = code_attr.partition(',')
+            filename, class_name = filename.strip(), class_name.strip()
+            if not filename or not class_name:
+                raise SyntaxError(f'missing blueprint filename or class name: {code_attr}')
+            code_str = load_builtin_blueprint_for_ocb(filename, class_name, self._blueprints_module)
+
+        ocb.code = Code.from_python_code(code_str, self._settings)
+        ocb.timestamp = self.get_min_timestamp(node)
+        self.sign_all_inputs(ocb, node=node)
+
+        private_key_literal = node.get_required_literal('ocb_private_key')
+        private_key_bytes = bytes.fromhex(private_key_literal)
+        password_literal = node.get_required_literal('ocb_password')
+        password_bytes = bytes.fromhex(password_literal)
+        key = KeyPair(private_key_bytes)
+        private_key = key.get_private_key(password_bytes)
+        ocb.sign(private_key)
+
+        if 'weight' in node.attrs:
+            ocb.weight = float(node.attrs['weight'])
+        else:
+            ocb.weight = self._daa.minimum_tx_weight(ocb)
+
+        self.update_vertex_hash(ocb)
+        return ocb
+
+    def create_vertex_transaction(self, node: DAGNode, *, cls: type[Transaction] = Transaction) -> Transaction:
         """Create a Transaction given a node."""
         block_parents, txs_parents = self._create_vertex_parents(node)
         inputs = self._create_vertex_txin(node)
         tokens, outputs = self._create_vertex_txout(node)
 
         assert len(block_parents) == 0
-        tx = Transaction(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+        tx = cls(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
         tx.timestamp = self.get_min_timestamp(node)
-        self.sign_all_inputs(node, tx)
+        self.sign_all_inputs(tx, node=node)
         if 'weight' in node.attrs:
             tx.weight = float(node.attrs['weight'])
         else:
@@ -283,8 +410,14 @@ class VertexExporter:
             case DAGNodeType.Genesis:
                 vertex = self.create_genesis_vertex(node)
 
+            case DAGNodeType.OnChainBlueprint:
+                vertex = self.create_vertex_on_chain_blueprint(node)
+
+            case DAGNodeType.Unknown:
+                raise AssertionError('dag type should be known at this point')
+
             case _:
-                raise NotImplementedError(node.type)
+                assert_never(node.type)
 
         assert vertex is not None
         assert vertex.hash not in self._vertice_per_id
@@ -304,3 +437,13 @@ class VertexExporter:
             vertex = self.create_vertex(node)
             if node.type is not DAGNodeType.Genesis:
                 yield node, vertex
+
+    def _get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+        """Get a blueprint class from the catalog or from our own on-chain blueprints."""
+        try:
+            return self._nc_catalog.get_blueprint_class(blueprint_id)
+        except BlueprintDoesNotExist:
+            ocb = self._vertice_per_id.get(blueprint_id)
+            if ocb is None or not isinstance(ocb, OnChainBlueprint):
+                raise SyntaxError(f'{blueprint_id.hex()} is not a valid blueprint id')
+            return ocb.get_blueprint_class()

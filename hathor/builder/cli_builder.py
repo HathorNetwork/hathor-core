@@ -78,6 +78,7 @@ class CliBuilder:
         from hathor.daa import TestMode
         from hathor.event.storage import EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
+        from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
@@ -134,6 +135,8 @@ class CliBuilder:
             if self._args.data else RocksDBStorage.create_temp(cache_capacity)
         )
 
+        self.nc_storage_factory: NCStorageFactory = NCRocksDBStorageFactory(self.rocksdb_storage)
+
         # Initialize indexes manager.
         indexes = RocksDBIndexesManager(self.rocksdb_storage, settings=settings)
 
@@ -143,7 +146,11 @@ class CliBuilder:
             # only TransactionCacheStorage should have indexes.
             kwargs['indexes'] = indexes
         tx_storage = TransactionRocksDBStorage(
-            self.rocksdb_storage, settings=settings, vertex_parser=vertex_parser, **kwargs
+            self.rocksdb_storage,
+            settings=settings,
+            vertex_parser=vertex_parser,
+            nc_storage_factory=self.nc_storage_factory,
+            **kwargs
         )
         event_storage = EventRocksDBStorage(self.rocksdb_storage)
         feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
@@ -158,7 +165,13 @@ class CliBuilder:
             self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
 
         if not self._args.disable_cache:
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
+            tx_storage = TransactionCacheStorage(
+                tx_storage,
+                reactor,
+                indexes=indexes,
+                settings=settings,
+                nc_storage_factory=self.nc_storage_factory,
+            )
             tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
             if self._args.cache_interval:
                 tx_storage.interval = self._args.cache_interval
@@ -166,6 +179,10 @@ class CliBuilder:
 
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
+
+        if settings.ENABLE_NANO_CONTRACTS:
+            from hathor.nanocontracts.catalog import generate_catalog_from_settings
+            self.tx_storage.nc_catalog = generate_catalog_from_settings(settings)
 
         self.wallet = None
         if self._args.wallet:
@@ -212,6 +229,16 @@ class CliBuilder:
         if self._args.utxo_index and tx_storage.indexes is not None:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
+
+        self.check_or_raise(
+            not self._args.nc_history_index,
+            '--nc-history-index has been deprecated, use --nc-indices instead',
+        )
+        if self._args.nc_indices and tx_storage.indexes is not None:
+            self.log.debug('enable nano indices')
+            tx_storage.indexes.enable_nc_indices()
+
+        assert self.nc_storage_factory is not None
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
