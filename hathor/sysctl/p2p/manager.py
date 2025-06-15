@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import os
+from urllib.parse import urlparse
 
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.peers_whitelist import URLPeersWhitelist, FilePeersWhitelist
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
@@ -277,15 +279,46 @@ class ConnectionsManagerSysctl(Sysctl):
     
     def get_whitelist_flag(self) -> bool:
         """Get whether whitelist-only mode is enable or off."""
-        return self.connections.whitelist_only
+        return self.connections.only_whitelist
 
-    def set_whitelist_flag(self, enable: bool) -> None:
+    def set_whitelist_flag(self, new_whitelist: str | None) -> None:
         """Set the whitelist-only mode (if enable, node will only allow peers in whitelist
         if it is not empty.)"""
 
-        self.connections.only_whitelist = enable
+        if not new_whitelist:
+            raise ValueError('No sysctl input given.')
+        
+        wl_object: URLPeersWhitelist | FilePeersWhitelist| None =  None
+        wl_url = urlparse(new_whitelist)
+        if os.path.isfile(new_whitelist):
+            # Fetch the peerIds in the file
+            # Must check whether the peerIds within make sense.
+            wl_object = FilePeersWhitelist(self.connections.reactor, new_whitelist)
+
+        elif wl_url.scheme == 'https' and wl_url.netloc:
+            # Fetch the peerIds in the URL
+            # Must ?? check whether they make sense?
+            wl_object = URLPeersWhitelist(self.connections.reactor, new_whitelist)
+
+        elif new_whitelist.lower().strip() in ('on', 'off'):
+            # Set the whitelist tracking ON or OFF for the currently given whitelist.
+            option : str = new_whitelist.lower().strip()
+            if option == "on":
+                self.connections.peers_whitelist.follow_wl()
+            else:
+                self.connections.peers_whitelist.unfollow_wl()
+
+        else:
+            raise ValueError('Invalid url/path input in sysctl.')
+
+        self.connections.peers_whitelist = wl_object
+        self.connections.peers
+        
 
         # When setting enable, all connections that are from peers not in the whitelist must
         # be discarded, if whitelist not empty.
-        if enable:
+        if not new_whitelist:
             self.connections.enable_whitelist()
+
+
+            # wHAT THIS WHITELIST CAN DO?? --> YES/NO, CUT CONNS NOT FOLLOWING IT, CHANGE THE URL/PATH....

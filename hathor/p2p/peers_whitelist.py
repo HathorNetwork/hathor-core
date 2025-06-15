@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from structlog import get_logger
 from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
+from twisted.web.client import Agent
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import parse_whitelist
@@ -30,6 +31,7 @@ class PeersWhitelist(ABC):
         self._current: list[PeerId] = []
         self._on_remove_callback: OnRemoveCallbackType | None = None
         self._is_running: bool = False
+        self._following_wl: bool = True
 
     def start(self, on_remove_callback: OnRemoveCallbackType) -> None:
         self._on_remove_callback = on_remove_callback
@@ -58,6 +60,14 @@ class PeersWhitelist(ABC):
             self._unsafe_update()
         finally:
             self._is_running = False
+    
+    def follow_wl(self) -> None:
+        """ Changes following_wl to True. Should not be called directly."""
+        self._following_wl = True
+
+    def unfollow_wl(self) -> None:
+        """ Changes following_wl to False. Should not be called directly."""
+        self._following_wl = False    
 
     @abstractmethod
     def _unsafe_update(self) -> Deferred[None]:
@@ -93,6 +103,7 @@ class URLPeersWhitelist(PeersWhitelist):
     def __init__(self, reactor: Reactor, url: str) -> None:
         super().__init__(reactor)
         self._url: str = url
+        self._http_agent = Agent(self._reactor)
 
         result = urlparse(self._url)
         if result.scheme != 'https':

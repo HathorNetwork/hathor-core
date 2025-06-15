@@ -888,7 +888,10 @@ class ConnectionsManager:
         self.disconnect_all_peers(force=True)
         self.my_peer.reload_entrypoints_from_source_file()
 
-    def enable_whitelist(self) -> None:
+    def enable_whitelist(self, new_whitelist: Optional[str]) -> None:
+        if new_whitelist:
+            if 
+            self.peers_whitelist._current = new_whitelist
         for conn in self.connections:
             # If there is no whitelist, no point in itering.
             if conn.get_peer_id():
