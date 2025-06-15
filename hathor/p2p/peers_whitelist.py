@@ -112,7 +112,9 @@ class URLPeersWhitelist(PeersWhitelist):
         if not result.netloc:
             raise ValueError(f'invalid url: {self._url}')
 
-    def update(self) -> Deferred[None]:
+        self.update()
+
+    def update_url_wl(self) -> Deferred[None]:
         """
             Updates the whitelist fetching the data via the url of the class.
         """
@@ -165,7 +167,7 @@ class URLPeersWhitelist(PeersWhitelist):
             Headers({'User-Agent': ['hathor-core']}),
             None)
         d.addCallback(readBody)
-        d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self.reactor)
+        d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self._reactor)
         d.addCallback(self._update_whitelist_cb)
         d.addErrback(self._update_whitelist_err)
         return d

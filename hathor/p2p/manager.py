@@ -888,12 +888,20 @@ class ConnectionsManager:
         self.disconnect_all_peers(force=True)
         self.my_peer.reload_entrypoints_from_source_file()
 
-    def enable_whitelist(self, new_whitelist: Optional[str]) -> None:
-        if new_whitelist:
-            if 
-            self.peers_whitelist._current = new_whitelist
+    def whitelist_swap(self, wl_object: URLPeersWhitelist | FilePeersWhitelist) -> None:
+        """
+            Altering whitelist (URL/PATH) during full-node runtime.
+        """
+        
+        if not wl_object._current:
+            raise Exception("Invalid whitelist object with no current peerIds.")
+    
+        # Opted not to permit update for None whitelist for now.
+        # Sysctl may only update to another URL or Path, not None.
+        self.peers_whitelist = wl_object
+
+        # All connections not in whitelist are severed.
         for conn in self.connections:
-            # If there is no whitelist, no point in itering.
             if conn.get_peer_id():
                 if conn.get_peer_id() not in self.peers_whitelist._current:
                     conn.disconnect(reason='Whitelist turned on', force=True)
