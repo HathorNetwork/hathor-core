@@ -157,7 +157,7 @@ class URLPeersWhitelist(PeersWhitelist):
         """
         from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
-        assert whitelist_url is not None  ### No settings URL! Fix this.
+        assert whitelist_url is not None
         self.log.info('update whitelist')
         d = self._http_agent.request(
             b'GET',
