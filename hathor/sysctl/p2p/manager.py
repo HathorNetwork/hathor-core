@@ -305,16 +305,16 @@ class ConnectionsManagerSysctl(Sysctl):
             option : str = new_whitelist.lower().strip()
             if option == "on":
                 self.connections.peers_whitelist.follow_wl()
+                self.connections.whitelist_toggle(True)
             else:
                 self.connections.peers_whitelist.unfollow_wl()
+                self.connections.whitelist_toggle(False)
 
         else:
             raise ValueError('Invalid url/path input in sysctl.')
 
         self.connections.peers_whitelist = wl_object
-        self.connections.peers
         
-
         # When setting enable, all connections that are from peers not in the whitelist must
         # be discarded, if whitelist not empty.
         if not new_whitelist:

@@ -900,8 +900,22 @@ class ConnectionsManager:
         # Sysctl may only update to another URL or Path, not None.
         self.peers_whitelist = wl_object
 
-        # All connections not in whitelist are severed.
-        for conn in self.connections:
-            if conn.get_peer_id():
-                if conn.get_peer_id() not in self.peers_whitelist._current:
-                    conn.disconnect(reason='Whitelist turned on', force=True)
+        self.whitelist_toggle(wl_object._following_wl)
+
+    def whitelist_toggle(self, wl_toggle: bool) -> None:
+        """
+            Called if whitelist is turned "on". 
+        """
+        if not self.peers_whitelist:
+            return 
+
+        if not self.peers_whitelist._current:
+            return 
+        
+        if wl_toggle:
+            # All connections not in the whitelist are severed.
+            for conn in self.connections:
+                if conn.get_peer_id():
+                    if conn.get_peer_id() not in self.peers_whitelist._current:
+                        conn.disconnect(reason='Whitelist turned on', force=True)
+        

@@ -61,7 +61,7 @@ class PeersWhitelist(ABC):
         finally:
             self._is_running = False
     
-    def follow_wl(self) -> None:
+    def follow_wl(self, ) -> None:
         """ Changes following_wl to True. Should not be called directly."""
         self._following_wl = True
 
