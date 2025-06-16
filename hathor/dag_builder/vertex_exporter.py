@@ -28,7 +28,6 @@ from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFact
 from hathor.dag_builder.utils import get_literal, is_literal
 from hathor.nanocontracts import Blueprint, OnChainBlueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
-from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.on_chain_blueprint import Code
 from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId
 from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb
@@ -440,10 +439,9 @@ class VertexExporter:
 
     def _get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
         """Get a blueprint class from the catalog or from our own on-chain blueprints."""
-        try:
-            return self._nc_catalog.get_blueprint_class(blueprint_id)
-        except BlueprintDoesNotExist:
-            ocb = self._vertice_per_id.get(blueprint_id)
-            if ocb is None or not isinstance(ocb, OnChainBlueprint):
-                raise SyntaxError(f'{blueprint_id.hex()} is not a valid blueprint id')
-            return ocb.get_blueprint_class()
+        if blueprint_class := self._nc_catalog.get_blueprint_class(blueprint_id):
+            return blueprint_class
+        ocb = self._vertice_per_id.get(blueprint_id)
+        if ocb is None or not isinstance(ocb, OnChainBlueprint):
+            raise SyntaxError(f'{blueprint_id.hex()} is not a valid blueprint id')
+        return ocb.get_blueprint_class()

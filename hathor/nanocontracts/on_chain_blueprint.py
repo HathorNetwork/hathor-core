@@ -374,6 +374,10 @@ class OnChainBlueprint(Transaction):
             'nc_signature': self.nc_signature.hex(),
         }
 
+    @override
+    def get_minimum_number_of_inputs(self) -> int:
+        return 0
+
     def get_method(self, method_name: str) -> Method:
         # XXX: possibly do this by analyzing the source AST instead of using the loaded code
         blueprint_class = self.get_blueprint_class()

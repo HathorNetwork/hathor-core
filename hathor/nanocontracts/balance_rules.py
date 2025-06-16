@@ -20,7 +20,7 @@ from typing import Generic, TypeVar
 from typing_extensions import assert_never, override
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
-from hathor.nanocontracts.exception import NCInvalidActionExecution
+from hathor.nanocontracts.exception import NCInvalidAction
 from hathor.nanocontracts.storage import NCChangesTracker
 from hathor.nanocontracts.types import (
     BaseAction,
@@ -159,18 +159,18 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
     @override
     def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
         if self.action.token_uid == HATHOR_TOKEN_UID:
-            raise NCInvalidActionExecution('cannot grant authorities for HTR token')
+            raise NCInvalidAction('cannot grant authorities for HTR token')
 
         balance = caller_changes_tracker.get_balance(self.action.token_uid)
 
         if self.action.mint and not balance.can_mint:
-            raise NCInvalidActionExecution(
+            raise NCInvalidAction(
                 f'{self.action.name} token {self.action.token_uid.hex()} requires mint, '
                 f'but contract does not have that authority'
             )
 
         if self.action.melt and not balance.can_melt:
-            raise NCInvalidActionExecution(
+            raise NCInvalidAction(
                 f'{self.action.name} token {self.action.token_uid.hex()} requires melt, '
                 f'but contract does not have that authority'
             )
@@ -195,15 +195,15 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
         balance = callee_changes_tracker.get_balance(self.action.token_uid)
 
         if self.action.mint and not balance.can_mint:
-            raise NCInvalidActionExecution(f'cannot acquire mint authority for token {self.action.token_uid.hex()}')
+            raise NCInvalidAction(f'cannot acquire mint authority for token {self.action.token_uid.hex()}')
 
         if self.action.melt and not balance.can_melt:
-            raise NCInvalidActionExecution(f'cannot acquire melt authority for token {self.action.token_uid.hex()}')
+            raise NCInvalidAction(f'cannot acquire melt authority for token {self.action.token_uid.hex()}')
 
     @override
     def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
         if self.action.token_uid == HATHOR_TOKEN_UID:
-            raise NCInvalidActionExecution('cannot acquire authorities for HTR token')
+            raise NCInvalidAction('cannot acquire authorities for HTR token')
 
         caller_changes_tracker.grant_authorities(
             self.action.token_uid,

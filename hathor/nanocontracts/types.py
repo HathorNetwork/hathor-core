@@ -68,12 +68,73 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
     """
 
     def __init__(self, data: T, script_input: bytes) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        from hathor.nanocontracts.nc_types import make_nc_type_for_type_extended
+        self.data = data
+        self.script_input = script_input
+        self.__nc_type = make_nc_type_for_type_extended(self.__inner_type__)
+
+    def __eq__(self, other):
+        if not isinstance(other, RawSignedData):
+            return False
+        if self.data != other.data:
+            return False
+        if self.script_input != other.script_input:
+            return False
+        return True
+
+    def get_data_bytes(self) -> bytes:
+        """Return the serialized data."""
+        return self.__nc_type.to_bytes(self.data)
+
+    def get_sighash_all_data(self) -> bytes:
+        """Workaround to be able to pass `self` for ScriptExtras. See the method `checksig`."""
+        return self.get_data_bytes()
+
+    def checksig(self, script: bytes) -> bool:
+        """Check if `self.script_input` satisfies the provided script."""
+        from hathor.transaction.exceptions import ScriptError
+        from hathor.transaction.scripts import ScriptExtras
+        from hathor.transaction.scripts.execute import execute_eval
+        full_data = self.script_input + script
+        log: list[str] = []
+        extras = ScriptExtras(tx=self)  # type: ignore[arg-type]
+        try:
+            execute_eval(full_data, log, extras)
+        except ScriptError:
+            return False
+        else:
+            return True
 
 
 class SignedData(InnerTypeMixin[T], Generic[T]):
     def __init__(self, data: T, script_input: bytes) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        self.data = data
+        self.script_input = script_input
+
+    def __eq__(self, other):
+        if not isinstance(other, SignedData):
+            return False
+        if self.data != other.data:
+            return False
+        if self.script_input != other.script_input:
+            return False
+        return True
+
+    def _get_raw_signed_data(self, contract_id: ContractId) -> RawSignedData:
+        # XXX: for some reason mypy doesn't recognize that self.__inner_type__ is defined even though it should
+        raw_type: type = tuple[ContractId, self.__inner_type__]  # type: ignore[name-defined]
+        raw_data = (contract_id, self.data)
+        return RawSignedData[raw_type](raw_data, self.script_input)  # type: ignore[valid-type]
+
+    def get_data_bytes(self, contract_id: ContractId) -> bytes:
+        """Return the serialized data."""
+        raw_signed_data = self._get_raw_signed_data(contract_id)
+        return raw_signed_data.get_data_bytes()
+
+    def checksig(self, contract_id: ContractId, script: bytes) -> bool:
+        """Check if script_input satisfies the provided script."""
+        raw_signed_data = self._get_raw_signed_data(contract_id)
+        return raw_signed_data.checksig(script)
 
 
 def _set_method_type(fn: Callable, method_type: NCMethodType) -> None:
