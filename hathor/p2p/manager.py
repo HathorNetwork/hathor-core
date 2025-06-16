@@ -894,10 +894,9 @@ class ConnectionsManager:
             Altering whitelist (URL/PATH) during full-node runtime.
         """
         
-        if not wl_object._current:
-            raise Exception("Invalid whitelist object with no current peerIds.")
+        if not wl_object:
+            return 
     
-        # Opted not to permit update for None whitelist for now.
         # Sysctl may only update to another URL or Path, not None.
         self.peers_whitelist = wl_object
 

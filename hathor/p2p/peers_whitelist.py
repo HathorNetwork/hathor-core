@@ -113,7 +113,6 @@ class URLPeersWhitelist(PeersWhitelist):
         if not result.netloc:
             raise ValueError(f'invalid url: {self._url}')
 
-        #self.update()
 
     def update_url_wl(self) -> Deferred[None]:
         """
@@ -153,18 +152,18 @@ class URLPeersWhitelist(PeersWhitelist):
     def is_peer_whitelisted(self, peer_id: PeerId) -> None:
         return peer_id in self._current
 
-    def _unsafe_update(self, whitelist_url: str) -> Deferred[None]:
+    def _unsafe_update(self) -> Deferred[None]:
         """
             Implementation of the child class of PeersWhitelist, called by update() 
             to fetch data from the provided url.
         """
         from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
-        assert whitelist_url is not None
+        assert self._url is not None
         self.log.info('update whitelist')
         d = self._http_agent.request(
             b'GET',
-            whitelist_url.encode(),
+            self._url.encode(),
             Headers({'User-Agent': ['hathor-core']}),
             None)
         d.addCallback(readBody)
