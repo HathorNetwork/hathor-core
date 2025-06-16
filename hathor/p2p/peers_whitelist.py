@@ -80,7 +80,7 @@ class PeersWhitelist(ABC):
 
 class FilePeersWhitelist(PeersWhitelist):
     def __init__(self, reactor: Reactor, path: str) -> None:
-        #super().__init__(reactor)
+        super().__init__(reactor)
         self._path = path
 
     def refresh(self) -> None:
