@@ -280,23 +280,28 @@ class ConnectionsManagerSysctl(Sysctl):
     def get_whitelist_flag(self) -> str:
         """Get whether whitelist-only mode is enable or off."""
         if self.connections.peers_whitelist:
-            return f"{self.connections.peers_whitelist}"
+            return f"{self.connections.peers_whitelist._current}"
         return "None"
 
     def set_whitelist_flag(self, new_whitelist: str) -> None:
-        """Set the whitelist-only mode (if enable, node will only allow peers in whitelist
-        if it is not empty.)"""
+        """Set the whitelist-only mode. If 'on' or 'off', simply changes the
+        following status of current whitelist. If an URL of Filepath, changes
+        the whitelist object, following it by default. 
+        It does not support eliminating the whitelist."""
 
-        wl_object: URLPeersWhitelist | FilePeersWhitelist| None =  None
+        wl_object: URLPeersWhitelist | FilePeersWhitelist
         wl_url = urlparse(new_whitelist)
+
         if os.path.isfile(new_whitelist):
             # Fetch the peerIds in the file
             # Must check whether the peerIds within make sense.
+            # Must start the looping call of the object.
             wl_object = FilePeersWhitelist(self.connections.reactor, new_whitelist)
 
         elif wl_url.scheme == 'https' and wl_url.netloc:
             # Fetch the peerIds in the URL
             # Must ?? check whether they make sense?
+            # Must start the looping call of the object.
             wl_object = URLPeersWhitelist(self.connections.reactor, new_whitelist)
 
         elif new_whitelist.lower().strip() in ('on', 'off'):
@@ -305,11 +310,17 @@ class ConnectionsManagerSysctl(Sysctl):
             if option == "on":
                 self.connections.peers_whitelist.follow_wl()
                 self.connections.whitelist_toggle(True)
+                return 
             else:
                 self.connections.peers_whitelist.unfollow_wl()
                 self.connections.whitelist_toggle(False)
+                return 
 
         else:
             raise SysctlException('Invalid url/path')
 
-        self.connections.peers_whitelist = wl_object
+        wl_object.start(self.connections.drop_connection_by_peer_id)
+        self.connections.whitelist_swap(wl_object)
+
+        # Notes: We need the object to get its LC started when passing it to ConnManag.
+        # The connections not within the wl must be dropped. (dropped by id, done in wl_toggle)
