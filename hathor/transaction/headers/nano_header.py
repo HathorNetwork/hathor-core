@@ -255,7 +255,51 @@ class NanoHeader(VertexBaseHeader):
 
     def get_blueprint_id(self, block: Block | None = None) -> BlueprintId:
         """Return the blueprint id."""
-        raise NotImplementedError('temporarily removed during nano merge')
+        from hathor.nanocontracts.exception import NanoContractDoesNotExist
+        from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId as NCVertexId
+        from hathor.transaction import Transaction
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        assert self.tx.storage is not None
+
+        if self.is_creating_a_new_contract():
+            blueprint_id = BlueprintId(NCVertexId(self.nc_id))
+            return blueprint_id
+
+        if block is None:
+            block = self.tx.storage.get_best_block()
+
+        try:
+            nc_storage = self.tx.storage.get_nc_storage(block, ContractId(NCVertexId(self.nc_id)))
+            blueprint_id = nc_storage.get_blueprint_id()
+            return blueprint_id
+        except NanoContractDoesNotExist:
+            # If the NC storage doesn't exist, the contract must be created by a tx in the mempool
+            pass
+
+        try:
+            nc_creation = self.tx.storage.get_transaction(self.nc_id)
+        except TransactionDoesNotExist as e:
+            raise NanoContractDoesNotExist from e
+
+        if not nc_creation.is_nano_contract():
+            raise NanoContractDoesNotExist(f'not a nano contract tx: {self.nc_id.hex()}')
+
+        assert isinstance(nc_creation, Transaction)
+        nano_header = nc_creation.get_nano_header()
+
+        if not nano_header.is_creating_a_new_contract():
+            raise NanoContractDoesNotExist(f'not a contract creation tx: {self.nc_id.hex()}')
+
+        # must be in the mempool
+        nc_creation_meta = nc_creation.get_metadata()
+        if nc_creation_meta.first_block is not None:
+            # otherwise, it failed or skipped execution
+            from hathor.transaction.nc_execution_state import NCExecutionState
+            assert nc_creation_meta.nc_execution in (NCExecutionState.FAILURE, NCExecutionState.SKIPPED)
+            raise NanoContractDoesNotExist
+
+        blueprint_id = BlueprintId(NCVertexId(nc_creation.get_nano_header().nc_id))
+        return blueprint_id
 
     def get_actions(self) -> list[NCAction]:
         """Get a list of NCActions from the header actions."""

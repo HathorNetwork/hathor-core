@@ -333,7 +333,12 @@ class OnChainBlueprint(Transaction):
 
     @override
     def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
-        raise NotImplementedError('temporarily removed during nano merge')
+        if not skip_cache and self._sighash_cache:
+            return self._sighash_cache
+        struct_bytes = super().get_sighash_all(skip_cache=True)
+        struct_bytes += self._serialize_ocb(skip_signature=True)
+        self._sighash_cache = struct_bytes
+        return struct_bytes
 
     @override
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
