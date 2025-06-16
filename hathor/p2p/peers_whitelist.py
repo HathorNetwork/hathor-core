@@ -80,6 +80,7 @@ class PeersWhitelist(ABC):
 
 class FilePeersWhitelist(PeersWhitelist):
     def __init__(self, reactor: Reactor, path: str) -> None:
+        #super().__init__(reactor)
         self._path = path
 
     def refresh(self) -> None:
@@ -112,7 +113,7 @@ class URLPeersWhitelist(PeersWhitelist):
         if not result.netloc:
             raise ValueError(f'invalid url: {self._url}')
 
-        self.update()
+        #self.update()
 
     def update_url_wl(self) -> Deferred[None]:
         """

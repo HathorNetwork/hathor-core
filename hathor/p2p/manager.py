@@ -189,6 +189,7 @@ class ConnectionsManager:
         self.peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = peers_whitelist
 
         # One may chose whether to follow the whitelist or not. Alterable by sysctl.
+        # This is a p2p_manager copy of the wl_object status "_following_wl".
         self.only_whitelist = bool(self.peers_whitelist)
 
         # Pubsub object to publish events
@@ -904,8 +905,12 @@ class ConnectionsManager:
 
     def whitelist_toggle(self, wl_toggle: bool) -> None:
         """
-            Called if whitelist is turned "on". 
+            Called if whitelist is turned "on" or "off". 
+            Called via sysctl methods.
         """
+        # Pass toggle option to p2p local copy.
+        self.only_whitelist = wl_toggle
+
         if not self.peers_whitelist:
             return 
 

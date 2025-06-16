@@ -277,17 +277,16 @@ class ConnectionsManagerSysctl(Sysctl):
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
     
-    def get_whitelist_flag(self) -> bool:
+    def get_whitelist_flag(self) -> str:
         """Get whether whitelist-only mode is enable or off."""
-        return self.connections.only_whitelist
+        if self.connections.peers_whitelist:
+            return f"{self.connections.peers_whitelist}"
+        return "None"
 
-    def set_whitelist_flag(self, new_whitelist: str | None) -> None:
+    def set_whitelist_flag(self, new_whitelist: str) -> None:
         """Set the whitelist-only mode (if enable, node will only allow peers in whitelist
         if it is not empty.)"""
 
-        if not new_whitelist:
-            raise ValueError('No sysctl input given.')
-        
         wl_object: URLPeersWhitelist | FilePeersWhitelist| None =  None
         wl_url = urlparse(new_whitelist)
         if os.path.isfile(new_whitelist):
@@ -311,14 +310,6 @@ class ConnectionsManagerSysctl(Sysctl):
                 self.connections.whitelist_toggle(False)
 
         else:
-            raise ValueError('Invalid url/path input in sysctl.')
+            raise SysctlException('Invalid url/path')
 
         self.connections.peers_whitelist = wl_object
-        
-        # When setting enable, all connections that are from peers not in the whitelist must
-        # be discarded, if whitelist not empty.
-        if not new_whitelist:
-            self.connections.enable_whitelist()
-
-
-            # wHAT THIS WHITELIST CAN DO?? --> YES/NO, CUT CONNS NOT FOLLOWING IT, CHANGE THE URL/PATH....
