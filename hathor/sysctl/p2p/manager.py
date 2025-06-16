@@ -58,6 +58,19 @@ def pretty_sync_version(sync_version: SyncVersion) -> str:
         case _:
             raise ValueError('unknown or not implemented')
 
+def get_whitelist_msg(wl_object: URLPeersWhitelist | FilePeersWhitelist) -> str:
+        getMsg = 'Whitelist Class: '
+        getMsg += f'FilePeersWhitelist || ' if isinstance(wl_object, FilePeersWhitelist) else ''
+        getMsg += f'URLPeersWhitelist || ' if isinstance(wl_object, URLPeersWhitelist) else ''
+        getMsg += 'Whitelist: '
+        getMsg += 'ON || ' if wl_object._following_wl else 'OFF || '
+        if wl_object._current:
+            getMsg += f'Amount of PeerIds: {len(wl_object._current)} || '
+        else:  
+            getMsg += f'Current peerId list EMPTY. '
+
+        return getMsg
+
 
 class ConnectionsManagerSysctl(Sysctl):
     def __init__(self, connections: ConnectionsManager) -> None:
@@ -126,8 +139,8 @@ class ConnectionsManagerSysctl(Sysctl):
         )
         self.register(
             'whitelist_on',
-            self.get_whitelist_flag,
-            self.set_whitelist_flag,
+            self.get_whitelist,
+            self.set_whitelist,
         )
 
     def set_force_sync_rotate(self) -> None:
@@ -277,21 +290,23 @@ class ConnectionsManagerSysctl(Sysctl):
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
     
-    def get_whitelist_flag(self) -> str:
-        """Get whether whitelist-only mode is enable or off."""
+    def get_whitelist(self) -> str:
+        """Get status of current whitelist."""
         if self.connections.peers_whitelist:
-            return f"{self.connections.peers_whitelist._current}"
-        return "None"
+            wl_object = self.connections.peers_whitelist
+            return get_whitelist_msg(wl_object)
 
-    def set_whitelist_flag(self, new_whitelist: str) -> None:
+        return 'No whitelist.'
+
+    def set_whitelist(self, new_whitelist: str) -> None:
         """Set the whitelist-only mode. If 'on' or 'off', simply changes the
         following status of current whitelist. If an URL of Filepath, changes
         the whitelist object, following it by default. 
-        It does not support eliminating the whitelist."""
+        It does not support eliminating the whitelist (passing None)."""
 
         wl_object: URLPeersWhitelist | FilePeersWhitelist
         wl_url = urlparse(new_whitelist)
-
+        option : str = new_whitelist.lower().strip()
         if os.path.isfile(new_whitelist):
             # Fetch the peerIds in the file
             # Must check whether the peerIds within make sense.
@@ -304,15 +319,18 @@ class ConnectionsManagerSysctl(Sysctl):
             # Must start the looping call of the object.
             wl_object = URLPeersWhitelist(self.connections.reactor, new_whitelist)
 
-        elif new_whitelist.lower().strip() in ('on', 'off'):
+        elif option in ('on', 'off'):
             # Set the whitelist tracking ON or OFF for the currently given whitelist.
-            option : str = new_whitelist.lower().strip()
             if option == "on":
-                self.connections.peers_whitelist.follow_wl()
+                # Turning the whitelist on immediately blocks all connections.
+                if self.connections.peers_whitelist:
+                    self.connections.peers_whitelist.follow_wl()
                 self.connections.whitelist_toggle(True)
                 return 
             else:
-                self.connections.peers_whitelist.unfollow_wl()
+                # Turning the whitelist off will update in the next refresh cycle
+                if self.connections.peers_whitelist:
+                    self.connections.peers_whitelist.unfollow_wl()
                 self.connections.whitelist_toggle(False)
                 return 
 

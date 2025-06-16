@@ -897,6 +897,9 @@ class ConnectionsManager:
         if not wl_object:
             return 
     
+        if self.peers_whitelist:
+            self.peers_whitelist.stop()
+
         # Sysctl may only update to another URL or Path, not None.
         self.peers_whitelist = wl_object
 
@@ -916,6 +919,8 @@ class ConnectionsManager:
         if not self.peers_whitelist._current:
             return 
         
+        self.peers_whitelist._following_wl = wl_toggle
+
         if wl_toggle:
             # All connections not in the whitelist are severed.
             for conn in self.connections:
