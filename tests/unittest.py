@@ -1,3 +1,4 @@
+import base64
 import os
 import re
 import secrets
@@ -62,6 +63,16 @@ def _get_default_peer_id_pool_filepath() -> str:
 
 
 PEER_ID_POOL = list(_load_peer_pool())
+
+OCB_TEST_PRIVKEY: bytes = base64.b64decode(
+    'MIH0MF8GCSqGSIb3DQEFDTBSMDEGCSqGSIb3DQEFDDAkBBCIdovnmKjK3KU'
+    'c61YGgja0AgIIADAMBggqhkiG9w0CCQUAMB0GCWCGSAFlAwQBKgQQl2CJT4'
+    'I2IUzRNoU9hyOWEwSBkLznN9Nunel+kK0FXpk//z0ZAnIyVacfHklCxFGyO'
+    'j1VSjor0CHzH2Gmblvr+m7lCmRmqSVAwJpplqQYdBUF6sR9djHLY6svPY0o'
+    '//dqQ/xM7QiY2FHlb3JQCTu7DaMflqPcJXlRXAFyoACnmj4/lUJWgrcWala'
+    'rCSI+8rIillg3AU8/2gfoB1BxulVIIG35SQ=='
+)
+OCB_TEST_PASSWORD: bytes = b'OCBtestPW'
 
 
 class TestBuilder(Builder):
