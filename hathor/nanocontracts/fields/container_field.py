@@ -109,7 +109,19 @@ class ContainerField(InnerTypeMixin[T], Field[T]):
 
     @override
     def __get__(self, instance: Blueprint, owner: object | None = None) -> T:
-        raise NotImplementedError('temporarily removed during nano merge')
+        if obj := instance.syscall.__cache__.get(self.__name):
+            return obj
+
+        # XXX: ideally we would instantiate the storage within _from_name_and_type, but we need the blueprint instance
+        #      and we only have access to it when __get__ is called the first time
+        storage = self.__inner_type__.__from_name_and_type__(
+            instance.syscall.__storage__,
+            self.__name,
+            self.__type,
+            type_map=self.__type_map,
+        )
+        instance.syscall.__cache__[self.__name] = storage
+        return storage
 
     @override
     def __delete__(self, instance: Blueprint) -> None:

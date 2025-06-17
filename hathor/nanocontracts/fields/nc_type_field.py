@@ -46,10 +46,19 @@ class NCTypeField(Field[T]):
         return self.__name.encode('utf-8')
 
     def __set__(self, instance: Blueprint, obj: T) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        instance.syscall.__storage__.put_obj(self.__storage_key(), self.__nc_type, obj)
+        instance.syscall.__cache__[self.__name] = obj
 
     def __get__(self, instance: Blueprint, owner: object | None = None) -> T:
-        raise NotImplementedError('temporarily removed during nano merge')
+        if self.__name in instance.syscall.__cache__:
+            return instance.syscall.__cache__[self.__name]
+
+        try:
+            obj = instance.syscall.__storage__.get_obj(self.__storage_key(), self.__nc_type)
+            instance.syscall.__cache__[self.__name] = obj
+            return obj
+        except KeyError:
+            raise AttributeError(f'Contract has no attribute \'{self.__name}\'')
 
     def __delete__(self, instance: Blueprint) -> None:
-        raise NotImplementedError('temporarily removed during nano merge')
+        instance.syscall.__storage__.del_obj(self.__storage_key())
