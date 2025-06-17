@@ -128,11 +128,11 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
         it = (x for _, x in self._iter(reverse=True))
         return collect_n(it, count)
 
-    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
+    def get_older(self, timestamp: int, hash_bytes: bytes | None, count: int) -> tuple[list[bytes], bool]:
         it = (x for _, x in self._iter(timestamp, hash_bytes, reverse=True))
         return collect_n(it, count)
 
-    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
+    def get_newer(self, timestamp: int, hash_bytes: bytes | None, count: int) -> tuple[list[bytes], bool]:
         it = (x for _, x in self._iter(timestamp, hash_bytes))
         return collect_n(it, count)
 

@@ -26,6 +26,7 @@ from hathor.exception import BuilderError
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.nanocontracts.resources.builtin import BlueprintBuiltinResource
 from hathor.nanocontracts.resources.nc_creation import NCCreationResource
+from hathor.nanocontracts.resources.nc_exec_logs import NCExecLogsResource
 from hathor.nanocontracts.resources.on_chain import BlueprintOnChainResource
 from hathor.prometheus import PrometheusMetricsExporter
 
@@ -271,6 +272,7 @@ class ResourcesBuilder:
             nc_resource.putChild(b'history', NanoContractHistoryResource(self.manager))
             nc_resource.putChild(b'state', NanoContractStateResource(self.manager))
             nc_resource.putChild(b'creation', NCCreationResource(self.manager))
+            nc_resource.putChild(b'logs', NCExecLogsResource(self.manager))
 
         if self._args.enable_debug_api:
             debug_resource = Resource()

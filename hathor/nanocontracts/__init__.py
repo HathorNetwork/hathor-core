@@ -18,7 +18,7 @@ from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.storage import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
-from hathor.nanocontracts.types import public, view
+from hathor.nanocontracts.types import fallback, public, view
 
 __all__ = [
     'Blueprint',
@@ -30,5 +30,6 @@ __all__ = [
     'NCRocksDBStorageFactory',
     'NCStorageFactory',
     'public',
+    'fallback',
     'view',
 ]
