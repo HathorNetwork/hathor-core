@@ -109,7 +109,8 @@ class ContainerField(InnerTypeMixin[T], Field[T]):
 
     @override
     def __get__(self, instance: Blueprint, owner: object | None = None) -> T:
-        if obj := instance.syscall.__cache__.get(self.__name):
+        cache = instance.syscall.__cache__
+        if cache is not None and (obj := cache.get(self.__name)):
             return obj
 
         # XXX: ideally we would instantiate the storage within _from_name_and_type, but we need the blueprint instance
@@ -120,7 +121,8 @@ class ContainerField(InnerTypeMixin[T], Field[T]):
             self.__type,
             type_map=self.__type_map,
         )
-        instance.syscall.__cache__[self.__name] = storage
+        if cache is not None:
+            cache[self.__name] = storage
         return storage
 
     @override

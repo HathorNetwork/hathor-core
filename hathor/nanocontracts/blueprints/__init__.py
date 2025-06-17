@@ -18,5 +18,4 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.blueprint import Blueprint
 
 
-_blueprints_mapper: dict[str, Type['Blueprint']] = {
-}
+_blueprints_mapper: dict[str, Type['Blueprint']] = {}

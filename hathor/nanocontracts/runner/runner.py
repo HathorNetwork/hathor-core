@@ -248,7 +248,6 @@ class Runner:
         nc_args: NCArgs,
     ) -> Any:
         """Call a contract public method with pre-constructed NCArgs."""
-        from hathor.nanocontracts.types import NC_INITIALIZE_METHOD
         if method_name == NC_INITIALIZE_METHOD:
             raise NCInvalidInitializeMethodCall(
                 'Cannot call initialize from call_public_method(); use create_contract() instead.'

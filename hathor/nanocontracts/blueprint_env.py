@@ -19,12 +19,13 @@ from typing import TYPE_CHECKING, Any, Optional, final
 from typing_extensions import deprecated
 
 from hathor.nanocontracts.storage import NCContractStorage
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, TokenUid
+from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
+    from hathor.nanocontracts.runner.types import NCArgs
 
 
 class BlueprintEnvironment:
@@ -37,11 +38,14 @@ class BlueprintEnvironment:
         runner: Runner,
         nc_logger: NCLogger,
         storage: NCContractStorage,
+        *,
+        disable_cache: bool = False,
     ) -> None:
         self.__log__ = nc_logger
         self.__runner = runner
         self.__storage__ = storage
-        self.__cache__: dict[str, Any] = {}
+        # XXX: we could replace dict|None with a Cache that can be disabled, cleared, limited, etc
+        self.__cache__: dict[str, Any] | None = None if disable_cache else {}
 
     @final
     @property
@@ -68,7 +72,7 @@ class BlueprintEnvironment:
         token_uid: Optional[TokenUid] = None,
         *,
         contract_id: Optional[ContractId] = None,
-    ) -> int:
+    ) -> Amount:
         """
         Return the balance for a given token before the current call, that is,
         excluding any actions and changes in the current call.
@@ -84,7 +88,7 @@ class BlueprintEnvironment:
         token_uid: Optional[TokenUid] = None,
         *,
         contract_id: Optional[ContractId] = None,
-    ) -> int:
+    ) -> Amount:
         """
         Return the balance for a given token before the current call, that is,
         excluding any actions and changes in the current call.
@@ -92,14 +96,14 @@ class BlueprintEnvironment:
         For instance, if a contract has 50 HTR and the call is requesting to withdraw 3 HTR,
         then this method will return 50 HTR."""
         balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
-        return balance.value
+        return Amount(balance.value)
 
     def get_current_balance(
         self,
         token_uid: Optional[TokenUid] = None,
         *,
         contract_id: Optional[ContractId] = None,
-    ) -> int:
+    ) -> Amount:
         """
         Return the current balance for a given token, which includes all actions and changes in the current call.
 
@@ -107,12 +111,12 @@ class BlueprintEnvironment:
         then this method will return 47 HTR.
         """
         balance = self.__runner.get_current_balance(contract_id, token_uid)
-        return balance.value
+        return Amount(balance.value)
 
     @final
     def can_mint_before_current_call(
         self,
-        token_uid: Optional[TokenUid] = None,
+        token_uid: TokenUid,
         *,
         contract_id: Optional[ContractId] = None,
     ) -> bool:
@@ -146,7 +150,7 @@ class BlueprintEnvironment:
     @final
     def can_melt_before_current_call(
         self,
-        token_uid: Optional[TokenUid] = None,
+        token_uid: TokenUid,
         *,
         contract_id: Optional[ContractId] = None,
     ) -> bool:
@@ -188,6 +192,29 @@ class BlueprintEnvironment:
     ) -> Any:
         """Call a public method of another contract."""
         return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
+
+    @final
+    def proxy_call_public_method(
+        self,
+        blueprint_id: BlueprintId,
+        method_name: str,
+        actions: list[NCAction],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Execute a proxy call to a public method of another blueprint."""
+        return self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs)
+
+    @final
+    def proxy_call_public_method_nc_args(
+        self,
+        blueprint_id: BlueprintId,
+        method_name: str,
+        actions: list[NCAction],
+        nc_args: NCArgs,
+    ) -> Any:
+        """Execute a proxy call to a public method of another blueprint."""
+        return self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
 
     @final
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
@@ -243,3 +270,8 @@ class BlueprintEnvironment:
             mint_authority,
             melt_authority,
         )
+
+    @final
+    def change_blueprint(self, blueprint_id: BlueprintId) -> None:
+        """Change the blueprint of this contract."""
+        self.__runner.syscall_change_blueprint(blueprint_id)

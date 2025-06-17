@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeAlias
@@ -164,7 +163,7 @@ class CallInfo:
     # Change trackers are grouped by contract. Because multiple calls can occur between contracts, leading to more than
     # one NCChangesTracker per contract, a stack is used. This design makes it fast to retrieve the most recent tracker
     # for a given contract whenever a new call is made.
-    change_trackers: defaultdict[ContractId, list[NCChangesTracker]] = field(default_factory=lambda: defaultdict(list))
+    change_trackers: dict[ContractId, list[NCChangesTracker]] = field(default_factory=dict)
 
     # Flag to enable/disable keeping record of all calls.
     enable_call_trace: bool
@@ -195,7 +194,10 @@ class CallInfo:
                 self.calls = []
             self.calls.append(call_record)
 
-        self.change_trackers[call_record.contract_id].append(call_record.changes_tracker)
+        if call_record.contract_id not in self.change_trackers:
+            self.change_trackers[call_record.contract_id] = [call_record.changes_tracker]
+        else:
+            self.change_trackers[call_record.contract_id].append(call_record.changes_tracker)
 
         assert self.depth == len(self.stack)
         self.call_counter += 1
