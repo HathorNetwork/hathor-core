@@ -16,8 +16,8 @@ import os
 from urllib.parse import urlparse
 
 from hathor.p2p.manager import ConnectionsManager
-from hathor.p2p.peers_whitelist import URLPeersWhitelist, FilePeersWhitelist
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
 from hathor.sysctl.exception import SysctlException
@@ -58,18 +58,19 @@ def pretty_sync_version(sync_version: SyncVersion) -> str:
         case _:
             raise ValueError('unknown or not implemented')
 
-def get_whitelist_msg(wl_object: URLPeersWhitelist | FilePeersWhitelist) -> str:
-        getMsg = 'Whitelist Class: '
-        getMsg += f'FilePeersWhitelist || ' if isinstance(wl_object, FilePeersWhitelist) else ''
-        getMsg += f'URLPeersWhitelist || ' if isinstance(wl_object, URLPeersWhitelist) else ''
-        getMsg += 'Whitelist: '
-        getMsg += 'ON || ' if wl_object._following_wl else 'OFF || '
-        if wl_object._current:
-            getMsg += f'Amount of PeerIds: {len(wl_object._current)}  '
-        else:  
-            getMsg += f'Current peerId list EMPTY. '
 
-        return getMsg
+def get_whitelist_msg(wl_object: URLPeersWhitelist | FilePeersWhitelist) -> str:
+    getMsg = 'Whitelist Class: '
+    getMsg += 'FilePeersWhitelist || ' if isinstance(wl_object, FilePeersWhitelist) else ''
+    getMsg += 'URLPeersWhitelist || ' if isinstance(wl_object, URLPeersWhitelist) else ''
+    getMsg += 'Whitelist: '
+    getMsg += 'ON || ' if wl_object._following_wl else 'OFF || '
+    if wl_object._current:
+        getMsg += 'Amount of PeerIds: {len(wl_object._current)}  '
+    else:
+        getMsg += 'Current peerId list EMPTY. '
+
+    return getMsg
 
 
 class ConnectionsManagerSysctl(Sysctl):
@@ -289,7 +290,7 @@ class ConnectionsManagerSysctl(Sysctl):
     def reload_entrypoints_and_connections(self) -> None:
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
-    
+
     def get_whitelist(self) -> str:
         """Get status of current whitelist."""
         if self.connections.peers_whitelist:
@@ -301,12 +302,12 @@ class ConnectionsManagerSysctl(Sysctl):
     def set_whitelist(self, new_whitelist: str) -> None:
         """Set the whitelist-only mode. If 'on' or 'off', simply changes the
         following status of current whitelist. If an URL of Filepath, changes
-        the whitelist object, following it by default. 
+        the whitelist object, following it by default.
         It does not support eliminating the whitelist (passing None)."""
 
         wl_object: URLPeersWhitelist | FilePeersWhitelist
         wl_url = urlparse(new_whitelist)
-        option : str = new_whitelist.lower().strip()
+        option: str = new_whitelist.lower().strip()
         if os.path.isfile(new_whitelist):
             # Fetch the peerIds in the file
             # Must check whether the peerIds within make sense.
@@ -326,13 +327,13 @@ class ConnectionsManagerSysctl(Sysctl):
                 if self.connections.peers_whitelist:
                     self.connections.peers_whitelist.follow_wl()
                 self.connections.whitelist_toggle(True)
-                return 
+                return
             else:
                 # Turning the whitelist off will update in the next refresh cycle
                 if self.connections.peers_whitelist:
                     self.connections.peers_whitelist.unfollow_wl()
                 self.connections.whitelist_toggle(False)
-                return 
+                return
 
         else:
             raise SysctlException('Invalid url/path')

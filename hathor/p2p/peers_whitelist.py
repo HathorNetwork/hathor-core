@@ -60,14 +60,14 @@ class PeersWhitelist(ABC):
             self._unsafe_update()
         finally:
             self._is_running = False
-    
+
     def follow_wl(self, ) -> None:
         """ Changes following_wl to True. Should not be called directly."""
         self._following_wl = True
 
     def unfollow_wl(self) -> None:
         """ Changes following_wl to False. Should not be called directly."""
-        self._following_wl = False    
+        self._following_wl = False
 
     @abstractmethod
     def _unsafe_update(self) -> Deferred[None]:
@@ -100,6 +100,7 @@ class FilePeersWhitelist(PeersWhitelist):
         self._current = new_whitelist
         return super()._unsafe_update()
 
+
 class URLPeersWhitelist(PeersWhitelist):
     def __init__(self, reactor: Reactor, url: str) -> None:
         super().__init__(reactor)
@@ -112,7 +113,7 @@ class URLPeersWhitelist(PeersWhitelist):
 
         if not result.netloc:
             raise ValueError(f'invalid url: {self._url}')
-    
+
         self.update()
 
     def update_url_wl(self) -> Deferred[None]:
@@ -149,13 +150,13 @@ class URLPeersWhitelist(PeersWhitelist):
             self.on_remove_callback(peer_id)
 
         self._current = new_whitelist
-    
+
     def is_peer_whitelisted(self, peer_id: PeerId) -> None:
         return peer_id in self._current
 
     def _unsafe_update(self) -> Deferred[None]:
         """
-            Implementation of the child class of PeersWhitelist, called by update() 
+            Implementation of the child class of PeersWhitelist, called by update()
             to fetch data from the provided url.
         """
         from twisted.web.client import readBody
@@ -172,4 +173,3 @@ class URLPeersWhitelist(PeersWhitelist):
         d.addCallback(self._update_whitelist_cb)
         d.addErrback(self._update_whitelist_err)
         return d
-    

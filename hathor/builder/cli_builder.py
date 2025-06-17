@@ -265,7 +265,7 @@ class CliBuilder:
         p2p_whitelist = None
 
         # If in testnet, it should always be disabled.
-        testnet = self._args.testnet 
+        testnet = self._args.testnet
 
         if p2p_wl in ('default', 'hathorlabs'):
             p2p_whitelist = URLPeersWhitelist(reactor, settings.WHITELIST_URL) if not testnet else None

@@ -31,8 +31,8 @@ from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.peer_storage import VerifiedPeerStorage 
-from hathor.p2p.peers_whitelist import URLPeersWhitelist, FilePeersWhitelist
+from hathor.p2p.peer_storage import VerifiedPeerStorage
+from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
@@ -895,25 +895,25 @@ class ConnectionsManager:
         """
 
         if not wl_object:
-            return 
+            return
 
         if self.peers_whitelist:
             self.peers_whitelist.stop()
 
         # Sysctl may only update to another URL or Path, not None.
-        self.log.warn(f"Swapping whitelists... ")
+        self.log.warn("Swapping whitelists... ")
         self.peers_whitelist = wl_object
 
         self.whitelist_toggle(wl_object._following_wl)
 
     def whitelist_toggle(self, wl_toggle: bool) -> None:
         """
-            Called if whitelist is turned "on" or "off". 
+            Called if whitelist is turned "on" or "off".
             Called via sysctl methods.
         """
 
         if not self.peers_whitelist:
-            return 
+            return
 
         # Pass toggle option to p2p local copy.
         self.only_whitelist = wl_toggle
@@ -926,6 +926,6 @@ class ConnectionsManager:
                 if conn.get_peer_id():
                     if conn.get_peer_id() not in self.peers_whitelist._current:
                         conn.disconnect(reason='Whitelist turned on', force=True)
-            return 
+            return
 
         self.log.warn("Whitelist OFF - Node starts ignoring it...")
