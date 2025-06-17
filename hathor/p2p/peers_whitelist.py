@@ -28,7 +28,7 @@ class PeersWhitelist(ABC):
         self._reactor = reactor
         self.lc_refresh = LoopingCall(self.update)
         self.lc_refresh.clock = self._reactor
-        self._current: list[PeerId] = []
+        self._current: set[PeerId] = set()
         self._on_remove_callback: OnRemoveCallbackType | None = None
         self._is_running: bool = False
         self._following_wl: bool = True
@@ -74,7 +74,7 @@ class PeersWhitelist(ABC):
         pass
 
     @abstractmethod
-    def is_peer_whitelisted(self) -> None:
+    def is_peer_whitelisted(self) -> bool:
         raise NotImplementedError
 
 
@@ -86,7 +86,7 @@ class FilePeersWhitelist(PeersWhitelist):
     def refresh(self) -> None:
         self._unsafe_update()
 
-    def is_peer_whitelisted(self, peer_id: PeerId) -> None:
+    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
         return peer_id in self._current
 
     def _unsafe_update(self) -> Deferred[None]:
@@ -102,9 +102,9 @@ class FilePeersWhitelist(PeersWhitelist):
 
 
 class URLPeersWhitelist(PeersWhitelist):
-    def __init__(self, reactor: Reactor, url: str) -> None:
+    def __init__(self, reactor: Reactor, url: str | None) -> None:
         super().__init__(reactor)
-        self._url: str = url
+        self._url: str | None = url
         self._http_agent = Agent(self._reactor)
 
         result = urlparse(self._url)
@@ -115,13 +115,6 @@ class URLPeersWhitelist(PeersWhitelist):
             raise ValueError(f'invalid url: {self._url}')
 
         self.update()
-
-    def update_url_wl(self) -> Deferred[None]:
-        """
-            Updates the whitelist fetching the data via the url of the class.
-        """
-        d = self._unsafe_update(self._url)
-        return d
 
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
@@ -147,11 +140,11 @@ class URLPeersWhitelist(PeersWhitelist):
             self.log.info('remove peers peers from whitelist', peers=peers_to_remove)
 
         for peer_id in peers_to_remove:
-            self.on_remove_callback(peer_id)
+            self._on_remove_callback(peer_id)
 
         self._current = new_whitelist
 
-    def is_peer_whitelisted(self, peer_id: PeerId) -> None:
+    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
         return peer_id in self._current
 
     def _unsafe_update(self) -> Deferred[None]:
