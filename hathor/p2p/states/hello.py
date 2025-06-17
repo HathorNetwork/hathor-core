@@ -182,6 +182,3 @@ def _parse_sync_versions(hello_data: dict[str, Any]) -> set[SyncVersion]:
         known_values = set(x.value for x in SyncVersion)
         recognized_values = set(hello_data['sync_versions']) & known_values
         return set(SyncVersion(x) for x in recognized_values)
-    else:
-        # XXX: implied value when sync-version capability isn't present
-        return {SyncVersion.V1_1}

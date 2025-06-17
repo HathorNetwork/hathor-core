@@ -41,8 +41,6 @@ def parse_text(text: str) -> list[str]:
 
 def parse_sync_version(name: str) -> SyncVersion:
     match name.strip():
-        case 'v1':
-            return SyncVersion.V1_1
         case 'v2':
             return SyncVersion.V2
         case _:
@@ -51,8 +49,6 @@ def parse_sync_version(name: str) -> SyncVersion:
 
 def pretty_sync_version(sync_version: SyncVersion) -> str:
     match sync_version:
-        case SyncVersion.V1_1:
-            return 'v1'
         case SyncVersion.V2:
             return 'v2'
         case _:
