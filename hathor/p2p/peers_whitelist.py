@@ -112,7 +112,8 @@ class URLPeersWhitelist(PeersWhitelist):
 
         if not result.netloc:
             raise ValueError(f'invalid url: {self._url}')
-
+    
+        self.update()
 
     def update_url_wl(self) -> Deferred[None]:
         """

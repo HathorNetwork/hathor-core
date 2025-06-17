@@ -65,7 +65,7 @@ def get_whitelist_msg(wl_object: URLPeersWhitelist | FilePeersWhitelist) -> str:
         getMsg += 'Whitelist: '
         getMsg += 'ON || ' if wl_object._following_wl else 'OFF || '
         if wl_object._current:
-            getMsg += f'Amount of PeerIds: {len(wl_object._current)} || '
+            getMsg += f'Amount of PeerIds: {len(wl_object._current)}  '
         else:  
             getMsg += f'Current peerId list EMPTY. '
 

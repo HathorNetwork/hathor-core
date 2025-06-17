@@ -893,14 +893,15 @@ class ConnectionsManager:
         """
             Altering whitelist (URL/PATH) during full-node runtime.
         """
-        
+
         if not wl_object:
             return 
-    
+
         if self.peers_whitelist:
             self.peers_whitelist.stop()
 
         # Sysctl may only update to another URL or Path, not None.
+        self.log.warn(f"Swapping whitelists... ")
         self.peers_whitelist = wl_object
 
         self.whitelist_toggle(wl_object._following_wl)
@@ -910,21 +911,21 @@ class ConnectionsManager:
             Called if whitelist is turned "on" or "off". 
             Called via sysctl methods.
         """
-        # Pass toggle option to p2p local copy.
-        self.only_whitelist = wl_toggle
 
         if not self.peers_whitelist:
             return 
 
-        if not self.peers_whitelist._current:
-            return 
-        
+        # Pass toggle option to p2p local copy.
+        self.only_whitelist = wl_toggle
         self.peers_whitelist._following_wl = wl_toggle
 
         if wl_toggle:
+            self.log.warn('Whitelist ON: Node starts following it...')
             # All connections not in the whitelist are severed.
             for conn in self.connections:
                 if conn.get_peer_id():
                     if conn.get_peer_id() not in self.peers_whitelist._current:
                         conn.disconnect(reason='Whitelist turned on', force=True)
-        
+            return 
+
+        self.log.warn("Whitelist OFF - Node starts ignoring it...")
