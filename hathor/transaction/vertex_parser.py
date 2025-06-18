@@ -56,7 +56,13 @@ class VertexParser:
         version = data[1]
         try:
             tx_version = TxVersion(version)
-            if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(tx_version, include_genesis=True):
+            is_valid = self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(
+                tx_version,
+                include_genesis=True,
+                settings=self._settings,
+            )
+
+            if not is_valid:
                 raise StructError(f"invalid vertex version: {tx_version}")
             cls = tx_version.get_cls()
             return cls.create_from_struct(data, storage=storage)

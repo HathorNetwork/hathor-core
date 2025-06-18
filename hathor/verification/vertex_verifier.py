@@ -52,7 +52,7 @@ class VertexVerifier:
 
     def verify_version(self, vertex: BaseTransaction) -> None:
         """Verify that the vertex version is valid."""
-        if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(vertex.version):
+        if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(vertex.version, settings=self._settings):
             raise InvalidVersionError(f"invalid vertex version: {vertex.version}")
 
     def verify_parents(self, vertex: BaseTransaction) -> None:
