@@ -93,7 +93,7 @@ class TimestampIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
+    def get_older(self, timestamp: int, hash_bytes: bytes | None, count: int) -> tuple[list[bytes], bool]:
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the oldest
 
         :param timestamp: Timestamp reference to start the search
@@ -104,7 +104,7 @@ class TimestampIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
+    def get_newer(self, timestamp: int, hash_bytes: bytes | None, count: int) -> tuple[list[bytes], bool]:
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the newest
 
         :param timestamp: Timestamp reference to start the search
