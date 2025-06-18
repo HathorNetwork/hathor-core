@@ -44,7 +44,10 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.exception import NanoContractDoesNotExist
+from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.runner.runner import RunnerFactory
+from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
@@ -383,6 +386,34 @@ class HathorManager:
         self.is_profiler_running = False
         if save_to:
             self.profiler.dump_stats(save_to)
+
+    def get_nc_runner(self, block: Block) -> Runner:
+        """Return a contract runner for a given block."""
+        raise NotImplementedError('temporarily removed during nano merge')
+
+    def get_best_block_nc_runner(self) -> Runner:
+        """Return a contract runner for the best block."""
+        best_block = self.tx_storage.get_best_block()
+        return self.get_nc_runner(best_block)
+
+    def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
+        """Return the nano block storage for a given block."""
+        raise NotImplementedError('temporarily removed during nano merge')
+
+    def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCContractStorage:
+        """Return a contract storage with the contract state at a given block."""
+        from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
+        block_storage = self.get_nc_block_storage(block)
+        try:
+            contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(nc_id)))
+        except KeyError:
+            raise NanoContractDoesNotExist(nc_id.hex())
+        return contract_storage
+
+    def get_best_block_nc_storage(self, nc_id: VertexId) -> NCContractStorage:
+        """Return a contract storage with the contract state at the best block."""
+        best_block = self.tx_storage.get_best_block()
+        return self.get_nc_storage(best_block, nc_id)
 
     def _initialize_components(self) -> None:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
