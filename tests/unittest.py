@@ -19,6 +19,7 @@ from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.manager import HathorManager
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
 from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
@@ -202,6 +203,7 @@ class TestCase(unittest.TestCase):
         enable_event_queue: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
+        mock_peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = None
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
 
         settings = self._settings._replace(NETWORK_NAME=network)
@@ -255,6 +257,15 @@ class TestCase(unittest.TestCase):
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
+
+        if not mock_peers_whitelist:
+            # Mock peers_whitelist must be initiated beforehand
+            # If given None in testing, it defaults to URL.
+            url = "https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids"
+            mock_peers_whitelist = URLPeersWhitelist(manager.reactor, url)
+            mock_peers_whitelist.follow_wl()
+            mock_peers_whitelist.start(mock_peers_whitelist._on_remove_callback)
+            manager.connections.peers_whitelist = mock_peers_whitelist
 
         return manager
 

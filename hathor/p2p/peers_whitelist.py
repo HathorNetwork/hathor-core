@@ -19,7 +19,7 @@ WHITELIST_RETRY_INTERVAL = 30
 # The timeout in seconds for the whitelist GET request
 WHITELIST_REQUEST_TIMEOUT = 45
 
-OnRemoveCallbackType = Callable[[PeerId], None]
+OnRemoveCallbackType = Callable[[PeerId], None] | None
 
 
 class PeersWhitelist(ABC):
@@ -29,7 +29,7 @@ class PeersWhitelist(ABC):
         self.lc_refresh = LoopingCall(self.update)
         self.lc_refresh.clock = self._reactor
         self._current: set[PeerId] = set()
-        self._on_remove_callback: OnRemoveCallbackType | None = None
+        self._on_remove_callback: OnRemoveCallbackType = None
         self._is_running: bool = False
         self._following_wl: bool = True
 
@@ -74,7 +74,7 @@ class PeersWhitelist(ABC):
         pass
 
     @abstractmethod
-    def is_peer_whitelisted(self) -> bool:
+    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
         raise NotImplementedError
 
 
@@ -98,7 +98,7 @@ class FilePeersWhitelist(PeersWhitelist):
             content = fp.read()
         new_whitelist = parse_whitelist(content)
         self._current = new_whitelist
-        return super()._unsafe_update()
+        return Deferred(None)
 
 
 class URLPeersWhitelist(PeersWhitelist):
@@ -140,7 +140,8 @@ class URLPeersWhitelist(PeersWhitelist):
             self.log.info('remove peers peers from whitelist', peers=peers_to_remove)
 
         for peer_id in peers_to_remove:
-            self._on_remove_callback(peer_id)
+            if self._on_remove_callback:
+                self._on_remove_callback(peer_id)
 
         self._current = new_whitelist
 
