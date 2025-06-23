@@ -18,16 +18,22 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import Field
 
-from hathor.api_util import Resource
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
-from hathor.utils.api import QueryParams, Response
+from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
+from hathor.nanocontracts.exception import NanoContractDoesNotExist
+from hathor.nanocontracts.nc_types import make_nc_type_for_type
+from hathor.nanocontracts.types import ContractId, VertexId
+from hathor.utils.api import ErrorResponse, QueryParams, Response
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
 
     from hathor.manager import HathorManager
+    from hathor.nanocontracts.storage import NCContractStorage
+    from hathor.transaction import Block
 
 
 @register_resource
@@ -42,7 +48,190 @@ class NanoContractStateResource(Resource):
         self.manager = manager
 
     def render_GET(self, request: 'Request') -> bytes:
-        raise NotImplementedError('temporarily removed during nano merge')
+        request.setHeader(b'content-type', b'application/json; charset=utf-8')
+        set_cors(request, 'GET')
+
+        params = NCStateParams.from_request(request)
+        if isinstance(params, ErrorResponse):
+            request.setResponseCode(400)
+            return params.json_dumpb()
+
+        if sum(x is not None for x in (params.block_hash, params.block_height, params.timestamp)) > 1:
+            request.setResponseCode(400)
+            error_response = ErrorResponse(
+                success=False,
+                error='only one of `block_hash`, `block_height`, or `timestamp` must be used',
+            )
+            return error_response.json_dumpb()
+
+        try:
+            nc_id_bytes = ContractId(VertexId(bytes.fromhex(params.id)))
+        except ValueError:
+            request.setResponseCode(400)
+            error_response = ErrorResponse(success=False, error=f'Invalid id: {params.id}')
+            return error_response.json_dumpb()
+
+        nc_storage: NCContractStorage
+        block: Block
+        block_hash: Optional[bytes]
+        try:
+            block_hash = bytes.fromhex(params.block_hash) if params.block_hash else None
+        except ValueError:
+            # This error will be raised in case the block_hash parameter is an invalid hex
+            request.setResponseCode(400)
+            error_response = ErrorResponse(success=False, error=f'Invalid block_hash parameter: {params.block_hash}')
+            return error_response.json_dumpb()
+
+        if params.block_height is not None:
+            # Get hash of the block with the height
+            if self.manager.tx_storage.indexes is None:
+                # No indexes enabled in the storage
+                request.setResponseCode(503)
+                error_response = ErrorResponse(
+                                    success=False,
+                                    error='No indexes enabled in the storage, so we can\'t filter by block height.'
+                                )
+                return error_response.json_dumpb()
+
+            block_hash = self.manager.tx_storage.indexes.height.get(params.block_height)
+            if block_hash is None:
+                # No block hash was found with this height
+                request.setResponseCode(400)
+                error_response = ErrorResponse(
+                                    success=False,
+                                    error=f'No block hash was found with height {params.block_height}.'
+                                )
+                return error_response.json_dumpb()
+        elif params.timestamp is not None:
+            if self.manager.tx_storage.indexes is None:
+                # No indexes enabled in the storage
+                request.setResponseCode(503)
+                error_response = ErrorResponse(
+                    success=False,
+                    error='No indexes enabled in the storage, so we can\'t filter by timestamp.'
+                )
+                return error_response.json_dumpb()
+
+            block_hashes, has_more = self.manager.tx_storage.indexes.sorted_blocks.get_older(
+                timestamp=params.timestamp,
+                hash_bytes=None,
+                count=1,
+            )
+            if not block_hashes:
+                # No block hash was found before this timestamp
+                request.setResponseCode(400)
+                error_response = ErrorResponse(
+                    success=False,
+                    error=f'No block hash was found before timestamp {params.timestamp}.'
+                )
+                return error_response.json_dumpb()
+            assert len(block_hashes) == 1
+            block_hash = block_hashes[0]
+
+        if block_hash:
+            try:
+                block = self.manager.tx_storage.get_block(block_hash)
+            except AssertionError:
+                # This block hash is not from a block
+                request.setResponseCode(400)
+                error_response = ErrorResponse(success=False, error=f'Invalid block_hash {params.block_hash}.')
+                return error_response.json_dumpb()
+        else:
+            block = self.manager.tx_storage.get_best_block()
+
+        try:
+            runner = self.manager.get_nc_runner(block)
+            nc_storage = runner.get_storage(nc_id_bytes)
+        except NanoContractDoesNotExist:
+            # Nano contract does not exist at this block
+            request.setResponseCode(404)
+            error_response = ErrorResponse(
+                success=False,
+                error=f'Nano contract does not exist at block {block.hash_hex}.'
+            )
+            return error_response.json_dumpb()
+
+        blueprint_id = nc_storage.get_blueprint_id()
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+
+        value: Any
+        # Get balances.
+        balances: dict[str, NCBalanceSuccessResponse | NCValueErrorResponse] = {}
+        for token_uid_hex in params.balances:
+            if token_uid_hex == '__all__':
+                # User wants to get the balance of all tokens in the nano contract
+                all_balances = nc_storage.get_all_balances()
+                for key_balance, balance in all_balances.items():
+                    balances[key_balance.token_uid.hex()] = NCBalanceSuccessResponse(
+                        value=str(balance.value),
+                        can_mint=balance.can_mint,
+                        can_melt=balance.can_melt,
+                    )
+                break
+
+            try:
+                token_uid = bytes.fromhex(token_uid_hex)
+            except ValueError:
+                balances[token_uid_hex] = NCValueErrorResponse(errmsg='invalid token id')
+                continue
+
+            balance = nc_storage.get_balance(token_uid)
+            balances[token_uid_hex] = NCBalanceSuccessResponse(
+                value=str(balance.value),
+                can_mint=balance.can_mint,
+                can_melt=balance.can_melt,
+            )
+
+        # Get fields.
+        fields: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
+        param_fields: list[str] = params.fields
+        for field in param_fields:
+            key_field = self.get_key_for_field(field)
+            if key_field is None:
+                fields[field] = NCValueErrorResponse(errmsg='invalid format')
+                continue
+
+            try:
+                field_type = blueprint_class.__annotations__[field]
+            except KeyError:
+                fields[field] = NCValueErrorResponse(errmsg='not a blueprint field')
+                continue
+
+            try:
+                field_nc_type = make_nc_type_for_type(field_type)
+                value = nc_storage.get_obj(key_field.encode(), field_nc_type)
+            except KeyError:
+                fields[field] = NCValueErrorResponse(errmsg='field not found')
+                continue
+
+            if type(value) is bytes:
+                value = value.hex()
+            fields[field] = NCValueSuccessResponse(value=value)
+
+        # Call view methods.
+        runner.disable_call_trace()  # call trace is not required for calling view methods.
+        calls: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
+        for call_info in params.calls:
+            try:
+                method_name, method_args = parse_nc_method_call(blueprint_class, call_info)
+                value = runner.call_view_method(nc_id_bytes, method_name, *method_args)
+                if type(value) is bytes:
+                    value = value.hex()
+            except Exception as e:
+                calls[call_info] = NCValueErrorResponse(errmsg=repr(e))
+            else:
+                calls[call_info] = NCValueSuccessResponse(value=value)
+
+        response = NCStateResponse(
+            success=True,
+            nc_id=params.id,
+            blueprint_id=blueprint_id.hex(),
+            blueprint_name=blueprint_class.__name__,
+            fields=fields,
+            balances=balances,
+            calls=calls,
+        )
+        return response.json_dumpb()
 
     def get_key_for_field(self, field: str) -> Optional[str]:
         """Return the storage key for a given field."""
@@ -79,6 +268,7 @@ class NCStateParams(QueryParams):
     calls: list[str] = Field(alias='calls[]', default_factory=list)
     block_hash: Optional[str]
     block_height: Optional[int]
+    timestamp: Optional[int]
 
 
 class NCValueSuccessResponse(Response):
@@ -233,20 +423,30 @@ NanoContractStateResource.openapi = {
                     'name': 'block_height',
                     'in': 'query',
                     'description': 'Height of the block to get the nano contract state from.'
-                                   'Can\'t be used together with block_hash parameter.',
+                                   'Can\'t be used together with block_hash or timestamp parameter.',
                     'required': False,
                     'schema': {
-                        'type': 'string'
+                        'type': 'int'
                     }
                 },
                 {
                     'name': 'block_hash',
                     'in': 'query',
                     'description': 'Hash of the block to get the nano contract state from.'
-                                   'Can\'t be used together with block_height parameter.',
+                                   'Can\'t be used together with block_height or timestamp parameter.',
                     'required': False,
                     'schema': {
                         'type': 'string'
+                    }
+                },
+                {
+                    'name': 'timestamp',
+                    'in': 'query',
+                    'description': 'Timestamp to get the nano contract state from.'
+                                   'Can\'t be used together with block_hash or block_height parameter.',
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
                     }
                 },
             ],
