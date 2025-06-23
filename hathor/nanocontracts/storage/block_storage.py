@@ -17,6 +17,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import NamedTuple, Optional
 
+from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
 from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
@@ -102,8 +103,11 @@ class NCBlockStorage:
         return trie
 
     def get_contract_storage(self, contract_id: ContractId) -> NCContractStorage:
-        nc_root_id = self.get_contract_root_id(contract_id)
-        trie = self._get_trie(nc_root_id)
+        try:
+            nc_root_id = self.get_contract_root_id(contract_id)
+            trie = self._get_trie(nc_root_id)
+        except KeyError:
+            raise NanoContractDoesNotExist(contract_id.hex())
         token_proxy = TokenProxy(self)
         return NCContractStorage(trie=trie, nc_id=contract_id, token_proxy=token_proxy)
 
