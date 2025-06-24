@@ -38,9 +38,6 @@ SETTINGS = HathorSettings(
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
         'WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK',
     ],
-    BLUEPRINTS={
-        bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'): 'Bet',
-    },
     SOFT_VOIDED_TX_IDS=list(map(bytes.fromhex, [
         '0000003dd5802b05f430a1f54304879173550c0944b49d74321bb9125ee727cb',
     ])),
