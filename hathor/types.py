@@ -14,16 +14,17 @@
 
 from typing import TypeAlias
 
-# XXX There is a lot of refactor to be done before we can use `NewType`.
-#     So, let's skip using NewType until everything is refactored.
+# XXX: All of these types already have an equivalent NewType available on `hathor.nanoconracts.types`, the next step is
+#      to refactor the places which use `hathor.types`, which is still a lot. Some of these would also benefit from
+#      using custom classes like `Hash` for better str/repr.
 
-VertexId: TypeAlias = bytes        # NewType('TxId', bytes)
 Address: TypeAlias = bytes         # NewType('Address', bytes)
 AddressB58: TypeAlias = str
-TxOutputScript: TypeAlias = bytes  # NewType('TxOutputScript', bytes)
-Timestamp: TypeAlias = int         # NewType('Timestamp', int)
-TokenUid: TypeAlias = VertexId     # NewType('TokenUid', VertexId)
 Amount: TypeAlias = int            # NewType('Amount', int)
+Timestamp: TypeAlias = int         # NewType('Timestamp', int)
+TxOutputScript: TypeAlias = bytes  # NewType('TxOutputScript', bytes)
+VertexId: TypeAlias = bytes        # NewType('VertexId', bytes)
+TokenUid: TypeAlias = VertexId     # NewType('TokenUid', VertexId)
 
 
 class Hash:

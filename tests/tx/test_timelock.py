@@ -1,4 +1,5 @@
 from hathor.crypto.util import decode_address
+from hathor.exception import InvalidNewTransaction
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
@@ -57,11 +58,11 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
-        propagated = self.manager.propagate_tx(tx2)
+        with self.assertRaises(InvalidNewTransaction):
+            self.manager.propagate_tx(tx2)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(500, sum(blocks_tokens) - 500))
-        self.assertFalse(propagated)
 
         self.clock.advance(1)
 
@@ -77,7 +78,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx3.parents = self.manager.get_new_tx_parents()
         tx3.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx3)
-        propagated = self.manager.propagate_tx(tx3, False)
+        propagated = self.manager.propagate_tx(tx3)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(500, sum(blocks_tokens) - 500 - 700))
         self.assertTrue(propagated)
@@ -97,7 +98,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx4.parents = self.manager.get_new_tx_parents()
         tx4.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx4)
-        propagated = self.manager.propagate_tx(tx4, False)
+        propagated = self.manager.propagate_tx(tx4)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(500, sum(blocks_tokens[:3])))
         self.assertTrue(propagated)
@@ -105,7 +106,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.clock.advance(8)
         tx2.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx2)
-        propagated = self.manager.propagate_tx(tx2, False)
+        propagated = self.manager.propagate_tx(tx2)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(blocks_tokens[:3])))
         self.assertTrue(propagated)

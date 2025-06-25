@@ -18,13 +18,15 @@ import hashlib
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
-from typing_extensions import override
+from typing_extensions import Self, override
 
 from hathor.checkpoint import Checkpoint
+from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
@@ -41,12 +43,15 @@ _FUNDS_FORMAT_STRING = '!BBBBB'
 _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 
+# TODO-RAUL: Any reference to TokenInfo that was declared here should be updated to use from TokenInfo class
 class RewardLockedInfo(NamedTuple):
     block_hash: VertexId
     blocks_needed: int
 
 
 class Transaction(GenericVertex[TransactionStaticMetadata]):
+    __slots__ = ['tokens', '_sighash_cache', '_sighash_data_cache']
+
     SERIALIZATION_NONCE_SIZE = 4
 
     def __init__(
@@ -85,6 +90,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
 
+    def clear_sighash_cache(self) -> None:
+        """Clear caches related to sighash calculation."""
+        self._sighash_cache = None
+        self._sighash_data_cache = None
+
     @property
     def is_block(self) -> bool:
         """Returns true if this is a block"""
@@ -95,21 +105,38 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """Returns true if this is a transaction"""
         return True
 
+    def is_nano_contract(self) -> bool:
+        try:
+            self.get_nano_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_nano_header(self) -> NanoHeader:
+        """Return the NanoHeader or raise ValueError."""
+        for header in self.headers:
+            if isinstance(header, NanoHeader):
+                return header
+        raise ValueError('nano header not found')
+
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'Transaction':
-        tx = cls()
+                           *, verbose: VerboseCallback = None) -> Self:
+        tx = cls(storage=storage)
         buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
 
-        if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
+        if len(buf) < cls.SERIALIZATION_NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
 
         [tx.nonce, ], buf = unpack('!I', buf)
         if verbose:
             verbose('nonce', tx.nonce)
 
+        while buf:
+            buf = tx.get_header_from_bytes(buf, verbose=verbose)
+
         tx.update_hash()
-        tx.storage = storage
 
         return tx
 
@@ -181,7 +208,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         return struct_bytes
 
-    def get_sighash_all(self) -> bytes:
+    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
         """Return a serialization of the inputs, outputs and tokens without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
@@ -190,7 +217,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         # This method does not depend on the input itself, however we call it for each one to sign it.
         # For transactions that have many inputs there is a significant decrease on the verify time
         # when using this cache, so we call this method only once.
-        if self._sighash_cache:
+        if not skip_cache and self._sighash_cache:
             return self._sighash_cache
 
         struct_bytes = bytearray(
@@ -212,6 +239,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
+
+        for header in self.headers:
+            struct_bytes += header.get_sighash_bytes()
 
         ret = bytes(struct_bytes)
         self._sighash_cache = ret
@@ -239,10 +269,35 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             return self._settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
+    def get_related_addresses(self) -> set[str]:
+        ret = super().get_related_addresses()
+        if self.is_nano_contract():
+            nano_header = self.get_nano_header()
+            ret.add(get_address_b58_from_bytes(nano_header.nc_address))
+        return ret
+
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
+
+        if self.is_nano_contract():
+            nano_header = self.get_nano_header()
+            json['nc_id'] = nano_header.get_contract_id().hex()
+            json['nc_seqnum'] = nano_header.nc_seqnum
+            json['nc_blueprint_id'] = nano_header.get_blueprint_id().hex()
+            json['nc_method'] = nano_header.nc_method
+            json['nc_args'] = nano_header.nc_args_bytes.hex()
+            json['nc_address'] = get_address_b58_from_bytes(nano_header.nc_address)
+            json['nc_context'] = nano_header.get_context().to_json()
+
         return json
+
+    def to_json_extended(self) -> dict[str, Any]:
+        json_extended = super().to_json_extended()
+        if self.is_nano_contract():
+            json = self.to_json()
+            return {**json, **json_extended}
+        return json_extended
 
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.storage is not None
@@ -261,48 +316,69 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         Get a complete token info dict, including data from both inputs and outputs.
         """
         token_dict = self._get_token_info_from_inputs()
+        self._update_token_info_from_nano_actions(token_dict=token_dict)
+        # This one must be called last so token_dict already contains all tokens in inputs and nano actions.
         self._update_token_info_from_outputs(token_dict=token_dict)
 
         return token_dict
 
+    def get_minimum_number_of_inputs(self) -> int:
+        """Return the minimum number of inputs for this transaction.
+        This is used by the verification services."""
+        if self.is_nano_contract():
+            return 0
+        return 1
+
+    def _update_token_info_from_nano_actions(self, *, token_dict: dict[TokenUid, TokenInfo]) -> None:
+        """Update token_dict with nano actions."""
+        if not self.is_nano_contract():
+            return
+
+        from hathor.nanocontracts.balance_rules import BalanceRules
+        nano_header = self.get_nano_header()
+
+        for action in nano_header.get_actions():
+            rules = BalanceRules.get_rules(self._settings, action)
+            rules.verification_rule(token_dict)
+
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
-
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict: dict[TokenUid, TokenInfo] = {self._settings.HATHOR_TOKEN_UID: TokenInfo.create_empty()}
+        token_dict: dict[TokenUid, TokenInfo] = {
+            self._settings.HATHOR_TOKEN_UID: TokenInfo.get_htr_default()
+        }
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            token_info_version: TokenInfoVersion | None = None
+            token_version: TokenInfoVersion | None
 
-            if token_uid != self._settings.HATHOR_TOKEN_UID:
+            if token_uid == self._settings.HATHOR_TOKEN_UID:
+                token_version = None
+            else:
                 assert self.storage is not None
                 token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
                 if token_creation_tx is None:
                     raise InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
 
-                token_info_version = token_creation_tx.token_info_version
+                token_version = token_creation_tx.token_info_version
 
             token_info = token_dict.get(
-                 token_uid,
-                 TokenInfo.create_empty(version=token_info_version))
-            amount = token_info.amount
-            can_mint = token_info.can_mint
-            can_melt = token_info.can_melt
+                token_uid,
+                TokenInfo.get_default(version=token_version))
+
             if spent_output.is_token_authority():
-                can_mint = can_mint or spent_output.can_mint_token()
-                can_melt = can_melt or spent_output.can_melt_token()
+                token_info.can_mint = token_info.can_mint or spent_output.can_mint_token()
+                token_info.can_melt = token_info.can_melt or spent_output.can_melt_token()
             else:
-                amount -= spent_output.value
+                token_info.amount = token_info.amount - spent_output.value
 
-            token_dict[token_uid] = TokenInfo(amount, can_mint, can_melt, token_info_version)
-
+            token_dict[token_uid] = token_info
         return token_dict
 
     def _update_token_info_from_outputs(self, *, token_dict: dict[TokenUid, TokenInfo]) -> None:
@@ -318,28 +394,23 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             token_info = token_dict.get(token_uid)
             if token_info is None:
                 raise InvalidToken('no inputs for token {}'.format(token_uid.hex()))
-            else:
-                # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
-                if tx_output.can_mint_token() and not token_info.can_mint:
-                    raise InvalidToken('output has mint authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
-                if tx_output.can_melt_token() and not token_info.can_melt:
-                    raise InvalidToken('output has melt authority, but no input has it: {}'.format(
-                        tx_output.to_human_readable()))
 
-                if tx_output.is_token_authority():
-                    # make sure we only have authorities that we know of
-                    if tx_output.value > TxOutput.ALL_AUTHORITIES:
-                        raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
-                else:
-                    # for regular outputs, just subtract from the total amount
-                    sum_tokens = token_info.amount + tx_output.value
-                    token_dict[token_uid] = TokenInfo(
-                        sum_tokens,
-                        token_info.can_mint,
-                        token_info.can_melt,
-                        token_info.version
-                    )
+            # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
+            if tx_output.can_mint_token() and not token_info.can_mint:
+                raise InvalidToken(f'output at index {index} has mint authority, but no input has it')
+            if tx_output.can_melt_token() and not token_info.can_melt:
+                raise InvalidToken(f'output at index {index} has melt authority, but no input has it')
+
+            if tx_output.is_token_authority():
+                # make sure we only have authorities that we know of
+                if tx_output.value > TxOutput.ALL_AUTHORITIES:
+                    raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
+            else:
+                # TODO-RAUL: update the following code block when the TokenInfo class become a mutable data class
+                # for regular outputs, just subtract from the total amount
+                # token_dict[token_uid].amount = token_info.amount + tx_output.value
+                # for regular outputs, just subtract from the total amount
+                token_info.amount = token_info.amount + tx_output.value
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent

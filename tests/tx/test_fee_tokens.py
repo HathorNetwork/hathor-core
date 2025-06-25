@@ -551,5 +551,5 @@ class TokenTest(unittest.TestCase):
 
     def resolve_and_propagate(self, tx: Transaction) -> None:
         self.manager.cpu_mining_service.resolve(tx)
-        self.manager.propagate_tx(tx, fails_silently=False)
+        self.manager.propagate_tx(tx)
         self.run_to_completion()

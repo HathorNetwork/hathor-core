@@ -23,10 +23,10 @@ from hathor.transaction.exceptions import (
     InvalidInputDataSize,
     InvalidOutputScriptSize,
     InvalidOutputValue,
-    NoInputError,
     ParentDoesNotExist,
     PowError,
     TimestampError,
+    TooFewInputs,
     TooManyInputs,
     TooManyOutputs,
     TooManySigOps,
@@ -135,7 +135,7 @@ class TransactionTest(unittest.TestCase):
     def test_no_inputs(self):
         tx = Transaction(inputs=[], storage=self.tx_storage)
 
-        with self.assertRaises(NoInputError):
+        with self.assertRaises(TooFewInputs):
             self._verifiers.tx.verify_number_of_inputs(tx)
 
     def test_too_many_outputs(self):
@@ -290,7 +290,7 @@ class TransactionTest(unittest.TestCase):
             storage=self.tx_storage,
         )
 
-        assert b1.get_base_hash() != b2.get_base_hash()
+        assert b1.get_mining_base_hash() != b2.get_mining_base_hash()
 
         header_head = b'\x00' * 32
         header_tail = b'\x00' * 12
@@ -298,9 +298,9 @@ class TransactionTest(unittest.TestCase):
         coinbase_parts = [
             b'\x00' * 42,
             MAGIC_NUMBER,
-            b1.get_base_hash(),
+            b1.get_mining_base_hash(),
             MAGIC_NUMBER,
-            b2.get_base_hash(),
+            b2.get_mining_base_hash(),
             b'\x00' * 18,
         ]
 
@@ -684,26 +684,30 @@ class TransactionTest(unittest.TestCase):
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]
         genesis_block.storage = manager.tx_storage
-        self.assertFalse(manager.propagate_tx(genesis_block))
+        with self.assertRaises(InvalidNewTransaction):
+            manager.propagate_tx(genesis_block)
 
         # 2. propagate block with weight 1
         block = manager.generate_mining_block()
         block.weight = 1
         self.manager.cpu_mining_service.resolve(block)
-        self.assertFalse(manager.propagate_tx(block))
+        with self.assertRaises(InvalidNewTransaction):
+            manager.propagate_tx(block)
 
         # 3. propagate block with wrong amount of tokens
         block = manager.generate_mining_block()
         output = TxOutput(1, block.outputs[0].script)
         block.outputs = [output]
         self.manager.cpu_mining_service.resolve(block)
-        self.assertFalse(manager.propagate_tx(block))
+        with self.assertRaises(InvalidNewTransaction):
+            manager.propagate_tx(block)
 
         # 4. propagate block from the future
         block = manager.generate_mining_block()
         block.timestamp = int(self.clock.seconds()) + self._settings.MAX_FUTURE_TIMESTAMP_ALLOWED + 100
         manager.cpu_mining_service.resolve(block, update_time=False)
-        self.assertFalse(manager.propagate_tx(block))
+        with self.assertRaises(InvalidNewTransaction):
+            manager.propagate_tx(block)
 
     def test_tx_methods(self):
         blocks = add_new_blocks(self.manager, 2, advance_clock=1)
@@ -789,21 +793,17 @@ class TransactionTest(unittest.TestCase):
         assert isinstance(e.value.__cause__, TransactionDataError)
 
     def test_output_serialization(self):
-        from hathor.transaction.base_transaction import (
-            _MAX_OUTPUT_VALUE_32,
-            MAX_OUTPUT_VALUE,
-            bytes_to_output_value,
-            output_value_to_bytes,
-        )
-        max_32 = output_value_to_bytes(_MAX_OUTPUT_VALUE_32)
+        from hathor.serialization.encoding.output_value import MAX_OUTPUT_VALUE_32
+        from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE, bytes_to_output_value, output_value_to_bytes
+        max_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32)
         self.assertEqual(len(max_32), 4)
         value, buf = bytes_to_output_value(max_32)
-        self.assertEqual(value, _MAX_OUTPUT_VALUE_32)
+        self.assertEqual(value, MAX_OUTPUT_VALUE_32)
 
-        over_32 = output_value_to_bytes(_MAX_OUTPUT_VALUE_32 + 1)
+        over_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32 + 1)
         self.assertEqual(len(over_32), 8)
         value, buf = bytes_to_output_value(over_32)
-        self.assertEqual(value, _MAX_OUTPUT_VALUE_32 + 1)
+        self.assertEqual(value, MAX_OUTPUT_VALUE_32 + 1)
 
         max_64 = output_value_to_bytes(MAX_OUTPUT_VALUE)
         self.assertEqual(len(max_64), 8)

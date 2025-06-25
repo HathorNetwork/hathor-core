@@ -15,6 +15,7 @@
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
+from hathor.nanocontracts import OnChainBlueprint
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.poa import PoaBlock
@@ -98,6 +99,7 @@ class VerificationService:
 
         Used by `self.validate_basic`. Should not modify the validation state."""
         self.verifiers.vertex.verify_version(vertex)
+        self.verifiers.vertex.verify_headers(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -116,8 +118,16 @@ class VerificationService:
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_basic_token_creation_tx(vertex)
+            case TxVersion.ON_CHAIN_BLUEPRINT:
+                assert type(vertex) is OnChainBlueprint
+                assert self._settings.ENABLE_NANO_CONTRACTS and self._settings.ENABLE_ON_CHAIN_BLUEPRINTS
+                self._verify_basic_on_chain_blueprint(vertex)
             case _:
                 assert_never(vertex.version)
+
+        if vertex.is_nano_contract():
+            assert self._settings.ENABLE_NANO_CONTRACTS
+            # nothing to do
 
     def _verify_basic_block(self, block: Block, *, skip_weight_verification: bool) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
@@ -145,6 +155,9 @@ class VerificationService:
     def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_basic_tx(tx)
 
+    def _verify_basic_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
+        self._verify_basic_tx(tx)
+
     def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
 
@@ -166,8 +179,15 @@ class VerificationService:
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_token_creation_tx(vertex, reject_locked_reward=reject_locked_reward)
+            case TxVersion.ON_CHAIN_BLUEPRINT:
+                assert type(vertex) is OnChainBlueprint
+                # TODO: on-chain blueprint verifications
+                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
             case _:
                 assert_never(vertex.version)
+
+        if vertex.is_nano_contract():
+            self._verify_nano_header(vertex)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def _verify_block(self, block: Block) -> None:
@@ -225,8 +245,8 @@ class VerificationService:
         self.verify_without_storage(tx)
         self.verifiers.tx.verify_sigops_input(tx)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
-        self.verifiers.vertex.verify_parents(tx)
         self.verifiers.tx.verify_sum(tx, token_dict or tx.get_complete_token_info())
+        self.verifiers.vertex.verify_parents(tx)
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 
@@ -239,6 +259,11 @@ class VerificationService:
         self._verify_tx(tx, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
         self.verifiers.token_creation_tx.verify_token_info(tx)
+
+    def _verify_nano_header(self, tx: BaseTransaction) -> None:
+        """Add `verify_no_authorities()` to the transaction verification."""
+        assert tx.is_nano_contract()
+        self.verifiers.nano_header.verify_actions(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
@@ -258,8 +283,14 @@ class VerificationService:
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
                 self._verify_without_storage_token_creation_tx(vertex)
+            case TxVersion.ON_CHAIN_BLUEPRINT:
+                assert type(vertex) is OnChainBlueprint
+                self._verify_without_storage_on_chain_blueprint(vertex)
             case _:
                 assert_never(vertex.version)
+
+        if vertex.is_nano_contract():
+            self._verify_without_storage_nano_header(vertex)
 
     def _verify_without_storage_base_block(self, block: Block) -> None:
         self.verifiers.block.verify_no_inputs(block)
@@ -292,3 +323,16 @@ class VerificationService:
 
     def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
         self._verify_without_storage_tx(tx)
+
+    def _verify_without_storage_nano_header(self, tx: BaseTransaction) -> None:
+        assert tx.is_nano_contract()
+        self.verifiers.nano_header.verify_nc_signature(tx)
+
+    def _verify_without_storage_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
+        self._verify_without_storage_tx(tx)
+        self.verifiers.on_chain_blueprint.verify_pubkey_is_allowed(tx)
+        self.verifiers.on_chain_blueprint.verify_nc_signature(tx)
+        self.verifiers.on_chain_blueprint.verify_python_script(tx)
+        self.verifiers.on_chain_blueprint.verify_script_restrictions(tx)
+        self.verifiers.on_chain_blueprint.verify_has_blueprint_attr(tx)
+        self.verifiers.on_chain_blueprint.verify_blueprint_type(tx)

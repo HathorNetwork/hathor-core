@@ -28,7 +28,7 @@ class SimulatorIndexesTestCase(unittest.TestCase):
         tx1.parents = manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         manager.cpu_mining_service.resolve(tx1)
-        assert manager.propagate_tx(tx1, False)
+        assert manager.propagate_tx(tx1)
 
         tx2 = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
         tx2.weight = 2.0
@@ -36,13 +36,13 @@ class SimulatorIndexesTestCase(unittest.TestCase):
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
         manager.cpu_mining_service.resolve(tx2)
-        assert manager.propagate_tx(tx2, False)
+        assert manager.propagate_tx(tx2)
 
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.weight = 3.0
         tx3.parents = tx1.parents
         manager.cpu_mining_service.resolve(tx3)
-        assert manager.propagate_tx(tx3, False)
+        assert manager.propagate_tx(tx3)
 
         for _ in range(100):
             address = self.get_address(0)

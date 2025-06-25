@@ -13,14 +13,20 @@
 #  limitations under the License.
 
 import struct
+from dataclasses import dataclass
 from typing import NamedTuple, Optional, Union
 
 from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import DataIndexError, FinalStackInvalid, InvalidScriptError, OutOfData
 
 
-class ScriptExtras(NamedTuple):
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ScriptExtras:
     tx: Transaction
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class UtxoScriptExtras(ScriptExtras):
     txin: TxInput
     spent_tx: BaseTransaction
 
@@ -103,10 +109,15 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> No
 
     :raises ScriptError: if script verification fails
     """
-    input_data = txin.data
-    output_script = spent_tx.outputs[txin.index].script
+    raw_script_eval(
+        input_data=txin.data,
+        output_script=spent_tx.outputs[txin.index].script,
+        extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx),
+    )
+
+
+def raw_script_eval(*, input_data: bytes, output_script: bytes, extras: ScriptExtras) -> None:
     log: list[str] = []
-    extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
 
     from hathor.transaction.scripts import MultiSig
     if MultiSig.re_match.search(output_script):
@@ -115,12 +126,12 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> No
         # we can't use input_data + output_script because it will end with an invalid stack
         # i.e. the signatures will still be on the stack after ouput_script is executed
         redeem_script_pos = MultiSig.get_multisig_redeem_script_pos(input_data)
-        full_data = txin.data[redeem_script_pos:] + output_script
+        full_data = input_data[redeem_script_pos:] + output_script
         execute_eval(full_data, log, extras)
 
         # Second, we need to validate that the signatures on the input_data solves the redeem_script
         # we pop and append the redeem_script to the input_data and execute it
-        multisig_data = MultiSig.get_multisig_data(extras.txin.data)
+        multisig_data = MultiSig.get_multisig_data(input_data)
         execute_eval(multisig_data, log, extras)
     else:
         # merge input_data and output_script

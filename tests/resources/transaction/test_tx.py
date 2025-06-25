@@ -129,11 +129,11 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.manager.tx_storage.save_transaction(tx_input)
 
         token_bytes1 = bytes.fromhex('001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d')
-        self.manager.tx_storage.indexes.tokens._create_token_info(
+        self.manager.tx_storage.indexes.tokens.create_token_info(
             token_bytes1, 'Test Coin', 'TSC', TokenInfoVersion.DEPOSIT)
 
         token_bytes2 = bytes.fromhex('007231eee3cb6160d95172a409d634d0866eafc8775f5729fff6a61e7850aba5')
-        self.manager.tx_storage.indexes.tokens._create_token_info(
+        self.manager.tx_storage.indexes.tokens.create_token_info(
             token_bytes2, 'NewCoin', 'NCN', TokenInfoVersion.DEPOSIT)
 
         response = yield self.web.get(
@@ -226,7 +226,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         # Both inputs are the same as the last parent, so no need to manually add them
 
         token_bytes1 = bytes.fromhex('000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330')
-        self.manager.tx_storage.indexes.tokens._create_token_info(
+        self.manager.tx_storage.indexes.tokens.create_token_info(
             token_bytes1, 'Wat wat', 'WAT', TokenInfoVersion.DEPOSIT)
 
         response = yield self.web.get(

@@ -19,6 +19,7 @@ import pytest
 
 from hathor.builder import Builder
 from hathor.conf.get_settings import get_global_settings
+from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
@@ -108,7 +109,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*10)
             tx.weight = 25
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=10,
@@ -146,7 +147,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*19)
             tx.weight = 25
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=19,
@@ -183,7 +184,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*20)
             tx.weight = 25
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=20,
@@ -222,7 +223,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*55)
             tx.weight = 30
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=55,
@@ -258,7 +259,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*56)
             tx.weight = 30
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=56,
@@ -300,7 +301,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             with pytest.raises(BlockMustSignalError):
                 manager.verification_service.verify(non_signaling_block)
 
-            assert not manager.propagate_tx(non_signaling_block)
+            with pytest.raises(InvalidNewTransaction):
+                manager.propagate_tx(non_signaling_block)
 
             # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
             [*_, last_block] = add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
@@ -308,7 +310,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*59)
             tx.weight = 30
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=59,
@@ -345,7 +347,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*60)
             tx.weight = 30
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=60,
@@ -384,7 +386,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*71)
             tx.weight = 30
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=71,
@@ -420,7 +422,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             tx = gen_new_tx(manager, address, 6400*72)
             tx.weight = 30
             tx.update_hash()
-            assert manager.propagate_tx(tx, fails_silently=False)
+            assert manager.propagate_tx(tx)
             result = self._get_result(web_client)
             assert result == dict(
                 block_height=72,

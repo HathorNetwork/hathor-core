@@ -15,11 +15,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from math import ceil
 
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeType, DAGOutput
+from hathor.transaction.util import get_deposit_token_deposit_amount
 
 
 class DefaultFiller:
@@ -64,7 +64,7 @@ class DefaultFiller:
         outputs.append(None)
         return len(outputs) - 1
 
-    def fill_parents(self, node: DAGNode, *, target: int = 2, candidates: list[str] | None = []) -> None:
+    def fill_parents(self, node: DAGNode, *, target: int = 2, candidates: list[str] | None = None) -> None:
         """Fill parents of a vertex.
 
         Note: We shouldn't use the DAG transactions because it would confirm them, violating the DAG description."""
@@ -104,7 +104,10 @@ class DefaultFiller:
             return DAGInput(token, index)
 
     def calculate_balance(self, node: DAGNode) -> dict[str, int]:
-        """Calculate the balance for each token in a node."""
+        """Calculate the balance for each token in a node.
+
+        balance = sum(outputs) - sum(inputs)
+        """
         ins: defaultdict[str, int] = defaultdict(int)
         for tx_name, index in node.inputs:
             node2 = self._get_or_create_node(tx_name)
@@ -117,7 +120,7 @@ class DefaultFiller:
             assert txout is not None
             outs[txout.token] += txout.amount
 
-        keys = set(ins.keys()) | set(outs.keys())
+        keys = set(ins.keys()) | set(outs.keys()) | set(node.balances.keys())
         balance = {}
         for key in keys:
             balance[key] = outs.get(key, 0) - ins.get(key, 0)
@@ -129,9 +132,8 @@ class DefaultFiller:
         balance = self.calculate_balance(node)
 
         for key, diff in balance.items():
-            # =0 balance
-            # <0 need output
-            # >0 need input
+            target = node.balances.get(key, 0)
+            diff -= target
             if diff < 0:
                 index = self.get_next_index(node.outputs)
                 node.outputs[index] = DAGOutput(abs(diff), key, {'_origin': 'f3'})
@@ -221,6 +223,10 @@ class DefaultFiller:
                     self.fill_parents(node)
                     self.balance_node_inputs_and_outputs(node)
 
+                case DAGNodeType.OnChainBlueprint:
+                    self.fill_parents(node)
+                    self.balance_node_inputs_and_outputs(node)
+
                 case DAGNodeType.Token:
                     tokens.append(node.name)
                     self.fill_parents(node)
@@ -234,15 +240,22 @@ class DefaultFiller:
             balance = self.calculate_balance(node)
             assert set(balance.keys()).issubset({'HTR', token})
 
-            htr_minimum = ceil(balance[token] / 100)
-            htr_balance = -balance.get('HTR', 0)
+            htr_deposit = get_deposit_token_deposit_amount(self._settings, balance[token])
+            htr_balance = balance.get('HTR', 0)
 
-            if htr_balance > htr_minimum:
+            # target = sum(outputs) - sum(inputs)
+            # <0 means deposit
+            # >0 means withdrawal
+            htr_target = node.balances.get('HTR', 0) - htr_deposit
+
+            diff = htr_balance - htr_target
+
+            if diff < 0:
                 index = self.get_next_index(node.outputs)
-                node.outputs[index] = DAGOutput(htr_balance - htr_minimum, 'HTR', {'_origin': 'f8'})
+                node.outputs[index] = DAGOutput(-diff, 'HTR', {'_origin': 'f8'})
 
-            elif htr_balance < htr_minimum:
-                txin = self.find_txin(htr_minimum - htr_balance, 'HTR')
+            elif diff > 0:
+                txin = self.find_txin(diff, 'HTR')
                 node.inputs.add(txin)
 
         if 'dummy' in self._builder._nodes:

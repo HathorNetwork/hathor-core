@@ -53,6 +53,11 @@ from hathor.verification.transaction_verifier import TransactionVerifier
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts import OnChainBlueprint
+    from hathor.nanocontracts.blueprint import Blueprint
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, NCStorageFactory
+    from hathor.nanocontracts.types import BlueprintId, ContractId
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
 cpu = get_cpu_profiler()
@@ -78,6 +83,7 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     indexes: Optional[IndexesManager]
     _latest_n_height_tips: list[HeightInfo]
+    nc_catalog: Optional['NCBlueprintCatalog'] = None
 
     log = get_logger()
 
@@ -102,8 +108,9 @@ class TransactionStorage(ABC):
 
     _migrations: list[BaseMigration]
 
-    def __init__(self, *, settings: HathorSettings) -> None:
+    def __init__(self, *, settings: HathorSettings, nc_storage_factory: NCStorageFactory) -> None:
         self._settings = settings
+        self._nc_storage_factory = nc_storage_factory
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -1142,6 +1149,92 @@ class TransactionStorage(ABC):
         with self.allow_partially_validated_context():
             return self.transaction_exists(vertex_id)
 
+    def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
+        """Return a block storage for the given block."""
+        return self._nc_storage_factory.get_block_storage_from_block(block)
+
+    def get_nc_storage(self, block: Block, contract_id: ContractId) -> NCContractStorage:
+        """Return a contract storage with the contract state at a given block."""
+        from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
+        if not block.is_genesis:
+            block_storage = self._nc_storage_factory.get_block_storage_from_block(block)
+        else:
+            block_storage = self._nc_storage_factory.get_empty_block_storage()
+
+        try:
+            contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(contract_id)))
+        except KeyError:
+            from hathor.nanocontracts.exception import NanoContractDoesNotExist
+            raise NanoContractDoesNotExist(contract_id.hex())
+        return contract_storage
+
+    def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
+        from hathor.nanocontracts.exception import BlueprintDoesNotExist
+        assert self.nc_catalog is not None
+
+        if blueprint_class := self.nc_catalog.get_blueprint_class(blueprint_id):
+            return blueprint_class
+
+        self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
+        if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
+            raise BlueprintDoesNotExist(blueprint_id.hex())
+        self.log.debug('on-chain blueprints enabled, looking for that instead')
+        return self.get_on_chain_blueprint(blueprint_id)
+
+    def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
+        """Returns the source code associated with the given blueprint_id.
+
+        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+
+        A point of difference is that an OCB will have a `__blueprint__ = BlueprintName` line, where a built-in
+        blueprint will not.
+        """
+        import inspect
+
+        from hathor.nanocontracts import OnChainBlueprint
+
+        blueprint = self._get_blueprint(blueprint_id)
+        if isinstance(blueprint, OnChainBlueprint):
+            return self.get_on_chain_blueprint(blueprint_id).code.text
+        else:
+            module = inspect.getmodule(blueprint)
+            assert module is not None
+            return inspect.getsource(module)
+
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+        """Returns the blueprint class associated with the given blueprint_id.
+
+        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+        """
+        from hathor.nanocontracts import OnChainBlueprint
+        blueprint = self._get_blueprint(blueprint_id)
+        if isinstance(blueprint, OnChainBlueprint):
+            return blueprint.get_blueprint_class()
+        else:
+            return blueprint
+
+    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
+        """Return an on-chain blueprint transaction."""
+        assert self._settings.ENABLE_ON_CHAIN_BLUEPRINTS
+        from hathor.nanocontracts import OnChainBlueprint
+        from hathor.nanocontracts.exception import (
+            BlueprintDoesNotExist,
+            OCBBlueprintNotConfirmed,
+            OCBInvalidBlueprintVertexType,
+        )
+        try:
+            blueprint_tx = self.get_transaction(blueprint_id)
+        except TransactionDoesNotExist:
+            self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
+            raise BlueprintDoesNotExist(blueprint_id.hex())
+        if not isinstance(blueprint_tx, OnChainBlueprint):
+            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())
+        tx_meta = blueprint_tx.get_metadata()
+        if tx_meta.voided_by or not tx_meta.first_block:
+            raise OCBBlueprintNotConfirmed(blueprint_id.hex())
+        # XXX: maybe use N blocks confirmation, like reward-locks
+        return blueprint_tx
+
 
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]
@@ -1152,8 +1245,9 @@ class BaseTransactionStorage(TransactionStorage):
         pubsub: Optional[Any] = None,
         *,
         settings: HathorSettings,
+        nc_storage_factory: NCStorageFactory,
     ) -> None:
-        super().__init__(settings=settings)
+        super().__init__(settings=settings, nc_storage_factory=nc_storage_factory)
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub

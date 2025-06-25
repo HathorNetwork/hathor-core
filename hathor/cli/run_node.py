@@ -69,6 +69,7 @@ class RunNode:
         """
         from hathor.cli.util import create_parser
         from hathor.feature_activation.feature import Feature
+        from hathor.nanocontracts.nc_exec_logs import NCLogConfig
         parser = create_parser(prefix=cls.env_vars_prefix)
 
         parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
@@ -115,6 +116,9 @@ class RunNode:
                             help='Create an index of transactions by address and allow searching queries')
         parser.add_argument('--utxo-index', action='store_true',
                             help='Create an index of UTXOs by token/address/amount and allow searching queries')
+        parser.add_argument('--nc-history-index', action='store_true', help=SUPPRESS)  # moved to --nc-indices
+        parser.add_argument('--nc-indices', action='store_true',
+                            help='Enable indices related to nano contracts')
         parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
         parser.add_argument('--prometheus-prefix', default='',
                             help='A prefix that will be added in all Prometheus metrics')
@@ -165,6 +169,9 @@ class RunNode:
                             help='Enables listening on IPv6 interface and connecting to IPv6 peers')
         parser.add_argument('--x-disable-ipv4', action='store_true',
                             help='Disables connecting to IPv4 peers')
+        possible_nc_exec_logs = [config.value for config in NCLogConfig]
+        parser.add_argument('--nc-exec-logs', default=NCLogConfig.NONE, choices=possible_nc_exec_logs,
+                            help=f'Enable saving Nano Contracts execution logs. One of {possible_nc_exec_logs}')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -456,9 +463,9 @@ class RunNode:
 
     def check_python_version(self) -> None:
         # comments to help grep's
-        MIN_VER = (3, 10)  # Python-3.10
-        MIN_STABLE = (3, 10)  # Python-3.10
-        RECOMMENDED_VER = (3, 10)  # Python-3.10
+        MIN_VER = (3, 11)  # Python-3.11
+        MIN_STABLE = (3, 12)  # Python-3.12
+        RECOMMENDED_VER = (3, 12)  # Python-3.12
         cur = sys.version_info
         cur_pretty = '.'.join(map(str, cur))
         min_pretty = '.'.join(map(str, MIN_VER))

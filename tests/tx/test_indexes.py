@@ -4,10 +4,10 @@ from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
 from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import iwindows
+from hathor.util import initialize_hd_wallet, iwindows
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
+from tests.utils import DEFAULT_WORDS, add_blocks_unlock_reward, add_custom_tx, add_new_tx, get_genesis_key
 
 
 class BaseIndexesTest(unittest.TestCase):
@@ -29,7 +29,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
-        self.assertTrue(self.manager.propagate_tx(tx1, False))
+        self.assertTrue(self.manager.propagate_tx(tx1))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
                 {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
@@ -44,7 +44,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
         self.manager.cpu_mining_service.resolve(tx2)
-        self.assertTrue(self.manager.propagate_tx(tx2, False))
+        self.assertTrue(self.manager.propagate_tx(tx2))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
                 {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
@@ -56,7 +56,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertIn(tx1.hash, tx3.parents)
         self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx2.hash, tx3.hash)
-        self.assertTrue(self.manager.propagate_tx(tx3, False))
+        self.assertTrue(self.manager.propagate_tx(tx3))
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
@@ -86,7 +86,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
-        self.assertTrue(self.manager.propagate_tx(tx1, False))
+        self.assertTrue(self.manager.propagate_tx(tx1))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
                 {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
@@ -99,7 +99,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertIn(tx1.hash, tx2.parents)
         tx2.timestamp = int(self.clock.seconds()) + 1
         self.manager.cpu_mining_service.resolve(tx2)
-        self.assertTrue(self.manager.propagate_tx(tx2, False))
+        self.assertTrue(self.manager.propagate_tx(tx2))
         if self.manager.tx_storage.indexes.mempool_tips is not None:
             self.assertEqual(
                 {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
@@ -113,7 +113,7 @@ class BaseIndexesTest(unittest.TestCase):
         # self.assertIn(tx1.hash, tx3.parents)
         self.manager.cpu_mining_service.resolve(tx3)
         self.assertNotEqual(tx2.hash, tx3.hash)
-        self.assertTrue(self.manager.propagate_tx(tx3, False))
+        self.assertTrue(self.manager.propagate_tx(tx3))
         # self.assertIn(tx3.hash, tx2.get_metadata().voided_by)
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
         if self.manager.tx_storage.indexes.mempool_tips is not None:
@@ -264,7 +264,7 @@ class BaseIndexesTest(unittest.TestCase):
         block2.timestamp = block1.timestamp
         block2.weight = 4
         self.manager.cpu_mining_service.resolve(block2)
-        self.manager.propagate_tx(block2, fails_silently=False)
+        self.manager.propagate_tx(block2)
         self.graphviz.labels[block2.hash] = 'block2'
 
         # make sure a reorg did happen as expected
@@ -470,7 +470,7 @@ class BaseIndexesTest(unittest.TestCase):
         # spend that utxo and check that it is gone from the index
         address1 = self.get_address(1)
 
-        wallet = self.get_wallet()
+        wallet = initialize_hd_wallet(DEFAULT_WORDS)
         tx1 = Transaction(
             timestamp=int(self.clock.seconds()),
             weight=1.0,
@@ -483,7 +483,7 @@ class BaseIndexesTest(unittest.TestCase):
             *wallet.get_input_aux_data(tx1.get_sighash_all(), wallet.get_private_key(address))
         )
         self.manager.cpu_mining_service.resolve(tx1)
-        self.assertTrue(self.manager.propagate_tx(tx1, False))
+        self.assertTrue(self.manager.propagate_tx(tx1))
 
         self.assertEqual(
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
@@ -544,7 +544,7 @@ class BaseIndexesTest(unittest.TestCase):
 
         change_value = 26
         transfer_value = 6400 - change_value
-        wallet = self.get_wallet()
+        wallet = initialize_hd_wallet(DEFAULT_WORDS)
         tx1 = Transaction(
             timestamp=int(self.clock.seconds()),
             weight=1.0,
@@ -558,7 +558,7 @@ class BaseIndexesTest(unittest.TestCase):
             *wallet.get_input_aux_data(tx1.get_sighash_all(), wallet.get_private_key(address))
         )
         self.manager.cpu_mining_service.resolve(tx1)
-        self.assertTrue(self.manager.propagate_tx(tx1, False))
+        self.assertTrue(self.manager.propagate_tx(tx1))
 
         # querying for exact values
 
@@ -693,6 +693,7 @@ class RocksDBIndexesTest(BaseIndexesTest):
     def setUp(self):
         import tempfile
 
+        from hathor.nanocontracts.storage import NCRocksDBStorageFactory
         from hathor.transaction.storage import TransactionRocksDBStorage
 
         super().setUp()
@@ -701,7 +702,13 @@ class RocksDBIndexesTest(BaseIndexesTest):
         self.tmpdirs.append(directory)
         rocksdb_storage = RocksDBStorage(path=directory)
         parser = VertexParser(settings=self._settings)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage, settings=self._settings, vertex_parser=parser)
+        nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
+        self.tx_storage = TransactionRocksDBStorage(
+            rocksdb_storage,
+            settings=self._settings,
+            vertex_parser=parser,
+            nc_storage_factory=nc_storage_factory,
+        )
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

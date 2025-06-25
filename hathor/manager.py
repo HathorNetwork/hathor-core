@@ -44,6 +44,10 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.exception import NanoContractDoesNotExist
+from hathor.nanocontracts.runner import Runner
+from hathor.nanocontracts.runner.runner import RunnerFactory
+from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
@@ -107,6 +111,7 @@ class HathorManager:
         execution_manager: ExecutionManager,
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
+        runner_factory: RunnerFactory,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -194,6 +199,7 @@ class HathorManager:
         self.connections = p2p_manager
         self.vertex_handler = vertex_handler
         self.vertex_parser = vertex_parser
+        self.runner_factory = runner_factory
 
         self.websocket_factory = websocket_factory
 
@@ -380,6 +386,36 @@ class HathorManager:
         self.is_profiler_running = False
         if save_to:
             self.profiler.dump_stats(save_to)
+
+    def get_nc_runner(self, block: Block) -> Runner:
+        """Return a contract runner for a given block."""
+        nc_storage_factory = self.consensus_algorithm.nc_storage_factory
+        block_storage = nc_storage_factory.get_block_storage_from_block(block)
+        return self.runner_factory.create(block_storage=block_storage)
+
+    def get_best_block_nc_runner(self) -> Runner:
+        """Return a contract runner for the best block."""
+        best_block = self.tx_storage.get_best_block()
+        return self.get_nc_runner(best_block)
+
+    def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
+        """Return the nano block storage for a given block."""
+        return self.consensus_algorithm.nc_storage_factory.get_block_storage_from_block(block)
+
+    def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCContractStorage:
+        """Return a contract storage with the contract state at a given block."""
+        from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
+        block_storage = self.get_nc_block_storage(block)
+        try:
+            contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(nc_id)))
+        except KeyError:
+            raise NanoContractDoesNotExist(nc_id.hex())
+        return contract_storage
+
+    def get_best_block_nc_storage(self, nc_id: VertexId) -> NCContractStorage:
+        """Return a contract storage with the contract state at the best block."""
+        best_block = self.tx_storage.get_best_block()
+        return self.get_nc_storage(best_block, nc_id)
 
     def _initialize_components(self) -> None:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
@@ -707,7 +743,7 @@ class HathorManager:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         return self.daa.get_tokens_issued_per_block(height)
 
-    def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
+    def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.
         """
         tips = self.tx_storage.get_best_block_tips()
@@ -724,7 +760,7 @@ class HathorManager:
         )
         if blk.weight <= min_insignificant_weight:
             self.log.warn('submit_block(): insignificant weight? accepted anyway', blk=blk.hash_hex, weight=blk.weight)
-        return self.propagate_tx(blk, fails_silently=fails_silently)
+        return self.propagate_tx(blk)
 
     def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,
                 max_output_script_size: int | None = None) -> None:
@@ -755,9 +791,9 @@ class HathorManager:
         if not tx_from_lib.is_standard(max_output_script_size, not allow_non_standard_script):
             raise NonStandardTxError('Transaction is non standard.')
 
-        self.propagate_tx(tx, fails_silently=False)
+        self.propagate_tx(tx)
 
-    def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
+    def propagate_tx(self, tx: BaseTransaction) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
         :return: True if the transaction was accepted
@@ -768,33 +804,28 @@ class HathorManager:
         else:
             tx.storage = self.tx_storage
 
-        return self.on_new_tx(tx, fails_silently=fails_silently, propagate_to_peers=True)
+        return self.on_new_tx(tx, propagate_to_peers=True)
 
     def on_new_tx(
         self,
-        tx: BaseTransaction,
+        vertex: BaseTransaction,
         *,
         quiet: bool = False,
-        fails_silently: bool = True,
         propagate_to_peers: bool = True,
         reject_locked_reward: bool = True
     ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
-        :param tx: transaction to be added
+        :param vertex: transaction to be added
         :param quiet: if True will not log when a new tx is accepted
-        :param fails_silently: if False will raise an exception when tx cannot be added
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        success = self.vertex_handler.on_new_vertex(
-            tx,
-            quiet=quiet,
-            fails_silently=fails_silently,
-            reject_locked_reward=reject_locked_reward,
-        )
+        success = self.vertex_handler.on_new_relayed_vertex(vertex,
+                                                            reject_locked_reward=reject_locked_reward,
+                                                            quiet=quiet)
 
         if propagate_to_peers and success:
-            self.connections.send_tx_to_peers(tx)
+            self.connections.send_tx_to_peers(vertex)
 
         return success
 

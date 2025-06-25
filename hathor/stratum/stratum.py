@@ -515,7 +515,7 @@ class StratumProtocol(JSONRPC):
             })
 
         tx = job.tx.clone()
-        block_base = tx.get_header_without_nonce()
+        block_base = tx.get_mining_header_without_nonce()
         block_base_hash = sha256d_hash(block_base)
         # Stratum sends the nonce as a big-endian hexadecimal string.
         if params.get('aux_pow'):
@@ -560,7 +560,7 @@ class StratumProtocol(JSONRPC):
                 # We only propagate blocks here in stratum
                 # For tx we need to propagate in the resource,
                 # so we can get the possible errors
-                self.manager.submit_block(tx, fails_silently=False)
+                self.manager.submit_block(tx)
                 self.blocks_found += 1
             except (InvalidNewTransaction, TxValidationError) as e:
                 # Block propagation failed, but the share was succesfully submited
@@ -600,7 +600,7 @@ class StratumProtocol(JSONRPC):
         else:
             if job:
                 job_data = {
-                    'data': job.tx.get_header_without_nonce().hex(),
+                    'data': job.tx.get_mining_header_without_nonce().hex(),
                     'job_id': job.id.hex,
                     'nonce_size': job.tx.SERIALIZATION_NONCE_SIZE,
                     'weight': float(job.weight),

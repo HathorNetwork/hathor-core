@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from struct import error as StructError, pack
+from dataclasses import dataclass
+from struct import pack
 from typing import Any, Optional
 
 from typing_extensions import override
@@ -22,7 +23,7 @@ from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
 from hathor.transaction.transaction import Transaction
-from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback, decode_string_utf8, int_to_bytes, unpack, unpack_len
 from hathor.types import TokenUid
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
@@ -30,6 +31,13 @@ _FUNDS_FORMAT_STRING = '!BBBB'
 
 # Signal bist (B), version (B), inputs len (B), outputs len (B)
 _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class TokenDescription:
+    token_id: bytes
+    token_name: str
+    token_symbol: str
 
 
 class TokenCreationTransaction(Transaction):
@@ -149,13 +157,13 @@ class TokenCreationTransaction(Transaction):
 
         return struct_bytes
 
-    def get_sighash_all(self) -> bytes:
+    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
         """ Returns a serialization of the inputs and outputs without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
-        if self._sighash_cache:
+        if not skip_cache and self._sighash_cache:
             return self._sighash_cache
 
         struct_bytes = pack(
@@ -177,6 +185,10 @@ class TokenCreationTransaction(Transaction):
         struct_bytes += b''.join(tx_outputs)
 
         struct_bytes += self.serialize_token_info()
+
+        for header in self.headers:
+            struct_bytes += header.get_sighash_bytes()
+
         self._sighash_cache = struct_bytes
 
         return struct_bytes
@@ -251,16 +263,6 @@ class TokenCreationTransaction(Transaction):
         token_dict = super()._get_token_info_from_inputs()
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
-        token_dict[self.hash] = TokenInfo.create_empty(version=self.token_info_version, is_new_token=True)
+        token_dict[self.hash] = TokenInfo.get_default(version=self.token_info_version, is_new_token=True)
 
         return token_dict
-
-
-def decode_string_utf8(encoded: bytes, key: str) -> str:
-    """ Raises StructError in case it's not a valid utf-8 string
-    """
-    try:
-        decoded = encoded.decode('utf-8')
-        return decoded
-    except UnicodeDecodeError:
-        raise StructError('{} must be a valid utf-8 string.'.format(key))

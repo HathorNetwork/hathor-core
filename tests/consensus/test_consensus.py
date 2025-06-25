@@ -33,7 +33,7 @@ class ConsensusTestCase(unittest.TestCase):
         manager.vertex_handler._execution_manager = execution_manager_mock
         manager.consensus_algorithm.unsafe_update = MagicMock(side_effect=MyError)
 
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
 
         execution_manager_mock.crash_and_exit.assert_called_once_with(
             reason=f"on_new_vertex() failed for tx {tx.hash_hex}"
@@ -78,7 +78,7 @@ class ConsensusTestCase(unittest.TestCase):
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
         manager.cpu_mining_service.resolve(b0)
-        manager.propagate_tx(b0, fails_silently=False)
+        manager.propagate_tx(b0)
 
         b1 = add_new_block(manager, advance_clock=15)
         b2 = add_new_block(manager, advance_clock=15)
@@ -139,7 +139,7 @@ class ConsensusTestCase(unittest.TestCase):
         b0 = manager.generate_mining_block()
         b0.parents = [blocks[-1].hash, conflicting_tx.hash, conflicting_tx.parents[0]]
         manager.cpu_mining_service.resolve(b0)
-        manager.propagate_tx(b0, fails_silently=False)
+        manager.propagate_tx(b0)
 
         b1 = add_new_block(manager, advance_clock=15)
         b2 = add_new_block(manager, advance_clock=15)
@@ -194,7 +194,7 @@ class ConsensusTestCase(unittest.TestCase):
         b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
         manager.cpu_mining_service.resolve(b0)
-        manager.propagate_tx(b0, fails_silently=False)
+        manager.propagate_tx(b0)
 
         b1 = add_new_block(manager, advance_clock=15)
         b2 = add_new_block(manager, advance_clock=15)
@@ -247,7 +247,7 @@ class ConsensusTestCase(unittest.TestCase):
         b0.parents = [b0.parents[0], conflicting_tx.hash, conflicting_tx.parents[0]]
         b0.weight = 10
         manager.cpu_mining_service.resolve(b0)
-        manager.propagate_tx(b0, fails_silently=False)
+        manager.propagate_tx(b0)
 
         b1 = add_new_block(manager, advance_clock=15)
         b2 = add_new_block(manager, advance_clock=15)

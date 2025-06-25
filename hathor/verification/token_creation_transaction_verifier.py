@@ -17,7 +17,7 @@ from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.fee import should_charge_fee
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
-from hathor.transaction.util import clean_token_string
+from hathor.transaction.util import validate_token_info
 from hathor.types import TokenUid
 
 
@@ -43,18 +43,7 @@ class TokenCreationTransactionVerifier:
     def verify_token_info(self, tx: TokenCreationTransaction) -> None:
         """ Validates token info
         """
-        name_len = len(tx.token_name)
-        symbol_len = len(tx.token_symbol)
-        if name_len == 0 or name_len > self._settings.MAX_LENGTH_TOKEN_NAME:
-            raise TransactionDataError('Invalid token name length ({})'.format(name_len))
-        if symbol_len == 0 or symbol_len > self._settings.MAX_LENGTH_TOKEN_SYMBOL:
-            raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
-
-        # Can't create the token with hathor name or symbol
-        if clean_token_string(tx.token_name) == clean_token_string(self._settings.HATHOR_TOKEN_NAME):
-            raise TransactionDataError('Invalid token name ({})'.format(tx.token_name))
-        if clean_token_string(tx.token_symbol) == clean_token_string(self._settings.HATHOR_TOKEN_SYMBOL):
-            raise TransactionDataError('Invalid token symbol ({})'.format(tx.token_symbol))
+        validate_token_info(self._settings, tx.token_name, tx.token_symbol, tx.token_info_version)
 
         # Can't create the token with a non activated version
         if tx.token_info_version == TokenInfoVersion.FEE and not should_charge_fee(self._settings):

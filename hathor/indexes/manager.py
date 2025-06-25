@@ -20,17 +20,24 @@ from functools import reduce
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
+from typing_extensions import assert_never
 
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.blueprint_history_index import BlueprintHistoryIndex
+from hathor.indexes.blueprint_timestamp_index import BlueprintTimestampIndex
 from hathor.indexes.height_index import HeightIndex
 from hathor.indexes.info_index import InfoIndex
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
+from hathor.indexes.nc_creation_index import NCCreationIndex
+from hathor.indexes.nc_history_index import NCHistoryIndex
 from hathor.indexes.timestamp_index import ScopeType as TimestampScopeType, TimestampIndex
 from hathor.indexes.tips_index import ScopeType as TipsScopeType, TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
 from hathor.transaction import BaseTransaction
+from hathor.transaction.nc_execution_state import NCExecutionState
+from hathor.transaction.token_info import TokenInfoVersion
 from hathor.util import tx_progress
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -67,6 +74,10 @@ class IndexesManager(ABC):
     addresses: Optional[AddressIndex]
     tokens: Optional[TokensIndex]
     utxo: Optional[UtxoIndex]
+    nc_creation: Optional[NCCreationIndex]
+    nc_history: Optional[NCHistoryIndex]
+    blueprints: Optional[BlueprintTimestampIndex]
+    blueprint_history: Optional[BlueprintHistoryIndex]
 
     def __init_checks__(self):
         """ Implementations must call this at the **end** of their __init__ for running ValueError checks."""
@@ -95,6 +106,10 @@ class IndexesManager(ABC):
             self.addresses,
             self.tokens,
             self.utxo,
+            self.nc_creation,
+            self.nc_history,
+            self.blueprints,
+            self.blueprint_history,
         ])
 
     @abstractmethod
@@ -115,6 +130,11 @@ class IndexesManager(ABC):
     @abstractmethod
     def enable_mempool_index(self) -> None:
         """Enable mempool index. It does nothing if it has already been enabled."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def enable_nc_indices(self) -> None:
+        """Enable Nano Contract related indices."""
         raise NotImplementedError
 
     def force_clear_all(self) -> None:
@@ -187,10 +207,150 @@ class IndexesManager(ABC):
     def update(self, tx: BaseTransaction) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx
         """
+        self.nc_update_add(tx)
+
         # XXX: this _should_ be here, but it breaks some tests, for now this is done explicitly in hathor.manager
         # self.mempool_tips.update(tx)
         if self.utxo:
             self.utxo.update(tx)
+
+    def nc_update_add(self, tx: BaseTransaction) -> None:
+        from hathor.conf.settings import HATHOR_TOKEN_UID
+        from hathor.nanocontracts.runner.types import (
+            NCSyscallRecord,
+            SyscallCreateContractRecord,
+            SyscallUpdateTokensRecord,
+        )
+        from hathor.nanocontracts.types import ContractId
+        from hathor.transaction.nc_execution_state import NCExecutionState
+
+        if not tx.is_nano_contract():
+            return
+
+        meta = tx.get_metadata()
+        if meta.nc_execution != NCExecutionState.SUCCESS:
+            return
+
+        assert meta.nc_calls
+        first_call = meta.nc_calls[0]
+        nc_syscalls: list[NCSyscallRecord] = []
+
+        # Add to indexes.
+        for call in meta.nc_calls:
+            # Txs that call other contracts are added to those contracts' history. This includes calls to `initialize`.
+            if self.nc_history:
+                self.nc_history.add_single_key(call.contract_id, tx)
+
+            # Accumulate all syscalls.
+            nc_syscalls.extend(call.index_updates)
+
+        created_contracts: set[ContractId] = set()
+        for syscall in nc_syscalls:
+            match syscall:
+                case SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=contract_id):
+                    assert contract_id not in created_contracts, f'contract {contract_id.hex()} created multiple times'
+                    assert contract_id != first_call.contract_id, (
+                        f'contract {contract_id.hex()} cannot make a syscall to create itself'
+                    )
+                    created_contracts.add(contract_id)
+
+                    # Txs that create other contracts are added to the NC creation index and blueprint index.
+                    # They're already added to the NC history index, above.
+                    if self.nc_creation:
+                        self.nc_creation.manually_add_tx(tx)
+
+                    if self.blueprint_history:
+                        self.blueprint_history.add_single_key(blueprint_id, tx)
+
+                case SyscallUpdateTokensRecord():
+                    # Minted/melted tokens are added/removed to/from the tokens index,
+                    # and the respective destroyed/created HTR too.
+                    if self.tokens:
+                        try:
+                            self.tokens.get_token_info(syscall.token_uid)
+                        except KeyError:
+                            # If the token doesn't exist in the index yet, it must be a token creation syscall.
+                            from hathor.nanocontracts.runner.types import SyscallRecordType
+                            assert syscall.type is SyscallRecordType.CREATE_TOKEN, syscall.type
+                            assert syscall.token_name is not None and syscall.token_symbol is not None
+                            # TODO-Raul: check with Gabriel with we should enforce a default value here,
+                            # TODO-Raul: since the SyscallUpdateTokensRecord already has an default value
+                            # TODO-Raul: for token_version or if we should only allow deposit in the moment
+                            token_version = TokenInfoVersion.DEPOSIT
+                            if syscall.token_version is not None:
+                                token_version = syscall.token_version
+
+                            self.tokens.create_token_info(syscall.token_uid,
+                                                          syscall.token_name,
+                                                          syscall.token_symbol,
+                                                          token_version)
+
+                        self.tokens.add_to_total(syscall.token_uid, syscall.token_amount)
+                        self.tokens.add_to_total(HATHOR_TOKEN_UID, syscall.htr_amount)
+
+                case _:
+                    assert_never(syscall)
+
+    def nc_update_remove(self, tx: BaseTransaction) -> None:
+        from hathor.conf.settings import HATHOR_TOKEN_UID
+        from hathor.nanocontracts.runner.types import (
+            NCSyscallRecord,
+            SyscallCreateContractRecord,
+            SyscallUpdateTokensRecord,
+        )
+        from hathor.nanocontracts.types import NC_INITIALIZE_METHOD, ContractId
+
+        if not tx.is_nano_contract():
+            return
+
+        meta = tx.get_metadata()
+        assert meta.nc_execution is NCExecutionState.SUCCESS
+        assert meta.nc_calls
+        first_call = meta.nc_calls[0]
+        nc_syscalls: list[NCSyscallRecord] = []
+
+        # Remove from indexes, but we must keep the first call's contract still in the indexes.
+        for call in meta.nc_calls:
+            # Remove from nc_history except where it's the same contract as the first call.
+            if self.nc_history and call.contract_id != first_call.contract_id:
+                self.nc_history.remove_single_key(call.contract_id, tx)
+
+            # Accumulate all syscalls.
+            nc_syscalls.extend(call.index_updates)
+
+        created_contracts: set[ContractId] = set()
+        for syscall in nc_syscalls:
+            match syscall:
+                case SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=contract_id):
+                    assert contract_id not in created_contracts, f'contract {contract_id.hex()} created multiple times'
+                    assert contract_id != first_call.contract_id, (
+                        f'contract {contract_id.hex()} cannot make a syscall to create itself'
+                    )
+                    created_contracts.add(contract_id)
+
+                    # Remove only when the first call is not creating a contract, that is,
+                    # if the tx itself is a nc creation, it must be kept in the indexes.
+                    if first_call.method_name != NC_INITIALIZE_METHOD:
+                        # Remove from nc_creation.
+                        if self.nc_creation:
+                            self.nc_creation.del_tx(tx)
+
+                        # Remove from blueprint_history.
+                        if self.blueprint_history:
+                            self.blueprint_history.remove_single_key(blueprint_id, tx)
+
+                case SyscallUpdateTokensRecord():
+                    # Undo the tokens update.
+                    if self.tokens:
+                        self.tokens.add_to_total(syscall.token_uid, -syscall.token_amount)
+                        self.tokens.add_to_total(HATHOR_TOKEN_UID, -syscall.htr_amount)
+
+                        from hathor.nanocontracts.runner.types import SyscallRecordType
+                        if syscall.type is SyscallRecordType.CREATE_TOKEN:
+                            self.tokens.destroy_token(syscall.token_uid)
+
+                case _:
+                    assert_never(syscall)
 
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
@@ -219,6 +379,18 @@ class IndexesManager(ABC):
         if self.tokens:
             self.tokens.add_tx(tx)
 
+        if self.nc_creation:
+            self.nc_creation.add_tx(tx)
+
+        if self.nc_history:
+            self.nc_history.add_tx(tx)
+
+        if self.blueprints:
+            self.blueprints.add_tx(tx)
+
+        if self.blueprint_history:
+            self.blueprint_history.add_tx(tx)
+
         # We need to check r1 as well to make sure we don't count twice the transactions/blocks that are
         # just changing from voided to executed or vice-versa
         if r1 and r3:
@@ -243,6 +415,14 @@ class IndexesManager(ABC):
                 self.addresses.remove_tx(tx)
             if self.utxo:
                 self.utxo.del_tx(tx)
+            if self.nc_creation:
+                self.nc_creation.del_tx(tx)
+            if self.nc_history:
+                self.nc_history.remove_tx(tx)
+            if self.blueprints:
+                self.blueprints.del_tx(tx)
+            if self.blueprint_history:
+                self.blueprint_history.remove_tx(tx)
             self.info.update_counts(tx, remove=True)
 
         # mempool will pick-up if the transaction is voided/invalid and remove it
@@ -285,6 +465,10 @@ class RocksDBIndexesManager(IndexesManager):
         self.tokens = None
         self.utxo = None
         self.mempool_tips = None
+        self.nc_creation = None
+        self.nc_history = None
+        self.blueprints = None
+        self.blueprint_history = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -309,3 +493,16 @@ class RocksDBIndexesManager(IndexesManager):
         if self.mempool_tips is None:
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
             self.mempool_tips = MemoryMempoolTipsIndex(settings=self.settings)
+
+    def enable_nc_indices(self) -> None:
+        from hathor.indexes.blueprint_timestamp_index import BlueprintTimestampIndex
+        from hathor.indexes.rocksdb_blueprint_history_index import RocksDBBlueprintHistoryIndex
+        from hathor.indexes.rocksdb_nc_history_index import RocksDBNCHistoryIndex
+        if self.nc_creation is None:
+            self.nc_creation = NCCreationIndex(self._db)
+        if self.nc_history is None:
+            self.nc_history = RocksDBNCHistoryIndex(self._db)
+        if self.blueprints is None:
+            self.blueprints = BlueprintTimestampIndex(self._db)
+        if self.blueprint_history is None:
+            self.blueprint_history = RocksDBBlueprintHistoryIndex(self._db)

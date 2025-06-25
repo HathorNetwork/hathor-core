@@ -282,7 +282,7 @@ class SendTokensResource(Resource):
         message = ''
         return_code = ''
         try:
-            success = self.manager.propagate_tx(tx, fails_silently=False)
+            success = self.manager.propagate_tx(tx)
             if success:
                 return_code = 'success'
             else:

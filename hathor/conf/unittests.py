@@ -41,6 +41,10 @@ SETTINGS = HathorSettings(
         default_threshold=3
     ),
     ENABLE_NANO_CONTRACTS=True,
+    ENABLE_ON_CHAIN_BLUEPRINTS=True,
+    NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
+        'HFwHrQHUftQ7obLj7xbQjG4ZEwvyVXeyoE',
+    ],
     FEE_PER_OUTPUT=1,
     FEE_FEATURE_FLAG=True
 )

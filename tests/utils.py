@@ -5,7 +5,7 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import requests
 from cryptography.hazmat.backends import default_backend
@@ -33,6 +33,11 @@ settings = HathorSettings()
 # useful for adding blocks to a different wallet
 BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
 
+DEFAULT_WORDS: str = (
+    'bind daring above film health blush during tiny neck slight clown salmon '
+    'wine brown good setup later omit jaguar tourist rescue flip pet salute'
+)
+
 
 def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningService) -> bytes:
     """ From block bytes we create a block and resolve pow
@@ -46,19 +51,62 @@ def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningServ
     return block.get_struct()
 
 
-def add_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+def add_custom_tx(
+    manager: HathorManager,
+    tx_inputs: list[tuple[BaseTransaction, int]],
+    *,
+    n_outputs: int = 1,
+    base_parent: Optional[Transaction] = None,
+    weight: Optional[float] = None,
+    resolve: bool = False,
+    address: Optional[str] = None,
+    inc_timestamp: int = 0
+) -> Transaction:
     """Add a custom tx based on the gen_custom_tx(...) method."""
-    tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight,
-                       resolve=resolve, address=address, inc_timestamp=inc_timestamp)
-    manager.propagate_tx(tx, fails_silently=False)
+    tx = gen_custom_tx(manager,
+                       tx_inputs,
+                       n_outputs=n_outputs,
+                       base_parent=base_parent,
+                       weight=weight,
+                       resolve=resolve,
+                       address=address,
+                       inc_timestamp=inc_timestamp)
+    manager.propagate_tx(tx)
     return tx
 
 
-def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+def gen_custom_tx(manager: HathorManager,
+                  tx_inputs: list[tuple[BaseTransaction, int]],
+                  *,
+                  n_outputs: int = 1,
+                  base_parent: Optional[Transaction] = None,
+                  weight: Optional[float] = None,
+                  resolve: bool = False,
+                  address: Optional[str] = None,
+                  inc_timestamp: int = 0) -> Transaction:
+    """Generate a custom tx based on the inputs and outputs. It gives full control to the
+    inputs and can be used to generate conflicts and specific patterns in the DAG."""
+    tx = gen_custom_base_tx(manager,
+                            tx_inputs,
+                            n_outputs=n_outputs,
+                            base_parent=base_parent,
+                            weight=weight,
+                            resolve=resolve,
+                            address=address,
+                            inc_timestamp=inc_timestamp)
+    return cast(Transaction, tx)
+
+
+def gen_custom_base_tx(manager: HathorManager,
+                       tx_inputs: list[tuple[BaseTransaction, int]],
+                       *,
+                       n_outputs: int = 1,
+                       base_parent: Optional[Transaction] = None,
+                       weight: Optional[float] = None,
+                       resolve: bool = False,
+                       address: Optional[str] = None,
+                       inc_timestamp: int = 0,
+                       cls: type[BaseTransaction] = Transaction) -> BaseTransaction:
     """Generate a custom tx based on the inputs and outputs. It gives full control to the
     inputs and can be used to generate conflicts and specific patterns in the DAG."""
     wallet = manager.wallet
@@ -96,7 +144,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     else:
         raise NotImplementedError
 
-    tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
+    tx2 = wallet.prepare_transaction(cls, inputs, outputs)
     tx2.storage = manager.tx_storage
     tx2.timestamp = max(tx_base.timestamp + 1, int(manager.reactor.seconds()))
 
@@ -123,7 +171,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
 def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
                             tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
     tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
-    manager.propagate_tx(tx, fails_silently=False)
+    manager.propagate_tx(tx)
     return tx
 
 
@@ -150,7 +198,7 @@ def add_new_tx(
     """
     tx = gen_new_tx(manager, address, value)
     if propagate:
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
     if advance_clock:
         manager.reactor.advance(advance_clock)  # type: ignore[attr-defined]
     return tx
@@ -473,7 +521,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
 
     manager.cpu_mining_service.resolve(tx)
     if propagate:
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
     return tx
@@ -560,7 +608,7 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
         input_.data = P2PKH.create_input_data(public_bytes, signature)
 
     manager.cpu_mining_service.resolve(tx)
-    manager.propagate_tx(tx, fails_silently=False)
+    manager.propagate_tx(tx)
     assert isinstance(manager.reactor, Clock)
     manager.reactor.advance(8)
 
@@ -670,7 +718,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
 
     if propagate:
         manager.verification_service.verify(tx)
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
 

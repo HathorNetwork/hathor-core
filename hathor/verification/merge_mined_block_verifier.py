@@ -39,4 +39,4 @@ class MergeMinedBlockVerifier:
             else self._settings.OLD_MAX_MERKLE_PATH_LENGTH
         )
 
-        block.aux_pow.verify(block.get_base_hash(), max_merkle_path_length)
+        block.aux_pow.verify(block.get_mining_base_hash(), max_merkle_path_length)
