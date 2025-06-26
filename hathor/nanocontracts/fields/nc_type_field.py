@@ -58,11 +58,11 @@ class NCTypeField(Field[T]):
 
         try:
             obj = instance.syscall.__storage__.get_obj(self.__storage_key(), self.__nc_type)
-            if cache is not None:
-                cache[self.__name] = obj
-            return obj
         except KeyError:
             raise AttributeError(f'Contract has no attribute \'{self.__name}\'')
+        if cache is not None:
+            cache[self.__name] = obj
+        return obj
 
     def __delete__(self, instance: Blueprint) -> None:
         instance.syscall.__storage__.del_obj(self.__storage_key())

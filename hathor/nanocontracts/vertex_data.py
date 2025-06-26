@@ -71,14 +71,10 @@ class VertexData:
         parents = tuple(vertex.parents)
         tokens: tuple[TokenUid, ...] = tuple()
         vertex_meta = vertex.get_metadata()
-        if vertex_meta.first_block is not None:
-            assert vertex.storage is not None
-            assert vertex_meta.first_block is not None
-            block = vertex.storage.get_block(vertex_meta.first_block)
-            block_data = BlockData.create_from_block(block)
-        else:
-            # XXX: use dummy data instead
-            block_data = BlockData(hash=VertexId(b''), timestamp=0, height=0)
+        assert vertex.storage is not None
+        assert vertex_meta.first_block is not None
+        block = vertex.storage.get_block(vertex_meta.first_block)
+        block_data = BlockData.create_from_block(block)
 
         assert isinstance(vertex, Transaction)
         headers_data: list[HeaderData] = []
