@@ -18,9 +18,9 @@ import json
 import os.path
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum, IntEnum, unique
+from enum import IntEnum, StrEnum, auto, unique
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 from pydantic import Field, validator
 from typing_extensions import override
@@ -40,18 +40,18 @@ MAX_EVENT_SIZE: int = 100 * 1024  # 100KiB
 
 
 @unique
-class NCLogConfig(str, Enum):
+class NCLogConfig(StrEnum):
     # Don't save any nano contract logs.
-    NONE = 'none'
+    NONE = auto()
 
     # Save logs for all nano contracts.
-    ALL = 'all'
+    ALL = auto()
 
     # Only save logs for nano contracts that failed.
-    FAILED = 'failed'
+    FAILED = auto()
 
     # Only save logs for nano contracts that failed with an unhandled exception (that is, not NCFail).
-    FAILED_UNHANDLED = 'failed_unhandled'
+    FAILED_UNHANDLED = auto()
 
 
 @unique
@@ -277,15 +277,25 @@ class NCLogStorage:
 
         match self._config:
             case NCLogConfig.NONE:
+                # don't save any logs
                 return
             case NCLogConfig.ALL:
+                # save all logs
                 pass
             case NCLogConfig.FAILED:
                 if exception is None:
+                    # don't save when there's no exception
                     return
             case NCLogConfig.FAILED_UNHANDLED:
-                if exception is None or not exception.__cause__ or isinstance(exception.__cause__, NCFail):
+                if exception is None:
+                    # don't save when there's no exception
                     return
+                assert isinstance(exception, NCFail)
+                if not exception.__cause__ or isinstance(exception.__cause__, NCFail):
+                    # don't save when it's a simple NCFail or caused by a NCFail
+                    return
+            case _:
+                assert_never(self._config)
 
         new_entry = NCExecEntry.from_call_info(call_info, tb)
         new_line_dict = {meta.first_block.hex(): new_entry.dict()}

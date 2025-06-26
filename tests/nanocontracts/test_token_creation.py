@@ -1,5 +1,6 @@
 
 from hathor.conf import HathorSettings
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
@@ -156,7 +157,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(value=0, can_mint=False, can_melt=False)
 
         assert TKB.is_nano_contract()
-        assert TKB.get_metadata().voided_by == {TKB.hash, settings.NC_EXECUTION_FAIL_ID}
+        assert TKB.get_metadata().voided_by == {TKB.hash, NC_EXECUTION_FAIL_ID}
 
         assert not tx3.is_nano_contract()
         assert tx3.get_metadata().voided_by == {TKB.hash}
@@ -203,7 +204,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         assert tx2.get_metadata().voided_by is None
         assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
 
-        assert tx3.get_metadata().voided_by == {tx3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
         assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
 
         assert b31.get_metadata().voided_by is None
