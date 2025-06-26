@@ -188,7 +188,7 @@ class Builder:
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
 
-        self._nc_anti_mev: bool = False
+        self._nc_anti_mev: bool = True
 
         self._nc_storage_factory: NCStorageFactory | None = None
         self._nc_log_storage: NCLogStorage | None = None

@@ -40,8 +40,8 @@ D = TypeVar('D', bound='DataclassInstance')
 def make_dataclass_nc_type(class_: type[D]) -> DataclassNCType[D]:
     """ Helper function to build a NCType for the given dataclass.
     """
-    from hathor.nanocontracts.nc_types import DEFAULT_TYPE_ALIAS_MAP, EXTENDED_TYPE_TO_NC_TYPE_MAP
-    type_map = NCType.TypeMap(DEFAULT_TYPE_ALIAS_MAP, EXTENDED_TYPE_TO_NC_TYPE_MAP)
+    from hathor.nanocontracts.nc_types import DEFAULT_TYPE_ALIAS_MAP, RETURN_TYPE_TO_NC_TYPE_MAP
+    type_map = NCType.TypeMap(DEFAULT_TYPE_ALIAS_MAP, RETURN_TYPE_TO_NC_TYPE_MAP)
     return DataclassNCType._from_type(class_, type_map=type_map)
 
 

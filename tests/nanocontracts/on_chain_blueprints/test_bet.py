@@ -6,7 +6,7 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key_bytes
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_type
+from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.types import (
     NC_INITIALIZE_METHOD,
     Address,
@@ -35,10 +35,10 @@ from .utils import get_ocb_private_key
 settings = HathorSettings()
 
 ON_CHAIN_BET_NC_CODE: str = load_builtin_blueprint_for_ocb('bet.py', 'Bet', test_blueprints)
-TX_OUTPUT_SCRIPT_NC_TYPE = make_nc_type_for_type(TxOutputScript)
-RESULT_NC_TYPE: NCType[str | None] = make_nc_type_for_type(str | None)  # type: ignore[arg-type]
-TIMESTAMP_NC_TYPE = make_nc_type_for_type(Timestamp)
-TOKEN_UID_NC_TYPE = make_nc_type_for_type(TokenUid)
+TX_OUTPUT_SCRIPT_NC_TYPE = make_nc_type(TxOutputScript)
+RESULT_NC_TYPE: NCType[str | None] = make_nc_type(str | None)  # type: ignore[arg-type]
+TIMESTAMP_NC_TYPE = make_nc_type(Timestamp)
+TOKEN_UID_NC_TYPE = make_nc_type(TokenUid)
 
 
 class BetInfo(NamedTuple):

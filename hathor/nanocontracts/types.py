@@ -68,10 +68,10 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
     """
 
     def __init__(self, data: T, script_input: bytes) -> None:
-        from hathor.nanocontracts.nc_types import make_nc_type_for_type_extended
+        from hathor.nanocontracts.nc_types import make_nc_type_for_return_type as make_nc_type
         self.data = data
         self.script_input = script_input
-        self.__nc_type = make_nc_type_for_type_extended(self.__inner_type__)
+        self.__nc_type = make_nc_type(self.__inner_type__)
 
     def __eq__(self, other):
         if not isinstance(other, RawSignedData):

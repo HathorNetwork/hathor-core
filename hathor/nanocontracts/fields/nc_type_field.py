@@ -47,15 +47,19 @@ class NCTypeField(Field[T]):
 
     def __set__(self, instance: Blueprint, obj: T) -> None:
         instance.syscall.__storage__.put_obj(self.__storage_key(), self.__nc_type, obj)
-        instance.syscall.__cache__[self.__name] = obj
+        cache = instance.syscall.__cache__
+        if cache is not None:
+            cache[self.__name] = obj
 
     def __get__(self, instance: Blueprint, owner: object | None = None) -> T:
-        if self.__name in instance.syscall.__cache__:
-            return instance.syscall.__cache__[self.__name]
+        cache = instance.syscall.__cache__
+        if cache is not None and self.__name in cache:
+            return cache[self.__name]
 
         try:
             obj = instance.syscall.__storage__.get_obj(self.__storage_key(), self.__nc_type)
-            instance.syscall.__cache__[self.__name] = obj
+            if cache is not None:
+                cache[self.__name] = obj
             return obj
         except KeyError:
             raise AttributeError(f'Contract has no attribute \'{self.__name}\'')

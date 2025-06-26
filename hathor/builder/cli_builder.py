@@ -240,8 +240,8 @@ class CliBuilder:
             self.log.debug('enable nano indices')
             tx_storage.indexes.enable_nc_indices()
 
-        from hathor.nanocontracts.sorter.timestamp_sorter import timestamp_nc_calls_sorter
-        nc_calls_sorter = timestamp_nc_calls_sorter
+        from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
+        nc_calls_sorter = random_nc_calls_sorter
 
         assert self.nc_storage_factory is not None
         runner_factory = RunnerFactory(

@@ -7,7 +7,7 @@ from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail, NCInvalidSignature
 from hathor.nanocontracts.method import Method
-from hathor.nanocontracts.nc_types import make_nc_type_for_type
+from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import NCAction, NCActionType, NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import sign_pycoin
@@ -24,8 +24,8 @@ from tests.utils import add_custom_tx, create_tokens, gen_custom_base_tx
 
 settings = HathorSettings()
 
-INT_NC_TYPE = make_nc_type_for_type(int)
-TOKEN_NC_TYPE = make_nc_type_for_type(TokenUid)
+INT_NC_TYPE = make_nc_type(int)
+TOKEN_NC_TYPE = make_nc_type(TokenUid)
 
 
 class MyBlueprint(Blueprint):

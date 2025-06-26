@@ -1,7 +1,7 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCFail, NCInsufficientFunds, NCViewMethodError
-from hathor.nanocontracts.nc_types import make_nc_type_for_type
+from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
@@ -20,10 +20,10 @@ from hathor.nanocontracts.types import (
 from tests import unittest
 from tests.nanocontracts.utils import TestRunner
 
-STR_NC_TYPE = make_nc_type_for_type(str)
-BYTES_NC_TYPE = make_nc_type_for_type(bytes)
-INT_NC_TYPE = make_nc_type_for_type(int)
-BOOL_NC_TYPE = make_nc_type_for_type(bool)
+STR_NC_TYPE = make_nc_type(str)
+BYTES_NC_TYPE = make_nc_type(bytes)
+INT_NC_TYPE = make_nc_type(int)
+BOOL_NC_TYPE = make_nc_type(bool)
 
 MOCK_ADDRESS = Address(b'')
 

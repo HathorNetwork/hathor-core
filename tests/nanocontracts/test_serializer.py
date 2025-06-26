@@ -1,6 +1,6 @@
 from typing import Optional, TypeVar
 
-from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_type
+from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.types import SignedData
 from tests import unittest
 
@@ -9,7 +9,7 @@ T = TypeVar('T')
 
 class NCSerializerTestCase(unittest.TestCase):
     def _run_test(self, type_: type[T], result: T) -> None:
-        nc_type = make_nc_type_for_type(type_)
+        nc_type = make_nc_type(type_)
         result_bytes = nc_type.to_bytes(result)
         result2: T = nc_type.from_bytes(result_bytes)
         self.assertEqual(result, result2)
@@ -17,7 +17,7 @@ class NCSerializerTestCase(unittest.TestCase):
     def _run_test_signed(self, type_: type[T], result: T) -> None:
         from hathor.wallet import KeyPair
 
-        nc_type = make_nc_type_for_type(type_)
+        nc_type = make_nc_type(type_)
         result_bytes = nc_type.to_bytes(result)
         result2: T = nc_type.from_bytes(result_bytes)
         self.assertEqual(result, result2)
@@ -27,7 +27,7 @@ class NCSerializerTestCase(unittest.TestCase):
         script_input = key.p2pkh_create_input_data(b'my-key', result_bytes)
         # XXX: ignoring valid-type because type_ can and must be used with SignedData
         signed_result: SignedData[T] = SignedData[type_](result, script_input)  # type: ignore[valid-type]
-        signeddata_nc_type = make_nc_type_for_type(SignedData[type_])  # type: ignore[valid-type]
+        signeddata_nc_type = make_nc_type(SignedData[type_])  # type: ignore[valid-type]
         serialized_bytes = signeddata_nc_type.to_bytes(signed_result)
         signed_result2: SignedData[T] = signeddata_nc_type.from_bytes(serialized_bytes)
         self.assertEqual(signed_result.data, signed_result2.data)

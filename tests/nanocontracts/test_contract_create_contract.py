@@ -2,7 +2,7 @@ from typing import Optional
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_type
+from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
     BlueprintId,
@@ -22,8 +22,8 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
-INT_NC_TYPE = make_nc_type_for_type(int)
-CONTRACT_NC_TYPE: NCType[ContractId | None] = make_nc_type_for_type(ContractId | None)  # type: ignore[arg-type]
+INT_NC_TYPE = make_nc_type(int)
+CONTRACT_NC_TYPE: NCType[ContractId | None] = make_nc_type(ContractId | None)  # type: ignore[arg-type]
 
 
 class MyBlueprint1(Blueprint):

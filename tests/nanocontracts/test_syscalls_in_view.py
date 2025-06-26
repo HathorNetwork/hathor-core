@@ -15,7 +15,9 @@
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public, view
+from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.exception import NCViewMethodError
+from hathor.nanocontracts.runner.types import NCRawArgs
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
@@ -104,6 +106,19 @@ class MyBlueprint(Blueprint):
     def create_token(self) -> None:
         self.syscall.create_token('', '', 0)
 
+    @view
+    def proxy_call_public_method(self) -> None:
+        self.syscall.proxy_call_public_method(BlueprintId(VertexId(b'')), '', [])
+
+    @view
+    def proxy_call_public_method_nc_args(self) -> None:
+        nc_args = NCRawArgs(b'')
+        self.syscall.proxy_call_public_method_nc_args(BlueprintId(VertexId(b'')), '', [], nc_args)
+
+    @view
+    def change_blueprint(self) -> None:
+        self.syscall.change_blueprint(BlueprintId(VertexId(b'')))
+
 
 class TestSyscallsInView(BlueprintTestCase):
     def setUp(self) -> None:
@@ -125,3 +140,34 @@ class TestSyscallsInView(BlueprintTestCase):
 
         with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.rng`'):
             self.runner.call_view_method(contract_id, 'test_rng')
+
+    def test_syscalls(self) -> None:
+        other_id = self.gen_random_contract_id()
+        self.runner.create_contract(other_id, self.blueprint_id, self.ctx, None)
+
+        properties = {'rng'}  # each property must be tested specifically
+        allowed_view_syscalls = {
+            'get_contract_id',
+            'get_blueprint_id',
+            'get_balance',
+            'get_balance_before_current_call',
+            'get_current_balance',
+            'can_mint',
+            'can_mint_before_current_call',
+            'can_melt',
+            'can_melt_before_current_call',
+            'call_view_method',
+        }
+
+        for method_name, method in BlueprintEnvironment.__dict__.items():
+            if '__' in method_name or method_name in properties:
+                continue
+
+            contract_id = self.gen_random_contract_id()
+            self.runner.create_contract(contract_id, self.blueprint_id, self.ctx, other_id)
+
+            if method_name in allowed_view_syscalls:
+                self.runner.call_view_method(contract_id, method_name)
+            else:
+                with pytest.raises(NCViewMethodError, match=f'@view method cannot call `syscall.{method_name}`'):
+                    self.runner.call_view_method(contract_id, method_name)

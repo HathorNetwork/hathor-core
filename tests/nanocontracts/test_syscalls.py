@@ -6,7 +6,7 @@ from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInvalidSyscall
-from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_type
+from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.types import (
     BlueprintId,
@@ -18,10 +18,10 @@ from hathor.nanocontracts.types import (
 )
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
-CONTRACT_NC_TYPE = make_nc_type_for_type(ContractId)
-BLUEPRINT_NC_TYPE = make_nc_type_for_type(BlueprintId)
-OPT_CONTRACT_NC_TYPE: NCType[ContractId | None] = make_nc_type_for_type(ContractId | None)  # type: ignore[arg-type]
-OPT_BLUEPRINT_NC_TYPE: NCType[BlueprintId | None] = make_nc_type_for_type(BlueprintId | None)  # type: ignore[arg-type]
+CONTRACT_NC_TYPE = make_nc_type(ContractId)
+BLUEPRINT_NC_TYPE = make_nc_type(BlueprintId)
+OPT_CONTRACT_NC_TYPE: NCType[ContractId | None] = make_nc_type(ContractId | None)  # type: ignore[arg-type]
+OPT_BLUEPRINT_NC_TYPE: NCType[BlueprintId | None] = make_nc_type(BlueprintId | None)  # type: ignore[arg-type]
 
 
 class MyBlueprint(Blueprint):
@@ -71,6 +71,24 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         self.nc_catalog.blueprints[self.my_blueprint_id] = MyBlueprint
         self.nc_catalog.blueprints[self.other_blueprint_id] = OtherBlueprint
+
+    def test_basics(self) -> None:
+        nc1_id = self.gen_random_contract_id()
+        nc2_id = self.gen_random_contract_id()
+
+        tx = self.get_genesis_tx()
+
+        ctx = Context([], tx, self.gen_random_address(), timestamp=0)
+        self.runner.create_contract(nc1_id, self.other_blueprint_id, ctx)
+        self.runner.create_contract(nc2_id, self.my_blueprint_id, ctx, nc1_id)
+
+        storage2 = self.runner.get_storage(nc2_id)
+
+        assert storage2.get_obj(b'my_nc_id', CONTRACT_NC_TYPE) == nc2_id
+        assert storage2.get_obj(b'other_nc_id', OPT_CONTRACT_NC_TYPE) == nc1_id
+
+        assert storage2.get_obj(b'my_blueprint_id', BLUEPRINT_NC_TYPE) == self.my_blueprint_id
+        assert storage2.get_obj(b'other_blueprint_id', OPT_BLUEPRINT_NC_TYPE) == self.other_blueprint_id
 
     def test_authorities(self) -> None:
         nc_id = self.gen_random_contract_id()

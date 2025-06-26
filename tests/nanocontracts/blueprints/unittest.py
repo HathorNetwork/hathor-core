@@ -3,6 +3,7 @@ from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Context
 from hathor.nanocontracts.blueprint import Blueprint
+from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
@@ -38,6 +39,38 @@ class BlueprintTestCase(unittest.TestCase):
     def build_manager(self) -> HathorManager:
         """Create a HathorManager instance."""
         return self.create_peer('testnet', nc_indices=True, nc_log_config=NCLogConfig.FAILED, wallet_index=True)
+
+    def get_readonly_contract(self, contract_id: ContractId) -> Blueprint:
+        """ Returns a read-only instance of a given contract to help testing it.
+
+        The returned instance cannot be used for writing, use `get_readwrite_contract` if you need to test writing.
+        """
+        return self._get_contract_instance(contract_id, locked=True)
+
+    def get_readwrite_contract(self, contract_id: ContractId) -> Blueprint:
+        """ Returns a read-write instance of a given contract to help testing it.
+
+        The returned instance can be used to write attributes, if you don't need to write anything it is recommended to
+        use `get_readonly_contract` instead to avoid accidental writes.
+        """
+        return self._get_contract_instance(contract_id, locked=False)
+
+    def _get_contract_instance(self, contract_id: ContractId, *, locked: bool) -> Blueprint:
+        """ Implementation of `get_readonly_contract` and `get_readwrite_contract`, only difference is `locked`
+        """
+        from hathor.nanocontracts.nc_exec_logs import NCLogger
+        runner = self.runner
+        contract_storage = runner.get_storage(contract_id)
+        if locked:
+            contract_storage.lock()
+        else:
+            contract_storage.unlock()
+        nc_logger = NCLogger(__reactor__=runner.reactor, __nc_id__=contract_id)
+        env = BlueprintEnvironment(runner, nc_logger, contract_storage, disable_cache=True)
+        blueprint_id = runner.get_blueprint_id(contract_id)
+        blueprint_class = runner.tx_storage.get_blueprint_class(blueprint_id)
+        contract = blueprint_class(env)
+        return contract
 
     def register_blueprint_class(self, blueprint_id: BlueprintId, blueprint_class: type[Blueprint]) -> None:
         """Register a blueprint class with a given id, allowing contracts to be created from it."""

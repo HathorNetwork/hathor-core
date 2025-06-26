@@ -15,7 +15,7 @@
 from collections.abc import Hashable, Mapping
 from functools import reduce
 from operator import or_
-from types import MappingProxyType as mappingproxy, UnionType
+from types import MappingProxyType as mappingproxy, NoneType, UnionType
 # XXX: ignore attr-defined because mypy doesn't recognize it, even though all version of python that we support; have
 #      this defined, even if it's an internal class
 from typing import _UnionGenericAlias  # type: ignore[attr-defined]
@@ -129,10 +129,12 @@ def _is_origin_hashable(origin_class: type) -> bool:
     return is_subclass(origin_class, Hashable)
 
 
-def _pretty_type(type_: type | UnionType) -> str:
+def pretty_type(type_: type | UnionType) -> str:
     """ Shows a cleaner string representation for a type.
     """
-    if hasattr(type_, '__args__'):
+    if type_ is NoneType or type_ is None:
+        return 'None'
+    elif hasattr(type_, '__args__'):
         return str(type_)
     else:
         return type_.__name__
@@ -151,7 +153,7 @@ def get_aliased_type(type_: type | UnionType, alias_map: TypeAliasMap, *, _verbo
     """
     new_type, replaced = _get_aliased_type(type_, alias_map)
     if replaced and _verbose:
-        logger.debug('type replaced', old=_pretty_type(type_), new=_pretty_type(new_type))
+        logger.debug('type replaced', old=pretty_type(type_), new=pretty_type(new_type))
     return new_type
 
 
@@ -230,7 +232,7 @@ def get_usable_origin_type(
     `TypeError` to indicate that the given type is not supported:
 
     >>> type_ = set[int]
-    >>> from hathor.nanocontracts.nc_types import _DEFAULT_TYPE_MAP as default_type_map
+    >>> from hathor.nanocontracts.nc_types import _FIELD_TYPE_MAP as default_type_map
     >>> origin = get_usable_origin_type(type_, type_map=default_type_map, _verbose=False)
     >>> assert origin in default_type_map.nc_types_map
     >>> origin

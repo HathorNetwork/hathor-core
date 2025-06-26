@@ -5,7 +5,7 @@ from typing import NamedTuple, Optional
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_type
+from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.types import (
     Address,
     Amount,
@@ -27,10 +27,10 @@ from tests.nanocontracts.test_blueprints.bet import Bet
 
 settings = HathorSettings()
 
-TX_OUTPUT_SCRIPT_NC_TYPE = make_nc_type_for_type(TxOutputScript)
-RESULT_NC_TYPE: NCType[str | None] = make_nc_type_for_type(str | None)  # type: ignore[arg-type]
-TIMESTAMP_NC_TYPE = make_nc_type_for_type(Timestamp)
-TOKEN_UID_NC_TYPE = make_nc_type_for_type(TokenUid)
+TX_OUTPUT_SCRIPT_NC_TYPE = make_nc_type(TxOutputScript)
+RESULT_NC_TYPE: NCType[str | None] = make_nc_type(str | None)  # type: ignore[arg-type]
+TIMESTAMP_NC_TYPE = make_nc_type(Timestamp)
+TOKEN_UID_NC_TYPE = make_nc_type(TokenUid)
 
 
 class BetInfo(NamedTuple):
