@@ -23,7 +23,7 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
-from hathor.nanocontracts.nc_types import make_nc_type_for_type
+from hathor.nanocontracts.nc_types import make_nc_type_for_field_type
 from hathor.nanocontracts.types import ContractId, VertexId
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 from hathor.wallet.exceptions import InvalidAddress
@@ -198,7 +198,7 @@ class NanoContractStateResource(Resource):
                 continue
 
             try:
-                field_nc_type = make_nc_type_for_type(field_type)
+                field_nc_type = make_nc_type_for_field_type(field_type)
                 value = nc_storage.get_obj(key_field.encode(), field_nc_type)
             except KeyError:
                 fields[field] = NCValueErrorResponse(errmsg='field not found')

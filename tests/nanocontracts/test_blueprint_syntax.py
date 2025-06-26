@@ -324,7 +324,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
                     pass
 
     def test_invalid_field_type(self) -> None:
-        msg = 'unsupported field type `float` on field `a`'
+        msg = 'unsupported field type: `a: float`'
         with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
             class MyBlueprint(Blueprint):
                 a: float

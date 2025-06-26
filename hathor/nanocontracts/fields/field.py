@@ -67,10 +67,11 @@ class Field(Generic[T], ABC):
         if origin_type in type_map.fields_map:
             field_class = type_map.fields_map[origin_type]
             return field_class._from_name_and_type(name, type_, type_map=type_map)
-        elif NCType.is_supported(origin_type, type_map=type_map.to_nc_type_map()):
-            return NCTypeField._from_name_and_type(name, type_, type_map=type_map)
         else:
-            raise TypeError(f'type {type_} is not supported by any Field class')
+            try:
+                return NCTypeField._from_name_and_type(name, type_, type_map=type_map)
+            except TypeError as e:
+                raise TypeError(f'type {type_} is not supported by any Field class') from e
 
     @classmethod
     @abstractmethod

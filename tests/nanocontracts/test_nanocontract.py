@@ -15,7 +15,7 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInvalidSignature
 from hathor.nanocontracts.method import Method
-from hathor.nanocontracts.nc_types import make_nc_type_for_type
+from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.types import (
     NCActionType,
     NCDepositAction,
@@ -42,8 +42,8 @@ from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT,
 from hathor.wallet import KeyPair
 from tests import unittest
 
-STR_NC_TYPE = make_nc_type_for_type(str)
-INT_NC_TYPE = make_nc_type_for_type(int)
+STR_NC_TYPE = make_nc_type(str)
+INT_NC_TYPE = make_nc_type(int)
 
 
 class MyBlueprint(Blueprint):

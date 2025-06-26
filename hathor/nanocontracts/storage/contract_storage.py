@@ -282,6 +282,7 @@ class NCContractStorage:
 
     def set_blueprint_id(self, blueprint_id: BlueprintId, /) -> None:
         """Set a new blueprint id for the contract."""
+        self.check_if_locked()
         return self._put_metadata(_BLUEPRINT_ID_KEY, blueprint_id)
 
     def get_balance(self, token_uid: bytes) -> Balance:

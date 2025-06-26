@@ -24,17 +24,16 @@ from typing_extensions import Self, assert_never, override
 from hathor.nanocontracts import Context
 from hathor.nanocontracts.exception import NCFail, NCSerializationArgTooLong, NCSerializationError
 from hathor.nanocontracts.nc_types import (
-    ESSENTIAL_TYPE_ALIAS_MAP,
-    EXTENDED_TYPE_TO_NC_TYPE_MAP,
     NCType,
     VarUint32NCType,
+    make_nc_type_for_arg_type,
+    make_nc_type_for_return_type,
 )
 from hathor.nanocontracts.utils import is_nc_public_method
 from hathor.serialization import Deserializer, SerializationError, Serializer
 from hathor.serialization.adapters import MaxBytesExceededError
 
 _num_args_nc_type = VarUint32NCType()
-_TYPE_MAP = NCType.TypeMap(ESSENTIAL_TYPE_ALIAS_MAP, EXTENDED_TYPE_TO_NC_TYPE_MAP)
 T = TypeVar('T')
 
 MAX_BYTES_SERIALIZED_ARG: int = 1000
@@ -63,10 +62,6 @@ def _serialize_map_exception(nc_type: NCType[T], value: T) -> bytes:
     except SerializationError as e:
         raise NCSerializationError from e
     return bytes(serializer.finalize())
-
-
-def _make_nc_type_for_type(type_: type[T], /) -> NCType[T]:
-    return NCType.from_type(type_, type_map=_TYPE_MAP)
 
 
 class _ArgsNCType(NCType):
@@ -145,7 +140,7 @@ class ArgsOnly:
     def from_arg_types(cls, arg_types: tuple[type, ...]) -> Self:
         args_nc_types: list[NCType] = []
         for arg_type in arg_types:
-            args_nc_types.append(_make_nc_type_for_type(arg_type))
+            args_nc_types.append(make_nc_type_for_arg_type(arg_type))
 
         return cls(_ArgsNCType(args_nc_types, max_bytes=MAX_BYTES_SERIALIZED_ARG))
 
@@ -169,9 +164,8 @@ class Method:
     This abstraction is used to (de)serialize the arguments of a method call, and (de)serialize the result of a method
     call. It may also be used to transmit values when a nano-method calls another nano-method.
 
-    Differently from the default map used by `make_nc_type_for_type`, this class uses the extended map, which means
-    that when the method's type signature requests a `dict`, it will produce a `dict` instead of a `mappingproxy` when
-    deserilizing. This is makes sense for values used on method calls.
+    For arguments, `make_nc_type_for_arg_type` is used, which tends to preserve original types as much as possible, but
+    for return types `make_nc_type_for_return_type` is used, which supports `None`.
     """
     args: _ArgsNCType
     return_: NCType
@@ -250,11 +244,11 @@ class Method:
             # XXX: this can (and probably will) be implemented in the future
             if param.default is not EMPTY:
                 raise TypeError('default values are not supported')
-            args_nc_types.append(_make_nc_type_for_type(param.annotation))
+            args_nc_types.append(make_nc_type_for_arg_type(param.annotation))
 
         return cls(
             _ArgsNCType(args_nc_types, max_bytes=MAX_BYTES_SERIALIZED_ARG),
-            _make_nc_type_for_type(method_signature.return_annotation),
+            make_nc_type_for_return_type(method_signature.return_annotation),
         )
 
     def serialize_args_bytes(self, args: tuple[Any, ...] | list[Any]) -> bytes:

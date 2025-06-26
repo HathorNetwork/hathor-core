@@ -1,11 +1,11 @@
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.nc_types import make_nc_type_for_type
+from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from tests.nanocontracts.test_blueprints.swap_demo import InvalidActions, InvalidRatio, InvalidTokens, SwapDemo
 
-SWAP_NC_TYPE = make_nc_type_for_type(int)
+SWAP_NC_TYPE = make_nc_type(int)
 
 
 class SwapDemoTestCase(BlueprintTestCase):

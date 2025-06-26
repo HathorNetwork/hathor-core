@@ -85,7 +85,7 @@ def test_isdisjoint() -> None:
     assert not my_set.isdisjoint({3})
 
 
-def issuperset() -> None:
+def test_issuperset() -> None:
     storage = MockNCStorage()
     my_set = SetStorageContainer(storage, 'my_set', _INT_NC_TYPE)
     my_set.update({1, 2, 3})
@@ -97,7 +97,7 @@ def issuperset() -> None:
     assert not my_set.issuperset({1, 2, 3, 4})
 
 
-def intersection() -> None:
+def test_intersection() -> None:
     storage = MockNCStorage()
     my_set = SetStorageContainer(storage, 'my_set', _INT_NC_TYPE)
     my_set.update({1, 2, 3})

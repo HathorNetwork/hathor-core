@@ -18,7 +18,7 @@ class NCBlockSorterTestCase(unittest.TestCase):
             self.nc_nodes[i] = VertexId(f'nc-{i}'.encode('ascii'))
 
     def test_all_independent(self) -> None:
-        sorter = NCBlockSorter()
+        sorter = NCBlockSorter(set(self.nodes.values()))
         for node in self.nodes.values():
             sorter.get_node(node)
 
@@ -37,15 +37,13 @@ class NCBlockSorterTestCase(unittest.TestCase):
             self.assertNotEqual(order, order2)
 
     def test_single_one_step_dependencies(self) -> None:
-        sorter = NCBlockSorter()
+        sorter = NCBlockSorter(set(self.nc_nodes.values()))
 
         # Generate the following graph:
         # 0 -> NC0 -> 1 -> NC1 -> 2 -> NC2 -> 3 -> ...
         for i in range(len(self.nodes) - 1):
             sorter.add_edge(self.nodes[i], self.nc_nodes[i])
             sorter.add_edge(self.nc_nodes[i], self.nodes[i + 1])
-        for _id in self.nodes.values():
-            sorter.remove_vertex(_id)
 
         seed = self.rng.randbytes(32)
         order = sorter.copy().generate_random_topological_order(seed)
@@ -58,7 +56,7 @@ class NCBlockSorterTestCase(unittest.TestCase):
             self.assertEqual(order, order2)
 
     def test_single_long_dependencies(self) -> None:
-        sorter = NCBlockSorter()
+        sorter = NCBlockSorter(set(self.nc_nodes.values()))
 
         # Generate the following graph:
         # 0 -> NC0 -> 1 -> 2 -> 3 -> 4 -> NC4 -> 5 -> 6 -> 7 -> 8 -> NC8 -> ...
@@ -68,8 +66,6 @@ class NCBlockSorterTestCase(unittest.TestCase):
                 sorter.add_edge(self.nc_nodes[i], self.nodes[i + 1])
             else:
                 sorter.add_edge(self.nodes[i], self.nodes[i + 1])
-        for _id in self.nodes.values():
-            sorter.remove_vertex(_id)
 
         seed = self.rng.randbytes(32)
         order = sorter.copy().generate_random_topological_order(seed)
@@ -82,14 +78,12 @@ class NCBlockSorterTestCase(unittest.TestCase):
             self.assertEqual(order, order2)
 
     def test_linear_multiple_dependencies(self) -> None:
-        sorter = NCBlockSorter()
+        sorter = NCBlockSorter(set(self.nc_nodes.values()))
         sorter.add_edge(self.nc_nodes[0], self.nodes[1])
         sorter.add_edge(self.nodes[1], self.nodes[2])
         sorter.add_edge(self.nodes[2], self.nodes[3])
         sorter.add_edge(self.nodes[3], self.nodes[4])
         sorter.add_edge(self.nodes[4], self.nc_nodes[5])
-        for _id in self.nodes.values():
-            sorter.remove_vertex(_id, discard=True)
 
         seed = self.rng.randbytes(32)
         order = sorter.copy().generate_random_topological_order(seed)
@@ -99,7 +93,7 @@ class NCBlockSorterTestCase(unittest.TestCase):
         ])
 
     def test_grid_multiple_dependencies(self) -> None:
-        sorter = NCBlockSorter()
+        sorter = NCBlockSorter(set(self.nc_nodes.values()))
 
         idx = 0
         n_layers = 10
@@ -125,9 +119,6 @@ class NCBlockSorterTestCase(unittest.TestCase):
                         sorter.add_edge(previous[j - 1], vertex_id)
                     sorter.add_edge(previous[j], vertex_id)
             layers.append(current)
-
-        for _id in self.nodes.values():
-            sorter.remove_vertex(_id, discard=True)
 
         seed = self.rng.randbytes(32)
         order = sorter.copy().generate_random_topological_order(seed)
