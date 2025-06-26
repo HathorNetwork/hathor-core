@@ -132,8 +132,8 @@ class IndexesManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def enable_nc_indices(self) -> None:
-        """Enable Nano Contract related indices."""
+    def enable_nc_indexes(self) -> None:
+        """Enable Nano Contract related indexes."""
         raise NotImplementedError
 
     def force_clear_all(self) -> None:
@@ -483,7 +483,7 @@ class RocksDBIndexesManager(IndexesManager):
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
             self.mempool_tips = MemoryMempoolTipsIndex(settings=self.settings)
 
-    def enable_nc_indices(self) -> None:
+    def enable_nc_indexes(self) -> None:
         from hathor.indexes.blueprint_timestamp_index import BlueprintTimestampIndex
         from hathor.indexes.rocksdb_blueprint_history_index import RocksDBBlueprintHistoryIndex
         from hathor.indexes.rocksdb_nc_history_index import RocksDBNCHistoryIndex

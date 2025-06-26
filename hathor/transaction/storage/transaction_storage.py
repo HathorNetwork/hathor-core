@@ -1150,12 +1150,7 @@ class TransactionStorage(ABC):
         else:
             block_storage = self._nc_storage_factory.get_empty_block_storage()
 
-        try:
-            contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(contract_id)))
-        except KeyError:
-            from hathor.nanocontracts.exception import NanoContractDoesNotExist
-            raise NanoContractDoesNotExist(contract_id.hex())
-        return contract_storage
+        return block_storage.get_contract_storage(ContractId(NCVertexId(contract_id)))
 
     def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
         from hathor.nanocontracts.exception import BlueprintDoesNotExist
