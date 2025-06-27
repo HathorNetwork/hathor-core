@@ -12,12 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from enum import Enum, unique
+from enum import StrEnum, auto, unique
 
 
 @unique
-class NCExecutionState(str, Enum):
-    PENDING = 'pending'  # aka, not even tried to execute it
-    SUCCESS = 'success'  # execution was sucessful
-    FAILURE = 'failure'  # execution failed and the transaction is voided
-    SKIPPED = 'skipped'  # execution was skipped, usually because the transaction was voided
+class NCExecutionState(StrEnum):
+    PENDING = auto()  # aka, not even tried to execute it
+    SUCCESS = auto()  # execution was sucessful
+    FAILURE = auto()  # execution failed and the transaction is voided
+    SKIPPED = auto()  # execution was skipped, usually because the transaction was voided

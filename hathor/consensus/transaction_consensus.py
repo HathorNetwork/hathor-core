@@ -176,6 +176,7 @@ class TransactionConsensusAlgorithm:
     def update_voided_info(self, tx: Transaction) -> None:
         """ This method should be called only once when the transactions is added to the DAG.
         """
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
         assert tx.storage is not None
 
         voided_by: set[bytes] = set()
@@ -188,7 +189,7 @@ class TransactionConsensusAlgorithm:
                     self.context.consensus.filter_out_voided_by_entries_from_parents(parent, parent_meta.voided_by)
                 )
         assert self._settings.SOFT_VOIDED_ID not in voided_by
-        assert self._settings.NC_EXECUTION_FAIL_ID not in voided_by
+        assert NC_EXECUTION_FAIL_ID not in voided_by
         assert not (self.context.consensus.soft_voided_tx_ids & voided_by)
 
         # Union of voided_by of inputs
@@ -198,9 +199,9 @@ class TransactionConsensusAlgorithm:
             if spent_meta.voided_by:
                 voided_by.update(spent_meta.voided_by)
                 voided_by.discard(self._settings.SOFT_VOIDED_ID)
-                voided_by.discard(self._settings.NC_EXECUTION_FAIL_ID)
+                voided_by.discard(NC_EXECUTION_FAIL_ID)
         assert self._settings.SOFT_VOIDED_ID not in voided_by
-        assert self._settings.NC_EXECUTION_FAIL_ID not in voided_by
+        assert NC_EXECUTION_FAIL_ID not in voided_by
 
         # Update accumulated weight of the transactions voiding us.
         assert tx.hash not in voided_by
@@ -262,6 +263,7 @@ class TransactionConsensusAlgorithm:
 
     def assert_voided_with_first_block(self, tx: BaseTransaction) -> None:
         """Assert the voided transaction with first block is valid."""
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
         assert tx.storage is not None
 
         meta = tx.get_metadata()
@@ -269,7 +271,7 @@ class TransactionConsensusAlgorithm:
         if bool(self.context.consensus.soft_voided_tx_ids & meta.voided_by):
             # Soft voided txs can be confirmed by blocks.
             return
-        if self._settings.NC_EXECUTION_FAIL_ID in meta.voided_by:
+        if NC_EXECUTION_FAIL_ID in meta.voided_by:
             # Nano transactions that failed execution can be confirmed by blocks.
             assert tx.is_nano_contract()
             return
@@ -278,7 +280,7 @@ class TransactionConsensusAlgorithm:
             tx2 = cast(Transaction, tx.storage.get_transaction(h))
             tx2_meta = tx2.get_metadata()
             assert tx2_meta.voided_by
-            if self._settings.NC_EXECUTION_FAIL_ID in tx2_meta.voided_by:
+            if NC_EXECUTION_FAIL_ID in tx2_meta.voided_by:
                 assert tx2.is_nano_contract()
                 return
         raise AssertionError
@@ -422,6 +424,7 @@ class TransactionConsensusAlgorithm:
 
     def has_only_nc_execution_fail_id(self, tx: Transaction) -> bool:
         """Return true if the only reason that tx is voided is because of nano execution failures."""
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
         meta = tx.get_metadata()
 
         if meta.voided_by is None:
@@ -429,7 +432,7 @@ class TransactionConsensusAlgorithm:
         assert meta.voided_by
 
         if tx.hash in meta.voided_by:
-            if self._settings.NC_EXECUTION_FAIL_ID not in meta.voided_by:
+            if NC_EXECUTION_FAIL_ID not in meta.voided_by:
                 # If tx has a conflict, it is voiding itself but did not failed nano execution,
                 # then we can safely return False.
                 return False
@@ -437,7 +440,7 @@ class TransactionConsensusAlgorithm:
         for h in meta.voided_by:
             if h == tx.hash:
                 continue
-            if h == self._settings.NC_EXECUTION_FAIL_ID:
+            if h == NC_EXECUTION_FAIL_ID:
                 continue
             if h == self._settings.SOFT_VOIDED_ID:
                 return False
@@ -445,9 +448,9 @@ class TransactionConsensusAlgorithm:
             tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
             tx2_voided_by: set[VertexId] = tx2_meta.voided_by or set()
-            if self._settings.NC_EXECUTION_FAIL_ID not in tx2_voided_by:
+            if NC_EXECUTION_FAIL_ID not in tx2_voided_by:
                 return False
-            assert tx2_voided_by == {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+            assert tx2_voided_by == {tx2.hash, NC_EXECUTION_FAIL_ID}
 
         return True
 

@@ -1,4 +1,4 @@
-from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.exception import NCFail
 from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
@@ -60,7 +60,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
 
         assert nc1.get_metadata().voided_by is None
         assert tx2.get_metadata().voided_by is None
-        assert tx3.get_metadata().voided_by == {tx3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
         assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
         assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
         assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
@@ -111,8 +111,8 @@ class NCBlueprintTestCase(BlueprintTestCase):
         b31, b32 = artifacts.get_typed_vertices(['b31', 'b32'], Block)
 
         assert nc1.get_metadata().voided_by is None
-        assert tx2.get_metadata().voided_by == {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
-        assert tx3.get_metadata().voided_by == {tx3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx2.get_metadata().voided_by == {tx2.hash, NC_EXECUTION_FAIL_ID}
+        assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
         assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
         assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
         assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
@@ -174,9 +174,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
         b31, b32 = artifacts.get_typed_vertices(['b31', 'b32'], Block)
 
         assert nc1.get_metadata().voided_by is None
-        assert tx1.get_metadata().voided_by == {tx1.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx1.get_metadata().voided_by == {tx1.hash, NC_EXECUTION_FAIL_ID}
         assert tx2.get_metadata().voided_by == {tx1.hash}
-        assert tx3.get_metadata().voided_by == {tx3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
         assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
         assert tx1.get_metadata().nc_execution is NCExecutionState.FAILURE
         assert tx2.get_metadata().nc_execution is NCExecutionState.SKIPPED
@@ -229,7 +229,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert nc1.get_metadata().voided_by is None
         assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
 
-        assert tx2.get_metadata().voided_by == {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx2.get_metadata().voided_by == {tx2.hash, NC_EXECUTION_FAIL_ID}
         assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
         assert_nc_failure_reason(
             manager=self.manager,
@@ -284,7 +284,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert tx2.get_metadata().voided_by is None
         assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
 
-        assert tx3.get_metadata().voided_by == {tx3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
         assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
 
         assert tx4.get_metadata().voided_by is None
@@ -352,7 +352,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert nc2.get_metadata().voided_by is None
 
         assert nc3.get_metadata().nc_execution is NCExecutionState.FAILURE
-        assert nc3.get_metadata().voided_by == {nc3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert nc3.get_metadata().voided_by == {nc3.hash, NC_EXECUTION_FAIL_ID}
         assert_nc_failure_reason(
             manager=self.manager,
             tx_id=nc3.hash,
@@ -407,7 +407,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert nc1.get_metadata().voided_by is None
 
         if nc2.get_metadata().nc_execution is NCExecutionState.FAILURE:
-            assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+            assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
             assert_nc_failure_reason(
                 manager=self.manager,
                 tx_id=nc2.hash,
