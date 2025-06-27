@@ -2,6 +2,8 @@ import os
 import re
 from typing import NamedTuple, Optional
 
+import pytest
+
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.context import Context
@@ -40,6 +42,7 @@ class BetInfo(NamedTuple):
     score: str
 
 
+@pytest.mark.does_metered_call
 class NCBetBlueprintTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
