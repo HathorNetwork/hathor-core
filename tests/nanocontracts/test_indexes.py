@@ -3,7 +3,7 @@ from typing import Any, Optional
 from hathor.conf import HathorSettings
 from hathor.dag_builder.artifacts import DAGArtifacts
 from hathor.manager import HathorManager
-from hathor.nanocontracts import Blueprint, Context, NCFail, public
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.types import NCActionType
@@ -203,7 +203,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
 
         # tx1 succeeded; tx2 failed so tx3 must be voided
         self.assertIsNone(meta1.voided_by)
-        self.assertEqual(meta2.voided_by, {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(meta2.voided_by, {tx2.hash, NC_EXECUTION_FAIL_ID})
         self.assertEqual(meta3.voided_by, {tx2.hash})
 
         # check we are not using tx3 as parents for transactions

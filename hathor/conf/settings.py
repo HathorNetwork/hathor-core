@@ -456,9 +456,6 @@ class HathorSettings(NamedTuple):
     NATIVE_TOKEN_NAME: str = 'Hathor'
     NATIVE_TOKEN_SYMBOL: str = 'HTR'
 
-    # Identifier used in metadata's voided_by when a Nano Contract method fails.
-    NC_EXECUTION_FAIL_ID: bytes = b'nc-fail'
-
     # The pubkeys allowed to create on-chain-blueprints in the network
     # XXX: in the future this restriction will be lifted, possibly through a feature activation
     NC_ON_CHAIN_BLUEPRINT_RESTRICTED: bool = True

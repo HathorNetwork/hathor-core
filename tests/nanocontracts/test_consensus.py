@@ -3,7 +3,7 @@ from typing import Any, cast
 from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key_bytes
 from hathor.exception import InvalidNewTransaction
-from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail, NCInvalidSignature
 from hathor.nanocontracts.method import Method
@@ -208,7 +208,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         meta = tx.get_metadata()
         self.assertIsNotNone(meta.first_block)
-        self.assertEqual(meta.voided_by, {tx.hash, settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(meta.voided_by, {tx.hash, NC_EXECUTION_FAIL_ID})
 
         # add another block that confirms tx
         self._add_new_block(tx_parents=[
@@ -365,7 +365,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         meta4 = tx4.get_metadata()
         self.assertIsNotNone(meta4.first_block)
-        self.assertEqual(meta4.voided_by, {tx4.hash, settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(meta4.voided_by, {tx4.hash, NC_EXECUTION_FAIL_ID})
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(Balance(value=1, can_mint=False, can_melt=False), nc_storage.get_balance(self.token_uid))
@@ -429,7 +429,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         # confirm that tx1 failed execution.
         meta = tx1.get_metadata()
         self.assertIsNotNone(meta.first_block)
-        self.assertEqual(meta.voided_by, {settings.NC_EXECUTION_FAIL_ID, tx1.hash})
+        self.assertEqual(meta.voided_by, {NC_EXECUTION_FAIL_ID, tx1.hash})
 
         # tx21 must be voided because it spends an input from tx and tx failed execution.
         self.assertEqual(tx21_meta.voided_by, {tx1.hash})
@@ -520,7 +520,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
 
         # assert state after execution (tx1 fails, tx2 executes)
-        self.assertEqual(tx1.get_metadata().voided_by, {tx1.hash, settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(tx1.get_metadata().voided_by, {tx1.hash, NC_EXECUTION_FAIL_ID})
         self.assertIsNone(tx2.get_metadata().voided_by)
         self.assertIsNone(tx3.get_metadata().voided_by)
         self.assertEqual(tx4.get_metadata().voided_by, {tx1.hash})
@@ -662,7 +662,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.assertIsNone(tx1.get_metadata().voided_by)
         self.assertIsNone(tx2.get_metadata().voided_by)
-        self.assertEqual(tx11.get_metadata().voided_by, {tx11.hash, settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(tx11.get_metadata().voided_by, {tx11.hash, NC_EXECUTION_FAIL_ID})
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
@@ -747,7 +747,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.assertIsNone(tx1.get_metadata().voided_by)
         self.assertIsNone(tx2.get_metadata().voided_by)
-        self.assertEqual(tx11.get_metadata().voided_by, {tx11.hash, settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(tx11.get_metadata().voided_by, {tx11.hash, NC_EXECUTION_FAIL_ID})
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
@@ -1016,7 +1016,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertEqual(meta3.first_block, b33.hash)
 
         self.assertIsNone(meta1.voided_by)
-        self.assertEqual(meta2.voided_by, {tx2.hash, self._settings.NC_EXECUTION_FAIL_ID})
+        self.assertEqual(meta2.voided_by, {tx2.hash, NC_EXECUTION_FAIL_ID})
         self.assertEqual(meta3.voided_by, {tx2.hash})
 
     def test_reexecute_fail_on_reorg_different_blocks(self) -> None:
@@ -1065,7 +1065,7 @@ class NCConsensusTestCase(SimulatorTestCase):
                 found_b33 = True
                 assert b33.get_metadata().voided_by is None
                 assert nc1.get_metadata().voided_by is None
-                assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+                assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
                 assert nc3.get_metadata().voided_by == {nc2.hash}
 
                 assert nc1.get_metadata().first_block == b31.hash
@@ -1078,7 +1078,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         assert b33.get_metadata().voided_by == {b33.hash}
         assert a34.get_metadata().voided_by is None
         assert nc1.get_metadata().voided_by is None
-        assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
         assert nc3.get_metadata().voided_by == {nc2.hash}
 
         assert nc1.get_metadata().first_block == b31.hash
@@ -1132,7 +1132,7 @@ class NCConsensusTestCase(SimulatorTestCase):
                 found_b33 = True
                 assert b33.get_metadata().voided_by is None
                 assert nc1.get_metadata().voided_by is None
-                assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+                assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
                 assert nc3.get_metadata().voided_by == {nc2.hash}
 
                 assert nc1.get_metadata().first_block == b31.hash
@@ -1145,7 +1145,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         assert b33.get_metadata().voided_by == {b33.hash}
         assert a34.get_metadata().voided_by is None
         assert nc1.get_metadata().voided_by is None
-        assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
         assert nc3.get_metadata().voided_by == {nc2.hash}
 
         assert nc1.get_metadata().first_block == b31.hash
@@ -1212,7 +1212,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         assert b33.get_metadata().voided_by is None
         assert nc1.get_metadata().voided_by is None
-        assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
         assert nc3.get_metadata().voided_by == {nc2.hash}
         assert nc4.get_metadata().voided_by is None
 
@@ -1293,7 +1293,7 @@ class NCConsensusTestCase(SimulatorTestCase):
                 found_b33 = True
                 assert b33.get_metadata().voided_by is None
                 assert nc1.get_metadata().voided_by is None
-                assert nc2.get_metadata().voided_by == {nc2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+                assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
                 assert nc3.get_metadata().voided_by == {nc2.hash}
                 assert nc4.get_metadata().voided_by is None
 
@@ -1395,7 +1395,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         assert tx1.get_metadata().voided_by is None
         assert tx2.get_metadata().voided_by is None
-        assert tx3.get_metadata().voided_by == {tx3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
         assert tx4.get_metadata().voided_by == {tx3.hash, tx4.hash}
         assert tx5.get_metadata().voided_by is None
 

@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable
+from typing import Protocol
 
 from hathor.transaction import Block, Transaction
 
-NCSorterCallable = Callable[[Block, list[Transaction]], list[Transaction]]
+
+class NCSorterCallable(Protocol):
+    def __call__(self, block: Block, nc_calls: list[Transaction]) -> list[Transaction]:
+        ...

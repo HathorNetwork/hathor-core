@@ -18,7 +18,7 @@ from unittest.mock import ANY
 import pytest
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts import Blueprint, Context, NCFail, public
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
 from hathor.nanocontracts.exception import NCError, NCInvalidMethodCall
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.nc_exec_logs import NCCallBeginEntry, NCCallEndEntry
@@ -202,7 +202,7 @@ class TestFallbackMethod(BlueprintTestCase):
         assert nc2.get_metadata().voided_by is None
 
         # nc3 fails because the fallback method is not expecting these args_bytes
-        assert nc3.get_metadata().voided_by == {nc3.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert nc3.get_metadata().voided_by == {nc3.hash, NC_EXECUTION_FAIL_ID}
         assert_nc_failure_reason(
             manager=self.manager,
             tx_id=nc3.hash,
