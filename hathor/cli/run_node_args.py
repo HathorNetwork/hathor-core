@@ -88,6 +88,5 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_enable_ipv6: bool
     x_disable_ipv4: bool
     localnet: bool
-    nc_history_index: bool
-    nc_indices: bool
+    nc_indexes: bool
     nc_exec_logs: NCLogConfig

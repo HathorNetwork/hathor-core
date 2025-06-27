@@ -47,7 +47,7 @@ class NCCreationResource(Resource):
 
         if not self.nc_creation_index or not self.nc_history_index or not self.bp_history_index:
             request.setResponseCode(503)
-            error_response = ErrorResponse(success=False, error='NC indices not initialized')
+            error_response = ErrorResponse(success=False, error='NC indexes not initialized, use --nc-indexes')
             return error_response.json_dumpb()
 
         params = NCCreationParams.from_request(request)

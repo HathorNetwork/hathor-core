@@ -38,7 +38,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
             'testnet',
             unlock_wallet=True,
             wallet_index=True,
-            nc_indices=True,
+            nc_indexes=True,
         )
         self.tx_storage = self.manager.tx_storage
 

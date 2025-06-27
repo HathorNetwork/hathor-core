@@ -149,7 +149,7 @@ class CallRecord:
     # Keep track of all changes made by this call.
     changes_tracker: NCChangesTracker
 
-    # A list of syscalls that affect indices. None when it's a VIEW call.
+    # A list of syscalls that affect indexes. None when it's a VIEW call.
     index_updates: list[NCSyscallRecord] | None
 
 

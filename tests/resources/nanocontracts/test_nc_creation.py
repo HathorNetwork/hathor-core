@@ -32,7 +32,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.manager = self.create_peer(
             'testnet',
-            nc_indices=True,
+            nc_indexes=True,
         )
         self.web = StubSite(NCCreationResource(self.manager))
         self.genesis_private_key = get_genesis_key()

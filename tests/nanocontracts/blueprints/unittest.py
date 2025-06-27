@@ -38,7 +38,7 @@ class BlueprintTestCase(unittest.TestCase):
 
     def build_manager(self) -> HathorManager:
         """Create a HathorManager instance."""
-        return self.create_peer('testnet', nc_indices=True, nc_log_config=NCLogConfig.FAILED, wallet_index=True)
+        return self.create_peer('testnet', nc_indexes=True, nc_log_config=NCLogConfig.FAILED, wallet_index=True)
 
     def get_readonly_contract(self, contract_id: ContractId) -> Blueprint:
         """ Returns a read-only instance of a given contract to help testing it.
