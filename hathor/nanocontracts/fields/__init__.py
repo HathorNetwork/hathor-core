@@ -20,11 +20,11 @@ from hathor.nanocontracts.fields.dict_field import DictField
 from hathor.nanocontracts.fields.field import Field
 from hathor.nanocontracts.fields.set_field import SetField
 from hathor.nanocontracts.fields.utils import TypeToFieldMap
-from hathor.nanocontracts.nc_types import DEFAULT_TYPE_ALIAS_MAP, DEFAULT_TYPE_TO_NC_TYPE_MAP
+from hathor.nanocontracts.nc_types import DEFAULT_TYPE_ALIAS_MAP, FIELD_TYPE_TO_NC_TYPE_MAP
 from hathor.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
 
 __all__ = [
-    'DEFAULT_TYPE_TO_FIELD_MAP',
+    'TYPE_TO_FIELD_MAP',
     'DequeField',
     'DictField',
     'Field',
@@ -35,12 +35,12 @@ __all__ = [
 
 T = TypeVar('T')
 
-DEFAULT_TYPE_TO_FIELD_MAP: TypeToFieldMap = {
+TYPE_TO_FIELD_MAP: TypeToFieldMap = {
     dict: DictField,
     list: DequeField,  # XXX: we should really make a ListField, a deque is different from a list
     set: SetField,
     deque: DequeField,
-    # XXX: other types fallback to DEFAULT_TYPE_TO_NC_TYPE_MAP
+    # XXX: other types fallback to FIELD_TYPE_TO_NC_TYPE_MAP
 }
 
 
@@ -49,8 +49,8 @@ def make_field_for_type(
     type_: type[T],
     /,
     *,
-    type_field_map: TypeToFieldMap = DEFAULT_TYPE_TO_FIELD_MAP,
-    type_nc_type_map: TypeToNCTypeMap = DEFAULT_TYPE_TO_NC_TYPE_MAP,
+    type_field_map: TypeToFieldMap = TYPE_TO_FIELD_MAP,
+    type_nc_type_map: TypeToNCTypeMap = FIELD_TYPE_TO_NC_TYPE_MAP,
     type_alias_map: TypeAliasMap = DEFAULT_TYPE_ALIAS_MAP,
 ) -> Field[T]:
     """ Like Field.from_name_and_type, but with default maps.

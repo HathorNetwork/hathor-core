@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.exception import BlueprintSyntaxError
+from hathor.nanocontracts.nc_types.utils import pretty_type
 from hathor.nanocontracts.types import NC_FALLBACK_METHOD, NC_INITIALIZE_METHOD, NC_METHOD_TYPE_ATTR, NCMethodType
 
 if TYPE_CHECKING:
@@ -79,7 +80,7 @@ class _BlueprintBase(type):
                     field = make_field_for_type(field_name, field_type)
                 except TypeError:
                     raise BlueprintSyntaxError(
-                        f'unsupported field type `{field_type.__name__}` on field `{field_name}`'
+                        f'unsupported field type: `{field_name}: {pretty_type(field_type)}`'
                     )
                 setattr(new_class, field_name, field)
             else:

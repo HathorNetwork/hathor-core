@@ -167,6 +167,7 @@ class Runner:
         if diff <= 0 or diff > MAX_SEQNUM_JUMP_SIZE:
             # Fail execution if seqnum is invalid.
             self._last_call_info = self._build_call_info(contract_id)
+            # TODO: Set the seqnum in this case?
             raise NCFail(f'invalid seqnum (diff={diff})')
         self.block_storage.set_address_seqnum(Address(nano_header.nc_address), nano_header.nc_seqnum)
 
@@ -249,7 +250,6 @@ class Runner:
         nc_args: NCArgs,
     ) -> Any:
         """Call a contract public method with pre-constructed NCArgs."""
-        from hathor.nanocontracts.types import NC_INITIALIZE_METHOD
         if method_name == NC_INITIALIZE_METHOD:
             raise NCInvalidInitializeMethodCall(
                 'Cannot call initialize from call_public_method(); use create_contract() instead.'

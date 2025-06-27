@@ -47,10 +47,11 @@ from hathor.nanocontracts.types import (
 )
 
 __all__ = [
+    'ARG_TYPE_TO_NC_TYPE_MAP',
     'DEFAULT_TYPE_ALIAS_MAP',
-    'DEFAULT_TYPE_TO_NC_TYPE_MAP',
     'ESSENTIAL_TYPE_ALIAS_MAP',
-    'EXTENDED_TYPE_TO_NC_TYPE_MAP',
+    'FIELD_TYPE_TO_NC_TYPE_MAP',
+    'RETURN_TYPE_TO_NC_TYPE_MAP',
     'AddressNCType',
     'BoolNCType',
     'BytesLikeNCType',
@@ -61,7 +62,9 @@ __all__ = [
     'FrozenSetNCType',
     'Int32NCType',
     'ListNCType',
+    'NCType',
     'NamedTupleNCType',
+    'NullNCType',
     'OptionalNCType',
     'SetNCType',
     'SignedDataNCType',
@@ -69,10 +72,11 @@ __all__ = [
     'TupleNCType',
     'TypeAliasMap',
     'TypeToNCTypeMap',
-    'NCType',
     'VarInt32NCType',
     'VarUint32NCType',
-    'make_nc_type_for_type',
+    'make_nc_type_for_field_type',
+    'make_nc_type_for_arg_type',
+    'make_nc_type_for_return_type',
 ]
 
 T = TypeVar('T')
@@ -95,7 +99,7 @@ DEFAULT_TYPE_ALIAS_MAP: TypeAliasMap = {
 }
 
 # Mapping between types and NCType classes.
-DEFAULT_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
+FIELD_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     # builtin types:
     bool: BoolNCType,
     bytes: BytesNCType,
@@ -104,14 +108,11 @@ DEFAULT_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     int: VarInt32NCType,
     str: StrNCType,
     tuple: TupleNCType,
-    # XXX: ignored dict-item because technically None is not a type, type[None]/NoneType is
-    None: NullNCType,  # type: ignore[dict-item]
     # other Python types:
     # XXX: ignored dict-item because Union is not considered a type, so mypy fails it, but it works for our case
     Union: OptionalNCType,  # type: ignore[dict-item]
     UnionType: OptionalNCType,
     NamedTuple: NamedTupleNCType,
-    NoneType: NullNCType,  # this can come up here as well as None
     # hathor types:
     Address: AddressNCType,
     Amount: VarUint32NCType,
@@ -125,8 +126,8 @@ DEFAULT_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
 }
 
 # This mapping includes all supported NCType classes, should only be used for parsing function calls
-EXTENDED_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
-    **DEFAULT_TYPE_TO_NC_TYPE_MAP,
+ARG_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
+    **FIELD_TYPE_TO_NC_TYPE_MAP,
     # bultin types:
     list: ListNCType,
     set: SetNCType,
@@ -135,24 +136,42 @@ EXTENDED_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     OrderedDict: DictNCType,
 }
 
-
-_DEFAULT_TYPE_MAP = NCType.TypeMap(DEFAULT_TYPE_ALIAS_MAP, DEFAULT_TYPE_TO_NC_TYPE_MAP)
-
-
-def make_nc_type_for_type(type_: type[T], /) -> NCType[T]:
-    """ Like NCType.from_type, but with default maps.
-
-    If you need to customize the mapping use `NCType.from_type` instead.
-    """
-    return NCType.from_type(type_, type_map=_DEFAULT_TYPE_MAP)
+RETURN_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
+    **ARG_TYPE_TO_NC_TYPE_MAP,
+    # XXX: ignored dict-item because technically None is not a type, type[None]/NoneType is
+    None: NullNCType,  # type: ignore[dict-item]
+    NoneType: NullNCType,  # this can come up here as well as None
+}
 
 
-_EXTENDED_TYPE_MAP = NCType.TypeMap(DEFAULT_TYPE_ALIAS_MAP, EXTENDED_TYPE_TO_NC_TYPE_MAP)
+_FIELD_TYPE_MAP = NCType.TypeMap(DEFAULT_TYPE_ALIAS_MAP, FIELD_TYPE_TO_NC_TYPE_MAP)
 
 
-def make_nc_type_for_type_extended(type_: type[T], /) -> NCType[T]:
-    """ Like make_nc_type_for_type, but with an extended type map.
+def make_nc_type_for_field_type(type_: type[T], /) -> NCType[T]:
+    """ Like NCType.from_type, but with maps for field annotations.
 
     If you need to customize the mapping use `NCType.from_type` instead.
     """
-    return NCType.from_type(type_, type_map=_EXTENDED_TYPE_MAP)
+    return NCType.from_type(type_, type_map=_FIELD_TYPE_MAP)
+
+
+_ARG_TYPE_MAP = NCType.TypeMap(ESSENTIAL_TYPE_ALIAS_MAP, ARG_TYPE_TO_NC_TYPE_MAP)
+
+
+def make_nc_type_for_arg_type(type_: type[T], /) -> NCType[T]:
+    """ Like NCType.from_type, but with maps for function arg annotations.
+
+    If you need to customize the mapping use `NCType.from_type` instead.
+    """
+    return NCType.from_type(type_, type_map=_ARG_TYPE_MAP)
+
+
+_RETURN_TYPE_MAP = NCType.TypeMap(ESSENTIAL_TYPE_ALIAS_MAP, RETURN_TYPE_TO_NC_TYPE_MAP)
+
+
+def make_nc_type_for_return_type(type_: type[T], /) -> NCType[T]:
+    """ Like NCType.from_type, but with maps for function return annotations.
+
+    If you need to customize the mapping use `NCType.from_type` instead.
+    """
+    return NCType.from_type(type_, type_map=_RETURN_TYPE_MAP)

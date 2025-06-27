@@ -12,14 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
-from typing import NamedTuple
+from collections import defaultdict
+from dataclasses import dataclass
 
 from typing_extensions import Self
 
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.transaction import Block, Transaction
-from hathor.types import VertexId
+from hathor.types import Address, VertexId
 
 
 def random_nc_calls_sorter(block: Block, nc_calls: list[Transaction]) -> list[Transaction]:
@@ -36,7 +39,8 @@ def random_nc_calls_sorter(block: Block, nc_calls: list[Transaction]) -> list[Tr
     return ret
 
 
-class SorterNode(NamedTuple):
+@dataclass(slots=True, kw_only=True)
+class SorterNode:
     id: VertexId
     outgoing_edges: set[VertexId]
     incoming_edges: set[VertexId]
@@ -57,18 +61,23 @@ class NCBlockSorter:
     Algorithm:
 
     1. Construct a Directed Acyclic Graph (DAG) of dependencies in O(n).
-    2. Filter out non-Nano transactions from the DAG, preserving dependency relations, in O(n).
-    3. Apply Kahn's algorithm to produce a topological sort in O(n).
+    2. Add "dummy" nodes between groups of txs with the same seqnum, acting as proxies for DAG dependencies.
+    3. Apply Kahn's algorithm to produce a topological sort in O(n). Skip nodes that are not part of nc_calls,
+       that is, with IDs that are either not txs, not NCs, or are dummy nodes.
     """
-    def __init__(self) -> None:
+    __slots__ = ('db', '_dirty', '_block', '_nc_hashes')
+
+    def __init__(self, nc_hashes: set[VertexId]) -> None:
         self.db: dict[VertexId, SorterNode] = {}
         self._dirty: bool = False
         self._block: Block | None = None
+        self._nc_hashes = nc_hashes
 
     @classmethod
     def create_from_block(cls, block: Block, nc_calls: list[Transaction]) -> Self:
         """Create a Sorter instance from the nano transactions confirmed by a block."""
-        sorter = cls()
+        nc_hashes = set(tx.hash for tx in nc_calls)
+        sorter = cls(nc_hashes)
         sorter._block = block
 
         # Add only edges from the funds DAG to the graph.
@@ -83,77 +92,66 @@ class NCBlockSorter:
                 sorter.add_edge(tx.hash, txin.tx_id)
 
         # Add edges from nano seqnum.
-        tx_info_list = []
+
+        # A dict of txs grouped by address and then seqnum.
+        grouped_txs: defaultdict[Address, defaultdict[int, list[Transaction]]] = defaultdict(lambda: defaultdict(list))
+        dummy_nodes = 0
+
         for tx in nc_calls:
             assert tx.is_nano_contract()
             nano_header = tx.get_nano_header()
-            tx_info_list.append((nano_header.nc_address, nano_header.nc_seqnum, tx.hash))
+            grouped_txs[nano_header.nc_address][nano_header.nc_seqnum].append(tx)
 
-        tx_info_list.sort()
-        for i in range(1, len(tx_info_list)):
-            prev_address, prev_seqnum, prev_hash = tx_info_list[i - 1]
-            curr_address, curr_seqnum, curr_hash = tx_info_list[i]
+        for _address, txs_by_seqnum in grouped_txs.items():
+            sorted_by_seqnum = sorted(txs_by_seqnum.items())
+            for i in range(1, len(sorted_by_seqnum)):
+                prev_seqnum, prev_txs = sorted_by_seqnum[i - 1]
+                curr_seqnum, curr_txs = sorted_by_seqnum[i]
+                dummy_node_id = f'dummy:{dummy_nodes}'.encode()
+                sorter.add_vertex(dummy_node_id)
+                dummy_nodes += 1
 
-            if curr_address != prev_address:
-                # Address is different, so do nothing.
-                continue
+                # Add edges from the dummy node to all prev_txs
+                for prev_tx in prev_txs:
+                    sorter.add_edge(dummy_node_id, prev_tx.hash)
 
-            # XXX What to do if seqnums are the same?!
-            assert curr_seqnum > prev_seqnum
-            sorter.add_edge(curr_hash, prev_hash)
-
-        # Remove all transactions that do not belong to nc_calls.
-        allowed_keys = set(tx.hash for tx in nc_calls)
-        to_be_removed = [key for key in sorter.db.keys() if key not in allowed_keys]
-        for key in to_be_removed:
-            sorter.remove_vertex(key)
+                # Add edges from curr_txs to the dummy node only when the
+                # tx's timestamp is greater than all prev_txs timestamps
+                max_prev_txs_timestamp = max(prev_txs, key=lambda tx: tx.timestamp).timestamp
+                for curr_tx in curr_txs:
+                    if curr_tx.timestamp > max_prev_txs_timestamp:
+                        sorter.add_edge(curr_tx.hash, dummy_node_id)
 
         return sorter
 
-    def copy(self) -> 'NCBlockSorter':
+    def copy(self) -> NCBlockSorter:
         """Copy the sorter. It is useful if one wants to call get_random_topological_order() multiple times."""
         if self._dirty:
             raise RuntimeError('copying a dirty sorter')
-        new_sorter = NCBlockSorter()
+        new_sorter = NCBlockSorter(self._nc_hashes)
         for vertex_id, vertex in self.db.items():
             new_sorter.db[vertex_id] = vertex.copy()
         return new_sorter
 
     def add_vertex(self, _id: VertexId) -> None:
         """Add a vertex to the DAG."""
-        self.get_node(_id)
+        _ = self.get_node(_id)
 
-    def add_edge(self, _from: VertexId, _to: VertexId) -> None:
+    def add_edge(self, from_: VertexId, to: VertexId) -> None:
         """Add the edge (_from, _to) to this DAG."""
-        assert _from != _to
-        self.get_node(_from).outgoing_edges.add(_to)
-        self.get_node(_to).incoming_edges.add(_from)
+        assert from_ != to
+        self.get_node(from_).outgoing_edges.add(to)
+        self.get_node(to).incoming_edges.add(from_)
 
-    def get_node(self, _id: VertexId) -> SorterNode:
+    def get_node(self, id_: VertexId) -> SorterNode:
         """Get a node by id or create one if it does not exist."""
-        vertex = self.db.get(_id)
+        vertex = self.db.get(id_)
         if vertex is not None:
             return vertex
 
-        vertex = SorterNode(_id, set(), set())
-        self.db[_id] = vertex
+        vertex = SorterNode(id=id_, outgoing_edges=set(), incoming_edges=set())
+        self.db[id_] = vertex
         return vertex
-
-    def remove_vertex(self, _id: VertexId, *, discard: bool = False) -> None:
-        """Remove vertex keeping the dependencies structure."""
-        if discard and _id not in self.db:
-            return
-        vertex = self.db.pop(_id)
-
-        for in_vertex_id in vertex.incoming_edges:
-            in_vertex = self.get_node(in_vertex_id)
-            in_vertex.outgoing_edges.update(vertex.outgoing_edges)
-            in_vertex.outgoing_edges.remove(_id)
-
-        for out_vertex_id in vertex.outgoing_edges:
-            out_vertex = self.get_node(out_vertex_id)
-            out_vertex.incoming_edges.update(vertex.incoming_edges)
-            out_vertex.incoming_edges.remove(_id)
 
     def get_vertices_with_no_outgoing_edges(self) -> list[VertexId]:
         """Get all vertices with no outgoing edges."""
@@ -173,10 +171,14 @@ class NCBlockSorter:
         candidates = self.get_vertices_with_no_outgoing_edges()
         ret = []
         for i in range(len(self.db)):
+            assert len(candidates) > 0, 'empty candidates, probably caused by circular dependencies in the graph'
             idx = rng.randbelow(len(candidates))
             # FIXME pop() runs in O(n)
             vertex_id = candidates.pop(idx)
-            ret.append(vertex_id)
+
+            # Skip all nodes that do not belong to nc_calls, which are either non-nano txs or dummy nodes.
+            if vertex_id in self._nc_hashes:
+                ret.append(vertex_id)
 
             vertex = self.get_node(vertex_id)
             assert not vertex.outgoing_edges

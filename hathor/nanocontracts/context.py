@@ -99,6 +99,11 @@ class Context:
         """Get a mapping of actions per token."""
         return self.__actions
 
+    @property
+    def actions_list(self) -> list[NCAction]:
+        """Get a list of all actions."""
+        return list(self.__all_actions__)
+
     def get_single_action(self, token_uid: TokenUid) -> NCAction:
         """Get exactly one action for the provided token, and fail otherwise."""
         actions = self.actions.get(token_uid)

@@ -57,7 +57,8 @@ MAX_COMPRESSION_LEVEL = 9
 ALLOWED_IMPORTS: dict[str, set[str]] = {
     # globals
     'math': {'ceil', 'floor'},
-    'typing': {'Optional', 'NamedTuple', 'TypeAlias'},
+    'typing': {'Optional', 'NamedTuple', 'TypeAlias', 'Union'},
+    'collections': {'OrderedDict'},
     # hathor
     'hathor.nanocontracts': {'Blueprint'},
     'hathor.nanocontracts.blueprint': {'Blueprint'},
