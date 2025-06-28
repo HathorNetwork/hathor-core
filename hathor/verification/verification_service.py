@@ -21,7 +21,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
+from hathor.transaction.token_info import TokenInfo
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -246,7 +246,7 @@ class VerificationService:
         self.verify_without_storage(tx)
         self.verifiers.tx.verify_sigops_input(tx)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
-        self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
+        self.verifiers.tx.verify_sum(tx, token_dict or tx.get_complete_token_info())
         self.verifiers.vertex.verify_parents(tx)
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)

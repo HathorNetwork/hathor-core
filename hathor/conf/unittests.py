@@ -45,4 +45,6 @@ SETTINGS = HathorSettings(
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
         'HFwHrQHUftQ7obLj7xbQjG4ZEwvyVXeyoE',
     ],
+    FEE_PER_OUTPUT=1,
+    FEE_FEATURE_FLAG=True
 )
