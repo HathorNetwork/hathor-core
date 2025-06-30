@@ -313,14 +313,14 @@ class CliBuilder:
         testnet = self._args.testnet
 
         if p2p_wl in ('default', 'hathorlabs'):
-            p2p_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL)) if not testnet else None
+            p2p_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True) if not testnet else None
         elif p2p_wl.lower() in ('none', 'disabled'):
             p2p_whitelist = None
         elif os.path.isfile(p2p_wl):
             p2p_whitelist = FilePeersWhitelist(reactor, p2p_wl) if not testnet else None
         else:
             # URLPeersWhitelist class rejects non-url paths.
-            p2p_whitelist = URLPeersWhitelist(reactor, p2p_wl)
+            p2p_whitelist = URLPeersWhitelist(reactor, p2p_wl, True)
 
         p2p_manager = ConnectionsManager(
             settings=settings,

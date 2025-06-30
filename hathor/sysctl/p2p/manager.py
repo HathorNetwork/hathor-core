@@ -314,7 +314,7 @@ class ConnectionsManagerSysctl(Sysctl):
             # Fetch the peerIds in the URL
             # Must ?? check whether they make sense?
             # Must start the looping call of the object.
-            wl_object = URLPeersWhitelist(self.connections.reactor, new_whitelist)
+            wl_object = URLPeersWhitelist(self.connections.reactor, new_whitelist, True)
 
         elif option in ('on', 'off'):
             # Set the whitelist tracking ON or OFF for the currently given whitelist.

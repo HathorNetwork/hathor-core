@@ -103,18 +103,19 @@ class FilePeersWhitelist(PeersWhitelist):
 
 
 class URLPeersWhitelist(PeersWhitelist):
-    def __init__(self, reactor: Reactor, url: str | None) -> None:
+    def __init__(self, reactor: Reactor, url: str | None, mainnet: bool = False) -> None:
         super().__init__(reactor)
         self._url: str | None = url
         self._http_agent = Agent(self._reactor)
 
         result = urlparse(self._url)
-        if result.scheme != 'https':
-            raise ValueError(f'invalid scheme, only https is allowed: {self._url}')
+        if self._url:
+            if mainnet and self._url.lower() != 'none':
+                if result.scheme != 'https':
+                    raise ValueError(f'invalid scheme, only https is allowed: {self._url}')
 
-        if not result.netloc:
-            raise ValueError(f'invalid url: {self._url}')
-
+                if not result.netloc:
+                    raise ValueError(f'invalid url: {self._url}')
         self.update()
 
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
