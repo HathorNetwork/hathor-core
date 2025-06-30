@@ -37,5 +37,6 @@ SETTINGS = HathorSettings(
     ENABLE_ON_CHAIN_BLUEPRINTS=True,
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
         'WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK',
+        'WQFDxic8xWWnMLL4aE5abY2XRKPNvGhtjY',
     ],
 )
