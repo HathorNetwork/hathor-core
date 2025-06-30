@@ -54,12 +54,13 @@ class PeersWhitelist(ABC):
         self.log.error('whitelist refresh had an exception. Start looping call again.', args=args, kwargs=kwargs)
         self._reactor.callLater(WHITELIST_RETRY_INTERVAL, self._start_lc)
 
-    def update(self) -> None:
+    def update(self) -> Deferred[None]:
         self._is_running = True
         try:
-            self._unsafe_update()
+            d = self._unsafe_update()
         finally:
             self._is_running = False
+        return d
 
     def follow_wl(self, ) -> None:
         """ Changes following_wl to True. Should not be called directly."""
