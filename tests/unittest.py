@@ -204,7 +204,7 @@ class TestCase(unittest.TestCase):
         enable_event_queue: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
-        mock_peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = None
+        mock_peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = None,
         nc_indexes: bool = False,
         nc_log_config: NCLogConfig | None = None,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.

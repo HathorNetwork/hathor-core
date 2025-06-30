@@ -17,8 +17,6 @@ from __future__ import annotations
 from enum import Enum
 from typing import NamedTuple, Optional
 
-
-
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
@@ -29,12 +27,10 @@ from hathor.transaction.headers.nano_header import ADDRESS_SEQNUM_SIZE
 from hathor.utils import leb128
 
 
-
 class _Tag(Enum):
     CONTRACT = b'\0'
     TOKEN = b'\1'
     ADDRESS = b'\2'
-
 
 
 class ContractKey(NamedTuple):
@@ -51,13 +47,11 @@ class TokenKey(NamedTuple):
         return _Tag.TOKEN.value + self.token_id
 
 
-
 class AddressKey(NamedTuple):
     address: Address
 
     def __bytes__(self):
         return _Tag.ADDRESS.value + self.address
-
 
 
 class NCBlockStorage:
@@ -150,7 +144,6 @@ class NCBlockStorage:
         token_description_bytes = self._TOKEN_DESCRIPTION_NC_TYPE.to_bytes(token_description)
         self._block_trie.update(bytes(key), token_description_bytes)
 
-
     def get_address_seqnum(self, address: Address) -> int:
         """Get the latest seqnum for an address.
 
@@ -173,4 +166,3 @@ class NCBlockStorage:
         key = AddressKey(address)
         seqnum_bytes = leb128.encode_unsigned(seqnum, max_bytes=ADDRESS_SEQNUM_SIZE)
         self._block_trie.update(bytes(key), seqnum_bytes)
-

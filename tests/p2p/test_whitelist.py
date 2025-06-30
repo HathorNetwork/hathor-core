@@ -150,4 +150,5 @@ class WhitelistTestCase(unittest.TestCase):
             read_body_mock.assert_not_called()
             _update_whitelist_cb_mock.assert_not_called()
             _update_whitelist_err_mock.assert_called_once()
+            # Check final instance
             assert isinstance(_update_whitelist_err_mock.call_args.args[0].value, TimeoutError)

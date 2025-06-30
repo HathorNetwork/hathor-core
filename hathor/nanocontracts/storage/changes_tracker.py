@@ -84,7 +84,6 @@ class NCChangesTracker(NCContractStorage):
 
         self._blueprint_id: BlueprintId | None = None
 
-
         self.has_been_commited = False
         self.has_been_blocked = False
 

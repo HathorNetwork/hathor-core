@@ -189,7 +189,6 @@ class Builder:
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
 
-
         self._peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = None
         self._nc_anti_mev: bool = True
 
@@ -197,7 +196,6 @@ class Builder:
         self._nc_log_storage: NCLogStorage | None = None
         self._runner_factory: RunnerFactory | None = None
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
-
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
