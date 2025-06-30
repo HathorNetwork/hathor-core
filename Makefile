@@ -6,6 +6,7 @@ all: check tests
 # testing:
 
 tests_cli = tests/cli/
+tests_nano = tests/nanocontracts/ tests/tx/test_indexes_nc_history.py tests/resources/nanocontracts/
 tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 tests_ci = extras/github/
 
@@ -23,6 +24,10 @@ pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=x
 
 #--implicit-reexport
 #--no-implicit-reexport
+
+.PHONY: tests-nano
+tests-nano:
+	pytest --durations=10 --cov-report=html --cov=hathor/nanocontracts/ --cov-config=.coveragerc_full -p no:warnings $(tests_nano)
 
 .PHONY: tests-cli
 tests-cli:
@@ -42,8 +47,9 @@ tests-quick:
 
 .PHONY: tests-genesis
 tests-genesis:
-	HATHOR_TEST_CONFIG_YAML='./hathor/conf/mainnet.yml' pytest tests/tx/test_genesis.py
-	HATHOR_TEST_CONFIG_YAML='./hathor/conf/testnet.yml' pytest tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathor/conf/mainnet.yml' pytest -n0 tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathor/conf/testnet.yml' pytest -n0 tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathor/conf/nano_testnet.yml' pytest -n0 tests/tx/test_genesis.py
 
 .PHONY: tests-ci
 tests-ci:

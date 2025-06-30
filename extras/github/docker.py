@@ -18,7 +18,7 @@ def prep_base_version(environ: Dict):
     ref = GITHUB_REF
 
     # Set base_version according to the github ref type
-    is_release_candidate = False
+    is_pre_release = False
     is_release = False
     is_nightly = False
 
@@ -42,9 +42,9 @@ def prep_base_version(environ: Dict):
 
         # Check if this is a release-candidate
         if pre_release:
-            if re.match(r'^rc\.[0-9]{1,3}$', pre_release):
+            if re.match(r'^(rc|alpha|beta)\.[0-9]{1,3}$', pre_release):
                 base_version = base_version + '-' + pre_release
-                is_release_candidate = True
+                is_pre_release = True
             else:
                 raise ValueError(f'Invalid Tag Value: {git_tag}')
         else:
@@ -58,18 +58,18 @@ def prep_base_version(environ: Dict):
     else:
         base_version = 'noop'
 
-    overwrite_hathor_core_version = is_release or is_release_candidate or is_nightly
+    overwrite_hathor_core_version = is_release or is_pre_release or is_nightly
     # We don't know for sure at this point in which cases we should enable Slack notification,
     # but we know when we should disable it for sure
-    output['disable-slack-notification'] = not (is_release or is_release_candidate)
+    output['disable-slack-notification'] = not (is_release or is_pre_release)
 
     if GITHUB_REPOSITORY.lower() != 'hathornetwork/hathor-core':
         output['disable-slack-notification'] = True
 
-    return output, base_version, is_release_candidate, overwrite_hathor_core_version
+    return output, base_version, is_pre_release, overwrite_hathor_core_version
 
 
-def prep_tags(environ: Dict, base_version: str, is_release_candidate: bool):
+def prep_tags(environ: Dict, base_version: str, is_pre_release: bool):
     MATRIX_PYTHON_IMPL = environ.get('MATRIX_PYTHON_IMPL')
     MATRIX_PYTHON_VERSION = environ.get('MATRIX_PYTHON_VERSION')
 
@@ -111,7 +111,7 @@ def prep_tags(environ: Dict, base_version: str, is_release_candidate: bool):
         tags.add(minor + '-' + suffix)
         if suffix == default_python:
             tags.add('latest')
-    elif GITHUB_EVENT_NAME == 'push' and not is_release_candidate:
+    elif GITHUB_EVENT_NAME == 'push' and not is_pre_release:
         tags.add('sha-' + GITHUB_SHA[:8])
 
     # Build the image list and set outputs
@@ -150,10 +150,10 @@ def overwrite_version(base_version: str):
 
 
 if __name__ == '__main__':
-    output, base_version, is_release_candidate, overwrite_hathor_core_version = prep_base_version(os.environ)
+    output, base_version, is_pre_release, overwrite_hathor_core_version = prep_base_version(os.environ)
     print_output(output)
 
-    output = prep_tags(os.environ, base_version, is_release_candidate)
+    output = prep_tags(os.environ, base_version, is_pre_release)
     print_output(output)
 
     if overwrite_hathor_core_version:

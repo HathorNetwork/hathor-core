@@ -35,36 +35,41 @@ class TupleNCType(NCType[tuple]):
     _args: tuple[NCType, ...]
 
     def __init__(self, args: NCType | Iterable[NCType]) -> None:
-        if isinstance(args, NCType):
+        if isinstance(args, Iterable):
+            self._varsize = False
+            self._args = tuple(args)
+            for arg in self._args:
+                assert isinstance(arg, NCType)
+            self._is_hashable = all(arg_nc_type.is_hashable() for arg_nc_type in self._args)
+        else:
+            assert isinstance(args, NCType)
             self._varsize = True
             self._args = (args,)
             self._is_hashable = args.is_hashable()
-        else:
-            self._varsize = False
-            self._args = tuple(args)
-            self._is_hashable = all(arg_nc_type.is_hashable() for arg_nc_type in self._args)
 
     @override
     @classmethod
     def _from_type(cls, type_: type[tuple], /, *, type_map: NCType.TypeMap) -> Self:
         origin_type: type = get_origin(type_) or type_
-        if origin_type is not tuple:
-            raise TypeError('expected tuple type')
-        args = get_args(type_)
+        if not issubclass(origin_type, (tuple, list)):
+            raise TypeError('expected tuple-like type')
+        args = list(get_args(type_))
         if args is None:
             raise TypeError('expected tuple[<args...>]')
+        if issubclass(type_, list):
+            args.append(Ellipsis)
         if args and args[-1] == Ellipsis:
             if len(args) != 2:
                 raise TypeError('ellipsis only allowed with one type: tuple[T, ...]')
             arg, _ellipsis = args
-            return cls(arg)
+            return cls(NCType.from_type(arg, type_map=type_map))
         else:
             return cls(NCType.from_type(arg, type_map=type_map) for arg in args)
 
     @override
     def _check_value(self, value: tuple, /, *, deep: bool) -> None:
-        if not isinstance(value, tuple):
-            raise TypeError('expected tuple')
+        if not isinstance(value, (tuple, list)):
+            raise TypeError('expected tuple-like')
         if deep:
             if self._varsize:
                 arg_nc_type, = self._args

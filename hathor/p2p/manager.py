@@ -543,7 +543,6 @@ class ConnectionsManager:
         """ It is called by the `lc_connect` looping call and tries to connect to a new peer.
         """
         if not self.new_connection_from_queue:
-            self.log.debug('connection queue is empty')
             return
         assert self.manager is not None
         self.log.debug('connect to peer from connection queue')

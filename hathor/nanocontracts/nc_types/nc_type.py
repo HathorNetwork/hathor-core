@@ -52,16 +52,6 @@ class NCType(ABC, Generic[T]):
 
     @final
     @staticmethod
-    def is_supported(type_: type[T], /, *, type_map: TypeMap) -> bool:
-        """ Returns True if when using the given type and type_map can be used to make a NCType."""
-        try:
-            get_usable_origin_type(type_, type_map=type_map)
-        except TypeError:
-            return False
-        return True
-
-    @final
-    @staticmethod
     def from_type(type_: type[T], /, *, type_map: TypeMap) -> NCType[T]:
         """ Instantiate a NCType instance from a type signature using the given maps.
 

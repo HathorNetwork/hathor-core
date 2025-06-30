@@ -12,17 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
 from hathor.pubsub import PubSubManager
-from hathor.transaction import BaseTransaction, Block
+from hathor.transaction import BaseTransaction, Block, Transaction
 
 if TYPE_CHECKING:
     from hathor.consensus.block_consensus import BlockConsensusAlgorithm
     from hathor.consensus.consensus import ConsensusAlgorithm
     from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithm
+    from hathor.nanocontracts.nc_exec_logs import NCEvent
 
 logger = get_logger()
 
@@ -39,6 +42,7 @@ class ConsensusAlgorithmContext:
     transaction_algorithm: 'TransactionConsensusAlgorithm'
     txs_affected: set[BaseTransaction]
     reorg_common_block: Optional[Block]
+    nc_events: list[tuple[Transaction, list[NCEvent]]] | None
 
     def __init__(self, consensus: 'ConsensusAlgorithm', pubsub: PubSubManager) -> None:
         self.consensus = consensus
@@ -47,6 +51,7 @@ class ConsensusAlgorithmContext:
         self.transaction_algorithm = self.consensus.transaction_algorithm_factory(self)
         self.txs_affected = set()
         self.reorg_common_block = None
+        self.nc_events = None
 
     def save(self, tx: BaseTransaction) -> None:
         """Only metadata is ever saved in a consensus update."""

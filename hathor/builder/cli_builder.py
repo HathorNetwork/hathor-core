@@ -33,6 +33,8 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -79,6 +81,7 @@ class CliBuilder:
         from hathor.daa import TestMode
         from hathor.event.storage import EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
+        from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
@@ -113,7 +116,7 @@ class CliBuilder:
         )
 
         # XXX Remove this protection after Nano Contracts are launched.
-        if settings.NETWORK_NAME not in {'nano-testnet-alpha', 'unittests'}:
+        if settings.NETWORK_NAME != 'unittests' and not settings.NETWORK_NAME.startswith('nano-testnet-'):
             # Add protection to prevent enabling Nano Contracts due to misconfigurations.
             self.check_or_raise(not settings.ENABLE_NANO_CONTRACTS,
                                 'configuration error: NanoContracts can only be enabled on localnets for now')
@@ -135,6 +138,8 @@ class CliBuilder:
             if self._args.data else RocksDBStorage.create_temp(cache_capacity)
         )
 
+        self.nc_storage_factory: NCStorageFactory = NCRocksDBStorageFactory(self.rocksdb_storage)
+
         # Initialize indexes manager.
         indexes = RocksDBIndexesManager(self.rocksdb_storage, settings=settings)
 
@@ -144,7 +149,11 @@ class CliBuilder:
             # only TransactionCacheStorage should have indexes.
             kwargs['indexes'] = indexes
         tx_storage = TransactionRocksDBStorage(
-            self.rocksdb_storage, settings=settings, vertex_parser=vertex_parser, **kwargs
+            self.rocksdb_storage,
+            settings=settings,
+            vertex_parser=vertex_parser,
+            nc_storage_factory=self.nc_storage_factory,
+            **kwargs
         )
         event_storage = EventRocksDBStorage(self.rocksdb_storage)
         feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
@@ -159,7 +168,13 @@ class CliBuilder:
             self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
 
         if not self._args.disable_cache:
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
+            tx_storage = TransactionCacheStorage(
+                tx_storage,
+                reactor,
+                indexes=indexes,
+                settings=settings,
+                nc_storage_factory=self.nc_storage_factory,
+            )
             tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
             if self._args.cache_interval:
                 tx_storage.interval = self._args.cache_interval
@@ -167,6 +182,10 @@ class CliBuilder:
 
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
+
+        if settings.ENABLE_NANO_CONTRACTS:
+            from hathor.nanocontracts.catalog import generate_catalog_from_settings
+            self.tx_storage.nc_catalog = generate_catalog_from_settings(settings)
 
         self.wallet = None
         if self._args.wallet:
@@ -214,10 +233,36 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
+        if self._args.nc_indexes and tx_storage.indexes is not None:
+            self.log.debug('enable nano indexes')
+            tx_storage.indexes.enable_nc_indexes()
+
+        from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
+        nc_calls_sorter = random_nc_calls_sorter
+
+        assert self.nc_storage_factory is not None
+        runner_factory = RunnerFactory(
+            reactor=reactor,
+            settings=settings,
+            tx_storage=tx_storage,
+            nc_storage_factory=self.nc_storage_factory,
+        )
+
+        nc_log_storage = NCLogStorage(
+            settings=settings,
+            path=self.rocksdb_storage.path,
+            config=self._args.nc_exec_logs,
+        )
+
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
+            self.nc_storage_factory,
             soft_voided_tx_ids,
             pubsub=pubsub,
+            settings=settings,
+            runner_factory=runner_factory,
+            nc_log_storage=nc_log_storage,
+            nc_calls_sorter=nc_calls_sorter,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
@@ -338,6 +383,7 @@ class CliBuilder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            runner_factory=runner_factory,
         )
 
         if self._args.x_ipython_kernel:

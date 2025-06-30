@@ -31,7 +31,7 @@ from hathor.nanocontracts.storage.contract_storage import (
     NCContractStorage,
 )
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
-from hathor.nanocontracts.types import ContractId, TokenUid
+from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid
 from hathor.transaction.token_creation_tx import TokenDescription
 
 T = TypeVar('T')
@@ -81,6 +81,9 @@ class NCChangesTracker(NCContractStorage):
         self._balance_diff: dict[BalanceKey, int] = {}
         self._authorities_diff: dict[BalanceKey, _NCAuthorityDiff] = {}
         self._created_tokens: dict[TokenUid, TokenDescription] = {}
+
+        self._blueprint_id: BlueprintId | None = None
+
 
         self.has_been_commited = False
         self.has_been_blocked = False
@@ -135,6 +138,7 @@ class NCChangesTracker(NCContractStorage):
     @override
     def put_obj(self, key: bytes, nc_type: NCType[T], data: T) -> None:
         self.check_if_locked()
+        nc_type.check_value(data)
         obj_key = self._to_attr_key(key)
         self.data[obj_key] = (data, nc_type)
 
@@ -182,6 +186,9 @@ class NCChangesTracker(NCContractStorage):
 
         for td in self._created_tokens.values():
             self.storage.create_token(TokenUid(td.token_id), td.token_name, td.token_symbol)
+
+        if self._blueprint_id is not None:
+            self.storage.set_blueprint_id(self._blueprint_id)
 
         self.has_been_commited = True
 
@@ -264,8 +271,19 @@ class NCChangesTracker(NCContractStorage):
         assert not bool(self._balance_diff)
         assert not bool(self._authorities_diff)
         assert not bool(self._created_tokens)
+        assert not bool(self._blueprint_id)
         return not bool(self.data)
 
     @override
     def get_root_id(self) -> bytes:
         raise NotImplementedError
+
+    def get_blueprint_id(self) -> BlueprintId:
+        if self._blueprint_id is not None:
+            return self._blueprint_id
+        return self.storage.get_blueprint_id()
+
+    def set_blueprint_id(self, value: BlueprintId) -> None:
+        """Set a new blueprint id for the contract."""
+        self.check_if_locked()
+        self._blueprint_id = value

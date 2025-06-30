@@ -105,7 +105,7 @@ def test_send_event_response() -> None:
                         b'"spent_outputs":[],"conflict_with":[],"voided_by":[],"received_by":[],"children":[],'
                         b'"twins":[],"accumulated_weight":10.0,"score":20.0,"accumulated_weight_raw":"1024",'
                         b'"score_raw":"1048576","first_block":null,"height":100,'
-                        b'"validation":"validation"}},"group_id":null},"latest_event_id":10,'
+                        b'"validation":"validation","nc_execution":null}},"group_id":null},"latest_event_id":10,'
                         b'"stream_id":"stream_id"}')
 
     protocol.sendMessage.assert_called_once_with(expected_payload)
