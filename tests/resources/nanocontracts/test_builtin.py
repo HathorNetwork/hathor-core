@@ -36,7 +36,7 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.manager = self.create_peer(
             'testnet',
-            nc_indices=True,
+            nc_indexes=True,
         )
         self.web = StubSite(BlueprintBuiltinResource(self.manager))
 
