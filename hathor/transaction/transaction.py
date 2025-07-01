@@ -301,7 +301,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             json['nc_method'] = nano_header.nc_method
             json['nc_args'] = nano_header.nc_args_bytes.hex()
             json['nc_address'] = get_address_b58_from_bytes(nano_header.nc_address)
-            json['nc_context'] = nano_header.get_context().to_json()
+            json['nc_context'] = nano_header.get_context().unwrap().to_json()
 
         return json
 
@@ -350,7 +350,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         from hathor.nanocontracts.balance_rules import BalanceRules
         nano_header = self.get_nano_header()
 
-        for action in nano_header.get_actions():
+        for action in nano_header.get_actions().unwrap():
             rules = BalanceRules.get_rules(self._settings, action)
             rules.verification_rule(token_dict)
 

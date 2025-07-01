@@ -18,10 +18,12 @@ from dataclasses import dataclass, field
 from enum import StrEnum, auto, unique
 from typing import TYPE_CHECKING, Any, TypeAlias
 
+from returns.result import Success
 from typing_extensions import Literal, Self, assert_never
 
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError, NCSerializationError
+from hathor.nanocontracts.exception import NCSerializationError
+from hathor.nanocontracts.nc_failure import NCNumberOfCallsExceeded, NCRecursionError, NCResult
 from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
 
@@ -185,13 +187,13 @@ class CallInfo:
         """Get the depth of the call stack."""
         return len(self.stack)
 
-    def pre_call(self, call_record: CallRecord) -> None:
+    def pre_call(self, call_record: CallRecord) -> NCResult[None]:
         """Called before a new call is executed."""
         if self.depth >= self.MAX_RECURSION_DEPTH:
-            raise NCRecursionError
+            return NCRecursionError().to_result()
 
         if self.call_counter >= self.MAX_CALL_COUNTER:
-            raise NCNumberOfCallsExceeded
+            return NCNumberOfCallsExceeded().to_result()
 
         if self.enable_call_trace:
             if self.calls is None:
@@ -206,6 +208,8 @@ class CallInfo:
         self.call_counter += 1
         self.stack.append(call_record)
         self.nc_logger.__log_call_begin__(call_record)
+
+        return Success(None)
 
     def post_call(self, call_record: CallRecord) -> None:
         """Called after a call is finished."""

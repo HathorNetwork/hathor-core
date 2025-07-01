@@ -22,9 +22,9 @@ from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
-from hathor.nanocontracts.exception import NCInvalidAction
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
+from hathor.nanocontracts.nc_failure import NCFailureException, NCInvalidAction
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.types import NCActionType, TokenUid
 from hathor.nanocontracts.utils import sign_pycoin
@@ -740,9 +740,11 @@ class TestActions(unittest.TestCase):
             ],
         )
 
-        with pytest.raises(NCInvalidAction) as e:
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
-        assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == f'conflicting actions for token {self.tka.hash_hex}'
 
     def test_grant_and_acquire_same_token_not_allowed(self) -> None:
         self._set_nano_header(
@@ -753,9 +755,11 @@ class TestActions(unittest.TestCase):
             ],
         )
 
-        with pytest.raises(NCInvalidAction) as e:
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
-        assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == f'conflicting actions for token {self.tka.hash_hex}'
 
     def test_conflicting_actions(self) -> None:
         # Add 2 conflicting actions for the same token.
@@ -764,9 +768,11 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=2),
         ])
 
-        with pytest.raises(NCInvalidAction) as e:
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
-        assert str(e.value) == 'conflicting actions for token 00'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == 'conflicting actions for token 00'
 
     def test_non_conflicting_actions_success(self) -> None:
         # Add a GRANT_AUTHORITY action to mint TKA, and add a mint authority input accordingly.
@@ -799,9 +805,11 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=2, amount=1),
         ])
 
-        with pytest.raises(NCInvalidAction) as e:
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verify(self.tx1)
-        assert str(e.value) == 'DEPOSIT token index 2 not found'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == 'DEPOSIT token index 2 not found'
 
     def test_token_uid_not_in_list(self) -> None:
         self._set_nano_header(tx=self.tx1, nc_actions=[
@@ -809,7 +817,7 @@ class TestActions(unittest.TestCase):
         ])
 
         nano_header = self.tx1.get_nano_header()
-        actions = nano_header.get_actions()
+        actions = nano_header.get_actions().unwrap()
 
         # Here I have to fake and patch get_actions() with an invalid
         # one because the nano header always creates valid token uids.
@@ -817,9 +825,11 @@ class TestActions(unittest.TestCase):
         fake_actions = [dataclasses.replace(actions[0], token_uid=TokenUid(fake_token_uid))]
 
         with patch('hathor.transaction.headers.NanoHeader.get_actions', lambda _: fake_actions):
-            with pytest.raises(NCInvalidAction) as e:
+            with pytest.raises(NCFailureException) as e:
                 self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
-        assert str(e.value) == f'DEPOSIT action requires token {fake_token_uid.hex()} in tokens list'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == f'DEPOSIT action requires token {fake_token_uid.hex()} in tokens list'
 
     def _test_invalid_unknown_authority(self, action_type: NCActionType) -> None:
         # Create an authority action with an unknown authority.
@@ -827,9 +837,11 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(type=action_type, token_index=1, amount=TxOutput.ALL_AUTHORITIES + 1),
         ])
 
-        with pytest.raises(NCInvalidAction) as e:
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verify(self.tx1)
-        assert str(e.value) == f'action {action_type.name} token {self.tka.hash_hex} invalid authorities: 0b100'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == f'action {action_type.name} token {self.tka.hash_hex} invalid authorities: 0b100'
 
     def _test_invalid_htr_authority(self, action_type: NCActionType) -> None:
         # Create an authority action for HTR.
@@ -837,9 +849,11 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(type=action_type, token_index=0, amount=TxOutput.TOKEN_MINT_MASK),
         ])
 
-        with pytest.raises(NCInvalidAction) as e:
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verify(self.tx1)
-        assert str(e.value) == f'{action_type.name} action cannot be executed on HTR token'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == f'{action_type.name} action cannot be executed on HTR token'
 
     def test_invalid_grant_unknown_authority(self) -> None:
         self._test_invalid_unknown_authority(NCActionType.GRANT_AUTHORITY)
@@ -863,9 +877,11 @@ class TestActions(unittest.TestCase):
             ),
         ])
 
-        with pytest.raises(NCInvalidAction) as e:
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verify(self.tx1)
-        assert str(e.value) == f'GRANT_AUTHORITY token {self.tka.hash_hex} requires mint, but no input has it'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == f'GRANT_AUTHORITY token {self.tka.hash_hex} requires mint, but no input has it'
 
     def test_grant_authority_cannot_melt(self) -> None:
         # Try to grant a TKA melt authority without an authority input.
@@ -877,9 +893,11 @@ class TestActions(unittest.TestCase):
             ),
         ])
 
-        with pytest.raises(NCInvalidAction) as e:
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verify(self.tx1)
-        assert str(e.value) == f'GRANT_AUTHORITY token {self.tka.hash_hex} requires melt, but no input has it'
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == f'GRANT_AUTHORITY token {self.tka.hash_hex} requires melt, but no input has it'
 
     def test_acquire_authority_cannot_mint_with_melt(self) -> None:
         # Try to create a mint authority output with an action to acquire a melt authority.
@@ -922,5 +940,8 @@ class TestActions(unittest.TestCase):
 
         self._set_nano_header(tx=self.tx1, nc_actions=actions)
 
-        with pytest.raises(NCInvalidAction, match='more actions than the max allowed: 17 > 16'):
+        with pytest.raises(NCFailureException) as e:
             self.manager.verification_service.verify(self.tx1)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == 'more actions than the max allowed: 17 > 16'

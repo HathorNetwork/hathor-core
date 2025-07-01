@@ -15,7 +15,7 @@
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.exception import NCInvalidAction
+from hathor.nanocontracts.nc_failure import NCFailureException, NCInvalidAction
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import ContractId, NCAcquireAuthorityAction, NCAction, NCGrantAuthorityAction, TokenUid
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -190,8 +190,11 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         self._initialize()
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
         msg = f'GRANT_AUTHORITY token {self.token_a.hex()} requires mint, but contract does not have that authority'
-        with pytest.raises(NCInvalidAction, match=msg):
+        with pytest.raises(NCFailureException) as e:
             self._grant_to_other(mint=True, melt=False)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == msg
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
 
     def test_grant_melt_success(self) -> None:
@@ -210,8 +213,11 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         self._initialize()
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
         msg = f'GRANT_AUTHORITY token {self.token_a.hex()} requires melt, but contract does not have that authority'
-        with pytest.raises(NCInvalidAction, match=msg):
+        with pytest.raises(NCFailureException) as e:
             self._grant_to_other(mint=False, melt=True)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidAction)
+        assert failure.msg == msg
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
 
     def test_acquire_mint(self) -> None:

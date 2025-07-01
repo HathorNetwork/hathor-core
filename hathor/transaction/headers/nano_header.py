@@ -18,8 +18,12 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from returns.iterables import Fold
+from returns.pipeline import is_successful
+from returns.result import Failure, Success
 from typing_extensions import assert_never
 
+from hathor.nanocontracts.nc_failure import NCInvalidAction, NCResult
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import (
@@ -51,7 +55,7 @@ class NanoHeaderAction:
     token_index: int
     amount: int
 
-    def to_nc_action(self, tx: Transaction) -> NCAction:
+    def to_nc_action(self, tx: Transaction) -> NCResult[NCAction]:
         """Create a NCAction from this NanoHeaderAction"""
         from hathor.nanocontracts.types import (
             NCAcquireAuthorityAction,
@@ -66,35 +70,39 @@ class NanoHeaderAction:
         try:
             token_uid = TokenUid(tx.get_token_uid(self.token_index))
         except IndexError:
-            from hathor.nanocontracts.exception import NCInvalidAction
-            raise NCInvalidAction(f'{self.type.name} token index {self.token_index} not found')
+            return NCInvalidAction(f'{self.type.name} token index {self.token_index} not found').to_result()
 
         match self.type:
             case NCActionType.DEPOSIT:
-                return NCDepositAction(token_uid=token_uid, amount=self.amount)
+                return NCDepositAction.try_new(token_uid=token_uid, amount=self.amount)
             case NCActionType.WITHDRAWAL:
-                return NCWithdrawalAction(token_uid=token_uid, amount=self.amount)
+                return NCWithdrawalAction.try_new(token_uid=token_uid, amount=self.amount)
             case NCActionType.GRANT_AUTHORITY:
                 mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
                 melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
-                self._validate_authorities(token_uid)
-                return NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+                result = self._validate_authorities(token_uid)
+                if not is_successful(result):
+                    return Failure(result.failure())
+                return NCGrantAuthorityAction.try_new(token_uid=token_uid, mint=mint, melt=melt)
             case NCActionType.ACQUIRE_AUTHORITY:
                 mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
                 melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
-                self._validate_authorities(token_uid)
-                return NCAcquireAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+                result = self._validate_authorities(token_uid)
+                if not is_successful(result):
+                    return Failure(result.failure())
+                return NCAcquireAuthorityAction.try_new(token_uid=token_uid, mint=mint, melt=melt)
             case _:
                 assert_never(self.type)
 
-    def _validate_authorities(self, token_uid: TokenUid) -> None:
+    def _validate_authorities(self, token_uid: TokenUid) -> NCResult[None]:
         """Check that the authorities in the `amount` are valid."""
         from hathor.transaction.base_transaction import TxOutput
         if self.amount > TxOutput.ALL_AUTHORITIES:
-            from hathor.nanocontracts.exception import NCInvalidAction
-            raise NCInvalidAction(
+            return NCInvalidAction(
                 f'action {self.type.name} token {token_uid.hex()} invalid authorities: 0b{self.amount:b}'
-            )
+            ).to_result()
+
+        return Success(None)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -301,14 +309,20 @@ class NanoHeader(VertexBaseHeader):
         blueprint_id = BlueprintId(NCVertexId(nc_creation.get_nano_header().nc_id))
         return blueprint_id
 
-    def get_actions(self) -> list[NCAction]:
+    def get_actions(self) -> NCResult[list[NCAction]]:
         """Get a list of NCActions from the header actions."""
-        return [header_action.to_nc_action(self.tx) for header_action in self.nc_actions]
+        return Fold.collect(
+            (header_action.to_nc_action(self.tx) for header_action in self.nc_actions),
+            Success(()),
+        ).map(list)
 
-    def get_context(self) -> Context:
+    def get_context(self) -> NCResult[Context]:
         """Return a context to be used in a method call."""
-        action_list = self.get_actions()
+        action_list_result = self.get_actions()
+        if not is_successful(action_list_result):
+            return Failure(action_list_result.failure())
 
+        action_list = action_list_result.unwrap()
         meta = self.tx.get_metadata()
         timestamp: int
         if meta.first_block is None:
@@ -327,4 +341,4 @@ class NanoHeader(VertexBaseHeader):
             address=Address(self.nc_address),
             timestamp=timestamp,
         )
-        return context
+        return Success(context)

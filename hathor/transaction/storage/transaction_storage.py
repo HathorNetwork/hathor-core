@@ -23,11 +23,13 @@ from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
+from returns.result import Failure, Success
 from structlog import get_logger
 
 from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
+from hathor.nanocontracts.nc_failure import BlueprintDoesNotExist, NCResult
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
@@ -1152,16 +1154,15 @@ class TransactionStorage(ABC):
 
         return block_storage.get_contract_storage(ContractId(NCVertexId(contract_id)))
 
-    def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
-        from hathor.nanocontracts.exception import BlueprintDoesNotExist
+    def _get_blueprint(self, blueprint_id: BlueprintId) -> NCResult[type[Blueprint] | OnChainBlueprint]:
         assert self.nc_catalog is not None
 
         if blueprint_class := self.nc_catalog.get_blueprint_class(blueprint_id):
-            return blueprint_class
+            return Success(blueprint_class)
 
         self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
         if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-            raise BlueprintDoesNotExist(blueprint_id.hex())
+            return BlueprintDoesNotExist(blueprint_id.hex()).to_result()
         self.log.debug('on-chain blueprints enabled, looking for that instead')
         return self.get_on_chain_blueprint(blueprint_id)
 
@@ -1177,47 +1178,46 @@ class TransactionStorage(ABC):
 
         from hathor.nanocontracts import OnChainBlueprint
 
-        blueprint = self._get_blueprint(blueprint_id)
+        blueprint = self._get_blueprint(blueprint_id).unwrap()
         if isinstance(blueprint, OnChainBlueprint):
-            return self.get_on_chain_blueprint(blueprint_id).code.text
+            return self.get_on_chain_blueprint(blueprint_id).unwrap().code.text
         else:
             module = inspect.getmodule(blueprint)
             assert module is not None
             return inspect.getsource(module)
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> NCResult[type[Blueprint]]:
         """Returns the blueprint class associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
         """
         from hathor.nanocontracts import OnChainBlueprint
-        blueprint = self._get_blueprint(blueprint_id)
-        if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
-        else:
-            return blueprint
 
-    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
+        match self._get_blueprint(blueprint_id):
+            case Success(OnChainBlueprint() as ocb):
+                return Success(ocb.get_blueprint_class())
+            case Success(blueprint):
+                return Success(blueprint)
+            case failure:
+                return Failure(failure.failure())
+
+    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> NCResult[OnChainBlueprint]:
         """Return an on-chain blueprint transaction."""
         assert self._settings.ENABLE_ON_CHAIN_BLUEPRINTS
         from hathor.nanocontracts import OnChainBlueprint
-        from hathor.nanocontracts.exception import (
-            BlueprintDoesNotExist,
-            OCBBlueprintNotConfirmed,
-            OCBInvalidBlueprintVertexType,
-        )
+        from hathor.nanocontracts.exception import OCBBlueprintNotConfirmed, OCBInvalidBlueprintVertexType
         try:
             blueprint_tx = self.get_transaction(blueprint_id)
         except TransactionDoesNotExist:
             self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
-            raise BlueprintDoesNotExist(blueprint_id.hex())
+            return BlueprintDoesNotExist(blueprint_id.hex()).to_result()
         if not isinstance(blueprint_tx, OnChainBlueprint):
-            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())
+            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())  # TODO
         tx_meta = blueprint_tx.get_metadata()
         if tx_meta.voided_by or not tx_meta.first_block:
-            raise OCBBlueprintNotConfirmed(blueprint_id.hex())
+            raise OCBBlueprintNotConfirmed(blueprint_id.hex())  # TODO
         # XXX: maybe use N blocks confirmation, like reward-locks
-        return blueprint_tx
+        return Success(blueprint_tx)
 
 
 class BaseTransactionStorage(TransactionStorage):

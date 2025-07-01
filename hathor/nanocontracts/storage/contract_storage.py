@@ -20,7 +20,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TypeVar
 
+from returns.result import Success
+
 from hathor.conf.settings import HATHOR_TOKEN_UID
+from hathor.nanocontracts.nc_failure import NCResult
 from hathor.nanocontracts.nc_types import BytesNCType, NCType
 from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
 from hathor.nanocontracts.storage.maybedeleted_nc_type import MaybeDeletedNCType
@@ -154,9 +157,10 @@ class NCContractStorage:
         """Return True if token_id exists in the current block."""
         return self._token_proxy.has_token(token_id)
 
-    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> NCResult[None]:
         """Create a new token in the current block."""
         self._token_proxy.create_token(token_id, token_name, token_symbol)
+        return Success(None)
 
     def lock(self) -> None:
         """Lock the storage for changes or commits."""

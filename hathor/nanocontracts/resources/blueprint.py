@@ -18,12 +18,13 @@ import types
 import typing
 from typing import TYPE_CHECKING, Any, Optional
 
+from returns.result import Success
+
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts import types as nc_types
 from hathor.nanocontracts.blueprint import NC_FIELDS_ATTR
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -88,12 +89,13 @@ class BlueprintInfoResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.blueprint_id}')
             return error_response.json_dumpb()
 
-        try:
-            blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
-        except BlueprintDoesNotExist:
-            request.setResponseCode(404)
-            error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
-            return error_response.json_dumpb()
+        match self.manager.tx_storage.get_blueprint_class(blueprint_id):
+            case Success(blueprint_class):
+                pass
+            case _:
+                request.setResponseCode(404)
+                error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
+                return error_response.json_dumpb()
 
         attributes: dict[str, str] = {}
         fields = getattr(blueprint_class, NC_FIELDS_ATTR)

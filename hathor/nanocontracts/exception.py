@@ -34,6 +34,14 @@ class NCInvalidSignature(NCTxValidationError):
     pass
 
 
+class NCInvalidActionToken(NCTxValidationError):
+    pass
+
+
+class NCInvalidActionList(NCTxValidationError):
+    pass
+
+
 class NCInvalidPubKey(NCTxValidationError):
     pass
 
@@ -42,14 +50,12 @@ class NCFail(NCError):
     """Raised by Blueprint's methods to fail execution."""
 
 
+# TODO
 class NanoContractDoesNotExist(NCFail):
     pass
 
 
-class BlueprintDoesNotExist(NCFail):
-    pass
-
-
+# TODO
 class NCSerializationError(NCFail):
     pass
 
@@ -59,81 +65,6 @@ class NCSerializationArgTooLong(NCSerializationError):
 
 
 class NCSerializationTypeError(NCSerializationError):
-    pass
-
-
-class NCViewMethodError(NCFail):
-    """Raised when a view method changes the state of the contract."""
-    pass
-
-
-class NCMethodNotFound(NCFail):
-    """Raised when a method is not found in a nano contract."""
-    pass
-
-
-class NCInsufficientFunds(NCFail):
-    """Raised when there is not enough funds to withdrawal from a nano contract."""
-    pass
-
-
-class NCAttributeError(NCFail):
-    pass
-
-
-class NCInvalidContext(NCFail):
-    """Raised when trying to run a method with an invalid context."""
-    pass
-
-
-class NCRecursionError(NCFail):
-    """Raised when recursion gets too deep."""
-
-
-class NCNumberOfCallsExceeded(NCFail):
-    """Raised when the total number of calls have been exceeded."""
-
-
-class NCInvalidContractId(NCFail):
-    """Raised when a contract call is invalid."""
-
-
-class NCInvalidMethodCall(NCFail):
-    """Raised when a contract calls another contract's invalid method."""
-
-
-class NCInvalidInitializeMethodCall(NCFail):
-    """Raised when a contract calls another contract's initialize method."""
-
-
-class NCInvalidPublicMethodCallFromView(NCFail):
-    """Raised when a contract calls another contract's initialize method."""
-
-
-class NCAlreadyInitializedContractError(NCFail):
-    """Raised when one tries to initialize a contract that has already been initialized."""
-
-
-class NCUninitializedContractError(NCFail):
-    """Raised when a contract calls a method from an uninitialized contract."""
-
-
-class NCInvalidAction(NCFail):
-    """Raised when an action is invalid."""
-    pass
-
-
-class NCInvalidSyscall(NCFail):
-    """Raised when a syscall is invalid."""
-    pass
-
-
-class NCTokenAlreadyExists(NCFail):
-    """Raised when one tries to create a duplicated token."""
-
-
-class NCForbiddenAction(NCFail):
-    """Raised when an action is forbidden on a method."""
     pass
 
 

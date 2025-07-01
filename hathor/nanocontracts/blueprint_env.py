@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional, final
 
 from typing_extensions import deprecated
 
+from hathor.nanocontracts.nc_failure import unwrap_or_raise
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
 
@@ -51,7 +52,8 @@ class BlueprintEnvironment:
     @property
     def rng(self) -> NanoRNG:
         """Return an RNG for the current contract."""
-        return self.__runner.syscall_get_rng()
+        result = self.__runner.syscall_get_rng()
+        return unwrap_or_raise(result)
 
     @final
     def get_contract_id(self) -> ContractId:
@@ -191,7 +193,8 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> Any:
         """Call a public method of another contract."""
-        return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
+        result = self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
+        return unwrap_or_raise(result)
 
     @final
     def proxy_call_public_method(
@@ -203,7 +206,8 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs)
+        result = self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs)
+        return unwrap_or_raise(result)
 
     @final
     def proxy_call_public_method_nc_args(
@@ -214,12 +218,14 @@ class BlueprintEnvironment:
         nc_args: NCArgs,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
+        result = self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
+        return unwrap_or_raise(result)
 
     @final
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a view method of another contract."""
-        return self.__runner.syscall_call_another_contract_view_method(nc_id, method_name, args, kwargs)
+        result = self.__runner.syscall_call_another_contract_view_method(nc_id, method_name, args, kwargs)
+        return unwrap_or_raise(result)
 
     @final
     def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
@@ -246,7 +252,8 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> tuple[ContractId, Any]:
         """Create a new contract."""
-        return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs)
+        result = self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs)
+        return unwrap_or_raise(result)
 
     @final
     def emit_event(self, data: bytes) -> None:
@@ -263,13 +270,14 @@ class BlueprintEnvironment:
         melt_authority: bool = True,
     ) -> TokenUid:
         """Create a new token."""
-        return self.__runner.syscall_create_child_token(
+        result = self.__runner.syscall_create_child_token(
             token_name,
             token_symbol,
             amount,
             mint_authority,
             melt_authority,
         )
+        return unwrap_or_raise(result)
 
     @final
     def change_blueprint(self, blueprint_id: BlueprintId) -> None:

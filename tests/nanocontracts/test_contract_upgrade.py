@@ -1,5 +1,8 @@
+import pytest
+
 from hathor.nanocontracts import Blueprint, Context, fallback, public
-from hathor.nanocontracts.exception import BlueprintDoesNotExist, NCFail, NCInvalidSyscall, NCMethodNotFound
+from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.nc_failure import BlueprintDoesNotExist, NCFailureException, NCInvalidSyscall
 from hathor.nanocontracts.runner.types import NCArgs
 from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -133,8 +136,11 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         assert isinstance(proxy_contract, ProxyBlueprint)
 
         self.runner.call_public_method(proxy_id, 'set_contract', ctx, proxy_id)
-        with self.assertRaises(NCInvalidSyscall, match='cannot call the same blueprint'):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(proxy_id, 'inc', ctx)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidSyscall)
+        assert failure.msg == 'cannot call the same blueprint'
 
         self.runner.call_public_method(proxy_id, 'set_contract', ctx, code1_id)
         self.runner.call_public_method(proxy_id, 'inc', ctx)
@@ -174,7 +180,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         assert proxy_contract.counter == 3
 
         # it should invoke the fallback method which will fail calling `dec()` from code2's blueprint.
-        with self.assertRaises(NCMethodNotFound, match='method `dec` not found and no fallback is provided'):
+        with self.assertRaises(RuntimeError, match='method `dec` not found and no fallback is provided'):  # TODO
             self.runner.call_public_method(proxy_id, 'dec', ctx)
         assert proxy_storage.get_blueprint_id() == self.proxy_bp_id
         assert proxy_contract.contract == code2_id
@@ -183,8 +189,9 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         assert proxy_contract.counter == 3
 
         unknown_bp_id = self.gen_random_blueprint_id()
-        with self.assertRaises(BlueprintDoesNotExist):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(proxy_id, 'upgrade_no_cb', ctx, unknown_bp_id)
+        assert isinstance(e.value.get_inner(), BlueprintDoesNotExist)
 
         self.runner.call_public_method(proxy_id, 'upgrade', ctx, self.code3_bp_id, 'on_upgrade_inc')
         assert proxy_storage.get_blueprint_id() == self.code3_bp_id

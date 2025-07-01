@@ -17,7 +17,8 @@ import re
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.exception import BlueprintSyntaxError, NCForbiddenAction
+from hathor.nanocontracts.exception import BlueprintSyntaxError
+from hathor.nanocontracts.nc_failure import NCFailureException, NCForbiddenAction
 from hathor.nanocontracts.runner.types import NCArgs
 from hathor.nanocontracts.types import (
     NCAcquireAuthorityAction,
@@ -99,12 +100,18 @@ class TestAllowedActions(BlueprintTestCase):
             ctx = self._get_context(action)
 
             # Test on public method
-            with pytest.raises(NCForbiddenAction, match=f'action {action.name} is forbidden on method `nop`'):
+            with pytest.raises(NCFailureException) as e:
                 self.runner.call_public_method(self.contract_id, 'nop', ctx)
+            failure = e.value.get_inner()
+            assert isinstance(failure, NCForbiddenAction)
+            assert failure.msg == f'action {action.name} is forbidden on method `nop`'
 
             # Test on fallback method
-            with pytest.raises(NCForbiddenAction, match=f'action {action.name} is forbidden on method `fallback`'):
+            with pytest.raises(NCFailureException) as e:
                 self.runner.call_public_method(self.contract_id, 'unknown', ctx)
+            failure = e.value.get_inner()
+            assert isinstance(failure, NCForbiddenAction)
+            assert failure.msg == f'action {action.name} is forbidden on method `fallback`'
 
     def test_conflicting_params(self) -> None:
         msg = 'use only one of `allow_actions` or per-action flags: `initialize()`'
@@ -124,8 +131,11 @@ class TestAllowedActions(BlueprintTestCase):
             for forbidden_action in forbidden_actions:
                 msg = f'action {forbidden_action.name} is forbidden on method `{method_name}`'
                 ctx = self._get_context(forbidden_action)
-                with pytest.raises(NCForbiddenAction, match=msg):
+                with pytest.raises(NCFailureException) as e:
                     runner.call_public_method(self.contract_id, method_name, ctx)
+                failure = e.value.get_inner()
+                assert isinstance(failure, NCForbiddenAction)
+                assert failure.msg == msg
 
     def test_allow_specific_action_on_fallback(self) -> None:
         for allowed_action in self.all_actions:
@@ -148,5 +158,8 @@ class TestAllowedActions(BlueprintTestCase):
             for forbidden_action in forbidden_actions:
                 msg = f'action {forbidden_action.name} is forbidden on method `fallback`'
                 ctx = self._get_context(forbidden_action)
-                with pytest.raises(NCForbiddenAction, match=msg):
+                with pytest.raises(NCFailureException) as e:
                     runner.call_public_method(self.contract_id, method_name, ctx)
+                failure = e.value.get_inner()
+                assert isinstance(failure, NCForbiddenAction)
+                assert failure.msg == msg

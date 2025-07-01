@@ -18,10 +18,11 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, TypeVar
 
+from returns.result import Success
 from typing_extensions import override
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts.exception import NCInsufficientFunds, NCTokenAlreadyExists
+from hathor.nanocontracts.nc_failure import NCInsufficientFunds, NCResult, NCTokenAlreadyExists
 from hathor.nanocontracts.nc_types import NCType
 from hathor.nanocontracts.storage.contract_storage import (
     AttrKey,
@@ -86,15 +87,18 @@ class NCChangesTracker(NCContractStorage):
         self.has_been_commited = False
         self.has_been_blocked = False
 
-    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> NCResult[None]:
         """Create a new token in this changes tracker."""
         if self.has_token(token_id):
-            raise NCTokenAlreadyExists
+            return NCTokenAlreadyExists().to_result()
+
         self._created_tokens[token_id] = TokenDescription(
             token_id=token_id,
             token_name=token_name,
             token_symbol=token_symbol,
         )
+
+        return Success(None)
 
     def has_token(self, token_id: TokenUid) -> bool:
         """Return True if a given token_id already exists."""
@@ -183,7 +187,7 @@ class NCChangesTracker(NCContractStorage):
             )
 
         for td in self._created_tokens.values():
-            self.storage.create_token(TokenUid(td.token_id), td.token_name, td.token_symbol)
+            self.storage.create_token(TokenUid(td.token_id), td.token_name, td.token_symbol).unwrap()
 
         if self._blueprint_id is not None:
             self.storage.set_blueprint_id(self._blueprint_id)
@@ -214,15 +218,17 @@ class NCChangesTracker(NCContractStorage):
 
         return balance
 
-    def validate_balances_are_positive(self) -> None:
+    def validate_balances_are_positive(self) -> NCResult[None]:
         """Check that all final balances are positive. If not, it raises NCInsufficientFunds."""
         for balance_key in self._balance_diff.keys():
             balance = self.get_balance(balance_key.token_uid)
             if balance.value < 0:
-                raise NCInsufficientFunds(
+                return NCInsufficientFunds(
                     f'negative balance for contract {self.nc_id.hex()} '
                     f'(balance={balance} token_uid={balance_key.token_uid.hex()})'
-                )
+                ).to_result()
+
+        return Success(None)
 
     @override
     def get_all_balances(self) -> dict[BalanceKey, Balance]:

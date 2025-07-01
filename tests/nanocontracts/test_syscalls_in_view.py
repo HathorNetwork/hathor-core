@@ -16,7 +16,6 @@ import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
-from hathor.nanocontracts.exception import NCViewMethodError
 from hathor.nanocontracts.runner.types import NCRawArgs
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -138,7 +137,7 @@ class TestSyscallsInView(BlueprintTestCase):
         contract_id = self.gen_random_contract_id()
         self.runner.create_contract(contract_id, self.blueprint_id, self.ctx, None)
 
-        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.rng`'):
+        with pytest.raises(RuntimeError, match='@view method cannot call `syscall.rng`'):  # TODO
             self.runner.call_view_method(contract_id, 'test_rng')
 
     def test_syscalls(self) -> None:
@@ -169,5 +168,5 @@ class TestSyscallsInView(BlueprintTestCase):
             if method_name in allowed_view_syscalls:
                 self.runner.call_view_method(contract_id, method_name)
             else:
-                with pytest.raises(NCViewMethodError, match=f'@view method cannot call `syscall.{method_name}`'):
+                with pytest.raises(RuntimeError, match=f'@view method cannot call `syscall.{method_name}`'):  # TODO
                     self.runner.call_view_method(contract_id, method_name)

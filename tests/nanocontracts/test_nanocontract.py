@@ -454,7 +454,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         ))
         nc2.update_hash()
         nc2_nano_header = nc2.get_nano_header()
-        context = nc2_nano_header.get_context()
+        context = nc2_nano_header.get_context().unwrap()
         self.assertEqual(2, len(context.actions))
 
         action1 = context.get_single_action(TokenUid(b'token-a'))

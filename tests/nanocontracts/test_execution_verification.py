@@ -15,13 +15,14 @@
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.exception import (
+from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.method import ArgsOnly
+from hathor.nanocontracts.nc_failure import (
     BlueprintDoesNotExist,
-    NCFail,
+    NCFailureException,
     NCMethodNotFound,
     NCUninitializedContractError,
 )
-from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.runner.types import NCRawArgs
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
@@ -40,18 +41,21 @@ class TestExecutionVerification(BlueprintTestCase):
         self.register_blueprint_class(self.blueprint_id, MyBlueprint)
 
     def test_blueprint_does_not_exist(self) -> None:
-        with pytest.raises(BlueprintDoesNotExist):
+        with pytest.raises(NCFailureException) as e:
             self.runner.create_contract(self.contract_id, self.gen_random_blueprint_id(), self.create_context(), 123)
+        assert isinstance(e.value.get_inner(), BlueprintDoesNotExist)
 
     def test_contract_does_not_exist(self) -> None:
-        with pytest.raises(NCUninitializedContractError):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.gen_random_contract_id(), 'method', self.create_context())
+        assert isinstance(e.value.get_inner(), NCUninitializedContractError)
 
     def test_method_not_found(self) -> None:
         self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context(), 123)
 
-        with pytest.raises(NCMethodNotFound):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.contract_id, 'not_found', self.create_context())
+        assert isinstance(e.value.get_inner(), NCMethodNotFound)
 
     def test_empty_args(self) -> None:
         with pytest.raises(NCFail) as e:

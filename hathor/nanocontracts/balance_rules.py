@@ -17,10 +17,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
+from returns.result import Success
 from typing_extensions import assert_never, override
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
-from hathor.nanocontracts.exception import NCInvalidAction
+from hathor.nanocontracts.nc_failure import NCInvalidAction, NCResult
 from hathor.nanocontracts.storage import NCChangesTracker
 from hathor.nanocontracts.types import (
     BaseAction,
@@ -51,7 +52,7 @@ class BalanceRules(ABC, Generic[T]):
         self.action = action
 
     @abstractmethod
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> NCResult[None]:
         """
         Define how the respective action interacts with the transaction's
         token_dict during the verification phase, updating it.
@@ -59,7 +60,7 @@ class BalanceRules(ABC, Generic[T]):
         raise NotImplementedError
 
     @abstractmethod
-    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
+    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> NCResult[None]:
         """
         Define how the respective action interacts with the transaction's changes tracker during nano contract
         execution, updating it, on the callee side.
@@ -67,7 +68,7 @@ class BalanceRules(ABC, Generic[T]):
         raise NotImplementedError
 
     @abstractmethod
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> NCResult[None]:
         """
         Define how the respective action interacts with the transaction's changes tracker during nano contract
         execution, updating it, on the caller side — that is, when a contract calls another contract.
@@ -100,18 +101,21 @@ class _DepositRules(BalanceRules[NCDepositAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> NCResult[None]:
         token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
         token_info.amount = token_info.amount + self.action.amount
         token_dict[self.action.token_uid] = token_info
+        return Success(None)
 
     @override
-    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
+    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> NCResult[None]:
         callee_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+        return Success(None)
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> NCResult[None]:
         caller_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+        return Success(None)
 
 
 class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
@@ -124,18 +128,21 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> NCResult[None]:
         token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
         token_info.amount = token_info.amount - self.action.amount
         token_dict[self.action.token_uid] = token_info
+        return Success(None)
 
     @override
-    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
+    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> NCResult[None]:
         callee_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+        return Success(None)
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> NCResult[None]:
         caller_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+        return Success(None)
 
 
 class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
@@ -148,21 +155,23 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> NCResult[None]:
         assert self.action.token_uid != HATHOR_TOKEN_UID
         token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
         if self.action.mint and not token_info.can_mint:
-            raise NCInvalidAction(
+            return NCInvalidAction(
                 f'{self.action.name} token {self.action.token_uid.hex()} requires mint, but no input has it'
-            )
+            ).to_result()
 
         if self.action.melt and not token_info.can_melt:
-            raise NCInvalidAction(
+            return NCInvalidAction(
                 f'{self.action.name} token {self.action.token_uid.hex()} requires melt, but no input has it'
-            )
+            ).to_result()
+
+        return Success(None)
 
     @override
-    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
+    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> NCResult[None]:
         assert self.action.token_uid != HATHOR_TOKEN_UID
         callee_changes_tracker.grant_authorities(
             self.action.token_uid,
@@ -170,24 +179,28 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
             grant_melt=self.action.melt,
         )
 
+        return Success(None)
+
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> NCResult[None]:
         if self.action.token_uid == HATHOR_TOKEN_UID:
-            raise NCInvalidAction('cannot grant authorities for HTR token')
+            return NCInvalidAction('cannot grant authorities for HTR token').to_result()
 
         balance = caller_changes_tracker.get_balance(self.action.token_uid)
 
         if self.action.mint and not balance.can_mint:
-            raise NCInvalidAction(
+            return NCInvalidAction(
                 f'{self.action.name} token {self.action.token_uid.hex()} requires mint, '
                 f'but contract does not have that authority'
-            )
+            ).to_result()
 
         if self.action.melt and not balance.can_melt:
-            raise NCInvalidAction(
+            return NCInvalidAction(
                 f'{self.action.name} token {self.action.token_uid.hex()} requires melt, '
                 f'but contract does not have that authority'
-            )
+            ).to_result()
+
+        return Success(None)
 
 
 class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
@@ -200,31 +213,38 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> NCResult[None]:
         assert self.action.token_uid != HATHOR_TOKEN_UID
         token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
         token_info.can_mint = token_info.can_mint or self.action.mint
         token_info.can_melt = token_info.can_melt or self.action.melt
         token_dict[self.action.token_uid] = token_info
+        return Success(None)
 
     @override
-    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
+    def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> NCResult[None]:
         assert self.action.token_uid != HATHOR_TOKEN_UID
         balance = callee_changes_tracker.get_balance(self.action.token_uid)
 
         if self.action.mint and not balance.can_mint:
-            raise NCInvalidAction(f'cannot acquire mint authority for token {self.action.token_uid.hex()}')
+            return NCInvalidAction(f'cannot acquire mint authority for token {self.action.token_uid.hex()}') \
+                .to_result()
 
         if self.action.melt and not balance.can_melt:
-            raise NCInvalidAction(f'cannot acquire melt authority for token {self.action.token_uid.hex()}')
+            return NCInvalidAction(f'cannot acquire melt authority for token {self.action.token_uid.hex()}') \
+                .to_result()
+
+        return Success(None)
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> NCResult[None]:
         if self.action.token_uid == HATHOR_TOKEN_UID:
-            raise NCInvalidAction('cannot acquire authorities for HTR token')
+            return NCInvalidAction('cannot acquire authorities for HTR token').to_result()
 
         caller_changes_tracker.grant_authorities(
             self.action.token_uid,
             grant_mint=self.action.mint,
             grant_melt=self.action.melt,
         )
+
+        return Success(None)

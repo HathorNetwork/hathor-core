@@ -17,10 +17,13 @@ from __future__ import annotations
 from collections import defaultdict
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, final
+from typing import TYPE_CHECKING, Any, Self, final
+
+from returns.result import Success
 
 from hathor.crypto.util import get_address_b58_from_bytes
-from hathor.nanocontracts.exception import NCFail, NCInvalidContext
+from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.nc_failure import NCInvalidContext, NCResult
 from hathor.nanocontracts.types import Address, ContractId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import VertexData
 from hathor.transaction.exceptions import TxValidationError
@@ -38,6 +41,8 @@ class Context:
 
     Deposits and withdrawals are grouped by token. Note that it is impossible
     to have both a deposit and a withdrawal for the same token.
+
+    NEVER INIT DIRECTLY, USE try_new
     """
     __slots__ = ('__actions', '__address', '__vertex', '__timestamp', '__all_actions__')
     __actions: MappingProxyType[TokenUid, tuple[NCAction, ...]]
@@ -52,17 +57,16 @@ class Context:
         address: Address | ContractId,
         timestamp: int,
     ) -> None:
+        """
+        NEVER INIT DIRECTLY, USE try_new
+        """
         # Dict of action where the key is the token_uid.
         # If empty, it is a method call without any actions.
         if not actions:
             self.__actions = _EMPTY_MAP
         else:
             from hathor.verification.nano_header_verifier import NanoHeaderVerifier
-            try:
-                NanoHeaderVerifier.verify_action_list(actions)
-            except TxValidationError as e:
-                raise NCInvalidContext('invalid nano context') from e
-
+            NanoHeaderVerifier.verify_action_list(actions)
             actions_map: defaultdict[TokenUid, tuple[NCAction, ...]] = defaultdict(tuple)
             for action in actions:
                 actions_map[action.token_uid] = (*actions_map[action.token_uid], action)
@@ -81,6 +85,19 @@ class Context:
 
         # Timestamp of the first block confirming tx.
         self.__timestamp = timestamp
+
+    @classmethod
+    def try_new(
+        cls,
+        actions: list[NCAction],
+        vertex: BaseTransaction | VertexData,
+        address: Address | ContractId,
+        timestamp: int,
+    ) -> NCResult[Self]:
+        try:
+            return Success(cls(actions=actions, vertex=vertex, address=address, timestamp=timestamp))
+        except TxValidationError as e:
+            return NCInvalidContext(f'invalid nano context: {e}').to_result()
 
     @property
     def vertex(self) -> VertexData:
@@ -111,9 +128,9 @@ class Context:
             raise NCFail(f'expected exactly 1 action for token {token_uid.hex()}')
         return actions[0]
 
-    def copy(self) -> Context:
+    def copy(self) -> NCResult[Self]:
         """Return a copy of the context."""
-        return Context(
+        return Context.try_new(
             actions=list(self.__all_actions__),
             vertex=self.vertex,
             address=self.address,

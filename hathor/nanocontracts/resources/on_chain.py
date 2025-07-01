@@ -20,11 +20,7 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
-from hathor.nanocontracts.exception import (
-    BlueprintDoesNotExist,
-    OCBBlueprintNotConfirmed,
-    OCBInvalidBlueprintVertexType,
-)
+from hathor.nanocontracts.exception import OCBBlueprintNotConfirmed, OCBInvalidBlueprintVertexType
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.util import bytes_from_hex
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -67,8 +63,9 @@ class BlueprintOnChainResource(Resource):
             blueprint_list = []
             if bp_id := bytes_from_hex(search):
                 try:
-                    bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id))
-                except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed):
+                    bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id)).unwrap()
+                # TODO: BlueprintDoesNotExist
+                except (OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed):
                     pass
                 else:
                     bp_class = bp_tx.get_blueprint_class()
@@ -94,8 +91,9 @@ class BlueprintOnChainResource(Resource):
             ref_tx_id = bytes.fromhex(params.before or params.after or '')
             assert ref_tx_id
             try:
-                ref_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(ref_tx_id))
-            except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed) as e:
+                ref_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(ref_tx_id)).unwrap()
+            # TODO: BlueprintDoesNotExist
+            except (OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed) as e:
                 request.setResponseCode(404)
                 error_response = ErrorResponse(
                     success=False, error=f'Blueprint not found: {repr(e)}'
@@ -112,8 +110,9 @@ class BlueprintOnChainResource(Resource):
         blueprints = []
         for idx, bp_id in enumerate(iter_bps):
             try:
-                bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id))
-            except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType):
+                bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id)).unwrap()
+            # TODO: BlueprintDoesNotExist
+            except OCBInvalidBlueprintVertexType:
                 raise AssertionError('bps iterator must always yield valid blueprint txs')
             except OCBBlueprintNotConfirmed:
                 # unconfirmed OCBs are simply not added to the response

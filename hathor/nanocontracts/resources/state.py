@@ -152,7 +152,7 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         blueprint_id = nc_storage.get_blueprint_id()
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id).unwrap()
 
         value: Any
         # Get balances.
@@ -213,7 +213,7 @@ class NanoContractStateResource(Resource):
         calls: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
         for call_info in params.calls:
             try:
-                method_name, method_args = parse_nc_method_call(blueprint_class, call_info)
+                method_name, method_args = parse_nc_method_call(blueprint_class, call_info).unwrap()
                 value = runner.call_view_method(nc_id_bytes, method_name, *method_args)
                 if type(value) is bytes:
                     value = value.hex()

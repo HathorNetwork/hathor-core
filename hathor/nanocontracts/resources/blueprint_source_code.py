@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.nanocontracts.exception import BlueprintDoesNotExist, OCBBlueprintNotConfirmed
+from hathor.nanocontracts.exception import OCBBlueprintNotConfirmed
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
@@ -58,10 +58,11 @@ class BlueprintSourceCodeResource(Resource):
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Blueprint not confirmed: {params.blueprint_id}')
             return error_response.json_dumpb()
-        except BlueprintDoesNotExist:
-            request.setResponseCode(404)
-            error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
-            return error_response.json_dumpb()
+        # TODO
+        # except BlueprintDoesNotExist:
+        #     request.setResponseCode(404)
+        #     error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
+        #     return error_response.json_dumpb()
 
         response = BlueprintSourceCodeResponse(
             id=params.blueprint_id,

@@ -261,6 +261,7 @@ class Method:
         """
         try:
             return _deserialize_map_exception(self.args, data)
+        # TODO
         except Exception as e:
             raise NCFail from e
 

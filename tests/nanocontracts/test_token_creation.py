@@ -143,7 +143,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
         assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -2
 
-        jkl_context = JKL.get_nano_header().get_context()
+        jkl_context = JKL.get_nano_header().get_context().unwrap()
         htr_token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
         assert jkl_context.actions[htr_token_uid] == (NCWithdrawalAction(token_uid=htr_token_uid, amount=3),)
 

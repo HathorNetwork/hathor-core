@@ -19,9 +19,10 @@ import pytest
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
-from hathor.nanocontracts.exception import NCError, NCInvalidMethodCall
+from hathor.nanocontracts.exception import NCError
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.nc_exec_logs import NCCallBeginEntry, NCCallEndEntry
+from hathor.nanocontracts.nc_failure import NCFailureException, NCInvalidMethodCall
 from hathor.nanocontracts.runner.types import CallType, NCArgs, NCParsedArgs, NCRawArgs
 from hathor.nanocontracts.types import ContractId, NCDepositAction, TokenUid, fallback
 from hathor.transaction import Block, Transaction
@@ -144,8 +145,11 @@ class TestFallbackMethod(BlueprintTestCase):
     def test_cannot_call_another_fallback_directly(self) -> None:
         contract_id = self.gen_random_contract_id()
         self.runner.create_contract(contract_id, self.blueprint_id, self.ctx)
-        with pytest.raises(NCInvalidMethodCall, match='method `fallback` is not a public method'):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.contract_id, 'call_another_fallback', self.ctx, contract_id)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidMethodCall)
+        assert failure.msg == 'method `fallback` is not a public method'
 
     def test_fallback_args_bytes_success(self) -> None:
         args_parser = ArgsOnly.from_arg_types((str, int))

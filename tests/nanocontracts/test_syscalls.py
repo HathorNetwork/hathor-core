@@ -5,7 +5,7 @@ import pytest
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCInvalidSyscall
+from hathor.nanocontracts.nc_failure import NCFailureException, NCInvalidSyscall
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.types import (
@@ -160,25 +160,40 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Try mint TKA
         msg = f'contract {nc_id.hex()} cannot mint {token_a_uid.hex()} tokens'
-        with pytest.raises(NCInvalidSyscall, match=msg):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(nc_id, 'mint', ctx, token_a_uid, 123)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidSyscall)
+        assert failure.msg == msg
 
         # Try melt TKA
         msg = f'contract {nc_id.hex()} cannot melt {token_a_uid.hex()} tokens'
-        with pytest.raises(NCInvalidSyscall, match=msg):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(nc_id, 'melt', ctx, token_a_uid, 456)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidSyscall)
+        assert failure.msg == msg
 
         # Try mint HTR
-        with pytest.raises(NCInvalidSyscall, match=f'contract {nc_id.hex()} cannot mint HTR tokens'):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(nc_id, 'mint', ctx, HATHOR_TOKEN_UID, 123)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidSyscall)
+        assert failure.msg == f'contract {nc_id.hex()} cannot mint HTR tokens'
 
         # Try melt HTR
-        with pytest.raises(NCInvalidSyscall, match=f'contract {nc_id.hex()} cannot melt HTR tokens'):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(nc_id, 'melt', ctx, HATHOR_TOKEN_UID, 456)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidSyscall)
+        assert failure.msg == f'contract {nc_id.hex()} cannot melt HTR tokens'
 
         # Try revoke HTR authorities
-        with pytest.raises(NCInvalidSyscall, match=f'contract {nc_id.hex()} cannot revoke authorities from HTR token'):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(nc_id, 'revoke', ctx, HATHOR_TOKEN_UID, True, False)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidSyscall)
+        assert failure.msg == f'contract {nc_id.hex()} cannot revoke authorities from HTR token'
 
         # Final state
         assert storage.get_all_balances() == {

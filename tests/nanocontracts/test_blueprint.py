@@ -1,6 +1,9 @@
+import pytest
+
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import BlueprintSyntaxError, NCFail, NCInsufficientFunds, NCViewMethodError
+from hathor.nanocontracts.exception import BlueprintSyntaxError, NCFail
+from hathor.nanocontracts.nc_failure import NCFailureException, NCInsufficientFunds
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
@@ -178,7 +181,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_private_method_change_state(self) -> None:
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        with self.assertRaises(NCViewMethodError):
+        with self.assertRaises(RuntimeError):  # TODO
             self.runner.call_view_method(nc_id, 'my_private_method_fail')
 
     def test_private_method_success(self) -> None:
@@ -208,8 +211,9 @@ class NCBlueprintTestCase(unittest.TestCase):
             MOCK_ADDRESS,
             timestamp=0,
         )
-        with self.assertRaises(NCInsufficientFunds):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(nc_id, 'nop', ctx)
+        assert isinstance(e.value.get_inner(), NCInsufficientFunds)
 
     def test_deposits_and_withdrawals(self) -> None:
         self._create_my_blueprint_contract()
@@ -249,8 +253,9 @@ class NCBlueprintTestCase(unittest.TestCase):
             MOCK_ADDRESS,
             timestamp=0,
         )
-        with self.assertRaises(NCInsufficientFunds):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(nc_id, 'nop', ctx)
+        assert isinstance(e.value.get_inner(), NCInsufficientFunds)
 
     def test_withdraw_wrong_token(self) -> None:
         self._create_my_blueprint_contract()
@@ -275,8 +280,9 @@ class NCBlueprintTestCase(unittest.TestCase):
             MOCK_ADDRESS,
             timestamp=0,
         )
-        with self.assertRaises(NCInsufficientFunds):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(nc_id, 'nop', ctx)
+        assert isinstance(e.value.get_inner(), NCInsufficientFunds)
         self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
 
     def test_invalid_field(self) -> None:

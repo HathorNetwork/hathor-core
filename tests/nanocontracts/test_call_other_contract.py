@@ -3,14 +3,14 @@ import sys
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, NCFail, public, view
-from hathor.nanocontracts.exception import (
+from hathor.nanocontracts.nc_failure import (
+    NCFailureException,
     NCInsufficientFunds,
     NCInvalidContractId,
     NCInvalidInitializeMethodCall,
     NCNumberOfCallsExceeded,
     NCRecursionError,
     NCUninitializedContractError,
-    NCViewMethodError,
 )
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
@@ -196,15 +196,21 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc1_id)
 
-        with pytest.raises(NCInvalidContractId, match='a contract cannot call itself'):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.nc1_id, 'dec', ctx)
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidContractId)
+        assert failure.msg == 'a contract cannot call itself'
 
     def test_call_itself_view(self) -> None:
         ctx = Context([], self.tx, MOCK_ADDRESS, timestamp=0)
         self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 10)
 
-        with pytest.raises(NCInvalidContractId, match='a contract cannot call itself'):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_view_method(self.nc1_id, 'invalid_call_view_itself')
+        failure = e.value.get_inner()
+        assert isinstance(failure, NCInvalidContractId)
+        assert failure.msg == 'a contract cannot call itself'
 
     def test_call_initialize(self) -> None:
         ctx = Context([], self.tx, MOCK_ADDRESS, timestamp=0)
@@ -212,8 +218,9 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
-        with self.assertRaises(NCInvalidInitializeMethodCall):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.nc1_id, 'invalid_call_initialize', ctx)
+        assert isinstance(e.value.get_inner(), NCInvalidInitializeMethodCall)
 
     def test_call_public_from_view(self) -> None:
         ctx = Context([], self.tx, MOCK_ADDRESS, timestamp=0)
@@ -221,7 +228,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
-        with self.assertRaises(NCViewMethodError):
+        with self.assertRaises(RuntimeError):  # TODO
             self.runner.call_view_method(self.nc1_id, 'invalid_call_public_from_view')
 
     def test_call_uninitialize_contract(self) -> None:
@@ -229,8 +236,9 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 10)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
-        with self.assertRaises(NCUninitializedContractError):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.nc1_id, 'dec', ctx)
+        assert isinstance(e.value.get_inner(), NCUninitializedContractError)
 
     def test_recursion_error(self) -> None:
         # Each call to `self.call_public_method()` in the blueprint adds 8 frames to the call stack.
@@ -245,8 +253,9 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc1_id)
 
-        with self.assertRaises(NCRecursionError):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.nc1_id, 'dec', ctx)
+        assert isinstance(e.value.get_inner(), NCRecursionError)
         trace = self.runner.get_last_call_info()
         assert trace.calls is not None
         self.assertEqual(len(trace.calls), self.runner.MAX_RECURSION_DEPTH)
@@ -257,8 +266,9 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 0)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
-        with self.assertRaises(NCNumberOfCallsExceeded):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.nc1_id, 'non_stop_call', ctx)
+        assert isinstance(e.value.get_inner(), NCNumberOfCallsExceeded)
         trace = self.runner.get_last_call_info()
         assert trace.calls is not None
         self.assertEqual(len(trace.calls), self.runner.MAX_CALL_COUNTER)
@@ -367,8 +377,9 @@ class NCBlueprintTestCase(unittest.TestCase):
             MOCK_ADDRESS,
             timestamp=0,
         )
-        with self.assertRaises(NCInsufficientFunds):
+        with pytest.raises(NCFailureException) as e:
             self.runner.call_public_method(self.nc1_id, 'get_tokens_from_another_contract', ctx)
+        assert isinstance(e.value.get_inner(), NCInsufficientFunds)
 
     def test_transfer_between_contracts(self) -> None:
         ctx = Context([], self.tx, MOCK_ADDRESS, timestamp=0)

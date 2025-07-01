@@ -308,7 +308,8 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if tx.is_nano_contract():
             assert isinstance(tx, Transaction)
             nano_header = tx.get_nano_header()
-            ctx = nano_header.get_context()
+            # It's safe to unwrap because verification guarantees the context is valid.
+            ctx = nano_header.get_context().unwrap()
             for action in ctx.__all_actions__:
                 match action:
                     case NCDepositAction():
@@ -344,7 +345,8 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if tx.is_nano_contract():
             assert isinstance(tx, Transaction)
             nano_header = tx.get_nano_header()
-            ctx = nano_header.get_context()
+            # It's safe to unwrap because verification guarantees the context is valid.
+            ctx = nano_header.get_context().unwrap()
             for action in ctx.__all_actions__:
                 match action:
                     case NCDepositAction():
