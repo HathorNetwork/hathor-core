@@ -29,7 +29,7 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.manager = self.create_peer(
             'testnet',
-            nc_indices=True,
+            nc_indexes=True,
         )
         self.web = StubSite(BlueprintOnChainResource(self.manager))
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)

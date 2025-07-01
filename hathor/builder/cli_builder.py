@@ -115,7 +115,7 @@ class CliBuilder:
         )
 
         # XXX Remove this protection after Nano Contracts are launched.
-        if settings.NETWORK_NAME not in {'nano-testnet-alpha', 'unittests'}:
+        if settings.NETWORK_NAME != 'unittests' and not settings.NETWORK_NAME.startswith('nano-testnet-'):
             # Add protection to prevent enabling Nano Contracts due to misconfigurations.
             self.check_or_raise(not settings.ENABLE_NANO_CONTRACTS,
                                 'configuration error: NanoContracts can only be enabled on localnets for now')
@@ -232,13 +232,9 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
-        self.check_or_raise(
-            not self._args.nc_history_index,
-            '--nc-history-index has been deprecated, use --nc-indices instead',
-        )
-        if self._args.nc_indices and tx_storage.indexes is not None:
-            self.log.debug('enable nano indices')
-            tx_storage.indexes.enable_nc_indices()
+        if self._args.nc_indexes and tx_storage.indexes is not None:
+            self.log.debug('enable nano indexes')
+            tx_storage.indexes.enable_nc_indexes()
 
         from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
         nc_calls_sorter = random_nc_calls_sorter

@@ -40,8 +40,8 @@ class BalanceRules(ABC, Generic[T]):
     """
     An abstract base class that unifies balance rules for NCActions.
 
-    Requires definitions for a verification-phase rule and a nano contract execution-phase rule,
-    which are normally complementary.
+    Requires definitions for a verification-phase rule and two nano contract execution-phase rules, one for the callee,
+    which is always a contract, and one for the caller, which may be a transaction or another contract.
     """
 
     __slots__ = ('settings', 'action')

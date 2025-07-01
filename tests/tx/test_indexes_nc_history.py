@@ -82,7 +82,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
         catalog = NCBlueprintCatalog({
             blueprint_id: MyTestBlueprint
         })
-        manager = self.create_peer('testnet', nc_indices=True)
+        manager = self.create_peer('testnet', nc_indexes=True)
         nc_history_index = manager.tx_storage.indexes.nc_history
         manager.tx_storage.nc_catalog = catalog
         dag_builder = TestDAGBuilder.from_manager(manager)
@@ -109,7 +109,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
         assert nc_history_index.get_latest_tx_timestamp(nc2.hash) is None
 
     def test_transaction_count(self) -> None:
-        builder = self.get_builder().enable_nc_indices()
+        builder = self.get_builder().enable_nc_indexes()
         manager = self.create_peer_from_builder(builder)
         assert isinstance(manager.tx_storage, TransactionRocksDBStorage)
         path = manager.tx_storage._rocksdb_storage.path
@@ -171,7 +171,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
         manager.tx_storage._rocksdb_storage.close()
 
         # Test loading counts from existing db
-        builder2 = self.get_builder().set_rocksdb_path(path).enable_nc_indices()
+        builder2 = self.get_builder().set_rocksdb_path(path).enable_nc_indexes()
         manager2 = self.create_peer_from_builder(builder2)
         indexes_manager2 = not_none(manager2.tx_storage.indexes)
         nc_history_index = not_none(indexes_manager2.nc_history)
@@ -211,7 +211,7 @@ class RocksDBNCHistoryIndexesTest(NCHistoryIndexesTest):
 
         # this makes sure we can spend the genesis outputs
         self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
-                                        utxo_index=True, nc_indices=True)
+                                        utxo_index=True, nc_indexes=True)
         self.blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = self.blocks[-1]
 

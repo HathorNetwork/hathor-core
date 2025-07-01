@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum, auto, unique
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 from typing_extensions import Literal, Self, assert_never
@@ -30,16 +30,18 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
 
 
-class CallType(str, Enum):
-    PUBLIC = 'public'
-    VIEW = 'view'
+@unique
+class CallType(StrEnum):
+    PUBLIC = auto()
+    VIEW = auto()
 
 
-class SyscallRecordType(str, Enum):
-    CREATE_CONTRACT = 'create_contract',
-    MINT_TOKENS = 'mint_tokens'
-    MELT_TOKENS = 'melt_tokens'
-    CREATE_TOKEN = 'create_token'
+@unique
+class SyscallRecordType(StrEnum):
+    CREATE_CONTRACT = auto()
+    MINT_TOKENS = auto()
+    MELT_TOKENS = auto()
+    CREATE_TOKEN = auto()
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -151,7 +153,7 @@ class CallRecord:
     # Keep track of all changes made by this call.
     changes_tracker: NCChangesTracker
 
-    # A list of syscalls that affect indices. None when it's a VIEW call.
+    # A list of syscalls that affect indexes. None when it's a VIEW call.
     index_updates: list[NCSyscallRecord] | None
 
 
@@ -175,15 +177,17 @@ class CallInfo:
     # A trace of the calls that happened. This will only be filled if `enable_call_trace` is true.
     calls: list[CallRecord] | None = None
 
-    # Current depth of execution. This is a dynamic value that changes as the execution progresses.
-    depth: int = 0
-
     # Counter of the number of calls performed so far. This is a dynamic value that changes as the
     # execution progresses.
     call_counter: int = 0
 
     # The logger to keep track of log entries during this call.
     nc_logger: NCLogger
+
+    @property
+    def depth(self) -> int:
+        """Get the depth of the call stack."""
+        return len(self.stack)
 
     def pre_call(self, call_record: CallRecord) -> None:
         """Called before a new call is executed."""
@@ -203,9 +207,7 @@ class CallInfo:
         else:
             self.change_trackers[call_record.contract_id].append(call_record.changes_tracker)
 
-        assert self.depth == len(self.stack)
         self.call_counter += 1
-        self.depth += 1
         self.stack.append(call_record)
         self.nc_logger.__log_call_begin__(call_record)
 
@@ -214,7 +216,6 @@ class CallInfo:
         assert call_record == self.stack.pop()
         assert call_record.changes_tracker == self.change_trackers[call_record.contract_id][-1]
         assert call_record.changes_tracker.nc_id == call_record.changes_tracker.storage.nc_id
-        self.depth -= 1
 
         change_trackers = self.change_trackers[call_record.contract_id]
         if len(change_trackers) > 1:

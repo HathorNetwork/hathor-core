@@ -20,7 +20,7 @@ import pytest
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.indexes.tokens_index import TokensIndex
-from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCInvalidAction
 from hathor.nanocontracts.method import Method
@@ -384,7 +384,7 @@ class TestActions(unittest.TestCase):
         self._test_acquire_authority_to_create_output(TxOutput.TOKEN_MINT_MASK)
 
         # Check that tx2 fails execution.
-        assert self.tx2.get_metadata().voided_by == {self.tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert self.tx2.get_metadata().voided_by == {self.tx2.hash, NC_EXECUTION_FAIL_ID}
         assert_nc_failure_reason(
             manager=self.manager,
             tx_id=self.tx2.hash,
@@ -405,7 +405,7 @@ class TestActions(unittest.TestCase):
         self._test_acquire_authority_to_create_output(TxOutput.TOKEN_MELT_MASK)
 
         # Check that tx2 fails execution.
-        assert self.tx2.get_metadata().voided_by == {self.tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert self.tx2.get_metadata().voided_by == {self.tx2.hash, NC_EXECUTION_FAIL_ID}
         assert_nc_failure_reason(
             manager=self.manager,
             tx_id=self.tx2.hash,
@@ -426,7 +426,7 @@ class TestActions(unittest.TestCase):
         self._test_acquire_authority_to_create_output(TxOutput.ALL_AUTHORITIES)
 
         # Check that tx2 fails execution.
-        assert self.tx2.get_metadata().voided_by == {self.tx2.hash, self._settings.NC_EXECUTION_FAIL_ID}
+        assert self.tx2.get_metadata().voided_by == {self.tx2.hash, NC_EXECUTION_FAIL_ID}
         assert_nc_failure_reason(
             manager=self.manager,
             tx_id=self.tx2.hash,

@@ -187,7 +187,8 @@ class VerificationService:
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
-            self._verify_nano_header(vertex)
+            assert self._settings.ENABLE_NANO_CONTRACTS
+            # nothing to do
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def _verify_block(self, block: Block) -> None:
@@ -260,11 +261,6 @@ class VerificationService:
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
         self.verifiers.token_creation_tx.verify_token_info(tx)
 
-    def _verify_nano_header(self, tx: BaseTransaction) -> None:
-        """Add `verify_no_authorities()` to the transaction verification."""
-        assert tx.is_nano_contract()
-        self.verifiers.nano_header.verify_actions(tx)
-
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -290,6 +286,7 @@ class VerificationService:
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
+            assert self._settings.ENABLE_NANO_CONTRACTS
             self._verify_without_storage_nano_header(vertex)
 
     def _verify_without_storage_base_block(self, block: Block) -> None:
@@ -327,6 +324,7 @@ class VerificationService:
     def _verify_without_storage_nano_header(self, tx: BaseTransaction) -> None:
         assert tx.is_nano_contract()
         self.verifiers.nano_header.verify_nc_signature(tx)
+        self.verifiers.nano_header.verify_actions(tx)
 
     def _verify_without_storage_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
         self._verify_without_storage_tx(tx)

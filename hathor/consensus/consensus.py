@@ -209,6 +209,7 @@ class ConsensusAlgorithm:
 
     def _filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
         """Remove voided_by entries of soft voided transactions."""
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
         if not (self.soft_voided_tx_ids & voided_by):
             return voided_by
         ret = set()
@@ -217,7 +218,7 @@ class ConsensusAlgorithm:
                 continue
             if h == self._settings.CONSENSUS_FAIL_ID:
                 continue
-            if h == self._settings.NC_EXECUTION_FAIL_ID:
+            if h == NC_EXECUTION_FAIL_ID:
                 continue
             if h == tx.hash:
                 continue
@@ -233,17 +234,18 @@ class ConsensusAlgorithm:
 
     def _filter_out_nc_fail_entries(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
         """Remove NC_EXECUTION_FAIL_ID flag from voided_by inherited by parents."""
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
         ret = set(voided_by)
-        if self._settings.NC_EXECUTION_FAIL_ID in ret:
+        if NC_EXECUTION_FAIL_ID in ret:
             # If NC_EXECUTION_FAIL_ID is in voided_by, then tx.hash must be in voided_by too.
             # So we remove both of them.
-            ret.remove(self._settings.NC_EXECUTION_FAIL_ID)
+            ret.remove(NC_EXECUTION_FAIL_ID)
             ret.remove(tx.hash)
         # Then we remove all hashes from transactions that also have the NC_EXECUTION_FAIL_ID flag.
         for h in voided_by:
             if h == self._settings.SOFT_VOIDED_ID:
                 continue
-            if h == self._settings.NC_EXECUTION_FAIL_ID:
+            if h == NC_EXECUTION_FAIL_ID:
                 continue
             if h == tx.hash:
                 continue
@@ -251,9 +253,9 @@ class ConsensusAlgorithm:
             tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
             tx2_voided_by: set[bytes] = tx2_meta.voided_by or set()
-            if self._settings.NC_EXECUTION_FAIL_ID in tx2_voided_by:
+            if NC_EXECUTION_FAIL_ID in tx2_voided_by:
                 ret.discard(h)
-        assert self._settings.NC_EXECUTION_FAIL_ID not in ret
+        assert NC_EXECUTION_FAIL_ID not in ret
         return ret
 
     def _remove_transactions(
