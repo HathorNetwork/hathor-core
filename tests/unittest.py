@@ -271,7 +271,7 @@ class TestCase(unittest.TestCase):
         if not mock_peers_whitelist:
             # Mock peers_whitelist must be initiated beforehand
             # If given None in testing, it defaults to URL.
-            url = "https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids"
+            url = "https://something.com"
             mock_peers_whitelist = URLPeersWhitelist(manager.reactor, url, False)
             mock_peers_whitelist.follow_wl()
             mock_peers_whitelist.start(mock_peers_whitelist._on_remove_callback)

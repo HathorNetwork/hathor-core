@@ -23,7 +23,7 @@ class WhitelistTestCase(unittest.TestCase):
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        manager2.connections.peers_whitelist._following_wl = True
+        manager2.connections.peers_whitelist._following_wl = False
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         conn = FakeConnection(manager1, manager2)
@@ -42,13 +42,12 @@ class WhitelistTestCase(unittest.TestCase):
         network = 'testnet'
         self._settings = get_global_settings()
         manager1 = self.create_peer(network)
-        manager1.connections.peers_whitelist._following_wl = True
-        manager1.connections.is_whitelist_only = True
+        manager1.connections.peers_whitelist.follow_wl()
 
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        manager2.connections.peers_whitelist._following_wl = True
+        manager2.connections.peers_whitelist.unfollow_wl()
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager1.connections.peers_whitelist._current.add(manager2.my_peer.id)
@@ -98,7 +97,7 @@ class WhitelistTestCase(unittest.TestCase):
         connections_manager = manager.connections
 
         settings_mock = Mock(spec_set=HathorSettings)
-        settings_mock.WHITELIST_URL = 'https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids'
+        settings_mock.WHITELIST_URL = 'https://something.com'
         connections_manager._settings = settings_mock
 
         agent_mock = Mock(spec_set=Agent)
@@ -152,3 +151,12 @@ class WhitelistTestCase(unittest.TestCase):
             _update_whitelist_err_mock.assert_called_once()
             # Check final instance
             assert isinstance(_update_whitelist_err_mock.call_args.args[0].value, TimeoutError)
+
+    def test_no_whitelist_but_follow(self) -> None:
+        pass
+
+    def test_whitelist_no_follow(self) -> None:
+        pass
+
+    def test_no_whitelist_unfollow(self) -> None:
+        pass
