@@ -161,7 +161,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
     ) -> None:
 
         method_parser = Method.from_callable(getattr(MyBlueprint, nc_method))
-        nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
+        nc_args_bytes = method_parser.serialize_args_bytes(nc_args).unwrap_or_raise()
 
         nano_header = NanoHeader(
             tx=nc,

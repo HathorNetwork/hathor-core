@@ -32,9 +32,11 @@ from hathor.transaction.util import (
 )
 from hathor.types import VertexId
 from hathor.utils import leb128
+from hathor.utils.result import Err, Ok, Result, propagate_result
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.context import Context
+    from hathor.nanocontracts.exception import NanoContractDoesNotExist, NCInvalidAction
     from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid
     from hathor.transaction import Transaction
     from hathor.transaction.base_transaction import BaseTransaction
@@ -51,8 +53,10 @@ class NanoHeaderAction:
     token_index: int
     amount: int
 
-    def to_nc_action(self, tx: Transaction) -> NCAction:
+    @propagate_result
+    def to_nc_action(self, tx: Transaction) -> Result[NCAction, NCInvalidAction]:
         """Create a NCAction from this NanoHeaderAction"""
+        from hathor.nanocontracts.exception import NCInvalidAction
         from hathor.nanocontracts.types import (
             NCAcquireAuthorityAction,
             NCActionType,
@@ -66,35 +70,36 @@ class NanoHeaderAction:
         try:
             token_uid = TokenUid(tx.get_token_uid(self.token_index))
         except IndexError:
-            from hathor.nanocontracts.exception import NCInvalidAction
-            raise NCInvalidAction(f'{self.type.name} token index {self.token_index} not found')
+            return Err(NCInvalidAction(f'{self.type.name} token index {self.token_index} not found'))
 
         match self.type:
             case NCActionType.DEPOSIT:
-                return NCDepositAction(token_uid=token_uid, amount=self.amount)
+                return NCDepositAction.try_new(token_uid=token_uid, amount=self.amount)
             case NCActionType.WITHDRAWAL:
-                return NCWithdrawalAction(token_uid=token_uid, amount=self.amount)
+                return NCWithdrawalAction.try_new(token_uid=token_uid, amount=self.amount)
             case NCActionType.GRANT_AUTHORITY:
                 mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
                 melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
-                self._validate_authorities(token_uid)
-                return NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+                self._validate_authorities(token_uid).unwrap_or_propagate()
+                return NCGrantAuthorityAction.try_new(token_uid=token_uid, mint=mint, melt=melt)
             case NCActionType.ACQUIRE_AUTHORITY:
                 mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
                 melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
-                self._validate_authorities(token_uid)
-                return NCAcquireAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+                self._validate_authorities(token_uid).unwrap_or_propagate()
+                return NCAcquireAuthorityAction.try_new(token_uid=token_uid, mint=mint, melt=melt)
             case _:
                 assert_never(self.type)
 
-    def _validate_authorities(self, token_uid: TokenUid) -> None:
+    def _validate_authorities(self, token_uid: TokenUid) -> Result[None, NCInvalidAction]:
         """Check that the authorities in the `amount` are valid."""
+        from hathor.nanocontracts.exception import NCInvalidAction
         from hathor.transaction.base_transaction import TxOutput
         if self.amount > TxOutput.ALL_AUTHORITIES:
-            from hathor.nanocontracts.exception import NCInvalidAction
-            raise NCInvalidAction(
+            return Err(NCInvalidAction(
                 f'action {self.type.name} token {token_uid.hex()} invalid authorities: 0b{self.amount:b}'
-            )
+            ))
+
+        return Ok(None)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -253,7 +258,7 @@ class NanoHeader(VertexBaseHeader):
             return ContractId(VertexId(self.tx.hash))
         return ContractId(VertexId(self.nc_id))
 
-    def get_blueprint_id(self, block: Block | None = None) -> BlueprintId:
+    def get_blueprint_id(self, block: Block | None = None) -> Result[BlueprintId, NanoContractDoesNotExist]:
         """Return the blueprint id."""
         from hathor.nanocontracts.exception import NanoContractDoesNotExist
         from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId as NCVertexId
@@ -263,32 +268,35 @@ class NanoHeader(VertexBaseHeader):
 
         if self.is_creating_a_new_contract():
             blueprint_id = BlueprintId(NCVertexId(self.nc_id))
-            return blueprint_id
+            return Ok(blueprint_id)
 
         if block is None:
             block = self.tx.storage.get_best_block()
 
-        try:
-            nc_storage = self.tx.storage.get_nc_storage(block, ContractId(NCVertexId(self.nc_id)))
-            blueprint_id = nc_storage.get_blueprint_id()
-            return blueprint_id
-        except NanoContractDoesNotExist:
-            # If the NC storage doesn't exist, the contract must be created by a tx in the mempool
-            pass
+        result = self.tx.storage.get_nc_storage(block, ContractId(NCVertexId(self.nc_id)))
+        match result:
+            case Ok(nc_storage):
+                blueprint_id = nc_storage.get_blueprint_id()
+                return Ok(blueprint_id)
+            case Err(NanoContractDoesNotExist()):
+                # If the NC storage doesn't exist, the contract must be created by a tx in the mempool
+                pass
+            case _:
+                assert_never(result)
 
         try:
             nc_creation = self.tx.storage.get_transaction(self.nc_id)
         except TransactionDoesNotExist as e:
-            raise NanoContractDoesNotExist from e
+            return Err(NanoContractDoesNotExist(), e)
 
         if not nc_creation.is_nano_contract():
-            raise NanoContractDoesNotExist(f'not a nano contract tx: {self.nc_id.hex()}')
+            return Err(NanoContractDoesNotExist(f'not a nano contract tx: {self.nc_id.hex()}'))
 
         assert isinstance(nc_creation, Transaction)
         nano_header = nc_creation.get_nano_header()
 
         if not nano_header.is_creating_a_new_contract():
-            raise NanoContractDoesNotExist(f'not a contract creation tx: {self.nc_id.hex()}')
+            return Err(NanoContractDoesNotExist(f'not a contract creation tx: {self.nc_id.hex()}'))
 
         # must be in the mempool
         nc_creation_meta = nc_creation.get_metadata()
@@ -296,18 +304,21 @@ class NanoHeader(VertexBaseHeader):
             # otherwise, it failed or skipped execution
             from hathor.transaction.nc_execution_state import NCExecutionState
             assert nc_creation_meta.nc_execution in (NCExecutionState.FAILURE, NCExecutionState.SKIPPED)
-            raise NanoContractDoesNotExist
+            return Err(NanoContractDoesNotExist())
 
         blueprint_id = BlueprintId(NCVertexId(nc_creation.get_nano_header().nc_id))
-        return blueprint_id
+        return Ok(blueprint_id)
 
-    def get_actions(self) -> list[NCAction]:
+    @propagate_result
+    def get_actions(self) -> Result[list[NCAction], NCInvalidAction]:
         """Get a list of NCActions from the header actions."""
-        return [header_action.to_nc_action(self.tx) for header_action in self.nc_actions]
+        actions = [header_action.to_nc_action(self.tx).unwrap_or_propagate() for header_action in self.nc_actions]
+        return Ok(actions)
 
-    def get_context(self) -> Context:
+    @propagate_result
+    def get_context(self) -> Result[Context, NCInvalidAction]:
         """Return a context to be used in a method call."""
-        action_list = self.get_actions()
+        action_list = self.get_actions().unwrap_or_propagate()
 
         meta = self.tx.get_metadata()
         timestamp: int
@@ -327,4 +338,4 @@ class NanoHeader(VertexBaseHeader):
             address=Address(self.nc_address),
             timestamp=timestamp,
         )
-        return context
+        return Ok(context)

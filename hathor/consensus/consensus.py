@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from structlog import get_logger
 
@@ -26,6 +26,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 from hathor.util import not_none
+from hathor.utils.result import Err, Ok
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -137,14 +138,18 @@ class ConsensusAlgorithm:
                 continue
             assert isinstance(tx_affected, Transaction)
             nano_header = tx_affected.get_nano_header()
-            try:
-                # TODO: We use this call to check whether the contract ID still exists after the reorg, as it may
-                #  have been a contract created by another contract that became "unexecuted" after the reorg. We
-                #  could use a more explicit check here instead of relying on this method.
-                nano_header.get_blueprint_id()
-            except NanoContractDoesNotExist:
-                from hathor.transaction.validation_state import ValidationState
-                tx_affected.set_validation(ValidationState.INVALID)
+
+            # TODO: We use this call to check whether the contract ID still exists after the reorg, as it may
+            #  have been a contract created by another contract that became "unexecuted" after the reorg. We
+            #  could use a more explicit check here instead of relying on this method.
+            match nano_header.get_blueprint_id():
+                case Ok():
+                    pass
+                case Err(NanoContractDoesNotExist()):
+                    from hathor.transaction.validation_state import ValidationState
+                    tx_affected.set_validation(ValidationState.INVALID)
+                case _ as unreachable:
+                    assert_never(unreachable)
 
         new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
         if new_best_height < best_height:

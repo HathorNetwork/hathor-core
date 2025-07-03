@@ -1,6 +1,8 @@
+import pytest
+
 from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.exception import NCRuntimeFailure
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.types import ContractId, TokenUid, VertexId
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -34,7 +36,7 @@ class NCGetContractTestCase(BlueprintTestCase):
         self.blueprint_id = self.gen_random_blueprint_id()
         self.register_blueprint_class(self.blueprint_id, MyBlueprint)
         self.runner.create_contract(self.nc_id, self.blueprint_id, self.create_context())
-        self.nc_storage = self.runner.get_storage(self.nc_id)
+        self.nc_storage = self.runner.get_storage(self.nc_id).unwrap_or_raise()
 
     def test_get_readwrite_contract(self) -> None:
         self.assertEqual(self.nc_storage.get_obj(b'x', INT_NC_TYPE), 0)
@@ -45,5 +47,7 @@ class NCGetContractTestCase(BlueprintTestCase):
         # XXX: the invalid_assign should fail as soon as put_obj is called, which makes this call fail with a NCFail,
         #      in the case where it doesn't fail immediately (and it's left to fail on commit), the exception raised
         #      will be a `TypeError` when commit is called.
-        with self.assertRaises(NCFail):
+        with pytest.raises(NCRuntimeFailure) as e:
             self.runner.call_public_method(self.nc_id, 'invalid_assign', self.create_context())
+        assert isinstance(e.value.__cause__, TypeError)
+        assert e.value.__cause__.args[0] == 'expected integer'

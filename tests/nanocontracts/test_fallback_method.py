@@ -149,9 +149,10 @@ class TestFallbackMethod(BlueprintTestCase):
 
     def test_fallback_args_bytes_success(self) -> None:
         args_parser = ArgsOnly.from_arg_types((str, int))
-        args_bytes = args_parser.serialize_args_bytes(('hello', 123))
+        args_bytes = args_parser.serialize_args_bytes(('hello', 123)).unwrap_or_raise()
         nc_args = NCRawArgs(args_bytes)
-        result = self.runner.call_public_method_with_nc_args(self.contract_id, 'unknown', self.ctx, nc_args)
+        result = self.runner.call_public_method_with_nc_args(self.contract_id, 'unknown', self.ctx, nc_args) \
+            .unwrap_or_raise()
         assert result == 'hello 246'
 
         last_call_info = self.runner.get_last_call_info()
@@ -171,7 +172,7 @@ class TestFallbackMethod(BlueprintTestCase):
     def test_dag_fallback(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         args_parser = ArgsOnly.from_arg_types((str, int))
-        valid_args_bytes = args_parser.serialize_args_bytes(('hello', 123))
+        valid_args_bytes = args_parser.serialize_args_bytes(('hello', 123)).unwrap_or_raise()
 
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]

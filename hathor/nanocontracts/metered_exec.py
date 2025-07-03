@@ -19,7 +19,9 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 from structlog import get_logger
 
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+from hathor.nanocontracts.exception import NCFail, NCFailure, NCRuntimeFailure
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
+from hathor.utils.result import Err, Ok, Result
 
 logger = get_logger()
 
@@ -77,7 +79,7 @@ class MeteredExecutor:
         del env['__builtins__']
         return env
 
-    def call(self, func: Callable[_P, _T], /, *args: _P.args, **kwargs: _P.kwargs) -> _T:
+    def call(self, func: Callable[_P, _T], /, *args: _P.args, **kwargs: _P.kwargs) -> Result[_T, NCFailure]:
         """ This is equivalent to `func(*args, **kwargs)` but with execution metering and memory limiting.
         """
         env: dict[str, object] = {
@@ -97,5 +99,17 @@ class MeteredExecutor:
             optimize=0,
             _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
         )
-        exec(code, env)
-        return cast(_T, env['__result__'])
+
+        try:
+            exec(code, env)
+        except Exception as e:
+            # TODO: Review this
+            # TODO: Prevent wrapping onions
+            if isinstance(e, (NCFail, NCRuntimeFailure)):
+                return Err(e)
+
+            failure = NCRuntimeFailure()
+            failure.__cause__ = e
+            return Err(failure, e)
+
+        return Ok(cast(_T, env['__result__']))

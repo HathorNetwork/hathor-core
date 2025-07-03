@@ -25,6 +25,7 @@ from hathor.nanocontracts.storage.token_proxy import TokenProxy
 from hathor.nanocontracts.types import Address, ContractId, TokenUid
 from hathor.transaction.headers.nano_header import ADDRESS_SEQNUM_SIZE
 from hathor.utils import leb128
+from hathor.utils.result import Err, Ok, Result
 
 
 class _Tag(Enum):
@@ -102,14 +103,14 @@ class NCBlockStorage:
         trie = PatriciaTrie(store, root_id=self.bytes_to_node_id(root_id))
         return trie
 
-    def get_contract_storage(self, contract_id: ContractId) -> NCContractStorage:
+    def get_contract_storage(self, contract_id: ContractId) -> Result[NCContractStorage, NanoContractDoesNotExist]:
         try:
             nc_root_id = self.get_contract_root_id(contract_id)
             trie = self._get_trie(nc_root_id)
         except KeyError:
-            raise NanoContractDoesNotExist(contract_id.hex())
+            return Err(NanoContractDoesNotExist(contract_id.hex()))
         token_proxy = TokenProxy(self)
-        return NCContractStorage(trie=trie, nc_id=contract_id, token_proxy=token_proxy)
+        return Ok(NCContractStorage(trie=trie, nc_id=contract_id, token_proxy=token_proxy))
 
     def get_empty_contract_storage(self, contract_id: ContractId) -> NCContractStorage:
         """Create a new contract storage instance for a given contract."""

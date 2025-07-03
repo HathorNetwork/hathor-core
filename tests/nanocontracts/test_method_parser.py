@@ -53,8 +53,8 @@ class NCBlueprintTestCase(unittest.TestCase):
     def _run_test_parser(self, method_parser: Method, data: T) -> None:
         # Then, check serialization and deserialization.
         args_in = (data,)
-        serialized_args_in = method_parser.serialize_args_bytes(args_in)
-        args_out = method_parser.deserialize_args_bytes(serialized_args_in)
+        serialized_args_in = method_parser.serialize_args_bytes(args_in).unwrap_or_raise()
+        args_out = method_parser.deserialize_args_bytes(serialized_args_in).unwrap_or_raise()
         self.assertEqual(args_in, args_out)
 
         # Also check that types match (they don't necessarily always match)
@@ -195,8 +195,8 @@ class NCBlueprintTestCase(unittest.TestCase):
 
         # Then, check serialization and deserialization.
         args_in = ('a', b'b', 1, True)
-        serialized_args_in = parser.serialize_args_bytes(args_in)
-        args_out = parser.deserialize_args_bytes(serialized_args_in)
+        serialized_args_in = parser.serialize_args_bytes(args_in).unwrap_or_raise()
+        args_out = parser.deserialize_args_bytes(serialized_args_in).unwrap_or_raise()
         self.assertEqual(args_in, args_out)
 
     def test_arg_parse_str(self) -> None:

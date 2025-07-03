@@ -24,6 +24,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError, NCSerializationError
 from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
+from hathor.utils.result import Err, Ok, Result
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -185,13 +186,13 @@ class CallInfo:
         """Get the depth of the call stack."""
         return len(self.stack)
 
-    def pre_call(self, call_record: CallRecord) -> None:
+    def pre_call(self, call_record: CallRecord) -> Result[None, NCRecursionError | NCNumberOfCallsExceeded]:
         """Called before a new call is executed."""
         if self.depth >= self.MAX_RECURSION_DEPTH:
-            raise NCRecursionError
+            return Err(NCRecursionError())
 
         if self.call_counter >= self.MAX_CALL_COUNTER:
-            raise NCNumberOfCallsExceeded
+            return Err(NCNumberOfCallsExceeded())
 
         if self.enable_call_trace:
             if self.calls is None:
@@ -206,6 +207,8 @@ class CallInfo:
         self.call_counter += 1
         self.stack.append(call_record)
         self.nc_logger.__log_call_begin__(call_record)
+
+        return Ok(None)
 
     def post_call(self, call_record: CallRecord) -> None:
         """Called after a call is finished."""
@@ -236,8 +239,9 @@ class NCRawArgs:
         from hathor.nanocontracts.method import ArgsOnly
         try:
             args_parser = ArgsOnly.from_arg_types(arg_types)
-            return args_parser.deserialize_args_bytes(self.args_bytes)
+            return args_parser.deserialize_args_bytes(self.args_bytes).unwrap_or_raise()
         except (NCSerializationError, TypeError):
+            # TODO: Review TypeError here and change to match instead of try-except
             return None
 
 

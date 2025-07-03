@@ -51,7 +51,7 @@ class BlueprintEnvironment:
     @property
     def rng(self) -> NanoRNG:
         """Return an RNG for the current contract."""
-        return self.__runner.syscall_get_rng()
+        return self.__runner.syscall_get_rng().unwrap_or_raise()
 
     @final
     def get_contract_id(self) -> ContractId:
@@ -63,7 +63,7 @@ class BlueprintEnvironment:
         """Return the blueprint id of a nano contract. By default, it returns for the current contract."""
         if contract_id is None:
             contract_id = self.get_contract_id()
-        return self.__runner.get_blueprint_id(contract_id)
+        return self.__runner.get_blueprint_id(contract_id).unwrap_or_raise()
 
     @final
     @deprecated('use explicit methods instead, `get_balance_before_current_call` or `get_current_balance`')
@@ -95,7 +95,7 @@ class BlueprintEnvironment:
 
         For instance, if a contract has 50 HTR and the call is requesting to withdraw 3 HTR,
         then this method will return 50 HTR."""
-        balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
+        balance = self.__runner.get_balance_before_current_call(contract_id, token_uid).unwrap_or_raise()
         return Amount(balance.value)
 
     def get_current_balance(
@@ -110,7 +110,7 @@ class BlueprintEnvironment:
         For instance, if a contract has 50 HTR and the call is requesting to withdraw 3 HTR,
         then this method will return 47 HTR.
         """
-        balance = self.__runner.get_current_balance(contract_id, token_uid)
+        balance = self.__runner.get_current_balance(contract_id, token_uid).unwrap_or_raise()
         return Amount(balance.value)
 
     @final
@@ -127,7 +127,7 @@ class BlueprintEnvironment:
         For instance, if a contract has a mint authority and a call is revoking it,
         then this method will return `True`.
         """
-        balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
+        balance = self.__runner.get_balance_before_current_call(contract_id, token_uid).unwrap_or_raise()
         return balance.can_mint
 
     @final
@@ -144,7 +144,7 @@ class BlueprintEnvironment:
         For instance, if a contract has a mint authority and a call is revoking it,
         then this method will return `False`.
         """
-        balance = self.__runner.get_current_balance(contract_id, token_uid)
+        balance = self.__runner.get_current_balance(contract_id, token_uid).unwrap_or_raise()
         return balance.can_mint
 
     @final
@@ -161,7 +161,7 @@ class BlueprintEnvironment:
         For instance, if a contract has a melt authority and a call is revoking it,
         then this method will return `True`.
         """
-        balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
+        balance = self.__runner.get_balance_before_current_call(contract_id, token_uid).unwrap_or_raise()
         return balance.can_melt
 
     @final
@@ -178,7 +178,7 @@ class BlueprintEnvironment:
         For instance, if a contract has a melt authority and a transaction is revoking it,
         then this method will return `False`.
         """
-        balance = self.__runner.get_current_balance(contract_id, token_uid)
+        balance = self.__runner.get_current_balance(contract_id, token_uid).unwrap_or_raise()
         return balance.can_melt
 
     @final
@@ -191,7 +191,8 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> Any:
         """Call a public method of another contract."""
-        return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs) \
+            .unwrap_or_raise()
 
     @final
     def proxy_call_public_method(
@@ -203,7 +204,8 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs) \
+            .unwrap_or_raise()
 
     @final
     def proxy_call_public_method_nc_args(
@@ -214,27 +216,31 @@ class BlueprintEnvironment:
         nc_args: NCArgs,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
+        return self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args) \
+            .unwrap_or_raise()
 
     @final
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a view method of another contract."""
-        return self.__runner.syscall_call_another_contract_view_method(nc_id, method_name, args, kwargs)
+        return self.__runner.syscall_call_another_contract_view_method(nc_id, method_name, args, kwargs) \
+            .unwrap_or_raise()
 
     @final
     def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
         """Revoke authorities from this nano contract."""
-        self.__runner.syscall_revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
+        self.__runner.syscall_revoke_authorities(
+            token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt
+        ).unwrap_or_raise()
 
     @final
     def mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Mint tokens and add them to the balance of this nano contract."""
-        self.__runner.syscall_mint_tokens(token_uid=token_uid, amount=amount)
+        self.__runner.syscall_mint_tokens(token_uid=token_uid, amount=amount).unwrap_or_raise()
 
     @final
     def melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Melt tokens by removing them from the balance of this nano contract."""
-        self.__runner.syscall_melt_tokens(token_uid=token_uid, amount=amount)
+        self.__runner.syscall_melt_tokens(token_uid=token_uid, amount=amount).unwrap_or_raise()
 
     @final
     def create_contract(
@@ -246,12 +252,13 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> tuple[ContractId, Any]:
         """Create a new contract."""
-        return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs)
+        return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs) \
+            .unwrap_or_raise()
 
     @final
     def emit_event(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
-        self.__runner.syscall_emit_event(data)
+        self.__runner.syscall_emit_event(data).unwrap_or_raise()
 
     @final
     def create_token(
@@ -269,9 +276,9 @@ class BlueprintEnvironment:
             amount,
             mint_authority,
             melt_authority,
-        )
+        ).unwrap_or_raise()
 
     @final
     def change_blueprint(self, blueprint_id: BlueprintId) -> None:
         """Change the blueprint of this contract."""
-        self.__runner.syscall_change_blueprint(blueprint_id)
+        self.__runner.syscall_change_blueprint(blueprint_id).unwrap_or_raise()

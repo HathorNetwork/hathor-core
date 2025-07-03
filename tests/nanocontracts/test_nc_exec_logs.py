@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from textwrap import dedent
 from unittest.mock import ANY
 
 from hathor.nanocontracts import Blueprint, Context, NCFail, public
@@ -431,12 +430,7 @@ class TestNCExecLogs(BaseNCExecLogs):
         error_tb = result.entries[b2.hash][0].error_traceback
         assert error_tb is not None
         assert error_tb.startswith('Traceback (most recent call last):')
-        assert dedent("""
-            ValueError: some value error\n
-            The above exception was the direct cause of the following exception:\n
-            Traceback (most recent call last):
-        """) in error_tb
-        assert error_tb.endswith('hathor.nanocontracts.exception.NCFail\n')
+        assert error_tb.endswith('ValueError: some value error\n')
 
     def test_reexecution_on_reorgs(self) -> None:
         self._prepare()

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import TypeAlias
 
 from hathor.exception import HathorError
 from hathor.transaction.exceptions import TxValidationError
@@ -50,15 +51,12 @@ class BlueprintDoesNotExist(NCFail):
     pass
 
 
+# TODO
 class NCSerializationError(NCFail):
     pass
 
 
 class NCSerializationArgTooLong(NCSerializationError):
-    pass
-
-
-class NCSerializationTypeError(NCSerializationError):
     pass
 
 
@@ -198,3 +196,10 @@ class OCBOutOfMemoryDuringLoading(NCError):
 class NCDisabledBuiltinError(NCError):
     """Raised when a disabled builtin is used during creation or execution of a nanocontract.
     """
+
+
+class NCRuntimeFailure(Exception):
+    pass
+
+
+NCFailure: TypeAlias = NCFail | NCRuntimeFailure

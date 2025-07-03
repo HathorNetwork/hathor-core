@@ -123,7 +123,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         self.runner.create_contract(code2_id, self.code2_bp_id, ctx)
         self.runner.create_contract(proxy_id, self.proxy_bp_id, ctx, code1_id)
 
-        proxy_storage = self.runner.get_storage(proxy_id)
+        proxy_storage = self.runner.get_storage(proxy_id).unwrap_or_raise()
 
         code1_contract = self.get_readonly_contract(code1_id)
         assert isinstance(code1_contract, CodeBlueprint1)

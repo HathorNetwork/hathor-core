@@ -80,7 +80,7 @@ class NanoHeaderVerifier:
 
         tx_tokens_set = set(tx.tokens)
         nano_header = tx.get_nano_header()
-        actions = nano_header.get_actions()
+        actions = nano_header.get_actions().unwrap_or_raise()
         NanoHeaderVerifier.verify_action_list(actions)
 
         for action in actions:

@@ -110,7 +110,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         expected = counter
         remainder = deposit
         while True:
-            nc_storage = self.runner.get_storage(nc_id)
+            nc_storage = self.runner.get_storage(nc_id).unwrap_or_raise()
             counter = nc_storage.get_obj(b'counter', INT_NC_TYPE)
             assert counter == expected
             new_nc_id = nc_storage.get_obj(b'contract', CONTRACT_NC_TYPE)

@@ -295,13 +295,16 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         if self.is_nano_contract():
             nano_header = self.get_nano_header()
+            ctx = nano_header.get_context() \
+                .expect('it should be safe to unwrap because verification guarantees the context is valid')
+
             json['nc_id'] = nano_header.get_contract_id().hex()
             json['nc_seqnum'] = nano_header.nc_seqnum
-            json['nc_blueprint_id'] = nano_header.get_blueprint_id().hex()
+            json['nc_blueprint_id'] = nano_header.get_blueprint_id().unwrap_or_raise().hex()
             json['nc_method'] = nano_header.nc_method
             json['nc_args'] = nano_header.nc_args_bytes.hex()
             json['nc_address'] = get_address_b58_from_bytes(nano_header.nc_address)
-            json['nc_context'] = nano_header.get_context().to_json()
+            json['nc_context'] = ctx.to_json()
 
         return json
 
@@ -349,10 +352,12 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         from hathor.nanocontracts.balance_rules import BalanceRules
         nano_header = self.get_nano_header()
+        actions = nano_header.get_actions() \
+            .expect('it should be safe to unwrap because verification guarantees the context is valid')
 
-        for action in nano_header.get_actions():
+        for action in actions:
             rules = BalanceRules.get_rules(self._settings, action)
-            rules.verification_rule(token_dict)
+            rules.verification_rule(token_dict).unwrap_or_raise()
 
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
