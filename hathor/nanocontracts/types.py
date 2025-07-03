@@ -17,7 +17,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, NewType, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, NewType, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
@@ -27,8 +27,9 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_has_self_arg,
     validate_method_types,
 )
-from hathor.nanocontracts.exception import BlueprintSyntaxError
+from hathor.nanocontracts.exception import BlueprintSyntaxError, NCInvalidAction
 from hathor.transaction.util import bytes_to_int, int_to_bytes
+from hathor.utils.result import Err, Ok, Result
 from hathor.utils.typing import InnerTypeMixin
 
 # Types to be used by blueprints.
@@ -340,8 +341,17 @@ class BaseAction:
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class BaseTokenAction(BaseAction):
-    """The base dataclass for all token-related NC actions. Shouldn't be instantiated directly."""
+    """
+    The base dataclass for all token-related NC actions. Shouldn't be instantiated directly.
+
+    NEVER INIT DIRECTLY, USE try_new
+    """
     amount: int
+
+    @classmethod
+    def try_new(cls, *, amount: int, token_uid: TokenUid) -> Result[Self, NCInvalidAction]:
+        # There are no failures, this method is just for API compatibility with BaseAuthorityAction.
+        return Ok(cls(amount=amount, token_uid=token_uid))
 
     @override
     def to_json(self) -> dict[str, Any]:
@@ -361,9 +371,15 @@ class BaseAuthorityAction(BaseAction):
     def __post_init__(self) -> None:
         """Validate the token uid."""
         from hathor.conf.settings import HATHOR_TOKEN_UID
-        from hathor.nanocontracts.exception import NCInvalidAction
         if self.token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidAction(f'{self.name} action cannot be executed on HTR token')
+
+    @classmethod
+    def try_new(cls, *, mint: bool, melt: bool, token_uid: TokenUid) -> Result[Self, NCInvalidAction]:
+        try:
+            return Ok(cls(mint=mint, melt=melt, token_uid=token_uid))
+        except NCInvalidAction as e:
+            return Err(e)
 
     @override
     def to_json(self) -> dict[str, Any]:

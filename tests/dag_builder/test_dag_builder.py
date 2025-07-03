@@ -280,13 +280,13 @@ class DAGBuilderTestCase(unittest.TestCase):
         tx2 = artifacts.by_name['tx2'].vertex
         tx3 = artifacts.by_name['tx3'].vertex
 
-        ctx2 = tx2.get_nano_header().get_context()
+        ctx2 = tx2.get_nano_header().get_context().unwrap_or_raise()
         self.assertEqual(dict(ctx2.actions), {
             tka_id: (NCDepositAction(token_uid=tka_id, amount=5),),
             htr_id: (NCDepositAction(token_uid=htr_id, amount=10),),
         })
 
-        ctx3 = tx3.get_nano_header().get_context()
+        ctx3 = tx3.get_nano_header().get_context().unwrap_or_raise()
         self.assertEqual(dict(ctx3.actions), {
             htr_id: (NCDepositAction(token_uid=htr_id, amount=3),),
             tka_id: (NCWithdrawalAction(token_uid=tka_id, amount=2),),
@@ -406,15 +406,15 @@ if foo:
 
         assert ocb1.get_blueprint_class().__name__ == 'Bet'
         assert nc1.get_nano_header().nc_id == ocb1.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb1.hash)
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb1.hash).unwrap_or_raise()
         assert blueprint_class.__name__ == 'Bet'
 
         assert ocb2.get_blueprint_class().__name__ == 'TestBlueprint1'
         assert nc2.get_nano_header().nc_id == ocb2.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb2.hash)
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb2.hash).unwrap_or_raise()
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
         assert ocb3.get_blueprint_class().__name__ == 'MyBlueprint'
         assert nc3.get_nano_header().nc_id == ocb3.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb3.hash)
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb3.hash).unwrap_or_raise()
         assert blueprint_class.__name__ == 'MyBlueprint'

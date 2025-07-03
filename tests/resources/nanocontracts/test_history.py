@@ -105,7 +105,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
 
         method = getattr(MyBlueprint, nc_method)
         method_parser = Method.from_callable(method)
-        nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
+        nc_args_bytes = method_parser.serialize_args_bytes(nc_args).unwrap_or_raise()
 
         nano_header = NanoHeader(
             tx=nc,
