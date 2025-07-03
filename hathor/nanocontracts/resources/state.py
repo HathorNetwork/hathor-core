@@ -317,14 +317,14 @@ NanoContractStateResource.openapi = {
         'x-rate-limit': {
             'global': [
                 {
-                    'rate': '10r/s',
+                    'rate': '30r/s',
                     'burst': 20,
                     'delay': 10
                 }
             ],
             'per-ip': [
                 {
-                    'rate': '2r/s',
+                    'rate': '5r/s',
                     'burst': 6,
                     'delay': 3
                 }

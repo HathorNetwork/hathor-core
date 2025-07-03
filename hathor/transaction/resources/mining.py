@@ -144,7 +144,7 @@ GetBlockTemplateResource.openapi = {
             'per-ip': [
                 {
                     'rate': '1r/s',
-                    'burst': 1,
+                    'burst': 3,
                     'delay': 3,
                 }
             ]
