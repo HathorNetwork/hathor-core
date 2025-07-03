@@ -76,8 +76,15 @@ class WhitelistTestCase(unittest.TestCase):
         manager2.connections.peers_whitelist._following_wl = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
+        # Mock Peers Whitelist does not fetch peer Ids from blank url
+        self.assertTrue(manager1.connections.peers_whitelist._current == set())
+        self.assertTrue(manager2.connections.peers_whitelist._current == set())
+
         manager1.connections.peers_whitelist._current.add(manager2.my_peer.id)
         manager2.connections.peers_whitelist._current.add(manager1.my_peer.id)
+
+        self.assertTrue(len(manager1.connections.peers_whitelist._current) == 1)
+        self.assertTrue(len(manager2.connections.peers_whitelist._current) == 1)
 
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
