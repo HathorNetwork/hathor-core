@@ -7,7 +7,7 @@ from twisted.web.client import Agent
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
-from hathor.p2p.manager import WHITELIST_REQUEST_TIMEOUT
+from hathor.p2p.peers_whitelist import WHITELIST_REQUEST_TIMEOUT, URLPeersWhitelist
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -16,12 +16,14 @@ from tests import unittest
 class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_no_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
+        manager1.connections.peers_whitelist._following_wl = True
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
+        manager2.connections.peers_whitelist._following_wl = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         conn = FakeConnection(manager1, manager2)
@@ -38,15 +40,18 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
-
+        self._settings = get_global_settings()
         manager1 = self.create_peer(network)
+        manager1.connections.peers_whitelist._following_wl = True
+        manager1.connections.is_whitelist_only = True
+
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
+        manager2.connections.peers_whitelist._following_wl = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
-        manager1.peers_whitelist.append(manager2.my_peer.id)
+        manager1.connections.peers_whitelist._current.add(manager2.my_peer.id)
 
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
@@ -62,16 +67,18 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_yes(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
+        manager1.connections.peers_whitelist._following_wl = True
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
+        manager2.connections.peers_whitelist._following_wl = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
-        manager1.peers_whitelist.append(manager2.my_peer.id)
-        manager2.peers_whitelist.append(manager1.my_peer.id)
+        manager1.connections.peers_whitelist._current.add(manager2.my_peer.id)
+        manager2.connections.peers_whitelist._current.add(manager1.my_peer.id)
 
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
@@ -91,22 +98,24 @@ class WhitelistTestCase(unittest.TestCase):
         connections_manager = manager.connections
 
         settings_mock = Mock(spec_set=HathorSettings)
-        settings_mock.WHITELIST_URL = 'some_url'
+        settings_mock.WHITELIST_URL = 'https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids'
         connections_manager._settings = settings_mock
 
         agent_mock = Mock(spec_set=Agent)
         agent_mock.request = Mock()
-        connections_manager._http_agent = agent_mock
+        if type(connections_manager.peers_whitelist) is not URLPeersWhitelist:
+            return
+        connections_manager.peers_whitelist._http_agent = agent_mock
 
         with (
-            patch.object(connections_manager, '_update_whitelist_cb') as _update_whitelist_cb_mock,
-            patch.object(connections_manager, '_update_whitelist_err') as _update_whitelist_err_mock,
+            patch.object(connections_manager.peers_whitelist, '_update_whitelist_cb') as _update_whitelist_cb_mock,
+            patch.object(connections_manager.peers_whitelist, '_update_whitelist_err') as _update_whitelist_err_mock,
             patch('twisted.web.client.readBody') as read_body_mock
         ):
             # Test success
             agent_mock.request.return_value = Deferred()
             read_body_mock.return_value = b'body'
-            d = connections_manager.update_whitelist()
+            d = connections_manager.peers_whitelist.update()
             d.callback(None)
 
             read_body_mock.assert_called_once_with(None)
@@ -119,7 +128,7 @@ class WhitelistTestCase(unittest.TestCase):
 
             # Test request error
             agent_mock.request.return_value = Deferred()
-            d = connections_manager.update_whitelist()
+            d = connections_manager.peers_whitelist.update()
             error = Failure('some_error')
             d.errback(error)
 
@@ -134,11 +143,12 @@ class WhitelistTestCase(unittest.TestCase):
             # Test timeout
             agent_mock.request.return_value = Deferred()
             read_body_mock.return_value = b'body'
-            connections_manager.update_whitelist()
+            connections_manager.peers_whitelist.update()
 
             self.clock.advance(WHITELIST_REQUEST_TIMEOUT + 1)
 
             read_body_mock.assert_not_called()
             _update_whitelist_cb_mock.assert_not_called()
             _update_whitelist_err_mock.assert_called_once()
+            # Check final instance
             assert isinstance(_update_whitelist_err_mock.call_args.args[0].value, TimeoutError)
