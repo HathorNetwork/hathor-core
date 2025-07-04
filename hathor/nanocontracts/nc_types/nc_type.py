@@ -67,6 +67,19 @@ class NCType(ABC, Generic[T]):
         aliased_type = get_aliased_type(type_, type_map.alias_map)
         return nc_type._from_type(aliased_type, type_map=type_map)
 
+    @final
+    @staticmethod
+    def check_type(type_: type[T], /, *, type_map: TypeMap) -> None:
+        usable_origin = get_usable_origin_type(type_, type_map=type_map)
+        nc_type = type_map.nc_types_map[usable_origin]
+        # XXX: first we try to create the nc_type without making an alias, this ensures that an invalid annotation
+        #      would not be accepted
+        _ = nc_type._from_type(type_, type_map=type_map)
+        # XXX: then we create the actual nc_type with type-alias
+        aliased_type = get_aliased_type(type_, type_map.alias_map)
+        # XXX: currently this is identical to from_type() but doesn't return the nc_type
+        nc_type._from_type(aliased_type, type_map=type_map)
+
     @classmethod
     def _from_type(cls, type_: type[T], /, *, type_map: TypeMap) -> Self:
         """ Instantiate a NCType instance from a type signature.

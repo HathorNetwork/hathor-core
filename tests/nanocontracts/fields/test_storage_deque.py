@@ -16,7 +16,8 @@ from collections import deque
 
 import pytest
 
-from hathor.nanocontracts.fields.deque_field import DequeStorageContainer, _DequeMetadata
+from hathor.nanocontracts.fields.container import ContainerLeaf
+from hathor.nanocontracts.fields.deque_container import DequeContainer, _DequeMetadata
 from hathor.nanocontracts.nc_types import Int32NCType, StrNCType
 from tests.nanocontracts.fields.utils import MockNCStorage
 
@@ -26,16 +27,19 @@ STR_NC_TYPE = StrNCType()
 
 def test_basic() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', INT_NC_TYPE)
-
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, INT_NC_TYPE))
     assert storage.store == {}
+    dq.__init_storage__()
+    assert storage.store == {b'dq:__metadata__': _DequeMetadata(first_index=0, length=0, reversed=False)}
+
     assert list(dq) == []
     assert dq.maxlen is None
 
 
 def test_append() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', STR_NC_TYPE)
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, STR_NC_TYPE))
+    dq.__init_storage__()
 
     dq.append('a')
     dq.append('b')
@@ -61,7 +65,8 @@ def test_append() -> None:
 
 def test_appendleft() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', STR_NC_TYPE)
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, STR_NC_TYPE))
+    dq.__init_storage__()
 
     dq.appendleft('a')
     dq.appendleft('b')
@@ -87,7 +92,8 @@ def test_appendleft() -> None:
 
 def test_extend() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', INT_NC_TYPE)
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, INT_NC_TYPE))
+    dq.__init_storage__()
 
     dq.extend([1, 2, 3])
 
@@ -121,7 +127,8 @@ def test_extend() -> None:
 
 def test_extendleft() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', INT_NC_TYPE)
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, INT_NC_TYPE))
+    dq.__init_storage__()
 
     dq.extendleft([1, 2, 3])
 
@@ -155,8 +162,8 @@ def test_extendleft() -> None:
 
 def test_pop() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', INT_NC_TYPE)
-    dq.extend([1, 2, 3, 4])
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, INT_NC_TYPE))
+    dq.__init_storage__([1, 2, 3, 4])
 
     assert dq.pop() == 4
     assert storage.store == {
@@ -183,7 +190,7 @@ def test_pop() -> None:
 
     # popping the last element resets the deque
     assert dq.pop() == 2
-    assert storage.store == {}
+    assert storage.store == {b'dq:__metadata__': _DequeMetadata(first_index=2, length=0, reversed=True)}
 
     with pytest.raises(IndexError):
         dq.pop()
@@ -191,8 +198,8 @@ def test_pop() -> None:
 
 def test_popleft() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', INT_NC_TYPE)
-    dq.extend([1, 2, 3, 4])
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, INT_NC_TYPE))
+    dq.__init_storage__([1, 2, 3, 4])
 
     assert dq.popleft() == 1
     assert storage.store == {
@@ -219,7 +226,7 @@ def test_popleft() -> None:
 
     # popping the last element resets the deque
     assert dq.popleft() == 3
-    assert storage.store == {}
+    assert storage.store == {b'dq:__metadata__': _DequeMetadata(first_index=2, length=0, reversed=True)}
 
     with pytest.raises(IndexError):
         dq.popleft()
@@ -228,8 +235,8 @@ def test_popleft() -> None:
 def test_reverse() -> None:
     storage = MockNCStorage()
 
-    dq = DequeStorageContainer(storage, 'dq', STR_NC_TYPE)
-    dq.extend(['a', 'b', 'c'])
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, STR_NC_TYPE))
+    dq.__init_storage__(['a', 'b', 'c'])
 
     assert storage.store == {
         b'dq:\x00': 'a',
@@ -252,9 +259,8 @@ def test_reverse() -> None:
 
 def test_indexing() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', STR_NC_TYPE)
-
-    dq.extend(['a', 'b', 'c', 'd'])
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, STR_NC_TYPE))
+    dq.__init_storage__(['a', 'b', 'c', 'd'])
 
     assert storage.store == {
         b'dq:\x00': 'a',
@@ -307,9 +313,9 @@ def test_indexing() -> None:
 
 def test_indexing_reversed() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', STR_NC_TYPE)
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, STR_NC_TYPE))
+    dq.__init_storage__(['a', 'b', 'c', 'd'])
 
-    dq.extend(['a', 'b', 'c', 'd'])
     dq.reverse()
 
     assert storage.store == {
@@ -351,7 +357,8 @@ def test_indexing_reversed() -> None:
 
 def test_len() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', STR_NC_TYPE)
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, STR_NC_TYPE))
+    dq.__init_storage__()
     assert len(dq) == 0
 
     dq.append('a')
@@ -366,7 +373,8 @@ def test_len() -> None:
 
 def test_reverse_empty() -> None:
     storage = MockNCStorage()
-    dq = DequeStorageContainer(storage, 'dq', INT_NC_TYPE)
+    dq = DequeContainer(storage, b'dq', ContainerLeaf(storage, INT_NC_TYPE))
+    dq.__init_storage__()
     assert list(dq) == []
     dq.reverse()
     assert list(dq) == []
