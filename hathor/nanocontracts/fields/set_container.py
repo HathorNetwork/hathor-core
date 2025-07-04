@@ -12,12 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Container as ContainerAbc, Iterable, Iterator
 from typing import Any, TypeVar, get_args, get_origin
 
 from typing_extensions import Self, override
 
-from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
+from hathor.nanocontracts.fields.container import KEY_SEPARATOR, Container
 from hathor.nanocontracts.fields.field import Field
 from hathor.nanocontracts.nc_types import NCType, VarUint32NCType
 from hathor.nanocontracts.nc_types.utils import is_origin_hashable
@@ -27,53 +27,51 @@ from hathor.util import not_none
 T = TypeVar('T')
 _S = TypeVar('_S')
 _NOT_PROVIDED = object()
-_LENGTH_KEY: str = '__length__'
+_LENGTH_KEY: bytes = b'__length__'
 _LENGTH_NC_TYPE = VarUint32NCType()
 
 
-class SetStorageContainer(StorageContainer[set[T]]):
+class SetContainer(Container[T]):
     # from https://github.com/python/typeshed/blob/main/stdlib/collections/__init__.pyi
     # from https://github.com/python/typeshed/blob/main/stdlib/typing.pyi
 
-    __slots__ = ('__storage', '__name', '__value', '__length_key')
+    __slots__ = ('__storage', '__prefix', '__member', '__length_key')
     __storage: NCContractStorage
-    __name: str
-    __value: NCType[T]
+    __prefix: bytes
+    __member: NCType[T]
     __length_key: bytes
 
     # XXX: what to do with this:
     # __hash__: ClassVar[None]  # type: ignore[assignment]
 
-    def __init__(self, storage: NCContractStorage, name: str, value: NCType[T]) -> None:
+    def __init__(self, storage: NCContractStorage, prefix: bytes, member: NCType[T]) -> None:
         self.__storage = storage
-        self.__name = name
-        self.__value = value
-        self.__length_key = f'{name}{KEY_SEPARATOR}{_LENGTH_KEY}'.encode()
+        self.__prefix = prefix
+        self.__member = member
+        self.__length_key = KEY_SEPARATOR.join([self.__prefix, _LENGTH_KEY])
 
-    # Methods needed by StorageContainer:
+    # Methods needed by Container:
 
     @override
     @classmethod
-    def __check_name_and_type__(cls, name: str, type_: type[set[T]]) -> None:
-        if not name.isidentifier():
-            raise TypeError('field name must be a valid identifier')
-        origin_type: type[set[T]] = not_none(get_origin(type_))
+    def __check_type__(cls, type_: type[ContainerAbc[T]]) -> None:
+        origin_type: type[ContainerAbc[T]] = not_none(get_origin(type_))
         if not issubclass(origin_type, set):
             raise TypeError('expected set type')
         args = get_args(type_)
         if not args or len(args) != 1:
-            raise TypeError(f'expected {type_.__name__}[<item type>]')
+            raise TypeError('expected exactly 1 type argument')
         item_type, = args
         if not is_origin_hashable(item_type):
             raise TypeError(f'{item_type} is not hashable')
 
     @override
     @classmethod
-    def __from_name_and_type__(
+    def __from_prefix_and_type__(
         cls,
         storage: NCContractStorage,
-        name: str,
-        type_: type[set[T]],
+        prefix: bytes,
+        type_: type[ContainerAbc[T]],
         /,
         *,
         type_map: Field.TypeMap,
@@ -81,14 +79,18 @@ class SetStorageContainer(StorageContainer[set[T]]):
         item_type, = get_args(type_)
         item_nc_type = NCType.from_type(item_type, type_map=type_map.to_nc_type_map())
         assert item_nc_type.is_hashable(), 'hashable "types" must produce hashable "values"'
-        return cls(storage, name, item_nc_type)
+        return cls(storage, prefix, item_nc_type)
+
+    @override
+    def __init_storage__(self) -> None:
+        self.__storage.put_obj(self.__length_key, _LENGTH_NC_TYPE, 0)
 
     def __to_db_key(self, elem: T) -> bytes:
         # We don't need to explicitly hash the value here, because the trie already does it internally.
-        return f'{self.__name}{KEY_SEPARATOR}'.encode() + self.__value.to_bytes(elem)
+        return KEY_SEPARATOR.join([self.__prefix, self.__member.to_bytes(elem)])
 
     def __get_length(self) -> int:
-        return self.__storage.get_obj(self.__length_key, _LENGTH_NC_TYPE, default=0)
+        return self.__storage.get_obj(self.__length_key, _LENGTH_NC_TYPE)
 
     def __increase_length(self) -> None:
         self.__storage.put_obj(self.__length_key, _LENGTH_NC_TYPE, self.__get_length() + 1)
@@ -137,7 +139,7 @@ class SetStorageContainer(StorageContainer[set[T]]):
         key = self.__to_db_key(elem)
         if self.__storage.has_obj(key):
             return
-        self.__storage.put_obj(key, self.__value, elem)
+        self.__storage.put_obj(key, self.__member, elem)
         self.__increase_length()
 
     def discard(self, elem: T, /) -> None:
@@ -206,6 +208,3 @@ class SetStorageContainer(StorageContainer[set[T]]):
         for other in others:
             for elem in other:
                 self.add(elem)
-
-
-SetField = ContainerField[SetStorageContainer[T]]
