@@ -15,11 +15,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, NamedTuple, TypeVar, final, get_origin
+from collections.abc import Container
+from typing import Generic, NamedTuple, TypeVar, cast, final, get_origin
 
 from typing_extensions import TYPE_CHECKING, Self
 
-from hathor.nanocontracts.fields.utils import TypeToFieldMap
+from hathor.nanocontracts.fields.container import TypeToContainerMap
 from hathor.nanocontracts.nc_types import NCType
 from hathor.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
 
@@ -49,7 +50,7 @@ class Field(Generic[T], ABC):
     class TypeMap(NamedTuple):
         alias_map: TypeAliasMap
         nc_types_map: TypeToNCTypeMap
-        fields_map: TypeToFieldMap
+        container_map: TypeToContainerMap
 
         def to_nc_type_map(self) -> NCType.TypeMap:
             return NCType.TypeMap(self.alias_map, self.nc_types_map)
@@ -59,14 +60,24 @@ class Field(Generic[T], ABC):
     @final
     @staticmethod
     def from_name_and_type(name: str, type_: type[T], /, *, type_map: TypeMap) -> Field[T]:
+        from hathor.nanocontracts.fields.container_field import ContainerField
         from hathor.nanocontracts.fields.nc_type_field import NCTypeField
 
         # if we have a `dict[int, int]` we use `get_origin()` to get the `dict` part, since it's a different instance
         origin_type = get_origin(type_) or type_
 
-        if origin_type in type_map.fields_map:
-            field_class = type_map.fields_map[origin_type]
-            return field_class._from_name_and_type(name, type_, type_map=type_map)
+        if origin_type in type_map.container_map:
+            assert isinstance(origin_type, type)  # redundant, but helps mypy
+            assert issubclass(origin_type, Container)  # redundant, but helps mypy
+            container_class = type_map.container_map[origin_type]
+            # XXX: ignore valid-type because mypy doesn't recognize `container_class` as a type, even though it is one
+            field_class = ContainerField[container_class]  # type: ignore[valid-type]
+            # XXX: this cast is valid because of the asserts, however mypy doesn't know the relationship between type_
+            #      and origin_type
+            container_type = cast(type[Container], type_)
+            field = field_class._from_name_and_type(name, container_type, type_map=type_map)
+            # this cast is valid because T: Container => Field[T]: ContainerField
+            return cast(Field[T], field)
         else:
             try:
                 return NCTypeField._from_name_and_type(name, type_, type_map=type_map)
