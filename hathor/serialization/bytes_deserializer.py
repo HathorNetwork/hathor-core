@@ -14,8 +14,9 @@
 
 from typing_extensions import override
 
+from ..utils.result import Err, Ok, Result, propagate_result
 from .deserializer import Deserializer
-from .exceptions import OutOfDataError
+from .exceptions import OutOfDataError, SerializationError
 from .types import Buffer
 
 _EMPTY_VIEW = memoryview(b'')
@@ -31,10 +32,11 @@ class BytesDeserializer(Deserializer):
         self._view = memoryview(data)
 
     @override
-    def finalize(self) -> None:
+    def finalize(self) -> Result[None, SerializationError]:
         if not self.is_empty():
-            raise ValueError('trailing data')
+            return Err(SerializationError('trailing data'))
         del self._view
+        return Ok(None)
 
     @override
     def is_empty(self) -> bool:
@@ -42,35 +44,37 @@ class BytesDeserializer(Deserializer):
         return not self._view
 
     @override
-    def peek_byte(self) -> int:
+    def peek_byte(self) -> Result[int, SerializationError]:
         if not len(self._view):
-            raise OutOfDataError('not enough bytes to read')
-        return self._view[0]
+            return Err(OutOfDataError('not enough bytes to read'))
+        return Ok(self._view[0])
 
     @override
-    def peek_bytes(self, n: int, *, exact: bool = True) -> memoryview:
+    def peek_bytes(self, n: int, *, exact: bool = True) -> Result[memoryview, SerializationError]:
         if n < 0:
-            raise ValueError('value cannot be negative')
+            return Err(SerializationError('value cannot be negative'))
         if exact and len(self._view) < n:
-            raise OutOfDataError('not enough bytes to read')
-        return self._view[:n]
+            return Err(OutOfDataError('not enough bytes to read'))
+        return Ok(self._view[:n])
 
+    @propagate_result
     @override
-    def read_byte(self) -> int:
-        b = self.peek_byte()
+    def read_byte(self) -> Result[int, SerializationError]:
+        b = self.peek_byte().unwrap_or_propagate()
         self._view = self._view[1:]
-        return b
+        return Ok(b)
 
+    @propagate_result
     @override
-    def read_bytes(self, n: int, *, exact: bool = True) -> memoryview:
-        b = self.peek_bytes(n, exact=exact)
+    def read_bytes(self, n: int, *, exact: bool = True) -> Result[memoryview, SerializationError]:
+        b = self.peek_bytes(n, exact=exact).unwrap_or_propagate()
         if exact and len(self._view) < n:
-            raise OutOfDataError('not enough bytes to read')
+            return Err(OutOfDataError('not enough bytes to read'))
         self._view = self._view[n:]
-        return b
+        return Ok(b)
 
     @override
-    def read_all(self) -> memoryview:
+    def read_all(self) -> Result[memoryview, SerializationError]:
         b = self._view
         self._view = _EMPTY_VIEW
-        return b
+        return Ok(b)

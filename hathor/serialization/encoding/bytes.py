@@ -59,8 +59,9 @@ trailing data
 b'foo'
 """
 
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
 
+from ...utils.result import Ok, Result, propagate_result
 from .leb128 import decode_leb128, encode_leb128
 
 
@@ -74,10 +75,11 @@ def encode_bytes(serializer: Serializer, data: bytes) -> None:
     serializer.write_bytes(data)
 
 
-def decode_bytes(deserializer: Deserializer) -> bytes:
+@propagate_result
+def decode_bytes(deserializer: Deserializer) -> Result[bytes, SerializationError]:
     """ Decodes a byte-sequnce with a length prefix.
 
     This modules's docstring has more details and examples.
     """
-    size = decode_leb128(deserializer, signed=False)
-    return bytes(deserializer.read_bytes(size))
+    size = decode_leb128(deserializer, signed=False).unwrap_or_propagate()
+    return Ok(bytes(deserializer.read_bytes(size).unwrap_or_propagate()))

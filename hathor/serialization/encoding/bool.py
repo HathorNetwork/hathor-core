@@ -55,7 +55,8 @@ True
 b'test'
 """
 
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
+from hathor.utils.result import Err, Ok, Result, propagate_result
 
 
 def encode_bool(serializer: Serializer, value: bool) -> None:
@@ -65,14 +66,15 @@ def encode_bool(serializer: Serializer, value: bool) -> None:
     serializer.write_byte(0x01 if value else 0x00)
 
 
-def decode_bool(deserializer: Deserializer) -> bool:
+@propagate_result
+def decode_bool(deserializer: Deserializer) -> Result[bool, SerializationError]:
     """ Decodes a boolean value from 1 byte.
     """
-    i = deserializer.read_byte()
+    i = deserializer.read_byte().unwrap_or_propagate()
     if i == 0:
-        return False
+        return Ok(False)
     elif i == 1:
-        return True
+        return Ok(True)
     else:
         raw = bytes([i])
-        raise ValueError(f'{raw!r} is not a valid boolean')
+        return Err(SerializationError(f'{raw!r} is not a valid boolean'))

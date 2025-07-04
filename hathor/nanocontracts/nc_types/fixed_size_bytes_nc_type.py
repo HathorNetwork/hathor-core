@@ -19,7 +19,8 @@ from typing import ClassVar, TypeVar
 from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
+from hathor.utils.result import Ok, Result, propagate_result
 from hathor.utils.typing import is_subclass
 
 B = TypeVar('B', bound=bytes)
@@ -65,9 +66,11 @@ class _FixedSizeBytesNCType(NCType[B]):
         assert len(data) == self._size  # XXX: double check
         serializer.write_bytes(data)
 
+    @propagate_result
     @override
-    def _deserialize(self, deserializer: Deserializer, /) -> B:
-        return self._filter_out(bytes(deserializer.read_bytes(self._size)))
+    def _deserialize(self, deserializer: Deserializer, /) -> Result[B, SerializationError]:
+        b = deserializer.read_bytes(self._size).unwrap_or_propagate()
+        return Ok(self._filter_out(bytes(b)))
 
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> B:

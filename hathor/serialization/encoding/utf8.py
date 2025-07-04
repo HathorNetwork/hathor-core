@@ -34,8 +34,9 @@ It works exactly like bytes-encoding but the encoded byte-sequence is utf-8 and 
 >>> de.finalize()
 """
 
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
 
+from ...utils.result import Ok, Result, propagate_result
 from .bytes import decode_bytes, encode_bytes
 
 
@@ -49,10 +50,11 @@ def encode_utf8(serializer: Serializer, value: str) -> None:
     encode_bytes(serializer, data)
 
 
-def decode_utf8(deserializer: Deserializer) -> str:
+@propagate_result
+def decode_utf8(deserializer: Deserializer) -> Result[str, SerializationError]:
     """ Decodes a UTF-8 string with a length prefix.
 
     This modules's docstring has more details and examples.
     """
-    data = decode_bytes(deserializer)
-    return data.decode('utf-8')
+    data = decode_bytes(deserializer).unwrap_or_propagate()
+    return Ok(data.decode('utf-8'))

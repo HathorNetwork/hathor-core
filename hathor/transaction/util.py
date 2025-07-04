@@ -81,14 +81,13 @@ def decode_string_utf8(encoded: bytes, key: str) -> str:
 
 
 def bytes_to_output_value(data: bytes) -> tuple[int, bytes]:
-    from hathor.serialization import BadDataError, Deserializer
+    from hathor.serialization import Deserializer
     from hathor.serialization.encoding.output_value import decode_output_value
     deserializer = Deserializer.build_bytes_deserializer(data)
-    try:
-        output_value = decode_output_value(deserializer)
-    except BadDataError as e:
-        raise InvalidOutputValue(*e.args)
-    remaining_data = deserializer.read_all()
+    output_value = decode_output_value(deserializer) \
+        .map_err(lambda e: InvalidOutputValue(*e.args)) \
+        .unwrap_or_raise()
+    remaining_data = deserializer.read_all().unwrap_or_raise()
     return (output_value, remaining_data)
 
 
@@ -96,10 +95,9 @@ def output_value_to_bytes(number: int) -> bytes:
     from hathor.serialization import Serializer
     from hathor.serialization.encoding.output_value import encode_output_value
     serializer = Serializer.build_bytes_serializer()
-    try:
-        encode_output_value(serializer, number)
-    except ValueError as e:
-        raise InvalidOutputValue(*e.args)
+    encode_output_value(serializer, number) \
+        .map_err(lambda e: InvalidOutputValue(*e.args)) \
+        .unwrap_or_raise()
     return bytes(serializer.finalize())
 
 

@@ -20,6 +20,8 @@ from typing_extensions import Self, override
 from hathor.serialization.deserializer import Deserializer
 from hathor.serialization.serializer import Serializer
 
+from ...utils.result import Result
+from .. import SerializationError
 from ..types import Buffer
 
 S = TypeVar('S', bound=Serializer)
@@ -69,7 +71,7 @@ class GenericDeserializerAdapter(Deserializer, Generic[D]):
         self.inner = deserializer
 
     @override
-    def finalize(self) -> None:
+    def finalize(self) -> Result[None, SerializationError]:
         return self.inner.finalize()
 
     @override
@@ -77,23 +79,23 @@ class GenericDeserializerAdapter(Deserializer, Generic[D]):
         return self.inner.is_empty()
 
     @override
-    def peek_byte(self) -> int:
+    def peek_byte(self) -> Result[int, SerializationError]:
         return self.inner.peek_byte()
 
     @override
-    def peek_bytes(self, n: int, *, exact: bool = True) -> Buffer:
+    def peek_bytes(self, n: int, *, exact: bool = True) -> Result[Buffer, SerializationError]:
         return self.inner.peek_bytes(n, exact=exact)
 
     @override
-    def read_byte(self) -> int:
+    def read_byte(self) -> Result[int, SerializationError]:
         return self.inner.read_byte()
 
     @override
-    def read_bytes(self, n: int, *, exact: bool = True) -> Buffer:
+    def read_bytes(self, n: int, *, exact: bool = True) -> Result[Buffer, SerializationError]:
         return self.inner.read_bytes(n, exact=exact)
 
     @override
-    def read_all(self) -> Buffer:
+    def read_all(self) -> Result[Buffer, SerializationError]:
         return self.inner.read_all()
 
     # allow using this adapter as a context manager:

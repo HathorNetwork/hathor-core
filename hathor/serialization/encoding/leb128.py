@@ -48,10 +48,11 @@ b'test'
 >>> de.finalize()
 """
 
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
+from hathor.utils.result import Err, Ok, Result, propagate_result
 
 
-def encode_leb128(serializer: Serializer, value: int, *, signed: bool) -> None:
+def encode_leb128(serializer: Serializer, value: int, *, signed: bool) -> Result[None, SerializationError]:
     """ Encodes an integer using LEB128.
 
     Caller must explicitly choose `signed=True` or `signed=False`.
@@ -59,7 +60,7 @@ def encode_leb128(serializer: Serializer, value: int, *, signed: bool) -> None:
     This module's docstring has more details on LEB128 and examples.
     """
     if not signed and value < 0:
-        raise ValueError('cannot encode value <0 as unsigend')
+        return Err(SerializationError('cannot encode value <0 as unsigend'))
     while True:
         byte = value & 0b0111_1111
         value >>= 7
@@ -72,8 +73,11 @@ def encode_leb128(serializer: Serializer, value: int, *, signed: bool) -> None:
             break
         serializer.write_byte(byte | 0b1000_0000)
 
+    return Ok(None)
 
-def decode_leb128(deserializer: Deserializer, *, signed: bool) -> int:
+
+@propagate_result
+def decode_leb128(deserializer: Deserializer, *, signed: bool) -> Result[int, SerializationError]:
     """ Decodes a LEB128-encoded integer.
 
     Caller must explicitly choose `signed=True` or `signed=False`.
@@ -83,11 +87,11 @@ def decode_leb128(deserializer: Deserializer, *, signed: bool) -> int:
     result = 0
     shift = 0
     while True:
-        byte = deserializer.read_byte()
+        byte = deserializer.read_byte().unwrap_or_propagate()
         result |= (byte & 0b0111_1111) << shift
         shift += 7
         assert shift % 7 == 0
         if (byte & 0b1000_0000) == 0:
             if signed and (byte & 0b0100_0000) != 0:
-                return result | -(1 << shift)
-            return result
+                return Ok(result | -(1 << shift))
+            return Ok(result)

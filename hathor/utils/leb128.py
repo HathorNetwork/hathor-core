@@ -15,6 +15,7 @@
 from hathor.serialization import Deserializer, SerializationError, Serializer
 from hathor.serialization.adapters import MaxBytesExceededError
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
+from hathor.utils.result import Ok, Result, propagate_result
 
 
 def encode_signed(value: int, *, max_bytes: int | None = None) -> bytes:
@@ -57,7 +58,8 @@ def encode_unsigned(value: int, *, max_bytes: int | None = None) -> bytes:
     return bytes(serializer.finalize())
 
 
-def decode_signed(data: bytes, *, max_bytes: int | None = None) -> tuple[int, bytes]:
+@propagate_result
+def decode_signed(data: bytes, *, max_bytes: int | None = None) -> Result[tuple[int, bytes], SerializationError]:
     """
     Receive and consume a buffer returning a tuple of the unpacked
     LEB128-encoded signed integer and the reamining buffer.
@@ -78,17 +80,18 @@ def decode_signed(data: bytes, *, max_bytes: int | None = None) -> tuple[int, by
     """
     deserializer = Deserializer.build_bytes_deserializer(data)
     try:
-        value = decode_leb128(deserializer.with_optional_max_bytes(max_bytes), signed=True)
+        value = decode_leb128(deserializer.with_optional_max_bytes(max_bytes), signed=True).unwrap_or_propagate()
     except MaxBytesExceededError as e:
         raise ValueError(f'cannot decode more than {max_bytes} bytes') from e
     except SerializationError as e:
         raise ValueError('deserialization error') from e
-    remaining_data = bytes(deserializer.read_all())
+    remaining_data = bytes(deserializer.read_all().unwrap_or_propagate())
     deserializer.finalize()
-    return (value, remaining_data)
+    return Ok((value, remaining_data))
 
 
-def decode_unsigned(data: bytes, *, max_bytes: int | None = None) -> tuple[int, bytes]:
+@propagate_result
+def decode_unsigned(data: bytes, *, max_bytes: int | None = None) -> Result[tuple[int, bytes], SerializationError]:
     """
     Receive and consume a buffer returning a tuple of the unpacked
     LEB128-encoded unsigned integer and the reamining buffer.
@@ -107,11 +110,11 @@ def decode_unsigned(data: bytes, *, max_bytes: int | None = None) -> tuple[int, 
     """
     deserializer = Deserializer.build_bytes_deserializer(data)
     try:
-        value = decode_leb128(deserializer.with_optional_max_bytes(max_bytes), signed=False)
+        value = decode_leb128(deserializer.with_optional_max_bytes(max_bytes), signed=False).unwrap_or_propagate()
     except MaxBytesExceededError as e:
         raise ValueError(f'cannot decode more than {max_bytes} bytes') from e
     except SerializationError as e:
         raise ValueError('deserialization error') from e
-    remaining_data = bytes(deserializer.read_all())
+    remaining_data = bytes(deserializer.read_all().unwrap_or_propagate())
     deserializer.finalize()
-    return (value, remaining_data)
+    return Ok((value, remaining_data))

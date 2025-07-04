@@ -32,7 +32,7 @@ T = TypeVar('T')
 class Serializer(ABC):
     def finalize(self) -> Buffer:
         """Get the resulting byte sequence, the serializer cannot be reused after this."""
-        raise TypeError('this serializer does not support finalization')
+        raise NotImplementedError('this serializer does not support finalization')
 
     @abstractmethod
     def cur_pos(self) -> int:

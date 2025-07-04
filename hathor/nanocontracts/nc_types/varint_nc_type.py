@@ -19,9 +19,10 @@ from typing import ClassVar
 from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
 from hathor.serialization.adapters import MaxBytesExceededError
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
+from hathor.utils.result import Result
 from hathor.utils.typing import is_subclass
 
 
@@ -80,14 +81,10 @@ class _VarIntNCType(NCType[int]):
             raise ValueError('value too long') from e
 
     @override
-    def _deserialize(self, deserializer: Deserializer, /) -> int:
+    def _deserialize(self, deserializer: Deserializer, /) -> Result[int, SerializationError]:
         if self._max_byte_size is not None:
             deserializer = deserializer.with_max_bytes(self._max_byte_size)
-        try:
-            value = decode_leb128(deserializer, signed=self._signed)
-        except MaxBytesExceededError as e:
-            raise ValueError('value too long') from e
-        return value
+        return decode_leb128(deserializer, signed=self._signed)
 
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> int:

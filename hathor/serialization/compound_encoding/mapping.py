@@ -51,9 +51,10 @@ Breakdown of the result:
 from collections.abc import Iterable, Mapping
 from typing import Callable, TypeVar
 
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
 
+from ...utils.result import Ok, Result, propagate_result
 from . import Decoder, Encoder
 
 KT = TypeVar('KT')
@@ -73,14 +74,15 @@ def encode_mapping(
         value_encoder(serializer, value)
 
 
+@propagate_result
 def decode_mapping(
     deserializer: Deserializer,
     key_decoder: Decoder[KT],
     value_decoder: Decoder[VT],
     mapping_builder: Callable[[Iterable[tuple[KT, VT]]], R],
-) -> R:
-    size = decode_leb128(deserializer, signed=False)
-    return mapping_builder(
+) -> Result[R, SerializationError]:
+    size = decode_leb128(deserializer, signed=False).unwrap_or_propagate()
+    return Ok(mapping_builder(
         (key_decoder(deserializer), value_decoder(deserializer))
         for _ in range(size)
-    )
+    ))

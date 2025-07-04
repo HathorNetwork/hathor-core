@@ -20,7 +20,8 @@ from typing import Generic, NamedTuple, TypeAlias, TypeVar, final
 from typing_extensions import Self
 
 from hathor.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap, get_aliased_type, get_usable_origin_type
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
+from hathor.utils.result import Result
 
 T = TypeVar('T')
 
@@ -182,7 +183,7 @@ class NCType(ABC, Generic[T]):
         raise NotImplementedError
 
     @abstractmethod
-    def _deserialize(self, deserializer: Deserializer, /) -> T:
+    def _deserialize(self, deserializer: Deserializer, /) -> Result[T, SerializationError]:
         """ Inner implementation of `deserialize`, it is expected that deserializers always produce valid values.
 
         Even then, `NCType.deserialize` should be passed as a `Decoder`, that way it's possible to do a "shallow check"

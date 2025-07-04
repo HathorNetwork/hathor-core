@@ -153,7 +153,8 @@ class Ok(Generic[T]):
         """
         return op(self._value)
 
-    def map_err(self, _op: Callable[[E], F]) -> Ok[T]:
+    # TODO: I had changed this type but it breaks variance. Undo other changes.
+    def map_err(self, op: object) -> Ok[T]:
         """
         The contained result is `Ok`, so return `Ok` with the original value
         """

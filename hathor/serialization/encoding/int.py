@@ -36,10 +36,11 @@ The encoding format itself is a standard big-endian format.
 -1234
 """
 
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
+from hathor.utils.result import Err, Ok, Result, propagate_result
 
 
-def encode_int(serializer: Serializer, number: int, *, length: int, signed: bool) -> None:
+def encode_int(serializer: Serializer, number: int, *, length: int, signed: bool) -> Result[None, SerializationError]:
     """ Encode an int using the given byte-length and signedness.
 
     This modules's docstring has more details and examples.
@@ -47,14 +48,16 @@ def encode_int(serializer: Serializer, number: int, *, length: int, signed: bool
     try:
         data = int.to_bytes(number, length, byteorder='big', signed=signed)
     except OverflowError:
-        raise ValueError('too big to encode')
+        return Err(SerializationError('too big to encode'))
     serializer.write_bytes(data)
+    return Ok(None)
 
 
-def decode_int(deserializer: Deserializer, *, length: int, signed: bool) -> int:
+@propagate_result
+def decode_int(deserializer: Deserializer, *, length: int, signed: bool) -> Result[int, SerializationError]:
     """ Decode an int using the given byte-length and signedness.
 
     This modules's docstring has more details and examples.
     """
-    data = deserializer.read_bytes(length)
-    return int.from_bytes(data, byteorder='big', signed=signed)
+    data = deserializer.read_bytes(length).unwrap_or_propagate()
+    return Ok(int.from_bytes(data, byteorder='big', signed=signed))

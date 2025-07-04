@@ -22,8 +22,9 @@ from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.nanocontracts.nc_types.utils import is_origin_hashable
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
 from hathor.serialization.compound_encoding.mapping import decode_mapping, encode_mapping
+from hathor.utils.result import Result
 
 T = TypeVar('T')
 H = TypeVar('H', bound=Hashable)
@@ -79,7 +80,7 @@ class _MapNCType(NCType[Mapping[H, T]], ABC):
         encode_mapping(serializer, value, self._key.serialize, self._value.serialize)
 
     @override
-    def _deserialize(self, deserializer: Deserializer, /) -> Mapping[H, T]:
+    def _deserialize(self, deserializer: Deserializer, /) -> Result[Mapping[H, T], SerializationError]:
         return decode_mapping(
             deserializer,
             self._key.deserialize,

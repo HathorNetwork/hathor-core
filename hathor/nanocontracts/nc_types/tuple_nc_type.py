@@ -20,7 +20,8 @@ from typing import get_args, get_origin
 from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
+from hathor.utils.result import Ok, Result
 
 
 # XXX: we can't usefully describe the tuple type
@@ -92,14 +93,14 @@ class TupleNCType(NCType[tuple]):
             encode_tuple(serializer, value, tuple(i.serialize for i in self._args))
 
     @override
-    def _deserialize(self, deserializer: Deserializer, /) -> tuple:
+    def _deserialize(self, deserializer: Deserializer, /) -> Result[tuple, SerializationError]:
         from hathor.serialization.compound_encoding.collection import decode_collection
         from hathor.serialization.compound_encoding.tuple import decode_tuple
         if self._varsize:
             assert len(self._args) == 1
             return decode_collection(deserializer, self._args[0].deserialize, tuple)
         else:
-            return decode_tuple(deserializer, tuple(i.deserialize for i in self._args))
+            return Ok(decode_tuple(deserializer, tuple(i.deserialize for i in self._args)))
 
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> tuple:

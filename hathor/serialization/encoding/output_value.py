@@ -80,48 +80,57 @@ b'test'
 import struct
 
 from hathor.serialization import Deserializer, Serializer
-from hathor.serialization.exceptions import BadDataError
+from hathor.serialization.exceptions import BadDataError, SerializationError
+from hathor.utils.result import Err, Ok, Result, propagate_result
 
 MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 8 bytes: 2_147_483_647
 MAX_OUTPUT_VALUE_64 = 2 ** 63  # max value (inclusive) that can be encoded (with 8 bytes): 9_223_372_036_854_775_808
 
 
-def encode_output_value(serializer: Serializer, number: int, *, strict: bool = True) -> None:
+def encode_output_value(
+    serializer: Serializer,
+    number: int,
+    *,
+    strict: bool = True,
+) -> Result[None, SerializationError]:
     """ Encodes either 4 or 8 bytes using our output-value format.
 
     This modules's docstring has more details and examples.
     """
     assert isinstance(number, int)
     if number < 0:
-        raise ValueError('Number must not be negative')
+        return Err(SerializationError('Number must not be negative'))
     if strict and number == 0:
-        raise ValueError('Number must be strictly positive')
+        return Err(SerializationError('Number must be strictly positive'))
     if number > MAX_OUTPUT_VALUE_64:
-        raise ValueError(f'Number is too big; max possible value is 2**63, got: {number}')
+        return Err(SerializationError(f'Number is too big; max possible value is 2**63, got: {number}'))
     # XXX: `signed` makes no difference, but oh well
     if number > MAX_OUTPUT_VALUE_32:
         serializer.write_bytes((-number).to_bytes(8, byteorder='big', signed=True))
     else:
         serializer.write_bytes(number.to_bytes(4, byteorder='big', signed=True))
 
+    return Ok(None)
 
-def decode_output_value(deserializer: Deserializer, *, strict: bool = True) -> int:
+
+@propagate_result
+def decode_output_value(deserializer: Deserializer, *, strict: bool = True) -> Result[int, SerializationError]:
     """ Decodes either 4 or 8 bytes using our output-value format.
 
     This modules's docstring has more details and examples.
     """
-    value_high_byte, = deserializer.peek_struct('!b')
+    value_high_byte, = deserializer.peek_struct('!b').unwrap_or_propagate()
     try:
         if value_high_byte < 0:
-            raw_value, = deserializer.read_struct('!q')
+            raw_value, = deserializer.read_struct('!q').unwrap_or_propagate()
             value = -raw_value
         else:
-            value, = deserializer.read_struct('!i')
+            value, = deserializer.read_struct('!i').unwrap_or_propagate()
     except struct.error as e:
-        raise BadDataError('Invalid byte struct for output') from e
+        return Err(BadDataError('Invalid byte struct for output'), e)
     assert value >= 0
     if strict and value == 0:
-        raise ValueError('Number must be strictly positive')
+        return Err(SerializationError('Number must be strictly positive'))
     if value < MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
-        raise ValueError('Value fits in 4 bytes but is using 8 bytes')
-    return value
+        return Err(SerializationError('Value fits in 4 bytes but is using 8 bytes'))
+    return Ok(value)

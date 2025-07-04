@@ -19,8 +19,9 @@ from typing import ClassVar
 from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
 from hathor.serialization.encoding.int import decode_int, encode_int
+from hathor.utils.result import Result
 from hathor.utils.typing import is_subclass
 
 
@@ -77,7 +78,7 @@ class _SizedIntNCType(NCType[int]):
         encode_int(serializer, value, length=self._byte_size, signed=self._signed)
 
     @override
-    def _deserialize(self, deserializer: Deserializer, /) -> int:
+    def _deserialize(self, deserializer: Deserializer, /) -> Result[int, SerializationError]:
         return decode_int(deserializer, length=self._byte_size, signed=self._signed)
 
     @override

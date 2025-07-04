@@ -20,6 +20,7 @@ from hathor.serialization.deserializer import Deserializer
 from hathor.serialization.exceptions import SerializationError
 from hathor.serialization.serializer import Serializer
 
+from ...utils.result import Err, Ok, Result, propagate_result
 from ..types import Buffer
 from .generic_adapter import GenericDeserializerAdapter, GenericSerializerAdapter
 
@@ -46,10 +47,11 @@ class MaxBytesSerializer(GenericSerializerAdapter[S]):
         super().__init__(serializer)
         self._bytes_left = max_bytes
 
-    def _check_update_exceeds(self, write_size: int) -> None:
+    def _check_update_exceeds(self, write_size: int) -> Result[None, MaxBytesExceededError]:
         self._bytes_left -= write_size
         if self._bytes_left < 0:
-            raise MaxBytesExceededError
+            return Err(MaxBytesExceededError())
+        return Ok(None)
 
     @override
     def write_byte(self, data: int) -> None:
@@ -68,24 +70,26 @@ class MaxBytesDeserializer(GenericDeserializerAdapter[D]):
         super().__init__(deserializer)
         self._bytes_left = max_bytes
 
-    def _check_update_exceeds(self, read_size: int) -> None:
+    def _check_update_exceeds(self, read_size: int) -> Result[None, MaxBytesExceededError]:
         self._bytes_left -= read_size
         if self._bytes_left < 0:
-            raise MaxBytesExceededError
+            return Err(MaxBytesExceededError())
+        return Ok(None)
 
     @override
-    def read_byte(self) -> int:
+    def read_byte(self) -> Result[int, SerializationError]:
         self._check_update_exceeds(1)
         return super().read_byte()
 
     @override
-    def read_bytes(self, n: int, *, exact: bool = True) -> Buffer:
+    def read_bytes(self, n: int, *, exact: bool = True) -> Result[Buffer, SerializationError]:
         self._check_update_exceeds(n)
         return super().read_bytes(n, exact=exact)
 
+    @propagate_result
     @override
-    def read_all(self) -> Buffer:
-        result = super().read_bytes(self._bytes_left, exact=False)
+    def read_all(self) -> Result[Buffer, SerializationError]:
+        result = super().read_bytes(self._bytes_left, exact=False).unwrap_or_propagate()
         if not self.is_empty():
-            raise MaxBytesExceededError
-        return result
+            return Err(MaxBytesExceededError())
+        return Ok(result)

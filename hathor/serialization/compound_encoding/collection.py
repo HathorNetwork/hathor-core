@@ -44,9 +44,10 @@ decoding a `tuple` could be used, it only matters that the collection can be ini
 from collections.abc import Collection, Iterable
 from typing import Callable, TypeVar
 
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
 
+from ...utils.result import Ok, Result, propagate_result
 from . import Decoder, Encoder
 
 T = TypeVar('T')
@@ -59,6 +60,11 @@ def encode_collection(serializer: Serializer, values: Collection[T], encoder: En
         encoder(serializer, value)
 
 
-def decode_collection(deserializer: Deserializer, decoder: Decoder[T], builder: Callable[[Iterable[T]], R]) -> R:
-    length = decode_leb128(deserializer, signed=False)
-    return builder(decoder(deserializer) for _ in range(length))
+@propagate_result
+def decode_collection(
+    deserializer: Deserializer,
+    decoder: Decoder[T],
+    builder: Callable[[Iterable[T]], R],
+) -> Result[R, SerializationError]:
+    length = decode_leb128(deserializer, signed=False).unwrap_or_propagate()
+    return Ok(builder(decoder(deserializer) for _ in range(length)))

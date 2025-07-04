@@ -154,7 +154,8 @@ class NCBlockStorage:
         except KeyError:
             return -1
         else:
-            seqnum, buf = leb128.decode_unsigned(seqnum_bytes, max_bytes=ADDRESS_SEQNUM_SIZE)
+            seqnum, buf = leb128.decode_unsigned(seqnum_bytes, max_bytes=ADDRESS_SEQNUM_SIZE) \
+                .expect('stored bytes should be valid')
             assert len(buf) == 0
             return seqnum
 

@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from typing_extensions import Self
 
+from ..utils.result import Err, Ok, Result, propagate_result
+from . import SerializationError
 from .types import Buffer
 
 if TYPE_CHECKING:
@@ -30,9 +32,9 @@ T = TypeVar('T')
 
 
 class Deserializer(ABC):
-    def finalize(self) -> None:
+    def finalize(self) -> Result[None, SerializationError]:
         """Check that all bytes were consumed, the deserializer cannot be used after this."""
-        raise TypeError('this deserializer does not support finalization')
+        return Err(SerializationError('this deserializer does not support finalization'))
 
     @staticmethod
     def build_bytes_deserializer(data: Buffer) -> BytesDeserializer:
@@ -44,27 +46,28 @@ class Deserializer(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def peek_byte(self) -> int:
+    def peek_byte(self) -> Result[int, SerializationError]:
         """Read a single byte but don't consume from buffer."""
         raise NotImplementedError
 
     @abstractmethod
-    def peek_bytes(self, n: int, *, exact: bool = True) -> Buffer:
+    def peek_bytes(self, n: int, *, exact: bool = True) -> Result[Buffer, SerializationError]:
         """Read n single byte but don't consume from buffer."""
         raise NotImplementedError
 
-    def peek_struct(self, format: str) -> tuple[Any, ...]:
+    @propagate_result
+    def peek_struct(self, format: str) -> Result[tuple[Any, ...], SerializationError]:
         size = struct.calcsize(format)
-        data = self.peek_bytes(size)
-        return struct.unpack(format, data)
+        data = self.peek_bytes(size).unwrap_or_propagate()
+        return Ok(struct.unpack(format, data))
 
     @abstractmethod
-    def read_byte(self) -> int:
+    def read_byte(self) -> Result[int, SerializationError]:
         """Read a single byte as unsigned int."""
         raise NotImplementedError
 
     @abstractmethod
-    def read_bytes(self, n: int, *, exact: bool = True) -> Buffer:
+    def read_bytes(self, n: int, *, exact: bool = True) -> Result[Buffer, SerializationError]:
         """Read n bytes, when exact=True it errors if there isn't enough data"""
         # XXX: this is a blanket implementation that is an example of the behavior, this implementation has to be
         #      explicitly used if needed
@@ -73,21 +76,22 @@ class Deserializer(ABC):
                 if not exact and self.is_empty():
                     break
                 yield self.read_byte()
-        return bytes(iter_bytes())
+        return Ok(bytes(iter_bytes()))
 
     @abstractmethod
-    def read_all(self) -> Buffer:
+    def read_all(self) -> Result[Buffer, SerializationError]:
         """Read all bytes until the reader is empty."""
         # XXX: it is recommended that implementors of Deserializer specialize this implementation
         def iter_bytes():
             while not self.is_empty():
                 yield self.read_byte()
-        return bytes(iter_bytes())
+        return Ok(bytes(iter_bytes()))
 
-    def read_struct(self, format: str) -> tuple[Any, ...]:
+    @propagate_result
+    def read_struct(self, format: str) -> Result[tuple[Any, ...], SerializationError]:
         size = struct.calcsize(format)
-        data = self.read_bytes(size)
-        return struct.unpack_from(format, data)
+        data = self.read_bytes(size).unwrap_or_propagate()
+        return Ok(struct.unpack_from(format, data))
 
     def with_max_bytes(self, max_bytes: int) -> MaxBytesDeserializer[Self]:
         """Helper method to wrap the current deserializer with MaxBytesDeserializer."""

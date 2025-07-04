@@ -17,9 +17,10 @@ from __future__ import annotations
 from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
-from hathor.serialization import Deserializer, Serializer
+from hathor.serialization import Deserializer, SerializationError, Serializer
 from hathor.serialization.consts import DEFAULT_BYTES_MAX_LENGTH
 from hathor.serialization.encoding.utf8 import decode_utf8, encode_utf8
+from hathor.utils.result import Result
 
 
 class StrNCType(NCType[str]):
@@ -45,7 +46,7 @@ class StrNCType(NCType[str]):
         encode_utf8(serializer.with_max_bytes(DEFAULT_BYTES_MAX_LENGTH), value)
 
     @override
-    def _deserialize(self, deserializer: Deserializer, /) -> str:
+    def _deserialize(self, deserializer: Deserializer, /) -> Result[str, SerializationError]:
         return decode_utf8(deserializer.with_max_bytes(DEFAULT_BYTES_MAX_LENGTH))
 
     @override
