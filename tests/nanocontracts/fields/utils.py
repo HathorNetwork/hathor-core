@@ -32,10 +32,10 @@ class MockNCStorage(NCContractStorage):
 
     @override
     def get_obj(self, key: bytes, value: NCType[T], *, default: D = _NOT_PROVIDED) -> T | D:
-        if item := self.store.get(key, default):
-            return item
+        if key in self.store:
+            return self.store[key]
         if default is _NOT_PROVIDED:
-            raise KeyError
+            raise KeyError(key)
         return default
 
     @override
