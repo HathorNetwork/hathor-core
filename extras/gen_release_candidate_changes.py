@@ -15,9 +15,10 @@ Example output:
 ```
 """
 
-import yaml
 import os
+
 import requests
+import yaml
 
 BASE_API_URL = 'https://api.github.com'
 REPO = 'HathorNetwork/hathor-core'

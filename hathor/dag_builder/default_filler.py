@@ -19,7 +19,7 @@ from collections import defaultdict
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeType, DAGOutput
-from hathor.transaction.util import get_deposit_amount
+from hathor.transaction.util import get_deposit_token_deposit_amount
 
 
 class DefaultFiller:
@@ -240,7 +240,7 @@ class DefaultFiller:
             balance = self.calculate_balance(node)
             assert set(balance.keys()).issubset({'HTR', token})
 
-            htr_deposit = get_deposit_amount(self._settings, balance[token])
+            htr_deposit = get_deposit_token_deposit_amount(self._settings, balance[token])
             htr_balance = balance.get('HTR', 0)
 
             # target = sum(outputs) - sum(inputs)

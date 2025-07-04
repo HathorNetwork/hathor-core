@@ -1,6 +1,7 @@
-import re
 import os
+import re
 from typing import Dict
+
 
 def print_output(output: Dict):
     outputs = ['{}={}\n'.format(k, v) for k, v in output.items()]
