@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import hashlib
-import traceback
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
@@ -26,6 +25,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.types import MetaNCCallRecord
 from hathor.util import classproperty
+from hathor.utils.result import Err, Ok
 from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
@@ -125,7 +125,7 @@ class BlockConsensusAlgorithm:
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.
         """
-        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, NCFail
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
         from hathor.nanocontracts.types import Address
 
         assert self._settings.ENABLE_NANO_CONTRACTS
@@ -194,40 +194,37 @@ class BlockConsensusAlgorithm:
                 continue
 
             runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
-            exception_and_tb: tuple[NCFail, str] | None = None
-            try:
-                runner.execute_from_tx(tx)
-            except NCFail as e:
-                kwargs: dict[str, Any] = {}
-                if tx.name:
-                    kwargs['__name'] = tx.name
-                self.log.info(
-                    'nc execution failed',
-                    tx=tx.hash.hex(),
-                    error=repr(e),
-                    cause=repr(e.__cause__),
-                    **kwargs,
-                )
-                exception_and_tb = e, traceback.format_exc()
-                self.mark_as_nc_fail_execution(tx)
-            else:
-                tx_meta.nc_execution = NCExecutionState.SUCCESS
-                self.context.save(tx)
-                # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
-                #      method once per contract per block, just like we do for the block_storage. This ensures we will
-                #      have a clean database with no orphan nodes.
-                runner.commit()
+            result = runner.execute_from_tx(tx)
 
-                # Update metadata.
-                self.nc_update_metadata(tx, runner)
+            match result:
+                case Ok():
+                    tx_meta.nc_execution = NCExecutionState.SUCCESS
+                    self.context.save(tx)
+                    # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
+                    #      method once per contract per block, just like we do for the block_storage. This ensures we
+                    #      will have a clean database with no orphan nodes.
+                    runner.commit()
 
-                # We only emit events when the nc is successfully executed.
-                assert self.context.nc_events is not None
-                last_call_info = runner.get_last_call_info()
-                self.context.nc_events.append((tx, last_call_info.nc_logger.__events__))
-            finally:
-                # We save logs regardless of whether the nc successfully executed.
-                self._nc_log_storage.save_logs(tx, runner.get_last_call_info(), exception_and_tb)
+                    # Update metadata.
+                    self.nc_update_metadata(tx, runner)
+
+                    # We only emit events when the nc is successfully executed.
+                    assert self.context.nc_events is not None
+                    last_call_info = runner.get_last_call_info()
+                    self.context.nc_events.append((tx, last_call_info.nc_logger.__events__))
+
+                case Err(e):
+                    kwargs: dict[str, Any] = {}
+                    if tx.name:
+                        kwargs['__name'] = tx.name
+                    self.log.info('nc execution failed', tx=tx.hash.hex(), error=repr(e), **kwargs)
+                    self.mark_as_nc_fail_execution(tx)
+
+                case _:
+                    assert_never(result)
+
+            # We save logs regardless of whether the nc successfully executed.
+            self._nc_log_storage.save_logs(tx, runner.get_last_call_info(), result)
 
         # Save block state root id. If nothing happens, it should be the same as its block parent.
         block_storage.commit()

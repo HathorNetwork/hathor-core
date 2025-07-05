@@ -1,6 +1,8 @@
+import pytest
+
 from hathor.nanocontracts import Blueprint, public
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.exception import NCRuntimeFailure
 from hathor.nanocontracts.types import NCDepositAction
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
@@ -48,10 +50,10 @@ class ViolationsTestCase(BlueprintTestCase):
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
 
-        with self.assertRaises(NCFail) as cm:
+        with pytest.raises(NCRuntimeFailure) as e:
             self.runner.call_public_method(self.contract_id, 'modify_actions', context)
-        exc = cm.exception
-        self.assertIsInstance(exc.__cause__, TypeError)
+        assert isinstance(e.value.__cause__, TypeError)
+        assert e.value.__cause__.args[0] == "'mappingproxy' object does not support item assignment"
 
     def test_modify_vertex(self) -> None:
         context = Context(
@@ -61,10 +63,10 @@ class ViolationsTestCase(BlueprintTestCase):
             timestamp=self.now
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
-        with self.assertRaises(NCFail) as cm:
+        with pytest.raises(NCRuntimeFailure) as e:
             self.runner.call_public_method(self.contract_id, 'modify_vertex', context)
-        exc = cm.exception
-        self.assertIsInstance(exc.__cause__, TypeError)
+        assert isinstance(e.value.__cause__, TypeError)
+        assert e.value.__cause__.args[0] == "'tuple' object does not support item assignment"
 
     def test_assign_non_declared_attribute(self) -> None:
         context = Context(
@@ -75,7 +77,7 @@ class ViolationsTestCase(BlueprintTestCase):
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
         self.runner.call_public_method(self.contract_id, 'assign_declared_attribute', context)
-        with self.assertRaises(NCFail) as cm:
+        with pytest.raises(NCRuntimeFailure) as e:
             self.runner.call_public_method(self.contract_id, 'assign_non_declared_attribute', context)
-        exc = cm.exception
-        self.assertIsInstance(exc.__cause__, AttributeError)
+        assert isinstance(e.value.__cause__, AttributeError)
+        assert e.value.__cause__.args[0] == "'MyBlueprint' object has no attribute 'unknown'"

@@ -107,7 +107,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         method = getattr(MyBlueprint, nc_method, None)
         if method is not None:
             method_parser = Method.from_callable(method)
-            nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
+            nc_args_bytes = method_parser.serialize_args_bytes(nc_args).unwrap_or_raise()
         else:
             nc_args_bytes = b''
 
@@ -454,7 +454,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         ))
         nc2.update_hash()
         nc2_nano_header = nc2.get_nano_header()
-        context = nc2_nano_header.get_context()
+        context = nc2_nano_header.get_context().unwrap_or_raise()
         self.assertEqual(2, len(context.actions))
 
         action1 = context.get_single_action(TokenUid(b'token-a'))

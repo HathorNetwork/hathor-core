@@ -26,12 +26,14 @@ from pydantic import Field, validator
 from typing_extensions import override
 
 from hathor.nanocontracts import NCFail
+from hathor.nanocontracts.exception import NCFailure
 from hathor.nanocontracts.runner import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.types import ContractId
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.types import VertexId
 from hathor.utils.pydantic import BaseModel
+from hathor.utils.result import Result, is_err
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -268,12 +270,11 @@ class NCLogStorage:
         self._path = Path(path).joinpath(NC_EXEC_LOGS_DIR)
         self._config = config
 
-    def save_logs(self, tx: Transaction, call_info: CallInfo, exception_and_tb: tuple[NCFail, str] | None) -> None:
+    def save_logs(self, tx: Transaction, call_info: CallInfo, result: Result[Any, NCFailure]) -> None:
         """Persist new NC execution logs."""
         assert tx.is_nano_contract()
         meta = tx.get_metadata()
         assert meta.first_block is not None, 'nc exec logs can only be saved when the nc is confirmed'
-        exception, tb = exception_and_tb if exception_and_tb is not None else (None, None)
 
         match self._config:
             case NCLogConfig.NONE:
@@ -283,21 +284,18 @@ class NCLogStorage:
                 # save all logs
                 pass
             case NCLogConfig.FAILED:
-                if exception is None:
+                if result.is_ok():
                     # don't save when there's no exception
                     return
             case NCLogConfig.FAILED_UNHANDLED:
-                if exception is None:
-                    # don't save when there's no exception
-                    return
-                assert isinstance(exception, NCFail)
-                if not exception.__cause__ or isinstance(exception.__cause__, NCFail):
-                    # don't save when it's a simple NCFail or caused by a NCFail
+                if result.is_ok() or isinstance(result.unwrap_err(), NCFail):
+                    # don't save when there's no exception or when it's an NCFail
                     return
             case _:
                 assert_never(self._config)
 
-        new_entry = NCExecEntry.from_call_info(call_info, tb)
+        traceback = result.traceback if is_err(result) else None
+        new_entry = NCExecEntry.from_call_info(call_info, traceback)
         new_line_dict = {meta.first_block.hex(): new_entry.dict()}
         path = self._get_file_path(tx.hash)
 

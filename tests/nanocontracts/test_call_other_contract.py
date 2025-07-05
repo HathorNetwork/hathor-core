@@ -27,6 +27,7 @@ from hathor.nanocontracts.types import (
     TokenUid,
     VertexId,
 )
+from hathor.utils.result import Ok
 from tests import unittest
 from tests.nanocontracts.utils import TestRunner
 
@@ -167,15 +168,15 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc1_id)
         self.runner.call_public_method(self.nc3_id, 'set_contract', ctx, self.nc2_id)
 
-        storage1 = self.runner.get_storage(self.nc1_id)
+        storage1 = self.runner.get_storage(self.nc1_id).unwrap_or_raise()
         self.assertEqual(storage1.get_obj(b'counter', COUNTER_NC_TYPE), 5)
         self.assertEqual(storage1.get_obj(b'contract', CONTRACT_NC_TYPE), None)
 
-        storage2 = self.runner.get_storage(self.nc2_id)
+        storage2 = self.runner.get_storage(self.nc2_id).unwrap_or_raise()
         self.assertEqual(storage2.get_obj(b'counter', COUNTER_NC_TYPE), 1)
         self.assertEqual(storage2.get_obj(b'contract', CONTRACT_NC_TYPE), self.nc1_id)
 
-        storage3 = self.runner.get_storage(self.nc3_id)
+        storage3 = self.runner.get_storage(self.nc3_id).unwrap_or_raise()
         self.assertEqual(storage3.get_obj(b'counter', COUNTER_NC_TYPE), 3)
         self.assertEqual(storage3.get_obj(b'contract', CONTRACT_NC_TYPE), self.nc2_id)
 
@@ -276,13 +277,16 @@ class NCBlueprintTestCase(unittest.TestCase):
         ctx = Context(actions, self.tx, MOCK_ADDRESS, timestamp=0)
         self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 0)
         self.assertEqual(
-            Balance(value=11, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token1_uid)
+            Ok(Balance(value=11, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token2_uid)
+            Ok(Balance(value=12, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=13, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token3_uid)
+            Ok(Balance(value=13, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token3_uid)
         )
 
         actions = [
@@ -293,13 +297,16 @@ class NCBlueprintTestCase(unittest.TestCase):
         ctx = Context(actions, self.tx, MOCK_ADDRESS, timestamp=0)
         self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 0)
         self.assertEqual(
-            Balance(value=21, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token1_uid)
+            Ok(Balance(value=21, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=22, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token2_uid)
+            Ok(Balance(value=22, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=23, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token3_uid)
+            Ok(Balance(value=23, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token3_uid)
         )
 
         actions = [
@@ -310,13 +317,16 @@ class NCBlueprintTestCase(unittest.TestCase):
         ctx = Context(actions, self.tx, MOCK_ADDRESS, timestamp=0)
         self.runner.create_contract(self.nc3_id, self.blueprint_id, ctx, 0)
         self.assertEqual(
-            Balance(value=31, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token1_uid)
+            Ok(Balance(value=31, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=32, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token2_uid)
+            Ok(Balance(value=32, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=33, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token3_uid)
+            Ok(Balance(value=33, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token3_uid)
         )
 
         ctx = Context([], self.tx, MOCK_ADDRESS, timestamp=0)
@@ -332,33 +342,42 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.call_public_method(self.nc1_id, 'get_tokens_from_another_contract', ctx)
 
         self.assertEqual(
-            Balance(value=4, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token1_uid)
+            Ok(Balance(value=4, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token2_uid)
+            Ok(Balance(value=0, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token3_uid)
-        )
-
-        self.assertEqual(
-            Balance(value=21, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token1_uid)
-        )
-        self.assertEqual(
-            Balance(value=16, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token2_uid)
-        )
-        self.assertEqual(
-            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token3_uid)
+            Ok(Balance(value=0, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token3_uid)
         )
 
         self.assertEqual(
-            Balance(value=31, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token1_uid)
+            Ok(Balance(value=21, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=32, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token2_uid)
+            Ok(Balance(value=16, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=4, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token3_uid)
+            Ok(Balance(value=0, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token3_uid)
+        )
+
+        self.assertEqual(
+            Ok(Balance(value=31, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token1_uid)
+        )
+        self.assertEqual(
+            Ok(Balance(value=32, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token2_uid)
+        )
+        self.assertEqual(
+            Ok(Balance(value=4, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token3_uid)
         )
 
         ctx = Context(
@@ -398,33 +417,42 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.call_public_method(self.nc1_id, 'split_balance', ctx)
 
         self.assertEqual(
-            Balance(value=49, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token1_uid)
+            Ok(Balance(value=49, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=24, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token2_uid)
+            Ok(Balance(value=24, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token3_uid)
-        )
-
-        self.assertEqual(
-            Balance(value=25, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token1_uid)
-        )
-        self.assertEqual(
-            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token2_uid)
-        )
-        self.assertEqual(
-            Balance(value=6, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token3_uid)
+            Ok(Balance(value=12, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc1_id, token3_uid)
         )
 
         self.assertEqual(
-            Balance(value=26, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token1_uid)
+            Ok(Balance(value=25, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=14, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token2_uid)
+            Ok(Balance(value=12, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=7, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token3_uid)
+            Ok(Balance(value=6, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc2_id, token3_uid)
+        )
+
+        self.assertEqual(
+            Ok(Balance(value=26, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token1_uid)
+        )
+        self.assertEqual(
+            Ok(Balance(value=14, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token2_uid)
+        )
+        self.assertEqual(
+            Ok(Balance(value=7, can_mint=False, can_melt=False)),
+            self.runner.get_current_balance(self.nc3_id, token3_uid)
         )
 
     def test_loop(self) -> None:
@@ -437,15 +465,15 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc3_id)
         self.runner.call_public_method(self.nc3_id, 'set_contract', ctx, self.nc1_id)
 
-        storage1 = self.runner.get_storage(self.nc1_id)
+        storage1 = self.runner.get_storage(self.nc1_id).unwrap_or_raise()
         self.assertEqual(storage1.get_obj(b'counter', COUNTER_NC_TYPE), 8)
         self.assertEqual(storage1.get_obj(b'contract', CONTRACT_NC_TYPE), self.nc2_id)
 
-        storage2 = self.runner.get_storage(self.nc2_id)
+        storage2 = self.runner.get_storage(self.nc2_id).unwrap_or_raise()
         self.assertEqual(storage2.get_obj(b'counter', COUNTER_NC_TYPE), 3)
         self.assertEqual(storage2.get_obj(b'contract', CONTRACT_NC_TYPE), self.nc3_id)
 
-        storage3 = self.runner.get_storage(self.nc3_id)
+        storage3 = self.runner.get_storage(self.nc3_id).unwrap_or_raise()
         self.assertEqual(storage3.get_obj(b'counter', COUNTER_NC_TYPE), 6)
         self.assertEqual(storage3.get_obj(b'contract', CONTRACT_NC_TYPE), self.nc1_id)
 
@@ -461,11 +489,11 @@ class NCBlueprintTestCase(unittest.TestCase):
 
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
 
-        storage1 = self.runner.get_storage(self.nc1_id)
+        storage1 = self.runner.get_storage(self.nc1_id).unwrap_or_raise()
         self.assertEqual(storage1.get_obj(b'counter', COUNTER_NC_TYPE), 8)
         self.assertEqual(storage1.get_obj(b'contract', CONTRACT_NC_TYPE), self.nc2_id)
 
-        storage2 = self.runner.get_storage(self.nc2_id)
+        storage2 = self.runner.get_storage(self.nc2_id).unwrap_or_raise()
         self.assertEqual(storage2.get_obj(b'counter', COUNTER_NC_TYPE), 3)
         self.assertEqual(storage2.get_obj(b'contract', CONTRACT_NC_TYPE), None)
 

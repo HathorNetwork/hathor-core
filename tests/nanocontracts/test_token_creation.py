@@ -143,7 +143,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
         assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -2
 
-        jkl_context = JKL.get_nano_header().get_context()
+        jkl_context = JKL.get_nano_header().get_context().unwrap_or_raise()
         htr_token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
         assert jkl_context.actions[htr_token_uid] == (NCWithdrawalAction(token_uid=htr_token_uid, amount=3),)
 
@@ -229,7 +229,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         )
         assert block_storage.get_token_description(child_token_id) == expected_token_info
 
-        nc_storage = block_storage.get_contract_storage(tx1.hash)
+        nc_storage = block_storage.get_contract_storage(tx1.hash).unwrap_or_raise()
         assert nc_storage.get_all_balances() == {
             child_token_balance_key: Balance(value=100, can_mint=False, can_melt=False),
             htr_balance_key: Balance(value=2, can_mint=False, can_melt=False),
