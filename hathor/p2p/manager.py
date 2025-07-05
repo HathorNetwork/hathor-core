@@ -70,7 +70,11 @@ class PeerConnectionsMetrics(NamedTuple):
     handshaking_peers_count: int
     connected_peers_count: int
     known_peers_count: int
-
+    # Counters for the connection pool slots
+    incoming_connections_count: int
+    outgoing_connections_count: int
+    discovered_connections_count: int
+    check_entrypoint_connections_count: int
 
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
@@ -141,6 +145,18 @@ class ConnectionsManager:
         # Global maximum number of connections.
         self.max_connections: int = self._settings.PEER_MAX_CONNECTIONS
 
+        # Maximum number of incoming connections.
+        self.max_incoming_connections: int = self._settings.PEER_MAX_ENTRYPOINTS
+
+        # Maximum number of outgoing connections. 
+        self.max_outgoing_connections: int = self._settings.PEER_MAX_OUTGOING_CONNECTIONS
+
+        # Maximum number of connections for untrustworthy peers checking.
+        self.max_check_peers_connections: int = self._settings.PEER_MAX_CHECK_PEER_CONNECTIONS
+
+        # Maximum connections for discovered peers:
+        self.max_discovered_peers_connections: int = self._settings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
+
         # Global rate limiter for all connections.
         self.rate_limiter = RateLimiter(self.reactor)
         self.enable_rate_limiter()
@@ -156,6 +172,18 @@ class ConnectionsManager:
 
         # List of peers connected and ready to communicate.
         self.connected_peers = {}
+
+        # List of connected_peers by outgoing connections.
+        self.outgoing_connections = set()
+
+        # List of connected peers by incoming connections.
+        self.incoming_connections = set()
+
+        # List of discovered peers connected in bootstrap phase.
+        self.discovered_connections = set()
+
+        # List of connections created for checking other peers.
+        self.check_entrypoint_connections = set()
 
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
@@ -361,7 +389,11 @@ class ConnectionsManager:
             len(self.connecting_peers),
             len(self.handshaking_peers),
             len(self.connected_peers),
-            len(self.verified_peer_storage)
+            len(self.verified_peer_storage),
+            len(self.incoming_connections),
+            len(self.outgoing_connections),
+            len(self.discovered_connections),
+            len(self.check_entrypoint_connections),
         )
 
     def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
@@ -417,10 +449,48 @@ class ConnectionsManager:
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
+
+        # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
+            
+        # Next block sends the connection to the appropriate slot.
+        # If it is a check connection, go to check_peers_connections slot.
+        # If a discovered connection, go to discovered_connections slot.
+        # If none of the above, go to either incoming or outgoing connections slot.
+        # Note: Assumes CHECK_ENTRYPOINT and DISCOVERED_CONNECTION cannot be True in Tandem.
+        if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
+            if len(self.incoming_connections) >= self.max_incoming_connections:
+                self.log.warn('DENIED: Reached maximum number of INCOMING connections', max_connections=self.max_incoming_connections)
+                protocol.disconnect(force=True)
+                return
+            self.incoming_connections.add(protocol)
+
+        if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
+            if len(self.outgoing_connections) >= self.max_outgoing_connections:
+                self.log.warn("DENIED: Reached maximum number of OUTGOING connections", max_connections=self.max_outgoing_connections)
+                protocol.disconnect(force=True)
+                return
+            self.outgoing_connections.add(protocol)
+            
+        if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
+            if len(self.discovered_connections) >= self.max_discovered_peers_connections:
+                self.log.warn("DENIED: Reached maximum number of DISCOVERED connections from peers.", max_connections=self.max_discovered_peers_connections)
+                protocol.disconnect(force=True)
+                return
+            self.discovered_connections.add(protocol)
+        
+        if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
+            if len(self.check_entrypoint_connections) >= self.max_check_peers_connections:
+                self.log.warn("DENIED: Reached maximum number of CONNECTIONS TO CHECK ENTRYPOINTS.", max_connections=self.max_check_peers_connections)
+                protocol.disconnect(force=True)
+                return
+            self.check_entrypoint_connections.add(protocol)
+        
+            
+        # Regardless of the slot sent, the total connections increases.
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
@@ -486,6 +556,19 @@ class ConnectionsManager:
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
         self.connections.discard(protocol)
+
+        # Each conn is from a slot - discard from it as well.
+        if protocol.connection_type == HathorSettings.ConnectionType.INCOMING:
+            self.incoming_connections.discard(protocol)
+        if protocol.connection_type == HathorSettings.ConnectionType.OUTGOING:
+            self.outgoing_connections.discard(protocol)
+        if protocol.connection_type == HathorSettings.ConnectionType.DISCOVERED:
+            self.discovered_connections.discard(protocol)
+        if protocol.connection_type == HathorSettings.ConnectionType.CHECK_ENTRYPOINTS:
+            self.check_entrypoint_connections.discard(protocol)
+
+
+        
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
         if protocol._peer is not None:
@@ -513,6 +596,26 @@ class ConnectionsManager:
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""
         for conn in self.connections:
+            yield conn
+
+    def iter_incoming_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all of the incoming connections."""
+        for conn in self.incoming_connections:
+            yield conn
+
+    def iter_outgoing_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all of the outgoing connections."""
+        for conn in self.outgoing_connections:
+            yield conn
+
+    def iter_check_entrypoint_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all of the connections reserved for entrypoint checking."""
+        for conn in self.check_entrypoint_connections:
+            yield conn
+
+    def iter_discovered_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all of the discovered connections after bootstrapping."""
+        for conn in self.discovered_connections:
             yield conn
 
     def iter_ready_connections(self) -> Iterable[HathorProtocol]:
