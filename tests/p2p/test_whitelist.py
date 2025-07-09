@@ -69,11 +69,11 @@ class WhitelistTestCase(unittest.TestCase):
         self._settings = get_global_settings()
 
         manager1 = self.create_peer(network)
-        manager1.connections.peers_whitelist._following_wl = True
+        manager1.connections.peers_whitelist.follow_wl()
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        manager2.connections.peers_whitelist._following_wl = True
+        manager2.connections.peers_whitelist.follow_wl()
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         # Mock Peers Whitelist does not fetch peer Ids from blank url
