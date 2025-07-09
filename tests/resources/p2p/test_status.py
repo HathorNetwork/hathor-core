@@ -22,6 +22,15 @@ class StatusTest(_BaseResourceTest._ResourceTest):
         self.manager2 = self.create_peer('testnet')
         address2 = IPv4Address('TCP', '192.168.1.1', 54322)
         self.manager2.connections.my_peer.info.entrypoints.add(PeerAddress.from_address(address2))
+
+        # Manager's whitelist is not empty, so its mock whitelist will be followed.
+        # Since manager 2 is a different instance, we need to add it to the whitelist of manager 1
+        self.manager.connections.peers_whitelist._current.add(self.manager2.my_peer.id)
+
+        # Likewise for manager 1 in manager 2
+        self.manager2.connections.peers_whitelist._current.add(self.manager.my_peer.id)
+
+        # Now, we create a fake connection between the two managers.
         self.conn1 = FakeConnection(self.manager, self.manager2, addr1=address1, addr2=address2)
 
     @inlineCallbacks
@@ -79,6 +88,9 @@ class StatusTest(_BaseResourceTest._ResourceTest):
         self.conn1.run_one_step()  # PEER-ID
         self.conn1.run_one_step()  # READY
         self.conn1.run_one_step()  # BOTH PEERS ARE READY NOW
+
+        assert self.manager.connections.peers_whitelist is not None, 'Peers whitelist should not be None'
+        assert len(self.manager.connections.peers_whitelist._current) == 3, 'Should have one peer in the whitelist'
 
         response = yield self.web.get("status")
         data = response.json_value()
