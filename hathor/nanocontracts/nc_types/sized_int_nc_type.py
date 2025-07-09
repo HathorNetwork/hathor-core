@@ -47,7 +47,7 @@ class _SizedIntNCType(NCType[int]):
         if not self._signed:
             return 0
         if self._byte_size is not None:
-            return -(2**self._byte_size)
+            return -(2**self._byte_size * 8)
         else:
             return None
 
