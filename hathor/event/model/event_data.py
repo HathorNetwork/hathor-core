@@ -19,11 +19,11 @@ from typing import Any, Optional, TypeAlias, Union, cast
 from pydantic import Extra, validator
 from typing_extensions import Self
 
-from hathor.pubsub import EventArguments
-from hathor.utils.pydantic import BaseModel
-from hathor.transaction import Transaction
 from hathor.crypto.util import get_address_b58_from_bytes
+from hathor.pubsub import EventArguments
+from hathor.transaction import Transaction
 from hathor.transaction.headers import VertexHeaderId
+from hathor.utils.pydantic import BaseModel
 
 
 class DecodedTxOutput(BaseModel, extra=Extra.ignore):
@@ -164,10 +164,10 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
                 dict(
                    id=VertexHeaderId.NANO_HEADER.value.hex(),
                    nc_seqnum=nano_header.nc_seqnum,
-                   nc_id=nano_header.nc_id,
+                   nc_id=nano_header.nc_id.hex(),
                    nc_method=nano_header.nc_method,
-                   nc_address=get_address_b58_from_bytes(nano_header.nc_address)
-               )
+                   nc_address=get_address_b58_from_bytes(nano_header.nc_address),
+                )
             )
 
         tx_json['headers'] = headers
