@@ -330,7 +330,4 @@ class VerificationService:
         self._verify_without_storage_tx(tx)
         self.verifiers.on_chain_blueprint.verify_pubkey_is_allowed(tx)
         self.verifiers.on_chain_blueprint.verify_nc_signature(tx)
-        self.verifiers.on_chain_blueprint.verify_python_script(tx)
-        self.verifiers.on_chain_blueprint.verify_script_restrictions(tx)
-        self.verifiers.on_chain_blueprint.verify_has_blueprint_attr(tx)
-        self.verifiers.on_chain_blueprint.verify_blueprint_type(tx)
+        self.verifiers.on_chain_blueprint.verify_code(tx)
