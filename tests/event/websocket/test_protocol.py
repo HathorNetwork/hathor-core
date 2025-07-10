@@ -100,7 +100,7 @@ def test_send_event_response() -> None:
     expected_payload = (b'{"type":"EVENT","peer_id":"my_peer_id","network":"my_network","event":{"id":10,'
                         b'"timestamp":123.0,"type":"VERTEX_METADATA_CHANGED","data":{"hash":"abc","nonce":123,'
                         b'"timestamp":456,"signal_bits":0,"version":1,"weight":10.0,"inputs":[],"outputs":[],'
-                        b'"parents":[],'
+                        b'"parents":[],"headers":[],'
                         b'"tokens":[],"token_name":null,"token_symbol":null,"aux_pow":null,"metadata":{"hash":"abc",'
                         b'"spent_outputs":[],"conflict_with":[],"voided_by":[],"received_by":[],"children":[],'
                         b'"twins":[],"accumulated_weight":10.0,"score":20.0,"accumulated_weight_raw":"1024",'
