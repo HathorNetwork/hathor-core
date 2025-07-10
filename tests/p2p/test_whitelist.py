@@ -23,9 +23,13 @@ class WhitelistTestCase(unittest.TestCase):
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        manager2.connections.peers_whitelist._following_wl = False
+        manager2.connections.peers_whitelist._following_wl = True
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
+        # Create a dummy peer for both managers to populate their whitelists.
+        dummy_manager = self.create_peer(network)
+        manager1.connections.peers_whitelist._current.add(dummy_manager.my_peer.id)
+        manager2.connections.peers_whitelist._current.add(dummy_manager.my_peer.id)
         conn = FakeConnection(manager1, manager2)
         self.assertFalse(conn.tr1.disconnecting)
         self.assertFalse(conn.tr2.disconnecting)
