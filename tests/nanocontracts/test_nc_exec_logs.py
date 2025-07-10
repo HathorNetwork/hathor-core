@@ -25,7 +25,7 @@ from hathor.nanocontracts.nc_exec_logs import (
     NCLogLevel,
 )
 from hathor.nanocontracts.runner import CallType
-from hathor.nanocontracts.types import ContractId, NCAction, NCDepositAction, TokenUid, view
+from hathor.nanocontracts.types import ContractId, NCDepositAction, TokenUid, view
 from hathor.transaction import Block, Transaction
 from hathor.util import not_none
 from tests import unittest
@@ -61,7 +61,7 @@ class MyBlueprint1(Blueprint):
     @public(allow_deposit=True)
     def call_another_public(self, ctx: Context, contract_id: ContractId) -> None:
         self.log.debug('call_another_public() called on MyBlueprint1', contract_id=contract_id)
-        actions: list[NCAction] = [NCDepositAction(token_uid=TokenUid(b'\x00'), amount=5)]
+        actions = [NCDepositAction(token_uid=TokenUid(b'\x00'), amount=5)]
         result1 = self.syscall.call_public_method(contract_id, 'sum', actions, 1, 2)
         result2 = self.syscall.call_view_method(contract_id, 'hello_world')
         self.log.debug('results on MyBlueprint1', result1=result1, result2=result2)

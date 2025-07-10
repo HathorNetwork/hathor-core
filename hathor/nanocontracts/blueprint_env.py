@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, final
+from typing import TYPE_CHECKING, Any, Optional, Sequence, final
 
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
@@ -166,7 +166,7 @@ class BlueprintEnvironment:
         self,
         nc_id: ContractId,
         method_name: str,
-        actions: list[NCAction],
+        actions: Sequence[NCAction],
         *args: Any,
         **kwargs: Any,
     ) -> Any:
@@ -178,7 +178,7 @@ class BlueprintEnvironment:
         self,
         blueprint_id: BlueprintId,
         method_name: str,
-        actions: list[NCAction],
+        actions: Sequence[NCAction],
         *args: Any,
         **kwargs: Any,
     ) -> Any:
@@ -190,7 +190,7 @@ class BlueprintEnvironment:
         self,
         blueprint_id: BlueprintId,
         method_name: str,
-        actions: list[NCAction],
+        actions: Sequence[NCAction],
         nc_args: NCArgs,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
@@ -221,7 +221,7 @@ class BlueprintEnvironment:
         self,
         blueprint_id: BlueprintId,
         salt: bytes,
-        actions: list[NCAction],
+        actions: Sequence[NCAction],
         *args: Any,
         **kwargs: Any,
     ) -> tuple[ContractId, Any]:

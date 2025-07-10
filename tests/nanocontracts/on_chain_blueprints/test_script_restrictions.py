@@ -21,8 +21,6 @@ ZLIB_BOMB: bytes = _load_file('bomb.zlib')
 
 
 class OnChainBlueprintScriptTestCase(unittest.TestCase):
-    use_memory_storage = True
-
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('unittests')

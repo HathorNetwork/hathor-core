@@ -66,7 +66,7 @@ class CallerBlueprint(Blueprint):
 
     @public
     def revoke_from_other(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
-        self.syscall.call_public_method(self.other_id, 'revoke_from_self', [], token_uid, True, True)
+        self.syscall.call_public_method(self.other_id, 'revoke_from_self', [], token_uid, mint, melt)
 
     @public
     def acquire_another(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:

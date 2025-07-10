@@ -158,6 +158,16 @@ class NCNanoContractTestCase(BlueprintTestCase):
             tka_balance_key: Balance(value=667, can_mint=False, can_melt=False),
         }
 
+        # Try revoke mint without having the authority
+        msg = f'contract {nc_id.hex()} cannot mint {token_a_uid.hex()} tokens'
+        with pytest.raises(NCInvalidSyscall, match=msg):
+            self.runner.call_public_method(nc_id, 'revoke', ctx, token_a_uid, True, False)
+
+        # Try revoke melt without having the authority
+        msg = f'contract {nc_id.hex()} cannot melt {token_a_uid.hex()} tokens'
+        with pytest.raises(NCInvalidSyscall, match=msg):
+            self.runner.call_public_method(nc_id, 'revoke', ctx, token_a_uid, False, True)
+
         # Try mint TKA
         msg = f'contract {nc_id.hex()} cannot mint {token_a_uid.hex()} tokens'
         with pytest.raises(NCInvalidSyscall, match=msg):

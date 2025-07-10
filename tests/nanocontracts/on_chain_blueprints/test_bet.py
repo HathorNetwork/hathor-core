@@ -49,8 +49,6 @@ class BetInfo(NamedTuple):
 
 
 class OnChainBetBlueprintTestCase(unittest.TestCase):
-    use_memory_storage = True
-
     def setUp(self) -> None:
         super().setUp()
         self.manager = self.create_peer('unittests')

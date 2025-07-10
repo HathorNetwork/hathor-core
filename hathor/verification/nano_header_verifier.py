@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Sequence
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.exception import NCInvalidAction, NCInvalidSignature
@@ -94,7 +95,7 @@ class NanoHeaderVerifier:
                 )
 
     @staticmethod
-    def verify_action_list(actions: list[NCAction]) -> None:
+    def verify_action_list(actions: Sequence[NCAction]) -> None:
         """Perform NCAction verifications that do not depend on the tx."""
         if len(actions) > MAX_ACTIONS_LEN:
             raise NCInvalidAction(f'more actions than the max allowed: {len(actions)} > {MAX_ACTIONS_LEN}')

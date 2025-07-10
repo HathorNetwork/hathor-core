@@ -22,8 +22,6 @@ from tests.nanocontracts.utils import TestRunner
 
 
 class BlueprintTestCase(unittest.TestCase):
-    use_memory_storage = True
-
     def setUp(self):
         super().setUp()
         self.manager = self.build_manager()

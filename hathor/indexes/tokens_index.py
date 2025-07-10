@@ -12,12 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Iterator, NamedTuple, Optional
+from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
+
+if TYPE_CHECKING:
+    from hathor.nanocontracts.runner.types import UpdateAuthoritiesRecord
 
 SCOPE = Scope(
     include_blocks=False,
@@ -62,6 +67,16 @@ class TokenIndexInfo(ABC):
     @abstractmethod
     def iter_melt_utxos(self) -> Iterator[TokenUtxoInfo]:
         """Iterate over melt-authority UTXOs"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def can_mint(self) -> bool:
+        """Return whether this token can be minted, that is, whether any UTXO or contract holds a mint authority."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def can_melt(self) -> bool:
+        """Return whether this token can be melted, that is, whether any UTXO or contract holds a melt authority."""
         raise NotImplementedError
 
 
@@ -115,13 +130,39 @@ class TokensIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def create_token_info(self, token_uid: bytes, name: str, symbol: str, total: int = 0) -> None:
+    def create_token_info(
+        self,
+        token_uid: bytes,
+        name: str,
+        symbol: str,
+        total: int = 0,
+        n_contracts_can_mint: int = 0,
+        n_contracts_can_melt: int = 0,
+    ) -> None:
         """Create a token info for a new token."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def create_token_info_from_contract(
+        self,
+        token_uid: bytes,
+        name: str,
+        symbol: str,
+        total: int = 0,
+    ) -> None:
+        """Create a token info for a new token created in a contract."""
         raise NotImplementedError
 
     @abstractmethod
     def destroy_token(self, token_uid: bytes) -> None:
         """Destroy a token."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_authorities_from_contract(self, record: UpdateAuthoritiesRecord, undo: bool = False) -> None:
+        """
+        Handle an UpdateAuthoritiesRecord by incrementing/decrementing the counters of contracts holding authorities.
+        """
         raise NotImplementedError
 
     @abstractmethod
