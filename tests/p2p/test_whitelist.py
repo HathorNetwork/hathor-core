@@ -47,9 +47,16 @@ class WhitelistTestCase(unittest.TestCase):
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
         manager2 = self.create_peer(network)
-        manager2.connections.peers_whitelist.unfollow_wl()
+        # Both follow their respective whitelist, although manager1 is not in manager2's whitelist.
+        manager2.connections.peers_whitelist.follow_wl()
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
+        # Whitelist of Manager 2 is empty, which still lets connections happen.
+        # We'll create a dummy peer id for manager2 to simulate a whitelist entry.
+        dummy_manager = self.create_peer(network)
+        manager2.connections.peers_whitelist._current.add(dummy_manager.my_peer.id)
+
+        # Now, manager2 has a non-empty whitelist, so not having manager1 in it will cause a disconnect.
         manager1.connections.peers_whitelist._current.add(manager2.my_peer.id)
 
         conn = FakeConnection(manager1, manager2)
