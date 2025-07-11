@@ -579,17 +579,11 @@ class Runner:
             rules = BalanceRules.get_rules(self._settings, action)
             rules.nc_callee_execution_rule(changes_tracker)
 
-        try:
-            # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
-            # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
-            # impact the original context. Since the runner relies on the context for other critical checks, any
-            # unauthorized modification would pose a serious security risk.
-            ret = self._metered_executor.call(method, ctx.copy(), *args, **kwargs)
-        except NCFail:
-            raise
-        except Exception as e:
-            # Convert any other exception to NCFail.
-            raise NCFail from e
+        # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
+        # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
+        # impact the original context. Since the runner relies on the context for other critical checks, any
+        # unauthorized modification would pose a serious security risk.
+        ret = self._metered_executor.call(method, ctx.copy(), *args, **kwargs)
 
         if len(self._call_info.change_trackers[contract_id]) > 1:
             call_record.changes_tracker.commit()

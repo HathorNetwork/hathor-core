@@ -198,3 +198,13 @@ class OCBOutOfMemoryDuringLoading(NCError):
 class NCDisabledBuiltinError(NCError):
     """Raised when a disabled builtin is used during creation or execution of a nanocontract.
     """
+
+
+"""
+- BaseException
+- Exception
+    - NCInternalException (raised by us intentionally to fail contract execution)
+    - NCFail (raised by users intentionally to fail contract execution)
+    - NCUnhandledInternalException (raised by us unintentionally, such as AssertionError)
+    - NCUnhandledUserException (raised by use)
+"""
