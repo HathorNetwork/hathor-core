@@ -83,7 +83,6 @@ class SyncMethodsTestCase(unittest.TestCase):
             expected_result = expected_result[::-1]
             self.assertEqual(result, expected_result)
 
-
     def test_tx_propagation_nat_peers(self) -> None:
         """ manager1 <- manager2 <- manager3
         """
@@ -152,7 +151,6 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(node_sync2.peer_best_block, node_sync2.synced_block)
         self.assertEqual(node_sync2.peer_best_block.height, self.manager2.tx_storage.get_height_best_block())
         self.assertConsensusEqual(self.manager2, self.manager3)
-
 
     def test_check_sync_state(self) -> None:
         """Tests if the LoopingCall to check the sync state works"""
@@ -357,7 +355,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(manager2.tx_storage.get_vertices_count(), total_count)
         self.assertEqual(len(manager2.tx_storage.indexes.mempool_tips.get()), 1)
         self.assertEqual(len(self.manager1.tx_storage.indexes.mempool_tips.get()), 1)
-    
+
     def test_block_sync_checkpoints(self) -> None:
         TOTAL_BLOCKS = 30
         LAST_CHECKPOINT = 15

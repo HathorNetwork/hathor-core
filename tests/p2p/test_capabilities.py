@@ -1,4 +1,4 @@
-from hathor.p2p.states import ReadyState, PeerIdState, HelloState
+from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -9,13 +9,14 @@ class CapabilitiesTestCase(unittest.TestCase):
         network = 'testnet'
         manager1 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
                                                            self._settings.CAPABILITY_SYNC_VERSION])
-        manager2 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST, self._settings.CAPABILITY_SYNC_VERSION])
+        manager2 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
+                                                           self._settings.CAPABILITY_SYNC_VERSION])
 
         assert manager1.connections.peers_whitelist is not None, 'Peers whitelist should not be None'
         assert manager2.connections.peers_whitelist is not None, 'Peers whitelist should not be None'
         assert len(manager1.connections.peers_whitelist._current) == 0, 'Should have no peers in the whitelist'
         assert len(manager2.connections.peers_whitelist._current) == 0, 'Should have no peers in the whitelist'
-        
+
         conn = FakeConnection(manager1, manager2)
 
         # Run the p2p protocol.

@@ -209,13 +209,13 @@ class HathorProtocolTestCase(unittest.TestCase):
             network,
             peer=self.peer1,
             capabilities=[self._settings.CAPABILITY_WHITELIST, self._settings.CAPABILITY_IPV6,
-                           self._settings.CAPABILITY_SYNC_VERSION]
+                          self._settings.CAPABILITY_SYNC_VERSION]
         )
         manager2 = self.create_peer(
             network,
             peer=self.peer2,
             capabilities=[self._settings.CAPABILITY_WHITELIST,
-                           self._settings.CAPABILITY_SYNC_VERSION]
+                          self._settings.CAPABILITY_SYNC_VERSION]
         )
 
         port1 = FakeConnection._get_port(manager1)
@@ -251,13 +251,13 @@ class HathorProtocolTestCase(unittest.TestCase):
             network,
             peer=self.peer1,
             capabilities=[self._settings.CAPABILITY_WHITELIST, self._settings.CAPABILITY_IPV6,
-                           self._settings.CAPABILITY_SYNC_VERSION]
+                          self._settings.CAPABILITY_SYNC_VERSION]
         )
         manager2 = self.create_peer(
             network,
             peer=self.peer2,
             capabilities=[self._settings.CAPABILITY_WHITELIST,
-                           self._settings.CAPABILITY_IPV6, self._settings.CAPABILITY_SYNC_VERSION]
+                          self._settings.CAPABILITY_IPV6, self._settings.CAPABILITY_SYNC_VERSION]
         )
 
         port1 = FakeConnection._get_port(manager1)
