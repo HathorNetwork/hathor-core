@@ -12,6 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from hathor.version import __version__
 
-__all__ = ['__version__']
+HATHOR_DIR = os.path.dirname(__file__)
+
+__all__ = [
+    '__version__',
+    'HATHOR_DIR',
+]

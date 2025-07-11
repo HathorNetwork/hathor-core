@@ -60,15 +60,15 @@ class BlueprintTestCase(unittest.TestCase):
         """
         from hathor.nanocontracts.nc_exec_logs import NCLogger
         runner = self.runner
-        contract_storage = runner.get_storage(contract_id)
+        contract_storage = runner.get_storage(contract_id).unwrap_or_raise()
         if locked:
             contract_storage.lock()
         else:
             contract_storage.unlock()
         nc_logger = NCLogger(__reactor__=runner.reactor, __nc_id__=contract_id)
         env = BlueprintEnvironment(runner, nc_logger, contract_storage, disable_cache=True)
-        blueprint_id = runner.get_blueprint_id(contract_id)
-        blueprint_class = runner.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_id = runner.get_blueprint_id(contract_id).unwrap_or_raise()
+        blueprint_class = runner.tx_storage.get_blueprint_class(blueprint_id).unwrap_or_raise()
         contract = blueprint_class(env)
         return contract
 

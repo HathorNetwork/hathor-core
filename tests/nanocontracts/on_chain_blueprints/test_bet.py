@@ -133,7 +133,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
 
         nc_id = blueprint.blueprint_id()
         nc_method = NC_INITIALIZE_METHOD
-        nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
+        nc_args_bytes = method_parser.serialize_args_bytes(nc_args).unwrap_or_raise()
 
         # sign
         address = self.wallet.get_unused_address()
@@ -188,7 +188,7 @@ class OnChainBetBlueprintTestCase(unittest.TestCase):
         # set expected self objects:
         self.nc_id = ContractId(VertexId(nc_init_tx.hash))
         self.runner = self.manager.get_nc_runner(block)
-        self.nc_storage = self.runner.get_storage(self.nc_id)
+        self.nc_storage = self.runner.get_storage(self.nc_id).unwrap_or_raise()
 
     def test_blueprint_initialization(self) -> None:
         # if initialization was correct we should be able to observe these in the nc_storage:

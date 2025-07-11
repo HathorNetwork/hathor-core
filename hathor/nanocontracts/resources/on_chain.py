@@ -67,7 +67,7 @@ class BlueprintOnChainResource(Resource):
             blueprint_list = []
             if bp_id := bytes_from_hex(search):
                 try:
-                    bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id))
+                    bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id)).unwrap_or_raise()
                 except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed):
                     pass
                 else:
@@ -94,7 +94,7 @@ class BlueprintOnChainResource(Resource):
             ref_tx_id = bytes.fromhex(params.before or params.after or '')
             assert ref_tx_id
             try:
-                ref_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(ref_tx_id))
+                ref_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(ref_tx_id)).unwrap_or_raise()
             except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed) as e:
                 request.setResponseCode(404)
                 error_response = ErrorResponse(
@@ -112,7 +112,7 @@ class BlueprintOnChainResource(Resource):
         blueprints = []
         for idx, bp_id in enumerate(iter_bps):
             try:
-                bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id))
+                bp_tx = tx_storage.get_on_chain_blueprint(blueprint_id_from_bytes(bp_id)).unwrap_or_raise()
             except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType):
                 raise AssertionError('bps iterator must always yield valid blueprint txs')
             except OCBBlueprintNotConfirmed:

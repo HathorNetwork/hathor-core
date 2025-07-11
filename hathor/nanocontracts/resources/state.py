@@ -141,7 +141,7 @@ class NanoContractStateResource(Resource):
 
         try:
             runner = self.manager.get_nc_runner(block)
-            nc_storage = runner.get_storage(nc_id_bytes)
+            nc_storage = runner.get_storage(nc_id_bytes).unwrap_or_raise()
         except NanoContractDoesNotExist:
             # Nano contract does not exist at this block
             request.setResponseCode(404)
@@ -152,7 +152,7 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         blueprint_id = nc_storage.get_blueprint_id()
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id).unwrap_or_raise()
 
         value: Any
         # Get balances.
@@ -213,7 +213,7 @@ class NanoContractStateResource(Resource):
         calls: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
         for call_info in params.calls:
             try:
-                method_name, method_args = parse_nc_method_call(blueprint_class, call_info)
+                method_name, method_args = parse_nc_method_call(blueprint_class, call_info).unwrap_or_raise()
                 value = runner.call_view_method(nc_id_bytes, method_name, *method_args)
                 if type(value) is bytes:
                     value = value.hex()

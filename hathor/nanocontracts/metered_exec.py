@@ -19,7 +19,9 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 from structlog import get_logger
 
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+from hathor.nanocontracts.exception import NCFail, NCFailure, NCRuntimeFailure
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
+from hathor.utils.result import Err, Ok, Result
 
 logger = get_logger()
 
@@ -77,7 +79,7 @@ class MeteredExecutor:
         del env['__builtins__']
         return env
 
-    def call(self, func: Callable[_P, _T], /, *args: _P.args, **kwargs: _P.kwargs) -> _T:
+    def call(self, func: Callable[_P, _T], /, *args: _P.args, **kwargs: _P.kwargs) -> Result[_T, NCFailure]:
         """ This is equivalent to `func(*args, **kwargs)` but with execution metering and memory limiting.
         """
         env: dict[str, object] = {
@@ -97,5 +99,31 @@ class MeteredExecutor:
             optimize=0,
             _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
         )
-        exec(code, env)
-        return cast(_T, env['__result__'])
+
+        # We call the function and wrap any exception in a Result for explicit error handling.
+        # There are two possible ways to reach this code:
+        #
+        # - A direct call originated from the consensus. It deals with the Result explicitly.
+        # - An indirect call originated from a syscall (which also ends up being originated from the consensus), for
+        #   example when a contract calls another contract. To bridge errors between our code and user code (the
+        #   blueprint) the `Result.unwrap_or_raise()` method is called on the edge, that is, on the syscalls in
+        #   BlueprintEnv. This will bubble up exceptions until they reach this point, the `exec()` of the entrypoint
+        #   blueprint method call. This can recurse if there are multiple nested calls.
+        try:
+            exec(code, env)
+        except Exception as e:
+            if isinstance(e, (NCFail, NCRuntimeFailure)):
+                # - NCFail can either be raised by our internal system for any usage errors (for example, calling
+                #   a public method from a view method), or explicitly in blueprint code (via `raise NCFail`).
+                # - NCRuntimeFailure is raised when an unhandled exception happens in blueprint code (for example,
+                #   when a user divides by zero).
+                # Both are wrapped in an Err and returned.
+                return Err(e)
+
+            # Any other exception is considered an unhandled exception,
+            # and is wrapped in an Err via an NCRuntimeFailure.
+            failure = NCRuntimeFailure()
+            failure.__cause__ = e
+            return Err(failure, e)
+
+        return Ok(cast(_T, env['__result__']))

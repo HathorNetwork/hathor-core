@@ -82,7 +82,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         self.runner.create_contract(nc1_id, self.other_blueprint_id, ctx)
         self.runner.create_contract(nc2_id, self.my_blueprint_id, ctx, nc1_id)
 
-        storage2 = self.runner.get_storage(nc2_id)
+        storage2 = self.runner.get_storage(nc2_id).unwrap_or_raise()
 
         assert storage2.get_obj(b'my_nc_id', CONTRACT_NC_TYPE) == nc2_id
         assert storage2.get_obj(b'other_nc_id', OPT_CONTRACT_NC_TYPE) == nc1_id
@@ -107,7 +107,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         )
 
         self.runner.create_contract(nc_id, self.other_blueprint_id, ctx_initialize)
-        storage = self.runner.get_storage(nc_id)
+        storage = self.runner.get_storage(nc_id).unwrap_or_raise()
 
         ctx_grant = Context(
             actions=[NCGrantAuthorityAction(token_uid=token_a_uid, mint=True, melt=True)],

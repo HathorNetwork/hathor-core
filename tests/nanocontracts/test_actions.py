@@ -33,6 +33,7 @@ from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.util import not_none
+from hathor.utils.result import Ok
 from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
 from hathor.wallet import HDWallet
 from tests import unittest
@@ -151,7 +152,7 @@ class TestActions(unittest.TestCase):
         if nc_args is not None:
             assert nc_method is not None
             method_parser = Method.from_callable(getattr(MyBlueprint, nc_method))
-            nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
+            nc_args_bytes = method_parser.serialize_args_bytes(nc_args).unwrap_or_raise()
 
         nano_header = NanoHeader(
             tx=tx,
@@ -809,12 +810,12 @@ class TestActions(unittest.TestCase):
         ])
 
         nano_header = self.tx1.get_nano_header()
-        actions = nano_header.get_actions()
+        actions = nano_header.get_actions().unwrap_or_raise()
 
         # Here I have to fake and patch get_actions() with an invalid
         # one because the nano header always creates valid token uids.
         fake_token_uid = b'\1' * 32
-        fake_actions = [dataclasses.replace(actions[0], token_uid=TokenUid(fake_token_uid))]
+        fake_actions = Ok([dataclasses.replace(actions[0], token_uid=TokenUid(fake_token_uid))])
 
         with patch('hathor.transaction.headers.NanoHeader.get_actions', lambda _: fake_actions):
             with pytest.raises(NCInvalidAction) as e:
