@@ -221,6 +221,11 @@ class BlockConsensusAlgorithm:
                 # Update metadata.
                 self.nc_update_metadata(tx, runner)
 
+                # Update indexes. This must be after metadata is updated.
+                assert tx.storage is not None
+                assert tx.storage.indexes is not None
+                tx.storage.indexes.handle_contract_execution(tx)
+
                 # We only emit events when the nc is successfully executed.
                 assert self.context.nc_events is not None
                 last_call_info = runner.get_last_call_info()
@@ -685,7 +690,7 @@ class BlockConsensusAlgorithm:
                 if meta.nc_execution is NCExecutionState.SUCCESS:
                     assert tx.storage is not None
                     assert tx.storage.indexes is not None
-                    tx.storage.indexes.nc_update_remove(tx)
+                    tx.storage.indexes.handle_contract_unexecution(tx)
                 meta.nc_execution = NCExecutionState.PENDING
                 meta.nc_calls = None
             meta.first_block = None
