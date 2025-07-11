@@ -17,7 +17,7 @@
         in
           pkgs.mkShell {
             buildInputs = [
-              pkgs.python310
+              pkgs.python312
               pkgs.poetry
               pkgs.rocksdb
               pkgs.snappy
@@ -33,7 +33,7 @@
             shellHook = ''
               export CFLAGS="-I${pkgs.rocksdb}/include"
               export LDFLAGS="-L${pkgs.rocksdb}/lib"
-              poetry env use python3.11
+              poetry env use python3.12
             '';
           };
     });
