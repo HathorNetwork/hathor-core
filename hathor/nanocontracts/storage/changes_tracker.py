@@ -81,6 +81,7 @@ class NCChangesTracker(NCContractStorage):
         self._balance_diff: dict[BalanceKey, int] = {}
         self._authorities_diff: dict[BalanceKey, _NCAuthorityDiff] = {}
         self._created_tokens: dict[TokenUid, TokenDescription] = {}
+
         self._blueprint_id: BlueprintId | None = None
 
         self.has_been_commited = False

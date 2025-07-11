@@ -41,6 +41,7 @@ from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.sorter.types import NCSorterCallable
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
@@ -188,6 +189,7 @@ class Builder:
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
 
+        self._peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = None
         self._nc_anti_mev: bool = True
 
         self._nc_storage_factory: NCStorageFactory | None = None
@@ -466,7 +468,7 @@ class Builder:
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
-            whitelist_only=False,
+            peers_whitelist=self._peers_whitelist,
             rng=self._rng,
             enable_ipv6=self._enable_ipv6,
             disable_ipv4=self._disable_ipv4,
@@ -755,6 +757,11 @@ class Builder:
     def enable_event_queue(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_event_queue = True
+        return self
+
+    def set_whitelist(self, peers_wl: URLPeersWhitelist | FilePeersWhitelist | None) -> 'Builder':
+        self.check_if_can_modify()
+        self._peers_whitelist = peers_wl
         return self
 
     def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':

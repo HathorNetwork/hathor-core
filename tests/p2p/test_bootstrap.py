@@ -57,7 +57,7 @@ class BootstrapTestCase(unittest.TestCase):
             pubsub,
             True,
             self.rng,
-            True,
+            None,
             enable_ipv6=False,
             disable_ipv4=False
         )
@@ -92,7 +92,7 @@ class BootstrapTestCase(unittest.TestCase):
             pubsub,
             True,
             self.rng,
-            True,
+            None,
             enable_ipv6=False,
             disable_ipv4=False
         )
