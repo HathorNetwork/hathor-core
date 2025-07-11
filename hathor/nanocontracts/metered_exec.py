@@ -19,7 +19,7 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 from structlog import get_logger
 
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
-from hathor.nanocontracts.exception import NCFail, NCFailure, NCRuntimeFailure
+from hathor.nanocontracts.exception import NCFail, NCFailure, NCUnhandledUserException
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
 from hathor.utils.result import Err, Ok, Result
 
@@ -112,17 +112,23 @@ class MeteredExecutor:
         try:
             exec(code, env)
         except Exception as e:
-            if isinstance(e, (NCFail, NCRuntimeFailure)):
-                # - NCFail can either be raised by our internal system for any usage errors (for example, calling
+            if isinstance(e, NCFailure):
+                # An NCFailure can be:
+                #
+                # - An NCFail which can either be raised by our internal system for any usage errors (for example, calling
                 #   a public method from a view method), or explicitly in blueprint code (via `raise NCFail`).
-                # - NCRuntimeFailure is raised when an unhandled exception happens in blueprint code (for example,
+                # - An NCUnhandledUserException is raised when an unhandled exception happens in blueprint code (for example,
                 #   when a user divides by zero).
-                # Both are wrapped in an Err and returned.
+                # - Any other exception in NCFailure is an internal exception raised by our code,
+                #   for example, in the Runner.
+                #
+                # All are wrapped in an Err and returned.
                 return Err(e)
 
-            # Any other exception is considered an unhandled exception,
-            # and is wrapped in an Err via an NCRuntimeFailure.
-            failure = NCRuntimeFailure()
+            # TODO: This will also catch internal unhandled exceptions and make them part of the consensus.
+            # Any other exception is considered unhandled and
+            # is wrapped in an Err via an NCUnhandledUserException.
+            failure = NCUnhandledUserException()
             failure.__cause__ = e
             return Err(failure, e)
 
