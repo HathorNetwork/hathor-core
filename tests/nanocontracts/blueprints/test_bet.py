@@ -48,7 +48,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         self.token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
         self.nc_id = ContractId(VertexId(b'1' * 32))
         self.initialize_contract()
-        self.nc_storage = self.runner.get_storage(self.nc_id)
+        self.nc_storage = self.runner.get_storage(self.nc_id).unwrap_or_raise()
 
     def _get_any_tx(self) -> BaseTransaction:
         genesis = self.manager.tx_storage.get_all_genesis()

@@ -165,7 +165,7 @@ class NCCreationResource(Resource):
             return None
 
         blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
-        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id).unwrap_or_raise()
 
         assert self.nc_history_index is not None
         return NCCreationItem(

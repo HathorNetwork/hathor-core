@@ -49,7 +49,7 @@ class NCGetContractTestCase(BlueprintTestCase):
         self.blueprint_id = self.gen_random_blueprint_id()
         self.register_blueprint_class(self.blueprint_id, MyBlueprint)
         self.initialize_contract()
-        self.nc_storage = self.runner.get_storage(self.nc_id)
+        self.nc_storage = self.runner.get_storage(self.nc_id).unwrap_or_raise()
 
     def get_any_tx(self) -> BaseTransaction:
         genesis = self.manager.tx_storage.get_all_genesis()

@@ -16,7 +16,7 @@ import builtins
 import inspect
 import types
 import typing
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, assert_never
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -27,6 +27,7 @@ from hathor.nanocontracts.exception import BlueprintDoesNotExist
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.utils.api import ErrorResponse, QueryParams, Response
+from hathor.utils.result import Err, Ok
 from hathor.utils.typing import get_args, get_origin
 
 if TYPE_CHECKING:
@@ -88,12 +89,15 @@ class BlueprintInfoResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.blueprint_id}')
             return error_response.json_dumpb()
 
-        try:
-            blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
-        except BlueprintDoesNotExist:
-            request.setResponseCode(404)
-            error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
-            return error_response.json_dumpb()
+        match self.manager.tx_storage.get_blueprint_class(blueprint_id):
+            case Ok(blueprint_class):
+                pass
+            case Err(BlueprintDoesNotExist()):
+                request.setResponseCode(404)
+                error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
+                return error_response.json_dumpb()
+            case _ as unreachable:
+                assert_never(unreachable)
 
         attributes: dict[str, str] = {}
         fields = getattr(blueprint_class, NC_FIELDS_ATTR)

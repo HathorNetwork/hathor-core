@@ -122,7 +122,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             nc = Transaction()
         assert isinstance(nc, Transaction)
 
-        nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
+        nc_args_bytes = method_parser.serialize_args_bytes(nc_args).unwrap_or_raise()
 
         if address is None:
             address = self.wallet.get_unused_address()

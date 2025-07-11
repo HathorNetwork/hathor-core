@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import TypeAlias
 
 from hathor.exception import HathorError
 from hathor.transaction.exceptions import TxValidationError
@@ -55,10 +56,6 @@ class NCSerializationError(NCFail):
 
 
 class NCSerializationArgTooLong(NCSerializationError):
-    pass
-
-
-class NCSerializationTypeError(NCSerializationError):
     pass
 
 
@@ -198,3 +195,18 @@ class OCBOutOfMemoryDuringLoading(NCError):
 class NCDisabledBuiltinError(NCError):
     """Raised when a disabled builtin is used during creation or execution of a nanocontract.
     """
+
+
+class NCRuntimeFailure(Exception):
+    """
+    Raised to signal a non-NCFail exception was raised by blueprint code during execution of a nano contract method.
+
+    ATTENTION: This shouldn't be used anywhere but in the `MeteredExecutor.call()` method.
+    """
+
+
+"""
+A type that represents all possible errors that can happen during a nano contract method execution,
+which can be either an NCFail or un unhandled exception caused by blueprint code (NCRuntimeFailure).
+"""
+NCFailure: TypeAlias = NCFail | NCRuntimeFailure

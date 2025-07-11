@@ -25,8 +25,10 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import (
+    NanoContractDoesNotExist,
     NCAlreadyInitializedContractError,
     NCFail,
+    NCFailure,
     NCForbiddenAction,
     NCInvalidContext,
     NCInvalidContractId,
@@ -87,6 +89,7 @@ from hathor.transaction.util import (
     get_withdraw_amount,
     validate_token_name_and_symbol,
 )
+from hathor.utils.result import Err, Ok, Result, propagate_result
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -96,13 +99,18 @@ MAX_SEQNUM_JUMP_SIZE: int = 10
 
 def _forbid_syscall_from_view(
     display_name: str,
-) -> Callable[[Callable[Concatenate['Runner', P], T]], Callable[Concatenate['Runner', P], T]]:
+) -> Callable[
+    [Callable[Concatenate['Runner', P], Result[T, NCFailure]]],
+    Callable[Concatenate['Runner', P], Result[T, NCFailure]]
+]:
     """Mark a syscall method as forbidden to be called from @view methods."""
-    def decorator(fn: Callable[Concatenate['Runner', P], T]) -> Callable[Concatenate['Runner', P], T]:
-        def wrapper(self: Runner, /, *args: P.args, **kwargs: P.kwargs) -> T:
+    def decorator(
+        fn: Callable[Concatenate['Runner', P], Result[T, NCFailure]]
+    ) -> Callable[Concatenate['Runner', P], Result[T, NCFailure]]:
+        def wrapper(self: Runner, /, *args: P.args, **kwargs: P.kwargs) -> Result[T, NCFailure]:
             current_call_record = self.get_current_call_record()
             if current_call_record.type is CallType.VIEW:
-                raise NCViewMethodError(f'@view method cannot call `syscall.{display_name}`')
+                return Err(NCViewMethodError(f'@view method cannot call `syscall.{display_name}`'))
             return fn(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -150,7 +158,8 @@ class Runner:
         # Information about updated tokens in the current call via syscalls.
         self._updated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
 
-    def execute_from_tx(self, tx: Transaction) -> None:
+    @propagate_result
+    def execute_from_tx(self, tx: Transaction) -> Result[Any, NCFailure]:
         """Execute the contract's method call."""
         # Check seqnum.
         nano_header = tx.get_nano_header()
@@ -167,21 +176,21 @@ class Runner:
             # Fail execution if seqnum is invalid.
             self._last_call_info = self._build_call_info(contract_id)
             # TODO: Set the seqnum in this case?
-            raise NCFail(f'invalid seqnum (diff={diff})')
+            return Err(NCFail(f'invalid seqnum (diff={diff})'))
         self.block_storage.set_address_seqnum(Address(nano_header.nc_address), nano_header.nc_seqnum)
 
         vertex_metadata = tx.get_metadata()
         assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
 
-        context = nano_header.get_context()
+        context = nano_header.get_context().unwrap_or_propagate()
         assert context.vertex.block.hash == vertex_metadata.first_block
 
         nc_args = NCRawArgs(nano_header.nc_args_bytes)
         if nano_header.is_creating_a_new_contract():
             blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
-            self.create_contract_with_nc_args(contract_id, blueprint_id, context, nc_args)
-        else:
-            self.call_public_method_with_nc_args(contract_id, nano_header.nc_method, context, nc_args)
+            return self.create_contract_with_nc_args(contract_id, blueprint_id, context, nc_args)
+
+        return self.call_public_method_with_nc_args(contract_id, nano_header.nc_method, context, nc_args)
 
     def disable_call_trace(self) -> None:
         """Disable call trace. Useful when the runner is only used to call view methods, for example in APIs."""
@@ -198,27 +207,30 @@ class Runner:
             return True
         return self.block_storage.has_contract(contract_id)
 
-    def get_storage(self, contract_id: ContractId) -> NCContractStorage:
+    @propagate_result
+    def get_storage(self, contract_id: ContractId) -> Result[NCContractStorage, NanoContractDoesNotExist]:
         """Return the storage for a contract.
 
         If no storage has been created, then one will be created."""
         storage = self._storages.get(contract_id)
         if storage is None:
-            storage = self.block_storage.get_contract_storage(contract_id)
+            storage = self.block_storage.get_contract_storage(contract_id).unwrap_or_propagate()
             storage.lock()
             self._storages[contract_id] = storage
-        return storage
+        return Ok(storage)
 
-    def _create_changes_tracker(self, contract_id: ContractId) -> NCChangesTracker:
+    @propagate_result
+    def _create_changes_tracker(self, contract_id: ContractId) -> Result[NCChangesTracker, NanoContractDoesNotExist]:
         """Return the latest change tracker for a contract."""
-        nc_storage = self.get_current_changes_tracker_or_storage(contract_id)
+        nc_storage = self.get_current_changes_tracker_or_storage(contract_id).unwrap_or_propagate()
         change_tracker = NCChangesTracker(contract_id, nc_storage)
-        return change_tracker
+        return Ok(change_tracker)
 
-    def get_blueprint_id(self, contract_id: ContractId) -> BlueprintId:
+    @propagate_result
+    def get_blueprint_id(self, contract_id: ContractId) -> Result[BlueprintId, NanoContractDoesNotExist]:
         """Return the blueprint id of a contract."""
-        nc_storage = self.get_current_changes_tracker_or_storage(contract_id)
-        return nc_storage.get_blueprint_id()
+        nc_storage = self.get_current_changes_tracker_or_storage(contract_id).unwrap_or_propagate()
+        return Ok(nc_storage.get_blueprint_id())
 
     def _build_call_info(self, contract_id: ContractId) -> CallInfo:
         from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -239,7 +251,7 @@ class Runner:
     ) -> Any:
         """Call a contract public method."""
         nc_args = NCParsedArgs(args, kwargs)
-        return self.call_public_method_with_nc_args(contract_id, method_name, ctx, nc_args)
+        return self.call_public_method_with_nc_args(contract_id, method_name, ctx, nc_args).unwrap_or_raise()
 
     def call_public_method_with_nc_args(
         self,
@@ -247,25 +259,24 @@ class Runner:
         method_name: str,
         ctx: Context,
         nc_args: NCArgs,
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """Call a contract public method with pre-constructed NCArgs."""
         if method_name == NC_INITIALIZE_METHOD:
-            raise NCInvalidInitializeMethodCall(
+            return Err(NCInvalidInitializeMethodCall(
                 'Cannot call initialize from call_public_method(); use create_contract() instead.'
-            )
-        try:
-            ret = self._unsafe_call_public_method(contract_id, method_name, ctx, nc_args)
-        finally:
-            self._reset_all_change_trackers()
-        return ret
+            ))
+        result = self._unsafe_call_public_method(contract_id, method_name, ctx, nc_args)
+        self._reset_all_change_trackers()
+        return result
 
+    @propagate_result
     def _unsafe_call_public_method(
         self,
         contract_id: ContractId,
         method_name: str,
         ctx: Context,
         nc_args: NCArgs,
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """Invoke a public method without running the usual guard‑safety checks.
 
         Used by call_public_method() and create_contract()."""
@@ -274,11 +285,11 @@ class Runner:
         self._call_info = self._build_call_info(contract_id)
 
         if not self.has_contract_been_initialized(contract_id):
-            raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
+            return Err(NCUninitializedContractError('cannot call methods from uninitialized contracts'))
 
         self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
 
-        blueprint_id = self.get_blueprint_id(contract_id)
+        blueprint_id = self.get_blueprint_id(contract_id).unwrap_or_propagate()
 
         ret = self._execute_public_method_call(
             contract_id=contract_id,
@@ -286,15 +297,16 @@ class Runner:
             method_name=method_name,
             ctx=ctx,
             nc_args=nc_args,
-        )
+        ).unwrap_or_propagate()
 
-        self._validate_balances(ctx)
+        self._validate_balances(ctx).unwrap_or_propagate()
         self._commit_all_changes_to_storage()
 
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
         self._updated_tokens_totals = defaultdict(int)
-        return ret
+        return Ok(ret)
 
+    @propagate_result
     @_forbid_syscall_from_view('call_public_method')
     def syscall_call_another_contract_public_method(
         self,
@@ -303,18 +315,18 @@ class Runner:
         actions: list[NCAction],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """Call another contract's public method. This method must be called by a blueprint during an execution."""
         if method_name == NC_INITIALIZE_METHOD:
-            raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
+            return Err(NCInvalidInitializeMethodCall('cannot call initialize from another contract'))
 
         if self.get_current_contract_id() == contract_id:
-            raise NCInvalidContractId('a contract cannot call itself')
+            return Err(NCInvalidContractId('a contract cannot call itself'))
 
         if not self.has_contract_been_initialized(contract_id):
-            raise NCUninitializedContractError('cannot call a method from an uninitialized contract')
+            return Err(NCUninitializedContractError('cannot call a method from an uninitialized contract'))
 
-        blueprint_id = self.get_blueprint_id(contract_id)
+        blueprint_id = self.get_blueprint_id(contract_id).unwrap_or_propagate()
         nc_args = NCParsedArgs(args, kwargs)
         return self._unsafe_call_another_contract_public_method(
             contract_id=contract_id,
@@ -332,7 +344,7 @@ class Runner:
         actions: list[NCAction],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """Execute a proxy call to another blueprint's public method (similar to a DELEGATECALL).
         This method must be called by a blueprint during an execution.
 
@@ -344,6 +356,7 @@ class Runner:
         nc_args = NCParsedArgs(args, kwargs)
         return self.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
 
+    @propagate_result
     @_forbid_syscall_from_view('proxy_call_public_method_nc_args')
     def syscall_proxy_call_public_method_nc_args(
         self,
@@ -351,14 +364,14 @@ class Runner:
         method_name: str,
         actions: list[NCAction],
         nc_args: NCArgs,
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         if method_name == NC_INITIALIZE_METHOD:
-            raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
+            return Err(NCInvalidInitializeMethodCall('cannot call initialize from another contract'))
 
         contract_id = self.get_current_contract_id()
 
-        if blueprint_id == self.get_blueprint_id(contract_id):
-            raise NCInvalidSyscall('cannot call the same blueprint')
+        if blueprint_id == self.get_blueprint_id(contract_id).unwrap_or_propagate():
+            return Err(NCInvalidSyscall('cannot call the same blueprint'))
 
         return self._unsafe_call_another_contract_public_method(
             contract_id=contract_id,
@@ -368,6 +381,7 @@ class Runner:
             nc_args=nc_args,
         )
 
+    @propagate_result
     def _unsafe_call_another_contract_public_method(
         self,
         contract_id: ContractId,
@@ -375,7 +389,7 @@ class Runner:
         method_name: str,
         actions: list[NCAction],
         nc_args: NCArgs,
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """Invoke another contract's public method without running the usual guard‑safety checks.
 
         Used by call_another_contract_public_method() and create_another_contract()."""
@@ -384,12 +398,12 @@ class Runner:
         last_call_record = self.get_current_call_record()
 
         if last_call_record.type is CallType.VIEW:
-            raise NCInvalidPublicMethodCallFromView('cannot call a public method from a view method')
+            return Err(NCInvalidPublicMethodCallFromView('cannot call a public method from a view method'))
 
         # Validate actions.
         for action in actions:
             if isinstance(action, BaseTokenAction) and action.amount < 0:
-                raise NCInvalidContext('amount must be positive')
+                return Err(NCInvalidContext('amount must be positive'))
 
         first_ctx = self._call_info.stack[0].ctx
         assert first_ctx is not None
@@ -399,15 +413,16 @@ class Runner:
         previous_changes_tracker = last_call_record.changes_tracker
         for action in actions:
             rules = BalanceRules.get_rules(self._settings, action)
-            rules.nc_caller_execution_rule(previous_changes_tracker)
+            rules.nc_caller_execution_rule(previous_changes_tracker).unwrap_or_propagate()
 
         # Call the other contract method.
-        ctx = Context(
+        ctx = Context.try_new(
             actions=actions,
             vertex=first_ctx.vertex,
             address=last_call_record.contract_id,
             timestamp=first_ctx.timestamp,
-        )
+        ).unwrap_or_propagate()
+
         return self._execute_public_method_call(
             contract_id=contract_id,
             blueprint_id=blueprint_id,
@@ -426,7 +441,8 @@ class Runner:
         self._last_call_info = self._call_info
         self._call_info = None
 
-    def _validate_balances(self, ctx: Context) -> None:
+    @propagate_result
+    def _validate_balances(self, ctx: Context) -> Result[None, NCFailure]:
         """
         Validate that all balances are non-negative and assert that
         the total diffs match the actions from the main call.
@@ -441,7 +457,7 @@ class Runner:
         for change_trackers in self._call_info.change_trackers.values():
             assert len(change_trackers) == 1, 'after execution, each contract must have exactly one change tracker'
             change_tracker = change_trackers[0]
-            change_tracker.validate_balances_are_positive()
+            change_tracker.validate_balances_are_positive().unwrap_or_propagate()
 
             # Update total_diffs according to the diffs caused by each call, for each token.
             for balance_key, balance in change_tracker.get_balance_diff().items():
@@ -493,6 +509,8 @@ class Runner:
             f'change tracker diffs do not match actions: {total_diffs}'
         )
 
+        return Ok(None)
+
     def _commit_all_changes_to_storage(self) -> None:
         """Commit all change trackers."""
         assert self._call_info is not None
@@ -514,6 +532,7 @@ class Runner:
             nc_storage.commit()
             nc_storage.lock()
 
+    @propagate_result
     def _execute_public_method_call(
         self,
         *,
@@ -522,7 +541,7 @@ class Runner:
         method_name: str,
         ctx: Context,
         nc_args: NCArgs,
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """An internal method that actually execute the public method call.
         It is also used when a contract calls another contract.
         """
@@ -530,8 +549,8 @@ class Runner:
         assert self._call_info is not None
 
         self._validate_context(ctx)
-        changes_tracker = self._create_changes_tracker(contract_id)
-        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
+        changes_tracker = self._create_changes_tracker(contract_id).unwrap_or_propagate()
+        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker).unwrap_or_propagate()
         method = getattr(blueprint, method_name, None)
 
         called_method_name: str = method_name
@@ -541,18 +560,20 @@ class Runner:
             assert method_name != NC_INITIALIZE_METHOD
             fallback_method = getattr(blueprint, NC_FALLBACK_METHOD, None)
             if fallback_method is None:
-                raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
+                return Err(NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided'))
             method = fallback_method
             called_method_name = NC_FALLBACK_METHOD
             args = method_name, nc_args
             kwargs = {}
         else:
             if not is_nc_public_method(method):
-                raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
+                return Err(NCInvalidMethodCall(f'method `{method_name}` is not a public method'))
             match nc_args:
                 case NCRawArgs(args_bytes):
+                    # TODO: Review the `from_callable` call. It contains some `raise TypeError`
+                    #  that may be caused by user input and crash the full node.
                     parser = Method.from_callable(method)
-                    args = parser.deserialize_args_bytes(args_bytes)
+                    args = parser.deserialize_args_bytes(args_bytes).unwrap_or_propagate()
                     kwargs = {}
                 case NCParsedArgs():
                     args = nc_args.args
@@ -572,39 +593,33 @@ class Runner:
             changes_tracker=changes_tracker,
             index_updates=[],
         )
-        self._call_info.pre_call(call_record)
+        self._call_info.pre_call(call_record).unwrap_or_propagate()
 
-        self._validate_actions(method, called_method_name, ctx)
+        self._validate_actions(method, called_method_name, ctx).unwrap_or_propagate()
         for action in ctx.__all_actions__:
             rules = BalanceRules.get_rules(self._settings, action)
-            rules.nc_callee_execution_rule(changes_tracker)
+            rules.nc_callee_execution_rule(changes_tracker).unwrap_or_propagate()
 
-        try:
-            # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
-            # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
-            # impact the original context. Since the runner relies on the context for other critical checks, any
-            # unauthorized modification would pose a serious security risk.
-            ret = self._metered_executor.call(method, ctx.copy(), *args, **kwargs)
-        except NCFail:
-            raise
-        except Exception as e:
-            # Convert any other exception to NCFail.
-            raise NCFail from e
+        # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
+        # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
+        # impact the original context. Since the runner relies on the context for other critical checks, any
+        # unauthorized modification would pose a serious security risk.
+        copied_context = ctx.copy().unwrap_or_propagate()
+        ret = self._metered_executor.call(method, copied_context, *args, **kwargs).unwrap_or_propagate()
 
         if len(self._call_info.change_trackers[contract_id]) > 1:
             call_record.changes_tracker.commit()
 
         self._call_info.post_call(call_record)
-        return ret
+        return Ok(ret)
 
     def call_view_method(self, contract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a contract view method."""
         assert self._call_info is None
         self._call_info = self._build_call_info(contract_id)
-        try:
-            return self._unsafe_call_view_method(contract_id, method_name, args, kwargs)
-        finally:
-            self._reset_all_change_trackers()
+        result = self._unsafe_call_view_method(contract_id, method_name, args, kwargs)
+        self._reset_all_change_trackers()
+        return result.unwrap_or_raise()
 
     def syscall_call_another_contract_view_method(
         self,
@@ -612,30 +627,31 @@ class Runner:
         method_name: str,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """Call the view method of another contract."""
         assert self._call_info is not None
         if self.get_current_contract_id() == contract_id:
-            raise NCInvalidContractId('a contract cannot call itself')
+            return Err(NCInvalidContractId('a contract cannot call itself'))
         return self._unsafe_call_view_method(contract_id, method_name, args, kwargs)
 
+    @propagate_result
     def _unsafe_call_view_method(
         self,
         contract_id: ContractId,
         method_name: str,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """Call a contract view method without handling resets."""
         assert self._call_info is not None
         if not self.has_contract_been_initialized(contract_id):
-            raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
+            return Err(NCUninitializedContractError('cannot call methods from uninitialized contracts'))
 
         if self._metered_executor is None:
             self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
 
-        changes_tracker = self._create_changes_tracker(contract_id)
-        blueprint_id = self.get_blueprint_id(contract_id)
+        changes_tracker = self._create_changes_tracker(contract_id).unwrap_or_propagate()
+        blueprint_id = self.get_blueprint_id(contract_id).unwrap_or_propagate()
 
         call_record = CallRecord(
             type=CallType.VIEW,
@@ -649,26 +665,30 @@ class Runner:
             changes_tracker=changes_tracker,
             index_updates=None,
         )
-        self._call_info.pre_call(call_record)
+        self._call_info.pre_call(call_record).unwrap_or_propagate()
 
-        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
+        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker).unwrap_or_propagate()
         method = getattr(blueprint, method_name)
 
         if method is None:
-            raise NCMethodNotFound(method_name)
+            return Err(NCMethodNotFound(method_name))
         if not is_nc_view_method(method):
-            raise NCInvalidMethodCall('not a view method')
+            return Err(NCInvalidMethodCall('not a view method'))
 
-        ret = self._metered_executor.call(method, *args, **kwargs)
+        ret = self._metered_executor.call(method, *args, **kwargs).unwrap_or_propagate()
 
         if not changes_tracker.is_empty():
-            raise NCViewMethodError('view methods cannot change the state')
+            return Err(NCViewMethodError('view methods cannot change the state'))
 
         self._call_info.post_call(call_record)
-        return ret
+        return Ok(ret)
 
     @deprecated('use explicit methods instead, `get_balance_before_current_call` or `get_current_balance`')
-    def get_balance(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
+    def get_balance(
+        self,
+        contract_id: ContractId | None,
+        token_uid: TokenUid | None,
+    ) -> Result[Balance, NanoContractDoesNotExist]:
         """
         Return the contract balance for a given token before the current call, that is,
         excluding any actions and changes in the current call.
@@ -676,27 +696,36 @@ class Runner:
         """
         return self.get_balance_before_current_call(contract_id, token_uid)
 
-    def get_balance_before_current_call(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
+    def get_balance_before_current_call(
+        self,
+        contract_id: ContractId | None,
+        token_uid: TokenUid | None,
+    ) -> Result[Balance, NanoContractDoesNotExist]:
         """
         Return the contract balance for a given token before the current call, that is,
         excluding any actions and changes in the current call.
         """
         return self._get_balance(contract_id=contract_id, token_uid=token_uid, before_current_call=True)
 
-    def get_current_balance(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
+    def get_current_balance(
+        self,
+        contract_id: ContractId | None,
+        token_uid: TokenUid | None,
+    ) -> Result[Balance, NanoContractDoesNotExist]:
         """
         Return the current contract balance for a given token,
         which includes all actions and changes in the current call.
         """
         return self._get_balance(contract_id=contract_id, token_uid=token_uid, before_current_call=False)
 
+    @propagate_result
     def _get_balance(
         self,
         *,
         contract_id: ContractId | None,
         token_uid: TokenUid | None,
         before_current_call: bool,
-    ) -> Balance:
+    ) -> Result[Balance, NanoContractDoesNotExist]:
         """Internal implementation of get_balance."""
         if contract_id is None:
             contract_id = self.get_current_contract_id()
@@ -705,12 +734,12 @@ class Runner:
 
         storage: NCContractStorage
         if self._call_info is None:
-            storage = self.get_storage(contract_id)
+            storage = self.get_storage(contract_id).unwrap_or_propagate()
         else:
             changes_tracker = self.get_current_changes_tracker(contract_id)
             storage = changes_tracker.storage if before_current_call else changes_tracker
 
-        return storage.get_balance(bytes(token_uid))
+        return Ok(storage.get_balance(bytes(token_uid)))
 
     def get_current_call_record(self) -> CallRecord:
         """Return the call record for the current method being executed."""
@@ -729,21 +758,25 @@ class Runner:
         assert len(change_trackers) > 0
         return change_trackers[-1]
 
-    def get_current_changes_tracker_or_storage(self, contract_id: ContractId) -> NCContractStorage:
+    def get_current_changes_tracker_or_storage(
+        self,
+        contract_id: ContractId,
+    ) -> Result[NCContractStorage, NanoContractDoesNotExist]:
         """Return the current NCChangesTracker if it exists or NCContractStorage otherwise."""
         if self._call_info is not None and contract_id in self._call_info.change_trackers:
             change_trackers = self._call_info.change_trackers[contract_id]
             assert len(change_trackers) > 0
-            return change_trackers[-1]
+            return Ok(change_trackers[-1])
         else:
             return self.get_storage(contract_id)
 
     @_forbid_syscall_from_view('rng')
-    def syscall_get_rng(self) -> NanoRNG:
+    def syscall_get_rng(self) -> Result[NanoRNG, NCFailure]:
         """Return the RNG for the current contract being executed."""
         if self._rng is None:
+            # This ValueError will crash the full node if raised during consensus, which is correct.
             raise ValueError('no seed was provided')
-        return self._rng
+        return Ok(self._rng)
 
     def _internal_create_contract(self, contract_id: ContractId, blueprint_id: BlueprintId) -> None:
         """Create a new contract without calling the initialize() method."""
@@ -763,7 +796,7 @@ class Runner:
     ) -> Any:
         """Create contract and call its initialize() method."""
         nc_args = NCParsedArgs(args, kwargs)
-        return self.create_contract_with_nc_args(contract_id, blueprint_id, ctx, nc_args)
+        return self.create_contract_with_nc_args(contract_id, blueprint_id, ctx, nc_args).unwrap_or_raise()
 
     def create_contract_with_nc_args(
         self,
@@ -771,18 +804,17 @@ class Runner:
         blueprint_id: BlueprintId,
         ctx: Context,
         nc_args: NCArgs,
-    ) -> Any:
+    ) -> Result[Any, NCFailure]:
         """Create contract and call its initialize() method with pre-constructed NCArgs."""
         if self.has_contract_been_initialized(contract_id):
-            raise NCAlreadyInitializedContractError(contract_id)
+            return Err(NCAlreadyInitializedContractError(contract_id))
 
         self._internal_create_contract(contract_id, blueprint_id)
-        try:
-            ret = self._unsafe_call_public_method(contract_id, NC_INITIALIZE_METHOD, ctx, nc_args)
-        finally:
-            self._reset_all_change_trackers()
-        return ret
+        result = self._unsafe_call_public_method(contract_id, NC_INITIALIZE_METHOD, ctx, nc_args)
+        self._reset_all_change_trackers()
+        return result
 
+    @propagate_result
     @_forbid_syscall_from_view('create_contract')
     def syscall_create_another_contract(
         self,
@@ -791,10 +823,10 @@ class Runner:
         actions: list[NCAction],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-    ) -> tuple[ContractId, Any]:
+    ) -> Result[tuple[ContractId, Any], NCFailure]:
         """Create a contract from another contract."""
         if not salt:
-            raise Exception('invalid salt')
+            raise NCFail('invalid salt')
 
         assert self._call_info is not None
         last_call_record = self.get_current_call_record()
@@ -802,7 +834,7 @@ class Runner:
         child_id = derive_child_contract_id(parent_id, salt, blueprint_id)
 
         if self.has_contract_been_initialized(child_id):
-            raise NCAlreadyInitializedContractError(child_id)
+            return Err(NCAlreadyInitializedContractError(child_id))
 
         self._internal_create_contract(child_id, blueprint_id)
         nc_args = NCParsedArgs(args, kwargs)
@@ -812,19 +844,25 @@ class Runner:
             NC_INITIALIZE_METHOD,
             actions,
             nc_args,
-        )
+        ).unwrap_or_propagate()
 
         assert last_call_record.index_updates is not None
         syscall_record = SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=child_id)
         last_call_record.index_updates.append(syscall_record)
-        return child_id, ret
+        return Ok((child_id, ret))
 
     @_forbid_syscall_from_view('revoke_authorities')
-    def syscall_revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
+    def syscall_revoke_authorities(
+        self,
+        token_uid: TokenUid,
+        *,
+        revoke_mint: bool,
+        revoke_melt: bool,
+    ) -> Result[None, NCFailure]:
         """Revoke authorities from this nano contract."""
         contract_id = self.get_current_contract_id()
         if token_uid == HATHOR_TOKEN_UID:
-            raise NCInvalidSyscall(f'contract {contract_id.hex()} cannot revoke authorities from HTR token')
+            return Err(NCInvalidSyscall(f'contract {contract_id.hex()} cannot revoke authorities from HTR token'))
 
         changes_tracker = self.get_current_changes_tracker(contract_id)
         changes_tracker.revoke_authorities(
@@ -833,19 +871,23 @@ class Runner:
             revoke_melt=revoke_melt,
         )
 
+        return Ok(None)
+
     @_forbid_syscall_from_view('mint_tokens')
-    def syscall_mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
+    def syscall_mint_tokens(self, token_uid: TokenUid, amount: int) -> Result[None, NCFailure]:
         """Mint tokens and add them to the balance of this nano contract."""
         call_record = self.get_current_call_record()
         if token_uid == HATHOR_TOKEN_UID:
-            raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint HTR tokens')
+            return Err(NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint HTR tokens'))
 
         changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
         assert changes_tracker.nc_id == call_record.contract_id
         balance = changes_tracker.get_balance(token_uid)
 
         if not balance.can_mint:
-            raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
+            return Err(NCInvalidSyscall(
+                f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens'
+            ))
 
         token_amount = amount
         htr_amount = -get_deposit_amount(self._settings, token_amount)
@@ -865,19 +907,23 @@ class Runner:
         )
         call_record.index_updates.append(syscall_record)
 
+        return Ok(None)
+
     @_forbid_syscall_from_view('melt_tokens')
-    def syscall_melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
+    def syscall_melt_tokens(self, token_uid: TokenUid, amount: int) -> Result[None, NCFailure]:
         """Melt tokens by removing them from the balance of this nano contract."""
         call_record = self.get_current_call_record()
         if token_uid == HATHOR_TOKEN_UID:
-            raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt HTR tokens')
+            return Err(NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt HTR tokens'))
 
         changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
         assert changes_tracker.nc_id == call_record.contract_id
         balance = changes_tracker.get_balance(token_uid)
 
         if not balance.can_melt:
-            raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens')
+            return Err(NCInvalidSyscall(
+                f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens'
+            ))
 
         token_amount = -amount
         htr_amount = get_withdraw_amount(self._settings, token_amount)
@@ -897,16 +943,20 @@ class Runner:
         )
         call_record.index_updates.append(syscall_record)
 
-    def _validate_context(self, ctx: Context) -> None:
+        return Ok(None)
+
+    def _validate_context(self, ctx: Context) -> Result[None, NCFailure]:
         """Check whether the context is valid."""
         for token_uid, actions in ctx.actions.items():
             for action in actions:
                 if token_uid != action.token_uid:
-                    raise NCInvalidContext('token_uid mismatch')
+                    return Err(NCInvalidContext('token_uid mismatch'))
                 if isinstance(action, BaseTokenAction) and action.amount < 0:
-                    raise NCInvalidContext('amount must be positive')
+                    return Err(NCInvalidContext('amount must be positive'))
 
-    def _validate_actions(self, method: Any, method_name: str, ctx: Context) -> None:
+        return Ok(None)
+
+    def _validate_actions(self, method: Any, method_name: str, ctx: Context) -> Result[None, NCFailure]:
         """Check whether actions are allowed."""
         allowed_actions: set[NCActionType] = getattr(method, NC_ALLOWED_ACTIONS_ATTR, set())
         assert isinstance(allowed_actions, set)
@@ -914,15 +964,23 @@ class Runner:
         for actions in ctx.actions.values():
             for action in actions:
                 if action.type not in allowed_actions:
-                    raise NCForbiddenAction(f'action {action.name} is forbidden on method `{method_name}`')
+                    return Err(NCForbiddenAction(f'action {action.name} is forbidden on method `{method_name}`'))
 
-    def _create_blueprint_instance(self, blueprint_id: BlueprintId, changes_tracker: NCChangesTracker) -> Blueprint:
+        return Ok(None)
+
+    @propagate_result
+    def _create_blueprint_instance(
+        self,
+        blueprint_id: BlueprintId,
+        changes_tracker: NCChangesTracker,
+    ) -> Result[Blueprint, NCFailure]:
         """Create a new blueprint instance."""
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
-        return blueprint_class(env)
+        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id).unwrap_or_propagate()
+        return Ok(blueprint_class(env))
 
+    @propagate_result
     @_forbid_syscall_from_view('create_token')
     def syscall_create_child_token(
         self,
@@ -931,12 +989,12 @@ class Runner:
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
-    ) -> TokenUid:
+    ) -> Result[TokenUid, NCFailure]:
         """Create a child token from a contract."""
         try:
             validate_token_name_and_symbol(self._settings, token_name, token_symbol)
         except TransactionDataError as e:
-            raise NCInvalidSyscall('invalid token description') from e
+            return Err(NCInvalidSyscall(e.args[0]))
 
         last_call_record = self.get_current_call_record()
         parent_id = last_call_record.contract_id
@@ -947,7 +1005,7 @@ class Runner:
         htr_amount = get_deposit_amount(self._settings, token_amount)
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
-        changes_tracker.create_token(token_id, token_name, token_symbol)
+        changes_tracker.create_token(token_id, token_name, token_symbol).unwrap_or_propagate()
         changes_tracker.grant_authorities(
             token_id,
             grant_mint=mint_authority,
@@ -969,28 +1027,32 @@ class Runner:
         )
         last_call_record.index_updates.append(syscall_record)
 
-        return token_id
+        return Ok(token_id)
 
+    @propagate_result
     @_forbid_syscall_from_view('emit_event')
-    def syscall_emit_event(self, data: bytes) -> None:
+    def syscall_emit_event(self, data: bytes) -> Result[None, NCFailure]:
         """Emit a custom event from a Nano Contract."""
         assert self._call_info is not None
         self._call_info.nc_logger.__emit_event__(data)
+        return Ok(None)
 
+    @propagate_result
     @_forbid_syscall_from_view('change_blueprint')
-    def syscall_change_blueprint(self, blueprint_id: BlueprintId) -> None:
+    def syscall_change_blueprint(self, blueprint_id: BlueprintId) -> Result[None, NCFailure]:
         """Change the blueprint of a contract."""
         assert self._call_info is not None
         last_call_record = self.get_current_call_record()
         if last_call_record.type is CallType.VIEW:
-            raise NCInvalidPublicMethodCallFromView('forbidden')
+            return Err(NCInvalidPublicMethodCallFromView('forbidden'))
 
-        # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
-        # exception.
-        self.tx_storage.get_blueprint_class(blueprint_id)
+        # The blueprint must exist. If an unknown blueprint is provided, it will return an Err(BlueprintDoesNotExist).
+        self.tx_storage.get_blueprint_class(blueprint_id).unwrap_or_propagate()
 
         nc_storage = self.get_current_changes_tracker(last_call_record.contract_id)
         nc_storage.set_blueprint_id(blueprint_id)
+
+        return Ok(None)
 
 
 class RunnerFactory:

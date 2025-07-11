@@ -44,7 +44,6 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
@@ -406,10 +405,7 @@ class HathorManager:
         """Return a contract storage with the contract state at a given block."""
         from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
         block_storage = self.get_nc_block_storage(block)
-        try:
-            contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(nc_id)))
-        except KeyError:
-            raise NanoContractDoesNotExist(nc_id.hex())
+        contract_storage = block_storage.get_contract_storage(ContractId(NCVertexId(nc_id))).unwrap_or_raise()
         return contract_storage
 
     def get_best_block_nc_storage(self, nc_id: VertexId) -> NCContractStorage:

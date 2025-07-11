@@ -19,10 +19,12 @@ from hathor.nanocontracts.exception import (
     BlueprintDoesNotExist,
     NCFail,
     NCMethodNotFound,
+    NCRuntimeFailure,
     NCUninitializedContractError,
 )
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.runner.types import NCRawArgs
+from hathor.utils.result import is_err
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -54,16 +56,18 @@ class TestExecutionVerification(BlueprintTestCase):
             self.runner.call_public_method(self.contract_id, 'not_found', self.create_context())
 
     def test_empty_args(self) -> None:
-        with pytest.raises(NCFail) as e:
+        msg = "MyBlueprint.initialize() missing 1 required positional argument: 'a'"
+        with pytest.raises(NCRuntimeFailure) as e:
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context())
         assert isinstance(e.value.__cause__, TypeError)
-        assert e.value.__cause__.args[0] == "MyBlueprint.initialize() missing 1 required positional argument: 'a'"
+        assert e.value.__cause__.args[0] == msg
 
     def test_too_many_args(self) -> None:
-        with pytest.raises(NCFail) as e:
+        msg = "MyBlueprint.initialize() takes 3 positional arguments but 4 were given"
+        with pytest.raises(NCRuntimeFailure) as e:
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context(), 123, 456)
         assert isinstance(e.value.__cause__, TypeError)
-        assert e.value.__cause__.args[0] == "MyBlueprint.initialize() takes 3 positional arguments but 4 were given"
+        assert e.value.__cause__.args[0] == msg
 
     @pytest.mark.xfail(strict=True, reason='not implemented yet')
     def test_wrong_arg_type_parsed(self) -> None:
@@ -72,20 +76,21 @@ class TestExecutionVerification(BlueprintTestCase):
 
     def test_wrong_arg_type_raw(self) -> None:
         args_parser = ArgsOnly.from_arg_types((str,))
-        args_bytes = args_parser.serialize_args_bytes(('abc',))
+        args_bytes = args_parser.serialize_args_bytes(('abc',)).unwrap_or_raise()
         nc_args = NCRawArgs(args_bytes)
 
-        with pytest.raises(NCFail) as e:
-            self.runner.create_contract_with_nc_args(
-                self.contract_id, self.blueprint_id, self.create_context(), nc_args
-            )
-        assert isinstance(e.value.__cause__, ValueError)
-        assert e.value.__cause__.args[0] == 'trailing data'
+        result = self.runner.create_contract_with_nc_args(
+            self.contract_id, self.blueprint_id, self.create_context(), nc_args
+        )
+
+        assert is_err(result)
+        assert isinstance(result.cause, ValueError)
+        assert result.cause.args[0] == 'trailing data'
 
     @pytest.mark.xfail(strict=True, reason='not implemented yet')
     def test_wrong_arg_type_but_valid_serialization(self) -> None:
         args_parser = ArgsOnly.from_arg_types((str,))
-        args_bytes = args_parser.serialize_args_bytes(('',))
+        args_bytes = args_parser.serialize_args_bytes(('',)).unwrap_or_raise()
         nc_args = NCRawArgs(args_bytes)
 
         with pytest.raises(NCFail):

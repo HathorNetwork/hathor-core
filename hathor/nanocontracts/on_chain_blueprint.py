@@ -254,10 +254,10 @@ class OnChainBlueprint(Transaction):
         metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
         try:
             env = metered_executor.exec(self.code.text)
-        except OutOfFuelError as e:
+        except OutOfFuelError as e:  # TODO
             self.log.error('loading blueprint module failed, fuel limit exceeded')
             raise OCBOutOfFuelDuringLoading from e
-        except OutOfMemoryError as e:
+        except OutOfMemoryError as e:  # TODO
             self.log.error('loading blueprint module failed, memory limit exceeded')
             raise OCBOutOfMemoryDuringLoading from e
         blueprint_class = env[BLUEPRINT_CLASS_NAME]

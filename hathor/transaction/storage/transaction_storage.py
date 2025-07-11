@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from contextlib import AbstractContextManager
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, assert_never, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
@@ -49,6 +49,7 @@ from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_con
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
+from hathor.utils.result import Err, Ok, Result
 from hathor.verification.transaction_verifier import TransactionVerifier
 
 if TYPE_CHECKING:
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts import OnChainBlueprint
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.exception import BlueprintDoesNotExist, NanoContractDoesNotExist
     from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, NCStorageFactory
     from hathor.nanocontracts.types import BlueprintId, ContractId
 
@@ -1142,7 +1144,11 @@ class TransactionStorage(ABC):
         """Return a block storage for the given block."""
         return self._nc_storage_factory.get_block_storage_from_block(block)
 
-    def get_nc_storage(self, block: Block, contract_id: ContractId) -> NCContractStorage:
+    def get_nc_storage(
+        self,
+        block: Block,
+        contract_id: ContractId,
+    ) -> Result[NCContractStorage, NanoContractDoesNotExist]:
         """Return a contract storage with the contract state at a given block."""
         from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
         if not block.is_genesis:
@@ -1152,16 +1158,19 @@ class TransactionStorage(ABC):
 
         return block_storage.get_contract_storage(ContractId(NCVertexId(contract_id)))
 
-    def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
-        from hathor.nanocontracts.exception import BlueprintDoesNotExist
+    def _get_blueprint(
+        self,
+        blueprint_id: BlueprintId,
+    ) -> Result[type[Blueprint] | OnChainBlueprint, BlueprintDoesNotExist]:
         assert self.nc_catalog is not None
+        from hathor.nanocontracts.exception import BlueprintDoesNotExist
 
         if blueprint_class := self.nc_catalog.get_blueprint_class(blueprint_id):
-            return blueprint_class
+            return Ok(blueprint_class)
 
         self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
         if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-            raise BlueprintDoesNotExist(blueprint_id.hex())
+            return Err(BlueprintDoesNotExist(blueprint_id.hex()))
         self.log.debug('on-chain blueprints enabled, looking for that instead')
         return self.get_on_chain_blueprint(blueprint_id)
 
@@ -1177,27 +1186,35 @@ class TransactionStorage(ABC):
 
         from hathor.nanocontracts import OnChainBlueprint
 
-        blueprint = self._get_blueprint(blueprint_id)
+        # This method is not called from consensus, so we can just `unwrap_or_raise` errors.
+        blueprint = self._get_blueprint(blueprint_id).unwrap_or_raise()
         if isinstance(blueprint, OnChainBlueprint):
-            return self.get_on_chain_blueprint(blueprint_id).code.text
+            return self.get_on_chain_blueprint(blueprint_id).unwrap_or_raise().code.text
         else:
             module = inspect.getmodule(blueprint)
             assert module is not None
             return inspect.getsource(module)
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> Result[type[Blueprint], BlueprintDoesNotExist]:
         """Returns the blueprint class associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
         """
         from hathor.nanocontracts import OnChainBlueprint
-        blueprint = self._get_blueprint(blueprint_id)
-        if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
-        else:
-            return blueprint
 
-    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
+        result = self._get_blueprint(blueprint_id)
+        match result:
+            case Ok(OnChainBlueprint() as ocb):
+                return Ok(ocb.get_blueprint_class())
+            case Ok(blueprint):
+                assert not isinstance(blueprint, OnChainBlueprint)
+                return Ok(blueprint)
+            case Err():
+                return result
+            case _:
+                assert_never(result)
+
+    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> Result[OnChainBlueprint, BlueprintDoesNotExist]:
         """Return an on-chain blueprint transaction."""
         assert self._settings.ENABLE_ON_CHAIN_BLUEPRINTS
         from hathor.nanocontracts import OnChainBlueprint
@@ -1210,14 +1227,14 @@ class TransactionStorage(ABC):
             blueprint_tx = self.get_transaction(blueprint_id)
         except TransactionDoesNotExist:
             self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
-            raise BlueprintDoesNotExist(blueprint_id.hex())
+            return Err(BlueprintDoesNotExist(blueprint_id.hex()))
         if not isinstance(blueprint_tx, OnChainBlueprint):
-            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())
+            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())  # TODO
         tx_meta = blueprint_tx.get_metadata()
         if tx_meta.voided_by or not tx_meta.first_block:
-            raise OCBBlueprintNotConfirmed(blueprint_id.hex())
+            raise OCBBlueprintNotConfirmed(blueprint_id.hex())  # TODO
         # XXX: maybe use N blocks confirmation, like reward-locks
-        return blueprint_tx
+        return Ok(blueprint_tx)
 
 
 class BaseTransactionStorage(TransactionStorage):

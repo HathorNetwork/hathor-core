@@ -33,6 +33,7 @@ from hathor.nanocontracts.storage.contract_storage import (
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid
 from hathor.transaction.token_creation_tx import TokenDescription
+from hathor.utils.result import Err, Ok, Result
 
 T = TypeVar('T')
 D = TypeVar('D')
@@ -86,15 +87,23 @@ class NCChangesTracker(NCContractStorage):
         self.has_been_commited = False
         self.has_been_blocked = False
 
-    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+    def create_token(
+        self,
+        token_id: TokenUid,
+        token_name: str,
+        token_symbol: str,
+    ) -> Result[None, NCTokenAlreadyExists]:
         """Create a new token in this changes tracker."""
         if self.has_token(token_id):
-            raise NCTokenAlreadyExists
+            return Err(NCTokenAlreadyExists())
+
         self._created_tokens[token_id] = TokenDescription(
             token_id=token_id,
             token_name=token_name,
             token_symbol=token_symbol,
         )
+
+        return Ok(None)
 
     def has_token(self, token_id: TokenUid) -> bool:
         """Return True if a given token_id already exists."""
@@ -183,7 +192,9 @@ class NCChangesTracker(NCContractStorage):
             )
 
         for td in self._created_tokens.values():
-            self.storage.create_token(TokenUid(td.token_id), td.token_name, td.token_symbol)
+            # TODO: Check this expect - can I create a situation where it fails?
+            self.storage.create_token(TokenUid(td.token_id), td.token_name, td.token_symbol) \
+                .expect('this err is already handled in the create_token syscall, so it\'s safe to unwrap here')
 
         if self._blueprint_id is not None:
             self.storage.set_blueprint_id(self._blueprint_id)
@@ -214,15 +225,17 @@ class NCChangesTracker(NCContractStorage):
 
         return balance
 
-    def validate_balances_are_positive(self) -> None:
+    def validate_balances_are_positive(self) -> Result[None, NCInsufficientFunds]:
         """Check that all final balances are positive. If not, it raises NCInsufficientFunds."""
         for balance_key in self._balance_diff.keys():
             balance = self.get_balance(balance_key.token_uid)
             if balance.value < 0:
-                raise NCInsufficientFunds(
+                return Err(NCInsufficientFunds(
                     f'negative balance for contract {self.nc_id.hex()} '
                     f'(balance={balance} token_uid={balance_key.token_uid.hex()})'
-                )
+                ))
+
+        return Ok(None)
 
     @override
     def get_all_balances(self) -> dict[BalanceKey, Balance]:
