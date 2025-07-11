@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import TypeAlias
 
 from hathor.exception import HathorError
@@ -39,19 +40,15 @@ class NCInvalidPubKey(NCTxValidationError):
     pass
 
 
-class NCFail(NCError):
-    """Raised by Blueprint's methods to fail execution."""
-
-
-class NanoContractDoesNotExist(NCFail):
+class NanoContractDoesNotExist(NCError):
     pass
 
 
-class BlueprintDoesNotExist(NCFail):
+class BlueprintDoesNotExist(NCError):
     pass
 
 
-class NCSerializationError(NCFail):
+class NCSerializationError(NCError):
     pass
 
 
@@ -59,77 +56,77 @@ class NCSerializationArgTooLong(NCSerializationError):
     pass
 
 
-class NCViewMethodError(NCFail):
+class NCViewMethodError(NCError):
     """Raised when a view method changes the state of the contract."""
     pass
 
 
-class NCMethodNotFound(NCFail):
+class NCMethodNotFound(NCError):
     """Raised when a method is not found in a nano contract."""
     pass
 
 
-class NCInsufficientFunds(NCFail):
+class NCInsufficientFunds(NCError):
     """Raised when there is not enough funds to withdrawal from a nano contract."""
     pass
 
 
-class NCAttributeError(NCFail):
+class NCAttributeError(NCError):
     pass
 
 
-class NCInvalidContext(NCFail):
+class NCInvalidContext(NCError):
     """Raised when trying to run a method with an invalid context."""
     pass
 
 
-class NCRecursionError(NCFail):
+class NCRecursionError(NCError):
     """Raised when recursion gets too deep."""
 
 
-class NCNumberOfCallsExceeded(NCFail):
+class NCNumberOfCallsExceeded(NCError):
     """Raised when the total number of calls have been exceeded."""
 
 
-class NCInvalidContractId(NCFail):
+class NCInvalidContractId(NCError):
     """Raised when a contract call is invalid."""
 
 
-class NCInvalidMethodCall(NCFail):
+class NCInvalidMethodCall(NCError):
     """Raised when a contract calls another contract's invalid method."""
 
 
-class NCInvalidInitializeMethodCall(NCFail):
+class NCInvalidInitializeMethodCall(NCError):
     """Raised when a contract calls another contract's initialize method."""
 
 
-class NCInvalidPublicMethodCallFromView(NCFail):
+class NCInvalidPublicMethodCallFromView(NCError):
     """Raised when a contract calls another contract's initialize method."""
 
 
-class NCAlreadyInitializedContractError(NCFail):
+class NCAlreadyInitializedContractError(NCError):
     """Raised when one tries to initialize a contract that has already been initialized."""
 
 
-class NCUninitializedContractError(NCFail):
+class NCUninitializedContractError(NCError):
     """Raised when a contract calls a method from an uninitialized contract."""
 
 
-class NCInvalidAction(NCFail):
+class NCInvalidAction(NCError):
     """Raised when an action is invalid."""
     pass
 
 
-class NCInvalidSyscall(NCFail):
+class NCInvalidSyscall(NCError):
     """Raised when a syscall is invalid."""
     pass
 
 
-class NCTokenAlreadyExists(NCFail):
+class NCTokenAlreadyExists(NCError):
     """Raised when one tries to create a duplicated token."""
 
 
-class NCForbiddenAction(NCFail):
+class NCForbiddenAction(NCError):
     """Raised when an action is forbidden on a method."""
     pass
 
@@ -197,16 +194,50 @@ class NCDisabledBuiltinError(NCError):
     """
 
 
-class NCRuntimeFailure(Exception):
+class NCUnhandledUserException(Exception):
     """
-    Raised to signal a non-NCFail exception was raised by blueprint code during execution of a nano contract method.
+    Raised to signal an unhandled exception was raised by blueprint code during execution of a nano contract method.
 
     ATTENTION: This shouldn't be used anywhere but in the `MeteredExecutor.call()` method.
     """
 
+"""
+ATTENTION: DO NOT subclass or raise this exception in internal code.
+We may allow blueprints to catch them at some point.
+"""
+class NCFail(NCError):
+    """
+    Raised by Blueprint methods to fail execution.
+    May be subclassed in blueprints for custom exceptions.
+    """
+
+NCInternalFailure: TypeAlias = (
+    NanoContractDoesNotExist
+    | BlueprintDoesNotExist
+    | NCSerializationError
+    | NCViewMethodError
+    | NCMethodNotFound
+    | NCInsufficientFunds
+    | NCAttributeError
+    | NCInvalidContext
+    | NCRecursionError
+    | NCNumberOfCallsExceeded
+    | NCInvalidContractId
+    | NCInvalidMethodCall
+    | NCInvalidInitializeMethodCall
+    | NCInvalidPublicMethodCallFromView
+    | NCAlreadyInitializedContractError
+    | NCUninitializedContractError
+    | NCInvalidAction
+    | NCInvalidSyscall
+    | NCTokenAlreadyExists
+    | NCForbiddenAction
+)
 
 """
 A type that represents all possible errors that can happen during a nano contract method execution,
-which can be either an NCFail or un unhandled exception caused by blueprint code (NCRuntimeFailure).
+which can either be a specific internal exception, an NCFail raised explicitly by blueprint code,
+or an unhandled exception raised by blueprint code (NCUnhandledUserException).
+For internal use only, should NOT be used by blueprints.
 """
-NCFailure: TypeAlias = NCFail | NCRuntimeFailure
+NCFailure: TypeAlias = NCInternalFailure | NCFail | NCUnhandledUserException

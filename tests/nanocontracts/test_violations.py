@@ -2,7 +2,7 @@ import pytest
 
 from hathor.nanocontracts import Blueprint, public
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCRuntimeFailure
+from hathor.nanocontracts.exception import NCUnhandledUserException
 from hathor.nanocontracts.types import NCDepositAction
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
@@ -50,7 +50,7 @@ class ViolationsTestCase(BlueprintTestCase):
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
 
-        with pytest.raises(NCRuntimeFailure) as e:
+        with pytest.raises(NCUnhandledUserException) as e:
             self.runner.call_public_method(self.contract_id, 'modify_actions', context)
         assert isinstance(e.value.__cause__, TypeError)
         assert e.value.__cause__.args[0] == "'mappingproxy' object does not support item assignment"
@@ -63,7 +63,7 @@ class ViolationsTestCase(BlueprintTestCase):
             timestamp=self.now
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
-        with pytest.raises(NCRuntimeFailure) as e:
+        with pytest.raises(NCUnhandledUserException) as e:
             self.runner.call_public_method(self.contract_id, 'modify_vertex', context)
         assert isinstance(e.value.__cause__, TypeError)
         assert e.value.__cause__.args[0] == "'tuple' object does not support item assignment"
@@ -77,7 +77,7 @@ class ViolationsTestCase(BlueprintTestCase):
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
         self.runner.call_public_method(self.contract_id, 'assign_declared_attribute', context)
-        with pytest.raises(NCRuntimeFailure) as e:
+        with pytest.raises(NCUnhandledUserException) as e:
             self.runner.call_public_method(self.contract_id, 'assign_non_declared_attribute', context)
         assert isinstance(e.value.__cause__, AttributeError)
         assert e.value.__cause__.args[0] == "'MyBlueprint' object has no attribute 'unknown'"
