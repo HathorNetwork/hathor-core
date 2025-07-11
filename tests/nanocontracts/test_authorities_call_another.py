@@ -138,8 +138,8 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         )
         self.runner.create_contract(self.caller_id, self.caller_blueprint_id, caller_ctx, other_id=self.callee_id)
         self.runner.create_contract(self.callee_id, self.callee_blueprint_id, callee_ctx)
-        self.caller_storage = self.runner.get_storage(self.caller_id)
-        self.callee_storage = self.runner.get_storage(self.callee_id)
+        self.caller_storage = self.runner.get_storage(self.caller_id).unwrap_or_raise()
+        self.callee_storage = self.runner.get_storage(self.callee_id).unwrap_or_raise()
 
     def _grant_to_other(self, *, mint: bool, melt: bool) -> None:
         context = Context(

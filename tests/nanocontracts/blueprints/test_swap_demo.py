@@ -51,7 +51,7 @@ class SwapDemoTestCase(BlueprintTestCase):
             multiplier_a,
             multiplier_b,
         )
-        self.nc_storage = self.runner.get_storage(self.contract_id)
+        self.nc_storage = self.runner.get_storage(self.contract_id).unwrap_or_raise()
 
     def _swap(
         self,

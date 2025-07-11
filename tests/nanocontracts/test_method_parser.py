@@ -3,7 +3,7 @@ from collections.abc import Callable
 from typing import Any, Optional, TypeVar
 
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCSerializationArgTooLong
+from hathor.nanocontracts.exception import NCSerializationArgTooLong, NCSerializationError
 from hathor.nanocontracts.method import MAX_BYTES_SERIALIZED_ARG, Method
 from hathor.nanocontracts.types import SignedData, public
 from tests import unittest
@@ -53,15 +53,15 @@ class NCBlueprintTestCase(unittest.TestCase):
     def _run_test_parser(self, method_parser: Method, data: T) -> None:
         # Then, check serialization and deserialization.
         args_in = (data,)
-        serialized_args_in = method_parser.serialize_args_bytes(args_in)
-        args_out = method_parser.deserialize_args_bytes(serialized_args_in)
+        serialized_args_in = method_parser.serialize_args_bytes(args_in).unwrap_or_raise()
+        args_out = method_parser.deserialize_args_bytes(serialized_args_in).unwrap_or_raise()
         self.assertEqual(args_in, args_out)
 
         # Also check that types match (they don't necessarily always match)
         self.assertEqual(type(args_in), type(args_out))
 
     def test_type_str_wrong_type(self) -> None:
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NCSerializationError):
             self._run_test(MyBlueprint.method_str, b'')
 
     def test_type_str_empty(self) -> None:
@@ -127,15 +127,15 @@ class NCBlueprintTestCase(unittest.TestCase):
         self._run_test(MyBlueprint.method_int, 100)
 
     def test_type_int_too_big(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NCSerializationError):
             self._run_test(MyBlueprint.method_int, 2**223)
 
     def test_type_int_too_small(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NCSerializationError):
             self._run_test(MyBlueprint.method_int, -2**223 - 1)
 
     def test_type_int_wrong_type(self) -> None:
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NCSerializationError):
             self._run_test(MyBlueprint.method_int, 1.)
 
     def test_type_int(self) -> None:
@@ -165,7 +165,7 @@ class NCBlueprintTestCase(unittest.TestCase):
             -2**224,
         ]
         for invalid_value in invalid_values:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(NCSerializationError):
                 self._run_test(Foo.bar, invalid_value)
 
     def test_type_bool_false(self) -> None:
@@ -195,8 +195,8 @@ class NCBlueprintTestCase(unittest.TestCase):
 
         # Then, check serialization and deserialization.
         args_in = ('a', b'b', 1, True)
-        serialized_args_in = parser.serialize_args_bytes(args_in)
-        args_out = parser.deserialize_args_bytes(serialized_args_in)
+        serialized_args_in = parser.serialize_args_bytes(args_in).unwrap_or_raise()
+        args_out = parser.deserialize_args_bytes(serialized_args_in).unwrap_or_raise()
         self.assertEqual(args_in, args_out)
 
     def test_arg_parse_str(self) -> None:

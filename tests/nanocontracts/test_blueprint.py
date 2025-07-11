@@ -136,7 +136,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         d = True
         self.runner.create_contract(nc_id, blueprint_id, ctx, a, b, c, d)
 
-        storage = self.runner.get_storage(nc_id)
+        storage = self.runner.get_storage(nc_id).unwrap_or_raise()
         self.assertEqual(storage.get_obj(b'a', STR_NC_TYPE), a)
         self.assertEqual(storage.get_obj(b'b', BYTES_NC_TYPE), b)
         self.assertEqual(storage.get_obj(b'c', INT_NC_TYPE), c)
@@ -154,7 +154,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         ]
         self.runner.create_contract(nc_id, blueprint_id, ctx, items)
 
-        storage = self.runner.get_storage(nc_id)
+        storage = self.runner.get_storage(nc_id).unwrap_or_raise()
         self.assertEqual(storage.get_obj(b'a:\x01a', STR_NC_TYPE), '1')
         self.assertEqual(storage.get_obj(b'a:\x01b', STR_NC_TYPE), '2')
         self.assertEqual(storage.get_obj(b'a:\x01c', STR_NC_TYPE), '3')
@@ -168,7 +168,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_public_method_fails(self) -> None:
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        storage = self.runner.get_storage(nc_id)
+        storage = self.runner.get_storage(nc_id).unwrap_or_raise()
 
         with self.assertRaises(NCFail):
             ctx = Context([], self.tx, MOCK_ADDRESS, timestamp=0)
@@ -189,7 +189,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_initial_balance(self) -> None:
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        storage = self.runner.get_storage(nc_id)
+        storage = self.runner.get_storage(nc_id).unwrap_or_raise()
         self.assertEqual(Balance(value=0, can_mint=False, can_melt=False), storage.get_balance(MOCK_ADDRESS))
 
     def test_nop(self) -> None:
@@ -214,7 +214,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_deposits_and_withdrawals(self) -> None:
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        storage = self.runner.get_storage(nc_id)
+        storage = self.runner.get_storage(nc_id).unwrap_or_raise()
         token_uid = TokenUid(b'\0')
         ctx = Context(
             [NCDepositAction(token_uid=token_uid, amount=100)],
@@ -255,7 +255,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_withdraw_wrong_token(self) -> None:
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        storage = self.runner.get_storage(nc_id)
+        storage = self.runner.get_storage(nc_id).unwrap_or_raise()
 
         token_uid = TokenUid(b'\0')
         wrong_token_uid = TokenUid(b'\1')
@@ -291,7 +291,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def test_balances(self) -> None:
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
-        storage = self.runner.get_storage(nc_id)
+        storage = self.runner.get_storage(nc_id).unwrap_or_raise()
 
         token_uid = TokenUid(b'\0')  # HTR
         ctx = Context(

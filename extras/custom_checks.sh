@@ -115,6 +115,28 @@ function check_do_not_import_twisted_reactor_directly() {
     return 0
 }
 
+function check_inherit_from_nc_fail() {
+    PATTERN='class .*\(NCFail\)'
+
+    if grep -R "$PATTERN" "hathor"; then
+        echo 'do not inherit from NCFail, this is only meant to be inherited by blueprint exceptions, created by users.'
+        echo 'we may allow blueprints to catch these exceptions at some point.'
+        return 1
+    fi
+    return 0
+}
+
+function check_raise_nc_fail() {
+    PATTERN='raise NCFail'
+
+    if grep -R "$PATTERN" "hathor"; then
+        echo 'do not raise NCFail, this is only meant to be raised by blueprints, created by users.'
+        echo 'we may allow blueprints to catch these exceptions at some point.'
+        return 1
+    fi
+    return 0
+}
+
 # List of functions to be executed
 checks=(
 	check_version_match
@@ -123,6 +145,8 @@ checks=(
 	check_do_not_import_tests_in_hathor
 	check_do_not_import_from_hathor_in_entrypoints
 	check_do_not_import_twisted_reactor_directly
+	check_inherit_from_nc_fail
+	check_raise_nc_fail
 )
 
 # Initialize a variable to track if any check fails
