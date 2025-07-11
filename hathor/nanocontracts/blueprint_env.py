@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, final
+from typing import TYPE_CHECKING, Any, Optional, TypeAlias, final
 
 from typing_extensions import deprecated
 
@@ -26,6 +26,9 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.runner.types import NCArgs
+
+
+Cache: TypeAlias = dict[bytes, Any] | None
 
 
 class BlueprintEnvironment:
@@ -45,7 +48,7 @@ class BlueprintEnvironment:
         self.__runner = runner
         self.__storage__ = storage
         # XXX: we could replace dict|None with a Cache that can be disabled, cleared, limited, etc
-        self.__cache__: dict[str, Any] | None = None if disable_cache else {}
+        self.__cache__: Cache = None if disable_cache else {}
 
     @final
     @property
