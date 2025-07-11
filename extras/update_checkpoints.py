@@ -25,9 +25,10 @@ New checkpoints to add for mainnet:
 The output can then be copied and pasted into `hathor/conf/mainnet.yml` and `hathor/conf/mainnet.py`
 """
 
+import argparse
+
 import requests
 import yaml
-import argparse
 
 # Built-in network configurations
 NETWORKS: dict[str, dict[str, str]] = {
