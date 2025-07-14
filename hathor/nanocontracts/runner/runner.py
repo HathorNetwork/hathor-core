@@ -81,11 +81,12 @@ from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TransactionDataError
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.token_info import TokenInfoVersion
 from hathor.transaction.util import (
     clean_token_string,
-    get_deposit_amount,
-    get_withdraw_amount,
-    validate_token_name_and_symbol,
+    get_deposit_token_deposit_amount,
+    get_deposit_token_withdraw_amount,
+    validate_token_info,
 )
 
 P = ParamSpec('P')
@@ -848,7 +849,7 @@ class Runner:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
 
         token_amount = amount
-        htr_amount = -get_deposit_amount(self._settings, token_amount)
+        htr_amount = -get_deposit_token_deposit_amount(self._settings, token_amount)
 
         changes_tracker.add_balance(token_uid, token_amount)
         changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
@@ -880,7 +881,7 @@ class Runner:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens')
 
         token_amount = -amount
-        htr_amount = get_withdraw_amount(self._settings, token_amount)
+        htr_amount = get_deposit_token_withdraw_amount(self._settings, token_amount)
 
         changes_tracker.add_balance(token_uid, token_amount)
         changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
@@ -931,10 +932,11 @@ class Runner:
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
+        token_version: TokenInfoVersion,
     ) -> TokenUid:
         """Create a child token from a contract."""
         try:
-            validate_token_name_and_symbol(self._settings, token_name, token_symbol)
+            validate_token_info(self._settings, token_name, token_symbol, token_version)
         except TransactionDataError as e:
             raise NCInvalidSyscall('invalid token description') from e
 
@@ -944,7 +946,7 @@ class Runner:
         token_id = derive_child_token_id(parent_id, cleaned_token_symbol)
 
         token_amount = amount
-        htr_amount = get_deposit_amount(self._settings, token_amount)
+        htr_amount = get_deposit_token_deposit_amount(self._settings, token_amount)
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
         changes_tracker.create_token(token_id, token_name, token_symbol)

@@ -58,6 +58,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, NCStorageFactory
     from hathor.nanocontracts.types import BlueprintId, ContractId
+    from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
 cpu = get_cpu_profiler()
 
@@ -548,6 +549,16 @@ class TransactionStorage(ABC):
             tx = self._get_transaction(hash_bytes)
         self.post_get_validation(tx)
         return tx
+
+    def get_token_creation_transaction(self, hash_bytes: bytes) -> Optional[TokenCreationTransaction]:
+        """Acquire the lock and get the token creation transaction with hash `hash_bytes`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        """
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+
+        tx = self.get_transaction(hash_bytes)
+        return tx if isinstance(tx, TokenCreationTransaction) else None
 
     def get_block_by_height(self, height: int) -> Optional[Block]:
         """Return a block in the best blockchain from the height index. This is fast."""

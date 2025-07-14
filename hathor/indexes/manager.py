@@ -37,6 +37,7 @@ from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
 from hathor.transaction import BaseTransaction
 from hathor.transaction.nc_execution_state import NCExecutionState
+from hathor.transaction.token_info import TokenInfoVersion
 from hathor.util import tx_progress
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -270,7 +271,17 @@ class IndexesManager(ABC):
                             from hathor.nanocontracts.runner.types import SyscallRecordType
                             assert syscall.type is SyscallRecordType.CREATE_TOKEN, syscall.type
                             assert syscall.token_name is not None and syscall.token_symbol is not None
-                            self.tokens.create_token_info(syscall.token_uid, syscall.token_name, syscall.token_symbol)
+                            # TODO-Raul: check with Gabriel with we should enforce a default value here,
+                            # TODO-Raul: since the SyscallUpdateTokensRecord already has an default value
+                            # TODO-Raul: for token_version or if we should only allow deposit in the moment
+                            token_version = TokenInfoVersion.DEPOSIT
+                            if syscall.token_version is not None:
+                                token_version = syscall.token_version
+
+                            self.tokens.create_token_info(syscall.token_uid,
+                                                          syscall.token_name,
+                                                          syscall.token_symbol,
+                                                          token_version)
 
                         self.tokens.add_to_total(syscall.token_uid, syscall.token_amount)
                         self.tokens.add_to_total(HATHOR_TOKEN_UID, syscall.htr_amount)
