@@ -172,28 +172,35 @@ class OnChainBlueprintVerifier:
         tx._ast_cache = parsed_tree
         return parsed_tree
 
-    def verify_python_script(self, tx: OnChainBlueprint) -> None:
+    def verify_code(self, tx: OnChainBlueprint) -> None:
+        """Run all verification related to the blueprint code."""
+        self._verify_python_script(tx)
+        self._verify_script_restrictions(tx)
+        self._verify_has_blueprint_attr(tx)
+        self._verify_blueprint_type(tx)
+
+    def _verify_python_script(self, tx: OnChainBlueprint) -> None:
         """Verify that the script can be parsed at all."""
         try:
             self._get_python_code_ast(tx)
         except SyntaxError as e:
             raise OCBInvalidScript('Could not correctly parse the script') from e
 
-    def verify_script_restrictions(self, tx: OnChainBlueprint) -> None:
+    def _verify_script_restrictions(self, tx: OnChainBlueprint) -> None:
         """Verify that the script does not use any forbidden syntax."""
         try:
             _RestrictionsVisitor().visit(self._get_python_code_ast(tx))
         except SyntaxError as e:
             raise OCBInvalidScript('forbidden syntax') from e
 
-    def verify_has_blueprint_attr(self, tx: OnChainBlueprint) -> None:
+    def _verify_has_blueprint_attr(self, tx: OnChainBlueprint) -> None:
         """Verify that the script defines a __blueprint__ attribute."""
         search_name = _SearchName(BLUEPRINT_CLASS_NAME)
         search_name.visit(self._get_python_code_ast(tx))
         if not search_name.found:
             raise OCBInvalidScript(f'Could not find {BLUEPRINT_CLASS_NAME} object')
 
-    def verify_blueprint_type(self, tx: OnChainBlueprint) -> None:
+    def _verify_blueprint_type(self, tx: OnChainBlueprint) -> None:
         """Verify that the __blueprint__ is a Blueprint, this will load and execute the blueprint code."""
         from hathor.nanocontracts.blueprint import Blueprint
         blueprint_class = tx.get_blueprint_object_bypass()

@@ -206,14 +206,16 @@ class IndexesManager(ABC):
     def update(self, tx: BaseTransaction) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx
         """
-        self.nc_update_add(tx)
-
         # XXX: this _should_ be here, but it breaks some tests, for now this is done explicitly in hathor.manager
         # self.mempool_tips.update(tx)
         if self.utxo:
             self.utxo.update(tx)
 
-    def nc_update_add(self, tx: BaseTransaction) -> None:
+    def handle_contract_execution(self, tx: BaseTransaction) -> None:
+        """
+        Update indexes according to a Nano Contract execution.
+        Must be called only once for each time a contract is executed.
+        """
         from hathor.conf.settings import HATHOR_TOKEN_UID
         from hathor.nanocontracts.runner.types import (
             NCSyscallRecord,
@@ -223,13 +225,9 @@ class IndexesManager(ABC):
         from hathor.nanocontracts.types import ContractId
         from hathor.transaction.nc_execution_state import NCExecutionState
 
-        if not tx.is_nano_contract():
-            return
-
         meta = tx.get_metadata()
-        if meta.nc_execution != NCExecutionState.SUCCESS:
-            return
-
+        assert tx.is_nano_contract()
+        assert meta.nc_execution is NCExecutionState.SUCCESS
         assert meta.nc_calls
         first_call = meta.nc_calls[0]
         nc_syscalls: list[NCSyscallRecord] = []
@@ -280,7 +278,11 @@ class IndexesManager(ABC):
                 case _:
                     assert_never(syscall)
 
-    def nc_update_remove(self, tx: BaseTransaction) -> None:
+    def handle_contract_unexecution(self, tx: BaseTransaction) -> None:
+        """
+        Update indexes according to a Nano Contract unexecution, which happens when a reorg unconfirms a nano tx.
+        Must be called only once for each time a contract is unexecuted.
+        """
         from hathor.conf.settings import HATHOR_TOKEN_UID
         from hathor.nanocontracts.runner.types import (
             NCSyscallRecord,
@@ -289,10 +291,8 @@ class IndexesManager(ABC):
         )
         from hathor.nanocontracts.types import NC_INITIALIZE_METHOD, ContractId
 
-        if not tx.is_nano_contract():
-            return
-
         meta = tx.get_metadata()
+        assert tx.is_nano_contract()
         assert meta.nc_execution is NCExecutionState.SUCCESS
         assert meta.nc_calls
         first_call = meta.nc_calls[0]
