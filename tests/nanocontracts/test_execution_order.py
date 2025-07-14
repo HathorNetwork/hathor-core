@@ -127,14 +127,13 @@ class TestExecutionOrder(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.blueprint_id = self.gen_random_blueprint_id()
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
         self.contract_id1 = self.gen_random_contract_id()
         self.contract_id2 = self.gen_random_contract_id()
         self.token_a = self.gen_random_token_uid()
         self.tx = self.get_genesis_tx()
         self.address = self.gen_random_address()
 
-        self.register_blueprint_class(self.blueprint_id, MyBlueprint)
         action = NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=10)
         self.runner.create_contract(self.contract_id1, self.blueprint_id, self._get_context(action), self.token_a)
         self.runner.create_contract(self.contract_id2, self.blueprint_id, self._get_context(action), self.token_a)

@@ -1,3 +1,4 @@
+import inspect
 import os
 import re
 from typing import NamedTuple, Optional
@@ -23,7 +24,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
-from tests.nanocontracts.test_blueprints.bet import Bet
+from tests.nanocontracts.test_blueprints import bet
 
 settings = HathorSettings()
 
@@ -43,8 +44,7 @@ class BetInfo(NamedTuple):
 class NCBetBlueprintTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
-        self.blueprint_id = self.gen_random_blueprint_id()
-        self.register_blueprint_class(self.blueprint_id, Bet)
+        self.blueprint_id = self.register_blueprint_file(inspect.getfile(bet))
         self.token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
         self.nc_id = ContractId(VertexId(b'1' * 32))
         self.initialize_contract()

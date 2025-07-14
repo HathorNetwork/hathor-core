@@ -124,8 +124,7 @@ class TestSyscallsInView(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.blueprint_id = self.gen_random_blueprint_id()
-        self.register_blueprint_class(self.blueprint_id, MyBlueprint)
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
 
         self.ctx = Context(
             actions=[],

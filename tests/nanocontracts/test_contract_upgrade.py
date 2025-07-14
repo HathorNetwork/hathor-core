@@ -100,15 +100,10 @@ class CodeBlueprint3(Blueprint):
 class NCDelegateCallTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
-        self.proxy_bp_id = self.gen_random_blueprint_id()
-        self.code1_bp_id = self.gen_random_blueprint_id()
-        self.code2_bp_id = self.gen_random_blueprint_id()
-        self.code3_bp_id = self.gen_random_blueprint_id()
-
-        self.register_blueprint_class(self.proxy_bp_id, ProxyBlueprint)
-        self.register_blueprint_class(self.code1_bp_id, CodeBlueprint1)
-        self.register_blueprint_class(self.code2_bp_id, CodeBlueprint2)
-        self.register_blueprint_class(self.code3_bp_id, CodeBlueprint3)
+        self.proxy_bp_id = self._register_blueprint_class(ProxyBlueprint)
+        self.code1_bp_id = self._register_blueprint_class(CodeBlueprint1)
+        self.code2_bp_id = self._register_blueprint_class(CodeBlueprint2)
+        self.code3_bp_id = self._register_blueprint_class(CodeBlueprint3)
 
     def test_basic(self) -> None:
         code1_id = self.gen_random_contract_id()

@@ -69,11 +69,8 @@ class TestFollowUpCall(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.blueprint_id1 = self.gen_random_blueprint_id()
-        self.blueprint_id2 = self.gen_random_blueprint_id()
-
-        self.register_blueprint_class(self.blueprint_id1, MyBlueprint1)
-        self.register_blueprint_class(self.blueprint_id2, MyBlueprint2)
+        self.blueprint_id1 = self._register_blueprint_class(MyBlueprint1)
+        self.blueprint_id2 = self._register_blueprint_class(MyBlueprint2)
 
         self.contract_id = self.gen_random_contract_id()
         self.other_id = self.gen_random_contract_id()
