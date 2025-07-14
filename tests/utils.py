@@ -739,6 +739,7 @@ class EventMocker:
         inputs=[],
         outputs=[],
         parents=[],
+        headers=[],
         tokens=[],
         metadata=TxMetadata(
             hash='abc',
