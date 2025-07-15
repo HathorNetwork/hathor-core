@@ -19,6 +19,7 @@ from typing import ClassVar, SupportsIndex, TypeVar, get_args, get_origin
 
 from typing_extensions import Self, override
 
+from hathor.nanocontracts.exception import NCTypeError, NCIndexError
 from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
 from hathor.nanocontracts.fields.field import Field
 from hathor.nanocontracts.nc_types import NCType, VarInt32NCType
@@ -67,13 +68,13 @@ class DequeStorageContainer(StorageContainer[Sequence[T]]):
     @classmethod
     def __check_name_and_type__(cls, name: str, type_: type[Sequence[T]]) -> None:
         if not name.isidentifier():
-            raise TypeError('field name must be a valid identifier')
+            raise NCTypeError('field name must be a valid identifier')
         origin_type: type[Sequence[T]] = not_none(get_origin(type_))
         if not issubclass(origin_type, Sequence):
-            raise TypeError('expected Sequence type')
+            raise NCTypeError('expected Sequence type')
         args = get_args(type_)
         if not args or len(args) != 1:
-            raise TypeError(f'expected {type_.__name__}[<item type>]')
+            raise NCTypeError(f'expected {type_.__name__}[<item type>]')
 
     @override
     @classmethod
@@ -135,7 +136,7 @@ class DequeStorageContainer(StorageContainer[Sequence[T]]):
 
     def __pop(self, *, metadata: _DequeMetadata, left: bool) -> T:
         if metadata.length == 0:
-            raise IndexError
+            raise NCIndexError
 
         index = metadata.first_index if left else metadata.last_index
         key = self.__to_db_key(index)
@@ -157,7 +158,7 @@ class DequeStorageContainer(StorageContainer[Sequence[T]]):
             idx += metadata.length
 
         if idx < 0 or idx >= metadata.length:
-            raise IndexError
+            raise NCIndexError
 
         return metadata.last_index - idx if metadata.reversed else metadata.first_index + idx
 

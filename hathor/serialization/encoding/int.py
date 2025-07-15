@@ -37,6 +37,7 @@ The encoding format itself is a standard big-endian format.
 """
 
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationValueError
 
 
 def encode_int(serializer: Serializer, number: int, *, length: int, signed: bool) -> None:
@@ -47,7 +48,7 @@ def encode_int(serializer: Serializer, number: int, *, length: int, signed: bool
     try:
         data = int.to_bytes(number, length, byteorder='big', signed=signed)
     except OverflowError:
-        raise ValueError('too big to encode')
+        raise SerializationValueError('too big to encode')
     serializer.write_bytes(data)
 
 

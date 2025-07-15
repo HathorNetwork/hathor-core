@@ -56,6 +56,7 @@ b'test'
 """
 
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationValueError
 
 
 def encode_bool(serializer: Serializer, value: bool) -> None:
@@ -75,4 +76,4 @@ def decode_bool(deserializer: Deserializer) -> bool:
         return True
     else:
         raw = bytes([i])
-        raise ValueError(f'{raw!r} is not a valid boolean')
+        raise SerializationValueError(f'{raw!r} is not a valid boolean')

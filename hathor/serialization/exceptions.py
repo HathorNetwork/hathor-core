@@ -35,3 +35,11 @@ class OutOfDataError(SerializationError, struct.error):
 
 class BadDataError(SerializationError):
     pass
+
+
+class SerializationTypeError(SerializationError):
+    pass
+
+
+class SerializationValueError(SerializationError):
+    pass

@@ -20,6 +20,7 @@ from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.consts import DEFAULT_BYTES_MAX_LENGTH
 from hathor.serialization.encoding.utf8 import decode_utf8, encode_utf8
+from hathor.serialization.exceptions import SerializationValueError, SerializationTypeError
 
 
 class StrNCType(NCType[str]):
@@ -32,13 +33,13 @@ class StrNCType(NCType[str]):
     @classmethod
     def _from_type(cls, type_: type[str], /, *, type_map: NCType.TypeMap) -> Self:
         if type_ is not str:
-            raise TypeError('expected str type')
+            raise NCTypeError('expected str type')
         return cls()
 
     @override
     def _check_value(self, value: str, /, *, deep: bool) -> None:
         if not isinstance(value, str):
-            raise TypeError('excpected str type')
+            raise NCTypeError('excpected str type')
 
     @override
     def _serialize(self, serializer: Serializer, value: str, /) -> None:
@@ -51,7 +52,7 @@ class StrNCType(NCType[str]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> str:
         if not isinstance(json_value, str):
-            raise ValueError('expected str')
+            raise NCValueError('expected str')
         return json_value
 
     @override

@@ -19,6 +19,7 @@ from typing import Generic, NamedTuple, TypeVar, final, get_origin
 
 from typing_extensions import TYPE_CHECKING, Self
 
+from hathor.nanocontracts.exception import NCTypeError
 from hathor.nanocontracts.fields.utils import TypeToFieldMap
 from hathor.nanocontracts.nc_types import NCType
 from hathor.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
@@ -70,8 +71,8 @@ class Field(Generic[T], ABC):
         else:
             try:
                 return NCTypeField._from_name_and_type(name, type_, type_map=type_map)
-            except TypeError as e:
-                raise TypeError(f'type {type_} is not supported by any Field class') from e
+            except TypeError as e:  # TODO
+                raise NCTypeError(f'type {type_} is not supported by any Field class') from e
 
     @classmethod
     @abstractmethod

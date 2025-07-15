@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Iterator, NamedTuple, TypeAlias, TypeVar, Unio
 
 from structlog import get_logger
 
+from hathor.serialization.exceptions import SerializationTypeError
 from hathor.utils.typing import get_args, get_origin, is_subclass
 
 if TYPE_CHECKING:
@@ -197,7 +198,7 @@ def _get_aliased_type(type_: type | UnionType, alias_map: TypeAliasMap) -> tuple
         #      type for `list[T]` is `tuple[T, ...]`
         elif isinstance(origin_type, type) and issubclass(origin_type, list) and issubclass(aliased_origin, tuple):
             if len(aliased_args) != 1:
-                raise TypeError('to make an alias from `list` to `tuple` exactly 1 argument is required')
+                raise NCTypeError('to make an alias from `list` to `tuple` exactly 1 argument is required')
             aliased_arg, = aliased_args
             return aliased_origin[aliased_arg, ...], replaced  # type: ignore[index]
 
@@ -222,7 +223,7 @@ def get_usable_origin_type(
     """ The purpose of this function is to map a given type into a type that is usable in a NCType.TypeMap
 
     It takes into account type-aliasing according to NCType.TypeMap.alias_map. If the given type cannot be used in the
-    given type_map, a TypeError exception will be raised.
+    given type_map, a SerializationTypeError exception will be raised.
 
     The returned type is such that it is guaranteed to exist in `type_map.nc_types_map`.
 
@@ -251,4 +252,4 @@ def get_usable_origin_type(
     if NamedTuple in type_map.nc_types_map and NamedTuple in getattr(type_, '__orig_bases__', tuple()):
         return NamedTuple
 
-    raise TypeError(f'type {type_} is not supported by any NCType class')
+    raise NCTypeError(f'type {type_} is not supported by any NCType class')

@@ -23,6 +23,7 @@ from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.consts import DEFAULT_BYTES_MAX_LENGTH
 from hathor.serialization.encoding.bytes import decode_bytes, encode_bytes
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 from hathor.utils.typing import is_subclass
 
 B = TypeVar('B', bound=bytes)
@@ -43,17 +44,17 @@ class BytesLikeNCType(NCType[B]):
     @classmethod
     def _from_type(cls, type_: type[B], /, *, type_map: NCType.TypeMap) -> Self:
         if not is_subclass(type_, bytes):
-            raise TypeError('expected bytes-like type')
+            raise NCTypeError('expected bytes-like type')
         return cls(type_)
 
     @override
     def _check_value(self, value: bytes, /, *, deep: bool) -> None:
         if isclass(self._actual_type):
             if not isinstance(value, self._actual_type):
-                raise TypeError('expected {self._actual_type} instance')
+                raise NCTypeError('expected {self._actual_type} instance')
         else:
             if not isinstance(value, bytes):
-                raise TypeError('expected bytes instance')
+                raise NCTypeError('expected bytes instance')
 
     @override
     def _serialize(self, serializer: Serializer, value: B, /) -> None:
@@ -68,7 +69,7 @@ class BytesLikeNCType(NCType[B]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> B:
         if not isinstance(json_value, str):
-            raise ValueError('expected str')
+            raise NCValueError('expected str')
         data = bytes.fromhex(json_value)
         return self._actual_type(data)
 
@@ -92,5 +93,5 @@ class BytesNCType(BytesLikeNCType[bytes]):
     @classmethod
     def _from_type(cls, type_: type[bytes], /, *, type_map: NCType.TypeMap) -> Self:
         if type_ is not bytes:
-            raise TypeError('expected bytes type')
+            raise NCTypeError('expected bytes type')
         return cls()

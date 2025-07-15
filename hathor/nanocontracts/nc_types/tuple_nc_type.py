@@ -21,6 +21,7 @@ from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 
 
 # XXX: we can't usefully describe the tuple type
@@ -52,15 +53,15 @@ class TupleNCType(NCType[tuple]):
     def _from_type(cls, type_: type[tuple], /, *, type_map: NCType.TypeMap) -> Self:
         origin_type: type = get_origin(type_) or type_
         if not issubclass(origin_type, (tuple, list)):
-            raise TypeError('expected tuple-like type')
+            raise NCTypeError('expected tuple-like type')
         args = list(get_args(type_))
         if args is None:
-            raise TypeError('expected tuple[<args...>]')
+            raise NCTypeError('expected tuple[<args...>]')
         if issubclass(type_, list):
             args.append(Ellipsis)
         if args and args[-1] == Ellipsis:
             if len(args) != 2:
-                raise TypeError('ellipsis only allowed with one type: tuple[T, ...]')
+                raise NCTypeError('ellipsis only allowed with one type: tuple[T, ...]')
             arg, _ellipsis = args
             return cls(NCType.from_type(arg, type_map=type_map))
         else:
@@ -69,7 +70,7 @@ class TupleNCType(NCType[tuple]):
     @override
     def _check_value(self, value: tuple, /, *, deep: bool) -> None:
         if not isinstance(value, (tuple, list)):
-            raise TypeError('expected tuple-like')
+            raise NCTypeError('expected tuple-like')
         if deep:
             if self._varsize:
                 arg_nc_type, = self._args
@@ -77,7 +78,7 @@ class TupleNCType(NCType[tuple]):
                     arg_nc_type._check_value(i, deep=True)
             else:
                 if len(value) != len(self._args):
-                    raise TypeError('wrong tuple size')
+                    raise NCTypeError('wrong tuple size')
                 for i, arg_nc_type in zip(value, self._args):
                     arg_nc_type._check_value(i, deep=True)
 
@@ -104,7 +105,7 @@ class TupleNCType(NCType[tuple]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> tuple:
         if not isinstance(json_value, list):
-            raise ValueError('expected list')
+            raise NCValueError('expected list')
         if self._varsize:
             assert len(self._args) == 1
             return tuple(self._args[0].json_to_value(i) for i in json_value)

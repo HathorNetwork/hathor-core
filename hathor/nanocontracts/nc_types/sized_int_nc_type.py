@@ -21,6 +21,7 @@ from typing_extensions import Self, override
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.int import decode_int, encode_int
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 from hathor.utils.typing import is_subclass
 
 
@@ -55,22 +56,22 @@ class _SizedIntNCType(NCType[int]):
     @classmethod
     def _from_type(cls, type_: type[int], /, *, type_map: NCType.TypeMap) -> Self:
         if not is_subclass(type_, int):
-            raise TypeError('expected int type')
+            raise NCTypeError('expected int type')
         return cls()
 
     @override
     def _check_value(self, value: int, /, *, deep: bool) -> None:
         if not isinstance(value, int):
-            raise TypeError('expected integer')
+            raise NCTypeError('expected integer')
         self._check_range(value)
 
     def _check_range(self, value: int) -> None:
         upper_bound = self._upper_bound_value()
         lower_bound = self._lower_bound_value()
         if upper_bound is not None and value > upper_bound:
-            raise ValueError('above upper bound')
+            raise NCValueError('above upper bound')
         if lower_bound is not None and value < lower_bound:
-            raise ValueError('below lower bound')
+            raise NCValueError('below lower bound')
 
     @override
     def _serialize(self, serializer: Serializer, value: int, /) -> None:
@@ -84,7 +85,7 @@ class _SizedIntNCType(NCType[int]):
     def _json_to_value(self, json_value: NCType.Json, /) -> int:
         # XXX: should we support str?
         if not isinstance(json_value, int):
-            raise ValueError('expected int')
+            raise NCValueError('expected int')
         return json_value
 
     @override

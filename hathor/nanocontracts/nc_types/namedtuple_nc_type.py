@@ -21,6 +21,7 @@ from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 
 N = TypeVar('N', bound=tuple)
 
@@ -42,17 +43,17 @@ class NamedTupleNCType(NCType[N]):
     @classmethod
     def _from_type(cls, type_: type[N], /, *, type_map: NCType.TypeMap) -> Self:
         if not issubclass(type_, tuple) and NamedTuple not in getattr(cls, '__orig_bases__', tuple()):
-            raise TypeError('expected NamedTuple type')
+            raise NCTypeError('expected NamedTuple type')
         args = [type_.__annotations__[field_name] for field_name in type_._fields]  # type: ignore[attr-defined]
         return cls(type_, (NCType.from_type(arg, type_map=type_map) for arg in args))
 
     @override
     def _check_value(self, value: N, /, *, deep: bool) -> None:
         if not isinstance(value, (tuple, self._actual_type)):
-            raise TypeError('expected tuple or namedtuple')
+            raise NCTypeError('expected tuple or namedtuple')
         # TODO: support default values
         if len(value) != len(self._args):
-            raise TypeError('wrong number of arguments')
+            raise NCTypeError('wrong number of arguments')
         if deep:
             for i, arg_nc_type in zip(value, self._args):
                 arg_nc_type._check_value(i, deep=True)
@@ -70,7 +71,7 @@ class NamedTupleNCType(NCType[N]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> N:
         if not isinstance(json_value, list):
-            raise ValueError('expected list')
+            raise NCValueError('expected list')
         return self._actual_type(*tuple(v.json_to_value(i) for (i, v) in zip(json_value, self._args)))
 
     @override

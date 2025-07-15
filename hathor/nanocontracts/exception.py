@@ -58,10 +58,6 @@ class NCSerializationArgTooLong(NCSerializationError):
     pass
 
 
-class NCSerializationTypeError(NCSerializationError):
-    pass
-
-
 class NCViewMethodError(NCFail):
     """Raised when a view method changes the state of the contract."""
     pass
@@ -78,6 +74,22 @@ class NCInsufficientFunds(NCFail):
 
 
 class NCAttributeError(NCFail):
+    pass
+
+
+class NCTypeError(NCFail):
+    pass
+
+
+class NCValueError(NCFail):
+    pass
+
+
+class NCIndexError(NCFail):
+    pass
+
+
+class NCKeyError(NCFail):
     pass
 
 

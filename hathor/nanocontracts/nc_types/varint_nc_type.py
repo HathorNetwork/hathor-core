@@ -22,6 +22,7 @@ from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.adapters import MaxBytesExceededError
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 from hathor.utils.typing import is_subclass
 
 
@@ -53,22 +54,22 @@ class _VarIntNCType(NCType[int]):
     @classmethod
     def _from_type(cls, type_: type[int], /, *, type_map: NCType.TypeMap) -> Self:
         if not is_subclass(type_, int):
-            raise TypeError('expected int type')
+            raise NCTypeError('expected int type')
         return cls()
 
     @override
     def _check_value(self, value: int, /, *, deep: bool) -> None:
         if not isinstance(value, int):
-            raise TypeError('expected integer')
+            raise NCTypeError('expected integer')
         self._check_range(value)
 
     def _check_range(self, value: int) -> None:
         upper_bound = self._upper_bound_value()
         lower_bound = self._lower_bound_value()
         if upper_bound is not None and value > upper_bound:
-            raise ValueError('above upper bound')
+            raise NCValueError('above upper bound')
         if lower_bound is not None and value < lower_bound:
-            raise ValueError('below lower bound')
+            raise NCValueError('below lower bound')
 
     @override
     def _serialize(self, serializer: Serializer, value: int, /) -> None:
@@ -77,7 +78,7 @@ class _VarIntNCType(NCType[int]):
         try:
             encode_leb128(serializer, value, signed=self._signed)
         except MaxBytesExceededError as e:
-            raise ValueError('value too long') from e
+            raise NCValueError('value too long') from e
 
     @override
     def _deserialize(self, deserializer: Deserializer, /) -> int:
@@ -86,14 +87,14 @@ class _VarIntNCType(NCType[int]):
         try:
             value = decode_leb128(deserializer, signed=self._signed)
         except MaxBytesExceededError as e:
-            raise ValueError('value too long') from e
+            raise NCValueError('value too long') from e
         return value
 
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> int:
         # XXX: should we drop support for int?
         if not isinstance(json_value, (int, str)):
-            raise ValueError('expected int or str')
+            raise NCValueError('expected int or str')
         return int(json_value)
 
     @override

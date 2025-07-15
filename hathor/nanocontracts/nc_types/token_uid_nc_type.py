@@ -22,6 +22,7 @@ from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.nanocontracts.types import TokenUid
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.compound_encoding.optional import decode_optional, encode_optional
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 from hathor.utils.typing import is_subclass
 
 TOKEN_SIZE = 32
@@ -40,18 +41,18 @@ class TokenUidNCType(NCType[TokenUid]):
         # XXX: TokenUid is a NewType it cannot be used to make this check, when we have a custom class it will be
         #      possible to use it here instead of bytes
         if not is_subclass(type_, bytes):
-            raise TypeError('expected bytes type')
+            raise NCTypeError('expected bytes type')
         return cls()
 
     @override
     def _check_value(self, value: TokenUid, /, *, deep: bool) -> None:
         if not isinstance(value, bytes):
-            raise TypeError('expected bytes instance')
+            raise NCTypeError('expected bytes instance')
         data = bytes(value)
         if data == HATHOR_TOKEN_UID:
             return
         elif len(data) != TOKEN_SIZE:
-            raise TypeError(
+            raise NCTypeError(
                 f'value has {len(value)} bytes, expected '
                 f'TokenUid to always have {TOKEN_SIZE} bytes'
             )
@@ -72,12 +73,12 @@ class TokenUidNCType(NCType[TokenUid]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> TokenUid:
         if not isinstance(json_value, str):
-            raise ValueError('expected str')
+            raise NCValueError('expected str')
         if json_value == HATHOR_TOKEN_HEX:
             return TokenUid(HATHOR_TOKEN_UID)
         data = bytes.fromhex(json_value)
         if len(data) != TOKEN_SIZE:
-            raise ValueError('TokenUid must either be a null byte or have 32 bytes')
+            raise NCValueError('TokenUid must either be a null byte or have 32 bytes')
         return TokenUid(data)
 
     @override

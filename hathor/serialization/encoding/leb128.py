@@ -49,6 +49,7 @@ b'test'
 """
 
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationValueError
 
 
 def encode_leb128(serializer: Serializer, value: int, *, signed: bool) -> None:
@@ -59,7 +60,7 @@ def encode_leb128(serializer: Serializer, value: int, *, signed: bool) -> None:
     This module's docstring has more details on LEB128 and examples.
     """
     if not signed and value < 0:
-        raise ValueError('cannot encode value <0 as unsigend')
+        raise SerializationValueError('cannot encode value <0 as unsigned')
     while True:
         byte = value & 0b0111_1111
         value >>= 7

@@ -19,6 +19,7 @@ from typing_extensions import Self, override
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.bool import decode_bool, encode_bool
+from hathor.serialization.exceptions import SerializationTypeError
 
 
 class BoolNCType(NCType[bool]):
@@ -31,13 +32,13 @@ class BoolNCType(NCType[bool]):
     @classmethod
     def _from_type(cls, type_: type[bool], /, *, type_map: NCType.TypeMap) -> Self:
         if type_ is not bool:
-            raise TypeError('expected bool type')
+            raise NCTypeError('expected bool type')
         return cls()
 
     @override
     def _check_value(self, value: bool, /, *, deep: bool) -> None:
         if not isinstance(value, bool):
-            raise TypeError('expected boolean')
+            raise NCTypeError('expected boolean')
 
     @override
     def _serialize(self, serializer: Serializer, value: bool, /) -> None:
@@ -50,7 +51,7 @@ class BoolNCType(NCType[bool]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> bool:
         if not isinstance(json_value, bool):
-            raise ValueError('expected bool')
+            raise NCValueError('expected bool')
         return json_value
 
     @override

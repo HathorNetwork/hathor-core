@@ -24,6 +24,7 @@ from typing_extensions import Self, override
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.compound_encoding.optional import decode_optional, encode_optional
+from hathor.serialization.exceptions import SerializationTypeError
 
 V = TypeVar('V')
 
@@ -44,11 +45,11 @@ class OptionalNCType(NCType[V | None]):
     @classmethod
     def _from_type(cls, type_: type[V | None], /, *, type_map: NCType.TypeMap) -> Self:
         if not isinstance(type_, (UnionType, UnionGenericAlias)):
-            raise TypeError('expected type union')
+            raise NCTypeError('expected type union')
         args = get_args(type_)
         assert args, 'union always has args'
         if len(args) != 2 or NoneType not in args:
-            raise TypeError('type must be either `None | T` or `T | None`')
+            raise NCTypeError('type must be either `None | T` or `T | None`')
         not_none_type, = tuple(set(args) - {NoneType})  # get the type that is not None
         return cls(NCType.from_type(not_none_type, type_map=type_map))
 

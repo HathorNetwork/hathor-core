@@ -30,6 +30,7 @@ from typing_extensions import Self, override
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.nanocontracts.nc_types.optional_nc_type import OptionalNCType
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -65,7 +66,7 @@ class DataclassNCType(NCType[D]):
     @classmethod
     def _from_type(cls, type_: type[D], /, *, type_map: NCType.TypeMap) -> Self:
         if not is_dataclass(type_):
-            raise TypeError('expected a dataclass')
+            raise NCTypeError('expected a dataclass')
         # XXX: the order is important, but `dict` and `fields` should have a stable order
         values: dict[str, NCType] = {}
         for field in fields(type_):
@@ -76,7 +77,7 @@ class DataclassNCType(NCType[D]):
     @override
     def _check_value(self, value: D, /, *, deep: bool) -> None:
         if not isinstance(value, self._class):
-            raise TypeError(f'expected {self._class} instance')
+            raise NCTypeError(f'expected {self._class} instance')
 
     @override
     def _serialize(self, serializer: Serializer, value: D, /) -> None:
@@ -93,7 +94,7 @@ class DataclassNCType(NCType[D]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> D:
         if not isinstance(json_value, dict):
-            raise ValueError('expected dict')
+            raise NCValueError('expected dict')
         kwargs: dict[str, Any] = {}
         for field_name, field_nc_type in self._fields.items():
             kwargs[field_name] = field_nc_type.json_to_value(json_value[field_name])

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from typing_extensions import Self
 
+from .exceptions import SerializationTypeError
 from .types import Buffer
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ T = TypeVar('T')
 class Serializer(ABC):
     def finalize(self) -> Buffer:
         """Get the resulting byte sequence, the serializer cannot be reused after this."""
-        raise TypeError('this serializer does not support finalization')
+        raise SerializationTypeError('this serializer does not support finalization')
 
     @abstractmethod
     def cur_pos(self) -> int:

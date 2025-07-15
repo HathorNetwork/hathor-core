@@ -17,6 +17,7 @@ from typing import TypeVar
 from typing_extensions import Self
 
 from hathor.nanocontracts.blueprint import Blueprint
+from hathor.nanocontracts.exception import NCAttributeError
 from hathor.nanocontracts.fields.field import Field
 from hathor.nanocontracts.nc_types import NCType
 
@@ -62,7 +63,7 @@ class NCTypeField(Field[T]):
                 cache[self.__name] = obj
             return obj
         except KeyError:
-            raise AttributeError(f'Contract has no attribute \'{self.__name}\'')
+            raise NCAttributeError(f'Contract has no attribute \'{self.__name}\'')
 
     def __delete__(self, instance: Blueprint) -> None:
         instance.syscall.__storage__.del_obj(self.__storage_key())

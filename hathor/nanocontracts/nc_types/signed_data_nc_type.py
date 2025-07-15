@@ -22,6 +22,7 @@ from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.nanocontracts.types import SignedData
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.compound_encoding.signed_data import decode_signed_data, encode_signed_data
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 from hathor.utils.typing import get_args, get_origin
 
 V = TypeVar('V', bound=NCType)
@@ -45,17 +46,17 @@ class SignedDataNCType(NCType[SignedData[V]]):
     def _from_type(cls, type_: type[SignedData[V]], /, *, type_map: NCType.TypeMap) -> Self:
         origin_type = get_origin(type_) or type_
         if not issubclass(origin_type, SignedData):
-            raise TypeError('expected SignedData type')
+            raise NCTypeError('expected SignedData type')
         args: tuple[type, ...] = get_args(type_) or tuple()
         if len(args) != 1:
-            raise TypeError('expected one type argument')
+            raise NCTypeError('expected one type argument')
         inner_type, = args
         return cls(NCType.from_type(inner_type, type_map=type_map), inner_type)
 
     @override
     def _check_value(self, value: SignedData[V], /, *, deep: bool) -> None:
         if not isinstance(value, SignedData):
-            raise TypeError('expected SignedData')
+            raise NCTypeError('expected SignedData')
         if deep:
             self._value._check_value(value.data, deep=True)
 
@@ -70,13 +71,13 @@ class SignedDataNCType(NCType[SignedData[V]]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> SignedData[V]:
         if not isinstance(json_value, list):
-            raise ValueError('expected list')
+            raise NCValueError('expected list')
         if len(json_value) != 2:
-            raise ValueError('expected list of 2 elements')
+            raise NCValueError('expected list of 2 elements')
         inner_json_value, signature_json_value = json_value
         data = self._value.json_to_value(inner_json_value)
         if not isinstance(signature_json_value, str):
-            raise ValueError('expected str for signature')
+            raise NCValueError('expected str for signature')
         script_input = bytes.fromhex(signature_json_value)
         # XXX: ignore named-defined because mypy doesn't recognize self._inner_type
         # NOTE: strangely enough it gives a name-defined error but in some nearly identical situations it gives a

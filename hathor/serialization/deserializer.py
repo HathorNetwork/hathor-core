@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from typing_extensions import Self
 
+from .exceptions import SerializationTypeError
 from .types import Buffer
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ T = TypeVar('T')
 class Deserializer(ABC):
     def finalize(self) -> None:
         """Check that all bytes were consumed, the deserializer cannot be used after this."""
-        raise TypeError('this deserializer does not support finalization')
+        raise SerializationTypeError('this deserializer does not support finalization')
 
     @staticmethod
     def build_bytes_deserializer(data: Buffer) -> BytesDeserializer:

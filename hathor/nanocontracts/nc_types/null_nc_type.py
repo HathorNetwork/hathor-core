@@ -20,6 +20,7 @@ from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 
 
 class NullNCType(NCType[None]):
@@ -31,12 +32,12 @@ class NullNCType(NCType[None]):
         # XXX: usually we expect NoneType as type_, but in some cases it can come-in as None, and we take that too
         if type_ is None or type_ is NoneType:
             return cls()
-        raise TypeError('expected None type')
+        raise NCTypeError('expected None type')
 
     @override
     def _check_value(self, value: None, /, *, deep: bool) -> None:
         if value is not None:
-            raise TypeError('expected None')
+            raise NCTypeError('expected None')
 
     @override
     def _serialize(self, serializer: Serializer, value: None, /) -> None:
@@ -51,7 +52,7 @@ class NullNCType(NCType[None]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> None:
         if json_value is not None:
-            raise ValueError('expected None/null')
+            raise NCValueError('expected None/null')
         return None
 
     @override

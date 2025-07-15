@@ -17,6 +17,7 @@ from typing import TypeVar, get_args, get_origin, overload
 
 from typing_extensions import Self, override
 
+from hathor.nanocontracts.exception import NCTypeError
 from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
 from hathor.nanocontracts.fields.field import Field
 from hathor.nanocontracts.nc_types import NCType, VarUint32NCType
@@ -58,16 +59,16 @@ class DictStorageContainer(StorageContainer[Mapping[K, V]]):
     @classmethod
     def __check_name_and_type__(cls, name: str, type_: type[Mapping[K, V]]) -> None:
         if not name.isidentifier():
-            raise TypeError('field name must be a valid identifier')
+            raise NCTypeError('field name must be a valid identifier')
         origin_type: type[Mapping[K, V]] = not_none(get_origin(type_))
         if not issubclass(origin_type, Mapping):
-            raise TypeError('expected Mapping type')
+            raise NCTypeError('expected Mapping type')
         args = get_args(type_)
         if not args or len(args) != 2:
-            raise TypeError(f'expected {type_.__name__}[<key type>, <value type>]')
+            raise NCTypeError(f'expected {type_.__name__}[<key type>, <value type>]')
         key_type, value_type = args
         if not is_origin_hashable(key_type):
-            raise TypeError(f'{key_type} is not hashable')
+            raise NCTypeError(f'{key_type} is not hashable')
 
     @override
     @classmethod

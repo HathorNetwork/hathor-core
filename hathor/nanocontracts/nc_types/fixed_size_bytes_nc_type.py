@@ -20,6 +20,7 @@ from typing_extensions import Self, override
 
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 from hathor.utils.typing import is_subclass
 
 B = TypeVar('B', bound=bytes)
@@ -37,7 +38,7 @@ class _FixedSizeBytesNCType(NCType[B]):
     @classmethod
     def _from_type(cls, type_: type[B], /, *, type_map: NCType.TypeMap) -> Self:
         if not is_subclass(type_, bytes):
-            raise TypeError('expected bytes-like type')
+            raise NCTypeError('expected bytes-like type')
         return cls(type_)
 
     def _filter_in(self, value: B, /) -> bytes:
@@ -51,10 +52,10 @@ class _FixedSizeBytesNCType(NCType[B]):
     @override
     def _check_value(self, value: B, /, *, deep: bool) -> None:
         if not isinstance(value, bytes):
-            raise TypeError(f'expected bytes type, not {type(value)}')
+            raise NCTypeError(f'expected bytes type, not {type(value)}')
         data = self._filter_in(value)
         if len(data) != self._size:
-            raise TypeError(
+            raise NCTypeError(
                 f'value has {len(value)} bytes, expected '
                 f'{self._actual_type.__name__} to always have {self._size} bytes'
             )
@@ -72,7 +73,7 @@ class _FixedSizeBytesNCType(NCType[B]):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> B:
         if not isinstance(json_value, str):
-            raise ValueError('expected str')
+            raise NCValueError('expected str')
         return self._filter_out(bytes.fromhex(json_value))
 
     @override

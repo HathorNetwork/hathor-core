@@ -15,7 +15,7 @@
 from typing_extensions import override
 
 from .deserializer import Deserializer
-from .exceptions import OutOfDataError
+from .exceptions import OutOfDataError, SerializationValueError
 from .types import Buffer
 
 _EMPTY_VIEW = memoryview(b'')
@@ -33,7 +33,7 @@ class BytesDeserializer(Deserializer):
     @override
     def finalize(self) -> None:
         if not self.is_empty():
-            raise ValueError('trailing data')
+            raise SerializationValueError('trailing data')
         del self._view
 
     @override
@@ -50,7 +50,7 @@ class BytesDeserializer(Deserializer):
     @override
     def peek_bytes(self, n: int, *, exact: bool = True) -> memoryview:
         if n < 0:
-            raise ValueError('value cannot be negative')
+            raise SerializationValueError('value cannot be negative')
         if exact and len(self._view) < n:
             raise OutOfDataError('not enough bytes to read')
         return self._view[:n]

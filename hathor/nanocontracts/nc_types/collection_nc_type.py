@@ -25,6 +25,7 @@ from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.nanocontracts.nc_types.utils import is_origin_hashable
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.compound_encoding.collection import decode_collection, encode_collection
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 
 T = TypeVar('T')
 H = TypeVar('H', bound=Hashable)
@@ -58,10 +59,10 @@ class _CollectionNCType(NCType[Collection[T]], ABC):
     def _get_member_type(cls, type_: type[Collection[T]]) -> type[T]:
         origin_type: type = get_origin(type_) or type_
         if not issubclass(origin_type, Collection):
-            raise TypeError('expected Collection type')
+            raise NCTypeError('expected Collection type')
         args = get_args(type_)
         if not args or len(args) != 1:
-            raise TypeError(f'expected {type_.__name__}[<type>]')
+            raise NCTypeError(f'expected {type_.__name__}[<type>]')
         return args[0]
 
     def _check_item(self, item: T) -> None:
@@ -70,7 +71,7 @@ class _CollectionNCType(NCType[Collection[T]], ABC):
     @override
     def _check_value(self, value: Collection[T], /, *, deep: bool) -> None:
         if not isinstance(value, Collection):
-            raise TypeError('expected Collection type')
+            raise NCTypeError('expected Collection type')
         if deep:
             for i in value:
                 self._check_item(i)
@@ -90,7 +91,7 @@ class _CollectionNCType(NCType[Collection[T]], ABC):
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> Collection[T]:
         if not isinstance(json_value, list):
-            raise ValueError('expected list')
+            raise NCValueError('expected list')
         return self._build(self._item.json_to_value(i) for i in json_value)
 
     @override
@@ -129,19 +130,19 @@ class SetNCType(_CollectionNCType[H]):
     def _get_member_type(cls, type_: type[Collection[T]]) -> type[T]:
         origin_type: type = get_origin(type_) or type_
         if not issubclass(origin_type, Set):
-            raise TypeError('expected Set type')
+            raise NCTypeError('expected Set type')
         args = get_args(type_)
         if not args or len(args) != 1:
-            raise TypeError(f'expected {type_.__name__}[<type>]')
+            raise NCTypeError(f'expected {type_.__name__}[<type>]')
         member_type, = args
         if not is_origin_hashable(args[0]):
-            raise TypeError(f'{args[0]} is not hashable')
+            raise NCTypeError(f'{args[0]} is not hashable')
         return member_type
 
     @override
     def _check_item(self, item: H) -> None:
         if not isinstance(item, Hashable):
-            raise TypeError('expected Hashable type')
+            raise NCTypeError('expected Hashable type')
         super()._check_item(item)
 
 

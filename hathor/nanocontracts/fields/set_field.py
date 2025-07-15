@@ -17,6 +17,7 @@ from typing import Any, TypeVar, get_args, get_origin
 
 from typing_extensions import Self, override
 
+from hathor.nanocontracts.exception import NCTypeError, NCKeyError
 from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
 from hathor.nanocontracts.fields.field import Field
 from hathor.nanocontracts.nc_types import NCType, VarUint32NCType
@@ -56,16 +57,16 @@ class SetStorageContainer(StorageContainer[set[T]]):
     @classmethod
     def __check_name_and_type__(cls, name: str, type_: type[set[T]]) -> None:
         if not name.isidentifier():
-            raise TypeError('field name must be a valid identifier')
+            raise NCTypeError('field name must be a valid identifier')
         origin_type: type[set[T]] = not_none(get_origin(type_))
         if not issubclass(origin_type, set):
-            raise TypeError('expected set type')
+            raise NCTypeError('expected set type')
         args = get_args(type_)
         if not args or len(args) != 1:
-            raise TypeError(f'expected {type_.__name__}[<item type>]')
+            raise NCTypeError(f'expected {type_.__name__}[<item type>]')
         item_type, = args
         if not is_origin_hashable(item_type):
-            raise TypeError(f'{item_type} is not hashable')
+            raise NCTypeError(f'{item_type} is not hashable')
 
     @override
     @classmethod
@@ -162,7 +163,7 @@ class SetStorageContainer(StorageContainer[set[T]]):
     def remove(self, elem: T, /) -> None:
         key = self.__to_db_key(elem)
         if not self.__storage.has_obj(key):
-            raise KeyError
+            raise NCKeyError
         self.__storage.del_obj(key)
         self.__decrease_length()
 

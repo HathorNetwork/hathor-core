@@ -20,6 +20,7 @@ from typing import Generic, TypeVar
 
 from typing_extensions import TYPE_CHECKING, Self, override
 
+from hathor.nanocontracts.exception import NCAttributeError, NCTypeError
 from hathor.nanocontracts.fields.field import Field
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.util import not_none
@@ -45,7 +46,7 @@ class StorageContainer(Generic[C], ABC):
     @classmethod
     @abstractmethod
     def __check_name_and_type__(cls, name: str, type_: type[C]) -> None:
-        """Should raise a TypeError if the given name or type is incompatible for use with container."""
+        """Should raise a NCTypeError if the given name or type is incompatible for use with container."""
         raise NotImplementedError
 
     @classmethod
@@ -94,7 +95,7 @@ class ContainerField(InnerTypeMixin[T], Field[T]):
     @classmethod
     def _from_name_and_type(cls, name: str, type_: type[T], /, *, type_map: Field.TypeMap) -> Self:
         if not issubclass(cls.__inner_type__, StorageContainer):
-            raise TypeError(f'{cls.__inner_type__} is not a StorageContainer')
+            raise NCTypeError(f'{cls.__inner_type__} is not a StorageContainer')
         cls.__inner_type__.__check_name_and_type__(name, type_)
         field = cls()
         field.__name = name
@@ -105,7 +106,7 @@ class ContainerField(InnerTypeMixin[T], Field[T]):
     @override
     def __set__(self, instance: Blueprint, value: T) -> None:
         # XXX: alternatively this could mimick a `my_container.clear(); my_container.update(value)`
-        raise AttributeError('cannot set a container field')
+        raise NCAttributeError('cannot set a container field')
 
     @override
     def __get__(self, instance: Blueprint, owner: object | None = None) -> T:
@@ -128,4 +129,4 @@ class ContainerField(InnerTypeMixin[T], Field[T]):
     @override
     def __delete__(self, instance: Blueprint) -> None:
         # XXX: alternatively delete the database
-        raise AttributeError('cannot delete a container field')
+        raise NCAttributeError('cannot delete a container field')

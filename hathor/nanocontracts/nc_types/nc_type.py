@@ -21,6 +21,7 @@ from typing_extensions import Self
 
 from hathor.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap, get_aliased_type, get_usable_origin_type
 from hathor.serialization import Deserializer, Serializer
+from hathor.serialization.exceptions import SerializationTypeError, SerializationValueError
 
 T = TypeVar('T')
 
@@ -76,7 +77,7 @@ class NCType(ABC, Generic[T]):
         specializations, this is the case particularly for compount NCTypes, like OptionalNCType or DictNCType.
         """
         # XXX: a NCType that is only meant for local use does not need to implement _from_type
-        raise TypeError(f'{cls} is not compatible with use in a NCType.TypeMap')
+        raise NCTypeError(f'{cls} is not compatible with use in a NCType.TypeMap')
 
     @final
     def is_hashable(self) -> bool:
@@ -87,7 +88,7 @@ class NCType(ABC, Generic[T]):
 
     @final
     def check_value(self, value: T, /) -> None:
-        """ Implementation should raise a TypeError if the value's type is not compatible.
+        """ Implementation should raise a SerializationTypeError if the value's type is not compatible.
 
         If `deep=True` then the check should recurse for compound types (like lists/maps) to check each value. It is
         expected that `deep=False` is used in a context where the recursion would be made externally, so to avoid
@@ -144,7 +145,7 @@ class NCType(ABC, Generic[T]):
     def json_to_value(self, json_value: Json, /) -> T:
         """ Use this to convert a value that comes out from `json.load` into the value that this class expects.
 
-        Will raise a ValueError if the given `json_value` is not compatible.
+        Will raise a SerializationValueError if the given `json_value` is not compatible.
         """
         # XXX: subclasses must implement NCType._json_to_value, not NCType.json_to_value
         value = self._json_to_value(json_value)
@@ -155,7 +156,7 @@ class NCType(ABC, Generic[T]):
     def value_to_json(self, value: T, /) -> Json:
         """ Use this to convert a value to an object compatible with `json.dump`.
 
-        Will raise a ValueError if the given `value` is not compatible.
+        Will raise a SerializationValueError if the given `value` is not compatible.
         """
         # XXX: subclasses must implement NCType._value_to_json, not NCType.value_to_json
         self._check_value(value, deep=False)
@@ -194,8 +195,8 @@ class NCType(ABC, Generic[T]):
 
     def _json_to_value(self, json: Json, /) -> T:
         """ Inner implementation of `NCType.json_to_value`."""
-        raise ValueError('this class does not support JSON conversion')
+        raise NCValueError('this class does not support JSON conversion')
 
     def _value_to_json(self, value: T, /) -> Json:
         """ Inner implementation of `NCType.value_to_json`."""
-        raise ValueError('this class does not support JSON conversion')
+        raise NCValueError('this class does not support JSON conversion')
