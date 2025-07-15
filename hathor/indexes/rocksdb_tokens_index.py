@@ -36,7 +36,7 @@ from hathor.nanocontracts.types import (
 )
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
-from hathor.transaction.token_info import TokenInfoVersion
+from hathor.transaction.token_info import TokenVersion
 from hathor.util import collect_n, json_dumpb, json_loadb
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -68,7 +68,7 @@ class _InfoDict(TypedDict):
     name: str
     symbol: str
     total: int
-    version: TokenInfoVersion | None
+    version: TokenVersion
 
 
 class _TxIndex(NamedTuple):
@@ -181,7 +181,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                           token_uid: bytes,
                           name: str,
                           symbol: str,
-                          token_info_version: Optional[TokenInfoVersion],
+                          version: TokenVersion,
                           total: int = 0) -> None:
         key = self._to_key_info(token_uid)
         old_value = self._db.get((self._cf, key))
@@ -190,7 +190,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             'name': name,
             'symbol': symbol,
             'total': total,
-            'version': token_info_version
+            'version': version
         })
         self._db.put((self._cf, key), value)
 
@@ -237,7 +237,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self._settings.HATHOR_TOKEN_UID,
             self._settings.HATHOR_TOKEN_NAME,
             self._settings.HATHOR_TOKEN_SYMBOL,
-            None,
+            TokenVersion.NATIVE,
             self._settings.GENESIS_TOKENS,
         )
 
@@ -297,11 +297,11 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                            tx=tx.hash_hex,
                            name=tx.token_name,
                            symb=tx.token_symbol,
-                           version=tx.token_info_version)
+                           version=tx.token_version)
             key_info = self._to_key_info(tx.hash)
             token_info = self._db.get((self._cf, key_info))
             if token_info is None:
-                self.create_token_info(tx.hash, tx.token_name, tx.token_symbol, tx.token_info_version)
+                self.create_token_info(tx.hash, tx.token_name, tx.token_symbol, tx.token_version)
 
         if tx.is_transaction:
             # Adding this tx to the transactions key list
@@ -462,7 +462,7 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
     def get_symbol(self) -> Optional[str]:
         return self._info['symbol']
 
-    def get_version(self) -> Optional[TokenInfoVersion]:
+    def get_version(self) -> TokenVersion:
         return self._info['version']
 
     def get_total(self) -> int:

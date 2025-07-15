@@ -20,7 +20,6 @@ from typing_extensions import deprecated
 
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
-from hathor.transaction.token_info import TokenInfoVersion
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -262,16 +261,32 @@ class BlueprintEnvironment:
         amount: int,
         mint_authority: bool = True,
         melt_authority: bool = True,
-        token_version: TokenInfoVersion = TokenInfoVersion.DEPOSIT
     ) -> TokenUid:
         """Create a new token."""
-        return self.__runner.syscall_create_child_token(
+        return self.__runner.syscall_create_child_deposit_token(
             token_name,
             token_symbol,
             amount,
             mint_authority,
-            melt_authority,
-            token_version
+            melt_authority
+        )
+
+    @final
+    def create_fee_token(
+        self,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool = True,
+        melt_authority: bool = True,
+    ) -> TokenUid:
+        """Create a new fee-based token."""
+        return self.__runner.syscall_create_child_fee_token(
+            token_name,
+            token_symbol,
+            amount,
+            mint_authority,
+            melt_authority
         )
 
     @final

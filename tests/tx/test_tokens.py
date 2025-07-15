@@ -9,7 +9,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.token_info import TokenInfoVersion
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount, int_to_bytes
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
@@ -548,7 +548,7 @@ class TokenTest(unittest.TestCase):
         info = tx.serialize_token_info()
 
         def generate_invalid_enum_value(start: int = 1) -> int:
-            valid_values = {item.value for item in TokenInfoVersion}
+            valid_values = {item.value for item in TokenVersion}
             candidate = start
             while candidate in valid_values:
                 candidate += 1

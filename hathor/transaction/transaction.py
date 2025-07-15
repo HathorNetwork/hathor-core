@@ -28,7 +28,7 @@ from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
-from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
+from hathor.transaction.token_info import TokenInfo, TokenVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 
@@ -43,7 +43,6 @@ _FUNDS_FORMAT_STRING = '!BBBBB'
 _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 
-# TODO-RAUL: Any reference to TokenInfo that was declared here should be updated to use from TokenInfo class
 class RewardLockedInfo(NamedTuple):
     block_hash: VertexId
     blocks_needed: int
@@ -356,27 +355,29 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            token_version: TokenInfoVersion | None
+            token_version: TokenVersion
 
             if token_uid == self._settings.HATHOR_TOKEN_UID:
-                token_version = None
+                token_version = TokenVersion.NATIVE
             else:
+                from hathor.transaction.storage.exceptions import TransactionDoesNotExist
                 assert self.storage is not None
-                token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
-                if token_creation_tx is None:
+                try:
+                    token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
+                    token_version = token_creation_tx.token_version
+                except TransactionDoesNotExist:
                     raise InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
-
-                token_version = token_creation_tx.token_info_version
 
             token_info = token_dict.get(
                 token_uid,
-                TokenInfo.get_default(version=token_version))
+                TokenInfo.get_default(version=token_version)
+            )
 
             if spent_output.is_token_authority():
                 token_info.can_mint = token_info.can_mint or spent_output.can_mint_token()
                 token_info.can_melt = token_info.can_melt or spent_output.can_melt_token()
             else:
-                token_info.amount = token_info.amount - spent_output.value
+                token_info.amount -= spent_output.value
 
             token_dict[token_uid] = token_info
         return token_dict
@@ -406,11 +407,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 if tx_output.value > TxOutput.ALL_AUTHORITIES:
                     raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
             else:
-                # TODO-RAUL: update the following code block when the TokenInfo class become a mutable data class
                 # for regular outputs, just subtract from the total amount
-                # token_dict[token_uid].amount = token_info.amount + tx_output.value
-                # for regular outputs, just subtract from the total amount
-                token_info.amount = token_info.amount + tx_output.value
+                token_info.amount += tx_output.value
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent

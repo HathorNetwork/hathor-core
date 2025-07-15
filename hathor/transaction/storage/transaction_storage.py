@@ -34,6 +34,7 @@ from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Verte
 from hathor.transaction.block import Block
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.storage.exceptions import (
+    TokenCreationTransactionDoesNotExist,
     TransactionDoesNotExist,
     TransactionIsNotABlock,
     TransactionNotInAllowedScopeError,
@@ -550,15 +551,20 @@ class TransactionStorage(ABC):
         self.post_get_validation(tx)
         return tx
 
-    def get_token_creation_transaction(self, hash_bytes: bytes) -> Optional[TokenCreationTransaction]:
+    def get_token_creation_transaction(self, hash_bytes: bytes) -> TokenCreationTransaction:
         """Acquire the lock and get the token creation transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
+        :raises TransactionDoesNotExist: If the transaction with the given hash does not exist.
+        :raises TokenCreationTransactionDoesNotExist: If the transaction exists but is not a TokenCreationTransaction.
+        :return: The TokenCreationTransaction instance.
         """
         from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
         tx = self.get_transaction(hash_bytes)
-        return tx if isinstance(tx, TokenCreationTransaction) else None
+        if not isinstance(tx, TokenCreationTransaction):
+            raise TokenCreationTransactionDoesNotExist(hash_bytes)
+        return tx
 
     def get_block_by_height(self, height: int) -> Optional[Block]:
         """Return a block in the best blockchain from the height index. This is fast."""

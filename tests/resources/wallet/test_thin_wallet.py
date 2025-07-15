@@ -6,7 +6,7 @@ from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
-from hathor.transaction.token_info import TokenInfoVersion
+from hathor.transaction.token_info import TokenVersion
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -356,7 +356,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         add_blocks_unlock_reward(self.manager)
         token_name = 'MyTestToken'
         token_symbol = 'MTT'
-        token_info_version = TokenInfoVersion.DEPOSIT
+        token_info_version = TokenVersion.DEPOSIT
         amount = 150
         tx = create_tokens(
             self.manager,
@@ -440,7 +440,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         add_blocks_unlock_reward(self.manager)
         token_name = 'MyTestToken'
         token_symbol = 'MTT'
-        token_info_version = TokenInfoVersion.FEE
+        token_info_version = TokenVersion.FEE
         amount = 150
         tx = create_fee_tokens(
             self.manager,
