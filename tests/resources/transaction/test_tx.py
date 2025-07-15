@@ -5,6 +5,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.resources import TransactionResource
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.token_info import TokenInfoVersion
 from hathor.transaction.validation_state import ValidationState
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions
@@ -128,10 +129,12 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.manager.tx_storage.save_transaction(tx_input)
 
         token_bytes1 = bytes.fromhex('001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d')
-        self.manager.tx_storage.indexes.tokens.create_token_info(token_bytes1, 'Test Coin', 'TSC')
+        self.manager.tx_storage.indexes.tokens.create_token_info(
+            token_bytes1, 'Test Coin', 'TSC', TokenInfoVersion.DEPOSIT)
 
         token_bytes2 = bytes.fromhex('007231eee3cb6160d95172a409d634d0866eafc8775f5729fff6a61e7850aba5')
-        self.manager.tx_storage.indexes.tokens.create_token_info(token_bytes2, 'NewCoin', 'NCN')
+        self.manager.tx_storage.indexes.tokens.create_token_info(
+            token_bytes2, 'NewCoin', 'NCN', TokenInfoVersion.DEPOSIT)
 
         response = yield self.web.get(
             "transaction", {b'id': b'0033784bc8443ba851fd88d81c6f06774ae529f25c1fa8f026884ad0a0e98011'})
@@ -223,7 +226,8 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         # Both inputs are the same as the last parent, so no need to manually add them
 
         token_bytes1 = bytes.fromhex('000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330')
-        self.manager.tx_storage.indexes.tokens.create_token_info(token_bytes1, 'Wat wat', 'WAT')
+        self.manager.tx_storage.indexes.tokens.create_token_info(
+            token_bytes1, 'Wat wat', 'WAT', TokenInfoVersion.DEPOSIT)
 
         response = yield self.web.get(
             "transaction", {b'id': b'00005f234469407614bf0abedec8f722bb5e534949ad37650f6077c899741ed7'})

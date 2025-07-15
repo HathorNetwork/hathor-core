@@ -43,7 +43,6 @@ def test_create_base_event(event_id: int, group_id: int | None) -> None:
             signal_bits=0,
             version=1,
             weight=10.0,
-            headers=[],
             inputs=[],
             outputs=[],
             parents=[],
